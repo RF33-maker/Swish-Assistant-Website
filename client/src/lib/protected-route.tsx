@@ -11,7 +11,7 @@ export function ProtectedRoute({
 }) {
   const { user, isLoading } = useAuth();
 
-  if (isLoading) {
+  if (isLoading || user === undefined) {
     return (
       <Route path={path}>
         <div className="flex items-center justify-center min-h-screen">
@@ -20,6 +20,7 @@ export function ProtectedRoute({
       </Route>
     );
   }
+
 
   if (!user) {
     return (

@@ -1,108 +1,59 @@
-import { ReactNode } from "react";
-import { 
-  AutoAwesome, 
-  Share, 
-  Slideshow, 
-  Web, 
-  Brush, 
-  Smartphone, 
-  VideoLibrary,
-  Inventory2
-} from "@mui/icons-material";
+import { BarChart2, Settings, UserCircle2, UploadCloud } from "lucide-react";
 
-interface FeatureCardProps {
-  icon: ReactNode;
-  title: string;
-  description: string;
-}
 
-const FeatureCard = ({ icon, title, description }: FeatureCardProps) => {
-  return (
-    <div className="bg-white rounded-xl shadow-md overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-lg border border-neutral-200">
-      <div className="p-6">
-        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
-          <div className="text-primary">{icon}</div>
-        </div>
-        <h3 className="text-lg font-medium text-neutral-900 mb-2">{title}</h3>
-        <p className="text-neutral-600 text-sm">{description}</p>
-      </div>
-    </div>
-  );
-};
 
-const features: FeatureCardProps[] = [
+const features = [
   {
-    icon: <AutoAwesome />,
-    title: "Design for me",
-    description: "Let our AI generate complete designs based on your description"
+    title: "Visualizations",
+    description: "Generate charts and shot maps from LiveStats files.",
+    icon: <BarChart2 className="w-6 h-6 text-orange-500" />,
+    onClick: () => {
+      const el = document.getElementById("visualization");
+      if (el) el.scrollIntoView({ behavior: "smooth" });
+    },
   },
   {
-    icon: <Share />,
-    title: "Social media",
-    description: "Create engaging content for Instagram, Facebook, Twitter and more"
+    title: "Scouting Report",
+    description: "The responses you asked the chatbot ready instantly to send to your players and coaching staff.",
+    icon: <Settings className="w-6 h-6 text-orange-500" />,
+    onClick: () => {
+      const el = document.getElementById("customization");
+      if (el) el.scrollIntoView({ behavior: "smooth" });
+    },
   },
   {
-    icon: <Slideshow />,
-    title: "Presentation",
-    description: "Build professional slide decks with compelling visuals"
+    title: "Player Profiles",
+    description: "Drill into stats and trends for every athlete.",
+    icon: <UserCircle2 className="w-6 h-6 text-orange-500" />,
+    onClick: () => {
+      // Placeholder — add link or tab switch later
+    },
   },
   {
-    icon: <Web />,
-    title: "Website",
-    description: "Generate modern, responsive website designs"
+    title: "Upload LiveStats PDF",
+    description: "Securely upload your game's stat sheet to analyze stats.",
+    icon: <UploadCloud className="w-6 h-6 text-orange-500" />,
+    onClick: () => {
+      window.open("https://www.dropbox.com/home", "_blank"); // Placeholder for future Dropbox OAuth
+    },
   },
-  {
-    icon: <Brush />,
-    title: "Brand identity",
-    description: "Develop logos, color schemes and brand guidelines"
-  },
-  {
-    icon: <Smartphone />,
-    title: "Mobile app",
-    description: "Design user interfaces for iOS and Android applications"
-  },
-  {
-    icon: <VideoLibrary />,
-    title: "Video content",
-    description: "Create storyboards and video asset designs"
-  },
-  {
-    icon: <Inventory2 />,
-    title: "Product design",
-    description: "Design packaging, marketing materials and more"
-  }
 ];
 
 export default function FeatureCards() {
-  const firstRowFeatures = features.slice(0, 4);
-  const secondRowFeatures = features.slice(4);
-
   return (
-    <section className="py-12 px-4 sm:px-6 lg:px-8 bg-white">
-      <div className="max-w-7xl mx-auto">
-        <h2 className="text-2xl font-semibold text-neutral-900 mb-8">Popular design options</h2>
-        
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {firstRowFeatures.map((feature, index) => (
-            <FeatureCard
-              key={`feature-1-${index}`}
-              icon={feature.icon}
-              title={feature.title}
-              description={feature.description}
-            />
-          ))}
-        </div>
-        
-        <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {secondRowFeatures.map((feature, index) => (
-            <FeatureCard
-              key={`feature-2-${index}`}
-              icon={feature.icon}
-              title={feature.title}
-              description={feature.description}
-            />
-          ))}
-        </div>
+    <section id="features" className="bg-white py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-6xl mx-auto grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        {features.map((feature, index) => (
+          <button
+            key={index}
+            onClick={feature.onClick}
+            className="flex flex-col items-start p-6 bg-neutral-50 border border-neutral-200 rounded-xl shadow-sm hover:shadow-md hover:bg-orange-50 transition transform hover:scale-[1.02] text-left"
+          >
+            <div className="mb-4">{feature.icon}</div>
+            <h3 className="text-lg font-semibold text-neutral-800 mb-2">{feature.title}</h3>
+            <p className="text-sm text-neutral-600">{feature.description}</p>
+          </button>
+        ))}
       </div>
     </section>
   );

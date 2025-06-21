@@ -15,6 +15,11 @@ import { useEffect } from "react";
 import { Layers, User, LucideGithub, Mail } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { SiLinkedin } from "react-icons/si";
+import SwishAssistantLogo from "@/assets/Swish Assistant Logo.png";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
+
+
+
 
 const loginSchema = z.object({
   username: z.string().min(1, { message: "Email is required" }).email({ message: "Invalid email address" }),
@@ -34,10 +39,12 @@ export default function AuthPage() {
   const { user, loginMutation, registerMutation } = useAuth();
   const [_, setLocation] = useLocation();
 
+  console.log("User in AuthPage:", user);
+
   // Redirect if user is already logged in
   useEffect(() => {
     if (user) {
-      setLocation("/");
+      setLocation("/dashboard");
     }
   }, [user, setLocation]);
 
@@ -77,23 +84,30 @@ export default function AuthPage() {
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
       {/* Left Column - Auth Forms */}
-      <div className="w-full md:w-1/2 p-4 md:p-8 flex items-center justify-center">
-        <Card className="w-full max-w-md">
+      <div className="w-full md:w-1/2 bg-gradient-to-br from-orange-100 via-white to-white p-4 md:p-8 flex items-center justify-center text-gray-800">
+          <Card className="w-full max-w-md shadow-none border border-gray-200 bg-white">
           <CardHeader className="text-center">
-            <div className="flex justify-center mb-2">
-              <div className="h-12 w-12 bg-primary rounded-md flex items-center justify-center text-primary-foreground">
-                <Layers size={28} />
-              </div>
+            <div className="flex flex-col items-center gap-2 mb-4">
+              <img src={SwishAssistantLogo} alt="Swish Assistant Logo" className="h-16" />
+              <h1 className="text-xl font-bold text-swish-dark
+">Swish Assistant</h1>
+              <p className="text-sm text-muted-foreground text-center">
+                Access your team’s AI-powered game insights — faster, smarter, and on your terms
+              </p>
             </div>
-            <CardTitle className="text-2xl font-bold">Design Platform</CardTitle>
-            <CardDescription>Sign in to your account or create a new one</CardDescription>
+
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="login" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 mb-6">
-                <TabsTrigger value="login">Login</TabsTrigger>
-                <TabsTrigger value="register">Register</TabsTrigger>
+              <TabsList className="grid w-full grid-cols-2 mb-6 bg-gray-100 text-gray-600 rounded-md">
+                <TabsTrigger value="login" className="data-[state=active]:bg-[#FFC285] data-[state=active]:text-white">
+                  Login
+                </TabsTrigger>
+                <TabsTrigger value="register" className="data-[state=active]:bg-[#FFC285] data-[state=active]:text-white">
+                  Register
+                </TabsTrigger>
               </TabsList>
+
               
               <TabsContent value="login">
                 <Form {...loginForm}>
@@ -105,7 +119,12 @@ export default function AuthPage() {
                         <FormItem>
                           <FormLabel>Email</FormLabel>
                           <FormControl>
-                            <Input placeholder="your@email.com" {...field} type="email" />
+                            <Input
+                              {...field}
+                              type="email"
+                              placeholder="coach@email.com"
+                              className="bg-white border border-gray-300 text-gray-800 placeholder-gray-400 focus:ring-orange-300 focus:border-orange-400"
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -116,14 +135,32 @@ export default function AuthPage() {
                       name="password"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Password</FormLabel>
+                          <div className="flex items-center gap-2">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <FormLabel className="cursor-help">Password</FormLabel>
+                              </TooltipTrigger>
+                              <TooltipContent side="right">
+                                Make it strong, Coach.
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
+
                           <FormControl>
-                            <Input placeholder="••••••••" {...field} type="password" />
+                            <Input
+                              {...field}
+                              type="password"
+                              placeholder="••••••••"
+                              className="bg-white border border-gray-300 text-gray-800 placeholder-gray-400 focus:ring-orange-300 focus:border-orange-400"
+                            />
                           </FormControl>
+
                           <FormMessage />
                         </FormItem>
+
                       )}
                     />
+
                     <div className="flex items-center justify-between">
                       <FormField
                         control={loginForm.control}
@@ -137,24 +174,24 @@ export default function AuthPage() {
                             />
                             <label
                               htmlFor="rememberMe"
-                              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                              className="text-sm text-gray-600"
                             >
                               Remember me
                             </label>
                           </div>
                         )}
                       />
-                      <a href="#" className="text-sm font-medium text-primary hover:text-primary/90">
-                        Forgot password?
+                      <a href="#" className="text-sm text-gray-500 hover:text-gray-700">
+                        Need help subbing in?
                       </a>
                     </div>
-                    <Button 
-                      type="submit" 
-                      className="w-full" 
-                      disabled={loginMutation.isPending}
+                    <Button
+                      type="submit"
+                      className="w-full bg-[#FFC285] hover:bg-[#ffb76c] text-white font-medium"
                     >
-                      {loginMutation.isPending ? "Signing in..." : "Sign in"}
+                      Sign in
                     </Button>
+
                   </form>
                 </Form>
               </TabsContent>
@@ -223,13 +260,13 @@ export default function AuthPage() {
                         </div>
                       )}
                     />
-                    <Button 
-                      type="submit" 
-                      className="w-full mt-6" 
-                      disabled={registerMutation.isPending}
+                    <Button
+                      type="submit"
+                      className="w-full bg-[#FFC285] hover:bg-[#ffb76c] text-white font-medium"
                     >
-                      {registerMutation.isPending ? "Creating account..." : "Create account"}
+                      Sign in
                     </Button>
+
                   </form>
                 </Form>
               </TabsContent>
@@ -237,66 +274,71 @@ export default function AuthPage() {
 
             <div className="relative mt-6">
               <div className="absolute inset-0 flex items-center">
-                <Separator className="w-full" />
+                <Separator className="w-full bg-orange-500 text-white hover:bg-orange-600" />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
+                <span className="mt-6 text-center text-xs text-gray-400">Powered by Automated Athlete</span>
               </div>
             </div>
 
-            <div className="mt-6 grid grid-cols-3 gap-3">
-              <Button variant="outline" size="icon" className="h-10">
-                <FcGoogle className="h-5 w-5" />
-              </Button>
-              <Button variant="outline" size="icon" className="h-10">
-                <LucideGithub className="h-5 w-5" />
-              </Button>
-              <Button variant="outline" size="icon" className="h-10">
-                <SiLinkedin className="h-5 w-5 text-[#0A66C2]" />
-              </Button>
-            </div>
+  
           </CardContent>
         </Card>
       </div>
 
       {/* Right Column - Hero */}
-      <div className="hidden md:block md:w-1/2 bg-gradient-to-br from-primary/90 to-primary/60 p-8 text-white">
+      {/* Right Column - Hero */}
+      <div className="hidden md:block md:w-1/2 bg-white p-8 text-gray-800">
         <div className="h-full flex flex-col justify-center max-w-lg mx-auto">
-          <h1 className="text-4xl font-bold mb-6">Design with AI, simplified</h1>
+          <h1 className="text-4xl font-bold mb-6 text-swish-dark">Game insights, simplified</h1>
           <p className="text-lg mb-8">
-            Our platform makes it easy to create stunning designs for any purpose using the power of artificial intelligence.
+            Swish Assistant turns your stat sheets into instant coaching value — 
+            from shot charts to player summaries, all powered by AI.
           </p>
-          <div className="space-y-4">
+
+          <div className="space-y-6">
+
+            {/* Feature 1 */}
             <div className="flex items-start space-x-3">
-              <div className="mt-1 bg-white/20 p-1 rounded-full">
+              <div className="mt-1 bg-swish-peach p-2 rounded-full">
                 <Mail size={20} className="text-white" />
               </div>
               <div>
-                <h3 className="font-medium">Smart prompt suggestions</h3>
-                <p className="text-sm text-white/80">Our AI helps you create the perfect prompt for your design needs</p>
+                <h3 className="font-semibold text-swish-dark">Ask questions, get answers</h3>
+                <p className="text-sm text-gray-700">
+                  Want to know how many 3s your top shooter hit last game? Just ask.
+                </p>
               </div>
             </div>
+
+            {/* Feature 2 */}
             <div className="flex items-start space-x-3">
-              <div className="mt-1 bg-white/20 p-1 rounded-full">
+              <div className="mt-1 bg-swish-peach p-2 rounded-full">
                 <User size={20} className="text-white" />
               </div>
               <div>
-                <h3 className="font-medium">Personalized experience</h3>
-                <p className="text-sm text-white/80">Customize the platform with your brand colors and logo</p>
+                <h3 className="font-semibold text-swish-dark">Quick Summaries</h3>
+                <p className="text-sm text-gray-700">
+                  Drop in your FIBA LiveStats PDF and generate visual scouting reports instantly..
+                </p>
               </div>
             </div>
+
+            {/* Feature 3 */}
             <div className="flex items-start space-x-3">
-              <div className="mt-1 bg-white/20 p-1 rounded-full">
+              <div className="mt-1 bg-swish-peach p-2 rounded-full">
                 <Layers size={20} className="text-white" />
               </div>
               <div>
-                <h3 className="font-medium">All-in-one design platform</h3>
-                <p className="text-sm text-white/80">Create designs for social media, presentations, websites and more</p>
+                <h3 className="font-semibold text-swish-dark">Custom team setup</h3>
+                <p className="text-sm text-gray-700">Upload your logo, add team colors, and personalize the experience.
+                </p>
               </div>
             </div>
+
           </div>
         </div>
       </div>
-    </div>
-  );
+      </div>
+  );  
 }

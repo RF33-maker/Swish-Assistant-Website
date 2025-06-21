@@ -17,6 +17,9 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        fontFamily: {
+          sans: ['Poppins', 'ui-sans-serif', 'system-ui'],
+        },
         popover: {
           DEFAULT: "hsl(var(--popover))",
           foreground: "hsl(var(--popover-foreground))",
@@ -61,6 +64,11 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        swish: {
+          peach: "#FFC285",
+          teal: "#4ECDC4",
+          dark: "#292F36",
+        }
       },
       keyframes: {
         "accordion-down": {

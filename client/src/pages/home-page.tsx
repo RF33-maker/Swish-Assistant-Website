@@ -3,8 +3,11 @@ import Footer from "@/components/layout/footer";
 import HeroSection from "@/components/home/hero-section";
 import FeatureCards from "@/components/home/feature-cards";
 import VisualizationSection from "@/components/home/visualization-section";
-import IframeSection from "@/components/home/iframe-section";
 import CustomizationSection from "@/components/home/customization-section";
+import UploadSection from "@/components/home/upload-section";
+import PreviewSection from "@/components/home/PreviewSection";
+
+
 
 export default function HomePage() {
   return (
@@ -12,9 +15,10 @@ export default function HomePage() {
       <Header />
       <main className="flex-grow">
         <HeroSection />
+        <UploadSection /> 
         <FeatureCards />
         <VisualizationSection />
-        <IframeSection />
+        <PreviewSection />
         <CustomizationSection />
       </main>
       <Footer />

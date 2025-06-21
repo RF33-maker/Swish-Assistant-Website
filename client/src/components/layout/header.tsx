@@ -12,6 +12,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Layers, Bell, HelpCircle, User, LogOut, Settings } from "lucide-react";
+import SwishAssistantLogo from "@/assets/Swish Assistant Logo.png";
+
 
 export default function Header() {
   const { user, logoutMutation } = useAuth();
@@ -27,7 +29,8 @@ export default function Header() {
     logoutMutation.mutate();
   };
 
-  const userInitial = user?.username.charAt(0).toUpperCase() || "U";
+  const userInitial = user?.username?.charAt(0)?.toUpperCase() || "U";
+
 
   return (
     <header className="bg-white shadow-sm">
@@ -36,14 +39,16 @@ export default function Header() {
           <div className="flex">
             <div className="flex-shrink-0 flex items-center">
               {/* Team logo */}
-              <div className="h-8 w-8 bg-primary rounded-md flex items-center justify-center text-white overflow-hidden">
-                {logoSrc ? (
-                  <img src={logoSrc} alt="Team Logo" className="h-full w-full object-contain" />
-                ) : (
-                  <Layers className="h-5 w-5" />
-                )}
+              <div className="flex items-center gap-2">
+                <img
+                  src={logoSrc || SwishAssistantLogo}
+                  alt="Swish Assistant Logo"
+                  className="h-8 w-auto"
+                />
+                <span className="text-lg font-semibold text-neutral-800"></span>
               </div>
-              <span className="ml-2 text-lg font-semibold text-neutral-800">Design Platform</span>
+
+              <span className="ml-2 text-lg font-semibold text-neutral-800"></span>
             </div>
           </div>
           <div className="flex items-center space-x-3">
@@ -73,13 +78,18 @@ export default function Header() {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
-                  <User className="mr-2 h-4 w-4" />
-                  <span>Profile</span>
+                <DropdownMenuItem asChild>
+                  <Link href="/profile">
+                    <User className="mr-2 h-4 w-4" />
+                    <span>Profile</span>
+                  </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Settings className="mr-2 h-4 w-4" />
-                  <span>Settings</span>
+
+                <DropdownMenuItem asChild>
+                  <Link href="/settings">
+                    <Settings className="mr-2 h-4 w-4" />
+                    <span>Settings</span>
+                  </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout}>

@@ -1,0 +1,82 @@
+"use client";
+
+import { useState } from "react";
+import { EditorContent, useEditor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import { Button } from "@/components/ui/button";
+import ScoutingReportTemplate from "@/components/templates/ScoutingReportTemplate";
+import BlankCanvasTemplate from "@/components/templates/BlankCanvasTemplate";
+import PostGameReport from "@/components/templates/PostGameReport";
+import PreGameReport from "@/components/templates/PreGameReport";
+import PostGameSummary from "@/components/templates/PostGameSummary";
+
+
+const templates = {
+  basic: "Scouting Report\n\nPlayer: Rhys Farrell\n\nSummary:\n- Points: 22\n- Assists: 4\n- Rebounds: 7",
+  detailed: "Detailed Report\n\n📊 Rhys Farrell had an impressive game with 22 points, 4 assists, and 7 rebounds. His shot selection was excellent and defense consistent.",
+  compact: "Rhys Farrell: 22 pts, 4 ast, 7 reb. Solid performance. 📈"
+};
+
+export default function PreviewSection() {
+  const [selectedTemplate, setSelectedTemplate] = useState("basic");
+
+  const editor = useEditor({
+    extensions: [StarterKit],
+    content: templates[selectedTemplate],
+  });
+
+  const handleTemplateChange = (templateKey: string) => {
+    setSelectedTemplate(templateKey);
+    editor?.commands.setContent(templates[templateKey]);
+  };
+  
+  const templateComponents: Record<string, JSX.Element> = {
+    scouting: <ScoutingReportTemplate />,
+    blank: <BlankCanvasTemplate />,
+    postgame: <PostGameReport />,
+    pregame: <PreGameReport />,
+    summary: <PostGameSummary />,
+  };
+
+
+  return (
+    <section className="py-12 px-4 sm:px-6 lg:px-8 bg-white">
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-4">
+          <h2 className="text-2xl font-semibold text-neutral-900 mb-1">Preview</h2>
+          <p className="text-neutral-600">Interactive scouting report</p>
+        </div>
+
+        <div className="mb-4">
+          <label className="block mb-2 text-sm text-neutral-700">Choose Template</label>
+          <select
+            className="border border-neutral-300 rounded-md p-2"
+            value={selectedTemplate}
+            onChange={(e) => setSelectedTemplate(e.target.value)}
+          >
+            <option value="scouting">🧾 Scouting Report</option>
+            <option value="blank">📝 Blank Canvas</option>
+            <option value="postgame">🏀 Post Game Report</option>
+            <option value="pregame">📋 Pre Game Report</option>
+            <option value="summary">📈 Post Game Summary</option>
+          </select>
+          <div className="mt-4 bg-white p-6 border rounded-md shadow">
+            {templateComponents[selectedTemplate]}
+          </div>
+
+
+        </div>
+
+        <div className="bg-neutral-100 p-4 rounded-lg shadow-md border border-neutral-300">
+          {editor && (
+            <EditorContent
+              editor={editor}
+              className="text-black bg-white p-4 rounded-md border border-gray-200 shadow-sm min-h-[200px]"
+            />
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
