@@ -311,7 +311,7 @@ import React from "react";
                       <h3 className="text-sm font-semibold text-slate-700 mb-3 text-center">{title}</h3>
                       <ul className="space-y-1 text-sm text-slate-800">
                       {Array.isArray(list) && list.map((p: any, i: number) => (
-                          <li key={i} className="flex justify-between">
+                          <li key={`${title}-${p.name}-${i}`} className="flex justify-between">
                             <span>{p.name}</span>
                             <span className="font-medium text-orange-500">{p[key]} {label}</span>
                           </li>
@@ -347,7 +347,7 @@ import React from "react";
               />
 
               {playerStats.length > 0 ? (
-                <>
+                <div>
                   {/* Sorting Controls */}
                   <div className="flex gap-4 mb-3 items-center">
                     <label className="text-sm text-slate-700 font-medium">
@@ -370,13 +370,13 @@ import React from "react";
                       }
                     >
                       {sortOrder === "asc" ? (
-                        <>
+                        <span>
                           ⬆️ <span className="underline">Ascending</span>
-                        </>
+                        </span>
                       ) : (
-                        <>
+                        <span>
                           ⬇️ <span className="underline">Descending</span>
-                        </>
+                        </span>
                       )}
                     </button>
                   </div>
@@ -403,7 +403,7 @@ import React from "react";
                           return sortOrder === "asc" ? aVal - bVal : bVal - aVal;
                         })
                         .map((p, i) => (
-                          <React.Fragment key={i}>
+                          <React.Fragment key={`${p.name}-${p.game_date || ''}-${i}`}>
                             <tr
                               className="border-t cursor-pointer hover:bg-orange-50"
                               onClick={() =>
@@ -417,7 +417,7 @@ import React from "react";
                             </tr>
 
                             {expandedPlayer === i && (
-                              <tr>
+                              <tr key={`expanded-${p.name}-${p.game_date || ''}-${i}`}>
                                 <td colSpan={4}>
                                   <GameSummaryRow player={p} leagueId={league.id} />
                                 </td>
@@ -427,7 +427,7 @@ import React from "react";
                         ))}
                     </tbody>
                   </table>
-                </>
+                </div>
               ) : (
                 <p className="text-sm text-slate-600 mt-2">No player data available.</p>
               )}
@@ -452,8 +452,8 @@ import React from "react";
                   <h3 className="text-md font-semibold text-slate-800 mb-4 text-center">{title}</h3>
                   {topPlayers.length > 0 ? (
                     <ul className="space-y-2">
-                      {topPlayers.map((player) => (
-                        <li key={player.name} className="flex flex-col leading-tight">
+                      {topPlayers.map((player, index) => (
+                        <li key={`${statKey}-${player.name}-${index}`} className="flex flex-col leading-tight">
                           <span className="text-sm font-semibold text-slate-800">{player.name}</span>
                           <span className="text-xs text-slate-500">{player[statKey]} {label}</span>
                         </li>
