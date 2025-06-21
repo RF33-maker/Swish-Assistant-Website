@@ -13,6 +13,62 @@ import React from "react";
     assists?: number;
   };
 
+  function GameSummaryRow({
+    player,
+    leagueId,
+  }: {
+    player: any;
+    leagueId: string;
+  }) {
+    const [summary, setSummary] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false);
+
+    const generateSummary = async () => {
+      setLoading(true);
+
+      try {
+        const response = await fetch("https://swishassistantbackend.replit.app/api/generate-summary", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: "Rhys Farrell",
+            team: "Gloucester City Kings",
+            game_date: "2023-09-24",
+          }),
+        });
+
+        const json = await response.json();
+        setSummary(json.summary);
+      } catch (e) {
+        console.error("❌ Fetch or display error:", e);
+        setSummary("⚠️ Failed to generate summary.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    return (
+      <div className="p-4 bg-gray-50 rounded-md mt-2">
+        <p className="text-sm mb-2 text-slate-700">
+          <strong>Game Date:</strong> {player.game_date?.slice(0, 10)} <br />
+          <strong>Team:</strong> {player.team_name || "N/A"}
+        </p>
+
+        {!summary ? (
+          <button
+            onClick={generateSummary}
+            className="bg-orange-500 text-white px-3 py-1 rounded hover:bg-orange-600 text-sm"
+            disabled={loading}
+          >
+            {loading ? "Generating..." : "Generate AI Summary"}
+          </button>
+        ) : (
+          <p className="whitespace-pre-line text-sm text-slate-700 mt-2">{summary}</p>
+        )}
+      </div>
+    );
+  }
+
   export default function LeaguePage() {
     const { slug } = useParams();
     const [search, setSearch] = useState("");
@@ -29,7 +85,7 @@ import React from "react";
     const [aiSummary, setAiSummary] = useState<string | null>(null);
     const [playerSearch, setPlayerSearch] = useState("");
     const [expandedPlayer, setExpandedPlayer] = useState<number | null>(null);
-    const [prompt, setPrompt] = useState("")
+    const [prompt, setPrompt] = useState("");
     const [sortField, setSortField] = useState("points");
     const [sortOrder, setSortOrder] = useState("desc");
 
@@ -264,7 +320,7 @@ import React from "react";
                       <div className="text-right pt-2">
                         <button
                           onClick={() => {
-                            setSortBy(sortMap[title]);
+                            setSortField(sortMap[title]);
                             setSortOrder("desc");
                             document.getElementById("player-stat-explorer")?.scrollIntoView({ behavior: "smooth" });
                           }}
@@ -425,62 +481,5 @@ import React from "react";
         </main>
       </div>
     );
-    function GameSummaryRow({
-      player,
-      leagueId,
-    }: {
-      player: any;
-      leagueId: string;
-    }) {
-      const [summary, setSummary] = useState<string | null>(null);
-      const [loading, setLoading] = useState(false);
-
-      const generateSummary = async () => {
-        setLoading(true);
-
-        try {
-          const response = await fetch("https://swishassistantbackend.replit.app/api/generate-summary", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              name: "Rhys Farrell",
-              team: "Gloucester City Kings",
-              game_date: "2023-09-24",
-            }),
-          });
-
-          const json = await response.json();
-          setSummary(json.summary);
-        } catch (e) {
-          console.error("❌ Fetch or display error:", e);
-          setSummary("⚠️ Failed to generate summary.");
-        } finally {
-          setLoading(false);
-        }
-      };
-
-      return (
-        <div className="p-4 bg-gray-50 rounded-md mt-2">
-          <p className="text-sm mb-2 text-slate-700">
-            <strong>Game Date:</strong> {player.game_date?.slice(0, 10)} <br />
-            <strong>Team:</strong> {player.team_name || "N/A"}
-          </p>
-
-          {!summary ? (
-            <button
-              onClick={generateSummary}
-              className="bg-orange-500 text-white px-3 py-1 rounded hover:bg-orange-600 text-sm"
-              disabled={loading}
-            >
-              {loading ? "Generating..." : "Generate AI Summary"}
-            </button>
-          ) : (
-            <p className="whitespace-pre-line text-sm text-slate-700 mt-2">{summary}</p>
-          )}
-        </div>
-      );
-    }
-
-
   }
 
