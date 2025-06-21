@@ -402,29 +402,32 @@ import React from "react";
                           const bVal = b[sortField] ?? 0;
                           return sortOrder === "asc" ? aVal - bVal : bVal - aVal;
                         })
-                        .map((p, i) => (
-                          <React.Fragment key={`${p.name}-${p.game_date || ''}-${i}`}>
-                            <tr
-                              className="border-t cursor-pointer hover:bg-orange-50"
-                              onClick={() =>
-                                setExpandedPlayer(expandedPlayer === i ? null : i)
-                              }
-                            >
-                              <td className="px-2 py-1">{p.name}</td>
-                              <td className="px-2 py-1">{p.points}</td>
-                              <td className="px-2 py-1">{p.rebounds_total}</td>
-                              <td className="px-2 py-1">{p.assists}</td>
-                            </tr>
-
-                            {expandedPlayer === i && (
-                              <tr key={`expanded-${p.name}-${p.game_date || ''}-${i}`}>
-                                <td colSpan={4}>
-                                  <GameSummaryRow player={p} leagueId={league.id} />
-                                </td>
+                        .map((p, i) => {
+                          const uniqueKey = `player-${p.id || p.name}-${p.game_date || 'no-date'}-${i}`;
+                          return (
+                            <React.Fragment key={uniqueKey}>
+                              <tr
+                                className="border-t cursor-pointer hover:bg-orange-50"
+                                onClick={() =>
+                                  setExpandedPlayer(expandedPlayer === i ? null : i)
+                                }
+                              >
+                                <td className="px-2 py-1">{p.name}</td>
+                                <td className="px-2 py-1">{p.points}</td>
+                                <td className="px-2 py-1">{p.rebounds_total}</td>
+                                <td className="px-2 py-1">{p.assists}</td>
                               </tr>
-                            )}
-                          </React.Fragment>
-                        ))}
+
+                              {expandedPlayer === i && (
+                                <tr>
+                                  <td colSpan={4}>
+                                    <GameSummaryRow player={p} leagueId={league.id} />
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
                     </tbody>
                   </table>
                 </div>
@@ -441,19 +444,19 @@ import React from "react";
               { title: "Top Scorers", statKey: "points", label: "PPG" },
               { title: "Top Rebounders", statKey: "rebounds_total", label: "RPG" },
               { title: "Top Playmakers", statKey: "assists", label: "APG" },
-            ].map(({ title, statKey, label }) => {
+            ].map(({ title, statKey, label }, sectionIndex) => {
               const topPlayers = [...playerStats]
                 .filter((p) => !isNaN(p[statKey]))
                 .sort((a, b) => b[statKey] - a[statKey])
                 .slice(0, 5);
 
               return (
-                <div key={statKey} className="bg-white rounded-xl shadow p-6 text-left">
+                <div key={`${statKey}-section-${sectionIndex}`} className="bg-white rounded-xl shadow p-6 text-left">
                   <h3 className="text-md font-semibold text-slate-800 mb-4 text-center">{title}</h3>
                   {topPlayers.length > 0 ? (
                     <ul className="space-y-2">
                       {topPlayers.map((player, index) => (
-                        <li key={`${statKey}-${player.name}-${index}`} className="flex flex-col leading-tight">
+                        <li key={`${statKey}-${player.id || player.name}-${player.game_date || 'no-date'}-${index}`} className="flex flex-col leading-tight">
                           <span className="text-sm font-semibold text-slate-800">{player.name}</span>
                           <span className="text-xs text-slate-500">{player[statKey]} {label}</span>
                         </li>
