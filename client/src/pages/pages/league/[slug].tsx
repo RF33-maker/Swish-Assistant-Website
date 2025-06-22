@@ -223,7 +223,7 @@ import React from "react";
 
     const topScorers = getTopList("points");
     const topRebounders = getTopList("rebounds_total");
-    const topAssists = getTopList("assists");
+    const topAssistsList = getTopList("assists");
 
 
     if (!league) {
@@ -333,9 +333,9 @@ import React from "react";
               <h2 className="text-lg font-semibold text-slate-800 mb-6">Top Performers</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                 {([
-                  { title: "Top Scorers", list: topScorer, label: "PPG", key: "avg" },
-                  { title: "Top Rebounders", list: topRebounder, label: "RPG", key: "avg" },
-                  { title: "Top Playmakers", list: topAssists, label: "APG", key: "avg" },
+                  { title: "Top Scorers", list: topScorers, label: "PPG", key: "avg" },
+                  { title: "Top Rebounders", list: topRebounders, label: "RPG", key: "avg" },
+                  { title: "Top Playmakers", list: topAssistsList, label: "APG", key: "avg" },
                 ] as const).map(({ title, list, label, key }) => (
                   <div key={title} className="bg-gray-50 rounded-lg p-4 shadow-inner">
                     <h3 className="text-sm font-semibold text-slate-700 mb-3 text-center">{title}</h3>
