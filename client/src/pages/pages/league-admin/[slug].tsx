@@ -96,14 +96,14 @@ export default function HomePage() {
                 />
               </div>
             )}
-        
+          </div>
+        </div>
 
-          <div className="bg-white p-6 rounded-xl shadow-[0_4px_20px_rgba(255,115,0,0.1)] border">
-            <CustomizationSection league={league} />
-            <div className="mt-6">
-              <h2 className="text-lg font-semibold text-slate-800 mb-2">League Table</h2>
-              <p className="text-sm text-slate-600">This is a placeholder for the league standings component.</p>
-            </div>
+        <div className="bg-white p-6 rounded-xl shadow-[0_4px_20px_rgba(255,115,0,0.1)] border">
+          <CustomizationSection league={league} />
+          <div className="mt-6">
+            <h2 className="text-lg font-semibold text-slate-800 mb-2">League Table</h2>
+            <p className="text-sm text-slate-600">This is a placeholder for the league standings component.</p>
           </div>
         </div>
       </main>
