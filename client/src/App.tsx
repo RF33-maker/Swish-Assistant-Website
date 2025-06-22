@@ -8,7 +8,7 @@ import HomePage from "@/pages/home-page";
 import AuthPage from "@/pages/auth-page";
 import LandingPage from "@/pages/landing-page";
 import LeaguePage from "./pages/pages/league/[slug]";
-import LeagueAdminPage from "@/pages/League-admin-page";
+import LeagueAdminPage from "./pages/pages/league-admin/[slug]";
 import PostLoginDashboard from "@/pages/post-login-dashboard"; // new dashboard page
 import { AuthProvider } from "./hooks/use-auth";
 import { ProtectedRoute } from "./lib/protected-route";

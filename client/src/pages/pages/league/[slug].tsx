@@ -474,47 +474,41 @@ import React from "react";
 
           </section>
 
-          <aside className="space-y-6">
-            {[
-              { title: "Top Scorers", statKey: "points", label: "PPG" },
-              { title: "Top Rebounders", statKey: "rebounds_total", label: "RPG" },
-              { title: "Top Playmakers", statKey: "assists", label: "APG" },
-            ].map(({ title, statKey, label }, sectionIndex) => {
-              const topPlayers = [...playerStats]
-                .filter((p) => !isNaN(p[statKey]))
-                .sort((a, b) => b[statKey] - a[statKey])
-                .slice(0, 5);
+          <aside className="bg-white rounded-xl shadow p-4 space-y-6">
+            {/* Instagram Embed */}
+            <div>
+              <h3 className="text-sm font-semibold text-slate-700 mb-2">Instagram Feed</h3>
+              <iframe
+                src="https://www.instagram.com/p/EXAMPLE/embed"
+                width="100%"
+                height="400"
+                className="rounded-md"
+                allow="autoplay; clipboard-write; encrypted-media; picture-in-picture"
+              ></iframe>
+            </div>
 
-              return (
-                <div key={`${statKey}-section-${sectionIndex}`} className="bg-white rounded-xl shadow p-6 text-left">
-                  <h3 className="text-md font-semibold text-slate-800 mb-4 text-center">{title}</h3>
-                  {topPlayers.length > 0 ? (
-                    <ul className="space-y-2">
-                      {topPlayers.map((player, index) => (
-                        <li key={`${statKey}-${player.id || player.name}-${player.game_date || 'no-date'}-${index}`} className="flex flex-col leading-tight">
-                          <span className="text-sm font-semibold text-slate-800">{player.name}</span>
-                          <span className="text-xs text-slate-500">{player[statKey]} {label}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-sm text-slate-500">Loading...</p>
-                  )}
-                  <div className="pt-4 text-right">
-                    <button
-                      onClick={() => {
-                        const section = document.getElementById("player-stat-explorer");
-                        if (section) section.scrollIntoView({ behavior: "smooth" });
-                      }}
-                      className="text-sm text-orange-500 hover:underline font-medium"
-                    >
-                      Full List →
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+            {/* YouTube Embed */}
+            <div>
+              <h3 className="text-sm font-semibold text-slate-700 mb-2">Latest Highlights</h3>
+              <iframe
+                width="100%"
+                height="250"
+                src="https://www.youtube.com/embed/VIDEO_ID"
+                title="YouTube video player"
+                frameBorder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              ></iframe>
+            </div>
+
+            {/* Comment Section Placeholder */}
+            <div>
+              <h3 className="text-sm font-semibold text-slate-700 mb-2">Community Comments</h3>
+              <p className="text-xs text-slate-500">💬 Only logged-in users can post.</p>
+              <div className="text-xs italic text-slate-400 mt-2">Coming soon...</div>
+            </div>
           </aside>
+
 
         </main>
       </div>
