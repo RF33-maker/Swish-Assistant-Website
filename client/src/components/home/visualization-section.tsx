@@ -1,5 +1,3 @@
-"use client";
-
 import { useEffect, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { Maximize } from "lucide-react";

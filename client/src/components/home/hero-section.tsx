@@ -1,5 +1,3 @@
-"use client";
-
 import SwishAssistantLogo from "@/assets/Swish Assistant Logo.png";
 import ChatContainer from "@/components/chat/ChatContainer";
 
