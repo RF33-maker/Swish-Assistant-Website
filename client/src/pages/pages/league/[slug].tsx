@@ -88,12 +88,9 @@ import React from "react";
     const [prompt, setPrompt] = useState("");
     const [sortField, setSortField] = useState("points");
     const [sortOrder, setSortOrder] = useState("desc");
+    const [sortBy, setSortBy] = useState("points");
+    
 
-    const sortMap = {
-      "Top Scorers": "points",
-      "Top Rebounders": "rebounds_total",
-      "Top Playmakers": "assists",
-    };
 
     useEffect(() => {
       const fetchSuggestions = async () => {
@@ -192,11 +189,42 @@ import React from "react";
       }
     };
 
+    const sortMap: Record<string, string> = {
+      "Top Scorers": "points",
+      "Top Rebounders": "rebounds_total",
+      "Top Playmakers": "assists",
+    };
+
     const sortedStats = [...playerStats].sort((a, b) => {
       const aValue = a[sortField] ?? 0;
       const bValue = b[sortField] ?? 0;
       return sortOrder === "asc" ? aValue - bValue : bValue - aValue;
     });
+
+    const getTopList = (key: string) => {
+      const grouped = playerStats.reduce((acc, curr) => {
+        const playerKey = curr.name;
+        if (!acc[playerKey]) {
+          acc[playerKey] = { ...curr, games: 1 };
+        } else {
+          acc[playerKey][key] += curr[key];
+          acc[playerKey].games += 1;
+        }
+        return acc;
+      }, {});
+
+      const players = Object.values(grouped).map((p: any) => ({
+        ...p,
+        avg: (p[key] / p.games).toFixed(1),
+      }));
+
+      return players.sort((a, b) => b.avg - a.avg).slice(0, 5);
+    };
+
+    const topScorers = getTopList("points");
+    const topRebounders = getTopList("rebounds_total");
+    const topAssists = getTopList("assists");
+
 
     if (!league) {
       return <div className="p-6 text-slate-600">Loading league...</div>;
@@ -304,36 +332,43 @@ import React from "react";
             <section id="stats" className="bg-white rounded-xl shadow p-6">
               <h2 className="text-lg font-semibold text-slate-800 mb-6">Top Performers</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                {[{ title: "Top Scorers", list: topScorer, label: "PPG", key: "avg" },
+                {([
+                  { title: "Top Scorers", list: topScorer, label: "PPG", key: "avg" },
                   { title: "Top Rebounders", list: topRebounder, label: "RPG", key: "avg" },
-                  { title: "Top Playmakers", list: topAssists, label: "APG", key: "avg" }].map(({ title, list, label, key }) => (
-                    <div key={title} className="bg-gray-50 rounded-lg p-4 shadow-inner">
-                      <h3 className="text-sm font-semibold text-slate-700 mb-3 text-center">{title}</h3>
-                      <ul className="space-y-1 text-sm text-slate-800">
-                      {Array.isArray(list) && list.map((p: any, i: number) => (
+                  { title: "Top Playmakers", list: topAssists, label: "APG", key: "avg" },
+                ] as const).map(({ title, list, label, key }) => (
+                  <div key={title} className="bg-gray-50 rounded-lg p-4 shadow-inner">
+                    <h3 className="text-sm font-semibold text-slate-700 mb-3 text-center">{title}</h3>
+                    <ul className="space-y-1 text-sm text-slate-800">
+                      {Array.isArray(list) &&
+                        list.map((p, i) => (
                           <li key={`${title}-${p.name}-${i}`} className="flex justify-between">
                             <span>{p.name}</span>
-                            <span className="font-medium text-orange-500">{p[key]} {label}</span>
+                            <span className="font-medium text-orange-500">
+                              {p[key]} {label}
+                            </span>
                           </li>
                         ))}
-                      </ul>
-                      <div className="text-right pt-2">
-                        <button
-                          onClick={() => {
-                            setSortField(sortMap[title]);
+                    </ul>
+                    <div className="text-right pt-2">
+                      <button
+                        onClick={() => {
+                          const sortKey = sortMap[title as keyof typeof sortMap];
+                          if (sortKey) {
+                            setSortBy(sortKey);
                             setSortOrder("desc");
                             document.getElementById("player-stat-explorer")?.scrollIntoView({ behavior: "smooth" });
-                          }}
-                          className="text-sm text-orange-500 hover:underline"
-                        >
-                          Full List →
-                        </button>
-                      </div>
+                          }
+                        }}
+                        className="text-sm text-orange-500 hover:underline"
+                      >
+                        Full List →
+                      </button>
                     </div>
+                  </div>
                 ))}
               </div>
             </section>
-
 
             <div className="bg-white rounded-xl shadow p-6">
               <h2 className="text-lg font-semibold text-slate-800">Player Stat Explorer</h2>
