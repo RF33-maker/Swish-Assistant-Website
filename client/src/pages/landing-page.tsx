@@ -12,6 +12,7 @@ export default function LandingPage() {
   const [query, setQuery] = useState("")
   const [suggestions, setSuggestions] = useState<any[]>([])
   const [, setLocation] = useLocation()
+  const [trendingLeagues, setTrendingLeagues] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchSuggestions = async () => {
@@ -66,6 +67,21 @@ export default function LandingPage() {
     }
 
   }
+
+  useEffect(() => {
+    const fetchTrending = async () => {
+      const { data, error } = await supabase
+        .from("leagues")
+        .select("name, slug")
+        .eq("is_public", true)
+        .order("updated_at", { ascending: false })
+        .limit(4);
+
+      if (!error) setTrendingLeagues(data || []);
+    };
+
+    fetchTrending();
+  }, []);
 
   return (
     <div className="min-h-screen bg-white text-slate-900 flex flex-col">
@@ -130,21 +146,32 @@ export default function LandingPage() {
 
         {/* Suggestions */}
         <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-4 max-w-xl w-full">
-          {[
-            "Who leads the UWE summer league in rebounds?",
-            "Who averages the most points in NBL D1?",
-            "Take me to the league Rhys Farrell plays in?",
-            "Show me top scorers this season.",
-          ].map((q, i) => (
-            <button
-              key={i}
-              onClick={() => setQuery(q)}
-              className="bg-orange-100 hover:bg-orange-200 text-sm text-orange-800 px-5 py-3 rounded-lg text-left transition"
-            >
-              {q}
-            </button>
-          ))}
+          {trendingLeagues.length > 0
+            ? trendingLeagues.map((league, i) => (
+                <button
+                  key={i}
+                  onClick={() => handleSelect(league.slug)}
+                  className="bg-orange-100 hover:bg-orange-200 text-sm text-orange-800 px-5 py-3 rounded-lg text-left transition"
+                >
+                  🔥 Trending: {league.name}
+                </button>
+              ))
+            : [
+                { name: "UWE Summer League D1", slug: "uwe-summer-league-d1" },
+                { name: "UWE Summer League D2", slug: "uwe-summer-league-d2" },
+                { name: "NBL D3 Gloucester City Kings", slug: "nbl-d3-gck" },
+              ].map((league, i) => (
+                <button
+                  key={i}
+                  onClick={() => handleSelect(league.slug)}
+                  className="bg-orange-100 hover:bg-orange-200 text-sm text-orange-800 px-5 py-3 rounded-lg text-left transition"
+                >
+                  🔥 Trending: {league.name}
+                </button>
+              ))}
         </div>
+
+
       </main>
 
       {/*used by teams and leagues across the UK*/}
@@ -248,7 +275,7 @@ export default function LandingPage() {
               Create a league and showcase your stats
             </h3>
             <p className="text-gray-600 mb-4">
-              Create a public or private league where you can showcase your stats and compare with other players and teams. Don't waste all that data you captured and give it a place to thrive.
+              Create a public league where you can showcase your stats and compare with other players and teams. Don't waste all that data you captured and give it a place to thrive.
             </p>
             <ul className="text-left text-gray-600 list-disc list-inside space-y-2">
               <li>Personalize the league to be branded in your own way</li>

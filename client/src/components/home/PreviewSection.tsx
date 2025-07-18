@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
+import { useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import ScoutingReportTemplate from "@/components/templates/ScoutingReportTemplate";
 import BlankCanvasTemplate from "@/components/templates/BlankCanvasTemplate";
@@ -36,9 +37,26 @@ export default function PreviewSection() {
     summary: <PostGameSummary />,
   };
 
+  const sectionRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleScoutInsert = (e: any) => {
+      const summary = e.detail;
+      if (editor) {
+        editor.commands.setContent(summary);
+        sectionRef.current?.scrollIntoView({ behavior: "smooth" });
+      }
+    };
+
+    window.addEventListener("scout-insert", handleScoutInsert);
+    return () => window.removeEventListener("scout-insert", handleScoutInsert);
+  }, [editor]);
+
 
   return (
-    <section className="py-12 px-4 sm:px-6 lg:px-8 bg-white">
+    <section 
+      ref={sectionRef}
+      className="py-12 px-4 sm:px-6 lg:px-8 bg-white">
       <div className="max-w-7xl mx-auto">
         <div className="mb-4">
           <h2 className="text-2xl font-semibold text-neutral-900 mb-1">Preview</h2>
