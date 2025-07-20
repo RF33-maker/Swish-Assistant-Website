@@ -13,7 +13,7 @@ interface ChatAreaProps {
   onScoutingResponse?: (text: string) => void;
 }
 
-const BACKEND_URL = "https://swishassistantbackend.replit.app";
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
 
 const ChatArea: React.FC<ChatAreaProps> = ({ externalMode, onScoutingResponse }) => {
   const [messages, setMessages] = useState<Message[]>([]);

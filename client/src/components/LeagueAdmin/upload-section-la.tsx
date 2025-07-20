@@ -9,6 +9,8 @@ type League = {
   user_id: string;
 };
 
+const BASE = import.meta.env.VITE_BACKEND_URL;
+
 export default function UploadSection() {
   const { user } = useAuth();
   const [uploading, setUploading] = useState(false);
@@ -59,7 +61,7 @@ export default function UploadSection() {
       setUploadedFile(file.name);
 
       try {
-        const res = await fetch("https://swishassistantbackend.replit.app/api/parse", {
+        const res = await fetch('${BASE}/api/parse', {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

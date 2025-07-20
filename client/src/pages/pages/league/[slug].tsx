@@ -5,6 +5,7 @@ import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import LeagueDefaultImage from "@/assets/league-default.png";
 import React from "react";
 
+const BASE = import.meta.env.VITE_BACKEND_URL;
 
   type PlayerStat = {
     name: string;
@@ -27,7 +28,7 @@ import React from "react";
       setLoading(true);
 
       try {
-        const response = await fetch("https://swishassistantbackend.replit.app/api/generate-summary", {
+        const response = await fetch('${BASE}/api/generate-summary', {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

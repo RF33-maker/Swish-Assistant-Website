@@ -3,6 +3,8 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } fro
 import { Maximize } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+const BASE = import.meta.env.VITE_BACKEND_URL;
+
 export default function VisualizationSection() {
   const [chartData, setChartData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -12,7 +14,7 @@ export default function VisualizationSection() {
   useEffect(() => {
     async function fetchPlayerList() {
       try {
-        const res = await fetch("https://swishassistantbackend.replit.app/players");
+        const res = await fetch('${BASE}/players');
         const names = await res.json();
         setPlayerList(names);
 
@@ -35,7 +37,7 @@ export default function VisualizationSection() {
       setLoading(true);
       try {
         const playerName = encodeURIComponent(selectedPlayer);
-        const res = await fetch(`https://swishassistantbackend.replit.app/chart_summary/${playerName}`);
+        const res = await fetch(`${BASE}/chart_summary/${playerName}`);
         const data = await res.json();
         setChartData(data);
       } catch (err) {
