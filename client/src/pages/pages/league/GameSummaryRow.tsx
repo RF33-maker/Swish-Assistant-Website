@@ -89,10 +89,35 @@ export function GameSummaryRow({
       </button>
 
       {summary && (
-        <div className="p-4 bg-gray-100 rounded">
-          {summary}
+        <div className="mt-3 p-4 bg-orange-50 border-l-4 border-orange-400 rounded-md shadow-sm space-y-3 text-sm text-slate-800">
+          {/* Extract sections using line breaks or regex */}
+          {(() => {
+            const titleMatch = summary.match(/Title Headline:\s*"(.*?)"/);
+            const summaryMatch = summary.match(/2\. Summary:\s*(.*?)3\. Coaching Tip:/s);
+            const coachingMatch = summary.match(/3\. Coaching Tip:\s*(.*)/s);
+
+            return (
+              <>
+                {titleMatch && (
+                  <h3 className="text-lg font-semibold text-orange-600">
+                    {titleMatch[1]}
+                  </h3>
+                )}
+                {summaryMatch && (
+                  <p className="leading-relaxed">{summaryMatch[1].trim()}</p>
+                )}
+                {coachingMatch && (
+                  <div>
+                    <p className="font-semibold text-slate-700 mb-1">Coaching Tip</p>
+                    <p className="leading-relaxed">{coachingMatch[1].trim()}</p>
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
       )}
+
     </div>
   );
 }
