@@ -21,7 +21,7 @@ function Router() {
     <Switch>
       {/* Public */}
       <Route path="/" component={LandingPage} />
-      <Route path="/auth" component={AuthPage} />
+      <Route path="/auth-page" component={AuthPage} />
       <Route path="/league/:slug" component={LeaguePage} />
       <Route path="/reset-password" component={ResetPassword} />
 
