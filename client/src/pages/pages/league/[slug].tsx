@@ -7,68 +7,82 @@ import React from "react";
 
 const BASE = import.meta.env.VITE_BACKEND_URL;
 
-  type PlayerStat = {
-    name: string;
-    points?: number;
-    rebounds_total?: number;
-    assists?: number;
+
+interface Player { name: string; }
+interface Game   { date: string; }
+
+
+function GameSummaryRow({
+  player,
+  game,
+}: {
+  player: Player;
+  game:   Game;
+}) {
+  const [summary, setSummary] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const generateSummary = async () => {
+    setLoading(true);
+
+    // 1) Fetch the stat line from Supabase using real column names
+    const { data: stat, error: statErr } = await supabase
+      .from("player_stats")
+      .select("team, points, rebounds_total, assists")
+      .eq("name",        player.name)
+      .eq("game_date",   game.date)
+      .single();
+
+    if (statErr || !stat) {
+      console.error("❌ Could not load stats:", statErr);
+      setSummary("⚠️ No stats found for that player on that date.");
+      setLoading(false);
+      return;
+    }
+
+    // 2) Send everything into your AI endpoint
+    try {
+      const response = await fetch(`${BASE}/api/generate-summary`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name:       player.name,
+          team:       stat.team,
+          game_date:  game.date,
+          points:     stat.points,
+          rebounds:   stat.rebounds_total,
+          assists:    stat.assists,
+        }),
+      });
+
+      const json = await response.json();
+      setSummary(json.summary);
+    } catch (e) {
+      console.error("❌ Fetch or display error:", e);
+      setSummary("⚠️ Failed to generate summary.");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  function GameSummaryRow({
-    player,
-    leagueId,
-  }: {
-    player: any;
-    leagueId: string;
-  }) {
-    const [summary, setSummary] = useState<string | null>(null);
-    const [loading, setLoading] = useState(false);
+  return (
+    <div className="space-y-2">
+      <button
+        onClick={generateSummary}
+        disabled={loading}
+        className="px-4 py-2 rounded bg-orange-500 text-white disabled:opacity-50"
+      >
+        {loading ? "Loading…" : "Generate AI Summary"}
+      </button>
 
-    const generateSummary = async () => {
-      setLoading(true);
-
-      try {
-        const response = await fetch('${BASE}/api/generate-summary', {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: "Rhys Farrell",
-            team: "Gloucester City Kings",
-            game_date: "2023-09-24",
-          }),
-        });
-
-        const json = await response.json();
-        setSummary(json.summary);
-      } catch (e) {
-        console.error("❌ Fetch or display error:", e);
-        setSummary("⚠️ Failed to generate summary.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    return (
-      <div className="p-4 bg-gray-50 rounded-md mt-2">
-        <p className="text-sm mb-2 text-slate-700">
-          <strong>Game Date:</strong> {player.game_date?.slice(0, 10)} <br />
-          <strong>Team:</strong> {player.team_name || "N/A"}
-        </p>
-
-        {!summary ? (
-          <button
-            onClick={generateSummary}
-            className="bg-orange-500 text-white px-3 py-1 rounded hover:bg-orange-600 text-sm"
-            disabled={loading}
-          >
-            {loading ? "Generating..." : "Generate AI Summary"}
-          </button>
-        ) : (
-          <p className="whitespace-pre-line text-sm text-slate-700 mt-2">{summary}</p>
-        )}
-      </div>
-    );
-  }
+      {summary && (
+        <div className="p-4 bg-gray-100 rounded">
+          {summary}
+        </div>
+      )}
+    </div>
+  );
+}
 
   export default function LeaguePage() {
     const { slug } = useParams();

@@ -14,7 +14,7 @@ export default function VisualizationSection() {
   useEffect(() => {
     async function fetchPlayerList() {
       try {
-        const res = await fetch("${BASE}/players");
+        const res = await fetch(`${BASE}/players`);
         const names = await res.json();
         setPlayerList(names);
 
@@ -37,7 +37,7 @@ export default function VisualizationSection() {
       setLoading(true);
       try {
         const playerName = encodeURIComponent(selectedPlayer);
-        const res = await fetch('${BASE}/chart_summary/${playerName}');
+        const res = await fetch(`${BASE}/chart_summary/${playerName}`);
         const data = await res.json();
         setChartData(data);
       } catch (err) {

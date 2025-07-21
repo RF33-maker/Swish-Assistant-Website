@@ -61,7 +61,7 @@ export default function UploadSection() {
       setUploadedFile(file.name);
 
       try {
-        const res = await fetch('${BASE}/api/parse', {
+        const res = await fetch(`${BASE}/api/parse`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -78,7 +78,7 @@ export default function UploadSection() {
             const errorData = await res.json();
             setMessage(`Parsing failed ❌: ${JSON.stringify(errorData)}`);
           } catch {
-            setMessage("Parsing failed ❌ and could not read error message.");
+            setMessage(`Parsing failed ❌ and could not read error message.`);
           }
         }
       } catch (fetchErr) {

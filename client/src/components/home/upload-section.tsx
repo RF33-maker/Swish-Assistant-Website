@@ -50,7 +50,7 @@ export default function UploadSection() {
       setMessage("Upload successful. Starting parse...");
       setUploadedFile(file.name);
 
-      const res = await fetch('${BASE}/api/parse', {
+      const res = await fetch(`${BASE}/api/parse`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
