@@ -71,7 +71,7 @@ import { GameSummaryRow } from "./GameSummaryRow";
             const { data: scorerData } = await supabase
               .from("player_stats")
               .select("name, points")
-              .eq("league_id", data.id)
+              .eq("league_id", data.league_id)
               .order("points", { ascending: false })
               .limit(1)
               .single();
@@ -79,7 +79,7 @@ import { GameSummaryRow } from "./GameSummaryRow";
             const { data: reboundData } = await supabase
               .from("player_stats")
               .select("name, rebounds_total")
-              .eq("league_id", data.id)
+              .eq("league_id", data.league_id)
               .order("rebounds_total", { ascending: false })
               .limit(1)
               .single();
@@ -87,7 +87,7 @@ import { GameSummaryRow } from "./GameSummaryRow";
             const { data: assistData } = await supabase
               .from("player_stats")
               .select("name, assists")
-              .eq("league_id", data.id)
+              .eq("league_id", data.league_id)
               .order("assists", { ascending: false })
               .limit(1)
               .single();
@@ -95,14 +95,14 @@ import { GameSummaryRow } from "./GameSummaryRow";
             const { data: recentGames } = await supabase
               .from("player_stats")
               .select("name, team_name, game_date, points, assists, rebounds_total")
-              .eq("league_id", data.id)
+              .eq("league_id", data.league_id)
               .order("game_date", { ascending: false })
               .limit(5);
 
             const { data: allPlayerStats } = await supabase
               .from("player_stats")
               .select("*")
-              .eq("league_id", data.id);
+              .eq("league_id", data.league_id);
 
             setTopScorer(scorerData);
             setTopRebounder(reboundData);
