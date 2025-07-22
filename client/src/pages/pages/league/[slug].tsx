@@ -63,10 +63,10 @@ import { GameSummaryRow } from "./GameSummaryRow";
           .select("*")
           .eq("slug", slug)
           .single();
-        console.log("Resolved league from slug:", slug, "→ ID:", data?.id);
+        console.log("Resolved league from slug:", slug, "→ ID:", data?.league_id);
 
 
-        if (data?.id) {
+        if (data?.league_id) {
           const fetchTopStats = async () => {
             const { data: scorerData } = await supabase
               .from("player_stats")
