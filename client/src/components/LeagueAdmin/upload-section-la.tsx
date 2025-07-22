@@ -28,6 +28,7 @@ export default function UploadSection() {
         .then(({ data, error }) => {
           console.log("Returned leagues:", data);
           console.log("Error:", error);
+          console.log("Current user ID:", user?.id);
           setLeagues(data || []);
         });
     }
