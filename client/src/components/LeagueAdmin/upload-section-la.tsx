@@ -25,9 +25,14 @@ export default function UploadSection() {
         .from("leagues")
         .select("league_id, name, user_id")
         .eq("user_id", user.id)
-        .then(({ data }) => setLeagues(data || []));
+        .then(({ data, error }) => {
+          console.log("Returned leagues:", data);
+          console.log("Error:", error);
+          setLeagues(data || []);
+        });
     }
   }, [user]);
+
 
   const onDrop = useCallback(
     async (acceptedFiles: File[]) => {
