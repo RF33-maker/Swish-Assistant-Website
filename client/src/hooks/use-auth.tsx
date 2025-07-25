@@ -1,23 +1,17 @@
 import { createContext, useContext, ReactNode } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { supabase } from "@/lib/supabase";
+import { authApi, type User, type LoginCredentials, type RegisterData } from "@/lib/supabase";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
-import { InsertUser, User as SelectUser } from "@shared/schema";
-
-type LoginData = {
-  username: string;
-  password: string;
-};
 
 type AuthContextType = {
-  user: SelectUser | null;
+  user: User | null;
   isLoading: boolean;
   error: Error | null;
-  loginMutation: ReturnType<typeof useMutation>;
-  logoutMutation: ReturnType<typeof useMutation>;
-  registerMutation: ReturnType<typeof useMutation>;
+  loginMutation: ReturnType<typeof useMutation<User, Error, LoginCredentials>>;
+  logoutMutation: ReturnType<typeof useMutation<void, Error, void>>;
+  registerMutation: ReturnType<typeof useMutation<User, Error, RegisterData>>;
 };
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -30,28 +24,20 @@ function useAuthProviderValue(): AuthContextType {
     data: user,
     error,
     isLoading,
-  } = useQuery<SelectUser | null, Error>({
+  } = useQuery<User | null, Error>({
     queryKey: ["user"],
-    queryFn: async () => {
-      const { data, error } = await supabase.auth.getUser();
-      if (error) throw new Error(error.message);
-      return data?.user ?? null;
-    },
+    queryFn: authApi.getCurrentUser,
   });
 
   const loginMutation = useMutation({
-    mutationFn: async ({ username, password }: LoginData) => {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: username,
-        password,
-      });
-
-      if (error) throw new Error(error.message);
-      return data.user as SelectUser;
-    },
-    onSuccess: (user: SelectUser) => {
+    mutationFn: authApi.login,
+    onSuccess: (user: User) => {
       queryClient.setQueryData(["user"], user);
-      setLocation("/"); // ✅ redirect
+      setLocation("/dashboard"); // redirect to dashboard after login
+      toast({
+        title: "Welcome back!",
+        description: `Logged in as ${user.username}`,
+      });
     },
     onError: (error: Error) => {
       toast({
@@ -63,16 +49,8 @@ function useAuthProviderValue(): AuthContextType {
   });
 
   const registerMutation = useMutation({
-    mutationFn: async ({ username, password }: InsertUser) => {
-      const { data, error } = await supabase.auth.signUp({
-        email: username,
-        password,
-      });
-
-      if (error) throw new Error(error.message);
-      return data.user as SelectUser;
-    },
-    onSuccess: (user: SelectUser) => {
+    mutationFn: authApi.register,
+    onSuccess: (user: User) => {
       queryClient.setQueryData(["user"], user);
     },
     onError: (error: Error) => {
@@ -85,12 +63,14 @@ function useAuthProviderValue(): AuthContextType {
   });
 
   const logoutMutation = useMutation({
-    mutationFn: async () => {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw new Error(error.message);
-    },
+    mutationFn: authApi.logout,
     onSuccess: () => {
       queryClient.setQueryData(["user"], null);
+      setLocation("/"); // redirect to home after logout
+      toast({
+        title: "Logged out",
+        description: "Successfully logged out",
+      });
     },
     onError: (error: Error) => {
       toast({
@@ -102,7 +82,7 @@ function useAuthProviderValue(): AuthContextType {
   });
 
   return {
-    user,
+    user: user ?? null,
     isLoading,
     error,
     loginMutation,
