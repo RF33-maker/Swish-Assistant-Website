@@ -1,93 +1,64 @@
-// client/src/lib/auth.ts
-// Authentication utilities for Express backend
+// client/src/lib/supabase.ts
+import { createClient } from '@supabase/supabase-js';
 
-export interface User {
-  id: number;
-  username: string;
-  email?: string;
-}
+// Get Supabase configuration from environment variables
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://omkwqpcgttrgvbhcxgqf.supabase.co';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ta3dxcGNndHRyZ3ZiaGN4Z3FmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjQ5NDAsImV4cCI6MjA2MjEwMDk0MH0.m58UtfRt6uCpnaeLYEERlrpReF2B1sHy1ztCadL44CA';
 
-export interface LoginCredentials {
-  username: string;
-  password: string;
-}
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-export interface RegisterData {
-  username: string;
-  password: string;
-  email?: string;
-}
+// Python backend configuration
+const backendUrl = import.meta.env.VITE_BACKEND_URL || 'your-flask-backend-url';
 
-// Auth API functions that work with Express backend
-export const authApi = {
-  // Login user
-  async login(credentials: LoginCredentials): Promise<User> {
-    const response = await fetch('/api/login', {
+// API utilities for Flask backend
+export const backendApi = {
+  // Upload and parse file
+  async uploadFile(file: File): Promise<any> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${backendUrl}/upload`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(credentials),
-      credentials: 'include',
+      body: formData,
     });
 
     if (!response.ok) {
       const error = await response.text();
-      throw new Error(error || 'Login failed');
+      throw new Error(error || 'File upload failed');
     }
 
     return response.json();
   },
 
-  // Register user
-  async register(data: RegisterData): Promise<User> {
-    const response = await fetch('/api/register', {
+  // Send chat message
+  async sendMessage(message: string, context?: any): Promise<any> {
+    const response = await fetch(`${backendUrl}/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(data),
-      credentials: 'include',
+      body: JSON.stringify({ message, context }),
     });
 
     if (!response.ok) {
       const error = await response.text();
-      throw new Error(error || 'Registration failed');
+      throw new Error(error || 'Chat request failed');
     }
 
     return response.json();
   },
 
-  // Logout user
-  async logout(): Promise<void> {
-    const response = await fetch('/api/logout', {
-      method: 'POST',
-      credentials: 'include',
+  // Parse document
+  async parseDocument(documentId: string): Promise<any> {
+    const response = await fetch(`${backendUrl}/parse/${documentId}`, {
+      method: 'GET',
     });
 
     if (!response.ok) {
-      throw new Error('Logout failed');
+      const error = await response.text();
+      throw new Error(error || 'Document parsing failed');
     }
-  },
 
-  // Get current user
-  async getCurrentUser(): Promise<User | null> {
-    try {
-      const response = await fetch('/api/user', {
-        credentials: 'include',
-      });
-
-      if (response.status === 401) {
-        return null;
-      }
-
-      if (!response.ok) {
-        throw new Error('Failed to get user');
-      }
-
-      return response.json();
-    } catch {
-      return null;
-    }
+    return response.json();
   },
 };

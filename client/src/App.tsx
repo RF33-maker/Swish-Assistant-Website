@@ -15,6 +15,7 @@ import { ProtectedRoute } from "./lib/protected-route";
 import ResetPassword from "./pages/reset-password";
 import SettingsPage from "./pages/settings-page";
 import ProfilePage from "./pages/profile-page";
+import TestConnections from "./components/test-connections";
 
 function Router() {
   return (
@@ -22,6 +23,7 @@ function Router() {
       {/* Public */}
       <Route path="/" component={LandingPage} />
       <Route path="/auth" component={AuthPage} />
+      <Route path="/test" component={TestConnections} />
       <Route path="/league/:slug" component={LeaguePage} />
       <Route path="/reset-password" component={ResetPassword} />
 
