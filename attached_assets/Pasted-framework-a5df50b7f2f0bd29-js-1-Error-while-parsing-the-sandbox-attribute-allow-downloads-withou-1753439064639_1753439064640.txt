@@ -1,0 +1,60 @@
+framework-a5df50b7f2f0bd29.js:1 Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+_ @ framework-a5df50b7f2f0bd29.js:1
+(anonymous) @ framework-a5df50b7f2f0bd29.js:1
+uD @ framework-a5df50b7f2f0bd29.js:1
+uI @ framework-a5df50b7f2f0bd29.js:1
+uM @ framework-a5df50b7f2f0bd29.js:1
+uS @ framework-a5df50b7f2f0bd29.js:1
+C @ framework-a5df50b7f2f0bd29.js:1
+z @ framework-a5df50b7f2f0bd29.js:1
+79ee481f-439e-4c5e-84f5-cfdbb7adae89-00-3k5vs407rwk02.spock.replit.dev:3001/__replco/workspace_iframe.html?initialPath=%2F&id=%3Ar43%3A:32 Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+eruda.js:2  GET https://omkwqpcgttrgvbhcxgqf.supabase.co/rest/v1/leagues?select=name%2Cslug&is_public=eq.true&order=updated_at.desc&limit=4 400 (Bad Request)
+window.fetch @ Network.js:219
+(anonymous) @ @supabase_supabase-js.js?v=1d750c5c:3900
+(anonymous) @ @supabase_supabase-js.js?v=1d750c5c:3921
+fulfilled @ @supabase_supabase-js.js?v=1d750c5c:3873
+Promise.then
+step @ @supabase_supabase-js.js?v=1d750c5c:3886
+(anonymous) @ @supabase_supabase-js.js?v=1d750c5c:3888
+__awaiter6 @ @supabase_supabase-js.js?v=1d750c5c:3870
+(anonymous) @ @supabase_supabase-js.js?v=1d750c5c:3911
+then @ @supabase_supabase-js.js?v=1d750c5c:89
+eruda.js:2  GET https://79ee481f-439e-4c5e-84f5-cfdbb7adae89-00-3k5vs407rwk02.spock.replit.dev:3001/ net::ERR_NETWORK_IO_SUSPENDED
+window.fetch @ Network.js:219
+ping @ client:736
+waitForSuccessfulPing @ client:749
+(anonymous) @ client:561
+eruda.js:2  Uncaught (in promise) TypeError: Failed to fetch
+    at window.fetch (eruda.js:2:218642)
+    at ping (client:736:13)
+    at waitForSuccessfulPing (client:749:13)
+    at WebSocket.<anonymous> (client:561:13)
+window.fetch @ Network.js:219
+ping @ client:736
+waitForSuccessfulPing @ client:749
+(anonymous) @ client:561
+6101-a81921986e64757f.js:1 WebSocket connection to 'wss://eval.spock.platform.replit.com/wsv2/v2.public.Q2dZSXFzK0t4QVlTQmdqSjY0ckVCaUlGYzNCdlkyc3dBRHJCQWdva056bGxaVFE0TVdZdE5ETTVaUzAwWXpWbExUZzBaalV0WTJaa1ltSTNZV1JoWlRnNUVnTnVhWGdhRjNKbGNHeHBkQzF5WlhCc0xXWnBiR1Z6TFhOd2IyTnJJaWhUZDJsemFDMUJjM05wYzNSaGJuUXRWMlZpYzJsMFpTMUVSVlpGVEU5UVRVVk9WQzFQVGt4WktnOWhkWFJ2YldGMFpXUmhkR2hzWlhSQ1VRb1ljbVZ3YkdsMExYSmxjR3d0WW14dlkydHpMWE53YjJOckVoWnlaWEJzYVhRdGNtVndiQzF0WlhSaExYTndiMk5yR2gxeVpYQnNhWFF0YldGeVoyRnlhVzVsTFdKc2IyTnJjeTF6Y0c5amEwb0hDTHVKM0JJUUFWQUFXaHh2Ym1KdllYSmthVzVuWDJWNGNHVnlhV1Z1WTJWZmJXVmthWFZ0V2c5cGJuUmxiblJmWW5WemFXNWxjM05hRkc5dVltOWhjbVJwYm1kZmNtOXNaVjlsZUdWaldodHZibUp2WVhKa2FXNW5YMnB2WWw5bGJuUnlaWEJ5Wlc1bGRYSjRBRklqQ0FFUWdJQ0FnQ0FaQUFBQUFBQUFFRUFoQUFBQUFBQUFFRUFvZ0lDQWdNZ0JNQUpnQUdvV0NMdUozQklTRDJGMWRHOXRZWFJsWkdGMGFHeGxkSUlCQWlvQW1nRUtDZ2d3TGpBdU1UVTFNS0FCQVE9PSsRKywSO3EQYEqOukWIzMo6Qhcen4qPZz1cEGom5KmnQAXyQB6h7UdmFh4VtjDGVSCOft323FrN7FzPITdN8gk.Q2dad2NtOWtPak1pQ25KbGNHeHBkQzVqYjIwPQ' failed: 
+(anonymous) @ 6101-a81921986e64757f.js:1
+push.52086.constructor.handleClose @ 6101-a81921986e64757f.js:1
+t @ 6101-a81921986e64757f.js:1
+framework-a5df50b7f2f0bd29.js:1 Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+_ @ framework-a5df50b7f2f0bd29.js:1
+(anonymous) @ framework-a5df50b7f2f0bd29.js:1
+uD @ framework-a5df50b7f2f0bd29.js:1
+uI @ framework-a5df50b7f2f0bd29.js:1
+uM @ framework-a5df50b7f2f0bd29.js:1
+uS @ framework-a5df50b7f2f0bd29.js:1
+C @ framework-a5df50b7f2f0bd29.js:1
+z @ framework-a5df50b7f2f0bd29.js:1
+79ee481f-439e-4c5e-84f5-cfdbb7adae89-00-3k5vs407rwk02.spock.replit.dev:3001/__replco/workspace_iframe.html?initialPath=%2F&id=%3Ar7c%3A:32 Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+Network.js:219  GET https://omkwqpcgttrgvbhcxgqf.supabase.co/rest/v1/leagues?select=name%2Cslug&is_public=eq.true&order=updated_at.desc&limit=4 400 (Bad Request)
+window.fetch @ Network.js:219
+(anonymous) @ @supabase_supabase-js.js?v=37d81d46:3900
+(anonymous) @ @supabase_supabase-js.js?v=37d81d46:3921
+fulfilled @ @supabase_supabase-js.js?v=37d81d46:3873
+Promise.then
+step @ @supabase_supabase-js.js?v=37d81d46:3886
+(anonymous) @ @supabase_supabase-js.js?v=37d81d46:3888
+__awaiter6 @ @supabase_supabase-js.js?v=37d81d46:3870
+(anonymous) @ @supabase_supabase-js.js?v=37d81d46:3911
+then @ @supabase_supabase-js.js?v=37d81d46:89

@@ -3,17 +3,22 @@ import react from "@vitejs/plugin-react";
 import path from "path";
 
 export default defineConfig({
-  root: "client",
+  root: "client", // ✅ needed if your index.html lives in client/
   plugins: [react()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "client/src"),
-      "@shared": path.resolve(__dirname, "shared"), // adjust if shared is outside client
+      "@shared": path.resolve(__dirname, "shared"),
       "@assets": path.resolve(__dirname, "client/src/assets"),
     },
   },
+  server: {
+    host: "0.0.0.0",       // ✅ required for Replit preview
+    port: 3000,
+    allowedHosts: true,   // ✅ fixes the blocked host issue
+  },
   build: {
-    outDir: "../dist",
+    outDir: "../dist",     // ✅ necessary if you're customizing build location
     emptyOutDir: true,
   },
 });

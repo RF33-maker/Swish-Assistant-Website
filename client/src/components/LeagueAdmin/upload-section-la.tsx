@@ -10,6 +10,7 @@ type League = {
 };
 
 const BASE = import.meta.env.VITE_BACKEND_URL;
+console.log("🔍 Backend URL:", BASE); // Add this line
 
 export default function UploadSection() {
   const { user } = useAuth();
