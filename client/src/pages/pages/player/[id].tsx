@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Calendar, Trophy, User, TrendingUp, Camera, Brain, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { generatePlayerAnalysis, type PlayerAnalysisData } from "@/lib/ai-analysis";
+import { SwishLogo } from "@/components/SwishLogo";
 
 interface PlayerStat {
   id: string;
@@ -413,10 +414,13 @@ export default function PlayerStatsPage() {
               variant="outline" 
               size="sm"
               onClick={() => setLocation('/')}
-              className="flex items-center gap-2 border-orange-100 hover:bg-orange-50"
+              className="group flex items-center gap-2 border-orange-200 hover:bg-white hover:border-orange-300 transition-all duration-300 hover:shadow-md"
             >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Dashboard
+              <ArrowLeft className="h-4 w-4 group-hover:hidden transition-all duration-300" />
+              <div className="hidden group-hover:block transition-all duration-300">
+                <SwishLogo size={16} className="text-orange-600" />
+              </div>
+              <span className="text-orange-700 group-hover:text-orange-800">Back to Dashboard</span>
             </Button>
           </div>
           
