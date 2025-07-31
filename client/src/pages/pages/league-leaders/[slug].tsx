@@ -90,16 +90,16 @@ export default function LeagueLeadersPage() {
           games_played: []
         };
 
-        // Group stats by player and calculate totals/averages
+        // Group stats by player name and calculate totals/averages
         const playerStatsMap = new Map();
 
         allPlayerStats.forEach(stat => {
-          const playerId = stat.player_id;
-          if (!playerStatsMap.has(playerId)) {
-            playerStatsMap.set(playerId, {
-              player_id: playerId,
+          const playerKey = `${stat.name}_${stat.team_name || 'Unknown'}`; // Use name + team as key
+          if (!playerStatsMap.has(playerKey)) {
+            playerStatsMap.set(playerKey, {
+              player_id: stat.player_id,
               name: stat.name,
-              team_name: stat.team_name,
+              team_name: stat.team_name || 'Unknown Team',
               total_points: 0,
               total_rebounds: 0,
               total_assists: 0,
@@ -115,7 +115,7 @@ export default function LeagueLeadersPage() {
             });
           }
 
-          const playerData = playerStatsMap.get(playerId);
+          const playerData = playerStatsMap.get(playerKey);
           playerData.total_points += stat.points || 0;
           playerData.total_rebounds += stat.rebounds_total || 0;
           playerData.total_assists += stat.assists || 0;
@@ -132,6 +132,9 @@ export default function LeagueLeadersPage() {
 
         const playersArray = Array.from(playerStatsMap.values());
 
+        console.log("🏀 Players array length:", playersArray.length);
+        console.log("🏀 Sample player data:", playersArray[0]);
+
         // Create leaderboards for each category
         processedStats.points = playersArray
           .map(p => ({
@@ -140,7 +143,7 @@ export default function LeagueLeadersPage() {
             display_value: `${(p.total_points / p.games_played).toFixed(1)} PPG`
           }))
           .sort((a, b) => b.avg_points - a.avg_points)
-          .slice(0, 10);
+          .slice(0, 5);
 
         processedStats.rebounds_total = playersArray
           .map(p => ({
@@ -149,7 +152,7 @@ export default function LeagueLeadersPage() {
             display_value: `${(p.total_rebounds / p.games_played).toFixed(1)} RPG`
           }))
           .sort((a, b) => b.avg_rebounds - a.avg_rebounds)
-          .slice(0, 10);
+          .slice(0, 5);
 
         processedStats.assists = playersArray
           .map(p => ({
@@ -158,7 +161,7 @@ export default function LeagueLeadersPage() {
             display_value: `${(p.total_assists / p.games_played).toFixed(1)} APG`
           }))
           .sort((a, b) => b.avg_assists - a.avg_assists)
-          .slice(0, 10);
+          .slice(0, 5);
 
         processedStats.steals = playersArray
           .map(p => ({
@@ -167,7 +170,7 @@ export default function LeagueLeadersPage() {
             display_value: `${(p.total_steals / p.games_played).toFixed(1)} SPG`
           }))
           .sort((a, b) => b.avg_steals - a.avg_steals)
-          .slice(0, 10);
+          .slice(0, 5);
 
         processedStats.blocks = playersArray
           .map(p => ({
@@ -176,10 +179,10 @@ export default function LeagueLeadersPage() {
             display_value: `${(p.total_blocks / p.games_played).toFixed(1)} BPG`
           }))
           .sort((a, b) => b.avg_blocks - a.avg_blocks)
-          .slice(0, 10);
+          .slice(0, 5);
 
-        // Calculate shooting percentages (minimum 2 games)
-        const playersWithEnoughGames = playersArray.filter(p => p.games_played >= 2);
+        // Calculate shooting percentages (minimum 1 game)
+        const playersWithEnoughGames = playersArray.filter(p => p.games_played >= 1);
 
         processedStats.field_goal_percentage = playersWithEnoughGames
           .map(p => ({
@@ -191,9 +194,9 @@ export default function LeagueLeadersPage() {
               ? `${((p.total_field_goals_made / p.total_field_goals_attempted) * 100).toFixed(1)}%`
               : "0.0%"
           }))
-          .filter(p => p.total_field_goals_attempted >= 5) // Minimum 5 attempts
+          .filter(p => p.total_field_goals_attempted >= 2) // Minimum 2 attempts
           .sort((a, b) => b.fg_percentage - a.fg_percentage)
-          .slice(0, 10);
+          .slice(0, 5);
 
         processedStats.three_point_percentage = playersWithEnoughGames
           .map(p => ({
@@ -205,9 +208,9 @@ export default function LeagueLeadersPage() {
               ? `${((p.total_three_points_made / p.total_three_points_attempted) * 100).toFixed(1)}%`
               : "0.0%"
           }))
-          .filter(p => p.total_three_points_attempted >= 3) // Minimum 3 attempts
+          .filter(p => p.total_three_points_attempted >= 1) // Minimum 1 attempt
           .sort((a, b) => b.three_point_percentage - a.three_point_percentage)
-          .slice(0, 10);
+          .slice(0, 5);
 
         processedStats.free_throw_percentage = playersWithEnoughGames
           .map(p => ({
@@ -219,9 +222,9 @@ export default function LeagueLeadersPage() {
               ? `${((p.total_free_throws_made / p.total_free_throws_attempted) * 100).toFixed(1)}%`
               : "0.0%"
           }))
-          .filter(p => p.total_free_throws_attempted >= 3) // Minimum 3 attempts
+          .filter(p => p.total_free_throws_attempted >= 1) // Minimum 1 attempt
           .sort((a, b) => b.ft_percentage - a.ft_percentage)
-          .slice(0, 10);
+          .slice(0, 5);
 
         processedStats.games_played = playersArray
           .map(p => ({
@@ -229,7 +232,7 @@ export default function LeagueLeadersPage() {
             display_value: `${p.games_played} Games`
           }))
           .sort((a, b) => b.games_played - a.games_played)
-          .slice(0, 10);
+          .slice(0, 5);
 
         setLeaderboardStats(processedStats);
 
@@ -425,7 +428,7 @@ export default function LeagueLeadersPage() {
         {/* Note about minimum requirements */}
         <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 text-center">
           <p className="text-sm text-orange-700">
-            * Shooting percentages require minimum attempts: Field Goals (5+), Three Pointers (3+), Free Throws (3+) and 2+ games played
+            * Shooting percentages require minimum attempts: Field Goals (2+), Three Pointers (1+), Free Throws (1+)
           </p>
         </div>
       </main>
