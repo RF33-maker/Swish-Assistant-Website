@@ -22,6 +22,8 @@ export default function LandingPage() {
       }
 
       // Search both leagues and players
+      console.log("🔍 Searching for:", query);
+      
       const [leaguesResponse, playersResponse] = await Promise.all([
         supabase
           .from("leagues")
@@ -34,6 +36,10 @@ export default function LandingPage() {
           .or(`name.ilike.%${query}%,team.ilike.%${query}%`)
           .limit(10)
       ]);
+
+      console.log("📊 Players response:", playersResponse);
+      console.log("📊 Players data:", playersResponse.data);
+      console.log("📊 Players error:", playersResponse.error);
 
       const leagues = leaguesResponse.data || [];
       const players = playersResponse.data || [];
