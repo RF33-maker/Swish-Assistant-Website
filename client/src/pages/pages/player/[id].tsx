@@ -10,22 +10,24 @@ import { useToast } from "@/hooks/use-toast";
 interface PlayerStat {
   id: string;
   player_id: string;
-  name: string;  // Using 'name' column as requested
-  team_name: string;
+  name?: string;  // Using 'name' column as requested
+  player_name?: string;  // Fallback column
+  team_name?: string;
+  team?: string;  // Fallback column
   game_date: string;
-  opponent: string;
-  points: number;
-  rebounds: number;
-  assists: number;
-  steals: number;
-  blocks: number;
-  field_goals_made: number;
-  field_goals_attempted: number;
-  three_pointers_made: number;
-  three_pointers_attempted: number;
-  free_throws_made: number;
-  free_throws_attempted: number;
-  minutes_played: number;
+  opponent?: string;
+  points?: number;
+  rebounds?: number;
+  assists?: number;
+  steals?: number;
+  blocks?: number;
+  field_goals_made?: number;
+  field_goals_attempted?: number;
+  three_pointers_made?: number;
+  three_pointers_attempted?: number;
+  free_throws_made?: number;
+  free_throws_attempted?: number;
+  minutes_played?: number;
 }
 
 interface SeasonAverages {
@@ -58,11 +60,15 @@ export default function PlayerStatsPage() {
       setLoading(true);
       try {
         // Fetch player game stats using 'name' column
+        console.log('Fetching stats for player ID:', playerId);
+        
         const { data: stats, error: statsError } = await supabase
           .from('player_stats')
           .select('*')
           .eq('player_id', playerId)
           .order('game_date', { ascending: false });
+
+        console.log('Player stats query result:', { stats, error: statsError });
 
         if (statsError) {
           console.error('Error fetching player stats:', statsError);
@@ -78,9 +84,10 @@ export default function PlayerStatsPage() {
 
         // Calculate season averages if we have stats
         if (stats && stats.length > 0) {
+          console.log('First stat record:', stats[0]);
           setPlayerInfo({
-            name: stats[0].name,  // Using 'name' column from player_stats
-            team: stats[0].team_name
+            name: stats[0].name || stats[0].player_name || 'Unknown Player',  // Fallback to player_name if name doesn't exist
+            team: stats[0].team_name || stats[0].team || 'Unknown Team'
           });
 
           const totals = stats.reduce((acc, game) => ({
