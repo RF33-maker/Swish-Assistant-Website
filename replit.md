@@ -38,6 +38,8 @@ A professional React and Tailwind CSS website with login functionality and an in
   - Connected search results to individual player stats pages at `/player/[id]`
   - Player pages display season averages and game-by-game statistics
   - Changed background styling to white instead of orange gradient per user preference
+  - Added playful micro-interactions with hover animations, progress bars, and smooth transitions
+  - Enhanced player profile section with profile picture placeholder and trending indicators
 - **2025-01-25**: Fixed frontend-backend communication issues and restored proper architecture
   - Restored Supabase configuration for database and authentication
   - Connected frontend to external Python Flask backend (https://sab-backend.onrender.com)

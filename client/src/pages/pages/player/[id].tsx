@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Calendar, Trophy, User } from "lucide-react";
+import { ArrowLeft, Calendar, Trophy, User, TrendingUp, Camera } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface PlayerStat {
@@ -217,16 +217,38 @@ export default function PlayerStatsPage() {
           </Button>
           
           {playerInfo && (
-            <div className="flex items-center gap-3 animate-slide-in-up">
-              <div className="h-12 w-12 rounded-full bg-orange-600 flex items-center justify-center animate-float hover:animate-shake cursor-pointer">
-                <User className="h-6 w-6 text-white" />
+            <div className="flex items-center gap-4 animate-slide-in-up">
+              {/* Profile Picture Section */}
+              <div className="relative group">
+                <div className="h-20 w-20 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center animate-float hover:animate-shake cursor-pointer shadow-lg">
+                  <User className="h-10 w-10 text-white" />
+                  {/* Camera overlay for profile pic upload */}
+                  <div className="absolute inset-0 rounded-full bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                    <Camera className="h-6 w-6 text-white" />
+                  </div>
+                </div>
+                <div className="absolute -bottom-1 -right-1 bg-orange-500 rounded-full p-1.5 shadow-lg animate-pulse">
+                  <TrendingUp className="h-3 w-3 text-white" />
+                </div>
               </div>
-              <div>
-                <h1 className="text-3xl font-bold text-orange-900 hover:text-orange-700 transition-colors duration-300">{playerInfo.name}</h1>
-                <p className="text-orange-700 flex items-center gap-2 hover:text-orange-600 transition-colors duration-300">
-                  <Trophy className="h-4 w-4 hover:animate-bounce" />
+              
+              {/* Player Info */}
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-1">
+                  <h1 className="text-3xl font-bold text-orange-900 hover:text-orange-700 transition-colors duration-300">{playerInfo.name}</h1>
+                  <TrendingUp className="h-6 w-6 text-orange-500 animate-bounce" />
+                </div>
+                <p className="text-orange-700 flex items-center gap-2 hover:text-orange-600 transition-colors duration-300 text-lg">
+                  <Trophy className="h-5 w-5 hover:animate-bounce" />
                   {playerInfo.team}
                 </p>
+                <div className="flex items-center gap-4 mt-2 text-sm text-orange-600">
+                  <span className="flex items-center gap-1">
+                    <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
+                    Active Player
+                  </span>
+                  <span className="text-orange-500 font-semibold">Performance Trending ↗</span>
+                </div>
               </div>
             </div>
           )}
