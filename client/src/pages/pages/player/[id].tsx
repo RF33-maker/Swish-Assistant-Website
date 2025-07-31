@@ -431,7 +431,7 @@ export default function PlayerStatsPage() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search players or leagues..."
-                className="flex-1 px-4 py-2 text-sm text-slate-900 focus:outline-none bg-white"
+                className="flex-1 px-4 py-2 text-sm text-orange-800 focus:outline-none bg-white"
               />
               <button
                 type="submit"
@@ -486,8 +486,8 @@ export default function PlayerStatsPage() {
                     <div className="h-20 w-20 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center animate-float hover:animate-shake cursor-pointer shadow-md">
                       <User className="h-10 w-10 text-white" />
                       {/* Camera overlay for profile pic upload */}
-                      <div className="absolute inset-0 rounded-full bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-                        <Camera className="h-6 w-6 text-white" />
+                      <div className="absolute inset-0 rounded-full bg-white bg-opacity-20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                        <Camera className="h-6 w-6 text-orange-700" />
                       </div>
                     </div>
                     <div className="absolute -bottom-1 -right-1 bg-orange-400 rounded-full p-1.5 shadow-md animate-pulse">
