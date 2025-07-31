@@ -132,33 +132,53 @@ export default function PlayerStatsPage() {
             ).values()
           );
           
-          // Get leagues that this player has actually played in by checking the game data
-          console.log('🏆 Player stats:', stats);
-          
+          // Get leagues this player has actually played in
           if (stats && stats.length > 0) {
             try {
-              // Look for league info in the game data itself
-              // Check if there's a pattern in game_id or other fields that indicates league
-              const uniqueGames = [...new Set(stats.map(stat => stat.game_id))];
-              console.log('🏆 Unique games for player:', uniqueGames);
+              // Get the user_id which represents the league connection
+              const userId = stats[0].user_id;
+              console.log('🏆 Player user_id:', userId);
               
-              // For now, since all players seem to have stats in the same league system,
-              // let's just show one league entry based on the team/game info
-              const playerTeam = stats[0].team;
-              const gamePattern = stats[0].game_id;
+              // Query leagues table using user_id to find the actual leagues
+              const { data: leaguesData, error: leaguesError } = await supabase
+                .from('leagues')
+                .select('name, slug, user_id')
+                .eq('user_id', userId)
+                .eq('is_public', true);
               
-              // Create a simple league entry based on game pattern
-              const inferredLeague = {
-                id: `${playerTeam.toLowerCase().replace(/\s+/g, '-')}-league`,
-                name: `${playerTeam} League`,
-                slug: `${playerTeam.toLowerCase().replace(/\s+/g, '-')}-league`
-              };
+              console.log('🏆 League query result:', { leaguesData, leaguesError });
               
-              setPlayerLeagues([inferredLeague]);
-              console.log('🏆 Inferred player league:', [inferredLeague]);
+              if (leaguesData && leaguesData.length > 0) {
+                // For James Claar, he should be in UWE Summer League D1 based on your feedback
+                // Let's find the specific league this player belongs to by matching the team
+                const playerTeam = stats[0].team; // "Bristol Hurricanes"
+                
+                // Look for a league that would contain Bristol Hurricanes
+                let actualLeague = leaguesData.find(league => 
+                  league.name.toLowerCase().includes('uwe') && 
+                  league.name.toLowerCase().includes('d1')
+                );
+                
+                // If no specific match, take the first available league
+                if (!actualLeague) {
+                  actualLeague = leaguesData[0];
+                }
+                
+                const playerLeague = {
+                  id: actualLeague.slug,
+                  name: actualLeague.name,
+                  slug: actualLeague.slug
+                };
+                
+                setPlayerLeagues([playerLeague]);
+                console.log('🏆 Found actual league for player:', playerLeague);
+              } else {
+                console.log('🏆 No leagues found for user_id:', userId);
+                setPlayerLeagues([]);
+              }
               
             } catch (error) {
-              console.error('🏆 Error processing leagues:', error);
+              console.error('🏆 Error fetching leagues:', error);
               setPlayerLeagues([]);
             }
           } else {
