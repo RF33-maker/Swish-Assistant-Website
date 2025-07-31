@@ -132,38 +132,52 @@ export default function PlayerStatsPage() {
             ).values()
           );
           
-          // Try to fetch league names from Supabase first
+          // Get all public leagues and match by user_id (which seems to be the league connection)
+          console.log('🏆 League IDs found in stats:', uniqueLeagues.map(l => l.id));
+          
           if (uniqueLeagues.length > 0) {
             try {
+              // Get the user_id from stats which represents the league connection
+              const userId = stats[0].user_id;
+              console.log('🏆 Looking for leagues with user_id:', userId);
+              
               const { data: leaguesData, error: leaguesError } = await supabase
                 .from('leagues')
-                .select('id, name, slug')
-                .in('id', uniqueLeagues.map(l => l.id));
+                .select('name, slug')
+                .eq('user_id', userId)
+                .eq('is_public', true);
               
               console.log('🏆 Leagues query result:', { leaguesData, leaguesError });
               
               if (leaguesData && leaguesData.length > 0) {
-                setPlayerLeagues(leaguesData);
-                console.log('🏆 Found leagues from Supabase:', leaguesData);
-              } else {
-                // Fallback: Create league entries with IDs as names for now
-                const fallbackLeagues = uniqueLeagues.map(league => ({
-                  id: league.id,
-                  name: `League ${league.id.substring(0, 8)}...`,
-                  slug: league.id
+                const formattedLeagues = leaguesData.map(league => ({
+                  id: league.slug,
+                  name: league.name,
+                  slug: league.slug
                 }));
-                setPlayerLeagues(fallbackLeagues);
-                console.log('🏆 Using fallback leagues:', fallbackLeagues);
+                setPlayerLeagues(formattedLeagues);
+                console.log('🏆 Found leagues from Supabase:', formattedLeagues);
+              } else {
+                console.log('🏆 No leagues found, trying to get any public leagues as fallback');
+                // Fallback: Get any public leagues
+                const { data: allLeagues } = await supabase
+                  .from('leagues')
+                  .select('name, slug')
+                  .eq('is_public', true)
+                  .limit(3);
+                
+                if (allLeagues && allLeagues.length > 0) {
+                  const formattedLeagues = allLeagues.map(league => ({
+                    id: league.slug,
+                    name: league.name,
+                    slug: league.slug
+                  }));
+                  setPlayerLeagues(formattedLeagues);
+                  console.log('🏆 Using fallback public leagues:', formattedLeagues);
+                }
               }
             } catch (error) {
               console.error('🏆 Error fetching leagues:', error);
-              // Fallback for any errors
-              const fallbackLeagues = uniqueLeagues.map(league => ({
-                id: league.id,
-                name: `League ${league.id.substring(0, 8)}...`,
-                slug: league.id
-              }));
-              setPlayerLeagues(fallbackLeagues);
             }
           }
         }
