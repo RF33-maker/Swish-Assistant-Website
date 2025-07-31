@@ -478,7 +478,7 @@ export default function PlayerStatsPage() {
         {/* Player Info Section */}
         {playerInfo && (
           <div className="mb-8">
-            <Card className="border-orange-100 shadow-md animate-slide-in-up">
+            <Card className="border-orange-200 shadow-md animate-slide-in-up bg-white">
               <CardContent className="pt-6">
                 <div className="flex items-center gap-4">
                   {/* Profile Picture Section */}
@@ -546,8 +546,8 @@ export default function PlayerStatsPage() {
 
         {/* Player Leagues */}
         {playerLeagues.length > 0 && (
-          <Card className="mb-6 border-orange-100 shadow-md animate-slide-in-up">
-            <CardHeader className="bg-orange-100 text-orange-900 rounded-t-lg border-b border-orange-200">
+          <Card className="mb-6 border-orange-200 shadow-md animate-slide-in-up bg-white">
+            <CardHeader className="bg-white text-orange-900 rounded-t-lg border-b border-orange-200">
               <CardTitle className="flex items-center gap-2">
                 <Trophy className="h-5 w-5 animate-float text-orange-700" />
                 Active Leagues ({playerLeagues.length})
@@ -565,7 +565,7 @@ export default function PlayerStatsPage() {
                     className="group cursor-pointer transform hover:scale-105 transition-all duration-300 animate-slide-in-up hover:animate-glow"
                     style={{ animationDelay: `${index * 150}ms` }}
                   >
-                    <Card className="border-orange-100 hover:border-orange-200 transition-all duration-300 hover:shadow-md">
+                    <Card className="border-orange-200 hover:border-orange-300 transition-all duration-300 hover:shadow-md bg-white">
                       <CardContent className="p-4">
                         <div className="flex items-center gap-3">
                           <div className="h-12 w-12 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center group-hover:rotate-12 transition-transform duration-300">
@@ -595,8 +595,8 @@ export default function PlayerStatsPage() {
 
         {/* Season Averages */}
         {seasonAverages && (
-          <Card className="mb-8 border-orange-100 shadow-md animate-slide-in-up hover:animate-glow">
-            <CardHeader className="bg-orange-100 text-orange-900 rounded-t-lg border-b border-orange-200">
+          <Card className="mb-8 border-orange-200 shadow-md animate-slide-in-up hover:animate-glow bg-white">
+            <CardHeader className="bg-white text-orange-900 rounded-t-lg border-b border-orange-200">
               <CardTitle className="flex items-center gap-2">
                 <Trophy className="h-5 w-5 animate-float text-orange-700" />
                 Season Averages ({seasonAverages.games_played} games)
@@ -705,8 +705,8 @@ export default function PlayerStatsPage() {
         )}
 
         {/* Game Log */}
-        <Card className="border-orange-100 shadow-md">
-          <CardHeader className="bg-orange-50 border-b border-orange-100">
+        <Card className="border-orange-200 shadow-md bg-white">
+          <CardHeader className="bg-white border-b border-orange-200">
             <CardTitle className="flex items-center gap-2 text-orange-800">
               <Calendar className="h-5 w-5" />
               Game Log
