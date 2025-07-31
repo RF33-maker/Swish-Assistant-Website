@@ -48,66 +48,76 @@ export default function PlayerStatsPage() {
   const { toast } = useToast();
   
   const playerId = match?.id;
+  
+  console.log('🎯 ROUTE DEBUG - Match object:', match);
+  console.log('🎯 ROUTE DEBUG - Player ID from match:', playerId);
   const [playerStats, setPlayerStats] = useState<PlayerStat[]>([]);
   const [seasonAverages, setSeasonAverages] = useState<SeasonAverages | null>(null);
   const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!playerId) return;
+    if (!playerId) {
+      console.log('No playerId provided');
+      return;
+    }
+
+    console.log('🏀 PLAYER PAGE - Starting data fetch for playerId:', playerId);
 
     const fetchPlayerData = async () => {
       setLoading(true);
       try {
-        // Fetch player game stats - try both player_id and name matching
-        console.log('Fetching stats for player ID:', playerId);
+        console.log('🔍 Step 1: Fetching player record by ID...');
         
         // First get the player's name from the specific record ID
-        console.log('Getting player name from ID:', playerId);
         const { data: playerRecord, error: playerError } = await supabase
           .from('player_stats')
           .select('name, team')
           .eq('id', playerId)
           .single();
 
-        console.log('Player record:', playerRecord, 'Error:', playerError);
+        console.log('📋 Step 1 Result - Player record:', playerRecord);
+        console.log('📋 Step 1 Error:', playerError);
 
         if (playerError || !playerRecord) {
-          console.error('Could not find player with ID:', playerId);
+          console.error('❌ Could not find player with ID:', playerId, 'Error:', playerError);
           toast({
             title: "Player Not Found",
             description: "Could not find player with the specified ID",
             variant: "destructive",
           });
+          setLoading(false);
           return;
         }
 
-        // Now get ALL stats for this player by name
-        console.log('Getting all stats for player:', playerRecord.name);
+        console.log('🔍 Step 2: Getting all stats for player:', playerRecord.name);
         const { data: stats, error: statsError } = await supabase
           .from('player_stats')
           .select('*')
           .eq('name', playerRecord.name)
           .order('game_date', { ascending: false });
 
-        console.log('Player stats query result:', { stats, error: statsError });
+        console.log('📊 Step 2 Result - Found', stats?.length || 0, 'stat records');
+        console.log('📊 Stats data sample:', stats?.[0]);
+        console.log('📊 Stats error:', statsError);
 
         if (statsError) {
-          console.error('Error fetching player stats:', statsError);
+          console.error('❌ Error fetching player stats:', statsError);
           toast({
             title: "Error Loading Stats",
             description: "Failed to load player statistics",
             variant: "destructive",
           });
+          setLoading(false);
           return;
         }
 
+        console.log('✅ Step 3: Setting player stats...');
         setPlayerStats(stats || []);
 
         // Calculate season averages if we have stats
         if (stats && stats.length > 0) {
-          console.log('Found', stats.length, 'stat records for player');
-          console.log('First stat record:', stats[0]);
+          console.log('📈 Step 4: Calculating averages for', stats.length, 'games');
           setPlayerInfo({
             name: stats[0].name || stats[0].player_name || 'Unknown Player',
             team: stats[0].team || stats[0].team_name || 'Unknown Team'
@@ -133,7 +143,7 @@ export default function PlayerStatsPage() {
           });
 
           const games = stats.length;
-          setSeasonAverages({
+          const averages = {
             games_played: games,
             avg_points: totals.points / games,
             avg_rebounds: totals.rebounds / games,
@@ -143,16 +153,23 @@ export default function PlayerStatsPage() {
             fg_percentage: totals.field_goals_attempted > 0 ? (totals.field_goals_made / totals.field_goals_attempted) * 100 : 0,
             three_point_percentage: totals.three_pointers_attempted > 0 ? (totals.three_pointers_made / totals.three_pointers_attempted) * 100 : 0,
             ft_percentage: totals.free_throws_attempted > 0 ? (totals.free_throws_made / totals.free_throws_attempted) * 100 : 0,
-          });
+          };
+          console.log('📊 Step 5: Calculated averages:', averages);
+          setSeasonAverages(averages);
+        } else {
+          console.log('⚠️ No stats found for player');
         }
+        
+        console.log('✅ PLAYER PAGE - Data fetch completed successfully');
       } catch (error) {
-        console.error('Error fetching player data:', error);
+        console.error('❌ PLAYER PAGE - Unexpected error:', error);
         toast({
           title: "Error",
           description: "Failed to load player data",
           variant: "destructive",
         });
       } finally {
+        console.log('🏁 PLAYER PAGE - Setting loading to false');
         setLoading(false);
       }
     };
