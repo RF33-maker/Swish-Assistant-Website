@@ -31,14 +31,17 @@ A professional React and Tailwind CSS website with login functionality and an in
 - Responsive design with mobile support
 
 ## Recent Changes
+- **2025-01-31**: Enhanced player search and statistics system
+  - Integrated player search into landing page search bar alongside leagues
+  - Fixed player stats page routing using proper wouter parameter extraction
+  - Added comprehensive player list page at `/players` with search and filtering
+  - Connected search results to individual player stats pages at `/player/[id]`
+  - Player pages display season averages and game-by-game statistics
+  - Changed background styling to white instead of orange gradient per user preference
 - **2025-01-25**: Fixed frontend-backend communication issues and restored proper architecture
   - Restored Supabase configuration for database and authentication
   - Connected frontend to external Python Flask backend (https://sab-backend.onrender.com)
   - Added backendApi utilities for file upload, document parsing, and chatbot functionality
-  - Configured environment variables for VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, and VITE_BACKEND_URL
-  - Fixed frontend to work as standalone React app without Express backend dependency
-  - Created player stats page at `/leagues/[id]` with comprehensive basketball statistics display
-  - Added season averages calculation and game log table with full stat tracking
 
 ## User Preferences
 - Use modern React patterns with hooks
