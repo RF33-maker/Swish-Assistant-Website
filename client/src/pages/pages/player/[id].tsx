@@ -4,8 +4,9 @@ import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Calendar, Trophy, User, TrendingUp, Camera } from "lucide-react";
+import { ArrowLeft, Calendar, Trophy, User, TrendingUp, Camera, Brain, Sparkles } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { generatePlayerAnalysis, type PlayerAnalysisData } from "@/lib/ai-analysis";
 
 interface PlayerStat {
   id: string;
@@ -59,6 +60,8 @@ export default function PlayerStatsPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchSuggestions, setSearchSuggestions] = useState<any[]>([]);
+  const [aiAnalysis, setAiAnalysis] = useState<string>("");
+  const [analysisLoading, setAnalysisLoading] = useState(false);
 
   useEffect(() => {
     if (!playerId) {
@@ -229,6 +232,34 @@ export default function PlayerStatsPage() {
           };
           console.log('📊 Step 6: Calculated averages:', averages);
           setSeasonAverages(averages);
+
+          // Generate AI analysis
+          if (playerRecord && averages) {
+            setAnalysisLoading(true);
+            try {
+              const analysisData: PlayerAnalysisData = {
+                name: playerRecord.name,
+                games_played: averages.games_played,
+                avg_points: averages.avg_points,
+                avg_rebounds: averages.avg_rebounds,
+                avg_assists: averages.avg_assists,
+                avg_steals: averages.avg_steals,
+                avg_blocks: averages.avg_blocks,
+                fg_percentage: averages.fg_percentage,
+                three_point_percentage: averages.three_point_percentage,
+                ft_percentage: averages.ft_percentage
+              };
+              
+              const analysis = await generatePlayerAnalysis(analysisData);
+              setAiAnalysis(analysis);
+              console.log("🤖 AI Analysis generated:", analysis);
+            } catch (error) {
+              console.error("❌ AI Analysis error:", error);
+              setAiAnalysis("Dynamic player with strong fundamentals and competitive drive.");
+            } finally {
+              setAnalysisLoading(false);
+            }
+          }
         } else {
           console.log('⚠️ No stats found for player');
         }
@@ -476,12 +507,35 @@ export default function PlayerStatsPage() {
                       <Trophy className="h-5 w-5 hover:animate-bounce flex-shrink-0" />
                       <span className="break-words">{playerInfo.team}</span>
                     </p>
-                    <div className="flex flex-wrap items-center gap-4 text-sm text-orange-600">
+                    <div className="flex flex-wrap items-center gap-4 text-sm text-orange-600 mb-3">
                       <span className="flex items-center gap-1 whitespace-nowrap">
                         <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
                         Active Player
                       </span>
                       <span className="text-orange-500 font-semibold whitespace-nowrap">Performance Trending ↗</span>
+                    </div>
+                    
+                    {/* AI Analysis */}
+                    <div className="bg-gradient-to-r from-orange-50 to-orange-100 rounded-lg p-3 border border-orange-200">
+                      <div className="flex items-start gap-2">
+                        <div className="flex items-center gap-1 text-orange-600 text-sm font-medium mb-1">
+                          {analysisLoading ? (
+                            <Brain className="h-4 w-4 animate-pulse" />
+                          ) : (
+                            <Sparkles className="h-4 w-4" />
+                          )}
+                          AI Player Analysis
+                        </div>
+                      </div>
+                      <p className="text-sm text-orange-800 leading-relaxed">
+                        {analysisLoading ? (
+                          <span className="flex items-center gap-2">
+                            <span className="animate-pulse">Analyzing playing style...</span>
+                          </span>
+                        ) : (
+                          aiAnalysis || "Analysis will appear after stats are loaded."
+                        )}
+                      </p>
                     </div>
                   </div>
                 </div>
