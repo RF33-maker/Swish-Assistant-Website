@@ -57,6 +57,8 @@ export default function PlayerStatsPage() {
   const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string } | null>(null);
   const [playerLeagues, setPlayerLeagues] = useState<{ id: string; name: string; slug: string }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchSuggestions, setSearchSuggestions] = useState<any[]>([]);
 
   useEffect(() => {
     if (!playerId) {
@@ -248,6 +250,105 @@ export default function PlayerStatsPage() {
     fetchPlayerData();
   }, [playerId, toast]);
 
+  // Search functionality
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchSuggestions([]);
+      return;
+    }
+
+    const fetchSuggestions = async () => {
+      console.log("🔍 Searching for:", searchQuery);
+      
+      const [leaguesResponse, playersResponse] = await Promise.all([
+        supabase
+          .from("leagues")
+          .select("name, slug")
+          .or(`name.ilike.%${searchQuery}%`)
+          .eq("is_public", true),
+        supabase
+          .from("player_stats")
+          .select("name, team, id")
+          .ilike("name", `%${searchQuery}%`)
+          .limit(10)
+      ]);
+
+      const leagues = leaguesResponse.data || [];
+      const players = playersResponse.data || [];
+
+      // Remove duplicate players (same name) and format
+      const uniquePlayers = players.reduce((acc: any[], player) => {
+        if (!acc.some(p => p.name === player.name)) {
+          acc.push({
+            name: player.name,
+            team: player.team,
+            player_id: player.id,
+            type: 'player'
+          });
+        }
+        return acc;
+      }, []);
+
+      // Format leagues
+      const formattedLeagues = leagues.map(league => ({
+        ...league,
+        type: 'league'
+      }));
+
+      // Combine and limit results
+      const combined = [...formattedLeagues, ...uniquePlayers].slice(0, 8);
+      setSearchSuggestions(combined);
+    }
+
+    const delayDebounce = setTimeout(fetchSuggestions, 300);
+    return () => clearTimeout(delayDebounce);
+  }, [searchQuery]);
+
+  const handleSearchSelect = (item: any) => {
+    setSearchQuery("");
+    setSearchSuggestions([]);
+    
+    if (item.type === 'league') {
+      setLocation(`/league/${item.slug}`);
+    } else if (item.type === 'player') {
+      setLocation(`/player/${item.player_id}`);
+    }
+  };
+
+  const handleSearchSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+
+    const { data, error } = await supabase
+      .from("leagues")
+      .select("slug")
+      .ilike("name", `%${searchQuery.toLowerCase()}%`)
+      .eq("is_public", true);
+
+    if (error) console.error("Supabase error:", error);
+
+    if (data && data.length > 0) {
+      setLocation(`/league/${data[0].slug}`);
+    } else {
+      // Try to find a player instead
+      const { data: playerData } = await supabase
+        .from("player_stats")
+        .select("id, name")
+        .ilike("name", `%${searchQuery}%`)
+        .limit(1);
+      
+      if (playerData && playerData.length > 0) {
+        setLocation(`/player/${playerData[0].id}`);
+      } else {
+        toast({
+          title: "No Results",
+          description: "No players or leagues found with that name.",
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       month: 'short',
@@ -323,6 +424,60 @@ export default function PlayerStatsPage() {
                 </div>
               </div>
             </div>
+          )}
+        </div>
+
+        {/* Search Bar */}
+        <div className="mb-8 max-w-2xl relative">
+          <form
+            onSubmit={handleSearchSubmit}
+            className="flex items-center shadow-lg rounded-full border border-orange-200 overflow-hidden bg-white"
+          >
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search for other players or leagues..."
+              className="flex-1 px-5 py-3 text-base text-slate-900 focus:outline-none bg-white"
+            />
+            <button
+              type="submit"
+              className="bg-orange-500 text-white font-semibold px-6 py-3 hover:bg-orange-600 transition"
+            >
+              Search
+            </button>
+          </form>
+
+          {searchSuggestions.length > 0 && (
+            <ul className="absolute z-50 w-full bg-white border border-orange-200 mt-1 rounded-md shadow-lg max-h-60 overflow-y-auto">
+              {searchSuggestions.map((item, index) => (
+                <li
+                  key={index}
+                  onClick={() => handleSearchSelect(item)}
+                  className="px-5 py-3 cursor-pointer hover:bg-orange-50 text-left text-slate-900 border-b border-orange-100 last:border-b-0"
+                >
+                  <div className="flex items-center gap-3">
+                    {item.type === 'league' ? (
+                      <span className="text-orange-500 text-lg">🏆</span>
+                    ) : (
+                      <span className="text-blue-500 text-lg">👤</span>
+                    )}
+                    <div className="flex-1">
+                      <div className="font-medium text-slate-900">{item.name}</div>
+                      {item.type === 'player' && (
+                        <div className="text-sm text-slate-600">{item.team}</div>
+                      )}
+                      {item.type === 'league' && (
+                        <div className="text-sm text-slate-600">League</div>
+                      )}
+                    </div>
+                    <div className="text-xs text-slate-500 capitalize bg-orange-100 px-2 py-1 rounded">
+                      {item.type}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
 
