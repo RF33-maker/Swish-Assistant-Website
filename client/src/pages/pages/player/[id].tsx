@@ -55,6 +55,7 @@ export default function PlayerStatsPage() {
   const [playerStats, setPlayerStats] = useState<PlayerStat[]>([]);
   const [seasonAverages, setSeasonAverages] = useState<SeasonAverages | null>(null);
   const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string } | null>(null);
+  const [playerLeagues, setPlayerLeagues] = useState<{ id: string; name: string; slug: string }[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -116,9 +117,60 @@ export default function PlayerStatsPage() {
         console.log('✅ Step 3: Setting player stats...');
         setPlayerStats(stats || []);
 
+        // Step 4: Get unique leagues for this player
+        if (stats && stats.length > 0) {
+          console.log('🏆 Step 4: Fetching player leagues...');
+          const uniqueLeagues = Array.from(
+            new Map(
+              stats
+                .filter(stat => stat.league_id)
+                .map(stat => [stat.league_id, { 
+                  id: stat.league_id, 
+                  name: 'League',
+                  slug: stat.league_id 
+                }])
+            ).values()
+          );
+          
+          // Try to fetch league names from Supabase first
+          if (uniqueLeagues.length > 0) {
+            try {
+              const { data: leaguesData, error: leaguesError } = await supabase
+                .from('leagues')
+                .select('id, name, slug')
+                .in('id', uniqueLeagues.map(l => l.id));
+              
+              console.log('🏆 Leagues query result:', { leaguesData, leaguesError });
+              
+              if (leaguesData && leaguesData.length > 0) {
+                setPlayerLeagues(leaguesData);
+                console.log('🏆 Found leagues from Supabase:', leaguesData);
+              } else {
+                // Fallback: Create league entries with IDs as names for now
+                const fallbackLeagues = uniqueLeagues.map(league => ({
+                  id: league.id,
+                  name: `League ${league.id.substring(0, 8)}...`,
+                  slug: league.id
+                }));
+                setPlayerLeagues(fallbackLeagues);
+                console.log('🏆 Using fallback leagues:', fallbackLeagues);
+              }
+            } catch (error) {
+              console.error('🏆 Error fetching leagues:', error);
+              // Fallback for any errors
+              const fallbackLeagues = uniqueLeagues.map(league => ({
+                id: league.id,
+                name: `League ${league.id.substring(0, 8)}...`,
+                slug: league.id
+              }));
+              setPlayerLeagues(fallbackLeagues);
+            }
+          }
+        }
+
         // Calculate season averages if we have stats
         if (stats && stats.length > 0) {
-          console.log('📈 Step 4: Calculating averages for', stats.length, 'games');
+          console.log('📈 Step 5: Calculating averages for', stats.length, 'games');
           setPlayerInfo({
             name: stats[0].name || stats[0].player_name || 'Unknown Player',
             team: stats[0].team || stats[0].team_name || 'Unknown Team'
@@ -155,7 +207,7 @@ export default function PlayerStatsPage() {
             three_point_percentage: totals.three_pointers_attempted > 0 ? (totals.three_pointers_made / totals.three_pointers_attempted) * 100 : 0,
             ft_percentage: totals.free_throws_attempted > 0 ? (totals.free_throws_made / totals.free_throws_attempted) * 100 : 0,
           };
-          console.log('📊 Step 5: Calculated averages:', averages);
+          console.log('📊 Step 6: Calculated averages:', averages);
           setSeasonAverages(averages);
         } else {
           console.log('⚠️ No stats found for player');
@@ -255,6 +307,55 @@ export default function PlayerStatsPage() {
             </div>
           )}
         </div>
+
+        {/* Player Leagues */}
+        {playerLeagues.length > 0 && (
+          <Card className="mb-6 border-orange-200 shadow-lg animate-slide-in-up">
+            <CardHeader className="bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-t-lg">
+              <CardTitle className="flex items-center gap-2">
+                <Trophy className="h-5 w-5 animate-float" />
+                Active Leagues ({playerLeagues.length})
+              </CardTitle>
+              <CardDescription className="text-orange-100">
+                Leagues where this player is currently active
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {playerLeagues.map((league, index) => (
+                  <div
+                    key={league.id}
+                    onClick={() => setLocation(`/leagues/${league.slug}`)}
+                    className="group cursor-pointer transform hover:scale-105 transition-all duration-300 animate-slide-in-up hover:animate-glow"
+                    style={{ animationDelay: `${index * 150}ms` }}
+                  >
+                    <Card className="border-orange-200 hover:border-orange-400 transition-all duration-300 hover:shadow-xl">
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="h-12 w-12 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center group-hover:rotate-12 transition-transform duration-300">
+                            <Trophy className="h-6 w-6 text-white group-hover:animate-bounce" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-orange-900 group-hover:text-orange-700 transition-colors duration-300 truncate">
+                              {league.name}
+                            </h3>
+                            <p className="text-sm text-orange-600 group-hover:text-orange-500 transition-colors duration-300">
+                              Click to view league →
+                            </p>
+                          </div>
+                          <TrendingUp className="h-5 w-5 text-orange-500 group-hover:animate-bounce" />
+                        </div>
+                        <div className="mt-3 w-full bg-orange-100 h-1 rounded-full overflow-hidden">
+                          <div className="h-full bg-gradient-to-r from-orange-400 to-orange-600 rounded-full transform origin-left transition-transform duration-1000 group-hover:scale-x-110 w-full"></div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Season Averages */}
         {seasonAverages && (
