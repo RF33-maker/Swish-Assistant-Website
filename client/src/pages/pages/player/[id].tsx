@@ -62,25 +62,33 @@ export default function PlayerStatsPage() {
         // Fetch player game stats - try both player_id and name matching
         console.log('Fetching stats for player ID:', playerId);
         
-        // First try to get by player_id
-        let { data: stats, error: statsError } = await supabase
+        // First get the player's name from the specific record ID
+        console.log('Getting player name from ID:', playerId);
+        const { data: playerRecord, error: playerError } = await supabase
+          .from('player_stats')
+          .select('name, team')
+          .eq('id', playerId)
+          .single();
+
+        console.log('Player record:', playerRecord, 'Error:', playerError);
+
+        if (playerError || !playerRecord) {
+          console.error('Could not find player with ID:', playerId);
+          toast({
+            title: "Player Not Found",
+            description: "Could not find player with the specified ID",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        // Now get ALL stats for this player by name
+        console.log('Getting all stats for player:', playerRecord.name);
+        const { data: stats, error: statsError } = await supabase
           .from('player_stats')
           .select('*')
-          .eq('player_id', playerId)
+          .eq('name', playerRecord.name)
           .order('game_date', { ascending: false });
-
-        // If no results, try by name (in case the URL param is actually a name)
-        if (!stats || stats.length === 0) {
-          console.log('No results by player_id, trying by name...');
-          const nameQuery = await supabase
-            .from('player_stats')
-            .select('*')
-            .or(`name.eq.${playerId},player_name.eq.${playerId}`)
-            .order('game_date', { ascending: false });
-          
-          stats = nameQuery.data;
-          statsError = nameQuery.error;
-        }
 
         console.log('Player stats query result:', { stats, error: statsError });
 
