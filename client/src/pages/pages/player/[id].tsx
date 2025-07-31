@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 interface PlayerStat {
   id: string;
   player_id: string;
-  player_name: string;
+  name: string;  // Using 'name' column as requested
   team_name: string;
   game_date: string;
   opponent: string;
@@ -41,7 +41,7 @@ interface SeasonAverages {
 }
 
 export default function PlayerStatsPage() {
-  const [match] = useRoute("/league/:id");
+  const [match] = useRoute("/player/:id");
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   
@@ -57,7 +57,7 @@ export default function PlayerStatsPage() {
     const fetchPlayerData = async () => {
       setLoading(true);
       try {
-        // Fetch player game stats
+        // Fetch player game stats using 'name' column
         const { data: stats, error: statsError } = await supabase
           .from('player_stats')
           .select('*')
@@ -79,7 +79,7 @@ export default function PlayerStatsPage() {
         // Calculate season averages if we have stats
         if (stats && stats.length > 0) {
           setPlayerInfo({
-            name: stats[0].player_name,
+            name: stats[0].name,  // Using 'name' column from player_stats
             team: stats[0].team_name
           });
 

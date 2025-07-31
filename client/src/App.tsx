@@ -9,7 +9,7 @@ import AuthPage from "@/pages/auth";
 import LandingPage from "@/pages/landing-page";
 import LeaguePage from "./pages/pages/league/[slug]";
 import LeagueAdminPage from "./pages/pages/league-admin/[slug]";
-import PlayerStatsPage from "./pages/pages/league/[id]";
+import PlayerStatsPage from "./pages/pages/player/[id]";
 import PostLoginDashboard from "@/pages/post-login-dashboard"; // new dashboard page
 import { AuthProvider } from "./hooks/use-auth";
 import { ProtectedRoute } from "./lib/protected-route";
@@ -26,7 +26,7 @@ function Router() {
       <Route path="/auth" component={AuthPage} />
       <Route path="/test" component={TestConnections} />
       <Route path="/league/:slug" component={LeaguePage} />
-      <Route path="/league/:id" component={PlayerStatsPage} />
+      <Route path="/player/:id" component={PlayerStatsPage} />
       <Route path="/reset-password" component={ResetPassword} />
 
       {/* Protected routes */}
