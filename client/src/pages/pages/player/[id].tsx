@@ -516,20 +516,20 @@ export default function PlayerStatsPage() {
                     </div>
                     
                     {/* AI Analysis */}
-                    <div className="bg-gradient-to-r from-orange-50 to-orange-100 rounded-lg p-3 border border-orange-200">
+                    <div className="bg-orange-50 rounded-lg p-4 border border-orange-100">
                       <div className="flex items-start gap-2">
-                        <div className="flex items-center gap-1 text-orange-600 text-sm font-medium mb-1">
+                        <div className="flex items-center gap-1 text-orange-700 text-sm font-medium mb-2">
                           {analysisLoading ? (
-                            <Brain className="h-4 w-4 animate-pulse" />
+                            <Brain className="h-4 w-4 animate-pulse text-orange-600" />
                           ) : (
-                            <Sparkles className="h-4 w-4" />
+                            <Sparkles className="h-4 w-4 text-orange-600" />
                           )}
                           AI Player Analysis
                         </div>
                       </div>
                       <p className="text-sm text-orange-800 leading-relaxed">
                         {analysisLoading ? (
-                          <span className="flex items-center gap-2">
+                          <span className="flex items-center gap-2 text-orange-700">
                             <span className="animate-pulse">Analyzing playing style...</span>
                           </span>
                         ) : (
