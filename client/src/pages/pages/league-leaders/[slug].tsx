@@ -95,12 +95,14 @@ export default function LeagueLeadersPage() {
         const playerStatsMap = new Map();
 
         allPlayerStats.forEach(stat => {
-          const playerKey = `${stat.name}_${stat.team_name || 'Unknown'}`; // Use name + team as key
+          // Use the correct team field from the data structure
+          const teamName = stat.team || stat.team_name || 'Unknown Team';
+          const playerKey = `${stat.name}_${teamName}`; // Use name + team as key
           if (!playerStatsMap.has(playerKey)) {
             playerStatsMap.set(playerKey, {
-              player_id: stat.player_id,
+              player_id: stat.player_id || stat.id, // Use player_id if available, otherwise use id
               name: stat.name,
-              team_name: stat.team_name || 'Unknown Team',
+              team_name: teamName,
               total_points: 0,
               total_rebounds: 0,
               total_assists: 0,
@@ -133,8 +135,7 @@ export default function LeagueLeadersPage() {
 
         const playersArray = Array.from(playerStatsMap.values());
 
-        console.log("🏀 Players array length:", playersArray.length);
-        console.log("🏀 Sample player data:", playersArray[0]);
+        // Data processing complete
 
         // Create leaderboards for each category
         processedStats.points = playersArray
