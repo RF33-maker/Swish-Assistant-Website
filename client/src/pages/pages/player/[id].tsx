@@ -413,7 +413,7 @@ export default function PlayerStatsPage() {
               variant="outline" 
               size="sm"
               onClick={() => setLocation('/')}
-              className="flex items-center gap-2 border-orange-200 hover:bg-orange-50"
+              className="flex items-center gap-2 border-orange-100 hover:bg-orange-50"
             >
               <ArrowLeft className="h-4 w-4" />
               Back to Dashboard
@@ -424,7 +424,7 @@ export default function PlayerStatsPage() {
           <div className="flex-1 max-w-md lg:max-w-lg relative">
             <form
               onSubmit={handleSearchSubmit}
-              className="flex items-center shadow-lg rounded-full border border-orange-200 overflow-hidden bg-white"
+              className="flex items-center shadow-md rounded-full border border-orange-100 overflow-hidden bg-white"
             >
               <input
                 type="text"
@@ -435,36 +435,36 @@ export default function PlayerStatsPage() {
               />
               <button
                 type="submit"
-                className="bg-orange-500 text-white font-semibold px-4 py-2 hover:bg-orange-600 transition text-sm"
+                className="bg-orange-400 text-white font-semibold px-4 py-2 hover:bg-orange-500 transition text-sm"
               >
                 Search
               </button>
             </form>
 
             {searchSuggestions.length > 0 && (
-              <ul className="absolute z-50 w-full bg-white border border-orange-200 mt-1 rounded-md shadow-lg max-h-60 overflow-y-auto">
+              <ul className="absolute z-50 w-full bg-white border border-orange-100 mt-1 rounded-md shadow-md max-h-60 overflow-y-auto">
                 {searchSuggestions.map((item, index) => (
                   <li
                     key={index}
                     onClick={() => handleSearchSelect(item)}
-                    className="px-4 py-2 cursor-pointer hover:bg-orange-50 text-left text-slate-900 border-b border-orange-100 last:border-b-0"
+                    className="px-4 py-2 cursor-pointer hover:bg-orange-50 text-left text-orange-900 border-b border-orange-50 last:border-b-0"
                   >
                     <div className="flex items-center gap-2">
                       {item.type === 'league' ? (
-                        <span className="text-orange-500 text-sm">🏆</span>
+                        <span className="text-orange-600 text-sm">🏆</span>
                       ) : (
-                        <span className="text-blue-500 text-sm">👤</span>
+                        <span className="text-orange-600 text-sm">👤</span>
                       )}
                       <div className="flex-1">
-                        <div className="font-medium text-slate-900 text-sm">{item.name}</div>
+                        <div className="font-medium text-orange-900 text-sm">{item.name}</div>
                         {item.type === 'player' && (
-                          <div className="text-xs text-slate-600">{item.team}</div>
+                          <div className="text-xs text-orange-700">{item.team}</div>
                         )}
                         {item.type === 'league' && (
-                          <div className="text-xs text-slate-600">League</div>
+                          <div className="text-xs text-orange-700">League</div>
                         )}
                       </div>
-                      <div className="text-xs text-slate-500 capitalize bg-orange-100 px-2 py-1 rounded">
+                      <div className="text-xs text-orange-700 capitalize bg-orange-50 px-2 py-1 rounded">
                         {item.type}
                       </div>
                     </div>
@@ -478,19 +478,19 @@ export default function PlayerStatsPage() {
         {/* Player Info Section */}
         {playerInfo && (
           <div className="mb-8">
-            <Card className="border-orange-200 shadow-lg animate-slide-in-up">
+            <Card className="border-orange-100 shadow-md animate-slide-in-up">
               <CardContent className="pt-6">
                 <div className="flex items-center gap-4">
                   {/* Profile Picture Section */}
                   <div className="relative group">
-                    <div className="h-20 w-20 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center animate-float hover:animate-shake cursor-pointer shadow-lg">
+                    <div className="h-20 w-20 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center animate-float hover:animate-shake cursor-pointer shadow-md">
                       <User className="h-10 w-10 text-white" />
                       {/* Camera overlay for profile pic upload */}
                       <div className="absolute inset-0 rounded-full bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
                         <Camera className="h-6 w-6 text-white" />
                       </div>
                     </div>
-                    <div className="absolute -bottom-1 -right-1 bg-orange-500 rounded-full p-1.5 shadow-lg animate-pulse">
+                    <div className="absolute -bottom-1 -right-1 bg-orange-400 rounded-full p-1.5 shadow-md animate-pulse">
                       <TrendingUp className="h-3 w-3 text-white" />
                     </div>
                   </div>
@@ -499,20 +499,20 @@ export default function PlayerStatsPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start gap-3 mb-2">
                       <div className="flex-1 min-w-0">
-                        <h1 className="text-3xl font-bold text-orange-900 hover:text-orange-700 transition-colors duration-300 break-words">{playerInfo.name}</h1>
+                        <h1 className="text-3xl font-bold text-orange-800 hover:text-orange-700 transition-colors duration-300 break-words">{playerInfo.name}</h1>
                       </div>
-                      <TrendingUp className="h-6 w-6 text-orange-500 animate-bounce flex-shrink-0 mt-1" />
+                      <TrendingUp className="h-6 w-6 text-orange-600 animate-bounce flex-shrink-0 mt-1" />
                     </div>
                     <p className="text-orange-700 flex items-center gap-2 hover:text-orange-600 transition-colors duration-300 text-lg mb-3">
                       <Trophy className="h-5 w-5 hover:animate-bounce flex-shrink-0" />
                       <span className="break-words">{playerInfo.team}</span>
                     </p>
-                    <div className="flex flex-wrap items-center gap-4 text-sm text-orange-600 mb-3">
+                    <div className="flex flex-wrap items-center gap-4 text-sm text-orange-700 mb-3">
                       <span className="flex items-center gap-1 whitespace-nowrap">
-                        <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
+                        <div className="h-2 w-2 bg-green-400 rounded-full animate-pulse"></div>
                         Active Player
                       </span>
-                      <span className="text-orange-500 font-semibold whitespace-nowrap">Performance Trending ↗</span>
+                      <span className="text-orange-600 font-semibold whitespace-nowrap">Performance Trending ↗</span>
                     </div>
                     
                     {/* AI Analysis */}
@@ -546,13 +546,13 @@ export default function PlayerStatsPage() {
 
         {/* Player Leagues */}
         {playerLeagues.length > 0 && (
-          <Card className="mb-6 border-orange-200 shadow-lg animate-slide-in-up">
-            <CardHeader className="bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-t-lg">
+          <Card className="mb-6 border-orange-100 shadow-md animate-slide-in-up">
+            <CardHeader className="bg-orange-100 text-orange-900 rounded-t-lg border-b border-orange-200">
               <CardTitle className="flex items-center gap-2">
-                <Trophy className="h-5 w-5 animate-float" />
+                <Trophy className="h-5 w-5 animate-float text-orange-700" />
                 Active Leagues ({playerLeagues.length})
               </CardTitle>
-              <CardDescription className="text-orange-100">
+              <CardDescription className="text-orange-700">
                 Leagues where this player is currently active
               </CardDescription>
             </CardHeader>
@@ -565,24 +565,24 @@ export default function PlayerStatsPage() {
                     className="group cursor-pointer transform hover:scale-105 transition-all duration-300 animate-slide-in-up hover:animate-glow"
                     style={{ animationDelay: `${index * 150}ms` }}
                   >
-                    <Card className="border-orange-200 hover:border-orange-400 transition-all duration-300 hover:shadow-xl">
+                    <Card className="border-orange-100 hover:border-orange-200 transition-all duration-300 hover:shadow-md">
                       <CardContent className="p-4">
                         <div className="flex items-center gap-3">
-                          <div className="h-12 w-12 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center group-hover:rotate-12 transition-transform duration-300">
+                          <div className="h-12 w-12 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center group-hover:rotate-12 transition-transform duration-300">
                             <Trophy className="h-6 w-6 text-white group-hover:animate-bounce" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <h3 className="font-semibold text-orange-900 group-hover:text-orange-700 transition-colors duration-300 truncate">
+                            <h3 className="font-semibold text-orange-800 group-hover:text-orange-700 transition-colors duration-300 truncate">
                               {league.name}
                             </h3>
-                            <p className="text-sm text-orange-600 group-hover:text-orange-500 transition-colors duration-300">
+                            <p className="text-sm text-orange-700 group-hover:text-orange-600 transition-colors duration-300">
                               Click to view league →
                             </p>
                           </div>
-                          <TrendingUp className="h-5 w-5 text-orange-500 group-hover:animate-bounce" />
+                          <TrendingUp className="h-5 w-5 text-orange-600 group-hover:animate-bounce" />
                         </div>
-                        <div className="mt-3 w-full bg-orange-100 h-1 rounded-full overflow-hidden">
-                          <div className="h-full bg-gradient-to-r from-orange-400 to-orange-600 rounded-full transform origin-left transition-transform duration-1000 group-hover:scale-x-110 w-full"></div>
+                        <div className="mt-3 w-full bg-orange-50 h-1 rounded-full overflow-hidden">
+                          <div className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-transform duration-1000 group-hover:scale-x-110 w-full"></div>
                         </div>
                       </CardContent>
                     </Card>
@@ -595,10 +595,10 @@ export default function PlayerStatsPage() {
 
         {/* Season Averages */}
         {seasonAverages && (
-          <Card className="mb-8 border-orange-200 shadow-lg animate-slide-in-up hover:animate-glow">
-            <CardHeader className="bg-orange-600 text-white rounded-t-lg">
+          <Card className="mb-8 border-orange-100 shadow-md animate-slide-in-up hover:animate-glow">
+            <CardHeader className="bg-orange-100 text-orange-900 rounded-t-lg border-b border-orange-200">
               <CardTitle className="flex items-center gap-2">
-                <Trophy className="h-5 w-5 animate-float" />
+                <Trophy className="h-5 w-5 animate-float text-orange-700" />
                 Season Averages ({seasonAverages.games_played} games)
               </CardTitle>
             </CardHeader>
@@ -607,13 +607,13 @@ export default function PlayerStatsPage() {
                 {/* Points */}
                 <div className="text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
                   <div className="relative">
-                    <div className="text-4xl font-bold text-orange-600 group-hover:text-orange-700 transition-colors duration-300 group-hover:animate-pulse">
+                    <div className="text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
                       {seasonAverages.avg_points.toFixed(1)}
                     </div>
                     <div className="text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">PPG</div>
-                    <div className="w-full bg-orange-100 h-2 rounded-full mt-3 overflow-hidden">
+                    <div className="w-full bg-orange-50 h-2 rounded-full mt-3 overflow-hidden">
                       <div 
-                        className="h-full bg-gradient-to-r from-orange-400 to-red-500 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
+                        className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
                         style={{ width: `${Math.min((seasonAverages.avg_points / 30) * 100, 100)}%` }}
                       ></div>
                     </div>
@@ -623,13 +623,13 @@ export default function PlayerStatsPage() {
                 {/* Rebounds */}
                 <div className="text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
                   <div className="relative">
-                    <div className="text-4xl font-bold text-orange-600 group-hover:text-orange-700 transition-colors duration-300 group-hover:animate-bounce">
+                    <div className="text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-bounce">
                       {seasonAverages.avg_rebounds.toFixed(1)}
                     </div>
                     <div className="text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">RPG</div>
-                    <div className="w-full bg-orange-100 h-2 rounded-full mt-3 overflow-hidden">
+                    <div className="w-full bg-orange-50 h-2 rounded-full mt-3 overflow-hidden">
                       <div 
-                        className="h-full bg-gradient-to-r from-orange-400 to-yellow-500 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
+                        className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
                         style={{ width: `${Math.min((seasonAverages.avg_rebounds / 15) * 100, 100)}%` }}
                       ></div>
                     </div>
@@ -639,13 +639,13 @@ export default function PlayerStatsPage() {
                 {/* Assists */}
                 <div className="text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
                   <div className="relative">
-                    <div className="text-4xl font-bold text-orange-600 group-hover:text-orange-700 transition-colors duration-300 group-hover:animate-pulse">
+                    <div className="text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
                       {seasonAverages.avg_assists.toFixed(1)}
                     </div>
                     <div className="text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">APG</div>
-                    <div className="w-full bg-orange-100 h-2 rounded-full mt-3 overflow-hidden">
+                    <div className="w-full bg-orange-50 h-2 rounded-full mt-3 overflow-hidden">
                       <div 
-                        className="h-full bg-gradient-to-r from-orange-400 to-green-500 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
+                        className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
                         style={{ width: `${Math.min((seasonAverages.avg_assists / 12) * 100, 100)}%` }}
                       ></div>
                     </div>
@@ -655,13 +655,13 @@ export default function PlayerStatsPage() {
                 {/* Field Goal % */}
                 <div className="text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
                   <div className="relative">
-                    <div className="text-4xl font-bold text-orange-600 group-hover:text-orange-700 transition-colors duration-300 group-hover:animate-pulse">
+                    <div className="text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
                       {formatPercentage(seasonAverages.fg_percentage)}
                     </div>
                     <div className="text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">FG%</div>
-                    <div className="w-full bg-orange-100 h-2 rounded-full mt-3 overflow-hidden">
+                    <div className="w-full bg-orange-50 h-2 rounded-full mt-3 overflow-hidden">
                       <div 
-                        className="h-full bg-gradient-to-r from-orange-400 to-blue-500 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
+                        className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
                         style={{ width: `${seasonAverages.fg_percentage}%` }}
                       ></div>
                     </div>
@@ -671,13 +671,13 @@ export default function PlayerStatsPage() {
                 {/* 3-Point % */}
                 <div className="text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
                   <div className="relative">
-                    <div className="text-4xl font-bold text-orange-600 group-hover:text-orange-700 transition-colors duration-300 group-hover:animate-pulse">
+                    <div className="text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
                       {formatPercentage(seasonAverages.three_point_percentage)}
                     </div>
                     <div className="text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">3P%</div>
-                    <div className="w-full bg-orange-100 h-2 rounded-full mt-3 overflow-hidden">
+                    <div className="w-full bg-orange-50 h-2 rounded-full mt-3 overflow-hidden">
                       <div 
-                        className="h-full bg-gradient-to-r from-orange-400 to-purple-500 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
+                        className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
                         style={{ width: `${seasonAverages.three_point_percentage}%` }}
                       ></div>
                     </div>
@@ -687,13 +687,13 @@ export default function PlayerStatsPage() {
                 {/* Free Throw % */}
                 <div className="text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
                   <div className="relative">
-                    <div className="text-4xl font-bold text-orange-600 group-hover:text-orange-700 transition-colors duration-300 group-hover:animate-pulse">
+                    <div className="text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
                       {formatPercentage(seasonAverages.ft_percentage)}
                     </div>
                     <div className="text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">FT%</div>
-                    <div className="w-full bg-orange-100 h-2 rounded-full mt-3 overflow-hidden">
+                    <div className="w-full bg-orange-50 h-2 rounded-full mt-3 overflow-hidden">
                       <div 
-                        className="h-full bg-gradient-to-r from-orange-400 to-indigo-500 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
+                        className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
                         style={{ width: `${seasonAverages.ft_percentage}%` }}
                       ></div>
                     </div>
@@ -705,9 +705,9 @@ export default function PlayerStatsPage() {
         )}
 
         {/* Game Log */}
-        <Card className="border-orange-200 shadow-lg">
-          <CardHeader className="bg-orange-100 border-b border-orange-200">
-            <CardTitle className="flex items-center gap-2 text-orange-900">
+        <Card className="border-orange-100 shadow-md">
+          <CardHeader className="bg-orange-50 border-b border-orange-100">
+            <CardTitle className="flex items-center gap-2 text-orange-800">
               <Calendar className="h-5 w-5" />
               Game Log
             </CardTitle>
