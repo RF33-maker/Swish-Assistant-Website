@@ -172,29 +172,33 @@ export default function LandingPage() {
           </form>
 
           {suggestions.length > 0 && (
-            <ul className="absolute z-50 w-full bg-gray-800 border border-gray-700 mt-1 rounded-md shadow-md max-h-60 overflow-y-auto">
+            <ul className="absolute z-50 w-full bg-white border border-orange-200 mt-1 rounded-md shadow-lg max-h-60 overflow-y-auto">
               {suggestions.map((item, index) => (
                 <li
                   key={index}
                   onClick={() => handleSelect(item)}
-                  className="px-5 py-3 cursor-pointer hover:bg-orange-600 text-left text-white border-b border-gray-700 last:border-b-0"
+                  className="px-5 py-3 cursor-pointer hover:bg-orange-50 text-left border-b border-orange-100 last:border-b-0 transition-colors duration-200"
                 >
                   <div className="flex items-center gap-3">
                     {item.type === 'league' ? (
-                      <span className="text-orange-400 text-lg">🏆</span>
+                      <div className="h-8 w-8 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center">
+                        <span className="text-white text-sm">🏆</span>
+                      </div>
                     ) : (
-                      <span className="text-blue-400 text-lg">👤</span>
+                      <div className="h-8 w-8 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center">
+                        <span className="text-white text-sm">👤</span>
+                      </div>
                     )}
                     <div className="flex-1">
-                      <div className="font-medium text-white">{item.name}</div>
+                      <div className="font-medium text-orange-900 text-sm">{item.name}</div>
                       {item.type === 'player' && (
-                        <div className="text-sm text-gray-300">{item.team}</div>
+                        <div className="text-xs text-orange-600">{item.team}</div>
                       )}
                       {item.type === 'league' && (
-                        <div className="text-sm text-gray-300">League</div>
+                        <div className="text-xs text-orange-600">League</div>
                       )}
                     </div>
-                    <div className="text-xs text-gray-400 capitalize bg-gray-700 px-2 py-1 rounded">
+                    <div className="text-xs text-orange-700 capitalize bg-orange-100 px-2 py-1 rounded-full font-medium">
                       {item.type}
                     </div>
                   </div>
