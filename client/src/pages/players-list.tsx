@@ -189,21 +189,22 @@ export default function PlayersListPage() {
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredPlayers.map((player) => (
+            {filteredPlayers.map((player, index) => (
               <Card 
                 key={`${player.name}-${player.player_id}`}
-                className="border-orange-200 shadow-lg hover:shadow-xl transition-all duration-200 cursor-pointer hover:scale-105"
+                className="border-orange-200 shadow-lg hover:shadow-2xl transition-all duration-300 cursor-pointer transform hover:scale-105 hover:-translate-y-2 group animate-slide-in-up hover:animate-glow"
                 onClick={() => handlePlayerClick(player.player_id)}
+                style={{ animationDelay: `${index * 100}ms` }}
               >
                 <CardHeader className="pb-3">
                   <div className="flex items-center gap-3">
-                    <div className="h-12 w-12 rounded-full bg-orange-600 flex items-center justify-center">
-                      <User className="h-6 w-6 text-white" />
+                    <div className="h-12 w-12 rounded-full bg-orange-600 group-hover:bg-orange-700 flex items-center justify-center transition-all duration-300 group-hover:rotate-12 group-hover:scale-110">
+                      <User className="h-6 w-6 text-white group-hover:animate-pulse" />
                     </div>
                     <div className="flex-1">
-                      <CardTitle className="text-orange-900 text-lg">{player.name}</CardTitle>
-                      <CardDescription className="flex items-center gap-1">
-                        <Trophy className="h-3 w-3" />
+                      <CardTitle className="text-orange-900 text-lg group-hover:text-orange-700 transition-colors duration-300">{player.name}</CardTitle>
+                      <CardDescription className="flex items-center gap-1 group-hover:text-orange-600 transition-colors duration-300">
+                        <Trophy className="h-3 w-3 group-hover:animate-bounce" />
                         {player.team_name}
                       </CardDescription>
                     </div>
@@ -211,17 +212,35 @@ export default function PlayersListPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-3 gap-4 mb-4">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-orange-600">{player.avg_points.toFixed(1)}</div>
-                      <div className="text-xs text-orange-700">PPG</div>
+                    <div className="text-center group-hover:transform group-hover:scale-110 transition-all duration-300">
+                      <div className="text-2xl font-bold text-orange-600 group-hover:text-orange-700 group-hover:animate-pulse">{player.avg_points.toFixed(1)}</div>
+                      <div className="text-xs text-orange-700 group-hover:text-orange-800">PPG</div>
+                      <div className="w-full bg-orange-100 h-1 rounded-full mt-1 overflow-hidden">
+                        <div 
+                          className="h-full bg-gradient-to-r from-orange-400 to-red-500 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110"
+                          style={{ width: `${Math.min((player.avg_points / 30) * 100, 100)}%` }}
+                        ></div>
+                      </div>
                     </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-orange-600">{player.avg_rebounds.toFixed(1)}</div>
-                      <div className="text-xs text-orange-700">RPG</div>
+                    <div className="text-center group-hover:transform group-hover:scale-110 transition-all duration-300">
+                      <div className="text-2xl font-bold text-orange-600 group-hover:text-orange-700 group-hover:animate-bounce">{player.avg_rebounds.toFixed(1)}</div>
+                      <div className="text-xs text-orange-700 group-hover:text-orange-800">RPG</div>
+                      <div className="w-full bg-orange-100 h-1 rounded-full mt-1 overflow-hidden">
+                        <div 
+                          className="h-full bg-gradient-to-r from-orange-400 to-yellow-500 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110"
+                          style={{ width: `${Math.min((player.avg_rebounds / 15) * 100, 100)}%` }}
+                        ></div>
+                      </div>
                     </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-orange-600">{player.avg_assists.toFixed(1)}</div>
-                      <div className="text-xs text-orange-700">APG</div>
+                    <div className="text-center group-hover:transform group-hover:scale-110 transition-all duration-300">
+                      <div className="text-2xl font-bold text-orange-600 group-hover:text-orange-700 group-hover:animate-pulse">{player.avg_assists.toFixed(1)}</div>
+                      <div className="text-xs text-orange-700 group-hover:text-orange-800">APG</div>
+                      <div className="w-full bg-orange-100 h-1 rounded-full mt-1 overflow-hidden">
+                        <div 
+                          className="h-full bg-gradient-to-r from-orange-400 to-green-500 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110"
+                          style={{ width: `${Math.min((player.avg_assists / 12) * 100, 100)}%` }}
+                        ></div>
+                      </div>
                     </div>
                   </div>
                   
@@ -231,13 +250,13 @@ export default function PlayersListPage() {
                     </Badge>
                     <Button 
                       size="sm" 
-                      className="bg-orange-600 hover:bg-orange-700 text-white"
+                      className="bg-orange-600 hover:bg-orange-700 text-white transform transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg"
                       onClick={(e) => {
                         e.stopPropagation();
                         handlePlayerClick(player.player_id);
                       }}
                     >
-                      <TrendingUp className="h-3 w-3 mr-1" />
+                      <TrendingUp className="h-3 w-3 mr-1 group-hover:animate-bounce" />
                       View Stats
                     </Button>
                   </div>

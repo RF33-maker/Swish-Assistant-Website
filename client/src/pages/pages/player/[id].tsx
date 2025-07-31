@@ -217,14 +217,14 @@ export default function PlayerStatsPage() {
           </Button>
           
           {playerInfo && (
-            <div className="flex items-center gap-3">
-              <div className="h-12 w-12 rounded-full bg-orange-600 flex items-center justify-center">
+            <div className="flex items-center gap-3 animate-slide-in-up">
+              <div className="h-12 w-12 rounded-full bg-orange-600 flex items-center justify-center animate-float hover:animate-shake cursor-pointer">
                 <User className="h-6 w-6 text-white" />
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-orange-900">{playerInfo.name}</h1>
-                <p className="text-orange-700 flex items-center gap-2">
-                  <Trophy className="h-4 w-4" />
+                <h1 className="text-3xl font-bold text-orange-900 hover:text-orange-700 transition-colors duration-300">{playerInfo.name}</h1>
+                <p className="text-orange-700 flex items-center gap-2 hover:text-orange-600 transition-colors duration-300">
+                  <Trophy className="h-4 w-4 hover:animate-bounce" />
                   {playerInfo.team}
                 </p>
               </div>
@@ -234,38 +234,109 @@ export default function PlayerStatsPage() {
 
         {/* Season Averages */}
         {seasonAverages && (
-          <Card className="mb-8 border-orange-200 shadow-lg">
+          <Card className="mb-8 border-orange-200 shadow-lg animate-slide-in-up hover:animate-glow">
             <CardHeader className="bg-orange-600 text-white rounded-t-lg">
               <CardTitle className="flex items-center gap-2">
-                <Trophy className="h-5 w-5" />
+                <Trophy className="h-5 w-5 animate-float" />
                 Season Averages ({seasonAverages.games_played} games)
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-6">
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-orange-600">{seasonAverages.avg_points.toFixed(1)}</div>
-                  <div className="text-sm text-orange-700">PPG</div>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
+                {/* Points */}
+                <div className="text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
+                  <div className="relative">
+                    <div className="text-4xl font-bold text-orange-600 group-hover:text-orange-700 transition-colors duration-300 group-hover:animate-pulse">
+                      {seasonAverages.avg_points.toFixed(1)}
+                    </div>
+                    <div className="text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">PPG</div>
+                    <div className="w-full bg-orange-100 h-2 rounded-full mt-3 overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-orange-400 to-red-500 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
+                        style={{ width: `${Math.min((seasonAverages.avg_points / 30) * 100, 100)}%` }}
+                      ></div>
+                    </div>
+                  </div>
                 </div>
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-orange-600">{seasonAverages.avg_rebounds.toFixed(1)}</div>
-                  <div className="text-sm text-orange-700">RPG</div>
+
+                {/* Rebounds */}
+                <div className="text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
+                  <div className="relative">
+                    <div className="text-4xl font-bold text-orange-600 group-hover:text-orange-700 transition-colors duration-300 group-hover:animate-bounce">
+                      {seasonAverages.avg_rebounds.toFixed(1)}
+                    </div>
+                    <div className="text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">RPG</div>
+                    <div className="w-full bg-orange-100 h-2 rounded-full mt-3 overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-orange-400 to-yellow-500 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
+                        style={{ width: `${Math.min((seasonAverages.avg_rebounds / 15) * 100, 100)}%` }}
+                      ></div>
+                    </div>
+                  </div>
                 </div>
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-orange-600">{seasonAverages.avg_assists.toFixed(1)}</div>
-                  <div className="text-sm text-orange-700">APG</div>
+
+                {/* Assists */}
+                <div className="text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
+                  <div className="relative">
+                    <div className="text-4xl font-bold text-orange-600 group-hover:text-orange-700 transition-colors duration-300 group-hover:animate-pulse">
+                      {seasonAverages.avg_assists.toFixed(1)}
+                    </div>
+                    <div className="text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">APG</div>
+                    <div className="w-full bg-orange-100 h-2 rounded-full mt-3 overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-orange-400 to-green-500 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
+                        style={{ width: `${Math.min((seasonAverages.avg_assists / 12) * 100, 100)}%` }}
+                      ></div>
+                    </div>
+                  </div>
                 </div>
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-orange-600">{formatPercentage(seasonAverages.fg_percentage)}</div>
-                  <div className="text-sm text-orange-700">FG%</div>
+
+                {/* Field Goal % */}
+                <div className="text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
+                  <div className="relative">
+                    <div className="text-4xl font-bold text-orange-600 group-hover:text-orange-700 transition-colors duration-300 group-hover:animate-pulse">
+                      {formatPercentage(seasonAverages.fg_percentage)}
+                    </div>
+                    <div className="text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">FG%</div>
+                    <div className="w-full bg-orange-100 h-2 rounded-full mt-3 overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-orange-400 to-blue-500 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
+                        style={{ width: `${seasonAverages.fg_percentage}%` }}
+                      ></div>
+                    </div>
+                  </div>
                 </div>
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-orange-600">{formatPercentage(seasonAverages.three_point_percentage)}</div>
-                  <div className="text-sm text-orange-700">3P%</div>
+
+                {/* 3-Point % */}
+                <div className="text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
+                  <div className="relative">
+                    <div className="text-4xl font-bold text-orange-600 group-hover:text-orange-700 transition-colors duration-300 group-hover:animate-pulse">
+                      {formatPercentage(seasonAverages.three_point_percentage)}
+                    </div>
+                    <div className="text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">3P%</div>
+                    <div className="w-full bg-orange-100 h-2 rounded-full mt-3 overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-orange-400 to-purple-500 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
+                        style={{ width: `${seasonAverages.three_point_percentage}%` }}
+                      ></div>
+                    </div>
+                  </div>
                 </div>
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-orange-600">{formatPercentage(seasonAverages.ft_percentage)}</div>
-                  <div className="text-sm text-orange-700">FT%</div>
+
+                {/* Free Throw % */}
+                <div className="text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
+                  <div className="relative">
+                    <div className="text-4xl font-bold text-orange-600 group-hover:text-orange-700 transition-colors duration-300 group-hover:animate-pulse">
+                      {formatPercentage(seasonAverages.ft_percentage)}
+                    </div>
+                    <div className="text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">FT%</div>
+                    <div className="w-full bg-orange-100 h-2 rounded-full mt-3 overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-orange-400 to-indigo-500 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
+                        style={{ width: `${seasonAverages.ft_percentage}%` }}
+                      ></div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -310,7 +381,7 @@ export default function PlayerStatsPage() {
                     {playerStats.map((game, index) => (
                       <tr 
                         key={game.id} 
-                        className={`border-b border-orange-100 hover:bg-orange-50 transition-colors ${
+                        className={`border-b border-orange-100 hover:bg-orange-50 hover:scale-[1.02] transform transition-all duration-200 cursor-pointer group ${
                           index % 2 === 0 ? 'bg-white' : 'bg-orange-25'
                         }`}
                       >
@@ -321,7 +392,7 @@ export default function PlayerStatsPage() {
                           </Badge>
                         </td>
                         <td className="px-4 py-3 text-orange-800">{game.minutes_played || 0}</td>
-                        <td className="px-4 py-3 font-semibold text-orange-900">{game.points || 0}</td>
+                        <td className="px-4 py-3 font-semibold text-orange-900 group-hover:text-orange-700 group-hover:scale-110 transition-all duration-200">{game.points || 0}</td>
                         <td className="px-4 py-3 text-orange-800">{game.rebounds || 0}</td>
                         <td className="px-4 py-3 text-orange-800">{game.assists || 0}</td>
                         <td className="px-4 py-3 text-orange-800">{game.steals || 0}</td>
