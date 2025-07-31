@@ -21,19 +21,51 @@ export default function LandingPage() {
         return
       }
 
-      const { data, error } = await supabase
-      .from("leagues")
-      .select("name, slug")
-      .or(`name.ilike.%${query}%`)
-      .eq("is_public", true);
+      // Search both leagues and players
+      const [leaguesResponse, playersResponse] = await Promise.all([
+        supabase
+          .from("leagues")
+          .select("name, slug")
+          .or(`name.ilike.%${query}%`)
+          .eq("is_public", true),
+        supabase
+          .from("player_stats")
+          .select("name, team, player_id")
+          .or(`name.ilike.%${query}%,team.ilike.%${query}%`)
+          .limit(10)
+      ]);
 
+      const leagues = leaguesResponse.data || [];
+      const players = playersResponse.data || [];
+
+      // Remove duplicate players (same name) and format
+      const uniquePlayers = players.reduce((acc: any[], player) => {
+        if (!acc.some(p => p.name === player.name)) {
+          acc.push({
+            name: player.name,
+            team: player.team,
+            player_id: player.player_id,
+            type: 'player'
+          });
+        }
+        return acc;
+      }, []);
+
+      // Format leagues
+      const formattedLeagues = leagues.map(league => ({
+        ...league,
+        type: 'league'
+      }));
+
+      // Combine and limit results
+      const combined = [...formattedLeagues, ...uniquePlayers].slice(0, 8);
 
       console.log("Query input:", query)
-      console.log("Returned data:", data)
-      console.log("Returned suggestions:", data);
-      console.log("Returned error:", error)
+      console.log("Leagues found:", leagues.length)
+      console.log("Players found:", uniquePlayers.length)
+      console.log("Combined suggestions:", combined);
 
-      setSuggestions(data || [])
+      setSuggestions(combined)
     }
 
     const delayDebounce = setTimeout(fetchSuggestions, 300)
@@ -41,10 +73,15 @@ export default function LandingPage() {
   }, [query])
 
 
-  const handleSelect = (slug: string) => {
+  const handleSelect = (item: any) => {
     setQuery("")
     setSuggestions([])
-    setLocation(`/league/${slug}`)
+    
+    if (item.type === 'league') {
+      setLocation(`/league/${item.slug}`)
+    } else if (item.type === 'player') {
+      setLocation(`/player/${item.player_id}`)
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -117,7 +154,7 @@ export default function LandingPage() {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search for player or league..."
+              placeholder="Search for players or leagues..."
               className="flex-1 px-5 py-4 text-base text-white focus:outline-none"
             />
             <button
@@ -130,13 +167,31 @@ export default function LandingPage() {
 
           {suggestions.length > 0 && (
             <ul className="absolute z-50 w-full bg-gray-800 border border-gray-700 mt-1 rounded-md shadow-md max-h-60 overflow-y-auto">
-              {suggestions.map((league, index) => (
+              {suggestions.map((item, index) => (
                 <li
                   key={index}
-                  onClick={() => handleSelect(league.slug)}
-                  className="px-5 py-3 cursor-pointer hover:bg-orange-600 text-left text-white"
+                  onClick={() => handleSelect(item)}
+                  className="px-5 py-3 cursor-pointer hover:bg-orange-600 text-left text-white border-b border-gray-700 last:border-b-0"
                 >
-                  {league.name}
+                  <div className="flex items-center gap-3">
+                    {item.type === 'league' ? (
+                      <span className="text-orange-400 text-lg">🏆</span>
+                    ) : (
+                      <span className="text-blue-400 text-lg">👤</span>
+                    )}
+                    <div className="flex-1">
+                      <div className="font-medium text-white">{item.name}</div>
+                      {item.type === 'player' && (
+                        <div className="text-sm text-gray-300">{item.team}</div>
+                      )}
+                      {item.type === 'league' && (
+                        <div className="text-sm text-gray-300">League</div>
+                      )}
+                    </div>
+                    <div className="text-xs text-gray-400 capitalize bg-gray-700 px-2 py-1 rounded">
+                      {item.type}
+                    </div>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -150,7 +205,7 @@ export default function LandingPage() {
             ? trendingLeagues.map((league, i) => (
                 <button
                   key={i}
-                  onClick={() => handleSelect(league.slug)}
+                  onClick={() => handleSelect({ type: 'league', slug: league.slug })}
                   className="bg-orange-100 hover:bg-orange-200 text-sm text-orange-800 px-5 py-3 rounded-lg text-left transition"
                 >
                   🔥 Trending: {league.name}
@@ -163,7 +218,7 @@ export default function LandingPage() {
               ].map((league, i) => (
                 <button
                   key={i}
-                  onClick={() => handleSelect(league.slug)}
+                  onClick={() => handleSelect({ type: 'league', slug: league.slug })}
                   className="bg-orange-100 hover:bg-orange-200 text-sm text-orange-800 px-5 py-3 rounded-lg text-left transition"
                 >
                   🔥 Trending: {league.name}
