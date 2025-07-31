@@ -106,22 +106,23 @@ export default function PlayerStatsPage() {
 
         // Calculate season averages if we have stats
         if (stats && stats.length > 0) {
+          console.log('Found', stats.length, 'stat records for player');
           console.log('First stat record:', stats[0]);
           setPlayerInfo({
-            name: stats[0].name || stats[0].player_name || 'Unknown Player',  // Fallback to player_name if name doesn't exist
-            team: stats[0].team_name || stats[0].team || 'Unknown Team'
+            name: stats[0].name || stats[0].player_name || 'Unknown Player',
+            team: stats[0].team || stats[0].team_name || 'Unknown Team'
           });
 
           const totals = stats.reduce((acc, game) => ({
             points: acc.points + (game.points || 0),
-            rebounds: acc.rebounds + (game.rebounds || 0),
+            rebounds: acc.rebounds + (game.rebounds_total || game.rebounds || 0),
             assists: acc.assists + (game.assists || 0),
             steals: acc.steals + (game.steals || 0),
             blocks: acc.blocks + (game.blocks || 0),
             field_goals_made: acc.field_goals_made + (game.field_goals_made || 0),
             field_goals_attempted: acc.field_goals_attempted + (game.field_goals_attempted || 0),
-            three_pointers_made: acc.three_pointers_made + (game.three_pointers_made || 0),
-            three_pointers_attempted: acc.three_pointers_attempted + (game.three_pointers_attempted || 0),
+            three_pointers_made: acc.three_pointers_made + (game.three_pt_made || game.three_pointers_made || 0),
+            three_pointers_attempted: acc.three_pointers_attempted + (game.three_pt_attempted || game.three_pointers_attempted || 0),
             free_throws_made: acc.free_throws_made + (game.free_throws_made || 0),
             free_throws_attempted: acc.free_throws_attempted + (game.free_throws_attempted || 0),
           }), {
