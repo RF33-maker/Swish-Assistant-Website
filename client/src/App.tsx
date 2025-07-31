@@ -9,6 +9,7 @@ import AuthPage from "@/pages/auth";
 import LandingPage from "@/pages/landing-page";
 import LeaguePage from "./pages/pages/league/[slug]";
 import LeagueAdminPage from "./pages/pages/league-admin/[slug]";
+import LeagueLeadersPage from "./pages/pages/league-leaders/[slug]";
 import PlayerStatsPage from "./pages/pages/player/[id]";
 import PlayersListPage from "./pages/players-list";
 import PostLoginDashboard from "@/pages/post-login-dashboard"; // new dashboard page
@@ -27,6 +28,7 @@ function Router() {
       <Route path="/auth" component={AuthPage} />
       <Route path="/test" component={TestConnections} />
       <Route path="/league/:slug" component={LeaguePage} />
+      <Route path="/league-leaders/:slug" component={LeagueLeadersPage} />
       <Route path="/players" component={PlayersListPage} />
       <Route path="/player/:id" component={PlayerStatsPage} />
       <Route path="/reset-password" component={ResetPassword} />

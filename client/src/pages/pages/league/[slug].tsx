@@ -218,6 +218,13 @@ import { GameSummaryRow } from "./GameSummaryRow";
           <div className="flex gap-6 text-sm font-medium text-slate-600">
             <a href="#" className="hover:text-orange-500">Overview</a>
             <a href="#" className="hover:text-orange-500">Stats</a>
+            <a 
+              href="#" 
+              className="hover:text-orange-500 cursor-pointer"
+              onClick={() => navigate(`/league-leaders/${slug}`)}
+            >
+              Leaders
+            </a>
             <a href="#" className="hover:text-orange-500">Schedule</a>
             <a href="#" className="hover:text-orange-500">Insights</a>
           </div>
