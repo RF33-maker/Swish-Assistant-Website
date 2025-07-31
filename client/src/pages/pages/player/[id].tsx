@@ -233,21 +233,23 @@ export default function PlayerStatsPage() {
               </div>
               
               {/* Player Info */}
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-1">
-                  <h1 className="text-3xl font-bold text-orange-900 hover:text-orange-700 transition-colors duration-300">{playerInfo.name}</h1>
-                  <TrendingUp className="h-6 w-6 text-orange-500 animate-bounce" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start gap-3 mb-2">
+                  <div className="flex-1 min-w-0">
+                    <h1 className="text-3xl font-bold text-orange-900 hover:text-orange-700 transition-colors duration-300 break-words">{playerInfo.name}</h1>
+                  </div>
+                  <TrendingUp className="h-6 w-6 text-orange-500 animate-bounce flex-shrink-0 mt-1" />
                 </div>
-                <p className="text-orange-700 flex items-center gap-2 hover:text-orange-600 transition-colors duration-300 text-lg">
-                  <Trophy className="h-5 w-5 hover:animate-bounce" />
-                  {playerInfo.team}
+                <p className="text-orange-700 flex items-center gap-2 hover:text-orange-600 transition-colors duration-300 text-lg mb-3">
+                  <Trophy className="h-5 w-5 hover:animate-bounce flex-shrink-0" />
+                  <span className="break-words">{playerInfo.team}</span>
                 </p>
-                <div className="flex items-center gap-4 mt-2 text-sm text-orange-600">
-                  <span className="flex items-center gap-1">
+                <div className="flex flex-wrap items-center gap-4 text-sm text-orange-600">
+                  <span className="flex items-center gap-1 whitespace-nowrap">
                     <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
                     Active Player
                   </span>
-                  <span className="text-orange-500 font-semibold">Performance Trending ↗</span>
+                  <span className="text-orange-500 font-semibold whitespace-nowrap">Performance Trending ↗</span>
                 </div>
               </div>
             </div>
