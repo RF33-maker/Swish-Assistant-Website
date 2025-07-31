@@ -376,16 +376,72 @@ export default function PlayerStatsPage() {
     <div className="min-h-screen bg-white">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
-        <div className="flex items-center gap-4 mb-8">
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => setLocation('/')}
-            className="flex items-center gap-2 border-orange-200 hover:bg-orange-50"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back to Dashboard
-          </Button>
+        <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4 mb-8">
+          <div className="flex items-center gap-4">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setLocation('/')}
+              className="flex items-center gap-2 border-orange-200 hover:bg-orange-50"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to Dashboard
+            </Button>
+          </div>
+          
+          {/* Search Bar in Header */}
+          <div className="flex-1 max-w-md lg:max-w-lg relative">
+            <form
+              onSubmit={handleSearchSubmit}
+              className="flex items-center shadow-lg rounded-full border border-orange-200 overflow-hidden bg-white"
+            >
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search players or leagues..."
+                className="flex-1 px-4 py-2 text-sm text-slate-900 focus:outline-none bg-white"
+              />
+              <button
+                type="submit"
+                className="bg-orange-500 text-white font-semibold px-4 py-2 hover:bg-orange-600 transition text-sm"
+              >
+                Search
+              </button>
+            </form>
+
+            {searchSuggestions.length > 0 && (
+              <ul className="absolute z-50 w-full bg-white border border-orange-200 mt-1 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                {searchSuggestions.map((item, index) => (
+                  <li
+                    key={index}
+                    onClick={() => handleSearchSelect(item)}
+                    className="px-4 py-2 cursor-pointer hover:bg-orange-50 text-left text-slate-900 border-b border-orange-100 last:border-b-0"
+                  >
+                    <div className="flex items-center gap-2">
+                      {item.type === 'league' ? (
+                        <span className="text-orange-500 text-sm">🏆</span>
+                      ) : (
+                        <span className="text-blue-500 text-sm">👤</span>
+                      )}
+                      <div className="flex-1">
+                        <div className="font-medium text-slate-900 text-sm">{item.name}</div>
+                        {item.type === 'player' && (
+                          <div className="text-xs text-slate-600">{item.team}</div>
+                        )}
+                        {item.type === 'league' && (
+                          <div className="text-xs text-slate-600">League</div>
+                        )}
+                      </div>
+                      <div className="text-xs text-slate-500 capitalize bg-orange-100 px-2 py-1 rounded">
+                        {item.type}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
           
           {playerInfo && (
             <div className="flex items-center gap-4 animate-slide-in-up">
@@ -427,59 +483,7 @@ export default function PlayerStatsPage() {
           )}
         </div>
 
-        {/* Search Bar */}
-        <div className="mb-8 max-w-2xl relative">
-          <form
-            onSubmit={handleSearchSubmit}
-            className="flex items-center shadow-lg rounded-full border border-orange-200 overflow-hidden bg-white"
-          >
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search for other players or leagues..."
-              className="flex-1 px-5 py-3 text-base text-slate-900 focus:outline-none bg-white"
-            />
-            <button
-              type="submit"
-              className="bg-orange-500 text-white font-semibold px-6 py-3 hover:bg-orange-600 transition"
-            >
-              Search
-            </button>
-          </form>
 
-          {searchSuggestions.length > 0 && (
-            <ul className="absolute z-50 w-full bg-white border border-orange-200 mt-1 rounded-md shadow-lg max-h-60 overflow-y-auto">
-              {searchSuggestions.map((item, index) => (
-                <li
-                  key={index}
-                  onClick={() => handleSearchSelect(item)}
-                  className="px-5 py-3 cursor-pointer hover:bg-orange-50 text-left text-slate-900 border-b border-orange-100 last:border-b-0"
-                >
-                  <div className="flex items-center gap-3">
-                    {item.type === 'league' ? (
-                      <span className="text-orange-500 text-lg">🏆</span>
-                    ) : (
-                      <span className="text-blue-500 text-lg">👤</span>
-                    )}
-                    <div className="flex-1">
-                      <div className="font-medium text-slate-900">{item.name}</div>
-                      {item.type === 'player' && (
-                        <div className="text-sm text-slate-600">{item.team}</div>
-                      )}
-                      {item.type === 'league' && (
-                        <div className="text-sm text-slate-600">League</div>
-                      )}
-                    </div>
-                    <div className="text-xs text-slate-500 capitalize bg-orange-100 px-2 py-1 rounded">
-                      {item.type}
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
 
         {/* Player Leagues */}
         {playerLeagues.length > 0 && (
