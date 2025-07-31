@@ -442,48 +442,53 @@ export default function PlayerStatsPage() {
               </ul>
             )}
           </div>
-          
-          {playerInfo && (
-            <div className="flex items-center gap-4 animate-slide-in-up">
-              {/* Profile Picture Section */}
-              <div className="relative group">
-                <div className="h-20 w-20 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center animate-float hover:animate-shake cursor-pointer shadow-lg">
-                  <User className="h-10 w-10 text-white" />
-                  {/* Camera overlay for profile pic upload */}
-                  <div className="absolute inset-0 rounded-full bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-                    <Camera className="h-6 w-6 text-white" />
-                  </div>
-                </div>
-                <div className="absolute -bottom-1 -right-1 bg-orange-500 rounded-full p-1.5 shadow-lg animate-pulse">
-                  <TrendingUp className="h-3 w-3 text-white" />
-                </div>
-              </div>
-              
-              {/* Player Info */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start gap-3 mb-2">
-                  <div className="flex-1 min-w-0">
-                    <h1 className="text-3xl font-bold text-orange-900 hover:text-orange-700 transition-colors duration-300 break-words">{playerInfo.name}</h1>
-                  </div>
-                  <TrendingUp className="h-6 w-6 text-orange-500 animate-bounce flex-shrink-0 mt-1" />
-                </div>
-                <p className="text-orange-700 flex items-center gap-2 hover:text-orange-600 transition-colors duration-300 text-lg mb-3">
-                  <Trophy className="h-5 w-5 hover:animate-bounce flex-shrink-0" />
-                  <span className="break-words">{playerInfo.team}</span>
-                </p>
-                <div className="flex flex-wrap items-center gap-4 text-sm text-orange-600">
-                  <span className="flex items-center gap-1 whitespace-nowrap">
-                    <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
-                    Active Player
-                  </span>
-                  <span className="text-orange-500 font-semibold whitespace-nowrap">Performance Trending ↗</span>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
-
+        {/* Player Info Section */}
+        {playerInfo && (
+          <div className="mb-8">
+            <Card className="border-orange-200 shadow-lg animate-slide-in-up">
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-4">
+                  {/* Profile Picture Section */}
+                  <div className="relative group">
+                    <div className="h-20 w-20 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center animate-float hover:animate-shake cursor-pointer shadow-lg">
+                      <User className="h-10 w-10 text-white" />
+                      {/* Camera overlay for profile pic upload */}
+                      <div className="absolute inset-0 rounded-full bg-black bg-opacity-50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                        <Camera className="h-6 w-6 text-white" />
+                      </div>
+                    </div>
+                    <div className="absolute -bottom-1 -right-1 bg-orange-500 rounded-full p-1.5 shadow-lg animate-pulse">
+                      <TrendingUp className="h-3 w-3 text-white" />
+                    </div>
+                  </div>
+                  
+                  {/* Player Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start gap-3 mb-2">
+                      <div className="flex-1 min-w-0">
+                        <h1 className="text-3xl font-bold text-orange-900 hover:text-orange-700 transition-colors duration-300 break-words">{playerInfo.name}</h1>
+                      </div>
+                      <TrendingUp className="h-6 w-6 text-orange-500 animate-bounce flex-shrink-0 mt-1" />
+                    </div>
+                    <p className="text-orange-700 flex items-center gap-2 hover:text-orange-600 transition-colors duration-300 text-lg mb-3">
+                      <Trophy className="h-5 w-5 hover:animate-bounce flex-shrink-0" />
+                      <span className="break-words">{playerInfo.team}</span>
+                    </p>
+                    <div className="flex flex-wrap items-center gap-4 text-sm text-orange-600">
+                      <span className="flex items-center gap-1 whitespace-nowrap">
+                        <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
+                        Active Player
+                      </span>
+                      <span className="text-orange-500 font-semibold whitespace-nowrap">Performance Trending ↗</span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Player Leagues */}
         {playerLeagues.length > 0 && (
