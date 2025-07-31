@@ -41,7 +41,7 @@ interface SeasonAverages {
 }
 
 export default function PlayerStatsPage() {
-  const [match] = useRoute("/leagues/:id");
+  const [match] = useRoute("/league/:id");
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   
