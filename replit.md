@@ -30,7 +30,14 @@ A professional React and Tailwind CSS website with login functionality and an in
 - Document parsing and chatbot functionality via Flask backend
 - Responsive design with mobile support
 
-## Recent Changes
+## Recent Changes  
+- **2025-01-31**: Added comprehensive League Leaders page with statistical leaderboards
+  - Created new dynamic route `/league-leaders/[slug]` for league-specific statistical leaders
+  - Built 9 statistical categories: points, rebounds, assists, steals, blocks, FG%, 3P%, FT%, games played
+  - Shows top 5 players per category with season averages and totals
+  - Added navigation link from league pages to leaders page
+  - Implemented clickable player entries that navigate to individual player profiles
+  - Fixed team name display and player data aggregation by name+team combination
 - **2025-01-31**: Enhanced player search and statistics system with AI analysis and softer color palette
   - Integrated player search into landing page search bar alongside leagues
   - Fixed player stats page routing using proper wouter parameter extraction

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams } from "wouter";
+import { useParams, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
@@ -28,6 +28,7 @@ interface League {
 
 export default function LeagueLeadersPage() {
   const { slug } = useParams();
+  const [location, navigate] = useLocation();
   const [league, setLeague] = useState<League | null>(null);
   const [leaderboardStats, setLeaderboardStats] = useState<LeaderboardStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -270,7 +271,8 @@ export default function LeagueLeadersPage() {
           players.map((player, index) => (
             <div 
               key={`${player.player_id}-${index}`} 
-              className="flex items-center justify-between p-2 rounded-lg bg-orange-50 hover:bg-orange-100 transition-colors duration-200"
+              className="flex items-center justify-between p-2 rounded-lg bg-orange-50 hover:bg-orange-100 transition-colors duration-200 cursor-pointer"
+              onClick={() => player.player_id && navigate(`/player/${player.player_id}`)}
             >
               <div className="flex items-center gap-3">
                 <div className={`
@@ -284,7 +286,7 @@ export default function LeagueLeadersPage() {
                 </div>
                 <div>
                   <p className="font-medium text-orange-900">{player.name}</p>
-                  <p className="text-sm text-orange-700">{player.team_name}</p>
+                  <p className="text-sm text-orange-700">{player.team_name || 'Unknown Team'}</p>
                 </div>
               </div>
               <div className="text-right">
