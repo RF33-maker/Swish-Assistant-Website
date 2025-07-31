@@ -69,7 +69,7 @@ export default function PlayersListPage() {
         allStats.forEach((stat) => {
           // Use name field or fallback to player_name
           const playerName = stat.name || stat.player_name || 'Unknown Player';
-          const playerId = stat.player_id || stat.id;
+          const playerId = stat.id;
           
           if (!playerMap.has(playerName)) {
             playerMap.set(playerName, {

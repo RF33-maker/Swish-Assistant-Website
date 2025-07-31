@@ -32,8 +32,8 @@ export default function LandingPage() {
           .eq("is_public", true),
         supabase
           .from("player_stats")
-          .select("name, team, player_id")
-          .or(`name.ilike.%${query}%,team.ilike.%${query}%`)
+          .select("name, team, id")
+          .ilike("name", `%${query}%`)
           .limit(10)
       ]);
 
@@ -50,7 +50,7 @@ export default function LandingPage() {
           acc.push({
             name: player.name,
             team: player.team,
-            player_id: player.player_id,
+            player_id: player.id,
             type: 'player'
           });
         }
