@@ -59,14 +59,28 @@ export default function PlayerStatsPage() {
     const fetchPlayerData = async () => {
       setLoading(true);
       try {
-        // Fetch player game stats using 'name' column
+        // Fetch player game stats - try both player_id and name matching
         console.log('Fetching stats for player ID:', playerId);
         
-        const { data: stats, error: statsError } = await supabase
+        // First try to get by player_id
+        let { data: stats, error: statsError } = await supabase
           .from('player_stats')
           .select('*')
           .eq('player_id', playerId)
           .order('game_date', { ascending: false });
+
+        // If no results, try by name (in case the URL param is actually a name)
+        if (!stats || stats.length === 0) {
+          console.log('No results by player_id, trying by name...');
+          const nameQuery = await supabase
+            .from('player_stats')
+            .select('*')
+            .or(`name.eq.${playerId},player_name.eq.${playerId}`)
+            .order('game_date', { ascending: false });
+          
+          stats = nameQuery.data;
+          statsError = nameQuery.error;
+        }
 
         console.log('Player stats query result:', { stats, error: statsError });
 
