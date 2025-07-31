@@ -43,14 +43,15 @@ interface SeasonAverages {
 }
 
 export default function PlayerStatsPage() {
-  const [match] = useRoute("/player/:id");
+  const [match, params] = useRoute("/player/:id");
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   
-  const playerId = match?.id;
+  const playerId = params?.id;
   
-  console.log('🎯 ROUTE DEBUG - Match object:', match);
-  console.log('🎯 ROUTE DEBUG - Player ID from match:', playerId);
+  console.log('🎯 ROUTE DEBUG - Match:', match);
+  console.log('🎯 ROUTE DEBUG - Params:', params);
+  console.log('🎯 ROUTE DEBUG - Player ID:', playerId);
   const [playerStats, setPlayerStats] = useState<PlayerStat[]>([]);
   const [seasonAverages, setSeasonAverages] = useState<SeasonAverages | null>(null);
   const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string } | null>(null);
