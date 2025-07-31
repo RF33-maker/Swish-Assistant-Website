@@ -20,6 +20,14 @@ export interface PlayerAnalysisData {
 
 export async function generatePlayerAnalysis(playerData: PlayerAnalysisData): Promise<string> {
   try {
+    // Check if API key is available
+    if (!process.env.OPENAI_API_KEY) {
+      console.log("OpenAI API key not found, using fallback analysis");
+      return "Skilled player with strong fundamentals and competitive drive.";
+    }
+
+    console.log("Generating AI analysis for player:", playerData.name);
+    
     const prompt = `Analyze this basketball player's statistics and provide a brief, engaging description of their playing style and strengths. Keep it under 40 words.
 
 Player: ${playerData.name}
@@ -35,6 +43,7 @@ Free Throw %: ${playerData.ft_percentage.toFixed(1)}%
 
 Focus on their primary role (scorer, defender, playmaker, etc.) and key strengths. Be specific and basketball-focused.`;
 
+    console.log("Calling OpenAI API...");
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
@@ -51,9 +60,14 @@ Focus on their primary role (scorer, defender, playmaker, etc.) and key strength
       temperature: 0.7
     });
 
-    return response.choices[0].message.content?.trim() || "Dynamic player with well-rounded skills and strong court presence.";
+    const analysis = response.choices[0].message.content?.trim() || "Dynamic player with well-rounded skills and strong court presence.";
+    console.log("AI analysis generated successfully:", analysis);
+    return analysis;
   } catch (error) {
     console.error("AI Analysis Error:", error);
+    if (error instanceof Error) {
+      console.error("Error details:", error.message);
+    }
     return "Skilled player with strong fundamentals and competitive drive.";
   }
 }

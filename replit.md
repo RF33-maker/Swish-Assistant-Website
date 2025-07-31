@@ -40,8 +40,10 @@ A professional React and Tailwind CSS website with login functionality and an in
   - Changed background styling to white instead of orange gradient per user preference
   - Added playful micro-interactions with hover animations, progress bars, and smooth transitions
   - Enhanced player profile section with profile picture placeholder and trending indicators
-  - Implemented AI-powered player analysis using OpenAI API with secure backend endpoint
-  - Updated entire page color scheme to softer orange tones (orange-50/100/300/400/700/800) for better readability and cohesive design matching gamelog section
+  - Implemented AI-powered player analysis using OpenAI API routed through external Python Flask backend
+  - Updated entire page color scheme to softer orange tones (orange-50/100/300/400/700/800) for better readability and cohesive design
+  - Transformed all card backgrounds from dark/black to clean white backgrounds with soft orange borders (border-orange-200/300)
+  - Fixed AI analysis functionality by routing requests to external Flask backend instead of conflicting local Express routes
 - **2025-01-25**: Fixed frontend-backend communication issues and restored proper architecture
   - Restored Supabase configuration for database and authentication
   - Connected frontend to external Python Flask backend (https://sab-backend.onrender.com)

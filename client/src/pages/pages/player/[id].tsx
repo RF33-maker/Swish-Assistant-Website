@@ -18,7 +18,7 @@ interface PlayerStat {
   game_date: string;
   opponent?: string;
   points?: number;
-  rebounds?: number;
+  rebounds_total?: number;
   assists?: number;
   steals?: number;
   blocks?: number;
@@ -754,7 +754,7 @@ export default function PlayerStatsPage() {
                         </td>
                         <td className="px-4 py-3 text-orange-800">{game.minutes_played || 0}</td>
                         <td className="px-4 py-3 font-semibold text-orange-900 group-hover:text-orange-700 group-hover:scale-110 transition-all duration-200">{game.points || 0}</td>
-                        <td className="px-4 py-3 text-orange-800">{game.rebounds || 0}</td>
+                        <td className="px-4 py-3 text-orange-800">{game.rebounds_total || 0}</td>
                         <td className="px-4 py-3 text-orange-800">{game.assists || 0}</td>
                         <td className="px-4 py-3 text-orange-800">{game.steals || 0}</td>
                         <td className="px-4 py-3 text-orange-800">{game.blocks || 0}</td>
@@ -762,7 +762,7 @@ export default function PlayerStatsPage() {
                           {game.field_goals_made || 0}/{game.field_goals_attempted || 0}
                         </td>
                         <td className="px-4 py-3 text-orange-800">
-                          {game.three_pointers_made || 0}/{game.three_pointers_attempted || 0}
+                          {game.three_pt_made || 0}/{game.three_pt_attempted || 0}
                         </td>
                         <td className="px-4 py-3 text-orange-800">
                           {game.free_throws_made || 0}/{game.free_throws_attempted || 0}
