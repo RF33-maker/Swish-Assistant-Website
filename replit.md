@@ -37,6 +37,8 @@ A professional React and Tailwind CSS website with login functionality and an in
   - Added backendApi utilities for file upload, document parsing, and chatbot functionality
   - Configured environment variables for VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, and VITE_BACKEND_URL
   - Fixed frontend to work as standalone React app without Express backend dependency
+  - Created player stats page at `/leagues/[id]` with comprehensive basketball statistics display
+  - Added season averages calculation and game log table with full stat tracking
 
 ## User Preferences
 - Use modern React patterns with hooks
