@@ -38,6 +38,7 @@ interface GameDetailModalProps {
 export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailModalProps) {
   const [gameStats, setGameStats] = useState<PlayerGameStats[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
   const [gameInfo, setGameInfo] = useState<{
     date: string;
     teams: string[];
@@ -79,6 +80,11 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
           });
 
           setGameStats(stats);
+          
+          // Set first team as default selection
+          if (teams.length > 0 && !selectedTeam) {
+            setSelectedTeam(teams[0]);
+          }
         }
       } catch (error) {
         console.error("Error processing game details:", error);
@@ -106,6 +112,9 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
       totalAssists: teamPlayers.reduce((sum, p) => sum + (p.assists || 0), 0),
     };
   });
+
+  const selectedTeamStats = teamStats?.find(team => team.name === selectedTeam);
+  const selectedTeamPlayers = selectedTeamStats?.players || [];
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
@@ -149,58 +158,90 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
             </div>
           ) : (
             <div className="p-6 space-y-6">
-              {/* Team Summary */}
-              {teamStats && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {teamStats.map((team, index) => (
-                    <div key={team.name} className="bg-orange-50 rounded-lg p-4 border border-orange-200">
-                      <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-lg font-semibold text-slate-800">{team.name}</h3>
-                        <div className="text-2xl font-bold text-orange-600">{team.score}</div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <div className="text-slate-600">Field Goals</div>
-                          <div className="font-medium">
-                            {team.totalFgMade}/{team.totalFgAttempted} 
-                            {team.totalFgAttempted > 0 && (
-                              <span className="text-slate-500 ml-1">
-                                ({((team.totalFgMade / team.totalFgAttempted) * 100).toFixed(1)}%)
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-slate-600">3-Pointers</div>
-                          <div className="font-medium">
-                            {team.totalThreeMade}/{team.totalThreeAttempted}
-                            {team.totalThreeAttempted > 0 && (
-                              <span className="text-slate-500 ml-1">
-                                ({((team.totalThreeMade / team.totalThreeAttempted) * 100).toFixed(1)}%)
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-slate-600">Total Rebounds</div>
-                          <div className="font-medium">{team.totalRebounds}</div>
-                        </div>
-                        <div>
-                          <div className="text-slate-600">Total Assists</div>
-                          <div className="font-medium">{team.totalAssists}</div>
-                        </div>
-                      </div>
+              {/* Final Score Summary */}
+              {gameInfo && (
+                <div className="bg-gradient-to-r from-orange-50 to-orange-100 rounded-lg p-4 border border-orange-200">
+                  <div className="flex items-center justify-center">
+                    <div className="text-center">
+                      <div className="text-lg font-semibold text-slate-800">{gameInfo.teams[0]}</div>
+                      <div className="text-3xl font-bold text-orange-600">{gameInfo.teamScores[gameInfo.teams[0]]}</div>
                     </div>
+                    <div className="mx-8 text-slate-400 font-medium">FINAL</div>
+                    <div className="text-center">
+                      <div className="text-lg font-semibold text-slate-800">{gameInfo.teams[1]}</div>
+                      <div className="text-3xl font-bold text-orange-600">{gameInfo.teamScores[gameInfo.teams[1]]}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Team Filter Buttons */}
+              {gameInfo && (
+                <div className="flex justify-center gap-2">
+                  {gameInfo.teams.map((team) => (
+                    <button
+                      key={team}
+                      onClick={() => setSelectedTeam(team)}
+                      className={`px-6 py-2 rounded-lg font-medium transition-colors ${
+                        selectedTeam === team
+                          ? 'bg-orange-500 text-white shadow-md'
+                          : 'bg-white text-slate-700 border border-orange-200 hover:bg-orange-50'
+                      }`}
+                    >
+                      {team} Box Score
+                    </button>
                   ))}
                 </div>
               )}
 
-              {/* Player Statistics Table */}
+              {/* Selected Team Summary */}
+              {selectedTeamStats && (
+                <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-xl font-bold text-slate-800">{selectedTeamStats.name}</h3>
+                    <div className="text-3xl font-bold text-orange-600">{selectedTeamStats.score}</div>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div>
+                      <div className="text-slate-600">Field Goals</div>
+                      <div className="font-medium">
+                        {selectedTeamStats.totalFgMade}/{selectedTeamStats.totalFgAttempted} 
+                        {selectedTeamStats.totalFgAttempted > 0 && (
+                          <span className="text-slate-500 ml-1">
+                            ({((selectedTeamStats.totalFgMade / selectedTeamStats.totalFgAttempted) * 100).toFixed(1)}%)
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-slate-600">3-Pointers</div>
+                      <div className="font-medium">
+                        {selectedTeamStats.totalThreeMade}/{selectedTeamStats.totalThreeAttempted}
+                        {selectedTeamStats.totalThreeAttempted > 0 && (
+                          <span className="text-slate-500 ml-1">
+                            ({((selectedTeamStats.totalThreeMade / selectedTeamStats.totalThreeAttempted) * 100).toFixed(1)}%)
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-slate-600">Total Rebounds</div>
+                      <div className="font-medium">{selectedTeamStats.totalRebounds}</div>
+                    </div>
+                    <div>
+                      <div className="text-slate-600">Total Assists</div>
+                      <div className="font-medium">{selectedTeamStats.totalAssists}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Box Score Table for Selected Team */}
               <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
                 <div className="p-4 bg-gray-50 border-b border-gray-200">
                   <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
                     <Users className="w-5 h-5" />
-                    Player Statistics
+                    {selectedTeam} Box Score
                   </h3>
                 </div>
                 <div className="overflow-x-auto">
@@ -208,7 +249,6 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                     <thead className="bg-gray-50 border-b border-gray-200">
                       <tr>
                         <th className="text-left p-3 font-medium text-slate-700">Player</th>
-                        <th className="text-left p-3 font-medium text-slate-700">Team</th>
                         <th className="text-center p-3 font-medium text-slate-700">MIN</th>
                         <th className="text-center p-3 font-medium text-slate-700">PTS</th>
                         <th className="text-center p-3 font-medium text-slate-700">FG</th>
@@ -223,7 +263,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                       </tr>
                     </thead>
                     <tbody>
-                      {gameStats.map((player, index) => (
+                      {selectedTeamPlayers.map((player, index) => (
                         <tr key={player.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-orange-50 transition-colors`}>
                           <td className="p-3">
                             <div>
@@ -233,7 +273,6 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                               )}
                             </div>
                           </td>
-                          <td className="p-3 text-slate-600">{player.team}</td>
                           <td className="p-3 text-center">
                             {player.minutes_played && (
                               <div className="flex items-center justify-center gap-1">
@@ -295,37 +334,73 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                         </tr>
                       ))}
                     </tbody>
+                    
+                    {/* Team Totals Row */}
+                    {selectedTeamStats && (
+                      <tfoot className="bg-orange-50 border-t-2 border-orange-200">
+                        <tr className="font-semibold text-slate-800">
+                          <td className="p-3">TEAM TOTALS</td>
+                          <td className="p-3 text-center">-</td>
+                          <td className="p-3 text-center text-orange-600">{selectedTeamStats.score}</td>
+                          <td className="p-3 text-center">
+                            {selectedTeamStats.totalFgMade}/{selectedTeamStats.totalFgAttempted}
+                            {selectedTeamStats.totalFgAttempted > 0 && (
+                              <div className="text-xs text-slate-500">
+                                {((selectedTeamStats.totalFgMade / selectedTeamStats.totalFgAttempted) * 100).toFixed(1)}%
+                              </div>
+                            )}
+                          </td>
+                          <td className="p-3 text-center">
+                            {selectedTeamStats.totalThreeMade}/{selectedTeamStats.totalThreeAttempted}
+                            {selectedTeamStats.totalThreeAttempted > 0 && (
+                              <div className="text-xs text-slate-500">
+                                {((selectedTeamStats.totalThreeMade / selectedTeamStats.totalThreeAttempted) * 100).toFixed(1)}%
+                              </div>
+                            )}
+                          </td>
+                          <td className="p-3 text-center">-</td>
+                          <td className="p-3 text-center">{selectedTeamStats.totalRebounds}</td>
+                          <td className="p-3 text-center">{selectedTeamStats.totalAssists}</td>
+                          <td className="p-3 text-center">-</td>
+                          <td className="p-3 text-center">-</td>
+                          <td className="p-3 text-center">-</td>
+                          <td className="p-3 text-center">-</td>
+                        </tr>
+                      </tfoot>
+                    )}
                   </table>
                 </div>
               </div>
 
-              {/* Game Insights */}
-              <div className="bg-gradient-to-r from-orange-50 to-yellow-50 rounded-lg p-4 border border-orange-200">
-                <h3 className="text-lg font-semibold text-slate-800 mb-3 flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-orange-500" />
-                  Game Insights
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                  <div className="bg-white rounded-md p-3">
-                    <div className="text-orange-600 font-medium">Top Scorer</div>
-                    <div className="text-slate-800">
-                      {gameStats[0]?.name} - {gameStats[0]?.points} points
+              {/* Team Insights */}
+              {selectedTeamPlayers.length > 0 && (
+                <div className="bg-gradient-to-r from-orange-50 to-yellow-50 rounded-lg p-4 border border-orange-200">
+                  <h3 className="text-lg font-semibold text-slate-800 mb-3 flex items-center gap-2">
+                    <TrendingUp className="w-5 h-5 text-orange-500" />
+                    {selectedTeam} Game Highlights
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                    <div className="bg-white rounded-md p-3">
+                      <div className="text-orange-600 font-medium">Top Scorer</div>
+                      <div className="text-slate-800">
+                        {selectedTeamPlayers.sort((a, b) => (b.points || 0) - (a.points || 0))[0]?.name} - {selectedTeamPlayers.sort((a, b) => (b.points || 0) - (a.points || 0))[0]?.points} points
+                      </div>
                     </div>
-                  </div>
-                  <div className="bg-white rounded-md p-3">
-                    <div className="text-orange-600 font-medium">Best Rebounder</div>
-                    <div className="text-slate-800">
-                      {gameStats.sort((a, b) => (b.rebounds_total || 0) - (a.rebounds_total || 0))[0]?.name} - {gameStats.sort((a, b) => (b.rebounds_total || 0) - (a.rebounds_total || 0))[0]?.rebounds_total} rebounds
+                    <div className="bg-white rounded-md p-3">
+                      <div className="text-orange-600 font-medium">Best Rebounder</div>
+                      <div className="text-slate-800">
+                        {selectedTeamPlayers.sort((a, b) => (b.rebounds_total || 0) - (a.rebounds_total || 0))[0]?.name} - {selectedTeamPlayers.sort((a, b) => (b.rebounds_total || 0) - (a.rebounds_total || 0))[0]?.rebounds_total} rebounds
+                      </div>
                     </div>
-                  </div>
-                  <div className="bg-white rounded-md p-3">
-                    <div className="text-orange-600 font-medium">Best Playmaker</div>
-                    <div className="text-slate-800">
-                      {gameStats.sort((a, b) => (b.assists || 0) - (a.assists || 0))[0]?.name} - {gameStats.sort((a, b) => (b.assists || 0) - (a.assists || 0))[0]?.assists} assists
+                    <div className="bg-white rounded-md p-3">
+                      <div className="text-orange-600 font-medium">Best Playmaker</div>
+                      <div className="text-slate-800">
+                        {selectedTeamPlayers.sort((a, b) => (b.assists || 0) - (a.assists || 0))[0]?.name} - {selectedTeamPlayers.sort((a, b) => (b.assists || 0) - (a.assists || 0))[0]?.assists} assists
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           )}
         </div>

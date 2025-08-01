@@ -31,6 +31,14 @@ A professional React and Tailwind CSS website with login functionality and an in
 - Responsive design with mobile support
 
 ## Recent Changes  
+- **2025-02-01**: Enhanced league page with carousel-style game results and team-filtered box scores
+  - Replaced AI Game Summary section with interactive game results carousel
+  - Created modern carousel component showing recent games with scores and top performers
+  - Added detailed game view modal with comprehensive player statistics
+  - Implemented team-based filtering in game details following standard box score format
+  - Users can now click between teams to view isolated box scores for familiar experience
+  - Added team totals row and highlighted game insights for selected team
+  - Fixed regex compatibility issues for better cross-browser support
 - **2025-01-31**: Added comprehensive League Leaders page with statistical leaderboards
   - Created new dynamic route `/league-leaders/[slug]` for league-specific statistical leaders
   - Built 9 statistical categories: points, rebounds, assists, steals, blocks, FG%, 3P%, FT%, games played
