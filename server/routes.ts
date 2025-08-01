@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
-import { generatePlayerAnalysis } from "./ai-analysis";
+import { generatePlayerAnalysis, generateChatResponse } from "./ai-analysis";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   console.log("=== REGISTERING ROUTES ===");
@@ -39,10 +39,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   console.log("AI Analysis route registered at /api/ai-analysis");
+
+  // League Chat endpoint with OpenAI
+  app.post("/api/chat", async (req, res) => {
+    console.log("Chat endpoint hit with data:", req.body);
+    try {
+      const { question, context, leagueName } = req.body;
+      
+      if (!question || !context) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+
+      const response = await generateChatResponse(question, context, leagueName);
+      res.json({ response });
+    } catch (error) {
+      console.error("Chat API Error:", error);
+      res.status(500).json({ 
+        error: "Failed to generate response",
+        response: "I'm having trouble processing your request right now. Please try again."
+      });
+    }
+  });
+  console.log("Chat route registered at /api/chat");
   
   // Debug: List all registered routes
   console.log("All routes registered:");
-  app._router.stack.forEach((middleware, index) => {
+  app._router.stack.forEach((middleware: any, index: number) => {
     if (middleware.route) {
       console.log(`${index}: ${middleware.route.methods} ${middleware.route.path}`);
     } else if (middleware.name === 'router') {

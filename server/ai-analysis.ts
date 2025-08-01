@@ -71,3 +71,59 @@ Focus on their primary role (scorer, defender, playmaker, etc.) and key strength
     return "Skilled player with strong fundamentals and competitive drive.";
   }
 }
+
+export async function generateChatResponse(question: string, context: string, leagueName: string): Promise<string> {
+  try {
+    // Check if API key is available
+    if (!process.env.OPENAI_API_KEY) {
+      console.log("OpenAI API key not found, using fallback response");
+      return "I'm currently unable to provide detailed analysis. Please try again later.";
+    }
+
+    console.log("Generating AI chat response for league:", leagueName);
+    console.log("Question:", question);
+    
+    const prompt = `You are a basketball league assistant for ${leagueName}. Answer the user's question using the provided league data. Be conversational, informative, and engaging. Use basketball terminology naturally and provide specific insights based on the data.
+
+LEAGUE DATA:
+${context}
+
+USER QUESTION: ${question}
+
+Provide a helpful response that:
+- Directly answers their question using the provided data
+- Includes specific statistics and names when relevant
+- Uses a friendly, knowledgeable tone
+- Adds basketball insights or context where appropriate
+- Keeps the response focused and concise (under 200 words)
+
+If the data doesn't contain enough information to answer the question fully, acknowledge this and suggest what else the user might ask about instead.`;
+
+    console.log("Calling OpenAI API for chat response...");
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: `You are an expert basketball league assistant for ${leagueName}. You provide insightful, engaging responses about league statistics, player performance, and game analysis using the provided data.`
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      max_tokens: 300,
+      temperature: 0.7
+    });
+
+    const chatResponse = response.choices[0].message.content?.trim() || "I'm having trouble analyzing that information right now. Could you try asking about specific player stats or recent games?";
+    console.log("AI chat response generated successfully");
+    return chatResponse;
+  } catch (error) {
+    console.error("AI Chat Response Error:", error);
+    if (error instanceof Error) {
+      console.error("Error details:", error.message);
+    }
+    return "I'm having trouble processing your request right now. Please try asking about player statistics, recent games, or team standings.";
+  }
+}
