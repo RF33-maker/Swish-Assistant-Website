@@ -32,6 +32,9 @@ import LeagueChatbot from "@/components/LeagueChatbot";
     const [sortBy, setSortBy] = useState("points");
     const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
     const [isGameModalOpen, setIsGameModalOpen] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
     
 
 
@@ -62,6 +65,14 @@ import LeagueChatbot from "@/components/LeagueChatbot";
 
 
     useEffect(() => {
+      const fetchUser = async () => {
+        const { data: { user } } = await supabase.auth.getUser();
+        setCurrentUser(user);
+      };
+      fetchUser();
+    }, []);
+
+    useEffect(() => {
       const fetchLeague = async () => {
         const { data, error } = await supabase
           .from("leagues")
@@ -70,6 +81,9 @@ import LeagueChatbot from "@/components/LeagueChatbot";
           .single();
         console.log("Resolved league from slug:", slug, "→ ID:", data?.league_id);
 
+        if (data) {
+          setIsOwner(currentUser?.id === data.user_id);
+        }
 
         if (data?.league_id) {
           const fetchTopStats = async () => {
@@ -124,7 +138,7 @@ import LeagueChatbot from "@/components/LeagueChatbot";
       };
 
       fetchLeague();
-    }, [slug]);
+    }, [slug, currentUser]);
 
     const handleSearch = () => {
       if (search.trim()) {
@@ -176,6 +190,54 @@ import LeagueChatbot from "@/components/LeagueChatbot";
     const handleCloseGameModal = () => {
       setIsGameModalOpen(false);
       setSelectedGameId(null);
+    };
+
+    const handleBannerUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file || !league?.league_id || !currentUser) return;
+
+      setUploadingBanner(true);
+      try {
+        // Upload file to Supabase storage
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${league.league_id}_${Date.now()}.${fileExt}`;
+        
+        const { data, error: uploadError } = await supabase.storage
+          .from('league-banners')
+          .upload(fileName, file);
+
+        if (uploadError) {
+          console.error('Upload error:', uploadError);
+          alert('Failed to upload banner');
+          return;
+        }
+
+        // Get public URL
+        const { data: { publicUrl } } = supabase.storage
+          .from('league-banners')
+          .getPublicUrl(fileName);
+
+        // Update league record with new banner URL
+        const { error: updateError } = await supabase
+          .from('leagues')
+          .update({ banner_url: publicUrl })
+          .eq('league_id', league.league_id);
+
+        if (updateError) {
+          console.error('Update error:', updateError);
+          alert('Failed to update banner');
+          return;
+        }
+
+        // Update local state
+        setLeague({ ...league, banner_url: publicUrl });
+        alert('Banner updated successfully!');
+      } catch (error) {
+        console.error('Banner upload error:', error);
+        alert('Failed to upload banner');
+      } finally {
+        setUploadingBanner(false);
+      }
     };
 
 
@@ -262,6 +324,40 @@ import LeagueChatbot from "@/components/LeagueChatbot";
                 Organised by {league?.organiser_name || "BallParkSports"}
               </p>
             </div>
+            
+            {/* Banner Upload Button for League Owner */}
+            {isOwner && (
+              <div className="absolute top-4 right-4">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleBannerUpload}
+                  className="hidden"
+                  id="banner-upload"
+                  disabled={uploadingBanner}
+                />
+                <label
+                  htmlFor="banner-upload"
+                  className={`inline-flex items-center gap-2 px-4 py-2 bg-white/90 hover:bg-white text-slate-700 text-sm font-medium rounded-lg cursor-pointer transition-colors ${
+                    uploadingBanner ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                >
+                  {uploadingBanner ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
+                      Change Banner
+                    </>
+                  )}
+                </label>
+              </div>
+            )}
           </div>
         </section>
 
