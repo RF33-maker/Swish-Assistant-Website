@@ -273,57 +273,57 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                               )}
                             </div>
                           </td>
-                          <td className="p-3 text-center">
+                          <td className="p-3 text-center text-slate-800">
                             {player.minutes_played && (
                               <div className="flex items-center justify-center gap-1">
                                 <Clock className="w-3 h-3 text-slate-400" />
-                                {player.minutes_played}
+                                <span className="text-slate-800">{player.minutes_played}</span>
                               </div>
                             )}
                           </td>
                           <td className="p-3 text-center font-semibold text-orange-600">{player.points}</td>
-                          <td className="p-3 text-center">
+                          <td className="p-3 text-center text-slate-800">
                             {player.field_goals_made !== undefined && player.field_goals_attempted !== undefined ? (
                               <div>
-                                <div>{player.field_goals_made}/{player.field_goals_attempted}</div>
+                                <div className="font-medium">{player.field_goals_made}/{player.field_goals_attempted}</div>
                                 {player.field_goal_percent && (
                                   <div className="text-xs text-slate-500">{player.field_goal_percent}%</div>
                                 )}
                               </div>
-                            ) : '-'}
+                            ) : <span className="text-slate-400">-</span>}
                           </td>
-                          <td className="p-3 text-center">
+                          <td className="p-3 text-center text-slate-800">
                             {player.three_pt_made !== undefined && player.three_pt_attempted !== undefined ? (
                               <div>
-                                <div>{player.three_pt_made}/{player.three_pt_attempted}</div>
+                                <div className="font-medium">{player.three_pt_made}/{player.three_pt_attempted}</div>
                                 {player.three_pt_percent && (
                                   <div className="text-xs text-slate-500">{player.three_pt_percent}%</div>
                                 )}
                               </div>
-                            ) : '-'}
+                            ) : <span className="text-slate-400">-</span>}
                           </td>
-                          <td className="p-3 text-center">
+                          <td className="p-3 text-center text-slate-800">
                             {player.free_throws_made !== undefined && player.free_throws_attempted !== undefined ? (
                               <div>
-                                <div>{player.free_throws_made}/{player.free_throws_attempted}</div>
+                                <div className="font-medium">{player.free_throws_made}/{player.free_throws_attempted}</div>
                                 {player.free_throw_percent && (
                                   <div className="text-xs text-slate-500">{player.free_throw_percent}%</div>
                                 )}
                               </div>
-                            ) : '-'}
+                            ) : <span className="text-slate-400">-</span>}
                           </td>
-                          <td className="p-3 text-center">
-                            <div>{player.rebounds_total}</div>
+                          <td className="p-3 text-center text-slate-800">
+                            <div className="font-medium">{player.rebounds_total}</div>
                             {(player.rebounds_o || player.rebounds_d) && (
                               <div className="text-xs text-slate-500">
                                 {player.rebounds_o || 0}O {player.rebounds_d || 0}D
                               </div>
                             )}
                           </td>
-                          <td className="p-3 text-center font-medium">{player.assists}</td>
-                          <td className="p-3 text-center">{player.steals || 0}</td>
-                          <td className="p-3 text-center">{player.blocks || 0}</td>
-                          <td className="p-3 text-center text-red-600">{player.turnovers || 0}</td>
+                          <td className="p-3 text-center font-medium text-slate-800">{player.assists}</td>
+                          <td className="p-3 text-center font-medium text-slate-800">{player.steals || 0}</td>
+                          <td className="p-3 text-center font-medium text-slate-800">{player.blocks || 0}</td>
+                          <td className="p-3 text-center font-medium text-red-600">{player.turnovers || 0}</td>
                           <td className="p-3 text-center">
                             {player.plus_minus !== undefined && (
                               <span className={`font-medium ${player.plus_minus >= 0 ? 'text-green-600' : 'text-red-600'}`}>
