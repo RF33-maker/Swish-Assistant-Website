@@ -98,7 +98,7 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
       const [playersData, gamesData] = await Promise.all([
         supabase
           .from('player_stats')
-          .select('name, points, rebounds_total, assists, steals, blocks, team, games_played')
+          .select('name, points, rebounds_total, assists, steals, blocks, team')
           .eq('league_id', leagueId)
           .order('points', { ascending: false })
           .limit(20),
@@ -131,10 +131,7 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
       if (playersData.data && playersData.data.length > 0) {
         contextData += "PLAYER STATISTICS:\n";
         playersData.data.forEach(p => {
-          const avgPoints = p.games_played ? (p.points / p.games_played).toFixed(1) : 'N/A';
-          const avgReb = p.games_played ? (p.rebounds_total / p.games_played).toFixed(1) : 'N/A';
-          const avgAst = p.games_played ? (p.assists / p.games_played).toFixed(1) : 'N/A';
-          contextData += `${p.name} (${p.team}): ${p.points} total pts (${avgPoints} ppg), ${p.rebounds_total} reb (${avgReb} rpg), ${p.assists} ast (${avgAst} apg), ${p.steals} stl, ${p.blocks} blk, ${p.games_played || 0} games\n`;
+          contextData += `${p.name} (${p.team}): ${p.points} pts, ${p.rebounds_total} reb, ${p.assists} ast, ${p.steals} stl, ${p.blocks} blk\n`;
         });
         contextData += "\n";
       }
@@ -205,11 +202,7 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
           );
           
           if (player) {
-            const avgPoints = player.games_played ? (player.points / player.games_played).toFixed(1) : 'N/A';
-            const avgReb = player.games_played ? (player.rebounds_total / player.games_played).toFixed(1) : 'N/A';
-            const avgAst = player.games_played ? (player.assists / player.games_played).toFixed(1) : 'N/A';
-            
-            return `📊 ${player.name} is having a solid season with ${player.team}!\n\n🏀 Season Performance:\n• Averaging ${avgPoints} points, ${avgReb} rebounds, and ${avgAst} assists per game\n• Total contributions: ${player.points} pts, ${player.rebounds_total} reb, ${player.assists} ast\n• Has played ${player.games_played || 'several'} games this season\n\n${player.points >= 20 ? '🔥 Strong scorer who can put up big numbers!' : player.rebounds_total >= 8 ? '💪 Solid presence in the paint with good rebounding!' : player.assists >= 5 ? '🎯 Great court vision and playmaking ability!' : '⚡ Well-rounded contributor on both ends!'}`;
+            return `📊 ${player.name} is having a solid season with ${player.team}!\n\n🏀 Season Performance:\n• Total contributions: ${player.points} pts, ${player.rebounds_total} reb, ${player.assists} ast\n• Additional stats: ${player.steals} steals, ${player.blocks} blocks\n\n${player.points >= 30 ? '🔥 Strong scorer who can put up big numbers!' : player.rebounds_total >= 15 ? '💪 Solid presence in the paint with good rebounding!' : player.assists >= 10 ? '🎯 Great court vision and playmaking ability!' : '⚡ Well-rounded contributor on both ends!'}`;
           }
         }
       }
@@ -260,8 +253,7 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
         if (playersData.data && playersData.data.length > 0) {
           const efficiencyPlayers = playersData.data
             .map(p => {
-              const gamesPlayed = p.games_played || 1;
-              const efficiency = (p.points + p.rebounds_total + p.assists + p.steals + p.blocks) / gamesPlayed;
+              const efficiency = p.points + p.rebounds_total + p.assists + p.steals + p.blocks;
               return { ...p, efficiency: efficiency.toFixed(1) };
             })
             .sort((a, b) => parseFloat(b.efficiency) - parseFloat(a.efficiency))
@@ -269,10 +261,10 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
 
           const topPlayer = efficiencyPlayers[0];
           const efficiencyList = efficiencyPlayers.map((p, i) => 
-            `${i + 1}. ${p.name} (${p.team}) - ${p.efficiency} efficiency rating`
+            `${i + 1}. ${p.name} (${p.team}) - ${p.efficiency} total production`
           ).join('\n');
 
-          return `⚡ Most Efficient Players in ${leagueName}:\n(Based on total production per game)\n\n${efficiencyList}\n\n🎯 ${topPlayer.name} leads the way with exceptional all-around production, contributing ${(topPlayer.points / (topPlayer.games_played || 1)).toFixed(1)} points, ${(topPlayer.rebounds_total / (topPlayer.games_played || 1)).toFixed(1)} rebounds, and ${(topPlayer.assists / (topPlayer.games_played || 1)).toFixed(1)} assists per game!`;
+          return `⚡ Most Efficient Players in ${leagueName}:\n(Based on total statistical production)\n\n${efficiencyList}\n\n🎯 ${topPlayer.name} leads the way with exceptional all-around production: ${topPlayer.points} points, ${topPlayer.rebounds_total} rebounds, ${topPlayer.assists} assists, ${topPlayer.steals} steals, and ${topPlayer.blocks} blocks!`;
         }
       }
 
@@ -280,25 +272,22 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
       if (lowerQuestion.includes('rebound') || lowerQuestion.includes('board')) {
         const topRebounder = playersData.data?.[0] ? playersData.data.find(p => p.rebounds_total === Math.max(...playersData.data.map(player => player.rebounds_total))) : null;
         if (topRebounder) {
-          const avg = topRebounder.games_played ? (topRebounder.rebounds_total / topRebounder.games_played).toFixed(1) : 'N/A';
-          return `🏀 ${topRebounder.name} (${topRebounder.team}) dominates the boards with ${topRebounder.rebounds_total} total rebounds (${avg} per game)!\n\nTop 5 Rebounders:\n${playersData.data?.sort((a, b) => b.rebounds_total - a.rebounds_total).slice(0, 5).map((p, i) => `${i + 1}. ${p.name} (${p.team}) - ${p.rebounds_total} rebounds`).join('\n')}`;
+          return `🏀 ${topRebounder.name} (${topRebounder.team}) dominates the boards with ${topRebounder.rebounds_total} total rebounds!\n\nTop 5 Rebounders:\n${playersData.data?.sort((a, b) => b.rebounds_total - a.rebounds_total).slice(0, 5).map((p, i) => `${i + 1}. ${p.name} (${p.team}) - ${p.rebounds_total} rebounds`).join('\n')}`;
         }
       }
 
       if (lowerQuestion.includes('scorer') || lowerQuestion.includes('scoring') || lowerQuestion.includes('points') || lowerQuestion.includes('top')) {
         const topScorer = playersData.data?.[0];
         if (topScorer) {
-          const avg = topScorer.games_played ? (topScorer.points / topScorer.games_played).toFixed(1) : 'N/A';
-          return `🔥 ${topScorer.name} (${topScorer.team}) leads ${leagueName} in scoring with ${topScorer.points} total points (${avg} per game)!\n\nTop 5 Scorers:\n${playersData.data?.slice(0, 5).map((p, i) => `${i + 1}. ${p.name} (${p.team}) - ${p.points} points`).join('\n')}`;
+          return `🔥 ${topScorer.name} (${topScorer.team}) leads ${leagueName} in scoring with ${topScorer.points} total points!\n\nTop 5 Scorers:\n${playersData.data?.slice(0, 5).map((p, i) => `${i + 1}. ${p.name} (${p.team}) - ${p.points} points`).join('\n')}`;
         }
       }
 
       // General response with data
       if (playersData.data && playersData.data.length > 0) {
         const topPlayer = playersData.data[0];
-        const avgPoints = topPlayer.games_played ? (topPlayer.points / topPlayer.games_played).toFixed(1) : 'N/A';
         
-        return `Here's what's happening in ${leagueName}:\n\n🏀 League Leaders:\n• Top Scorer: ${topPlayer.name} (${topPlayer.team}) - ${topPlayer.points} points (${avgPoints} ppg)\n• Games Played: ${gamesData.data?.length || 'Several'} recent games\n• Teams Competing: ${new Set(playersData.data.map(p => p.team)).size} active teams\n\n💡 Try asking me:\n• "How is [Player Name] doing?"\n• "Who is the best team?"\n• "Who are the most efficient players?"`;
+        return `Here's what's happening in ${leagueName}:\n\n🏀 League Leaders:\n• Top Scorer: ${topPlayer.name} (${topPlayer.team}) - ${topPlayer.points} points\n• Games Played: ${gamesData.data?.length || 'Several'} recent games\n• Teams Competing: ${new Set(playersData.data.map(p => p.team)).size} active teams\n\n💡 Try asking me:\n• "How is [Player Name] doing?"\n• "Who is the best team?"\n• "Who are the most efficient players?"`;
       }
 
       return `I can help you explore ${leagueName} data! Try asking about specific players, team performance, or statistical leaders.`;
