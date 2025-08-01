@@ -5,6 +5,8 @@ import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import LeagueDefaultImage from "@/assets/league-default.png";
 import React from "react";
 import { GameSummaryRow } from "./GameSummaryRow";
+import GameResultsCarousel from "@/components/GameResultsCarousel";
+import GameDetailModal from "@/components/GameDetailModal";
 
 
   export default function LeaguePage() {
@@ -27,6 +29,8 @@ import { GameSummaryRow } from "./GameSummaryRow";
     const [sortField, setSortField] = useState("points");
     const [sortOrder, setSortOrder] = useState("desc");
     const [sortBy, setSortBy] = useState("points");
+    const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
+    const [isGameModalOpen, setIsGameModalOpen] = useState(false);
     
 
 
@@ -163,6 +167,16 @@ import { GameSummaryRow } from "./GameSummaryRow";
     const topRebounders = getTopList("rebounds_total");
     const topAssistsList = getTopList("assists");
 
+    const handleGameClick = (gameId: string) => {
+      setSelectedGameId(gameId);
+      setIsGameModalOpen(true);
+    };
+
+    const handleCloseGameModal = () => {
+      setIsGameModalOpen(false);
+      setSelectedGameId(null);
+    };
+
 
     if (!league) {
       return <div className="p-6 text-slate-600">Loading league...</div>;
@@ -250,29 +264,15 @@ import { GameSummaryRow } from "./GameSummaryRow";
           </div>
         </section>
 
-        <div className="bg-white rounded-xl shadow p-6">
-          <h2 className="text-lg font-semibold text-slate-800">AI Game Summary</h2>
-          <p className="text-sm text-slate-600 mt-2">
-            {aiSummary || "2023/24 season Gloucester City Kings had a strong showing this season, led by ${scorerData?.name} who averaged ${scorerData?.points} points per game."}
-          </p>
-        </div>
-
         <main className="max-w-7xl mx-auto px-6 py-10 grid grid-cols-1 md:grid-cols-3 gap-8">
           <section className="md:col-span-2 space-y-6">
-            <div className="bg-white rounded-xl shadow p-6">
-              <h2 className="text-lg font-semibold text-slate-800">Recent Game Summaries</h2>
-              {gameSummaries.length > 0 ? (
-                <ul className="mt-4 space-y-2">
-                  {gameSummaries.map((game, index) => (
-                    <li key={index} className="text-sm text-slate-600">
-                      {game.name} ({game.team_name}) scored {game.points} pts, {game.assists} ast, {game.rebounds_total} reb on {game.game_date}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-slate-600 mt-2">No recent games available.</p>
-              )}
-            </div>
+            {/* Game Results Carousel */}
+            {league?.league_id && (
+              <GameResultsCarousel 
+                leagueId={league.league_id} 
+                onGameClick={handleGameClick}
+              />
+            )}
 
             <section id="stats" className="bg-white rounded-xl shadow p-6">
               <h2 className="text-lg font-semibold text-slate-800 mb-6">Top Performers</h2>
@@ -466,6 +466,15 @@ import { GameSummaryRow } from "./GameSummaryRow";
 
 
         </main>
+
+        {/* Game Detail Modal */}
+        {selectedGameId && (
+          <GameDetailModal
+            gameId={selectedGameId}
+            isOpen={isGameModalOpen}
+            onClose={handleCloseGameModal}
+          />
+        )}
       </div>
     );
   }

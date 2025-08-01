@@ -93,8 +93,8 @@ export function GameSummaryRow({
           {/* Extract sections using line breaks or regex */}
           {(() => {
             const titleMatch = summary.match(/Title Headline:\s*"(.*?)"/);
-            const summaryMatch = summary.match(/2\. Summary:\s*(.*?)3\. Coaching Tip:/s);
-            const coachingMatch = summary.match(/3\. Coaching Tip:\s*(.*)/s);
+            const summaryMatch = summary.match(/2\. Summary:\s*([\s\S]*?)3\. Coaching Tip:/);
+            const coachingMatch = summary.match(/3\. Coaching Tip:\s*([\s\S]*)/); 
 
             return (
               <>
