@@ -39,9 +39,9 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
 
   const suggestedQuestions = [
     "How is Marcos Perez Tosca doing?",
+    "Who does Rhys Farrell play for?",
     "Who is the best team?",
     "Who are the most efficient players?",
-    "Who leads in rebounds?",
     "Show me the top scorers"
   ];
 
@@ -191,14 +191,50 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
       console.log('Players data available:', !!playersData.data, playersData.data?.length);
       console.log('Games data available:', !!gamesData.data, gamesData.data?.length);
 
-      // For now, provide intelligent pattern-based responses while we fix the API endpoint
+      // Player team lookup questions
+      if ((lowerQuestion.includes('who does') || lowerQuestion.includes('what team') || lowerQuestion.includes('play for') || lowerQuestion.includes('plays for')) && playersData.data) {
+        // Extract player name from various question formats
+        const teamQuestionPatterns = [
+          /who does ([\w\s]+?) play for/,
+          /what team (?:does|is) ([\w\s]+?) (?:play for|on|with)/,
+          /([\w\s]+?) plays? for (?:what|which) team/,
+          /where does ([\w\s]+?) play/
+        ];
+        
+        let playerName = '';
+        for (const pattern of teamQuestionPatterns) {
+          const match = lowerQuestion.match(pattern);
+          if (match) {
+            playerName = match[1].trim();
+            break;
+          }
+        }
+        
+        if (playerName) {
+          const player = playersData.data.find(p => 
+            p.name.toLowerCase().includes(playerName) || 
+            playerName.includes(p.name.toLowerCase().split(' ')[0]) ||
+            p.name.toLowerCase().split(' ')[0] === playerName.split(' ')[0]
+          );
+          
+          if (player) {
+            return `🏀 ${player.name} plays for ${player.team}!\n\n📊 Quick Stats:\n• ${player.points} points\n• ${player.rebounds_total} rebounds\n• ${player.assists} assists\n• ${player.steals} steals\n• ${player.blocks} blocks`;
+          } else {
+            return `I couldn't find a player named "${playerName}" in ${leagueName}. Try asking about one of these players:\n\n${playersData.data.slice(0, 5).map(p => `• ${p.name} (${p.team})`).join('\n')}`;
+          }
+        }
+      }
+
+      // Player performance questions  
       if (lowerQuestion.includes('how') && (lowerQuestion.includes('doing') || lowerQuestion.includes('performing'))) {
         // Extract player name from question
         const playerNameMatch = lowerQuestion.match(/how (?:is|are) ([\w\s]+?) (?:doing|performing)/);
         if (playerNameMatch && playersData.data) {
           const searchName = playerNameMatch[1].trim();
           const player = playersData.data.find(p => 
-            p.name.toLowerCase().includes(searchName) || searchName.includes(p.name.toLowerCase().split(' ')[0])
+            p.name.toLowerCase().includes(searchName) || 
+            searchName.includes(p.name.toLowerCase().split(' ')[0]) ||
+            p.name.toLowerCase().split(' ')[0] === searchName.split(' ')[0]
           );
           
           if (player) {
