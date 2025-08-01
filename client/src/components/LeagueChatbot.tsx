@@ -38,11 +38,11 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
   };
 
   const suggestedQuestions = [
-    "Who are the top scorers in this league?",
-    "Show me the latest game results",
-    "What are the current standings?",
-    "Who leads in rebounds this season?",
-    "Give me team performance stats"
+    "Who are the top scorers?",
+    "Who leads in rebounds?",
+    "Show me recent games",
+    "What are the team standings?",
+    "Who has the most assists?"
   ];
 
   const handleSuggestedQuestion = (question: string) => {
@@ -67,7 +67,6 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
     setIsLoading(true);
 
     try {
-      // Query Supabase based on user question
       const response = await queryLeagueData(message, leagueId);
       
       const botMessage: Message = {
@@ -93,122 +92,24 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
 
   const queryLeagueData = async (question: string, leagueId: string): Promise<string> => {
     try {
-      console.log('Querying league data for league ID:', leagueId);
+      const lowerQuestion = question.toLowerCase();
       
-      // First, gather relevant data from Supabase using correct table names
-      const [playersData, gamesData] = await Promise.all([
-        supabase
+      // Quick data retrieval based on specific questions
+      if (lowerQuestion.includes('rebound')) {
+        const { data: players } = await supabase
           .from('player_stats')
-          .select('name, points, rebounds_total, assists, steals, blocks, team, game_date, home_team, away_team')
+          .select('name, rebounds_total, team')
           .eq('league_id', leagueId)
-          .order('points', { ascending: false })
-          .limit(20),
-        supabase
-          .from('games')
-          .select('game_date, home_team, away_team, home_score, away_score')
-          .eq('league_id', leagueId)
-          .order('game_date', { ascending: false })
-          .limit(10)
-      ]);
+          .order('rebounds_total', { ascending: false })
+          .limit(5);
 
-      console.log('Players data result:', playersData);
-      console.log('Games data result:', gamesData);
-
-      // Check for errors
-      if (playersData.error) {
-        console.error('Player stats query error:', playersData.error);
-      }
-      if (gamesData.error) {
-        console.error('Games query error:', gamesData.error);
-      }
-
-      // Prepare context data for OpenAI
-      let contextData = `League: ${leagueName}\n\n`;
-      
-      if (playersData.data && playersData.data.length > 0) {
-        contextData += "PLAYER STATISTICS:\n";
-        playersData.data.forEach(p => {
-          contextData += `${p.name} (${p.team}): ${p.points} pts, ${p.rebounds_total} reb, ${p.assists} ast, ${p.steals} stl, ${p.blocks} blk\n`;
-        });
-        contextData += "\n";
-      }
-
-      if (gamesData.data && gamesData.data.length > 0) {
-        contextData += "RECENT GAMES:\n";
-        gamesData.data.forEach(g => {
-          const date = new Date(g.game_date).toLocaleDateString();
-          contextData += `${g.home_team} ${g.home_score} - ${g.away_score} ${g.away_team} (${date})\n`;
-        });
-        contextData += "\n";
-        
-        // Calculate simple team records from games
-        const teamRecords = new Map();
-        gamesData.data.forEach(g => {
-          // Home team
-          if (!teamRecords.has(g.home_team)) {
-            teamRecords.set(g.home_team, { wins: 0, losses: 0 });
-          }
-          if (g.home_score > g.away_score) {
-            teamRecords.get(g.home_team).wins++;
-          } else {
-            teamRecords.get(g.home_team).losses++;
-          }
-          
-          // Away team
-          if (!teamRecords.has(g.away_team)) {
-            teamRecords.set(g.away_team, { wins: 0, losses: 0 });
-          }
-          if (g.away_score > g.home_score) {
-            teamRecords.get(g.away_team).wins++;
-          } else {
-            teamRecords.get(g.away_team).losses++;
-          }
-        });
-        
-        if (teamRecords.size > 0) {
-          contextData += "TEAM RECORDS (from recent games):\n";
-          Array.from(teamRecords.entries())
-            .sort(([,a], [,b]) => b.wins - a.wins)
-            .forEach(([team, record], i) => {
-              contextData += `${i + 1}. ${team} (${record.wins}-${record.losses})\n`;
-            });
-          contextData += "\n";
+        if (players && players.length > 0) {
+          const topRebounders = players.map((p, i) => `${i + 1}. ${p.name} (${p.team}) - ${p.rebounds_total} rebounds`).join('\n');
+          return `🏀 Top Rebounders in ${leagueName}:\n\n${topRebounders}`;
         }
       }
 
-      console.log('Context data prepared:', contextData);
-      console.log('Calling OpenAI API via /api/chat...');
-
-      // Call OpenAI API for intelligent response
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          question: question,
-          context: contextData,
-          leagueName: leagueName
-        }),
-      });
-
-      console.log('API response status:', response.status, response.statusText);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('API error response:', errorText);
-        throw new Error(`API call failed: ${response.statusText} - ${errorText}`);
-      }
-
-      const data = await response.json();
-      console.log('API response data:', data);
-      return data.response || "I couldn't generate a response at this time. Please try again.";
-
-    } catch (error) {
-      console.error('Error querying league data:', error);
-      
-      // Fallback to simple data response if OpenAI fails
-      try {
+      if (lowerQuestion.includes('scorer') || lowerQuestion.includes('points')) {
         const { data: players } = await supabase
           .from('player_stats')
           .select('name, points, team')
@@ -217,13 +118,98 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
           .limit(5);
 
         if (players && players.length > 0) {
-          const topScorers = players.map((p, i) => `${i + 1}. ${p.name} (${p.team}) - ${p.points} pts`).join('\n');
-          return `🏀 Top Scorers in ${leagueName}:\n\n${topScorers}\n\n(Note: AI analysis temporarily unavailable)`;
+          const topScorers = players.map((p, i) => `${i + 1}. ${p.name} (${p.team}) - ${p.points} points`).join('\n');
+          return `🏀 Top Scorers in ${leagueName}:\n\n${topScorers}`;
         }
-      } catch (fallbackError) {
-        console.error('Fallback query also failed:', fallbackError);
       }
 
+      if (lowerQuestion.includes('assist')) {
+        const { data: players } = await supabase
+          .from('player_stats')
+          .select('name, assists, team')
+          .eq('league_id', leagueId)
+          .order('assists', { ascending: false })
+          .limit(5);
+
+        if (players && players.length > 0) {
+          const topAssists = players.map((p, i) => `${i + 1}. ${p.name} (${p.team}) - ${p.assists} assists`).join('\n');
+          return `🏀 Top Playmakers in ${leagueName}:\n\n${topAssists}`;
+        }
+      }
+
+      if (lowerQuestion.includes('game') || lowerQuestion.includes('result')) {
+        const { data: games } = await supabase
+          .from('games')
+          .select('game_date, home_team, away_team, home_score, away_score')
+          .eq('league_id', leagueId)
+          .order('game_date', { ascending: false })
+          .limit(5);
+
+        if (games && games.length > 0) {
+          const recentGames = games.map(g => 
+            `${g.home_team} ${g.home_score} - ${g.away_score} ${g.away_team} (${new Date(g.game_date).toLocaleDateString()})`
+          ).join('\n');
+          return `🏀 Recent Games in ${leagueName}:\n\n${recentGames}`;
+        }
+      }
+
+      if (lowerQuestion.includes('standing') || lowerQuestion.includes('record')) {
+        const { data: games } = await supabase
+          .from('games')
+          .select('game_date, home_team, away_team, home_score, away_score')
+          .eq('league_id', leagueId)
+          .order('game_date', { ascending: false })
+          .limit(10);
+
+        if (games && games.length > 0) {
+          const teamRecords = new Map();
+          games.forEach(g => {
+            // Home team
+            if (!teamRecords.has(g.home_team)) {
+              teamRecords.set(g.home_team, { wins: 0, losses: 0 });
+            }
+            if (g.home_score > g.away_score) {
+              teamRecords.get(g.home_team).wins++;
+            } else {
+              teamRecords.get(g.home_team).losses++;
+            }
+            
+            // Away team
+            if (!teamRecords.has(g.away_team)) {
+              teamRecords.set(g.away_team, { wins: 0, losses: 0 });
+            }
+            if (g.away_score > g.home_score) {
+              teamRecords.get(g.away_team).wins++;
+            } else {
+              teamRecords.get(g.away_team).losses++;
+            }
+          });
+          
+          const standings = Array.from(teamRecords.entries())
+            .sort(([,a], [,b]) => b.wins - a.wins)
+            .map(([team, record], i) => `${i + 1}. ${team} (${record.wins}-${record.losses})`)
+            .join('\n');
+          
+          return `🏀 Current Standings in ${leagueName}:\n\n${standings}`;
+        }
+      }
+
+      // Default response with quick stats
+      const { data: players } = await supabase
+        .from('player_stats')
+        .select('name, points, rebounds_total, assists, team')
+        .eq('league_id', leagueId)
+        .order('points', { ascending: false })
+        .limit(3);
+
+      if (players && players.length > 0) {
+        return `Here's some quick ${leagueName} data:\n\nTop Performers:\n${players.map((p, i) => `${i + 1}. ${p.name} (${p.team}) - ${p.points}pts, ${p.rebounds_total}reb, ${p.assists}ast`).join('\n')}\n\nTry asking about:\n• Top scorers or rebounders\n• Recent games\n• Team standings`;
+      }
+
+      return `I can help you with ${leagueName} data! Try asking about:\n• Top scorers or rebounders\n• Recent games\n• Team standings`;
+
+    } catch (error) {
+      console.error('Error querying league data:', error);
       return "I'm having trouble accessing the league data right now. Please try again in a moment.";
     }
   };
@@ -267,10 +253,10 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
               <span className="font-medium">Ask about:</span>
             </div>
             <ul className="text-xs text-orange-600 space-y-1">
-              <li>• Top scorers and player stats</li>
+              <li>• Top scorers and rebounders</li>
               <li>• Recent game results</li>
               <li>• Team standings</li>
-              <li>• Performance analytics</li>
+              <li>• Player performance stats</li>
             </ul>
           </div>
           
@@ -306,7 +292,7 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
           {messages.length === 0 ? (
             <div className="space-y-4">
               <p className="text-base text-slate-600 mb-4">
-                Ask me anything about {leagueName}! Here are some suggestions:
+                Ask me about {leagueName} stats! Here are some suggestions:
               </p>
               
               <div className="space-y-3">
