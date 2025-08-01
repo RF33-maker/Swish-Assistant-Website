@@ -176,6 +176,9 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
         }
       }
 
+      console.log('Context data prepared:', contextData);
+      console.log('Calling OpenAI API via /api/chat...');
+
       // Call OpenAI API for intelligent response
       const response = await fetch('/api/chat', {
         method: 'POST',
@@ -189,27 +192,36 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
         }),
       });
 
+      console.log('API response status:', response.status, response.statusText);
+
       if (!response.ok) {
-        throw new Error(`API call failed: ${response.statusText}`);
+        const errorText = await response.text();
+        console.error('API error response:', errorText);
+        throw new Error(`API call failed: ${response.statusText} - ${errorText}`);
       }
 
       const data = await response.json();
+      console.log('API response data:', data);
       return data.response || "I couldn't generate a response at this time. Please try again.";
 
     } catch (error) {
       console.error('Error querying league data:', error);
       
       // Fallback to simple data response if OpenAI fails
-      const { data: players } = await supabase
-        .from('game_player_stats')
-        .select('name, points, team')
-        .eq('league_id', leagueId)
-        .order('points', { ascending: false })
-        .limit(5);
+      try {
+        const { data: players } = await supabase
+          .from('player_stats')
+          .select('name, points, team')
+          .eq('league_id', leagueId)
+          .order('points', { ascending: false })
+          .limit(5);
 
-      if (players && players.length > 0) {
-        const topScorers = players.map((p, i) => `${i + 1}. ${p.name} (${p.team}) - ${p.points} pts`).join('\n');
-        return `🏀 Top Scorers in ${leagueName}:\n\n${topScorers}\n\n(Note: AI analysis temporarily unavailable)`;
+        if (players && players.length > 0) {
+          const topScorers = players.map((p, i) => `${i + 1}. ${p.name} (${p.team}) - ${p.points} pts`).join('\n');
+          return `🏀 Top Scorers in ${leagueName}:\n\n${topScorers}\n\n(Note: AI analysis temporarily unavailable)`;
+        }
+      } catch (fallbackError) {
+        console.error('Fallback query also failed:', fallbackError);
       }
 
       return "I'm having trouble accessing the league data right now. Please try again in a moment.";
