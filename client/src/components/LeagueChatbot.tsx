@@ -218,7 +218,7 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
           );
           
           if (player) {
-            return `🏀 ${player.name} plays for ${player.team}!\n\n📊 Quick Stats:\n• ${player.points} points\n• ${player.rebounds_total} rebounds\n• ${player.assists} assists\n• ${player.steals} steals\n• ${player.blocks} blocks`;
+            return `${player.name} plays for ${player.team}.\n\n💡 Want to know more? Try asking:\n• "How is ${player.name} doing?"\n• "Who are ${player.team}'s top players?"`;
           } else {
             return `I couldn't find a player named "${playerName}" in ${leagueName}. Try asking about one of these players:\n\n${playersData.data.slice(0, 5).map(p => `• ${p.name} (${p.team})`).join('\n')}`;
           }
@@ -238,7 +238,7 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
           );
           
           if (player) {
-            return `📊 ${player.name} is having a solid season with ${player.team}!\n\n🏀 Season Performance:\n• Total contributions: ${player.points} pts, ${player.rebounds_total} reb, ${player.assists} ast\n• Additional stats: ${player.steals} steals, ${player.blocks} blocks\n\n${player.points >= 30 ? '🔥 Strong scorer who can put up big numbers!' : player.rebounds_total >= 15 ? '💪 Solid presence in the paint with good rebounding!' : player.assists >= 10 ? '🎯 Great court vision and playmaking ability!' : '⚡ Well-rounded contributor on both ends!'}`;
+            return `${player.name} is having a solid season with ${player.team}!\n\nSeason totals: ${player.points} pts, ${player.rebounds_total} reb, ${player.assists} ast, ${player.steals} stl, ${player.blocks} blk\n\n${player.points >= 30 ? '🔥 Strong scorer who can put up big numbers!' : player.rebounds_total >= 15 ? '💪 Solid presence in the paint with good rebounding!' : player.assists >= 10 ? '🎯 Great court vision and playmaking ability!' : '⚡ Well-rounded contributor on both ends!'}\n\n💡 Want to compare? Try asking:\n• "Who are the most efficient players?"\n• "Who does ${player.team} play next?"`;
           }
         }
       }
@@ -280,7 +280,7 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
             const avgFor = (record.pointsFor / (record.wins + record.losses)).toFixed(1);
             const avgAgainst = (record.pointsAgainst / (record.wins + record.losses)).toFixed(1);
             
-            return `🏆 ${teamName} is currently the top team in ${leagueName}!\n\n📈 Team Performance:\n• Record: ${record.wins}-${record.losses} (${winPct}% win rate)\n• Averaging ${avgFor} points per game\n• Allowing ${avgAgainst} points per game\n• Point differential: +${(parseFloat(avgFor) - parseFloat(avgAgainst)).toFixed(1)} per game\n\n${parseFloat(winPct) >= 70 ? '🔥 Dominant team with excellent execution!' : parseFloat(winPct) >= 50 ? '💪 Solid team with consistent performance!' : '⚡ Fighting hard and improving each game!'}`;
+            return `${teamName} is the top team in ${leagueName}.\n\nRecord: ${record.wins}-${record.losses} (${winPct}% win rate)\nAveraging ${avgFor} points per game\nAllowing ${avgAgainst} points per game\n\n💡 Want to know more? Try asking:\n• "Who are ${teamName}'s top players?"\n• "Show me recent games"`;
           }
         }
       }
@@ -300,7 +300,7 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
             `${i + 1}. ${p.name} (${p.team}) - ${p.efficiency} total production`
           ).join('\n');
 
-          return `⚡ Most Efficient Players in ${leagueName}:\n(Based on total statistical production)\n\n${efficiencyList}\n\n🎯 ${topPlayer.name} leads the way with exceptional all-around production: ${topPlayer.points} points, ${topPlayer.rebounds_total} rebounds, ${topPlayer.assists} assists, ${topPlayer.steals} steals, and ${topPlayer.blocks} blocks!`;
+          return `Most Efficient Players in ${leagueName}:\n(Based on total statistical production)\n\n${efficiencyList}\n\n${topPlayer.name} leads with ${topPlayer.efficiency} total production.\n\n💡 Want more details? Try asking:\n• "How is ${topPlayer.name} doing?"\n• "Who leads in rebounds?"`;
         }
       }
 
@@ -308,14 +308,14 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
       if (lowerQuestion.includes('rebound') || lowerQuestion.includes('board')) {
         const topRebounder = playersData.data?.[0] ? playersData.data.find(p => p.rebounds_total === Math.max(...playersData.data.map(player => player.rebounds_total))) : null;
         if (topRebounder) {
-          return `🏀 ${topRebounder.name} (${topRebounder.team}) dominates the boards with ${topRebounder.rebounds_total} total rebounds!\n\nTop 5 Rebounders:\n${playersData.data?.sort((a, b) => b.rebounds_total - a.rebounds_total).slice(0, 5).map((p, i) => `${i + 1}. ${p.name} (${p.team}) - ${p.rebounds_total} rebounds`).join('\n')}`;
+          return `Rebounding Leaders in ${leagueName}:\n\n${playersData.data?.sort((a, b) => b.rebounds_total - a.rebounds_total).slice(0, 5).map((p, i) => `${i + 1}. ${p.name} (${p.team}) - ${p.rebounds_total} rebounds`).join('\n')}\n\n💡 Want player details? Try asking:\n• "How is ${topRebounder.name} doing?"\n• "Who are the most efficient players?"`;
         }
       }
 
       if (lowerQuestion.includes('scorer') || lowerQuestion.includes('scoring') || lowerQuestion.includes('points') || lowerQuestion.includes('top')) {
         const topScorer = playersData.data?.[0];
         if (topScorer) {
-          return `🔥 ${topScorer.name} (${topScorer.team}) leads ${leagueName} in scoring with ${topScorer.points} total points!\n\nTop 5 Scorers:\n${playersData.data?.slice(0, 5).map((p, i) => `${i + 1}. ${p.name} (${p.team}) - ${p.points} points`).join('\n')}`;
+          return `Scoring Leaders in ${leagueName}:\n\n${playersData.data?.slice(0, 5).map((p, i) => `${i + 1}. ${p.name} (${p.team}) - ${p.points} points`).join('\n')}\n\n💡 Want more details? Try asking:\n• "How is ${topScorer.name} doing?"\n• "Who is the best team?"`;
         }
       }
 
