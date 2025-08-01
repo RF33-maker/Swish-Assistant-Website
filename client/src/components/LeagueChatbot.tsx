@@ -94,122 +94,137 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
     try {
       const lowerQuestion = question.toLowerCase();
       
-      // Quick data retrieval based on specific questions
-      if (lowerQuestion.includes('rebound')) {
-        const { data: players } = await supabase
+      // Gather comprehensive league data for OpenAI context
+      const [playersData, gamesData] = await Promise.all([
+        supabase
           .from('player_stats')
-          .select('name, rebounds_total, team')
-          .eq('league_id', leagueId)
-          .order('rebounds_total', { ascending: false })
-          .limit(5);
-
-        if (players && players.length > 0) {
-          const topRebounders = players.map((p, i) => `${i + 1}. ${p.name} (${p.team}) - ${p.rebounds_total} rebounds`).join('\n');
-          return `🏀 Top Rebounders in ${leagueName}:\n\n${topRebounders}`;
-        }
-      }
-
-      if (lowerQuestion.includes('scorer') || lowerQuestion.includes('points')) {
-        const { data: players } = await supabase
-          .from('player_stats')
-          .select('name, points, team')
+          .select('name, points, rebounds_total, assists, steals, blocks, team, games_played')
           .eq('league_id', leagueId)
           .order('points', { ascending: false })
-          .limit(5);
-
-        if (players && players.length > 0) {
-          const topScorers = players.map((p, i) => `${i + 1}. ${p.name} (${p.team}) - ${p.points} points`).join('\n');
-          return `🏀 Top Scorers in ${leagueName}:\n\n${topScorers}`;
-        }
-      }
-
-      if (lowerQuestion.includes('assist')) {
-        const { data: players } = await supabase
-          .from('player_stats')
-          .select('name, assists, team')
-          .eq('league_id', leagueId)
-          .order('assists', { ascending: false })
-          .limit(5);
-
-        if (players && players.length > 0) {
-          const topAssists = players.map((p, i) => `${i + 1}. ${p.name} (${p.team}) - ${p.assists} assists`).join('\n');
-          return `🏀 Top Playmakers in ${leagueName}:\n\n${topAssists}`;
-        }
-      }
-
-      if (lowerQuestion.includes('game') || lowerQuestion.includes('result')) {
-        const { data: games } = await supabase
+          .limit(20),
+        supabase
           .from('games')
           .select('game_date, home_team, away_team, home_score, away_score')
           .eq('league_id', leagueId)
           .order('game_date', { ascending: false })
-          .limit(5);
+          .limit(15)
+      ]);
 
-        if (games && games.length > 0) {
-          const recentGames = games.map(g => 
-            `${g.home_team} ${g.home_score} - ${g.away_score} ${g.away_team} (${new Date(g.game_date).toLocaleDateString()})`
-          ).join('\n');
-          return `🏀 Recent Games in ${leagueName}:\n\n${recentGames}`;
-        }
+      console.log('League data retrieved for OpenAI:', { 
+        players: playersData.data?.length, 
+        games: gamesData.data?.length 
+      });
+
+      // Prepare context data for OpenAI
+      let contextData = `League: ${leagueName}\n\n`;
+      
+      if (playersData.data && playersData.data.length > 0) {
+        contextData += "PLAYER STATISTICS:\n";
+        playersData.data.forEach(p => {
+          const avgPoints = p.games_played ? (p.points / p.games_played).toFixed(1) : 'N/A';
+          const avgReb = p.games_played ? (p.rebounds_total / p.games_played).toFixed(1) : 'N/A';
+          const avgAst = p.games_played ? (p.assists / p.games_played).toFixed(1) : 'N/A';
+          contextData += `${p.name} (${p.team}): ${p.points} total pts (${avgPoints} ppg), ${p.rebounds_total} reb (${avgReb} rpg), ${p.assists} ast (${avgAst} apg), ${p.steals} stl, ${p.blocks} blk, ${p.games_played || 0} games\n`;
+        });
+        contextData += "\n";
       }
 
-      if (lowerQuestion.includes('standing') || lowerQuestion.includes('record')) {
-        const { data: games } = await supabase
-          .from('games')
-          .select('game_date, home_team, away_team, home_score, away_score')
-          .eq('league_id', leagueId)
-          .order('game_date', { ascending: false })
-          .limit(10);
-
-        if (games && games.length > 0) {
-          const teamRecords = new Map();
-          games.forEach(g => {
-            // Home team
-            if (!teamRecords.has(g.home_team)) {
-              teamRecords.set(g.home_team, { wins: 0, losses: 0 });
-            }
-            if (g.home_score > g.away_score) {
-              teamRecords.get(g.home_team).wins++;
-            } else {
-              teamRecords.get(g.home_team).losses++;
-            }
-            
-            // Away team
-            if (!teamRecords.has(g.away_team)) {
-              teamRecords.set(g.away_team, { wins: 0, losses: 0 });
-            }
-            if (g.away_score > g.home_score) {
-              teamRecords.get(g.away_team).wins++;
-            } else {
-              teamRecords.get(g.away_team).losses++;
+      if (gamesData.data && gamesData.data.length > 0) {
+        contextData += "RECENT GAMES:\n";
+        gamesData.data.forEach(g => {
+          const date = new Date(g.game_date).toLocaleDateString();
+          contextData += `${g.home_team} ${g.home_score} - ${g.away_score} ${g.away_team} (${date})\n`;
+        });
+        contextData += "\n";
+        
+        // Calculate team records for context
+        const teamRecords = new Map();
+        gamesData.data.forEach(g => {
+          [g.home_team, g.away_team].forEach(team => {
+            if (!teamRecords.has(team)) {
+              teamRecords.set(team, { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0 });
             }
           });
           
-          const standings = Array.from(teamRecords.entries())
-            .sort(([,a], [,b]) => b.wins - a.wins)
-            .map(([team, record], i) => `${i + 1}. ${team} (${record.wins}-${record.losses})`)
-            .join('\n');
+          if (g.home_score > g.away_score) {
+            teamRecords.get(g.home_team).wins++;
+            teamRecords.get(g.away_team).losses++;
+          } else {
+            teamRecords.get(g.away_team).wins++;
+            teamRecords.get(g.home_team).losses++;
+          }
           
-          return `🏀 Current Standings in ${leagueName}:\n\n${standings}`;
+          teamRecords.get(g.home_team).pointsFor += g.home_score;
+          teamRecords.get(g.home_team).pointsAgainst += g.away_score;
+          teamRecords.get(g.away_team).pointsFor += g.away_score;
+          teamRecords.get(g.away_team).pointsAgainst += g.home_score;
+        });
+        
+        if (teamRecords.size > 0) {
+          contextData += "TEAM RECORDS:\n";
+          Array.from(teamRecords.entries())
+            .sort(([,a], [,b]) => {
+              const aWinPct = a.wins / (a.wins + a.losses);
+              const bWinPct = b.wins / (b.wins + b.losses);
+              return bWinPct - aWinPct;
+            })
+            .forEach(([team, record]) => {
+              const winPct = ((record.wins / (record.wins + record.losses)) * 100).toFixed(1);
+              const avgFor = (record.pointsFor / (record.wins + record.losses)).toFixed(1);
+              const avgAgainst = (record.pointsAgainst / (record.wins + record.losses)).toFixed(1);
+              contextData += `${team}: ${record.wins}-${record.losses} (${winPct}%), ${avgFor} ppg for, ${avgAgainst} ppg against\n`;
+            });
+          contextData += "\n";
         }
       }
 
-      // Default response with quick stats
-      const { data: players } = await supabase
-        .from('player_stats')
-        .select('name, points, rebounds_total, assists, team')
-        .eq('league_id', leagueId)
-        .order('points', { ascending: false })
-        .limit(3);
+      console.log('Context prepared, calling OpenAI API...');
 
-      if (players && players.length > 0) {
-        return `Here's some quick ${leagueName} data:\n\nTop Performers:\n${players.map((p, i) => `${i + 1}. ${p.name} (${p.team}) - ${p.points}pts, ${p.rebounds_total}reb, ${p.assists}ast`).join('\n')}\n\nTry asking about:\n• Top scorers or rebounders\n• Recent games\n• Team standings`;
+      // Call OpenAI API for intelligent response
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          question: question,
+          context: contextData,
+          leagueName: leagueName
+        }),
+      });
+
+      console.log('OpenAI API response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('OpenAI API error:', errorText);
+        throw new Error(`API call failed: ${response.statusText}`);
       }
 
-      return `I can help you with ${leagueName} data! Try asking about:\n• Top scorers or rebounders\n• Recent games\n• Team standings`;
+      const data = await response.json();
+      console.log('OpenAI response received successfully');
+      return data.response || "I couldn't generate a response at this time. Please try again.";
+
 
     } catch (error) {
       console.error('Error querying league data:', error);
+      
+      // Fallback to simple data response if OpenAI fails
+      try {
+        const { data: players } = await supabase
+          .from('player_stats')
+          .select('name, points, rebounds_total, assists, team')
+          .eq('league_id', leagueId)
+          .order('points', { ascending: false })
+          .limit(3);
+
+        if (players && players.length > 0) {
+          return `Here's some quick ${leagueName} data:\n\nTop Performers:\n${players.map((p, i) => `${i + 1}. ${p.name} (${p.team}) - ${p.points}pts, ${p.rebounds_total}reb, ${p.assists}ast`).join('\n')}\n\n(AI analysis temporarily unavailable - please try again)`;
+        }
+      } catch (fallbackError) {
+        console.error('Fallback query also failed:', fallbackError);
+      }
+
       return "I'm having trouble accessing the league data right now. Please try again in a moment.";
     }
   };
