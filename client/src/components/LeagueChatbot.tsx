@@ -426,7 +426,7 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
       </div>
 
       {isExpanded && (
-        <div className="p-5">
+        <div className="p-6">
           {messages.length === 0 ? (
             <div className="space-y-4">
               <p className="text-base text-slate-600 mb-4">
@@ -437,8 +437,44 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
                 {suggestedQuestions.map((question, index) => (
                   <button
                     key={index}
-                    onClick={() => handleSuggestedQuestion(question)}
-                    className="w-full text-left p-3 text-base bg-orange-50 hover:bg-orange-100 rounded-lg text-slate-700 transition-colors"
+                    onClick={async () => {
+                      if (!user || isLoading) return;
+                      
+                      const userMessage: Message = {
+                        id: Date.now().toString(),
+                        type: 'user',
+                        content: question,
+                        timestamp: new Date()
+                      };
+                      
+                      setMessages(prev => [...prev, userMessage]);
+                      setIsLoading(true);
+                      
+                      try {
+                        const response = await queryLeagueData(question, leagueId);
+                        
+                        const botMessage: Message = {
+                          id: (Date.now() + 1).toString(),
+                          type: 'bot',
+                          content: response,
+                          timestamp: new Date()
+                        };
+                        
+                        setMessages(prev => [...prev, botMessage]);
+                      } catch (error) {
+                        const errorMessage: Message = {
+                          id: (Date.now() + 1).toString(),
+                          type: 'bot',
+                          content: "I'm sorry, I encountered an error while processing your request. Please try again.",
+                          timestamp: new Date()
+                        };
+                        setMessages(prev => [...prev, errorMessage]);
+                      }
+                      
+                      setIsLoading(false);
+                    }}
+                    className="w-full text-left p-4 text-base bg-orange-50 hover:bg-orange-100 rounded-lg text-slate-700 transition-colors border border-orange-200 hover:border-orange-300"
+                    disabled={isLoading}
                   >
                     {question}
                   </button>
@@ -446,7 +482,7 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
               </div>
             </div>
           ) : (
-            <div className="space-y-4 max-h-96 overflow-y-auto mb-4">
+            <div className="space-y-8 max-h-[600px] overflow-y-auto mb-8 p-6 bg-slate-50 rounded-lg">
               {messages.map((message) => (
                 <div
                   key={message.id}
@@ -456,10 +492,10 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
                     <Bot className="w-7 h-7 text-orange-500 mt-1 flex-shrink-0" />
                   )}
                   <div
-                    className={`max-w-[80%] p-4 rounded-lg text-base ${
+                    className={`max-w-[80%] p-5 rounded-lg text-base leading-relaxed ${
                       message.type === 'user'
                         ? 'bg-orange-500 text-white'
-                        : 'bg-gray-100 text-slate-800'
+                        : 'bg-white text-slate-800 shadow-sm border border-slate-200'
                     }`}
                   >
                     <div className="whitespace-pre-line">{message.content}</div>
@@ -477,7 +513,7 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
               {isLoading && (
                 <div className="flex gap-3 justify-start">
                   <Bot className="w-7 h-7 text-orange-500 mt-1 flex-shrink-0" />
-                  <div className="bg-gray-100 text-slate-800 p-4 rounded-lg text-base">
+                  <div className="bg-white text-slate-800 p-5 rounded-lg text-base shadow-sm border border-slate-200">
                     <div className="flex items-center gap-2">
                       <div className="w-3 h-3 bg-slate-400 rounded-full animate-bounce"></div>
                       <div className="w-3 h-3 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
@@ -490,13 +526,13 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
             </div>
           )}
 
-          <div className="flex gap-3">
+          <div className="flex gap-3 mt-4">
             <Input
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               placeholder="Ask about stats, games, players..."
               onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-              className="text-base py-3"
+              className="text-base py-4 px-4"
               disabled={isLoading}
             />
             <Button
