@@ -93,11 +93,13 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
 
   const queryLeagueData = async (question: string, leagueId: string): Promise<string> => {
     try {
-      // First, gather relevant data from Supabase
-      const [playersData, gamesData, teamsData] = await Promise.all([
+      console.log('Querying league data for league ID:', leagueId);
+      
+      // First, gather relevant data from Supabase using correct table names
+      const [playersData, gamesData] = await Promise.all([
         supabase
-          .from('game_player_stats')
-          .select('name, points, rebounds_total, assists, steals, blocks, team, game_date')
+          .from('player_stats')
+          .select('name, points, rebounds_total, assists, steals, blocks, team, game_date, home_team, away_team')
           .eq('league_id', leagueId)
           .order('points', { ascending: false })
           .limit(20),
@@ -106,14 +108,19 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
           .select('game_date, home_team, away_team, home_score, away_score')
           .eq('league_id', leagueId)
           .order('game_date', { ascending: false })
-          .limit(10),
-        supabase
-          .from('teams')
-          .select('name, wins, losses')
-          .eq('league_id', leagueId)
-          .order('wins', { ascending: false })
           .limit(10)
       ]);
+
+      console.log('Players data result:', playersData);
+      console.log('Games data result:', gamesData);
+
+      // Check for errors
+      if (playersData.error) {
+        console.error('Player stats query error:', playersData.error);
+      }
+      if (gamesData.error) {
+        console.error('Games query error:', gamesData.error);
+      }
 
       // Prepare context data for OpenAI
       let contextData = `League: ${leagueName}\n\n`;
@@ -133,14 +140,40 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
           contextData += `${g.home_team} ${g.home_score} - ${g.away_score} ${g.away_team} (${date})\n`;
         });
         contextData += "\n";
-      }
-
-      if (teamsData.data && teamsData.data.length > 0) {
-        contextData += "TEAM STANDINGS:\n";
-        teamsData.data.forEach((t, i) => {
-          contextData += `${i + 1}. ${t.name} (${t.wins}-${t.losses})\n`;
+        
+        // Calculate simple team records from games
+        const teamRecords = new Map();
+        gamesData.data.forEach(g => {
+          // Home team
+          if (!teamRecords.has(g.home_team)) {
+            teamRecords.set(g.home_team, { wins: 0, losses: 0 });
+          }
+          if (g.home_score > g.away_score) {
+            teamRecords.get(g.home_team).wins++;
+          } else {
+            teamRecords.get(g.home_team).losses++;
+          }
+          
+          // Away team
+          if (!teamRecords.has(g.away_team)) {
+            teamRecords.set(g.away_team, { wins: 0, losses: 0 });
+          }
+          if (g.away_score > g.home_score) {
+            teamRecords.get(g.away_team).wins++;
+          } else {
+            teamRecords.get(g.away_team).losses++;
+          }
         });
-        contextData += "\n";
+        
+        if (teamRecords.size > 0) {
+          contextData += "TEAM RECORDS (from recent games):\n";
+          Array.from(teamRecords.entries())
+            .sort(([,a], [,b]) => b.wins - a.wins)
+            .forEach(([team, record], i) => {
+              contextData += `${i + 1}. ${team} (${record.wins}-${record.losses})\n`;
+            });
+          contextData += "\n";
+        }
       }
 
       // Call OpenAI API for intelligent response
