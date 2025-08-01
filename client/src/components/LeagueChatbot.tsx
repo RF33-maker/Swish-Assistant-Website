@@ -115,6 +115,16 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
         games: gamesData.data?.length 
       });
 
+      console.log('Players query result:', playersData);
+      console.log('Games query result:', gamesData);
+
+      if (playersData.error) {
+        console.error('Players query error:', playersData.error);
+      }
+      if (gamesData.error) {
+        console.error('Games query error:', gamesData.error);
+      }
+
       // Prepare context data for OpenAI
       let contextData = `League: ${leagueName}\n\n`;
       
