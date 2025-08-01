@@ -7,6 +7,7 @@ import React from "react";
 import { GameSummaryRow } from "./GameSummaryRow";
 import GameResultsCarousel from "@/components/GameResultsCarousel";
 import GameDetailModal from "@/components/GameDetailModal";
+import LeagueChatbot from "@/components/LeagueChatbot";
 
 
   export default function LeaguePage() {
@@ -429,9 +430,17 @@ import GameDetailModal from "@/components/GameDetailModal";
 
           </section>
 
-          <aside className="bg-white rounded-xl shadow p-4 space-y-6">
+          <aside className="space-y-6">
+            {/* League Chatbot */}
+            {league?.league_id && (
+              <LeagueChatbot 
+                leagueId={league.league_id} 
+                leagueName={league.name || 'League'} 
+              />
+            )}
+
             {/* Instagram Embed */}
-            <div>
+            <div className="bg-white rounded-xl shadow p-4">
               <h3 className="text-sm font-semibold text-slate-700 mb-2">Instagram Feed</h3>
               <iframe
                 src="https://www.instagram.com/p/EXAMPLE/embed"
@@ -443,7 +452,7 @@ import GameDetailModal from "@/components/GameDetailModal";
             </div>
 
             {/* YouTube Embed */}
-            <div>
+            <div className="bg-white rounded-xl shadow p-4">
               <h3 className="text-sm font-semibold text-slate-700 mb-2">Latest Highlights</h3>
               <iframe
                 width="100%"
@@ -457,7 +466,7 @@ import GameDetailModal from "@/components/GameDetailModal";
             </div>
 
             {/* Comment Section Placeholder */}
-            <div>
+            <div className="bg-white rounded-xl shadow p-4">
               <h3 className="text-sm font-semibold text-slate-700 mb-2">Community Comments</h3>
               <p className="text-xs text-slate-500">💬 Only logged-in users can post.</p>
               <div className="text-xs italic text-slate-400 mt-2">Coming soon...</div>
