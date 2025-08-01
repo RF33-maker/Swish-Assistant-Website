@@ -179,6 +179,10 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
       }
 
       console.log('Context prepared, generating intelligent response...');
+      console.log('Question:', question);
+      console.log('Lower question:', lowerQuestion);
+      console.log('Players data available:', !!playersData.data, playersData.data?.length);
+      console.log('Games data available:', !!gamesData.data, gamesData.data?.length);
 
       // For now, provide intelligent pattern-based responses while we fix the API endpoint
       if (lowerQuestion.includes('how') && (lowerQuestion.includes('doing') || lowerQuestion.includes('performing'))) {
@@ -262,8 +266,8 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
         }
       }
 
-      // Default intelligent response based on question type
-      if (lowerQuestion.includes('rebound')) {
+      // Broader question matching for common terms
+      if (lowerQuestion.includes('rebound') || lowerQuestion.includes('board')) {
         const topRebounder = playersData.data?.[0] ? playersData.data.find(p => p.rebounds_total === Math.max(...playersData.data.map(player => player.rebounds_total))) : null;
         if (topRebounder) {
           const avg = topRebounder.games_played ? (topRebounder.rebounds_total / topRebounder.games_played).toFixed(1) : 'N/A';
@@ -271,7 +275,7 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
         }
       }
 
-      if (lowerQuestion.includes('scorer') || lowerQuestion.includes('points')) {
+      if (lowerQuestion.includes('scorer') || lowerQuestion.includes('scoring') || lowerQuestion.includes('points') || lowerQuestion.includes('top')) {
         const topScorer = playersData.data?.[0];
         if (topScorer) {
           const avg = topScorer.games_played ? (topScorer.points / topScorer.games_played).toFixed(1) : 'N/A';
