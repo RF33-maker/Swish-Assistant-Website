@@ -472,7 +472,13 @@ import LeagueChatbot from "@/components/LeagueChatbot";
           </div>
 
           <div className="flex gap-6 text-sm font-medium text-slate-600">
-            <a href="#" className="hover:text-orange-500">Overview</a>
+            <a 
+              href="#" 
+              className="hover:text-orange-500 cursor-pointer"
+              onClick={() => navigate(`/league/${slug}/teams`)}
+            >
+              Teams
+            </a>
             <a href="#" className="hover:text-orange-500">Stats</a>
             <a 
               href="#" 

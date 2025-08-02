@@ -16,6 +16,7 @@ import PostLoginDashboard from "@/pages/post-login-dashboard"; // new dashboard 
 import CoachesHub from "@/pages/CoachesHub";
 import TeamProfile from "@/pages/TeamProfile";
 import TeamsList from "@/pages/TeamsList";
+import LeagueTeams from "@/pages/LeagueTeams";
 import { AuthProvider } from "./hooks/use-auth";
 import { ProtectedRoute } from "./lib/protected-route";
 import ResetPassword from "./pages/reset-password";
@@ -31,6 +32,7 @@ function Router() {
       <Route path="/auth" component={AuthPage} />
       <Route path="/test" component={TestConnections} />
       <Route path="/league/:slug" component={LeaguePage} />
+      <Route path="/league/:slug/teams" component={LeagueTeams} />
       <Route path="/league-leaders/:slug" component={LeagueLeadersPage} />
       <Route path="/players" component={PlayersListPage} />
       <Route path="/player/:id" component={PlayerStatsPage} />
