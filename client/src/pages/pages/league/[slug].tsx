@@ -368,79 +368,50 @@ import LeagueChatbot from "@/components/LeagueChatbot";
 
     // Calculate team standings from player stats
     const calculateStandings = (playerStats: any[]) => {
-      const gameResults: { [key: string]: { team: string, opponent: string, date: string, teamScore: number, opponentScore: number } } = {};
       
-      // Group player stats by game (team + opponent + date)
-      playerStats.forEach(stat => {
-        if (!stat.team || !stat.opponent || !stat.game_date) return;
-        
-        const gameKey = `${stat.team}_vs_${stat.opponent}_${stat.game_date}`;
-        
-        if (!gameResults[gameKey]) {
-          gameResults[gameKey] = {
-            team: stat.team,
-            opponent: stat.opponent,
-            date: stat.game_date,
-            teamScore: 0,
-            opponentScore: 0
-          };
-        }
-        
-        gameResults[gameKey].teamScore += stat.points || 0;
-      });
-
-      // Also count opponent scores (reverse perspective)
-      playerStats.forEach(stat => {
-        if (!stat.team || !stat.opponent || !stat.game_date) return;
-        
-        const reverseGameKey = `${stat.opponent}_vs_${stat.team}_${stat.game_date}`;
-        
-        if (gameResults[reverseGameKey]) {
-          gameResults[reverseGameKey].opponentScore += stat.points || 0;
-        }
-      });
-
-      // Calculate team records
-      const teamRecords: { [team: string]: { wins: number, losses: number, pointsFor: number, pointsAgainst: number, games: number } } = {};
+      // Since we don't have opponent data, let's create a simplified approach
+      // We'll calculate basic team stats (total points, games played) without win/loss records
+      const teamStats: { [team: string]: { totalPoints: number, games: number, avgPoints: number } } = {};
       
-      Object.values(gameResults).forEach(game => {
-        // Initialize team records
-        if (!teamRecords[game.team]) {
-          teamRecords[game.team] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0 };
-        }
-        if (!teamRecords[game.opponent]) {
-          teamRecords[game.opponent] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0 };
-        }
-
-        // Record game results
-        if (game.teamScore > game.opponentScore) {
-          teamRecords[game.team].wins++;
-          teamRecords[game.opponent].losses++;
-        } else if (game.opponentScore > game.teamScore) {
-          teamRecords[game.opponent].wins++;
-          teamRecords[game.team].losses++;
-        }
-
-        teamRecords[game.team].pointsFor += game.teamScore;
-        teamRecords[game.team].pointsAgainst += game.opponentScore;
-        teamRecords[game.team].games++;
+      // Group by team and count games
+      const gamesByTeam: { [team: string]: Set<string> } = {};
+      
+      playerStats.forEach(stat => {
+        const team = stat.team || stat.team_name;
+        if (!team || !stat.game_date) return;
         
-        teamRecords[game.opponent].pointsFor += game.opponentScore;
-        teamRecords[game.opponent].pointsAgainst += game.teamScore;
-        teamRecords[game.opponent].games++;
+        // Initialize team stats
+        if (!teamStats[team]) {
+          teamStats[team] = { totalPoints: 0, games: 0, avgPoints: 0 };
+          gamesByTeam[team] = new Set();
+        }
+        
+        // Add points
+        teamStats[team].totalPoints += stat.points || 0;
+        
+        // Track unique games for this team
+        gamesByTeam[team].add(stat.game_date);
       });
-
-      // Convert to array and sort by win percentage
-      const standingsArray = Object.entries(teamRecords).map(([team, record]) => ({
+      
+      // Calculate games and averages
+      Object.keys(teamStats).forEach(team => {
+        teamStats[team].games = gamesByTeam[team].size;
+        teamStats[team].avgPoints = teamStats[team].games > 0 ? 
+          teamStats[team].totalPoints / teamStats[team].games : 0;
+      });
+      
+      // Convert to standings format (sorted by average points since we don't have wins/losses)
+      const standingsArray = Object.entries(teamStats).map(([team, stats]) => ({
         team,
-        wins: record.wins,
-        losses: record.losses,
-        winPct: record.games > 0 ? (record.wins / record.games) : 0,
-        pointsFor: record.pointsFor,
-        pointsAgainst: record.pointsAgainst,
-        pointsDiff: record.pointsFor - record.pointsAgainst,
-        games: record.games
-      })).sort((a, b) => b.winPct - a.winPct || b.pointsDiff - a.pointsDiff);
+        wins: 0, // We'll show 0 since we don't have opponent data
+        losses: 0,
+        winPct: 0,
+        pointsFor: Math.round(stats.totalPoints),
+        pointsAgainst: 0, // We don't have this data
+        pointsDiff: 0,
+        games: stats.games,
+        avgPoints: Math.round(stats.avgPoints * 100) / 100
+      })).sort((a, b) => b.avgPoints - a.avgPoints);
 
       setStandings(standingsArray);
     };
@@ -633,12 +604,9 @@ import LeagueChatbot from "@/components/LeagueChatbot";
                       <tr className="border-b border-gray-200">
                         <th className="text-left py-3 px-2 font-semibold text-slate-700">#</th>
                         <th className="text-left py-3 px-2 font-semibold text-slate-700">Team</th>
-                        <th className="text-center py-3 px-2 font-semibold text-slate-700">W</th>
-                        <th className="text-center py-3 px-2 font-semibold text-slate-700">L</th>
-                        <th className="text-center py-3 px-2 font-semibold text-slate-700">Win%</th>
-                        <th className="text-right py-3 px-2 font-semibold text-slate-700">PF</th>
-                        <th className="text-right py-3 px-2 font-semibold text-slate-700">PA</th>
-                        <th className="text-right py-3 px-2 font-semibold text-slate-700">Diff</th>
+                        <th className="text-center py-3 px-2 font-semibold text-slate-700">GP</th>
+                        <th className="text-right py-3 px-2 font-semibold text-slate-700">Total PTS</th>
+                        <th className="text-right py-3 px-2 font-semibold text-slate-700">Avg PTS</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -651,27 +619,18 @@ import LeagueChatbot from "@/components/LeagueChatbot";
                         >
                           <td className="py-3 px-2 font-medium text-slate-600">{index + 1}</td>
                           <td className="py-3 px-2 font-medium text-slate-800">{team.team}</td>
-                          <td className="py-3 px-2 text-center text-green-600 font-semibold">{team.wins}</td>
-                          <td className="py-3 px-2 text-center text-red-600 font-semibold">{team.losses}</td>
-                          <td className="py-3 px-2 text-center font-medium">
-                            {team.games > 0 ? (team.winPct * 100).toFixed(1) + '%' : '0%'}
-                          </td>
+                          <td className="py-3 px-2 text-center text-slate-600">{team.games}</td>
                           <td className="py-3 px-2 text-right text-slate-600">{team.pointsFor}</td>
-                          <td className="py-3 px-2 text-right text-slate-600">{team.pointsAgainst}</td>
-                          <td className={`py-3 px-2 text-right font-medium ${
-                            team.pointsDiff > 0 ? 'text-green-600' : team.pointsDiff < 0 ? 'text-red-600' : 'text-slate-600'
-                          }`}>
-                            {team.pointsDiff > 0 ? '+' : ''}{team.pointsDiff}
-                          </td>
+                          <td className="py-3 px-2 text-right font-medium text-orange-600">{team.avgPoints}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                   <div className="mt-4 text-xs text-slate-500">
                     <div className="flex gap-6">
-                      <span>PF = Points For</span>
-                      <span>PA = Points Against</span>
-                      <span>Diff = Point Differential</span>
+                      <span>GP = Games Played</span>
+                      <span>Total PTS = Total Points Scored</span>
+                      <span>Avg PTS = Average Points Per Game</span>
                     </div>
                   </div>
                 </div>
