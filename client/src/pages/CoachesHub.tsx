@@ -5,6 +5,7 @@ import TeamPerformanceTrends from '@/components/TeamPerformanceTrends';
 import LeagueChatbot from '@/components/LeagueChatbot';
 import { TrendingUp, BarChart3, Users, Target, Award, Eye, MessageCircle, Search } from 'lucide-react';
 import { Link } from 'wouter';
+import SwishLogo from '@/assets/Swish Assistant Logo.png';
 
 export default function CoachesHub() {
   const { user } = useAuth();
@@ -109,9 +110,9 @@ export default function CoachesHub() {
             <div className="flex items-center gap-3">
               <div className="p-2 bg-orange-100 rounded-lg">
                 <img 
-                  src="https://cdn-icons-png.flaticon.com/512/857/857418.png" 
+                  src={SwishLogo} 
                   alt="Swish Assistant" 
-                  className="w-6 h-6"
+                  className="w-6 h-6 object-contain"
                 />
               </div>
               <div>
@@ -308,9 +309,9 @@ export default function CoachesHub() {
               <div className="bg-gradient-to-r from-orange-50 to-yellow-50 border border-orange-200 rounded-lg p-6">
                 <div className="flex items-start gap-3">
                   <img 
-                    src="https://cdn-icons-png.flaticon.com/512/857/857418.png" 
+                    src={SwishLogo} 
                     alt="Coaching Tips" 
-                    className="w-6 h-6 mt-1"
+                    className="w-6 h-6 mt-1 object-contain"
                   />
                   <div>
                     <h3 className="font-semibold text-slate-800 mb-2">Coaching Insights</h3>
