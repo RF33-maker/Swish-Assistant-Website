@@ -45,6 +45,11 @@ A professional React and Tailwind CSS website with login functionality and an in
   - Added auto-scrolling animation with 30-second continuous loop for seamless viewing
   - Styled with dark background and prominent team scores matching sports broadcast aesthetics
   - Changed "Top Performers" section to "League Leaders" with direct navigation to leaders page
+- **2025-02-01**: Added dynamic Instagram integration for league owners
+  - League owners can add Instagram profile URLs to show latest posts automatically
+  - Supports both profile URLs (auto-updating) and specific post URLs (fixed content)
+  - Instagram embed appears in sidebar for all users when configured by league owner
+  - URLs stored in database with proper validation and embed URL conversion
 - **2025-02-01**: Enhanced league page with carousel-style game results and team-filtered box scores
   - Replaced AI Game Summary section with interactive game results carousel
   - Created modern carousel component showing recent games with scores and top performers

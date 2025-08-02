@@ -330,16 +330,25 @@ import LeagueChatbot from "@/components/LeagueChatbot";
       }
     };
 
-    // Convert Instagram post URL to embed URL
+    // Convert Instagram profile URL to embed URL for latest posts
     const getInstagramEmbedUrl = (url: string) => {
       if (!url) return null;
       
-      // Extract post ID from various Instagram URL formats
-      const regex = /(?:instagram\.com\/p\/|instagram\.com\/reel\/)([A-Za-z0-9_-]+)/;
-      const match = url.match(regex);
+      // Check if it's a profile URL (instagram.com/username)
+      const profileRegex = /(?:instagram\.com\/)([A-Za-z0-9._]+)(?:\/)?$/;
+      const profileMatch = url.match(profileRegex);
       
-      if (match) {
-        return `https://www.instagram.com/p/${match[1]}/embed`;
+      if (profileMatch) {
+        // Return profile embed URL which shows latest posts
+        return `https://www.instagram.com/${profileMatch[1]}/embed`;
+      }
+      
+      // Fallback: Extract post ID from specific post URLs
+      const postRegex = /(?:instagram\.com\/p\/|instagram\.com\/reel\/)([A-Za-z0-9_-]+)/;
+      const postMatch = url.match(postRegex);
+      
+      if (postMatch) {
+        return `https://www.instagram.com/p/${postMatch[1]}/embed`;
       }
       
       return null;
@@ -664,11 +673,14 @@ import LeagueChatbot from "@/components/LeagueChatbot";
                 <div className="space-y-3">
                   <input
                     type="text"
-                    placeholder="Enter Instagram post URL (e.g., https://www.instagram.com/p/ABC123...)"
+                    placeholder="Enter Instagram profile URL (e.g., https://www.instagram.com/yourleague) or specific post URL"
                     value={instagramUrl}
                     onChange={(e) => setInstagramUrl(e.target.value)}
                     className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md"
                   />
+                  <p className="text-xs text-gray-500">
+                    💡 Use profile URL to automatically show latest posts, or specific post URL for a fixed post
+                  </p>
                   <div className="flex gap-2">
                     <button
                       onClick={handleInstagramUpdate}
