@@ -74,22 +74,28 @@ import LeagueChatbot from "@/components/LeagueChatbot";
 
     useEffect(() => {
       const fetchLeague = async () => {
-        if (!currentUser) return; // Wait for user to be loaded
-        
         const { data, error } = await supabase
           .from("leagues")
           .select("*")
           .eq("slug", slug)
           .single();
+        
         console.log("Resolved league from slug:", slug, "→ ID:", data?.league_id);
         console.log("League data:", data);
         console.log("Current user:", currentUser);
+        console.log("Fetch error:", error);
 
         if (data) {
           setLeague(data);
           const ownerStatus = currentUser?.id === data.user_id;
           setIsOwner(ownerStatus);
           console.log("Is owner?", ownerStatus, "User ID:", currentUser?.id, "League owner ID:", data.user_id);
+        }
+        
+        if (error) {
+          console.error("Failed to fetch league:", error);
+          // Still set empty league data to show the page structure
+          setLeague(null);
         }
 
         if (data?.league_id) {
@@ -144,10 +150,8 @@ import LeagueChatbot from "@/components/LeagueChatbot";
         setLeague(data);
       };
 
-      if (currentUser) {
-        fetchLeague();
-      }
-    }, [slug, currentUser]);
+      fetchLeague();
+    }, [slug]);
 
     const handleSearch = () => {
       if (search.trim()) {
