@@ -582,6 +582,13 @@ import LeagueChatbot from "@/components/LeagueChatbot";
             >
               Teams
             </a>
+            <a 
+              href="#" 
+              className={`hover:text-orange-500 cursor-pointer ${activeTab === 'standings' ? 'text-orange-500 font-semibold' : ''}`}
+              onClick={(e) => { e.preventDefault(); setActiveTab('standings'); }}
+            >
+              Standings
+            </a>
             <a href="#" className="hover:text-orange-500">Stats</a>
             <a 
               href="#" 
@@ -964,9 +971,214 @@ import LeagueChatbot from "@/components/LeagueChatbot";
                 </div>
               </>
             )}
-          </section>
 
-          {/* Team Profile Modal/Sidebar */}
+            {/* Standings Tab Content */}
+            {activeTab === 'standings' && (
+              <>
+                {/* League Leaders */}
+                <div className="bg-white rounded-xl shadow p-4">
+                  <div className="flex justify-between items-center mb-3">
+                    <h2 className="text-lg font-semibold text-slate-800">League Leaders</h2>
+                    <button
+                      onClick={() => navigate(`/league-leaders/${slug}`)}
+                      className="text-sm text-orange-500 hover:text-orange-600 font-medium hover:underline"
+                    >
+                      View All Leaders →
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    {([
+                      { title: "Top Scorers", list: topScorers, label: "PPG", key: "avg" },
+                      { title: "Top Rebounders", list: topRebounders, label: "RPG", key: "avg" },
+                      { title: "Top Playmakers", list: topAssistsList, label: "APG", key: "avg" },
+                    ] as const).map(({ title, list, label, key }) => (
+                      <div key={title} className="bg-gray-50 rounded-lg p-4 shadow-inner">
+                        <h3 className="text-sm font-semibold text-slate-700 mb-3 text-center">{title}</h3>
+                        <ul className="space-y-1 text-sm text-slate-800">
+                          {Array.isArray(list) &&
+                            list.map((p, i) => (
+                              <li key={`${title}-${p.name}-${i}`} className="flex justify-between">
+                                <span 
+                                  className="cursor-pointer hover:text-orange-600 transition"
+                                  onClick={() => navigate(`/player/${p.name}`)}
+                                >
+                                  {p.name}
+                                </span>
+                                <span className="font-medium text-orange-500">
+                                  {p[key]} {label}
+                                </span>
+                              </li>
+                            ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* League Standings */}
+                <div className="bg-white rounded-xl shadow p-6">
+                  <h2 className="text-lg font-semibold text-slate-800 mb-4">League Standings</h2>
+                  {standings.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-gray-200">
+                            <th className="text-left py-3 px-2 font-semibold text-slate-700">#</th>
+                            <th className="text-left py-3 px-2 font-semibold text-slate-700">Team</th>
+                            <th className="text-center py-3 px-2 font-semibold text-slate-700">GP</th>
+                            <th className="text-right py-3 px-2 font-semibold text-slate-700">Total PTS</th>
+                            <th className="text-right py-3 px-2 font-semibold text-slate-700">Avg PTS</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {standings.map((team, index) => (
+                            <tr 
+                              key={team.team} 
+                              className={`border-b border-gray-100 hover:bg-orange-50 transition-colors cursor-pointer ${
+                                index < 3 ? 'bg-green-50' : index >= standings.length - 2 ? 'bg-red-50' : ''
+                              }`}
+                              onClick={() => setSelectedTeam(teams.find(t => t.name === team.team))}
+                            >
+                              <td className="py-3 px-2 font-medium text-slate-600">{index + 1}</td>
+                              <td className="py-3 px-2 font-medium text-slate-800 hover:text-orange-600 transition cursor-pointer">
+                                {team.team}
+                              </td>
+                              <td className="py-3 px-2 text-center text-slate-600">{team.games}</td>
+                              <td className="py-3 px-2 text-right text-slate-600">{team.pointsFor}</td>
+                              <td className="py-3 px-2 text-right font-medium text-orange-600">{team.avgPoints}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <div className="mt-4 text-xs text-slate-500">
+                        <div className="flex gap-6">
+                          <span>GP = Games Played</span>
+                          <span>Total PTS = Total Points Scored</span>
+                          <span>Avg PTS = Average Points Per Game</span>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      <p className="text-sm">No standings available</p>
+                      <p className="text-xs mt-1">Standings will appear once games are played</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-white rounded-xl shadow p-6">
+                  <h2 className="text-lg font-semibold text-slate-800">Player Stat Explorer</h2>
+
+                  <input
+                    type="text"
+                    placeholder="Search players..."
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded mb-4"
+                    value={playerSearch}
+                    onChange={(e) => setPlayerSearch(e.target.value)}
+                  />
+
+                  {playerStats.length > 0 ? (
+                    <div>
+                      {/* Sorting Controls */}
+                      <div className="flex gap-4 mb-3 items-center">
+                        <label className="text-sm text-slate-700 font-medium">
+                          Sort by:
+                          <select
+                            className="ml-2 border border-orange-300 text-orange-600 bg-orange-50 px-2 py-1 rounded shadow-sm hover:bg-orange-100 focus:outline-none focus:ring-2 focus:ring-orange-300"
+                            value={sortField}
+                            onChange={(e) => setSortField(e.target.value)}
+                          >
+                            <option value="points">Points</option>
+                            <option value="rebounds_total">Rebounds</option>
+                            <option value="assists">Assists</option>
+                          </select>
+                        </label>
+
+                        <button
+                          className="flex items-center gap-1 text-sm text-slate-600 hover:text-orange-600 transition"
+                          onClick={() =>
+                            setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"))
+                          }
+                        >
+                          {sortOrder === "asc" ? (
+                            <span>
+                              ⬆️ <span className="underline">Ascending</span>
+                            </span>
+                          ) : (
+                            <span>
+                              ⬇️ <span className="underline">Descending</span>
+                            </span>
+                          )}
+                        </button>
+                      </div>
+
+                      {/* Stats Table */}
+                      <table className="mt-4 w-full text-sm text-left text-slate-700">
+                        <thead>
+                          <tr>
+                            <th className="px-2 py-1">Name</th>
+                            <th className="px-2 py-1">PTS</th>
+                            <th className="px-2 py-1">REB</th>
+                            <th className="px-2 py-1">AST</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sortedPlayerStats
+                            .filter((p) =>
+                              p.name.toLowerCase().includes(playerSearch.toLowerCase())
+                            )
+                            .slice(0, 10)
+                            .map((p, i) => {
+                              return (
+                                <React.Fragment key={`${p.name}-${p.game_date}-${i}`}>
+                                  <tr
+                                    className="cursor-pointer hover:bg-orange-50 transition"
+                                    onClick={() =>
+                                      setExpandedPlayer(expandedPlayer === i ? null : i)
+                                    }
+                                  >
+                                    <td className="px-2 py-1 font-medium text-orange-600 cursor-pointer hover:underline">
+                                      {p.name}
+                                    </td>
+                                    <td className="px-2 py-1">{p.points}</td>
+                                    <td className="px-2 py-1">{p.rebounds_total}</td>
+                                    <td className="px-2 py-1">{p.assists}</td>
+                                  </tr>
+
+                                  {expandedPlayer === i && (
+                                    <tr>
+                                      <td colSpan={4}>
+                                        <GameSummaryRow
+                                          player={{ name: p.name }}
+                                          game={{
+                                            id: p.id,
+                                            game_date: p.game_date,
+                                            team: p.team,
+                                            opponent: p.opponent,
+                                            league_id: league.id,
+                                          }}
+                                        />
+
+                                      </td>
+                                    </tr>
+                                  )}
+                                </React.Fragment>
+                              );
+                            })}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-slate-600 mt-2">No player data available.</p>
+                  )}
+
+                </div>
+              </>
+            )}
+          </section>
+        </main>
+
+        {/* Team Profile Modal/Sidebar */}
           {selectedTeam && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
               <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -1259,6 +1471,8 @@ import LeagueChatbot from "@/components/LeagueChatbot";
               )}
 
             </div>
+              </>
+            )}
           </section>
 
           <aside className="space-y-6">
@@ -1367,9 +1581,6 @@ import LeagueChatbot from "@/components/LeagueChatbot";
               <div className="text-xs italic text-slate-400 mt-2">Coming soon...</div>
             </div>
           </aside>
-
-
-        </main>
 
         {/* Game Detail Modal */}
         {selectedGameId && (
