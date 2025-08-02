@@ -233,10 +233,11 @@ import LeagueChatbot from "@/components/LeagueChatbot";
         console.log('Public URL:', publicUrl);
 
         // Update league record with new banner URL
-        const { error: updateError } = await supabase
+        const { data: updateData, error: updateError } = await supabase
           .from('leagues')
           .update({ banner_url: publicUrl })
-          .eq('league_id', league.league_id);
+          .eq('league_id', league.league_id)
+          .select();
 
         if (updateError) {
           console.error('Database update error:', updateError);
@@ -244,21 +245,28 @@ import LeagueChatbot from "@/components/LeagueChatbot";
           return;
         }
 
-        console.log('Database updated successfully');
+        console.log('Database updated successfully:', updateData);
 
-        // Force a refetch to ensure the banner persists
-        const { data: updatedLeague, error: fetchError } = await supabase
-          .from('leagues')
-          .select('*')
-          .eq('slug', slug)
-          .single();
+        // Update local state immediately with the new banner URL
+        const updatedLeagueData = { ...league, banner_url: publicUrl };
+        setLeague(updatedLeagueData);
+        console.log('Updated local league state with banner URL:', publicUrl);
         
-        if (fetchError) {
-          console.error('Refetch error:', fetchError);
-        } else {
-          console.log('Refetched league data:', updatedLeague);
-          setLeague(updatedLeague);
-        }
+        // Force a refetch to ensure the banner persists
+        setTimeout(async () => {
+          const { data: updatedLeague, error: fetchError } = await supabase
+            .from('leagues')
+            .select('*')
+            .eq('slug', slug)
+            .single();
+          
+          if (fetchError) {
+            console.error('Refetch error:', fetchError);
+          } else {
+            console.log('Refetched league data:', updatedLeague);
+            setLeague(updatedLeague);
+          }
+        }, 1000);
         
         alert('Banner updated successfully!');
       } catch (error) {
