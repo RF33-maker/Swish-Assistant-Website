@@ -379,12 +379,7 @@ import LeagueChatbot from "@/components/LeagueChatbot";
               <p className="text-sm text-white/90 mt-1">
                 Organised by {league?.organiser_name || "BallParkSports"}
               </p>
-              {/* Debug: Show current banner URL */}
-              {league?.banner_url && (
-                <p className="text-xs text-white/70 mt-1">
-                  Banner: {league.banner_url.length > 50 ? league.banner_url.substring(0, 50) + '...' : league.banner_url}
-                </p>
-              )}
+
             </div>
             
             {/* Banner Upload Button for League Owner */}
@@ -425,12 +420,7 @@ import LeagueChatbot from "@/components/LeagueChatbot";
               </div>
             )}
             
-            {/* Debug info for ownership */}
-            <div className="absolute top-4 left-4 text-xs text-white bg-black/50 p-2 rounded">
-              User: {currentUser?.id ? currentUser.id.substring(0, 8) + '...' : 'Not logged in'}<br/>
-              Owner: {league?.user_id ? league.user_id.substring(0, 8) + '...' : 'No owner'}<br/>
-              Is Owner: {isOwner ? 'Yes' : 'No'}
-            </div>
+
           </div>
         </section>
 
