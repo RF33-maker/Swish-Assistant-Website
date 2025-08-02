@@ -334,23 +334,32 @@ import LeagueChatbot from "@/components/LeagueChatbot";
     const getInstagramEmbedUrl = (url: string) => {
       if (!url) return null;
       
+      console.log('Processing Instagram URL:', url);
+      
+      // Clean the URL by removing query parameters
+      const cleanUrl = url.split('?')[0];
+      
       // Check if it's a profile URL (instagram.com/username)
       const profileRegex = /(?:instagram\.com\/)([A-Za-z0-9._]+)(?:\/)?$/;
-      const profileMatch = url.match(profileRegex);
+      const profileMatch = cleanUrl.match(profileRegex);
       
       if (profileMatch) {
-        // Return profile embed URL which shows latest posts
-        return `https://www.instagram.com/${profileMatch[1]}/embed`;
+        const embedUrl = `https://www.instagram.com/${profileMatch[1]}/embed`;
+        console.log('Generated profile embed URL:', embedUrl);
+        return embedUrl;
       }
       
       // Fallback: Extract post ID from specific post URLs
       const postRegex = /(?:instagram\.com\/p\/|instagram\.com\/reel\/)([A-Za-z0-9_-]+)/;
-      const postMatch = url.match(postRegex);
+      const postMatch = cleanUrl.match(postRegex);
       
       if (postMatch) {
-        return `https://www.instagram.com/p/${postMatch[1]}/embed`;
+        const embedUrl = `https://www.instagram.com/p/${postMatch[1]}/embed`;
+        console.log('Generated post embed URL:', embedUrl);
+        return embedUrl;
       }
       
+      console.log('No match found for URL:', url);
       return null;
     };
 
