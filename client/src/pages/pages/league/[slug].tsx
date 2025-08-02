@@ -212,15 +212,18 @@ import LeagueChatbot from "@/components/LeagueChatbot";
           return;
         }
 
-        // Get public URL
+        // Get public URL with cache-busting parameter
         const { data: { publicUrl } } = supabase.storage
           .from('league-banners')
           .getPublicUrl(fileName);
+        
+        // Add cache-busting parameter to ensure immediate display
+        const publicUrlWithCacheBust = `${publicUrl}?t=${Date.now()}`;
 
         // Update league record with new banner URL
         const { error: updateError } = await supabase
           .from('leagues')
-          .update({ banner_url: publicUrl })
+          .update({ banner_url: publicUrlWithCacheBust })
           .eq('league_id', league.league_id);
 
         if (updateError) {
@@ -229,8 +232,20 @@ import LeagueChatbot from "@/components/LeagueChatbot";
           return;
         }
 
-        // Update local state
-        setLeague({ ...league, banner_url: publicUrl });
+        // Update local state and refetch to ensure persistence
+        setLeague({ ...league, banner_url: publicUrlWithCacheBust });
+        
+        // Force a refetch to ensure the banner persists
+        const { data: updatedLeague } = await supabase
+          .from('leagues')
+          .select('*')
+          .eq('slug', slug)
+          .single();
+        
+        if (updatedLeague) {
+          setLeague(updatedLeague);
+        }
+        
         alert('Banner updated successfully!');
       } catch (error) {
         console.error('Banner upload error:', error);
