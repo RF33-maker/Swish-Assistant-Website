@@ -3,7 +3,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { supabase } from '@/lib/supabase';
 import TeamPerformanceTrends from '@/components/TeamPerformanceTrends';
 import LeagueChatbot from '@/components/LeagueChatbot';
-import { TrendingUp, BarChart3, Users, Target, Award, Eye, MessageCircle } from 'lucide-react';
+import { TrendingUp, BarChart3, Users, Target, Award, Eye, MessageCircle, Search } from 'lucide-react';
 import { Link } from 'wouter';
 
 export default function CoachesHub() {
@@ -12,6 +12,8 @@ export default function CoachesHub() {
   const [selectedLeague, setSelectedLeague] = useState<any>(null);
   const [playerStats, setPlayerStats] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filteredLeagues, setFilteredLeagues] = useState<any[]>([]);
 
   useEffect(() => {
     if (user) {
@@ -24,6 +26,14 @@ export default function CoachesHub() {
       fetchLeagueStats();
     }
   }, [selectedLeague]);
+
+  useEffect(() => {
+    // Filter leagues based on search query
+    const filtered = leagues.filter(league => 
+      league.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+    setFilteredLeagues(filtered);
+  }, [leagues, searchQuery]);
 
   const fetchUserLeagues = async () => {
     try {
@@ -98,7 +108,11 @@ export default function CoachesHub() {
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-orange-100 rounded-lg">
-                <Target className="w-6 h-6 text-orange-600" />
+                <img 
+                  src="https://cdn-icons-png.flaticon.com/512/25/25694.png" 
+                  alt="Swish Assistant" 
+                  className="w-6 h-6"
+                />
               </div>
               <div>
                 <h1 className="text-xl font-bold text-slate-800">Coaches Hub</h1>
@@ -134,40 +148,81 @@ export default function CoachesHub() {
           <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
             {/* Main Content */}
             <div className="xl:col-span-3 space-y-8">
-              {/* League Selector */}
+              {/* League Search & Selection */}
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <div className="flex items-center gap-3 mb-4">
-                  <Eye className="w-5 h-5 text-orange-600" />
-                  <h2 className="text-lg font-semibold text-slate-800">League Overview</h2>
+                  <Search className="w-5 h-5 text-orange-600" />
+                  <h2 className="text-lg font-semibold text-slate-800">League Selection</h2>
                 </div>
                 
-                {leagues.length > 1 ? (
-                  <div className="flex items-center gap-4">
-                    <label className="text-sm font-medium text-slate-700">Select League:</label>
-                    <select
-                      value={selectedLeague?.league_id || ''}
-                      onChange={(e) => {
-                        const league = leagues.find(l => l.league_id === e.target.value);
-                        setSelectedLeague(league);
-                      }}
-                      className="border border-gray-300 rounded-md px-3 py-2 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                <div className="space-y-4">
+                  {/* Search Bar */}
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Search your leagues..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full border border-gray-300 rounded-md px-4 py-2 pl-10 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                    />
+                    <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+                  </div>
+
+                  {/* League Results */}
+                  {searchQuery && (
+                    <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-md">
+                      {filteredLeagues.length > 0 ? (
+                        filteredLeagues.map(league => (
+                          <button
+                            key={league.league_id}
+                            onClick={() => {
+                              setSelectedLeague(league);
+                              setSearchQuery('');
+                            }}
+                            className="w-full text-left px-4 py-2 hover:bg-orange-50 focus:bg-orange-50 focus:outline-none transition text-sm"
+                          >
+                            <div className="font-medium text-slate-800">{league.name}</div>
+                            <div className="text-xs text-slate-500">Created {new Date(league.created_at).toLocaleDateString()}</div>
+                          </button>
+                        ))
+                      ) : (
+                        <div className="px-4 py-3 text-sm text-slate-500">No leagues found matching "{searchQuery}"</div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Selected League Display */}
+                  {selectedLeague && (
+                    <div className="flex items-center justify-between p-3 bg-orange-50 border border-orange-200 rounded-md">
+                      <div className="flex items-center gap-3">
+                        <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                        <div>
+                          <span className="font-medium text-slate-800">{selectedLeague.name}</span>
+                          <span className="text-sm text-slate-500 ml-2">
+                            ({playerStats.length} records)
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setSelectedLeague(null)}
+                        className="text-slate-400 hover:text-slate-600 transition"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Quick League Access for single league */}
+                  {leagues.length === 1 && !selectedLeague && (
+                    <button
+                      onClick={() => setSelectedLeague(leagues[0])}
+                      className="w-full p-3 border-2 border-dashed border-orange-300 rounded-md hover:border-orange-400 hover:bg-orange-50 transition text-center"
                     >
-                      {leagues.map(league => (
-                        <option key={league.league_id} value={league.league_id}>
-                          {league.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-3">
-                    <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                    <span className="font-medium text-slate-800">{selectedLeague?.name}</span>
-                    <span className="text-sm text-slate-500">
-                      ({playerStats.length} player records)
-                    </span>
-                  </div>
-                )}
+                      <div className="font-medium text-slate-800">{leagues[0].name}</div>
+                      <div className="text-sm text-orange-600">Click to select</div>
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Quick Stats Cards */}
@@ -252,7 +307,11 @@ export default function CoachesHub() {
               {/* Coaching Tips */}
               <div className="bg-gradient-to-r from-orange-50 to-yellow-50 border border-orange-200 rounded-lg p-6">
                 <div className="flex items-start gap-3">
-                  <Target className="w-6 h-6 text-orange-600 mt-1" />
+                  <img 
+                    src="https://cdn-icons-png.flaticon.com/512/25/25694.png" 
+                    alt="Coaching Tips" 
+                    className="w-6 h-6 mt-1"
+                  />
                   <div>
                     <h3 className="font-semibold text-slate-800 mb-2">Coaching Insights</h3>
                     <div className="text-sm text-slate-700 space-y-2">
