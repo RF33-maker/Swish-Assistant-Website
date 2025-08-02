@@ -31,13 +31,16 @@ A professional React and Tailwind CSS website with login functionality and an in
 - Responsive design with mobile support
 
 ## Recent Changes  
-- **2025-02-02**: Implemented comprehensive Team Profiles section replacing Overview tab in league pages
-  - Replaced "Overview" navigation tab with "Teams" tab for better content organization
-  - Created detailed team profile cards showing team logos (placeholder), descriptions, league participation, recent game results, top performers, and roster previews
-  - Added team data aggregation from player statistics including games played, average team points, roster management with player averages
-  - Built responsive team cards with gradient backgrounds, team info headers, and detailed statistics breakdown
-  - Included "View Full Profile" buttons for future individual team page navigation
-  - Enhanced league page structure to focus on team-centric information rather than general league leaders
+- **2025-02-02**: Created separate dedicated team profile pages with comprehensive team data
+  - Removed Team Profiles section from league pages to maintain focus on League Leaders
+  - Built standalone TeamProfile.tsx component with detailed team information display
+  - Added route `/team/:teamName` for individual team profile pages with slug-based navigation
+  - Implemented comprehensive team statistics including roster management, player averages, recent games, and top performer highlights
+  - Created team header with logo placeholder, team statistics summary, and league association
+  - Added full roster table with player positions, games played, and statistical averages
+  - Included recent games section showing team performance history with dates and scores
+  - Featured star player highlight card with comprehensive statistical breakdown
+  - Restored "Overview" navigation tab on league pages as originally requested
 - **2025-02-02**: Created dedicated Coaches Hub with integrated chatbot and performance analytics
   - Built new `/coaches-hub` route with authentication-protected access for league owners
   - Moved Team Performance Trends visualizer from public league pages to coaches-only section

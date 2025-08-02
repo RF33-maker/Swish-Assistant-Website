@@ -35,7 +35,7 @@ function Router() {
       <Route path="/players" component={PlayersListPage} />
       <Route path="/player/:id" component={PlayerStatsPage} />
       <Route path="/teams" component={TeamsList} />
-      <Route path="/team/:teamId" component={TeamProfile} />
+      <Route path="/team/:teamName" component={TeamProfile} />
       <Route path="/reset-password" component={ResetPassword} />
 
       {/* Protected routes */}

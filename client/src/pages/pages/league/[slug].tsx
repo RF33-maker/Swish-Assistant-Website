@@ -39,8 +39,7 @@ import LeagueChatbot from "@/components/LeagueChatbot";
   const [instagramUrl, setInstagramUrl] = useState("");
   const [isEditingInstagram, setIsEditingInstagram] = useState(false);
   const [updatingInstagram, setUpdatingInstagram] = useState(false);
-  const [teams, setTeams] = useState([]);
-  const [teamGames, setTeamGames] = useState({});
+
     
 
 
@@ -156,82 +155,6 @@ import LeagueChatbot from "@/components/LeagueChatbot";
 
 
           fetchTopStats();
-          const fetchTeamsAfterStats = async () => {
-            // Get unique teams from player stats
-            const uniqueTeams = [...new Set(allPlayerStats?.map(stat => stat.team || stat.team_name).filter(Boolean))];
-            
-            const teamsWithData = await Promise.all(uniqueTeams.map(async (teamName) => {
-              // Get team stats
-              const teamPlayers = allPlayerStats?.filter(stat => 
-                (stat.team || stat.team_name) === teamName
-              ) || [];
-              
-              // Calculate team totals and averages
-              const gamesByDate = teamPlayers.reduce((acc, player) => {
-                if (!acc[player.game_date]) {
-                  acc[player.game_date] = {
-                    totalPoints: 0,
-                    date: player.game_date,
-                    opponent: player.opponent || 'Unknown'
-                  };
-                }
-                acc[player.game_date].totalPoints += player.points || 0;
-                return acc;
-              }, {});
-              
-              const games = Object.values(gamesByDate);
-              const recentGames = games.slice(-5); // Last 5 games
-              
-              // Get roster with stats
-              const roster = teamPlayers.reduce((acc, player) => {
-                const existing = acc.find(p => p.name === player.name);
-                if (existing) {
-                  existing.totalPoints += player.points || 0;
-                  existing.totalRebounds += player.rebounds_total || 0;
-                  existing.totalAssists += player.assists || 0;
-                  existing.gamesPlayed += 1;
-                } else {
-                  acc.push({
-                    name: player.name,
-                    position: player.position || 'Player',
-                    totalPoints: player.points || 0,
-                    totalRebounds: player.rebounds_total || 0,
-                    totalAssists: player.assists || 0,
-                    gamesPlayed: 1
-                  });
-                }
-                return acc;
-              }, []);
-              
-              // Calculate averages
-              roster.forEach(player => {
-                player.avgPoints = Math.round((player.totalPoints / player.gamesPlayed) * 10) / 10;
-                player.avgRebounds = Math.round((player.totalRebounds / player.gamesPlayed) * 10) / 10;
-                player.avgAssists = Math.round((player.totalAssists / player.gamesPlayed) * 10) / 10;
-              });
-              
-              // Find top player
-              const topPlayer = roster.reduce((prev, current) => 
-                (prev.avgPoints > current.avgPoints) ? prev : current, roster[0]
-              );
-              
-              return {
-                name: teamName,
-                roster,
-                topPlayer,
-                recentGames,
-                totalGames: games.length,
-                avgTeamPoints: games.length > 0 ? 
-                  Math.round((games.reduce((sum, game) => sum + game.totalPoints, 0) / games.length) * 10) / 10 : 0
-              };
-            }));
-            
-            setTeams(teamsWithData);
-          };
-          
-          if (allPlayerStats && allPlayerStats.length > 0) {
-            fetchTeamsAfterStats();
-          }
         }
 
         if (error) console.error("Failed to fetch league:", error);
@@ -549,7 +472,7 @@ import LeagueChatbot from "@/components/LeagueChatbot";
           </div>
 
           <div className="flex gap-6 text-sm font-medium text-slate-600">
-            <a href="#" className="hover:text-orange-500">Teams</a>
+            <a href="#" className="hover:text-orange-500">Overview</a>
             <a href="#" className="hover:text-orange-500">Stats</a>
             <a 
               href="#" 
@@ -641,162 +564,39 @@ import LeagueChatbot from "@/components/LeagueChatbot";
         <main className="max-w-7xl mx-auto px-6 py-10 grid grid-cols-1 md:grid-cols-3 gap-8">
           <section className="md:col-span-2 space-y-6">
 
-            {/* Teams Section */}
-            <section id="teams" className="bg-white rounded-xl shadow p-6">
+            {/* League Leaders */}
+            <section id="stats" className="bg-white rounded-xl shadow p-6">
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-lg font-semibold text-slate-800">Team Profiles</h2>
+                <h2 className="text-lg font-semibold text-slate-800">League Leaders</h2>
                 <button
                   onClick={() => navigate(`/league-leaders/${slug}`)}
                   className="text-sm text-orange-500 hover:text-orange-600 font-medium hover:underline"
                 >
-                  View League Leaders →
+                  View All Leaders →
                 </button>
               </div>
-              
-              {teams.length > 0 ? (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {teams.map((team, index) => (
-                    <div key={team.name} className="bg-gradient-to-br from-gray-50 to-orange-50 rounded-xl border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
-                      {/* Team Header */}
-                      <div className="bg-gradient-to-r from-orange-500 to-orange-600 p-4 text-white">
-                        <div className="flex items-center gap-3">
-                          {/* Team Logo Placeholder */}
-                          <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center border-2 border-white/30">
-                            <div className="text-center">
-                              <div className="text-lg font-bold">{team.name.charAt(0)}</div>
-                              <div className="text-xs opacity-75">LOGO</div>
-                            </div>
-                          </div>
-                          
-                          {/* Team Info */}
-                          <div className="flex-1">
-                            <h3 className="text-lg font-bold mb-1">{team.name}</h3>
-                            <div className="text-sm opacity-90">
-                              {team.roster.length} Players • {team.totalGames} Games • {team.avgTeamPoints} PPG
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Team Content */}
-                      <div className="p-4 space-y-4">
-                        {/* Description */}
-                        <div>
-                          <h4 className="font-semibold text-slate-800 mb-2 text-sm flex items-center gap-2">
-                            <svg className="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                            Description
-                          </h4>
-                          <p className="text-sm text-slate-600 bg-white rounded-lg p-3 border border-orange-100">
-                            Professional basketball team competing in {league?.name}. Known for competitive spirit and strong team chemistry.
-                          </p>
-                        </div>
-
-                        {/* Recent Results */}
-                        <div>
-                          <h4 className="font-semibold text-slate-800 mb-2 text-sm flex items-center gap-2">
-                            <svg className="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                            </svg>
-                            Recent Results (W/L)
-                          </h4>
-                          <div className="space-y-1">
-                            {team.recentGames.slice(0, 3).map((game, idx) => (
-                              <div key={idx} className="flex justify-between items-center p-2 bg-white rounded border border-orange-100">
-                                <div className="text-sm">
-                                  <span className="font-medium">vs {game.opponent}</span>
-                                  <span className="text-gray-500 ml-2">{new Date(game.date).toLocaleDateString()}</span>
-                                </div>
-                                <div className="text-sm font-bold text-slate-700">
-                                  {game.totalPoints} PTS
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Top Player & Roster Preview */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {/* Top Player */}
-                          {team.topPlayer && (
-                            <div>
-                              <h4 className="font-semibold text-slate-800 mb-2 text-sm flex items-center gap-2">
-                                <svg className="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                                </svg>
-                                Top Player
-                              </h4>
-                              <div className="bg-white border border-orange-100 rounded-lg p-3">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                                    {team.topPlayer.name.charAt(0)}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="font-bold text-slate-800 text-sm truncate">{team.topPlayer.name}</div>
-                                    <div className="text-xs text-slate-600">{team.topPlayer.position}</div>
-                                  </div>
-                                  <div className="text-right">
-                                    <div className="font-bold text-orange-600 text-sm">{team.topPlayer.avgPoints}</div>
-                                    <div className="text-xs text-slate-500">PPG</div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Roster Preview */}
-                          <div>
-                            <h4 className="font-semibold text-slate-800 mb-2 text-sm flex items-center gap-2">
-                              <svg className="w-4 h-4 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-                              </svg>
-                              Roster ({team.roster.length})
-                            </h4>
-                            <div className="bg-white border border-orange-100 rounded-lg p-3 max-h-24 overflow-y-auto">
-                              <div className="space-y-1">
-                                {team.roster.slice(0, 3).map((player, idx) => (
-                                  <div key={idx} className="flex justify-between items-center text-sm">
-                                    <span className="font-medium truncate">{player.name}</span>
-                                    <span className="text-slate-500 text-xs">{player.avgPoints} PPG</span>
-                                  </div>
-                                ))}
-                                {team.roster.length > 3 && (
-                                  <div className="text-center text-xs text-slate-500 py-1">
-                                    +{team.roster.length - 3} more
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* View Full Profile Button */}
-                        <div className="pt-3 border-t border-orange-100">
-                          <button 
-                            onClick={() => navigate(`/team/${encodeURIComponent(team.name)}`)}
-                            className="w-full bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                            </svg>
-                            View Full Profile
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-12 bg-gradient-to-br from-gray-50 to-orange-50 rounded-xl border border-gray-200">
-                  <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                  </svg>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No teams found</h3>
-                  <p className="text-gray-600">Teams will appear here once player data is available for this league.</p>
-                </div>
-              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                {([
+                  { title: "Top Scorers", list: topScorers, label: "PPG", key: "avg" },
+                  { title: "Top Rebounders", list: topRebounders, label: "RPG", key: "avg" },
+                  { title: "Top Playmakers", list: topAssistsList, label: "APG", key: "avg" },
+                ] as const).map(({ title, list, label, key }) => (
+                  <div key={title} className="bg-gray-50 rounded-lg p-4 shadow-inner">
+                    <h3 className="text-sm font-semibold text-slate-700 mb-3 text-center">{title}</h3>
+                    <ul className="space-y-1 text-sm text-slate-800">
+                      {Array.isArray(list) &&
+                        list.map((p, i) => (
+                          <li key={`${title}-${p.name}-${i}`} className="flex justify-between">
+                            <span>{p.name}</span>
+                            <span className="font-medium text-orange-500">
+                              {p[key]} {label}
+                            </span>
+                          </li>
+                        ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
             </section>
 
             {/* League Standings */}
