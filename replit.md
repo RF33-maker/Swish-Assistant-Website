@@ -31,6 +31,14 @@ A professional React and Tailwind CSS website with login functionality and an in
 - Responsive design with mobile support
 
 ## Recent Changes  
+- **2025-02-02**: Added comprehensive Animated Team Performance Trend Visualizer feature
+  - Interactive animated visualization showing team performance trends over time
+  - Teams ranked by average points per game with visual trend indicators (up/down/stable)
+  - Clickable team cards revealing detailed metrics including games played, total points, best game, and consistency
+  - Smooth framer-motion animations with staggered card reveals and interactive sparkline charts
+  - Mini sparkline charts showing recent form with color-coded performance trends
+  - Calculates team trends by comparing first half vs second half game performance
+  - Shows performance insights and explanations for trend calculations
 - **2025-02-01**: Successfully implemented league banner upload functionality for league owners
   - League owners can now upload custom banners for their leagues via "Change Banner" button
   - Integrated with Supabase storage using 'league-banners' bucket with proper RLS policies

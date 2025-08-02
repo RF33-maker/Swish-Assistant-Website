@@ -8,6 +8,7 @@ import { GameSummaryRow } from "./GameSummaryRow";
 import GameResultsCarousel from "@/components/GameResultsCarousel";
 import GameDetailModal from "@/components/GameDetailModal";
 import LeagueChatbot from "@/components/LeagueChatbot";
+import TeamPerformanceTrends from "@/components/TeamPerformanceTrends";
 
 
   export default function LeaguePage() {
@@ -755,6 +756,14 @@ import LeagueChatbot from "@/components/LeagueChatbot";
             </div>
 
           </section>
+
+          {/* Team Performance Trends */}
+          {playerStats.length > 0 && (
+            <TeamPerformanceTrends 
+              playerStats={playerStats} 
+              leagueId={league?.league_id || ''} 
+            />
+          )}
 
           <aside className="space-y-6">
             {/* League Chatbot */}
