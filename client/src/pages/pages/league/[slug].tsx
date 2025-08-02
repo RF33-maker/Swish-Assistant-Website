@@ -35,6 +35,9 @@ import LeagueChatbot from "@/components/LeagueChatbot";
   const [isOwner, setIsOwner] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  const [instagramUrl, setInstagramUrl] = useState("");
+  const [isEditingInstagram, setIsEditingInstagram] = useState(false);
+  const [updatingInstagram, setUpdatingInstagram] = useState(false);
     
 
 
@@ -89,6 +92,7 @@ import LeagueChatbot from "@/components/LeagueChatbot";
           setLeague(data);
           const ownerStatus = currentUser?.id === data.user_id;
           setIsOwner(ownerStatus);
+          setInstagramUrl(data.instagram_embed_url || "");
           console.log("Is owner?", ownerStatus, "User ID:", currentUser?.id, "League owner ID:", data.user_id);
         }
         
@@ -296,6 +300,50 @@ import LeagueChatbot from "@/components/LeagueChatbot";
       }
     };
 
+    // Handle Instagram URL update
+    const handleInstagramUpdate = async () => {
+      if (!isOwner || !league) return;
+      
+      setUpdatingInstagram(true);
+      try {
+        const { data, error } = await supabase
+          .from('leagues')
+          .update({ instagram_embed_url: instagramUrl })
+          .eq('league_id', league.league_id)
+          .select()
+          .single();
+
+        if (error) {
+          console.error('Instagram update error:', error);
+          alert('Failed to update Instagram URL');
+          return;
+        }
+
+        setLeague({ ...league, instagram_embed_url: instagramUrl });
+        setIsEditingInstagram(false);
+        alert('Instagram URL updated successfully!');
+      } catch (error) {
+        console.error('Instagram update error:', error);
+        alert(`Failed to update Instagram URL: ${error.message}`);
+      } finally {
+        setUpdatingInstagram(false);
+      }
+    };
+
+    // Convert Instagram post URL to embed URL
+    const getInstagramEmbedUrl = (url: string) => {
+      if (!url) return null;
+      
+      // Extract post ID from various Instagram URL formats
+      const regex = /(?:instagram\.com\/p\/|instagram\.com\/reel\/)([A-Za-z0-9_-]+)/;
+      const match = url.match(regex);
+      
+      if (match) {
+        return `https://www.instagram.com/p/${match[1]}/embed`;
+      }
+      
+      return null;
+    };
 
     if (!league) {
       return <div className="p-6 text-slate-600">Loading league...</div>;
@@ -600,14 +648,75 @@ import LeagueChatbot from "@/components/LeagueChatbot";
 
             {/* Instagram Embed */}
             <div className="bg-white rounded-xl shadow p-4">
-              <h3 className="text-sm font-semibold text-slate-700 mb-2">Instagram Feed</h3>
-              <iframe
-                src="https://www.instagram.com/p/EXAMPLE/embed"
-                width="100%"
-                height="400"
-                className="rounded-md"
-                allow="autoplay; clipboard-write; encrypted-media; picture-in-picture"
-              ></iframe>
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="text-sm font-semibold text-slate-700">Instagram Feed</h3>
+                {isOwner && (
+                  <button
+                    onClick={() => setIsEditingInstagram(!isEditingInstagram)}
+                    className="text-xs text-orange-500 hover:text-orange-600 font-medium"
+                  >
+                    {isEditingInstagram ? 'Cancel' : 'Edit'}
+                  </button>
+                )}
+              </div>
+
+              {isEditingInstagram && isOwner ? (
+                <div className="space-y-3">
+                  <input
+                    type="text"
+                    placeholder="Enter Instagram post URL (e.g., https://www.instagram.com/p/ABC123...)"
+                    value={instagramUrl}
+                    onChange={(e) => setInstagramUrl(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleInstagramUpdate}
+                      disabled={updatingInstagram}
+                      className={`px-3 py-1 text-xs font-medium rounded ${
+                        updatingInstagram 
+                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                          : 'bg-orange-500 text-white hover:bg-orange-600'
+                      }`}
+                    >
+                      {updatingInstagram ? 'Updating...' : 'Save'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsEditingInstagram(false);
+                        setInstagramUrl(league?.instagram_embed_url || "");
+                      }}
+                      className="px-3 py-1 text-xs font-medium bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  {league?.instagram_embed_url && getInstagramEmbedUrl(league.instagram_embed_url) ? (
+                    <iframe
+                      src={getInstagramEmbedUrl(league.instagram_embed_url)}
+                      width="100%"
+                      height="400"
+                      className="rounded-md border"
+                      allow="autoplay; clipboard-write; encrypted-media; picture-in-picture"
+                    ></iframe>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      <p className="text-sm">No Instagram post added yet</p>
+                      {isOwner && (
+                        <button
+                          onClick={() => setIsEditingInstagram(true)}
+                          className="mt-2 text-xs text-orange-500 hover:text-orange-600 underline"
+                        >
+                          Add Instagram Post
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* YouTube Embed */}
