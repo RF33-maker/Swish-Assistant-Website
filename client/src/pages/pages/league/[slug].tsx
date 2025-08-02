@@ -145,6 +145,9 @@ import LeagueChatbot from "@/components/LeagueChatbot";
             setTopAssists(assistData);
             setGameSummaries(recentGames || []);
             setPlayerStats(allPlayerStats || []);
+            
+            // Calculate standings from game data
+            calculateStandings(allPlayerStats || []);
           };
 
           fetchTopStats();
@@ -363,6 +366,85 @@ import LeagueChatbot from "@/components/LeagueChatbot";
       return null;
     };
 
+    // Calculate team standings from player stats
+    const calculateStandings = (playerStats: any[]) => {
+      const gameResults: { [key: string]: { team: string, opponent: string, date: string, teamScore: number, opponentScore: number } } = {};
+      
+      // Group player stats by game (team + opponent + date)
+      playerStats.forEach(stat => {
+        if (!stat.team || !stat.opponent || !stat.game_date) return;
+        
+        const gameKey = `${stat.team}_vs_${stat.opponent}_${stat.game_date}`;
+        
+        if (!gameResults[gameKey]) {
+          gameResults[gameKey] = {
+            team: stat.team,
+            opponent: stat.opponent,
+            date: stat.game_date,
+            teamScore: 0,
+            opponentScore: 0
+          };
+        }
+        
+        gameResults[gameKey].teamScore += stat.points || 0;
+      });
+
+      // Also count opponent scores (reverse perspective)
+      playerStats.forEach(stat => {
+        if (!stat.team || !stat.opponent || !stat.game_date) return;
+        
+        const reverseGameKey = `${stat.opponent}_vs_${stat.team}_${stat.game_date}`;
+        
+        if (gameResults[reverseGameKey]) {
+          gameResults[reverseGameKey].opponentScore += stat.points || 0;
+        }
+      });
+
+      // Calculate team records
+      const teamRecords: { [team: string]: { wins: number, losses: number, pointsFor: number, pointsAgainst: number, games: number } } = {};
+      
+      Object.values(gameResults).forEach(game => {
+        // Initialize team records
+        if (!teamRecords[game.team]) {
+          teamRecords[game.team] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0 };
+        }
+        if (!teamRecords[game.opponent]) {
+          teamRecords[game.opponent] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0 };
+        }
+
+        // Record game results
+        if (game.teamScore > game.opponentScore) {
+          teamRecords[game.team].wins++;
+          teamRecords[game.opponent].losses++;
+        } else if (game.opponentScore > game.teamScore) {
+          teamRecords[game.opponent].wins++;
+          teamRecords[game.team].losses++;
+        }
+
+        teamRecords[game.team].pointsFor += game.teamScore;
+        teamRecords[game.team].pointsAgainst += game.opponentScore;
+        teamRecords[game.team].games++;
+        
+        teamRecords[game.opponent].pointsFor += game.opponentScore;
+        teamRecords[game.opponent].pointsAgainst += game.teamScore;
+        teamRecords[game.opponent].games++;
+      });
+
+      // Convert to array and sort by win percentage
+      const standingsArray = Object.entries(teamRecords).map(([team, record]) => ({
+        team,
+        wins: record.wins,
+        losses: record.losses,
+        winPct: record.games > 0 ? (record.wins / record.games) : 0,
+        pointsFor: record.pointsFor,
+        pointsAgainst: record.pointsAgainst,
+        pointsDiff: record.pointsFor - record.pointsAgainst,
+        games: record.games
+      })).sort((a, b) => b.winPct - a.winPct || b.pointsDiff - a.pointsDiff);
+
+      setStandings(standingsArray);
+    };
+
     if (!league) {
       return <div className="p-6 text-slate-600">Loading league...</div>;
     }
@@ -540,6 +622,66 @@ import LeagueChatbot from "@/components/LeagueChatbot";
                 ))}
               </div>
             </section>
+
+            {/* League Standings */}
+            <div className="bg-white rounded-xl shadow p-6">
+              <h2 className="text-lg font-semibold text-slate-800 mb-4">League Standings</h2>
+              {standings.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="text-left py-3 px-2 font-semibold text-slate-700">#</th>
+                        <th className="text-left py-3 px-2 font-semibold text-slate-700">Team</th>
+                        <th className="text-center py-3 px-2 font-semibold text-slate-700">W</th>
+                        <th className="text-center py-3 px-2 font-semibold text-slate-700">L</th>
+                        <th className="text-center py-3 px-2 font-semibold text-slate-700">Win%</th>
+                        <th className="text-right py-3 px-2 font-semibold text-slate-700">PF</th>
+                        <th className="text-right py-3 px-2 font-semibold text-slate-700">PA</th>
+                        <th className="text-right py-3 px-2 font-semibold text-slate-700">Diff</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {standings.map((team, index) => (
+                        <tr 
+                          key={team.team} 
+                          className={`border-b border-gray-100 hover:bg-orange-50 transition-colors ${
+                            index < 3 ? 'bg-green-50' : index >= standings.length - 2 ? 'bg-red-50' : ''
+                          }`}
+                        >
+                          <td className="py-3 px-2 font-medium text-slate-600">{index + 1}</td>
+                          <td className="py-3 px-2 font-medium text-slate-800">{team.team}</td>
+                          <td className="py-3 px-2 text-center text-green-600 font-semibold">{team.wins}</td>
+                          <td className="py-3 px-2 text-center text-red-600 font-semibold">{team.losses}</td>
+                          <td className="py-3 px-2 text-center font-medium">
+                            {team.games > 0 ? (team.winPct * 100).toFixed(1) + '%' : '0%'}
+                          </td>
+                          <td className="py-3 px-2 text-right text-slate-600">{team.pointsFor}</td>
+                          <td className="py-3 px-2 text-right text-slate-600">{team.pointsAgainst}</td>
+                          <td className={`py-3 px-2 text-right font-medium ${
+                            team.pointsDiff > 0 ? 'text-green-600' : team.pointsDiff < 0 ? 'text-red-600' : 'text-slate-600'
+                          }`}>
+                            {team.pointsDiff > 0 ? '+' : ''}{team.pointsDiff}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="mt-4 text-xs text-slate-500">
+                    <div className="flex gap-6">
+                      <span>PF = Points For</span>
+                      <span>PA = Points Against</span>
+                      <span>Diff = Point Differential</span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <p className="text-sm">No standings available</p>
+                  <p className="text-xs mt-1">Standings will appear once games are played</p>
+                </div>
+              )}
+            </div>
 
             <div className="bg-white rounded-xl shadow p-6">
               <h2 className="text-lg font-semibold text-slate-800">Player Stat Explorer</h2>

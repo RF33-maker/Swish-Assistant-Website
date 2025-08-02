@@ -50,6 +50,12 @@ A professional React and Tailwind CSS website with login functionality and an in
   - Supports both profile URLs (auto-updating) and specific post URLs (fixed content)
   - Instagram embed appears in sidebar for all users when configured by league owner
   - URLs stored in database with proper validation and embed URL conversion
+- **2025-02-01**: Implemented comprehensive league standings system
+  - Automatically calculates team win-loss records from existing game data
+  - Shows wins, losses, win percentage, points for/against, and point differential
+  - Teams ranked by win percentage with point differential as tiebreaker
+  - Visual highlights for top 3 teams (green) and bottom 2 teams (red)
+  - Responsive table design with hover effects and detailed statistics
 - **2025-02-01**: Enhanced league page with carousel-style game results and team-filtered box scores
   - Replaced AI Game Summary section with interactive game results carousel
   - Created modern carousel component showing recent games with scores and top performers
