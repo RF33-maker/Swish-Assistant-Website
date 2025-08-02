@@ -33,9 +33,10 @@ interface GameDetailModalProps {
   gameId: string;
   isOpen: boolean;
   onClose: () => void;
+  onTeamClick?: (teamName: string) => void;
 }
 
-export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailModalProps) {
+export default function GameDetailModal({ gameId, isOpen, onClose, onTeamClick }: GameDetailModalProps) {
   const [gameStats, setGameStats] = useState<PlayerGameStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
@@ -133,7 +134,12 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                   <Trophy className="w-4 h-4" />
                   {gameInfo.teams.map((team, index) => (
                     <span key={team} className="font-medium">
-                      {team} {gameInfo.teamScores[team]}
+                      <span 
+                        className="cursor-pointer hover:text-orange-600 transition-colors"
+                        onClick={() => onTeamClick?.(team)}
+                      >
+                        {team}
+                      </span> {gameInfo.teamScores[team]}
                       {index < gameInfo.teams.length - 1 && <span className="mx-2 text-orange-500">vs</span>}
                     </span>
                   ))}
@@ -163,12 +169,22 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                 <div className="bg-gradient-to-r from-orange-50 to-orange-100 rounded-lg p-4 border border-orange-200">
                   <div className="flex items-center justify-center">
                     <div className="text-center">
-                      <div className="text-lg font-semibold text-slate-800">{gameInfo.teams[0]}</div>
+                      <div 
+                        className="text-lg font-semibold text-slate-800 cursor-pointer hover:text-orange-600 transition-colors"
+                        onClick={() => onTeamClick?.(gameInfo.teams[0])}
+                      >
+                        {gameInfo.teams[0]}
+                      </div>
                       <div className="text-3xl font-bold text-orange-600">{gameInfo.teamScores[gameInfo.teams[0]]}</div>
                     </div>
                     <div className="mx-8 text-slate-400 font-medium">FINAL</div>
                     <div className="text-center">
-                      <div className="text-lg font-semibold text-slate-800">{gameInfo.teams[1]}</div>
+                      <div 
+                        className="text-lg font-semibold text-slate-800 cursor-pointer hover:text-orange-600 transition-colors"
+                        onClick={() => onTeamClick?.(gameInfo.teams[1])}
+                      >
+                        {gameInfo.teams[1]}
+                      </div>
                       <div className="text-3xl font-bold text-orange-600">{gameInfo.teamScores[gameInfo.teams[1]]}</div>
                     </div>
                   </div>

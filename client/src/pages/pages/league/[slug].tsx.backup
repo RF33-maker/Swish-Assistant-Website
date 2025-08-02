@@ -664,7 +664,6 @@ import LeagueChatbot from "@/components/LeagueChatbot";
                 <GameResultsCarousel 
                   leagueId={league.league_id} 
                   onGameClick={handleGameClick}
-                  onTeamClick={(teamName) => setSelectedTeam(teams.find(t => t.name === teamName))}
                 />
               </div>
             </div>
@@ -1062,7 +1061,16 @@ import LeagueChatbot from "@/components/LeagueChatbot";
             </div>
           )}
 
-            {/* League Leaders */}
+          <aside className="space-y-6">
+            {/* League Chatbot */}
+            {league?.league_id && (
+              <LeagueChatbot 
+                leagueId={league.league_id} 
+                leagueName={league.name || 'League'} 
+              />
+            )}
+
+            {/* Instagram Embed */}
             <div className="bg-white rounded-xl shadow p-4">
               <div className="flex justify-between items-center mb-3">
                 <h2 className="text-lg font-semibold text-slate-800">League Leaders</h2>
@@ -1095,7 +1103,7 @@ import LeagueChatbot from "@/components/LeagueChatbot";
                   </div>
                 ))}
               </div>
-            </div>
+            </section>
 
             {/* League Standings */}
             <div className="bg-white rounded-xl shadow p-6">
@@ -1116,15 +1124,12 @@ import LeagueChatbot from "@/components/LeagueChatbot";
                       {standings.map((team, index) => (
                         <tr 
                           key={team.team} 
-                          className={`border-b border-gray-100 hover:bg-orange-50 transition-colors cursor-pointer ${
+                          className={`border-b border-gray-100 hover:bg-orange-50 transition-colors ${
                             index < 3 ? 'bg-green-50' : index >= standings.length - 2 ? 'bg-red-50' : ''
                           }`}
-                          onClick={() => setSelectedTeam(teams.find(t => t.name === team.team))}
                         >
                           <td className="py-3 px-2 font-medium text-slate-600">{index + 1}</td>
-                          <td className="py-3 px-2 font-medium text-slate-800 hover:text-orange-600 transition cursor-pointer">
-                            {team.team}
-                          </td>
+                          <td className="py-3 px-2 font-medium text-slate-800">{team.team}</td>
                           <td className="py-3 px-2 text-center text-slate-600">{team.games}</td>
                           <td className="py-3 px-2 text-right text-slate-600">{team.pointsFor}</td>
                           <td className="py-3 px-2 text-right font-medium text-orange-600">{team.avgPoints}</td>
@@ -1259,6 +1264,7 @@ import LeagueChatbot from "@/components/LeagueChatbot";
               )}
 
             </div>
+
           </section>
 
           <aside className="space-y-6">
@@ -1377,10 +1383,6 @@ import LeagueChatbot from "@/components/LeagueChatbot";
             gameId={selectedGameId}
             isOpen={isGameModalOpen}
             onClose={handleCloseGameModal}
-            onTeamClick={(teamName) => {
-              handleCloseGameModal();
-              setSelectedTeam(teams.find(t => t.name === teamName));
-            }}
           />
         )}
       </div>

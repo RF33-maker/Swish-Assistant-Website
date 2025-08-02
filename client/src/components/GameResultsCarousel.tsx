@@ -14,9 +14,10 @@ interface GameResult {
 interface GameResultsCarouselProps {
   leagueId: string;
   onGameClick: (gameId: string) => void;
+  onTeamClick?: (teamName: string) => void;
 }
 
-export default function GameResultsCarousel({ leagueId, onGameClick }: GameResultsCarouselProps) {
+export default function GameResultsCarousel({ leagueId, onGameClick, onTeamClick }: GameResultsCarouselProps) {
   const [games, setGames] = useState<GameResult[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -135,7 +136,13 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
           </div>
           <div className="flex items-center justify-between">
             <div className="text-center">
-              <div className="text-white font-bold text-sm">
+              <div 
+                className="text-white font-bold text-sm hover:text-orange-300 cursor-pointer transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onTeamClick?.(game.away_team);
+                }}
+              >
                 {getTeamAbbr(game.away_team)}
               </div>
               <div className="text-2xl font-bold text-white">
@@ -146,7 +153,13 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
               VS
             </div>
             <div className="text-center">
-              <div className="text-white font-bold text-sm">
+              <div 
+                className="text-white font-bold text-sm hover:text-orange-300 cursor-pointer transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onTeamClick?.(game.home_team);
+                }}
+              >
                 {getTeamAbbr(game.home_team)}
               </div>
               <div className="text-2xl font-bold text-white">
