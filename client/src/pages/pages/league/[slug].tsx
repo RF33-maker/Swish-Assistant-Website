@@ -245,11 +245,11 @@ import LeagueChatbot from "@/components/LeagueChatbot";
         
         console.log('Column check result:', checkData, checkError);
 
-        // Update league record with new banner URL
+        // Try updating by slug instead of league_id
         const { data: updateData, error: updateError } = await supabase
           .from('leagues')
           .update({ banner_url: publicUrl })
-          .eq('league_id', league.league_id)
+          .eq('slug', slug)
           .select();
 
         if (updateError) {
