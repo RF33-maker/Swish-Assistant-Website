@@ -14,6 +14,8 @@ import PlayerStatsPage from "./pages/pages/player/[id]";
 import PlayersListPage from "./pages/players-list";
 import PostLoginDashboard from "@/pages/post-login-dashboard"; // new dashboard page
 import CoachesHub from "@/pages/CoachesHub";
+import TeamProfile from "@/pages/TeamProfile";
+import TeamsList from "@/pages/TeamsList";
 import { AuthProvider } from "./hooks/use-auth";
 import { ProtectedRoute } from "./lib/protected-route";
 import ResetPassword from "./pages/reset-password";
@@ -32,6 +34,8 @@ function Router() {
       <Route path="/league-leaders/:slug" component={LeagueLeadersPage} />
       <Route path="/players" component={PlayersListPage} />
       <Route path="/player/:id" component={PlayerStatsPage} />
+      <Route path="/teams" component={TeamsList} />
+      <Route path="/team/:teamId" component={TeamProfile} />
       <Route path="/reset-password" component={ResetPassword} />
 
       {/* Protected routes */}
