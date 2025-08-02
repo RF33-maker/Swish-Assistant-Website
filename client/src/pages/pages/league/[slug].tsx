@@ -74,6 +74,8 @@ import LeagueChatbot from "@/components/LeagueChatbot";
 
     useEffect(() => {
       const fetchLeague = async () => {
+        if (!currentUser) return; // Wait for user to be loaded
+        
         const { data, error } = await supabase
           .from("leagues")
           .select("*")
@@ -142,7 +144,9 @@ import LeagueChatbot from "@/components/LeagueChatbot";
         setLeague(data);
       };
 
-      fetchLeague();
+      if (currentUser) {
+        fetchLeague();
+      }
     }, [slug, currentUser]);
 
     const handleSearch = () => {
@@ -371,7 +375,6 @@ import LeagueChatbot from "@/components/LeagueChatbot";
             </div>
             
             {/* Banner Upload Button for League Owner */}
-            {console.log('Rendering banner section. isOwner:', isOwner, 'currentUser:', currentUser?.id, 'league owner:', league?.user_id)}
             {isOwner && (
               <div className="absolute top-4 right-4">
                 <input
