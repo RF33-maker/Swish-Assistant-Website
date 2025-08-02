@@ -31,6 +31,13 @@ A professional React and Tailwind CSS website with login functionality and an in
 - Responsive design with mobile support
 
 ## Recent Changes  
+- **2025-02-02**: Implemented comprehensive Team Profiles section replacing Overview tab in league pages
+  - Replaced "Overview" navigation tab with "Teams" tab for better content organization
+  - Created detailed team profile cards showing team logos (placeholder), descriptions, league participation, recent game results, top performers, and roster previews
+  - Added team data aggregation from player statistics including games played, average team points, roster management with player averages
+  - Built responsive team cards with gradient backgrounds, team info headers, and detailed statistics breakdown
+  - Included "View Full Profile" buttons for future individual team page navigation
+  - Enhanced league page structure to focus on team-centric information rather than general league leaders
 - **2025-02-02**: Created dedicated Coaches Hub with integrated chatbot and performance analytics
   - Built new `/coaches-hub` route with authentication-protected access for league owners
   - Moved Team Performance Trends visualizer from public league pages to coaches-only section
