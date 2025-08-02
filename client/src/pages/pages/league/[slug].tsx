@@ -80,9 +80,14 @@ import LeagueChatbot from "@/components/LeagueChatbot";
           .eq("slug", slug)
           .single();
         console.log("Resolved league from slug:", slug, "→ ID:", data?.league_id);
+        console.log("League data:", data);
+        console.log("Current user:", currentUser);
 
         if (data) {
-          setIsOwner(currentUser?.id === data.user_id);
+          setLeague(data);
+          const ownerStatus = currentUser?.id === data.user_id;
+          setIsOwner(ownerStatus);
+          console.log("Is owner?", ownerStatus, "User ID:", currentUser?.id, "League owner ID:", data.user_id);
         }
 
         if (data?.league_id) {
@@ -358,12 +363,16 @@ import LeagueChatbot from "@/components/LeagueChatbot";
             </div>
             
             {/* Banner Upload Button for League Owner */}
+            {console.log('Rendering banner section. isOwner:', isOwner, 'currentUser:', currentUser?.id, 'league owner:', league?.user_id)}
             {isOwner && (
               <div className="absolute top-4 right-4">
                 <input
                   type="file"
                   accept="image/*"
-                  onChange={handleBannerUpload}
+                  onChange={(e) => {
+                    console.log('File input changed:', e.target.files?.[0]);
+                    handleBannerUpload(e);
+                  }}
                   className="hidden"
                   id="banner-upload"
                   disabled={uploadingBanner}
@@ -373,6 +382,7 @@ import LeagueChatbot from "@/components/LeagueChatbot";
                   className={`inline-flex items-center gap-2 px-4 py-2 bg-white/90 hover:bg-white text-slate-700 text-sm font-medium rounded-lg cursor-pointer transition-colors ${
                     uploadingBanner ? 'opacity-50 cursor-not-allowed' : ''
                   }`}
+                  onClick={() => console.log('Label clicked for banner upload')}
                 >
                   {uploadingBanner ? (
                     <>
@@ -390,6 +400,13 @@ import LeagueChatbot from "@/components/LeagueChatbot";
                 </label>
               </div>
             )}
+            
+            {/* Debug info for ownership */}
+            <div className="absolute top-4 left-4 text-xs text-white bg-black/50 p-2 rounded">
+              User: {currentUser?.id ? currentUser.id.substring(0, 8) + '...' : 'Not logged in'}<br/>
+              Owner: {league?.user_id ? league.user_id.substring(0, 8) + '...' : 'No owner'}<br/>
+              Is Owner: {isOwner ? 'Yes' : 'No'}
+            </div>
           </div>
         </section>
 
