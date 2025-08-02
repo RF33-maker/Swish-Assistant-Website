@@ -45,11 +45,6 @@ export default function TeamsList() {
           leagues!inner(name)
         `);
 
-      if (!teamsData || teamsData.length === 0) {
-        console.log('No teams data found');
-        return;
-      }
-
       if (error) {
         console.error('Error fetching teams:', error);
         return;
@@ -58,13 +53,13 @@ export default function TeamsList() {
       // Process teams data
       const teamsMap = new Map();
       
-      teamsData.forEach(stat => {
+      teamsData?.forEach(stat => {
         const teamKey = `${stat.team}-${stat.league_id}`;
         if (!teamsMap.has(teamKey)) {
           teamsMap.set(teamKey, {
             name: stat.team,
             league_id: stat.league_id,
-            league_name: stat.leagues?.[0]?.name || 'Unknown League',
+            league_name: stat.leagues?.name,
             players: new Set(),
             total_points: 0,
             games: 0
@@ -72,7 +67,7 @@ export default function TeamsList() {
         }
         
         const team = teamsMap.get(teamKey);
-        team.players.add(stat.player_id || stat.name || 'Unknown Player');
+        team.players.add(stat.name || 'Unknown Player');
         team.total_points += stat.points || 0;
         team.games += 1;
       });

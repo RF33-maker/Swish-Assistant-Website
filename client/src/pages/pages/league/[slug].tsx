@@ -39,9 +39,6 @@ import LeagueChatbot from "@/components/LeagueChatbot";
   const [instagramUrl, setInstagramUrl] = useState("");
   const [isEditingInstagram, setIsEditingInstagram] = useState(false);
   const [updatingInstagram, setUpdatingInstagram] = useState(false);
-  const [activeTab, setActiveTab] = useState("overview");
-  const [teams, setTeams] = useState<any[]>([]);
-  const [selectedTeam, setSelectedTeam] = useState<any>(null);
     
 
 
@@ -107,8 +104,6 @@ import LeagueChatbot from "@/components/LeagueChatbot";
         }
 
         if (data?.league_id) {
-          fetchTeamData(data.league_id);
-          
           const fetchTopStats = async () => {
             const { data: scorerData } = await supabase
               .from("player_stats")
@@ -165,100 +160,6 @@ import LeagueChatbot from "@/components/LeagueChatbot";
 
       fetchLeague();
     }, [slug]);
-
-    // Fetch team data for the league
-    const fetchTeamData = async (leagueId: string) => {
-      try {
-        const { data: teamsData, error } = await supabase
-          .from('player_stats')
-          .select(`
-            team,
-            league_id,
-            name,
-            points,
-            rebounds_total,
-            assists,
-            game_date
-          `)
-          .eq('league_id', leagueId);
-
-        if (error) {
-          console.error('Error fetching teams:', error);
-          return;
-        }
-
-        // Process teams data
-        const teamsMap = new Map();
-        
-        teamsData?.forEach(stat => {
-          const teamKey = stat.team;
-          if (!teamsMap.has(teamKey)) {
-            teamsMap.set(teamKey, {
-              name: stat.team,
-              league_id: stat.league_id,
-              players: new Map(),
-              total_points: 0,
-              games: new Set()
-            });
-          }
-          
-          const team = teamsMap.get(teamKey);
-          
-          // Track unique players
-          const playerKey = stat.name;
-          if (!team.players.has(playerKey)) {
-            team.players.set(playerKey, {
-              name: stat.name,
-              total_points: 0,
-              total_rebounds: 0,
-              total_assists: 0,
-              games_played: 0
-            });
-          }
-          
-          const player = team.players.get(playerKey);
-          player.total_points += stat.points || 0;
-          player.total_rebounds += stat.rebounds_total || 0;
-          player.total_assists += stat.assists || 0;
-          player.games_played += 1;
-          
-          // Track team totals
-          team.total_points += stat.points || 0;
-          team.games.add(stat.game_date);
-        });
-
-        // Convert to array and calculate averages
-        const teamsArray = Array.from(teamsMap.values()).map(team => {
-          const playersArray = Array.from(team.players.values()).map(player => ({
-            ...player,
-            avg_points: player.games_played > 0 ? Math.round((player.total_points / player.games_played) * 10) / 10 : 0,
-            avg_rebounds: player.games_played > 0 ? Math.round((player.total_rebounds / player.games_played) * 10) / 10 : 0,
-            avg_assists: player.games_played > 0 ? Math.round((player.total_assists / player.games_played) * 10) / 10 : 0
-          }));
-
-          // Find top player
-          const topPlayer = playersArray.length > 0 
-            ? playersArray.reduce((prev, current) => (prev.avg_points > current.avg_points) ? prev : current)
-            : null;
-
-          return {
-            name: team.name,
-            league_id: team.league_id,
-            player_count: playersArray.length,
-            avg_points: team.games.size > 0 ? Math.round((team.total_points / team.games.size) * 10) / 10 : 0,
-            games_played: team.games.size,
-            roster: playersArray.sort((a, b) => b.avg_points - a.avg_points),
-            top_player: topPlayer
-          };
-        });
-
-        // Sort by avg points
-        teamsArray.sort((a, b) => b.avg_points - a.avg_points);
-        setTeams(teamsArray);
-      } catch (error) {
-        console.error('Error processing teams:', error);
-      }
-    };
 
     const handleSearch = () => {
       if (search.trim()) {
@@ -568,27 +469,7 @@ import LeagueChatbot from "@/components/LeagueChatbot";
           </div>
 
           <div className="flex gap-6 text-sm font-medium text-slate-600">
-            <a 
-              href="#" 
-              className={`hover:text-orange-500 cursor-pointer ${activeTab === 'overview' ? 'text-orange-500 font-semibold' : ''}`}
-              onClick={(e) => { e.preventDefault(); setActiveTab('overview'); }}
-            >
-              Overview
-            </a>
-            <a 
-              href="#" 
-              className={`hover:text-orange-500 cursor-pointer ${activeTab === 'teams' ? 'text-orange-500 font-semibold' : ''}`}
-              onClick={(e) => { e.preventDefault(); setActiveTab('teams'); }}
-            >
-              Teams
-            </a>
-            <a 
-              href="#" 
-              className={`hover:text-orange-500 cursor-pointer ${activeTab === 'standings' ? 'text-orange-500 font-semibold' : ''}`}
-              onClick={(e) => { e.preventDefault(); setActiveTab('standings'); }}
-            >
-              Standings
-            </a>
+            <a href="#" className="hover:text-orange-500">Overview</a>
             <a href="#" className="hover:text-orange-500">Stats</a>
             <a 
               href="#" 
@@ -671,7 +552,6 @@ import LeagueChatbot from "@/components/LeagueChatbot";
                 <GameResultsCarousel 
                   leagueId={league.league_id} 
                   onGameClick={handleGameClick}
-                  onTeamClick={(teamName) => setSelectedTeam(teams.find(t => t.name === teamName))}
                 />
               </div>
             </div>
@@ -680,603 +560,9 @@ import LeagueChatbot from "@/components/LeagueChatbot";
 
         <main className="max-w-7xl mx-auto px-6 py-10 grid grid-cols-1 md:grid-cols-3 gap-8">
           <section className="md:col-span-2 space-y-6">
-            
-            {/* Overview Tab Content */}
-            {activeTab === 'overview' && (
-              <>
-                {/* League Leaders */}
-                <section id="stats" className="bg-white rounded-xl shadow p-6">
-                  <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-lg font-semibold text-slate-800">League Leaders</h2>
-                    <button
-                      onClick={() => navigate(`/league-leaders/${slug}`)}
-                      className="text-sm text-orange-500 hover:text-orange-600 font-medium hover:underline"
-                    >
-                      View All Leaders →
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                    {([
-                      { title: "Top Scorers", list: topScorers, label: "PPG", key: "avg" },
-                      { title: "Top Rebounders", list: topRebounders, label: "RPG", key: "avg" },
-                      { title: "Top Playmakers", list: topAssistsList, label: "APG", key: "avg" },
-                    ] as const).map(({ title, list, label, key }) => (
-                      <div key={title} className="bg-gray-50 rounded-lg p-4 shadow-inner">
-                        <h3 className="text-sm font-semibold text-slate-700 mb-3 text-center">{title}</h3>
-                        <ul className="space-y-1 text-sm text-slate-800">
-                          {Array.isArray(list) &&
-                            list.map((p, i) => (
-                              <li key={`${title}-${p.name}-${i}`} className="flex justify-between">
-                                <span 
-                                  className="cursor-pointer hover:text-orange-600 transition"
-                                  onClick={() => navigate(`/player/${p.name}`)}
-                                >
-                                  {p.name}
-                                </span>
-                                <span className="font-medium text-orange-500">
-                                  {p[key]} {label}
-                                </span>
-                              </li>
-                            ))}
-                        </ul>
-                      </div>
-                    ))}
-                  </div>
-                </section>
 
-                {/* League Standings */}
-                <div className="bg-white rounded-xl shadow p-6">
-                  <h2 className="text-lg font-semibold text-slate-800 mb-4">League Standings</h2>
-                  {standings.length > 0 ? (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-gray-200">
-                            <th className="text-left py-3 px-2 font-semibold text-slate-700">#</th>
-                            <th className="text-left py-3 px-2 font-semibold text-slate-700">Team</th>
-                            <th className="text-center py-3 px-2 font-semibold text-slate-700">GP</th>
-                            <th className="text-right py-3 px-2 font-semibold text-slate-700">Total PTS</th>
-                            <th className="text-right py-3 px-2 font-semibold text-slate-700">Avg PTS</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {standings.map((team, index) => (
-                            <tr 
-                              key={team.team} 
-                              className={`border-b border-gray-100 hover:bg-orange-50 transition-colors cursor-pointer ${
-                                index < 3 ? 'bg-green-50' : index >= standings.length - 2 ? 'bg-red-50' : ''
-                              }`}
-                              onClick={() => setSelectedTeam(teams.find(t => t.name === team.team))}
-                            >
-                              <td className="py-3 px-2 font-medium text-slate-600">{index + 1}</td>
-                              <td className="py-3 px-2 font-medium text-slate-800 hover:text-orange-600 transition">
-                                {team.team}
-                              </td>
-                              <td className="py-3 px-2 text-center text-slate-600">{team.games}</td>
-                              <td className="py-3 px-2 text-right text-slate-600">{team.pointsFor}</td>
-                              <td className="py-3 px-2 text-right font-medium text-orange-600">{team.avgPoints}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      <div className="mt-4 text-xs text-slate-500">
-                        <div className="flex gap-6">
-                          <span>GP = Games Played</span>
-                          <span>Total PTS = Total Points Scored</span>
-                          <span>Avg PTS = Average Points Per Game</span>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-center py-8 text-gray-500">
-                      <p className="text-sm">No standings available</p>
-                      <p className="text-xs mt-1">Standings will appear once games are played</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Player Stats Explorer */}
-                <div className="bg-white rounded-xl shadow p-6">
-                  <h2 className="text-lg font-semibold text-slate-800">Player Stat Explorer</h2>
-
-                  <input
-                    type="text"
-                    placeholder="Search players..."
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded mb-4"
-                    value={playerSearch}
-                    onChange={(e) => setPlayerSearch(e.target.value)}
-                  />
-
-                  {playerStats.length > 0 ? (
-                    <div>
-                      {/* Sorting Controls */}
-                      <div className="flex gap-4 mb-3 items-center">
-                        <label className="text-sm text-slate-700 font-medium">
-                          Sort by:
-                          <select
-                            className="ml-2 border border-orange-300 text-orange-600 bg-orange-50 px-2 py-1 rounded shadow-sm hover:bg-orange-100 focus:outline-none focus:ring-2 focus:ring-orange-300"
-                            value={sortField}
-                            onChange={(e) => setSortField(e.target.value)}
-                          >
-                            <option value="points">Points</option>
-                            <option value="rebounds_total">Rebounds</option>
-                            <option value="assists">Assists</option>
-                          </select>
-                        </label>
-
-                        <button
-                          className="flex items-center gap-1 text-sm text-slate-600 hover:text-orange-600 transition"
-                          onClick={() =>
-                            setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"))
-                          }
-                        >
-                          {sortOrder === "asc" ? (
-                            <span>
-                              ⬆️ <span className="underline">Ascending</span>
-                            </span>
-                          ) : (
-                            <span>
-                              ⬇️ <span className="underline">Descending</span>
-                            </span>
-                          )}
-                        </button>
-                      </div>
-
-                      {/* Stats Table */}
-                      <table className="mt-4 w-full text-sm text-left text-slate-700">
-                        <thead>
-                          <tr>
-                            <th className="px-2 py-1">Name</th>
-                            <th className="px-2 py-1">PTS</th>
-                            <th className="px-2 py-1">REB</th>
-                            <th className="px-2 py-1">AST</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {[...playerStats]
-                            .filter((p) =>
-                              p.name.toLowerCase().includes(playerSearch.toLowerCase())
-                            )
-                            .sort((a, b) => {
-                              const aVal = a[sortField] ?? 0;
-                              const bVal = b[sortField] ?? 0;
-                              return sortOrder === "asc" ? aVal - bVal : bVal - aVal;
-                            })
-                            .map((p, i) => {
-                              const uniqueKey = `player-${p.id || p.name}-${p.game_date || 'no-date'}-${i}`;
-                              return (
-                                <React.Fragment key={uniqueKey}>
-                                  <tr
-                                    className="border-t cursor-pointer hover:bg-orange-50"
-                                    onClick={() =>
-                                      setExpandedPlayer(expandedPlayer === i ? null : i)
-                                    }
-                                  >
-                                    <td className="px-2 py-1 hover:text-orange-600 transition cursor-pointer">
-                                      {p.name}
-                                    </td>
-                                    <td className="px-2 py-1">{p.points}</td>
-                                    <td className="px-2 py-1">{p.rebounds_total}</td>
-                                    <td className="px-2 py-1">{p.assists}</td>
-                                  </tr>
-
-                                  {expandedPlayer === i && (
-                                    <tr>
-                                      <td colSpan={4}>
-                                        <GameSummaryRow
-                                          player={{ name: p.name }}
-                                          game={{
-                                            id: p.id,
-                                            game_date: p.game_date,
-                                            team: p.team,
-                                            opponent: p.opponent,
-                                            league_id: league.id,
-                                          }}
-                                        />
-                                      </td>
-                                    </tr>
-                                  )}
-                                </React.Fragment>
-                              );
-                            })}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-slate-600 mt-2">No player data available.</p>
-                  )}
-                </div>
-              </>
-            )}
-
-            {/* Teams Tab Content */}
-            {activeTab === 'teams' && (
-              <>
-                {/* Team Profiles Section */}
-                <div className="bg-white rounded-xl shadow p-6">
-                  <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-lg font-semibold text-slate-800">Team Profiles</h2>
-                    <span className="text-sm text-slate-600">{teams.length} teams</span>
-                  </div>
-                  
-                  {teams.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {teams.map((team, index) => (
-                        <div 
-                          key={team.name} 
-                          className="border border-orange-200 rounded-lg p-4 hover:shadow-lg transition cursor-pointer hover:border-orange-300"
-                          onClick={() => setSelectedTeam(team)}
-                        >
-                        >
-                          <div className="flex items-start justify-between mb-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-12 h-12 bg-gradient-to-br from-orange-100 to-orange-200 rounded-lg flex items-center justify-center">
-                                <span className="text-orange-600 font-bold text-lg">
-                                  {team.name.charAt(0).toUpperCase()}
-                                </span>
-                              </div>
-                              <div>
-                                <h3 className="font-bold text-slate-800 text-lg hover:text-orange-600 transition">
-                                  {team.name}
-                                </h3>
-                                <p className="text-sm text-slate-600">#{index + 1} in league</p>
-                              </div>
-                            </div>
-                          </div>
-                          
-                          <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                              <span className="text-slate-600">Players:</span>
-                              <span className="ml-2 font-semibold text-slate-800">{team.player_count}</span>
-                            </div>
-                            <div>
-                              <span className="text-slate-600">Avg Points:</span>
-                              <span className="ml-2 font-semibold text-orange-600">{team.avg_points}</span>
-                            </div>
-                            <div>
-                              <span className="text-slate-600">Games:</span>
-                              <span className="ml-2 font-semibold text-slate-800">{team.games_played}</span>
-                            </div>
-                            <div>
-                              <span className="text-slate-600">Top Player:</span>
-                              <span className="ml-2 font-semibold text-orange-600">
-                                {team.top_player?.name || 'N/A'}
-                              </span>
-                            </div>
-                          </div>
-                          
-                          <div className="mt-4 pt-4 border-t border-gray-200">
-                            <div className="flex items-center gap-2 text-orange-600">
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                              </svg>
-                              <span className="text-sm font-medium">View Team Profile</span>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-12">
-                      <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                        </svg>
-                      </div>
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">No teams found</h3>
-                      <p className="text-gray-600">Teams will appear here once games are played</p>
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-
-            {/* Standings Tab Content */}
-            {activeTab === 'standings' && (
-              <>
-                {/* League Leaders */}
-                <div className="bg-white rounded-xl shadow p-4">
-                  <div className="flex justify-between items-center mb-3">
-                    <h2 className="text-lg font-semibold text-slate-800">League Leaders</h2>
-                    <button
-                      onClick={() => navigate(`/league-leaders/${slug}`)}
-                      className="text-sm text-orange-500 hover:text-orange-600 font-medium hover:underline"
-                    >
-                      View All Leaders →
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                    {([
-                      { title: "Top Scorers", list: topScorers, label: "PPG", key: "avg" },
-                      { title: "Top Rebounders", list: topRebounders, label: "RPG", key: "avg" },
-                      { title: "Top Playmakers", list: topAssistsList, label: "APG", key: "avg" },
-                    ] as const).map(({ title, list, label, key }) => (
-                      <div key={title} className="bg-gray-50 rounded-lg p-4 shadow-inner">
-                        <h3 className="text-sm font-semibold text-slate-700 mb-3 text-center">{title}</h3>
-                        <ul className="space-y-1 text-sm text-slate-800">
-                          {Array.isArray(list) &&
-                            list.map((p, i) => (
-                              <li key={`${title}-${p.name}-${i}`} className="flex justify-between">
-                                <span 
-                                  className="cursor-pointer hover:text-orange-600 transition"
-                                  onClick={() => navigate(`/player/${p.name}`)}
-                                >
-                                  {p.name}
-                                </span>
-                                <span className="font-medium text-orange-500">
-                                  {p[key]} {label}
-                                </span>
-                              </li>
-                            ))}
-                        </ul>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* League Standings */}
-                <div className="bg-white rounded-xl shadow p-6">
-                  <h2 className="text-lg font-semibold text-slate-800 mb-4">League Standings</h2>
-                  {standings.length > 0 ? (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-gray-200">
-                            <th className="text-left py-3 px-2 font-semibold text-slate-700">#</th>
-                            <th className="text-left py-3 px-2 font-semibold text-slate-700">Team</th>
-                            <th className="text-center py-3 px-2 font-semibold text-slate-700">GP</th>
-                            <th className="text-right py-3 px-2 font-semibold text-slate-700">Total PTS</th>
-                            <th className="text-right py-3 px-2 font-semibold text-slate-700">Avg PTS</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {standings.map((team, index) => (
-                            <tr 
-                              key={team.team} 
-                              className={`border-b border-gray-100 hover:bg-orange-50 transition-colors cursor-pointer ${
-                                index < 3 ? 'bg-green-50' : index >= standings.length - 2 ? 'bg-red-50' : ''
-                              }`}
-                              onClick={() => setSelectedTeam(teams.find(t => t.name === team.team))}
-                            >
-                              <td className="py-3 px-2 font-medium text-slate-600">{index + 1}</td>
-                              <td className="py-3 px-2 font-medium text-slate-800 hover:text-orange-600 transition cursor-pointer">
-                                {team.team}
-                              </td>
-                              <td className="py-3 px-2 text-center text-slate-600">{team.games}</td>
-                              <td className="py-3 px-2 text-right text-slate-600">{team.pointsFor}</td>
-                              <td className="py-3 px-2 text-right font-medium text-orange-600">{team.avgPoints}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                      <div className="mt-4 text-xs text-slate-500">
-                        <div className="flex gap-6">
-                          <span>GP = Games Played</span>
-                          <span>Total PTS = Total Points Scored</span>
-                          <span>Avg PTS = Average Points Per Game</span>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-center py-8 text-gray-500">
-                      <p className="text-sm">No standings available</p>
-                      <p className="text-xs mt-1">Standings will appear once games are played</p>
-                    </div>
-                  )}
-                </div>
-
-                <div className="bg-white rounded-xl shadow p-6">
-                  <h2 className="text-lg font-semibold text-slate-800">Player Stat Explorer</h2>
-
-                  <input
-                    type="text"
-                    placeholder="Search players..."
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded mb-4"
-                    value={playerSearch}
-                    onChange={(e) => setPlayerSearch(e.target.value)}
-                  />
-
-                  {playerStats.length > 0 ? (
-                    <div>
-                      {/* Sorting Controls */}
-                      <div className="flex gap-4 mb-3 items-center">
-                        <label className="text-sm text-slate-700 font-medium">
-                          Sort by:
-                          <select
-                            className="ml-2 border border-orange-300 text-orange-600 bg-orange-50 px-2 py-1 rounded shadow-sm hover:bg-orange-100 focus:outline-none focus:ring-2 focus:ring-orange-300"
-                            value={sortField}
-                            onChange={(e) => setSortField(e.target.value)}
-                          >
-                            <option value="points">Points</option>
-                            <option value="rebounds_total">Rebounds</option>
-                            <option value="assists">Assists</option>
-                          </select>
-                        </label>
-
-                        <button
-                          className="flex items-center gap-1 text-sm text-slate-600 hover:text-orange-600 transition"
-                          onClick={() =>
-                            setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"))
-                          }
-                        >
-                          {sortOrder === "asc" ? (
-                            <span>
-                              ⬆️ <span className="underline">Ascending</span>
-                            </span>
-                          ) : (
-                            <span>
-                              ⬇️ <span className="underline">Descending</span>
-                            </span>
-                          )}
-                        </button>
-                      </div>
-
-                      {/* Stats Table */}
-                      <table className="mt-4 w-full text-sm text-left text-slate-700">
-                        <thead>
-                          <tr>
-                            <th className="px-2 py-1">Name</th>
-                            <th className="px-2 py-1">PTS</th>
-                            <th className="px-2 py-1">REB</th>
-                            <th className="px-2 py-1">AST</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {sortedPlayerStats
-                            .filter((p) =>
-                              p.name.toLowerCase().includes(playerSearch.toLowerCase())
-                            )
-                            .slice(0, 10)
-                            .map((p, i) => {
-                              return (
-                                <React.Fragment key={`${p.name}-${p.game_date}-${i}`}>
-                                  <tr
-                                    className="cursor-pointer hover:bg-orange-50 transition"
-                                    onClick={() =>
-                                      setExpandedPlayer(expandedPlayer === i ? null : i)
-                                    }
-                                  >
-                                    <td className="px-2 py-1 font-medium text-orange-600 cursor-pointer hover:underline">
-                                      {p.name}
-                                    </td>
-                                    <td className="px-2 py-1">{p.points}</td>
-                                    <td className="px-2 py-1">{p.rebounds_total}</td>
-                                    <td className="px-2 py-1">{p.assists}</td>
-                                  </tr>
-
-                                  {expandedPlayer === i && (
-                                    <tr>
-                                      <td colSpan={4}>
-                                        <GameSummaryRow
-                                          player={{ name: p.name }}
-                                          game={{
-                                            id: p.id,
-                                            game_date: p.game_date,
-                                            team: p.team,
-                                            opponent: p.opponent,
-                                            league_id: league.id,
-                                          }}
-                                        />
-
-                                      </td>
-                                    </tr>
-                                  )}
-                                </React.Fragment>
-                              );
-                            })}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-slate-600 mt-2">No player data available.</p>
-                  )}
-
-                </div>
-              </>
-            )}
-          </section>
-        </main>
-
-        {/* Team Profile Modal/Sidebar */}
-          {selectedTeam && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                <div className="p-6">
-                  {/* Team Header */}
-                  <div className="flex items-start justify-between mb-6">
-                    <div className="flex items-center gap-4">
-                      <div className="w-16 h-16 bg-gradient-to-br from-orange-100 to-orange-200 rounded-xl flex items-center justify-center">
-                        <span className="text-orange-600 font-bold text-2xl">
-                          {selectedTeam.name.charAt(0).toUpperCase()}
-                        </span>
-                      </div>
-                      <div>
-                        <h2 className="text-2xl font-bold text-slate-800">{selectedTeam.name}</h2>
-                        <p className="text-slate-600">{league?.name}</p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setSelectedTeam(null)}
-                      className="text-slate-400 hover:text-slate-600 transition"
-                    >
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-
-                  {/* Team Stats */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                    <div className="bg-orange-50 rounded-lg p-4 text-center">
-                      <div className="text-2xl font-bold text-orange-600">{selectedTeam.player_count}</div>
-                      <div className="text-sm text-slate-600">Players</div>
-                    </div>
-                    <div className="bg-orange-50 rounded-lg p-4 text-center">
-                      <div className="text-2xl font-bold text-orange-600">{selectedTeam.avg_points}</div>
-                      <div className="text-sm text-slate-600">Avg Points</div>
-                    </div>
-                    <div className="bg-orange-50 rounded-lg p-4 text-center">
-                      <div className="text-2xl font-bold text-orange-600">{selectedTeam.games_played}</div>
-                      <div className="text-sm text-slate-600">Games</div>
-                    </div>
-                    <div className="bg-orange-50 rounded-lg p-4 text-center">
-                      <div className="text-2xl font-bold text-orange-600">
-                        #{teams.findIndex(t => t.name === selectedTeam.name) + 1}
-                      </div>
-                      <div className="text-sm text-slate-600">Rank</div>
-                    </div>
-                  </div>
-
-                  {/* Team Roster */}
-                  <div>
-                    <h3 className="text-lg font-semibold text-slate-800 mb-4">Team Roster</h3>
-                    {selectedTeam.roster && selectedTeam.roster.length > 0 ? (
-                      <div className="space-y-3">
-                        {selectedTeam.roster.map((player, index) => (
-                          <div 
-                            key={player.name} 
-                            className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-orange-50 transition cursor-pointer"
-                            onClick={() => navigate(`/player/${player.name}`)}
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 bg-orange-200 rounded-full flex items-center justify-center">
-                                <span className="text-orange-700 font-semibold text-sm">
-                                  {index + 1}
-                                </span>
-                              </div>
-                              <div>
-                                <div className="font-medium text-slate-800 hover:text-orange-600 transition">
-                                  {player.name}
-                                </div>
-                                <div className="text-xs text-slate-500">
-                                  {player.games_played} games played
-                                </div>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="font-semibold text-slate-800">{player.avg_points} PPG</div>
-                              <div className="text-xs text-slate-500">
-                                {player.avg_rebounds} RPG, {player.avg_assists} APG
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-8 text-slate-500">
-                        <p>No roster information available</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-            {/* League Leaders */}
-            <div className="bg-white rounded-xl shadow p-4">
-              <div className="flex justify-between items-center mb-3">
+            <section id="stats" className="bg-white rounded-xl shadow p-6">
+              <div className="flex justify-between items-center mb-6">
                 <h2 className="text-lg font-semibold text-slate-800">League Leaders</h2>
                 <button
                   onClick={() => navigate(`/league-leaders/${slug}`)}
@@ -1307,7 +593,7 @@ import LeagueChatbot from "@/components/LeagueChatbot";
                   </div>
                 ))}
               </div>
-            </div>
+            </section>
 
             {/* League Standings */}
             <div className="bg-white rounded-xl shadow p-6">
@@ -1328,15 +614,12 @@ import LeagueChatbot from "@/components/LeagueChatbot";
                       {standings.map((team, index) => (
                         <tr 
                           key={team.team} 
-                          className={`border-b border-gray-100 hover:bg-orange-50 transition-colors cursor-pointer ${
+                          className={`border-b border-gray-100 hover:bg-orange-50 transition-colors ${
                             index < 3 ? 'bg-green-50' : index >= standings.length - 2 ? 'bg-red-50' : ''
                           }`}
-                          onClick={() => setSelectedTeam(teams.find(t => t.name === team.team))}
                         >
                           <td className="py-3 px-2 font-medium text-slate-600">{index + 1}</td>
-                          <td className="py-3 px-2 font-medium text-slate-800 hover:text-orange-600 transition cursor-pointer">
-                            {team.team}
-                          </td>
+                          <td className="py-3 px-2 font-medium text-slate-800">{team.team}</td>
                           <td className="py-3 px-2 text-center text-slate-600">{team.games}</td>
                           <td className="py-3 px-2 text-right text-slate-600">{team.pointsFor}</td>
                           <td className="py-3 px-2 text-right font-medium text-orange-600">{team.avgPoints}</td>
@@ -1471,8 +754,7 @@ import LeagueChatbot from "@/components/LeagueChatbot";
               )}
 
             </div>
-              </>
-            )}
+
           </section>
 
           <aside className="space-y-6">
@@ -1582,16 +864,15 @@ import LeagueChatbot from "@/components/LeagueChatbot";
             </div>
           </aside>
 
+
+        </main>
+
         {/* Game Detail Modal */}
         {selectedGameId && (
           <GameDetailModal
             gameId={selectedGameId}
             isOpen={isGameModalOpen}
             onClose={handleCloseGameModal}
-            onTeamClick={(teamName) => {
-              handleCloseGameModal();
-              setSelectedTeam(teams.find(t => t.name === teamName));
-            }}
           />
         )}
       </div>
