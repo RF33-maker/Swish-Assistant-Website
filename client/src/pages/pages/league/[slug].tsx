@@ -424,15 +424,22 @@ import LeagueChatbot from "@/components/LeagueChatbot";
           </div>
         </section>
 
+        {/* Horizontal Game Results Ticker */}
+        {league?.league_id && (
+          <section className="bg-gray-900 text-white py-4 overflow-hidden">
+            <div className="relative">
+              <div className="flex animate-scroll whitespace-nowrap">
+                <GameResultsCarousel 
+                  leagueId={league.league_id} 
+                  onGameClick={handleGameClick}
+                />
+              </div>
+            </div>
+          </section>
+        )}
+
         <main className="max-w-7xl mx-auto px-6 py-10 grid grid-cols-1 md:grid-cols-3 gap-8">
           <section className="md:col-span-2 space-y-6">
-            {/* Game Results Carousel */}
-            {league?.league_id && (
-              <GameResultsCarousel 
-                leagueId={league.league_id} 
-                onGameClick={handleGameClick}
-              />
-            )}
 
             <section id="stats" className="bg-white rounded-xl shadow p-6">
               <h2 className="text-lg font-semibold text-slate-800 mb-6">Top Performers</h2>

@@ -2,6 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Game Results Ticker Animation */
+@keyframes scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-scroll {
+  animation: scroll 30s linear infinite;
+}
+
 /* Custom animations for micro-interactions */
 @keyframes float {
   0%, 100% { transform: translateY(0px); }

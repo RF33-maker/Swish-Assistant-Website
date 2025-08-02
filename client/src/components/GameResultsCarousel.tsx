@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { ChevronLeft, ChevronRight, Calendar, Trophy, Users } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 interface GameResult {
@@ -7,15 +6,9 @@ interface GameResult {
   game_date: string;
   home_team: string;
   away_team: string;
-  home_score?: number;
-  away_score?: number;
-  top_performers: Array<{
-    name: string;
-    team: string;
-    points: number;
-    rebounds_total: number;
-    assists: number;
-  }>;
+  home_score: number;
+  away_score: number;
+  status: string;
 }
 
 interface GameResultsCarouselProps {
@@ -25,7 +18,6 @@ interface GameResultsCarouselProps {
 
 export default function GameResultsCarousel({ leagueId, onGameClick }: GameResultsCarouselProps) {
   const [games, setGames] = useState<GameResult[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -70,32 +62,21 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
             return acc;
           }, {});
 
-          // Get top performers (top 3 scorers in the game)
-          const topPerformers = game.players
-            .sort((a: any, b: any) => (b.points || 0) - (a.points || 0))
-            .slice(0, 3)
-            .map((player: any) => ({
-              name: player.name,
-              team: player.team,
-              points: player.points || 0,
-              rebounds_total: player.rebounds_total || 0,
-              assists: player.assists || 0,
-            }));
-
           const teams = Object.keys(teamScores);
+          const [homeTeam, awayTeam] = teams.length >= 2 ? teams : [game.home_team, game.away_team];
           
           return {
             game_id: game.game_id,
             game_date: game.game_date,
-            home_team: teams[0] || "Team A",
-            away_team: teams[1] || "Team B",
-            home_score: teamScores[teams[0]] || 0,
-            away_score: teamScores[teams[1]] || 0,
-            top_performers: topPerformers,
+            home_team: homeTeam,
+            away_team: awayTeam,
+            home_score: teamScores[homeTeam] || 0,
+            away_score: teamScores[awayTeam] || 0,
+            status: "FINAL"
           };
         });
 
-        setGames(processedGames.slice(0, 10)); // Show last 10 games
+        setGames(processedGames.slice(0, 10)); // Show recent 10 games
       } catch (error) {
         console.error("Error processing game results:", error);
       } finally {
@@ -108,121 +89,76 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
     }
   }, [leagueId]);
 
-  const nextGame = () => {
-    setCurrentIndex((prev) => (prev + 1) % games.length);
-  };
-
-  const prevGame = () => {
-    setCurrentIndex((prev) => (prev - 1 + games.length) % games.length);
-  };
-
   if (loading) {
     return (
-      <div className="bg-white rounded-xl shadow p-6">
-        <h2 className="text-lg font-semibold text-slate-800 mb-4">Recent Game Results</h2>
-        <div className="animate-pulse">
-          <div className="h-32 bg-gray-200 rounded-lg"></div>
-        </div>
+      <div className="flex gap-4 animate-pulse">
+        {[1,2,3,4,5].map(i => (
+          <div key={i} className="bg-gray-800 rounded-lg h-16 w-64 flex-shrink-0"></div>
+        ))}
       </div>
     );
   }
 
   if (games.length === 0) {
     return (
-      <div className="bg-white rounded-xl shadow p-6">
-        <h2 className="text-lg font-semibold text-slate-800 mb-4">Recent Game Results</h2>
-        <p className="text-sm text-slate-600">No game results available.</p>
+      <div className="text-center text-white/70 py-4">
+        No recent game results available
       </div>
     );
   }
 
-  const currentGame = games[currentIndex];
+  // Format date for display
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric' 
+    }).toUpperCase();
+  };
+
+  // Get team abbreviation (first 3 letters)
+  const getTeamAbbr = (teamName: string) => {
+    return teamName.substring(0, 3).toUpperCase();
+  };
 
   return (
-    <div className="bg-white rounded-xl shadow p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-slate-800">Recent Game Results</h2>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={prevGame}
-            className="p-1 rounded-full hover:bg-orange-100 transition-colors"
-            disabled={games.length <= 1}
-          >
-            <ChevronLeft className="w-5 h-5 text-slate-600" />
-          </button>
-          <span className="text-sm text-slate-500">
-            {currentIndex + 1} / {games.length}
-          </span>
-          <button
-            onClick={nextGame}
-            className="p-1 rounded-full hover:bg-orange-100 transition-colors"
-            disabled={games.length <= 1}
-          >
-            <ChevronRight className="w-5 h-5 text-slate-600" />
-          </button>
-        </div>
-      </div>
-
-      <div 
-        className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-lg p-4 cursor-pointer hover:shadow-md transition-shadow border border-orange-200"
-        onClick={() => onGameClick(currentGame.game_id)}
-      >
-        {/* Game Header */}
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2 text-sm text-slate-600">
-            <Calendar className="w-4 h-4" />
-            {new Date(currentGame.game_date).toLocaleDateString()}
+    <div className="flex gap-4 min-w-max">
+      {/* Duplicate games for seamless loop */}
+      {[...games, ...games].map((game, index) => (
+        <div
+          key={`${game.game_id}-${index}`}
+          className="bg-gray-800 rounded-lg px-4 py-3 flex-shrink-0 w-64 cursor-pointer hover:bg-gray-700 transition-colors"
+          onClick={() => onGameClick(game.game_id)}
+        >
+          <div className="text-xs text-gray-400 text-center mb-1">
+            {formatDate(game.game_date)}
           </div>
-          <div className="text-xs text-orange-600 font-medium">
-            Click for details →
-          </div>
-        </div>
-
-        {/* Score Display */}
-        <div className="flex items-center justify-center mb-4">
-          <div className="text-center">
-            <div className="text-sm font-medium text-slate-700">{currentGame.home_team}</div>
-            <div className="text-2xl font-bold text-orange-600">{currentGame.home_score}</div>
-          </div>
-          <div className="mx-6 text-slate-400">VS</div>
-          <div className="text-center">
-            <div className="text-sm font-medium text-slate-700">{currentGame.away_team}</div>
-            <div className="text-2xl font-bold text-orange-600">{currentGame.away_score}</div>
-          </div>
-        </div>
-
-        {/* Top Performers */}
-        <div>
-          <div className="flex items-center gap-1 mb-2">
-            <Trophy className="w-4 h-4 text-orange-500" />
-            <span className="text-sm font-medium text-slate-700">Top Performers</span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            {currentGame.top_performers.map((player, index) => (
-              <div key={index} className="bg-white rounded-md p-2 text-xs">
-                <div className="font-medium text-slate-800">{player.name}</div>
-                <div className="text-slate-600">{player.team}</div>
-                <div className="text-orange-600 font-medium">
-                  {player.points}pts / {player.rebounds_total}reb / {player.assists}ast
-                </div>
+          <div className="flex items-center justify-between">
+            <div className="text-center">
+              <div className="text-white font-bold text-sm">
+                {getTeamAbbr(game.away_team)}
               </div>
-            ))}
+              <div className="text-2xl font-bold text-white">
+                {game.away_score}
+              </div>
+            </div>
+            <div className="text-gray-400 text-xs px-2">
+              VS
+            </div>
+            <div className="text-center">
+              <div className="text-white font-bold text-sm">
+                {getTeamAbbr(game.home_team)}
+              </div>
+              <div className="text-2xl font-bold text-white">
+                {game.home_score}
+              </div>
+            </div>
+          </div>
+          <div className="text-xs text-gray-400 text-center mt-1">
+            {game.status}
           </div>
         </div>
-      </div>
-
-      {/* Indicators */}
-      <div className="flex justify-center mt-4 gap-1">
-        {games.map((_, index) => (
-          <button
-            key={index}
-            onClick={() => setCurrentIndex(index)}
-            className={`w-2 h-2 rounded-full transition-colors ${
-              index === currentIndex ? "bg-orange-500" : "bg-gray-300"
-            }`}
-          />
-        ))}
-      </div>
+      ))}
     </div>
   );
 }
