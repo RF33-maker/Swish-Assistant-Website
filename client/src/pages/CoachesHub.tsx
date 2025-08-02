@@ -109,7 +109,7 @@ export default function CoachesHub() {
             <div className="flex items-center gap-3">
               <div className="p-2 bg-orange-100 rounded-lg">
                 <img 
-                  src="https://cdn-icons-png.flaticon.com/512/25/25694.png" 
+                  src="https://cdn-icons-png.flaticon.com/512/857/857418.png" 
                   alt="Swish Assistant" 
                   className="w-6 h-6"
                 />
@@ -308,7 +308,7 @@ export default function CoachesHub() {
               <div className="bg-gradient-to-r from-orange-50 to-yellow-50 border border-orange-200 rounded-lg p-6">
                 <div className="flex items-start gap-3">
                   <img 
-                    src="https://cdn-icons-png.flaticon.com/512/25/25694.png" 
+                    src="https://cdn-icons-png.flaticon.com/512/857/857418.png" 
                     alt="Coaching Tips" 
                     className="w-6 h-6 mt-1"
                   />
