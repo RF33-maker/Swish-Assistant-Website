@@ -236,6 +236,15 @@ import LeagueChatbot from "@/components/LeagueChatbot";
         
         console.log('Public URL:', publicUrl);
 
+        // First check if banner_url column exists by trying a simple select
+        const { data: checkData, error: checkError } = await supabase
+          .from('leagues')
+          .select('banner_url')
+          .eq('league_id', league.league_id)
+          .single();
+        
+        console.log('Column check result:', checkData, checkError);
+
         // Update league record with new banner URL
         const { data: updateData, error: updateError } = await supabase
           .from('leagues')
