@@ -470,21 +470,6 @@ import LeagueChatbot from "@/components/LeagueChatbot";
                           </li>
                         ))}
                     </ul>
-                    <div className="text-right pt-2">
-                      <button
-                        onClick={() => {
-                          const sortKey = sortMap[title as keyof typeof sortMap];
-                          if (sortKey) {
-                            setSortBy(sortKey);
-                            setSortOrder("desc");
-                            document.getElementById("player-stat-explorer")?.scrollIntoView({ behavior: "smooth" });
-                          }
-                        }}
-                        className="text-sm text-orange-500 hover:underline"
-                      >
-                        Full List →
-                      </button>
-                    </div>
                   </div>
                 ))}
               </div>
