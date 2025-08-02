@@ -194,64 +194,75 @@ import LeagueChatbot from "@/components/LeagueChatbot";
 
     const handleBannerUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
-      if (!file || !league?.league_id || !currentUser) return;
+      if (!file || !league?.league_id || !currentUser) {
+        console.error('Missing requirements:', { file: !!file, league_id: league?.league_id, user: !!currentUser });
+        return;
+      }
 
       setUploadingBanner(true);
       try {
+        console.log('Starting banner upload for league:', league.league_id);
+        
         // Upload file to Supabase storage
         const fileExt = file.name.split('.').pop();
         const fileName = `${league.league_id}_${Date.now()}.${fileExt}`;
         
+        console.log('Uploading file:', fileName);
         const { data, error: uploadError } = await supabase.storage
           .from('league-banners')
           .upload(fileName, file);
 
         if (uploadError) {
           console.error('Upload error:', uploadError);
-          alert('Failed to upload banner');
+          alert(`Failed to upload banner: ${uploadError.message}`);
           return;
         }
 
-        // Get public URL with cache-busting parameter
+        console.log('File uploaded successfully:', data);
+
+        // Get public URL without cache-busting for database storage
         const { data: { publicUrl } } = supabase.storage
           .from('league-banners')
           .getPublicUrl(fileName);
         
-        // Add cache-busting parameter to ensure immediate display
-        const publicUrlWithCacheBust = `${publicUrl}?t=${Date.now()}`;
+        console.log('Public URL:', publicUrl);
 
         // Update league record with new banner URL
         const { error: updateError } = await supabase
           .from('leagues')
-          .update({ banner_url: publicUrlWithCacheBust })
+          .update({ banner_url: publicUrl })
           .eq('league_id', league.league_id);
 
         if (updateError) {
-          console.error('Update error:', updateError);
-          alert('Failed to update banner');
+          console.error('Database update error:', updateError);
+          alert(`Failed to update banner in database: ${updateError.message}`);
           return;
         }
 
-        // Update local state and refetch to ensure persistence
-        setLeague({ ...league, banner_url: publicUrlWithCacheBust });
-        
+        console.log('Database updated successfully');
+
         // Force a refetch to ensure the banner persists
-        const { data: updatedLeague } = await supabase
+        const { data: updatedLeague, error: fetchError } = await supabase
           .from('leagues')
           .select('*')
           .eq('slug', slug)
           .single();
         
-        if (updatedLeague) {
+        if (fetchError) {
+          console.error('Refetch error:', fetchError);
+        } else {
+          console.log('Refetched league data:', updatedLeague);
           setLeague(updatedLeague);
         }
         
         alert('Banner updated successfully!');
       } catch (error) {
         console.error('Banner upload error:', error);
-        alert('Failed to upload banner');
+        alert(`Failed to upload banner: ${error.message}`);
       } finally {
         setUploadingBanner(false);
+        // Reset file input
+        event.target.value = '';
       }
     };
 
@@ -338,6 +349,12 @@ import LeagueChatbot from "@/components/LeagueChatbot";
               <p className="text-sm text-white/90 mt-1">
                 Organised by {league?.organiser_name || "BallParkSports"}
               </p>
+              {/* Debug: Show current banner URL */}
+              {league?.banner_url && (
+                <p className="text-xs text-white/70 mt-1">
+                  Banner: {league.banner_url.length > 50 ? league.banner_url.substring(0, 50) + '...' : league.banner_url}
+                </p>
+              )}
             </div>
             
             {/* Banner Upload Button for League Owner */}
