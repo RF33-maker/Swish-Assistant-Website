@@ -13,6 +13,7 @@ import LeagueLeadersPage from "./pages/pages/league-leaders/[slug]";
 import PlayerStatsPage from "./pages/pages/player/[id]";
 import PlayersListPage from "./pages/players-list";
 import PostLoginDashboard from "@/pages/post-login-dashboard"; // new dashboard page
+import CoachesHub from "@/pages/CoachesHub";
 import { AuthProvider } from "./hooks/use-auth";
 import { ProtectedRoute } from "./lib/protected-route";
 import ResetPassword from "./pages/reset-password";
@@ -35,7 +36,7 @@ function Router() {
 
       {/* Protected routes */}
       <ProtectedRoute path="/dashboard" component={PostLoginDashboard} />
-      <ProtectedRoute path="/coaches-hub" component={HomePage} />
+      <ProtectedRoute path="/coaches-hub" component={CoachesHub} />
       <ProtectedRoute path="/league-admin" component={LeagueAdminPage} />
       <ProtectedRoute path="/profile" component={ProfilePage} />
       <ProtectedRoute path="/settings" component={SettingsPage} />
