@@ -442,7 +442,15 @@ import LeagueChatbot from "@/components/LeagueChatbot";
           <section className="md:col-span-2 space-y-6">
 
             <section id="stats" className="bg-white rounded-xl shadow p-6">
-              <h2 className="text-lg font-semibold text-slate-800 mb-6">Top Performers</h2>
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-lg font-semibold text-slate-800">League Leaders</h2>
+                <button
+                  onClick={() => navigate(`/league-leaders/${slug}`)}
+                  className="text-sm text-orange-500 hover:text-orange-600 font-medium hover:underline"
+                >
+                  View All Leaders →
+                </button>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                 {([
                   { title: "Top Scorers", list: topScorers, label: "PPG", key: "avg" },

@@ -40,6 +40,11 @@ A professional React and Tailwind CSS website with login functionality and an in
   - Feature tested and confirmed working with proper storage permissions
   - Fixed Row Level Security policies to allow public league viewing while maintaining secure banner uploads
   - Resolved frontend code to fetch league data regardless of authentication status for public access
+- **2025-02-01**: Redesigned game results section with horizontal scrolling ticker
+  - Transformed game results carousel into sports-style horizontal ticker under league banner
+  - Added auto-scrolling animation with 30-second continuous loop for seamless viewing
+  - Styled with dark background and prominent team scores matching sports broadcast aesthetics
+  - Changed "Top Performers" section to "League Leaders" with direct navigation to leaders page
 - **2025-02-01**: Enhanced league page with carousel-style game results and team-filtered box scores
   - Replaced AI Game Summary section with interactive game results carousel
   - Created modern carousel component showing recent games with scores and top performers
