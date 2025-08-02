@@ -31,6 +31,13 @@ A professional React and Tailwind CSS website with login functionality and an in
 - Responsive design with mobile support
 
 ## Recent Changes  
+- **2025-02-02**: Created dedicated Coaches Hub with integrated chatbot and performance analytics
+  - Built new `/coaches-hub` route with authentication-protected access for league owners
+  - Moved Team Performance Trends visualizer from public league pages to coaches-only section
+  - Integrated LeagueChatbot for quick coaching insights and team performance questions
+  - Added league selection, quick stats cards, and coaching tips specifically for team management
+  - Created sidebar with coaching assistant chatbot and quick action links
+  - Positioned performance analytics as coaching tool rather than general league feature
 - **2025-02-02**: Added comprehensive Animated Team Performance Trend Visualizer feature
   - Interactive animated visualization showing team performance trends over time
   - Teams ranked by average points per game with visual trend indicators (up/down/stable)

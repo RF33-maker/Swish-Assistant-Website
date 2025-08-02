@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { supabase } from '@/lib/supabase';
 import TeamPerformanceTrends from '@/components/TeamPerformanceTrends';
-import { TrendingUp, BarChart3, Users, Target, Award, Eye } from 'lucide-react';
+import LeagueChatbot from '@/components/LeagueChatbot';
+import { TrendingUp, BarChart3, Users, Target, Award, Eye, MessageCircle } from 'lucide-react';
 import { Link } from 'wouter';
 
 export default function CoachesHub() {
@@ -130,139 +131,194 @@ export default function CoachesHub() {
             </Link>
           </div>
         ) : (
-          <div className="space-y-8">
-            {/* League Selector */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <Eye className="w-5 h-5 text-orange-600" />
-                <h2 className="text-lg font-semibold text-slate-800">League Overview</h2>
-              </div>
-              
-              {leagues.length > 1 ? (
-                <div className="flex items-center gap-4">
-                  <label className="text-sm font-medium text-slate-700">Select League:</label>
-                  <select
-                    value={selectedLeague?.league_id || ''}
-                    onChange={(e) => {
-                      const league = leagues.find(l => l.league_id === e.target.value);
-                      setSelectedLeague(league);
-                    }}
-                    className="border border-gray-300 rounded-md px-3 py-2 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                  >
-                    {leagues.map(league => (
-                      <option key={league.league_id} value={league.league_id}>
-                        {league.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ) : (
-                <div className="flex items-center gap-3">
-                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                  <span className="font-medium text-slate-800">{selectedLeague?.name}</span>
-                  <span className="text-sm text-slate-500">
-                    ({playerStats.length} player records)
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* Quick Stats Cards */}
-            {selectedLeague && playerStats.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-blue-100 rounded-lg">
-                      <Users className="w-5 h-5 text-blue-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-slate-500">Total Players</p>
-                      <p className="text-2xl font-bold text-slate-800">
-                        {new Set(playerStats.map(p => p.name)).size}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-green-100 rounded-lg">
-                      <BarChart3 className="w-5 h-5 text-green-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-slate-500">Games Recorded</p>
-                      <p className="text-2xl font-bold text-slate-800">
-                        {new Set(playerStats.map(p => `${p.game_date}_${p.team}`)).size}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-orange-100 rounded-lg">
-                      <TrendingUp className="w-5 h-5 text-orange-600" />
-                    </div>
-                    <div>
-                      <p className="text-sm text-slate-500">Teams Tracked</p>
-                      <p className="text-2xl font-bold text-slate-800">
-                        {new Set(playerStats.map(p => p.team).filter(Boolean)).size}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Team Performance Trends */}
-            {selectedLeague && playerStats.length > 0 ? (
-              <div>
-                <div className="mb-6">
-                  <h2 className="text-xl font-semibold text-slate-800 mb-2">Team Performance Analysis</h2>
-                  <p className="text-slate-600">
-                    Analyze your teams' performance trends, identify improvement patterns, and track consistency across games.
-                  </p>
+          <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
+            {/* Main Content */}
+            <div className="xl:col-span-3 space-y-8">
+              {/* League Selector */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <Eye className="w-5 h-5 text-orange-600" />
+                  <h2 className="text-lg font-semibold text-slate-800">League Overview</h2>
                 </div>
                 
-                <TeamPerformanceTrends 
-                  playerStats={playerStats} 
-                  leagueId={selectedLeague.league_id} 
-                />
+                {leagues.length > 1 ? (
+                  <div className="flex items-center gap-4">
+                    <label className="text-sm font-medium text-slate-700">Select League:</label>
+                    <select
+                      value={selectedLeague?.league_id || ''}
+                      onChange={(e) => {
+                        const league = leagues.find(l => l.league_id === e.target.value);
+                        setSelectedLeague(league);
+                      }}
+                      className="border border-gray-300 rounded-md px-3 py-2 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                    >
+                      {leagues.map(league => (
+                        <option key={league.league_id} value={league.league_id}>
+                          {league.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                    <span className="font-medium text-slate-800">{selectedLeague?.name}</span>
+                    <span className="text-sm text-slate-500">
+                      ({playerStats.length} player records)
+                    </span>
+                  </div>
+                )}
               </div>
-            ) : selectedLeague ? (
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
-                <BarChart3 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-slate-800 mb-2">No Game Data Available</h3>
-                <p className="text-slate-600 mb-4">
-                  Upload player statistics to see detailed team performance trends and coaching insights.
-                </p>
-                <Link 
-                  href="/league-admin" 
-                  className="inline-flex items-center gap-2 bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition"
-                >
-                  <Award className="w-4 h-4" />
-                  Upload Stats
-                </Link>
-              </div>
-            ) : null}
 
-            {/* Coaching Tips */}
-            <div className="bg-gradient-to-r from-orange-50 to-yellow-50 border border-orange-200 rounded-lg p-6">
-              <div className="flex items-start gap-3">
-                <Target className="w-6 h-6 text-orange-600 mt-1" />
+              {/* Quick Stats Cards */}
+              {selectedLeague && playerStats.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-blue-100 rounded-lg">
+                        <Users className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-slate-500">Total Players</p>
+                        <p className="text-2xl font-bold text-slate-800">
+                          {new Set(playerStats.map(p => p.name)).size}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-green-100 rounded-lg">
+                        <BarChart3 className="w-5 h-5 text-green-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-slate-500">Games Recorded</p>
+                        <p className="text-2xl font-bold text-slate-800">
+                          {new Set(playerStats.map(p => `${p.game_date}_${p.team}`)).size}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-orange-100 rounded-lg">
+                        <TrendingUp className="w-5 h-5 text-orange-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-slate-500">Teams Tracked</p>
+                        <p className="text-2xl font-bold text-slate-800">
+                          {new Set(playerStats.map(p => p.team).filter(Boolean)).size}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Team Performance Trends */}
+              {selectedLeague && playerStats.length > 0 ? (
                 <div>
-                  <h3 className="font-semibold text-slate-800 mb-2">Coaching Insights</h3>
-                  <div className="text-sm text-slate-700 space-y-2">
-                    <p>
-                      <strong>Green Trends (↗️):</strong> Teams showing improvement - consider maintaining current strategies and building momentum.
-                    </p>
-                    <p>
-                      <strong>Red Trends (↘️):</strong> Teams declining - review game film, adjust tactics, or focus on player development areas.
-                    </p>
-                    <p>
-                      <strong>Stable Trends (➡️):</strong> Consistent performance - evaluate if current level meets goals or needs enhancement.
+                  <div className="mb-6">
+                    <h2 className="text-xl font-semibold text-slate-800 mb-2">Team Performance Analysis</h2>
+                    <p className="text-slate-600">
+                      Analyze your teams' performance trends, identify improvement patterns, and track consistency across games.
                     </p>
                   </div>
+                  
+                  <TeamPerformanceTrends 
+                    playerStats={playerStats} 
+                    leagueId={selectedLeague.league_id} 
+                  />
+                </div>
+              ) : selectedLeague ? (
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
+                  <BarChart3 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-slate-800 mb-2">No Game Data Available</h3>
+                  <p className="text-slate-600 mb-4">
+                    Upload player statistics to see detailed team performance trends and coaching insights.
+                  </p>
+                  <Link 
+                    href="/league-admin" 
+                    className="inline-flex items-center gap-2 bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition"
+                  >
+                    <Award className="w-4 h-4" />
+                    Upload Stats
+                  </Link>
+                </div>
+              ) : null}
+
+              {/* Coaching Tips */}
+              <div className="bg-gradient-to-r from-orange-50 to-yellow-50 border border-orange-200 rounded-lg p-6">
+                <div className="flex items-start gap-3">
+                  <Target className="w-6 h-6 text-orange-600 mt-1" />
+                  <div>
+                    <h3 className="font-semibold text-slate-800 mb-2">Coaching Insights</h3>
+                    <div className="text-sm text-slate-700 space-y-2">
+                      <p>
+                        <strong>Green Trends (↗️):</strong> Teams showing improvement - consider maintaining current strategies and building momentum.
+                      </p>
+                      <p>
+                        <strong>Red Trends (↘️):</strong> Teams declining - review game film, adjust tactics, or focus on player development areas.
+                      </p>
+                      <p>
+                        <strong>Stable Trends (➡️):</strong> Consistent performance - evaluate if current level meets goals or needs enhancement.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Sidebar */}
+            <div className="xl:col-span-1 space-y-6">
+              {/* Coaching Assistant Chatbot */}
+              {selectedLeague && (
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                  <div className="flex items-center gap-2 mb-4">
+                    <MessageCircle className="w-5 h-5 text-orange-600" />
+                    <h3 className="font-semibold text-slate-800">Coaching Assistant</h3>
+                  </div>
+                  <p className="text-sm text-slate-600 mb-4">
+                    Ask questions about your team's performance, player statistics, or get strategic insights.
+                  </p>
+                  <LeagueChatbot 
+                    leagueId={selectedLeague.league_id} 
+                    leagueName={selectedLeague.name || 'League'} 
+                  />
+                </div>
+              )}
+
+              {/* Quick Actions */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+                <h3 className="font-semibold text-slate-800 mb-4">Quick Actions</h3>
+                <div className="space-y-3">
+                  <Link 
+                    href="/league-admin"
+                    className="flex items-center gap-2 text-sm text-orange-600 hover:text-orange-700 transition"
+                  >
+                    <Award className="w-4 h-4" />
+                    Upload Player Stats
+                  </Link>
+                  {selectedLeague && (
+                    <Link 
+                      href={`/league/${selectedLeague.slug}`}
+                      className="flex items-center gap-2 text-sm text-orange-600 hover:text-orange-700 transition"
+                    >
+                      <Eye className="w-4 h-4" />
+                      View Public League Page
+                    </Link>
+                  )}
+                  {selectedLeague && (
+                    <Link 
+                      href={`/league-leaders/${selectedLeague.slug}`}
+                      className="flex items-center gap-2 text-sm text-orange-600 hover:text-orange-700 transition"
+                    >
+                      <TrendingUp className="w-4 h-4" />
+                      View League Leaders
+                    </Link>
+                  )}
                 </div>
               </div>
             </div>
