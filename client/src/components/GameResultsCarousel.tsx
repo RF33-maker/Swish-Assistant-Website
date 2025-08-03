@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { TeamLogo } from "./TeamLogo";
 
 interface GameResult {
   game_id: string;
@@ -135,8 +136,11 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
           </div>
           <div className="flex items-center justify-between">
             <div className="text-center">
-              <div className="text-white font-bold text-sm">
-                {getTeamAbbr(game.away_team)}
+              <div className="flex items-center justify-center gap-2 mb-1">
+                <TeamLogo teamName={game.away_team} leagueId={leagueId} size={20} />
+                <div className="text-white font-bold text-sm">
+                  {getTeamAbbr(game.away_team)}
+                </div>
               </div>
               <div className="text-2xl font-bold text-white">
                 {game.away_score}
@@ -146,8 +150,11 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
               VS
             </div>
             <div className="text-center">
-              <div className="text-white font-bold text-sm">
-                {getTeamAbbr(game.home_team)}
+              <div className="flex items-center justify-center gap-2 mb-1">
+                <TeamLogo teamName={game.home_team} leagueId={leagueId} size={20} />
+                <div className="text-white font-bold text-sm">
+                  {getTeamAbbr(game.home_team)}
+                </div>
               </div>
               <div className="text-2xl font-bold text-white">
                 {game.home_score}
