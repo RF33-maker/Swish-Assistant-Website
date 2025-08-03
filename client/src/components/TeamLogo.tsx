@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabase";
 interface TeamLogoProps {
   teamName: string;
   leagueId: string;
-  size?: "sm" | "md" | "lg" | "xl";
+  size?: "sm" | "md" | "lg" | "xl" | number;
   className?: string;
 }
 
@@ -82,7 +82,14 @@ export function TeamLogo({ teamName, leagueId, size = "md", className = "" }: Te
     setLogoUrl(null);
   };
 
-  const baseClasses = `${sizeClasses[size]} rounded-lg flex items-center justify-center ${className}`;
+  const getSizeClasses = () => {
+    if (typeof size === 'number') {
+      return `w-${Math.max(1, Math.floor(size/4))} h-${Math.max(1, Math.floor(size/4))}`;
+    }
+    return sizeClasses[size as keyof typeof sizeClasses];
+  };
+
+  const baseClasses = `${getSizeClasses()} rounded-lg flex items-center justify-center ${className}`;
 
   if (isLoading) {
     return (
