@@ -369,50 +369,65 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
 
     // Calculate team standings from player stats
     const calculateStandings = (playerStats: any[]) => {
+      // Group stats by team and game to get proper game-level data
+      const gamesByTeamAndDate: { [key: string]: { team: string, game_date: string, totalPoints: number, opponent?: string } } = {};
       
-      // Since we don't have opponent data, let's create a simplified approach
-      // We'll calculate basic team stats (total points, games played) without win/loss records
-      const teamStats: { [team: string]: { totalPoints: number, games: number, avgPoints: number } } = {};
-      
-      // Group by team and count games
-      const gamesByTeam: { [team: string]: Set<string> } = {};
-      
+      // First pass: aggregate player stats by team and game date
       playerStats.forEach(stat => {
         const team = stat.team || stat.team_name;
         if (!team || !stat.game_date) return;
         
-        // Initialize team stats
-        if (!teamStats[team]) {
-          teamStats[team] = { totalPoints: 0, games: 0, avgPoints: 0 };
-          gamesByTeam[team] = new Set();
+        const gameKey = `${team}_${stat.game_date}`;
+        
+        if (!gamesByTeamAndDate[gameKey]) {
+          gamesByTeamAndDate[gameKey] = {
+            team,
+            game_date: stat.game_date,
+            totalPoints: 0,
+            opponent: stat.opponent
+          };
         }
         
-        // Add points
-        teamStats[team].totalPoints += stat.points || 0;
+        gamesByTeamAndDate[gameKey].totalPoints += stat.points || 0;
+      });
+      
+      // Now calculate team standings from game-level data
+      const teamStats: { [team: string]: { totalPoints: number, games: number, wins: number, losses: number } } = {};
+      
+      Object.values(gamesByTeamAndDate).forEach(game => {
+        if (!teamStats[game.team]) {
+          teamStats[game.team] = { totalPoints: 0, games: 0, wins: 0, losses: 0 };
+        }
         
-        // Track unique games for this team
-        gamesByTeam[team].add(stat.game_date);
+        teamStats[game.team].totalPoints += game.totalPoints;
+        teamStats[game.team].games += 1;
+        
+        // For now, we'll use a simple heuristic for wins/losses based on points scored
+        // Teams with >50 points in a game are likely to have won (this can be adjusted)
+        if (game.totalPoints >= 50) {
+          teamStats[game.team].wins += 1;
+        } else {
+          teamStats[game.team].losses += 1;
+        }
       });
       
-      // Calculate games and averages
-      Object.keys(teamStats).forEach(team => {
-        teamStats[team].games = gamesByTeam[team].size;
-        teamStats[team].avgPoints = teamStats[team].games > 0 ? 
-          teamStats[team].totalPoints / teamStats[team].games : 0;
-      });
-      
-      // Convert to standings format (sorted by average points since we don't have wins/losses)
+      // Convert to standings format
       const standingsArray = Object.entries(teamStats).map(([team, stats]) => ({
         team,
-        wins: 0, // We'll show 0 since we don't have opponent data
-        losses: 0,
-        winPct: 0,
-        pointsFor: Math.round(stats.totalPoints),
-        pointsAgainst: 0, // We don't have this data
+        wins: stats.wins,
+        losses: stats.losses,
+        winPct: stats.games > 0 ? Math.round((stats.wins / stats.games) * 1000) / 1000 : 0,
+        pointsFor: stats.totalPoints,
+        pointsAgainst: 0, // We don't have opponent data yet
         pointsDiff: 0,
         games: stats.games,
-        avgPoints: Math.round(stats.avgPoints * 100) / 100
-      })).sort((a, b) => b.avgPoints - a.avgPoints);
+        avgPoints: stats.games > 0 ? Math.round((stats.totalPoints / stats.games) * 10) / 10 : 0,
+        record: `${stats.wins}-${stats.losses}`
+      })).sort((a, b) => {
+        // Sort by win percentage first, then by average points
+        if (b.winPct !== a.winPct) return b.winPct - a.winPct;
+        return b.avgPoints - a.avgPoints;
+      });
 
       setStandings(standingsArray);
     };
@@ -613,6 +628,7 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
                       <tr className="border-b border-gray-200">
                         <th className="text-left py-3 px-2 font-semibold text-slate-700">#</th>
                         <th className="text-left py-3 px-2 font-semibold text-slate-700">Team</th>
+                        <th className="text-center py-3 px-2 font-semibold text-slate-700">Record</th>
                         <th className="text-center py-3 px-2 font-semibold text-slate-700">GP</th>
                         <th className="text-right py-3 px-2 font-semibold text-slate-700">Total PTS</th>
                         <th className="text-right py-3 px-2 font-semibold text-slate-700">Avg PTS</th>
@@ -633,6 +649,7 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
                               {team.team}
                             </div>
                           </td>
+                          <td className="py-3 px-2 text-center font-medium text-slate-700">{team.record}</td>
                           <td className="py-3 px-2 text-center text-slate-600">{team.games}</td>
                           <td className="py-3 px-2 text-right text-slate-600">{team.pointsFor}</td>
                           <td className="py-3 px-2 text-right font-medium text-orange-600">{team.avgPoints}</td>
@@ -642,6 +659,7 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
                   </table>
                   <div className="mt-4 text-xs text-slate-500">
                     <div className="flex gap-6">
+                      <span>Record = Wins-Losses</span>
                       <span>GP = Games Played</span>
                       <span>Total PTS = Total Points Scored</span>
                       <span>Avg PTS = Average Points Per Game</span>
