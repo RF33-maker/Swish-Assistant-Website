@@ -1,82 +1,108 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { setupAuth } from "./auth";
-import { generatePlayerAnalysis, generateChatResponse } from "./ai-analysis";
+import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
+import { supabase } from "../client/src/lib/supabase";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  console.log("=== REGISTERING ROUTES ===");
-  
-  // sets up /api/register, /api/login, /api/logout, /api/user
-  setupAuth(app);
-  console.log("Auth routes registered");
-
-  // Add API prefix test endpoint
-  app.get("/api/test", (req, res) => {
-    console.log("Test endpoint hit");
-    res.json({ message: "API routes are working!" });
-  });
-  console.log("Test route registered at /api/test");
-
-  // AI Analysis endpoint
-  app.post("/api/ai-analysis", async (req, res) => {
-    console.log("AI Analysis endpoint hit with data:", req.body);
+  // Team logo upload endpoint - Get upload URL
+  app.post("/api/team-logos/upload", async (req, res) => {
     try {
-      const playerData = req.body;
-      
-      // Validate required fields
-      if (!playerData.name || typeof playerData.games_played !== 'number') {
-        return res.status(400).json({ error: "Invalid player data" });
-      }
-
-      const analysis = await generatePlayerAnalysis(playerData);
-      res.json({ analysis });
+      const objectStorageService = new ObjectStorageService();
+      const uploadURL = await objectStorageService.getTeamLogoUploadURL();
+      res.json({ uploadURL });
     } catch (error) {
-      console.error("AI Analysis API Error:", error);
-      res.status(500).json({ 
-        error: "Failed to generate analysis",
-        analysis: "Dynamic player with strong fundamentals and competitive drive."
-      });
+      console.error("Error getting team logo upload URL:", error);
+      res.status(500).json({ error: "Failed to get upload URL" });
     }
   });
-  console.log("AI Analysis route registered at /api/ai-analysis");
 
-  // League Chat endpoint with OpenAI
-  app.post("/api/chat", async (req, res) => {
-    console.log("Chat endpoint hit with data:", req.body);
+  // Team logo save endpoint - Save logo association after upload
+  app.post("/api/team-logos", async (req, res) => {
     try {
-      const { question, context, leagueName } = req.body;
-      
-      if (!question || !context) {
+      const { leagueId, teamName, logoUrl } = req.body;
+
+      if (!leagueId || !teamName || !logoUrl) {
         return res.status(400).json({ error: "Missing required fields" });
       }
 
-      const response = await generateChatResponse(question, context, leagueName);
-      res.json({ response });
-    } catch (error) {
-      console.error("Chat API Error:", error);
-      res.status(500).json({ 
-        error: "Failed to generate response",
-        response: "I'm having trouble processing your request right now. Please try again."
+      const objectStorageService = new ObjectStorageService();
+      const logoPath = objectStorageService.normalizeTeamLogoPath(logoUrl);
+
+      // Insert or update team logo in database
+      const { data, error } = await supabase
+        .from("team_logos")
+        .upsert({
+          league_id: leagueId,
+          team_name: teamName,
+          logo_url: logoPath,
+          uploaded_by: "system", // In real app, this would be the authenticated user ID
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'league_id,team_name',
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Database error:", error);
+        return res.status(500).json({ error: "Failed to save team logo" });
+      }
+
+      res.json({
+        success: true,
+        logoPath,
+        teamLogo: data,
       });
-    }
-  });
-  console.log("Chat route registered at /api/chat");
-  
-  // Debug: List all registered routes
-  console.log("All routes registered:");
-  app._router.stack.forEach((middleware: any, index: number) => {
-    if (middleware.route) {
-      console.log(`${index}: ${middleware.route.methods} ${middleware.route.path}`);
-    } else if (middleware.name === 'router') {
-      console.log(`${index}: Router middleware`);
-    } else {
-      console.log(`${index}: ${middleware.name} middleware`);
+    } catch (error) {
+      console.error("Error saving team logo:", error);
+      res.status(500).json({ error: "Failed to save team logo" });
     }
   });
 
-  // Add additional API routes here if needed
-  
+  // Team logo serving endpoint
+  app.get("/team-logos/:logoPath(*)", async (req, res) => {
+    try {
+      const logoPath = `/team-logos/${req.params.logoPath}`;
+      const objectStorageService = new ObjectStorageService();
+      const logoFile = await objectStorageService.getTeamLogoFile(logoPath);
+      objectStorageService.downloadObject(logoFile, res);
+    } catch (error) {
+      console.error("Error serving team logo:", error);
+      if (error instanceof ObjectNotFoundError) {
+        return res.status(404).json({ error: "Logo not found" });
+      }
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Get team logos for a league
+  app.get("/api/leagues/:leagueId/team-logos", async (req, res) => {
+    try {
+      const { leagueId } = req.params;
+
+      const { data, error } = await supabase
+        .from("team_logos")
+        .select("*")
+        .eq("league_id", leagueId);
+
+      if (error) {
+        console.error("Database error:", error);
+        return res.status(500).json({ error: "Failed to fetch team logos" });
+      }
+
+      // Convert database format to client format
+      const teamLogos = data.reduce((acc: Record<string, string>, logo: any) => {
+        acc[logo.team_name] = logo.logo_url;
+        return acc;
+      }, {});
+
+      res.json(teamLogos);
+    } catch (error) {
+      console.error("Error fetching team logos:", error);
+      res.status(500).json({ error: "Failed to fetch team logos" });
+    }
+  });
+
   const httpServer = createServer(app);
-
   return httpServer;
 }

@@ -1,0 +1,105 @@
+import { useState, useEffect } from "react";
+
+interface TeamLogoProps {
+  teamName: string;
+  leagueId: string;
+  size?: "sm" | "md" | "lg" | "xl";
+  className?: string;
+}
+
+const sizeClasses = {
+  sm: "w-8 h-8",
+  md: "w-12 h-12", 
+  lg: "w-16 h-16",
+  xl: "w-24 h-24"
+};
+
+/**
+ * TeamLogo component that displays the team logo if available, or a fallback placeholder.
+ * Automatically fetches and caches team logos for the league.
+ * 
+ * @param props.teamName - The name of the team
+ * @param props.leagueId - The ID of the league
+ * @param props.size - Size variant (sm, md, lg, xl)
+ * @param props.className - Additional CSS classes
+ */
+export function TeamLogo({ teamName, leagueId, size = "md", className = "" }: TeamLogoProps) {
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    const fetchTeamLogos = async () => {
+      try {
+        setIsLoading(true);
+        setHasError(false);
+        
+        const response = await fetch(`/api/leagues/${leagueId}/team-logos`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch team logos');
+        }
+        
+        const teamLogos = await response.json();
+        const logoPath = teamLogos[teamName];
+        
+        if (logoPath) {
+          setLogoUrl(logoPath);
+        } else {
+          setLogoUrl(null);
+        }
+      } catch (error) {
+        console.error('Error fetching team logo:', error);
+        setHasError(true);
+        setLogoUrl(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (leagueId && teamName) {
+      fetchTeamLogos();
+    }
+  }, [leagueId, teamName]);
+
+  const handleImageError = () => {
+    setHasError(true);
+    setLogoUrl(null);
+  };
+
+  const baseClasses = `${sizeClasses[size]} rounded-lg flex items-center justify-center ${className}`;
+
+  if (isLoading) {
+    return (
+      <div className={`${baseClasses} bg-gray-200 animate-pulse`}>
+        <div className="text-gray-400 text-xs">...</div>
+      </div>
+    );
+  }
+
+  if (logoUrl && !hasError) {
+    return (
+      <div className={`${baseClasses} overflow-hidden`}>
+        <img
+          src={logoUrl}
+          alt={`${teamName} logo`}
+          className="w-full h-full object-cover"
+          onError={handleImageError}
+        />
+      </div>
+    );
+  }
+
+  // Fallback placeholder
+  return (
+    <div className={`${baseClasses} bg-orange-500 text-white font-bold border-2 border-orange-600`}>
+      <div className="text-center">
+        <div className={`font-bold ${size === 'sm' ? 'text-xs' : size === 'md' ? 'text-sm' : 'text-lg'}`}>
+          {teamName.charAt(0).toUpperCase()}
+        </div>
+        {size !== 'sm' && (
+          <div className="text-xs opacity-75 leading-none">TEAM</div>
+        )}
+      </div>
+    </div>
+  );
+}

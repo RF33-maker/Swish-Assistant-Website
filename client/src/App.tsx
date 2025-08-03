@@ -17,6 +17,7 @@ import CoachesHub from "@/pages/CoachesHub";
 import TeamProfile from "@/pages/TeamProfile";
 import TeamsList from "@/pages/TeamsList";
 import LeagueTeams from "@/pages/LeagueTeams";
+import TeamLogoManager from "@/pages/TeamLogoManager";
 import { AuthProvider } from "./hooks/use-auth";
 import { ProtectedRoute } from "./lib/protected-route";
 import ResetPassword from "./pages/reset-password";
@@ -33,6 +34,7 @@ function Router() {
       <Route path="/test" component={TestConnections} />
       <Route path="/league/:slug" component={LeaguePage} />
       <Route path="/league/:slug/teams" component={LeagueTeams} />
+      <Route path="/league/:slug/team-logos" component={TeamLogoManager} />
       <Route path="/league-leaders/:slug" component={LeagueLeadersPage} />
       <Route path="/players" component={PlayersListPage} />
       <Route path="/player/:id" component={PlayerStatsPage} />

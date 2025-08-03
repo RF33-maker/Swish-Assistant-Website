@@ -31,6 +31,16 @@ A professional React and Tailwind CSS website with login functionality and an in
 - Responsive design with mobile support
 
 ## Recent Changes  
+- **2025-02-02**: Implemented comprehensive team logo upload and management system
+  - Set up object storage integration for team logo uploads with cloud storage backend
+  - Created team_logos database table to store logo assignments by league ID and team name
+  - Built TeamLogoUploader component for league owners to upload team logos with file validation (JPG, PNG, GIF, WebP up to 5MB)
+  - Developed TeamLogo component that displays logos or fallback placeholders across all platform features
+  - Created dedicated TeamLogoManager page at `/league/:slug/team-logos` for league owners to manage all team logos
+  - Added "Manage Team Logos" button in league owner controls alongside banner management
+  - Integrated team logos into league standings table, team profile pages, and team listing cards
+  - Logos automatically appear in scoreboards, standings, team profiles, and all team-related displays
+  - Added upload progress indicators, error handling, and success feedback for logo management
 - **2025-02-02**: Implemented Teams navigation tab and dedicated league teams page
   - Changed "Overview" navigation tab to "Teams" in league pages
   - Created `/league/:slug/teams` route accessible via Teams navigation button
@@ -38,7 +48,7 @@ A professional React and Tailwind CSS website with login functionality and an in
   - Added team grid layout with detailed team cards showing statistics, top players, and recent games
   - Maintained separate `/team/:teamName` route for individual team profile pages
   - Teams page shows league header with total teams and games statistics
-  - Each team card includes team logo placeholder, roster size, average points, top player highlight, and recent game results
+  - Each team card includes team logo display, roster size, average points, top player highlight, and recent game results
   - Added "View Full Team Profile" buttons linking to individual team pages
   - Kept League Leaders section on main league page for statistical information
 - **2025-02-02**: Created dedicated Coaches Hub with integrated chatbot and performance analytics

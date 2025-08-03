@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation, useParams } from "wouter";
 import { supabase } from "@/lib/supabase";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
+import { TeamLogo } from "@/components/TeamLogo";
 import React from "react";
 
 interface League {
@@ -300,12 +301,12 @@ export default function TeamProfile() {
         <div className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl p-8 text-white mb-8">
           <div className="flex items-center gap-6">
             {/* Team Logo Placeholder */}
-            <div className="w-24 h-24 bg-white/20 rounded-xl flex items-center justify-center border-2 border-white/30">
-              <div className="text-center">
-                <div className="text-3xl font-bold">{team.name.charAt(0)}</div>
-                <div className="text-sm opacity-75">LOGO</div>
-              </div>
-            </div>
+            <TeamLogo 
+              teamName={team.name} 
+              leagueId={team.league?.league_id || ''} 
+              size="xl" 
+              className="border-2 border-white/30" 
+            />
             
             {/* Team Info */}
             <div className="flex-1">
