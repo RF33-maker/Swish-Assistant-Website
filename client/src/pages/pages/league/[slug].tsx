@@ -72,15 +72,12 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
 
 
     useEffect(() => {
-      const fetchUser = async () => {
+      const fetchUserAndLeague = async () => {
+        // First get the current user
         const { data: { user } } = await supabase.auth.getUser();
         setCurrentUser(user);
-      };
-      fetchUser();
-    }, []);
-
-    useEffect(() => {
-      const fetchLeague = async () => {
+        
+        // Then fetch league data
         const { data, error } = await supabase
           .from("leagues")
           .select("*")
@@ -89,15 +86,16 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
         
         console.log("Resolved league from slug:", slug, "→ ID:", data?.league_id);
         console.log("League data:", data);
-        console.log("Current user:", currentUser);
+        console.log("Current user:", user);
         console.log("Fetch error:", error);
 
         if (data) {
           setLeague(data);
-          const ownerStatus = currentUser?.id === data.user_id;
+          // Now check ownership with the fetched user data
+          const ownerStatus = user?.id === data.user_id || user?.id === data.created_by;
           setIsOwner(ownerStatus);
           setInstagramUrl(data.instagram_embed_url || "");
-          console.log("Is owner?", ownerStatus, "User ID:", currentUser?.id, "League owner ID:", data.user_id);
+          console.log("Is owner?", ownerStatus, "User ID:", user?.id, "League owner ID:", data.user_id);
         }
         
         if (error) {
@@ -158,12 +156,9 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
 
           fetchTopStats();
         }
-
-        if (error) console.error("Failed to fetch league:", error);
-        setLeague(data);
       };
 
-      fetchLeague();
+      fetchUserAndLeague();
     }, [slug]);
 
     const handleSearch = () => {
