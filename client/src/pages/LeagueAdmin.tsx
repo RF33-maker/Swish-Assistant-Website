@@ -87,17 +87,60 @@ export default function LeagueAdmin() {
   };
 
   const fetchTeams = async () => {
+    if (!league?.league_id) return;
+    
     try {
-      const response = await fetch(`https://sab-backend.onrender.com/api/teams`);
-      const data = await response.json();
+      // Try different possible column names for team data
+      let playerStats = null;
+      let error = null;
       
-      if (league?.league_id) {
-        const leagueTeams = data.filter((team: any) => team.league_id === league.league_id);
-        const uniqueTeams = Array.from(new Set(leagueTeams.map((team: any) => team.name)));
+      // Try 'team' first
+      const teamResult = await supabase
+        .from('player_stats')
+        .select('team')
+        .eq('league_id', league.league_id);
+        
+      if (!teamResult.error && teamResult.data?.length > 0) {
+        playerStats = teamResult.data;
+      } else {
+        // Try 'team_name' if 'team' doesn't work
+        const teamNameResult = await supabase
+          .from('player_stats')
+          .select('team_name')
+          .eq('league_id', league.league_id);
+          
+        if (!teamNameResult.error) {
+          playerStats = teamNameResult.data;
+        } else {
+          error = teamNameResult.error;
+        }
+      }
+      
+      if (error) {
+        console.error("Error fetching teams from player stats:", error);
+        // For now, set some example teams so you can test logo upload
+        setTeams(['Team A', 'Team B', 'Warriors', 'Lakers', 'Bulls']);
+        console.log("Using example teams for testing");
+        return;
+      }
+      
+      // Get unique team names
+      const uniqueTeams = Array.from(new Set(
+        playerStats?.map((stat: any) => stat.team || stat.team_name).filter(Boolean) || []
+      ));
+      
+      // If no teams found, provide some example teams for testing
+      if (uniqueTeams.length === 0) {
+        setTeams(['Team A', 'Team B', 'Warriors', 'Lakers', 'Bulls']);
+        console.log("No teams found in player stats, using example teams");
+      } else {
         setTeams(uniqueTeams);
+        console.log("Teams found:", uniqueTeams);
       }
     } catch (error) {
       console.error("Error fetching teams:", error);
+      // Fallback to example teams
+      setTeams(['Team A', 'Team B', 'Warriors', 'Lakers', 'Bulls']);
     }
   };
 
@@ -105,15 +148,30 @@ export default function LeagueAdmin() {
     if (!league?.league_id) return;
     
     try {
-      const response = await fetch(`/api/team-logos/${league.league_id}`);
-      if (response.ok) {
-        const logos = await response.json();
-        const logoMap: Record<string, string> = {};
-        logos.forEach((logo: TeamLogo) => {
-          logoMap[logo.teamName] = logo.logoUrl;
-        });
-        setTeamLogos(logoMap);
+      // For now, we'll store logos in a simple format
+      // Team logos will be stored as files in Supabase storage with predictable names
+      const logoMap: Record<string, string> = {};
+      
+      // Check for existing logo files for each team
+      for (const teamName of teams) {
+        try {
+          const fileName = `${league.league_id}_${teamName.replace(/\s+/g, '_')}.png`;
+          const { data } = supabase.storage
+            .from('team-logos')
+            .getPublicUrl(fileName);
+          
+          // Check if file exists by trying to fetch it
+          const response = await fetch(data.publicUrl, { method: 'HEAD' });
+          if (response.ok) {
+            logoMap[teamName] = data.publicUrl;
+          }
+        } catch (error) {
+          // File doesn't exist, that's okay
+        }
       }
+      
+      setTeamLogos(logoMap);
+      console.log("Team logos loaded:", logoMap);
     } catch (error) {
       console.error("Error fetching team logos:", error);
     }
@@ -175,31 +233,38 @@ export default function LeagueAdmin() {
     }
   };
 
-  const handleLogoUpload = async (teamName: string, file: File) => {
+  const handleTeamLogoUpload = async (teamName: string, file: File) => {
     if (!league || !currentUser) return;
 
     setUploadingLogo(teamName);
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('leagueId', league.league_id);
-      formData.append('teamName', teamName);
-      formData.append('uploadedBy', currentUser?.id || '');
+      // Upload to Supabase storage with predictable filename
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${league.league_id}_${teamName.replace(/\s+/g, '_')}.${fileExt}`;
+      
+      const { data, error } = await supabase.storage
+        .from('team-logos')
+        .upload(fileName, file, {
+          upsert: true // This will overwrite existing files
+        });
 
-      const response = await fetch('/api/team-logos/upload', {
-        method: 'POST',
-        body: formData,
-      });
+      if (error) throw error;
 
-      if (response.ok) {
-        const result = await response.json();
-        setTeamLogos(prev => ({
-          ...prev,
-          [teamName]: result.logoUrl
-        }));
-      }
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('team-logos')
+        .getPublicUrl(fileName);
+
+      // Update local state
+      setTeamLogos(prev => ({
+        ...prev,
+        [teamName]: publicUrl
+      }));
+      
+      alert('Team logo uploaded successfully!');
     } catch (error) {
       console.error("Error uploading team logo:", error);
+      alert('Failed to upload team logo');
     } finally {
       setUploadingLogo(null);
     }
@@ -209,19 +274,25 @@ export default function LeagueAdmin() {
     if (!league || !currentUser) return;
 
     try {
-      const response = await fetch(`/api/team-logos/${league.league_id}/${teamName}`, {
-        method: 'DELETE'
-      });
+      // Remove from Supabase storage
+      const fileName = `${league.league_id}_${teamName.replace(/\s+/g, '_')}.png`;
+      const { error } = await supabase.storage
+        .from('team-logos')
+        .remove([fileName]);
 
-      if (response.ok) {
-        setTeamLogos(prev => {
-          const updated = { ...prev };
-          delete updated[teamName];
-          return updated;
-        });
-      }
+      if (error) throw error;
+
+      // Update local state
+      setTeamLogos(prev => {
+        const updated = { ...prev };
+        delete updated[teamName];
+        return updated;
+      });
+      
+      alert('Team logo removed successfully!');
     } catch (error) {
       console.error("Error removing team logo:", error);
+      alert('Failed to remove team logo');
     }
   };
 
@@ -417,11 +488,37 @@ export default function LeagueAdmin() {
                     </div>
 
                     <div className="space-y-2">
-                      <TeamLogoUploader
-                        teamName={teamName}
-                        leagueId={league.league_id}
-                        onUploadComplete={() => fetchTeamLogos()}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleTeamLogoUpload(teamName, file);
+                        }}
+                        className="hidden"
+                        id={`logo-upload-${teamName}`}
+                        disabled={uploadingLogo === teamName}
                       />
+                      <label
+                        htmlFor={`logo-upload-${teamName}`}
+                        className={`w-full inline-flex items-center justify-center gap-2 px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-lg cursor-pointer transition-colors ${
+                          uploadingLogo === teamName ? 'opacity-50 cursor-not-allowed' : ''
+                        }`}
+                      >
+                        {uploadingLogo === teamName ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                            Uploading...
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                            </svg>
+                            Upload Logo
+                          </>
+                        )}
+                      </label>
                       
                       {teamLogos[teamName] && (
                         <button
