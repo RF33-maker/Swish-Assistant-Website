@@ -94,53 +94,38 @@ export default function LeagueAdmin() {
       let playerStats = null;
       let error = null;
       
-      // Try 'team' first
-      const teamResult = await supabase
+      // Get all team data from player_stats
+      const result = await supabase
         .from('player_stats')
         .select('team')
         .eq('league_id', league.league_id);
         
-      if (!teamResult.error && teamResult.data?.length > 0) {
-        playerStats = teamResult.data;
-      } else {
-        // Try 'team_name' if 'team' doesn't work
-        const teamNameResult = await supabase
-          .from('player_stats')
-          .select('team_name')
-          .eq('league_id', league.league_id);
-          
-        if (!teamNameResult.error) {
-          playerStats = teamNameResult.data;
-        } else {
-          error = teamNameResult.error;
-        }
+      if (!result.error && result.data?.length > 0) {
+        playerStats = result.data;
       }
       
-      if (error) {
-        console.error("Error fetching teams from player stats:", error);
-        // For now, set some example teams so you can test logo upload
-        setTeams(['Team A', 'Team B', 'Warriors', 'Lakers', 'Bulls']);
-        console.log("Using example teams for testing");
+      if (!playerStats || playerStats.length === 0) {
+        setTeams([]);
         return;
       }
       
-      // Get unique team names
-      const uniqueTeams = Array.from(new Set(
-        playerStats?.map((stat: any) => stat.team || stat.team_name).filter(Boolean) || []
-      ));
+      // Get unique team names from the data
+      let uniqueTeams: string[] = [];
       
-      // If no teams found, provide some example teams for testing
-      if (uniqueTeams.length === 0) {
-        setTeams(['Team A', 'Team B', 'Warriors', 'Lakers', 'Bulls']);
-        console.log("No teams found in player stats, using example teams");
-      } else {
-        setTeams(uniqueTeams);
-        console.log("Teams found:", uniqueTeams);
+      if (Array.isArray(playerStats)) {
+        // Extract unique team names
+        uniqueTeams = Array.from(new Set(
+          playerStats
+            .map((stat: any) => stat.team)
+            .filter(Boolean)
+        ));
       }
+      
+      setTeams(uniqueTeams);
+      console.log("Teams loaded:", uniqueTeams);
     } catch (error) {
       console.error("Error fetching teams:", error);
-      // Fallback to example teams
-      setTeams(['Team A', 'Team B', 'Warriors', 'Lakers', 'Bulls']);
+      setTeams([]);
     }
   };
 
@@ -238,6 +223,21 @@ export default function LeagueAdmin() {
 
     setUploadingLogo(teamName);
     try {
+      // Check if bucket exists first
+      const { data: buckets } = await supabase.storage.listBuckets();
+      const teamLogosBucket = buckets?.find(bucket => bucket.name === 'team-logos');
+      
+      if (!teamLogosBucket) {
+        console.log("Creating team-logos bucket...");
+        const { error: bucketError } = await supabase.storage.createBucket('team-logos', {
+          public: true
+        });
+        if (bucketError) {
+          console.error("Error creating bucket:", bucketError);
+          throw new Error("Storage bucket doesn't exist. Please create 'team-logos' bucket in Supabase Storage.");
+        }
+      }
+
       // Upload to Supabase storage with predictable filename
       const fileExt = file.name.split('.').pop();
       const fileName = `${league.league_id}_${teamName.replace(/\s+/g, '_')}.${fileExt}`;
@@ -264,7 +264,7 @@ export default function LeagueAdmin() {
       alert('Team logo uploaded successfully!');
     } catch (error) {
       console.error("Error uploading team logo:", error);
-      alert('Failed to upload team logo');
+      alert(`Failed to upload team logo: ${error.message}`);
     } finally {
       setUploadingLogo(null);
     }
@@ -471,6 +471,10 @@ export default function LeagueAdmin() {
                 <h2 className="text-xl font-semibold text-gray-800">Team Logo Management</h2>
                 <p className="text-gray-600">Upload and manage logos for all teams in your league</p>
               </div>
+            </div>
+
+            <div className="mb-4">
+              <p className="text-sm text-gray-600">Found {teams.length} teams in this league</p>
             </div>
 
             {teams.length > 0 ? (
