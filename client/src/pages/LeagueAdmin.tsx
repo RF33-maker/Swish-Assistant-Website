@@ -137,7 +137,12 @@ export default function LeagueAdmin() {
   };
 
   const fetchTeamLogos = async () => {
-    if (!league?.league_id) return;
+    if (!league?.league_id || teams.length === 0) {
+      console.log("Skipping logo fetch - no league ID or teams");
+      return;
+    }
+    
+    console.log("Fetching logos for teams:", teams);
     
     try {
       // For now, we'll store logos in a simple format
@@ -148,6 +153,8 @@ export default function LeagueAdmin() {
       for (const teamName of teams) {
         try {
           const fileName = `${league.league_id}_${teamName.replace(/\s+/g, '_')}.png`;
+          console.log(`Checking for logo: ${fileName}`);
+          
           const { data } = supabase.storage
             .from('team-logos')
             .getPublicUrl(fileName);
@@ -155,10 +162,14 @@ export default function LeagueAdmin() {
           // Check if file exists by trying to fetch it
           const response = await fetch(data.publicUrl, { method: 'HEAD' });
           if (response.ok) {
+            console.log(`Found logo for ${teamName}: ${data.publicUrl}`);
             logoMap[teamName] = data.publicUrl;
+          } else {
+            console.log(`No logo found for ${teamName}`);
           }
         } catch (error) {
           // File doesn't exist, that's okay
+          console.log(`Error checking logo for ${teamName}:`, error);
         }
       }
       
@@ -230,24 +241,11 @@ export default function LeagueAdmin() {
 
     setUploadingLogo(teamName);
     try {
-      // Check if bucket exists first
-      const { data: buckets } = await supabase.storage.listBuckets();
-      const teamLogosBucket = buckets?.find(bucket => bucket.name === 'team-logos');
-      
-      if (!teamLogosBucket) {
-        console.log("Creating team-logos bucket...");
-        const { error: bucketError } = await supabase.storage.createBucket('team-logos', {
-          public: true
-        });
-        if (bucketError) {
-          console.error("Error creating bucket:", bucketError);
-          throw new Error("Storage bucket doesn't exist. Please create 'team-logos' bucket in Supabase Storage.");
-        }
-      }
-
       // Upload to Supabase storage with predictable filename
       const fileExt = file.name.split('.').pop();
       const fileName = `${league.league_id}_${teamName.replace(/\s+/g, '_')}.${fileExt}`;
+      
+      console.log("Uploading file:", fileName);
       
       const { data, error } = await supabase.storage
         .from('team-logos')
@@ -255,12 +253,19 @@ export default function LeagueAdmin() {
           upsert: true // This will overwrite existing files
         });
 
-      if (error) throw error;
+      if (error) {
+        console.error("Upload error:", error);
+        throw error;
+      }
+
+      console.log("Upload successful:", data);
 
       // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('team-logos')
         .getPublicUrl(fileName);
+
+      console.log("Public URL:", publicUrl);
 
       // Update local state
       setTeamLogos(prev => ({

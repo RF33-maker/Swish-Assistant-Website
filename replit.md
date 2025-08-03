@@ -30,7 +30,13 @@ A professional React and Tailwind CSS website with login functionality and an in
 - Document parsing and chatbot functionality via Flask backend
 - Responsive design with mobile support
 
-## Recent Changes  
+## Recent Changes
+- **2025-02-03**: Fixed team data loading timing issues and storage bucket access problems
+  - Resolved useEffect dependency timing causing "No teams found" display after teams were successfully loaded
+  - Fixed team logo upload functionality by removing automatic bucket creation (bucket already exists)
+  - Added comprehensive debugging and error handling for team data fetching from Supabase player_stats table
+  - Teams now load correctly after league data is available: Bristol Hurricanes, Freeball, Crickhowell Elite, Gloucester City Kings, Just Us, Dawgs, JustCardio, Empees A
+  - Storage upload now works directly with existing 'team-logos' bucket without RLS policy conflicts
 - **2025-02-02**: Created dedicated `/league-admin/:slug` route for centralized league management
   - Built comprehensive LeagueAdmin page consolidating all league owner controls
   - Moved team logo management, banner upload, and Instagram integration to dedicated admin area
