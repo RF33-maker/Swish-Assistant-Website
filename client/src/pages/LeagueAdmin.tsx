@@ -43,10 +43,16 @@ export default function LeagueAdmin() {
     checkUser();
     if (slug) {
       fetchLeague();
+    }
+  }, [slug]);
+
+  // Fetch teams and logos after league is loaded
+  useEffect(() => {
+    if (league?.league_id) {
       fetchTeams();
       fetchTeamLogos();
     }
-  }, [slug]);
+  }, [league?.league_id]);
 
   const checkUser = async () => {
     try {
@@ -87,42 +93,43 @@ export default function LeagueAdmin() {
   };
 
   const fetchTeams = async () => {
-    if (!league?.league_id) return;
+    if (!league?.league_id) {
+      console.log("No league_id available for fetching teams");
+      return;
+    }
+    
+    console.log("Fetching teams for league:", league.league_id);
     
     try {
-      // Try different possible column names for team data
-      let playerStats = null;
-      let error = null;
-      
       // Get all team data from player_stats
       const result = await supabase
         .from('player_stats')
         .select('team')
         .eq('league_id', league.league_id);
         
-      if (!result.error && result.data?.length > 0) {
-        playerStats = result.data;
+      console.log("Team query result:", result);
+      
+      if (result.error) {
+        console.error("Error in team query:", result.error);
+        setTeams([]);
+        return;
       }
       
-      if (!playerStats || playerStats.length === 0) {
+      if (!result.data || result.data.length === 0) {
+        console.log("No team data found");
         setTeams([]);
         return;
       }
       
       // Get unique team names from the data
-      let uniqueTeams: string[] = [];
+      const uniqueTeams = Array.from(new Set(
+        result.data
+          .map((stat: any) => stat.team)
+          .filter(Boolean)
+      ));
       
-      if (Array.isArray(playerStats)) {
-        // Extract unique team names
-        uniqueTeams = Array.from(new Set(
-          playerStats
-            .map((stat: any) => stat.team)
-            .filter(Boolean)
-        ));
-      }
-      
+      console.log("Unique teams extracted:", uniqueTeams);
       setTeams(uniqueTeams);
-      console.log("Teams loaded:", uniqueTeams);
     } catch (error) {
       console.error("Error fetching teams:", error);
       setTeams([]);
@@ -264,7 +271,7 @@ export default function LeagueAdmin() {
       alert('Team logo uploaded successfully!');
     } catch (error) {
       console.error("Error uploading team logo:", error);
-      alert(`Failed to upload team logo: ${error.message}`);
+      alert(`Failed to upload team logo: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setUploadingLogo(null);
     }
