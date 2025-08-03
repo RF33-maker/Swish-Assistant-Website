@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { TeamLogoUploader } from "@/components/TeamLogoUploader";
 import { TeamLogo } from "@/components/TeamLogo";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
+import UploadSection from "@/components/LeagueAdmin/upload-section-la";
 
 interface League {
   league_id: string;
@@ -476,6 +477,11 @@ export default function LeagueAdmin() {
                 {updatingInstagram ? 'Updating...' : 'Update Instagram'}
               </button>
             </div>
+          </div>
+
+          {/* PDF Upload Section */}
+          <div className="lg:col-span-2 bg-white rounded-xl shadow overflow-hidden">
+            <UploadSection />
           </div>
 
           {/* Team Logo Management */}
