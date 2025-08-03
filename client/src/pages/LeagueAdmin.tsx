@@ -1,0 +1,453 @@
+import { useEffect, useState } from "react";
+import { useLocation, useParams } from "wouter";
+import { supabase } from "@/lib/supabase";
+import { TeamLogoUploader } from "@/components/TeamLogoUploader";
+import { TeamLogo } from "@/components/TeamLogo";
+import SwishLogo from "@/assets/Swish Assistant Logo.png";
+
+interface League {
+  league_id: string;
+  name: string;
+  slug: string;
+  banner_url?: string;
+  instagram_embed_url?: string;
+  created_by: string;
+  user_id: string;
+}
+
+interface TeamLogo {
+  id: number;
+  leagueId: string;
+  teamName: string;
+  logoUrl: string;
+  uploadedBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export default function LeagueAdmin() {
+  const { slug } = useParams();
+  const [location, navigate] = useLocation();
+  const [league, setLeague] = useState<League | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [isOwner, setIsOwner] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [instagramUrl, setInstagramUrl] = useState("");
+  const [updatingInstagram, setUpdatingInstagram] = useState(false);
+  const [teams, setTeams] = useState<string[]>([]);
+  const [teamLogos, setTeamLogos] = useState<Record<string, string>>({});
+  const [uploadingLogo, setUploadingLogo] = useState<string | null>(null);
+
+  useEffect(() => {
+    checkUser();
+    if (slug) {
+      fetchLeague();
+      fetchTeams();
+      fetchTeamLogos();
+    }
+  }, [slug]);
+
+  const checkUser = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      setCurrentUser(user);
+    } catch (error) {
+      console.error("Error checking user:", error);
+    }
+  };
+
+  const fetchLeague = async () => {
+    try {
+      setLoading(true);
+      
+      const { data: leagues, error } = await supabase
+        .from('leagues')
+        .select('*')
+        .eq('slug', slug)
+        .single();
+
+      if (error) {
+        console.error("Error fetching league:", error);
+        return;
+      }
+
+      setLeague(leagues);
+      setInstagramUrl(leagues?.instagram_embed_url || "");
+      
+      // Check if current user is owner
+      const { data: { user } } = await supabase.auth.getUser();
+      setIsOwner(user?.id === leagues?.created_by || user?.id === leagues?.user_id);
+      
+    } catch (error) {
+      console.error("Error fetching league:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchTeams = async () => {
+    try {
+      const response = await fetch(`https://sab-backend.onrender.com/api/teams`);
+      const data = await response.json();
+      
+      if (league?.league_id) {
+        const leagueTeams = data.filter((team: any) => team.league_id === league.league_id);
+        const uniqueTeams = Array.from(new Set(leagueTeams.map((team: any) => team.name)));
+        setTeams(uniqueTeams);
+      }
+    } catch (error) {
+      console.error("Error fetching teams:", error);
+    }
+  };
+
+  const fetchTeamLogos = async () => {
+    if (!league?.league_id) return;
+    
+    try {
+      const response = await fetch(`/api/team-logos/${league.league_id}`);
+      if (response.ok) {
+        const logos = await response.json();
+        const logoMap: Record<string, string> = {};
+        logos.forEach((logo: TeamLogo) => {
+          logoMap[logo.teamName] = logo.logoUrl;
+        });
+        setTeamLogos(logoMap);
+      }
+    } catch (error) {
+      console.error("Error fetching team logos:", error);
+    }
+  };
+
+  const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !league || !currentUser) return;
+
+    setUploadingBanner(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${league.league_id}_${Date.now()}.${fileExt}`;
+      
+      const { data, error } = await supabase.storage
+        .from('league-banners')
+        .upload(fileName, file);
+
+      if (error) throw error;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('league-banners')
+        .getPublicUrl(fileName);
+
+      const { error: updateError } = await supabase
+        .from('leagues')
+        .update({ banner_url: publicUrl })
+        .eq('league_id', league.league_id);
+
+      if (updateError) throw updateError;
+
+      setLeague({ ...league, banner_url: publicUrl });
+      
+    } catch (error) {
+      console.error("Error uploading banner:", error);
+    } finally {
+      setUploadingBanner(false);
+    }
+  };
+
+  const handleInstagramUpdate = async () => {
+    if (!league || !currentUser) return;
+
+    setUpdatingInstagram(true);
+    try {
+      const { error } = await supabase
+        .from('leagues')
+        .update({ instagram_embed_url: instagramUrl })
+        .eq('league_id', league.league_id);
+
+      if (error) throw error;
+
+      setLeague({ ...league, instagram_embed_url: instagramUrl });
+      
+    } catch (error) {
+      console.error("Error updating Instagram URL:", error);
+    } finally {
+      setUpdatingInstagram(false);
+    }
+  };
+
+  const handleLogoUpload = async (teamName: string, file: File) => {
+    if (!league || !currentUser) return;
+
+    setUploadingLogo(teamName);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('leagueId', league.league_id);
+      formData.append('teamName', teamName);
+      formData.append('uploadedBy', currentUser?.id || '');
+
+      const response = await fetch('/api/team-logos/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setTeamLogos(prev => ({
+          ...prev,
+          [teamName]: result.logoUrl
+        }));
+      }
+    } catch (error) {
+      console.error("Error uploading team logo:", error);
+    } finally {
+      setUploadingLogo(null);
+    }
+  };
+
+  const handleRemoveLogo = async (teamName: string) => {
+    if (!league || !currentUser) return;
+
+    try {
+      const response = await fetch(`/api/team-logos/${league.league_id}/${teamName}`, {
+        method: 'DELETE'
+      });
+
+      if (response.ok) {
+        setTeamLogos(prev => {
+          const updated = { ...prev };
+          delete updated[teamName];
+          return updated;
+        });
+      }
+    } catch (error) {
+      console.error("Error removing team logo:", error);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading league admin...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!league) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">League Not Found</h1>
+          <p className="text-gray-600 mb-4">The league you're looking for doesn't exist.</p>
+          <button
+            onClick={() => navigate('/')}
+            className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg"
+          >
+            Go Home
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isOwner) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-800 mb-2">Access Denied</h1>
+          <p className="text-gray-600 mb-4">You don't have permission to access this league's admin panel.</p>
+          <button
+            onClick={() => navigate(`/league/${slug}`)}
+            className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg"
+          >
+            View League
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => navigate(`/league/${slug}`)}
+                className="text-gray-600 hover:text-gray-800"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-800">League Admin</h1>
+                <p className="text-gray-600">{league.name}</p>
+              </div>
+            </div>
+            <img src={SwishLogo} alt="Swish" className="h-8" />
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-6 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          
+          {/* Banner Management */}
+          <div className="bg-white rounded-xl shadow p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-800">League Banner</h2>
+                <p className="text-gray-600">Upload a custom banner for your league page</p>
+              </div>
+            </div>
+
+            {league.banner_url && (
+              <div className="mb-4">
+                <img 
+                  src={league.banner_url} 
+                  alt="League Banner" 
+                  className="w-full h-32 object-cover rounded-lg border"
+                />
+              </div>
+            )}
+
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleBannerUpload}
+              className="hidden"
+              id="banner-upload"
+              disabled={uploadingBanner}
+            />
+            <label
+              htmlFor="banner-upload"
+              className={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-lg cursor-pointer transition-colors ${
+                uploadingBanner ? 'opacity-50 cursor-not-allowed' : ''
+              }`}
+            >
+              {uploadingBanner ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  Uploading...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                  {league.banner_url ? 'Change Banner' : 'Upload Banner'}
+                </>
+              )}
+            </label>
+          </div>
+
+          {/* Instagram Management */}
+          <div className="bg-white rounded-xl shadow p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 bg-pink-100 rounded-lg flex items-center justify-center">
+                <svg className="w-5 h-5 text-pink-600" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-800">Instagram Integration</h2>
+                <p className="text-gray-600">Connect your league's Instagram profile</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <input
+                type="text"
+                placeholder="Enter Instagram profile URL (e.g., https://www.instagram.com/yourleague)"
+                value={instagramUrl}
+                onChange={(e) => setInstagramUrl(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              />
+              <button
+                onClick={handleInstagramUpdate}
+                disabled={updatingInstagram}
+                className={`w-full px-4 py-3 font-medium rounded-lg transition-colors ${
+                  updatingInstagram 
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                    : 'bg-pink-500 text-white hover:bg-pink-600'
+                }`}
+              >
+                {updatingInstagram ? 'Updating...' : 'Update Instagram'}
+              </button>
+            </div>
+          </div>
+
+          {/* Team Logo Management */}
+          <div className="lg:col-span-2 bg-white rounded-xl shadow p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-800">Team Logo Management</h2>
+                <p className="text-gray-600">Upload and manage logos for all teams in your league</p>
+              </div>
+            </div>
+
+            {teams.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {teams.map((teamName) => (
+                  <div key={teamName} className="border border-gray-200 rounded-lg p-4">
+                    <div className="text-center mb-4">
+                      <TeamLogo 
+                        teamName={teamName} 
+                        leagueId={league.league_id} 
+                        size="lg" 
+                        className="mx-auto mb-2" 
+                      />
+                      <h3 className="font-medium text-gray-800">{teamName}</h3>
+                    </div>
+
+                    <div className="space-y-2">
+                      <TeamLogoUploader
+                        teamName={teamName}
+                        leagueId={league.league_id}
+                        onUploadComplete={() => fetchTeamLogos()}
+                      />
+                      
+                      {teamLogos[teamName] && (
+                        <button
+                          onClick={() => handleRemoveLogo(teamName)}
+                          className="w-full px-3 py-2 text-sm text-red-600 hover:text-red-700 border border-red-200 hover:border-red-300 rounded-lg transition-colors"
+                        >
+                          Remove Logo
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 text-gray-500">
+                <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+                <p className="text-lg font-medium mb-2">No Teams Found</p>
+                <p className="text-sm">Teams will appear here once player data is added to your league.</p>
+              </div>
+            )}
+          </div>
+
+        </div>
+      </main>
+    </div>
+  );
+}

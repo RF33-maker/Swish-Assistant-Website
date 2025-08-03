@@ -788,65 +788,25 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
                 </h3>
                 
                 <div className="space-y-4">
-                  {/* Team Logo Management */}
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <h4 className="font-medium text-slate-700">Team Logo Management</h4>
-                      <button
-                        onClick={() => navigate(`/league/${slug}/team-logos`)}
-                        className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-                      >
-                        View All →
-                      </button>
-                    </div>
-                    <p className="text-sm text-slate-600 mb-3">
-                      Upload and manage logos for all teams in your league.
-                    </p>
-                    <button
-                      onClick={() => navigate(`/league/${slug}/team-logos`)}
-                      className="w-full bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                      </svg>
-                      Manage Team Logos
-                    </button>
-                  </div>
-
-                  {/* Banner Management */}
-                  <div className="bg-gray-50 rounded-lg p-4">
-                    <h4 className="font-medium text-slate-700 mb-3">League Banner</h4>
-                    <p className="text-sm text-slate-600 mb-3">
-                      Change your league's banner image that appears at the top of the page.
-                    </p>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleBannerUpload}
-                      className="hidden"
-                      id="admin-banner-upload"
-                      disabled={uploadingBanner}
-                    />
-                    <label
-                      htmlFor="admin-banner-upload"
-                      className={`w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm font-medium rounded-lg cursor-pointer transition-colors ${
-                        uploadingBanner ? 'opacity-50 cursor-not-allowed' : ''
-                      }`}
-                    >
-                      {uploadingBanner ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                          Uploading...
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                          </svg>
-                          Change Banner
-                        </>
-                      )}
-                    </label>
+                  <p className="text-sm text-slate-600 mb-4">
+                    Manage all aspects of your league from the dedicated admin area.
+                  </p>
+                  
+                  <button
+                    onClick={() => navigate(`/league-admin/${slug}`)}
+                    className="w-full bg-blue-500 hover:bg-blue-600 text-white px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Open League Admin
+                  </button>
+                  
+                  <div className="text-xs text-slate-500 space-y-1">
+                    <p>• Team Logo Management</p>
+                    <p>• Banner & Media Settings</p>
+                    <p>• Social Media Integration</p>
                   </div>
                 </div>
               </div>

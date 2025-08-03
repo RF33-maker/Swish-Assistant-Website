@@ -31,13 +31,19 @@ A professional React and Tailwind CSS website with login functionality and an in
 - Responsive design with mobile support
 
 ## Recent Changes  
+- **2025-02-02**: Created dedicated `/league-admin/:slug` route for centralized league management
+  - Built comprehensive LeagueAdmin page consolidating all league owner controls
+  - Moved team logo management, banner upload, and Instagram integration to dedicated admin area
+  - Created "Open League Admin" button in league sidebar that navigates to `/league-admin/:slug`
+  - Centralized all league editing functionality in single admin interface per user request
+  - Admin page includes team logo management grid with upload/remove capabilities for all teams
+  - Integrated banner management with preview and Instagram URL configuration
+  - Added access control ensuring only league owners can access admin functionality
 - **2025-02-02**: Implemented comprehensive team logo upload and management system
   - Set up object storage integration for team logo uploads with cloud storage backend
   - Created team_logos database table to store logo assignments by league ID and team name
   - Built TeamLogoUploader component for league owners to upload team logos with file validation (JPG, PNG, GIF, WebP up to 5MB)
   - Developed TeamLogo component that displays logos or fallback placeholders across all platform features
-  - Created dedicated TeamLogoManager page at `/league/:slug/team-logos` for league owners to manage all team logos
-  - Added "Manage Team Logos" button in league owner controls alongside banner management
   - Integrated team logos into league standings table, team profile pages, and team listing cards
   - Logos automatically appear in scoreboards, standings, team profiles, and all team-related displays
   - Added upload progress indicators, error handling, and success feedback for logo management
