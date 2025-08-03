@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
 
 interface TeamLogoProps {
   teamName: string;
@@ -29,22 +30,37 @@ export function TeamLogo({ teamName, leagueId, size = "md", className = "" }: Te
   const [hasError, setHasError] = useState(false);
 
   useEffect(() => {
-    const fetchTeamLogos = async () => {
+    const fetchTeamLogo = async () => {
       try {
         setIsLoading(true);
         setHasError(false);
         
-        const response = await fetch(`/api/leagues/${leagueId}/team-logos`);
-        if (!response.ok) {
-          throw new Error('Failed to fetch team logos');
+        // Try common file extensions for team logos
+        const extensions = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
+        let foundLogo = false;
+        
+        for (const ext of extensions) {
+          const fileName = `${leagueId}_${teamName.replace(/\s+/g, '_')}.${ext}`;
+          
+          // Get public URL from Supabase storage
+          const { data } = supabase.storage
+            .from('team-logos')
+            .getPublicUrl(fileName);
+          
+          try {
+            // Check if the file exists by attempting to fetch it
+            const response = await fetch(data.publicUrl, { method: 'HEAD' });
+            if (response.ok) {
+              setLogoUrl(data.publicUrl);
+              foundLogo = true;
+              break;
+            }
+          } catch (error) {
+            // Continue to next extension
+          }
         }
         
-        const teamLogos = await response.json();
-        const logoPath = teamLogos[teamName];
-        
-        if (logoPath) {
-          setLogoUrl(logoPath);
-        } else {
+        if (!foundLogo) {
           setLogoUrl(null);
         }
       } catch (error) {
@@ -57,7 +73,7 @@ export function TeamLogo({ teamName, leagueId, size = "md", className = "" }: Te
     };
 
     if (leagueId && teamName) {
-      fetchTeamLogos();
+      fetchTeamLogo();
     }
   }, [leagueId, teamName]);
 

@@ -253,31 +253,31 @@ export default function LeagueAdmin() {
       
       console.log("Uploading file:", fileName);
       
-      // Try uploading to storage with service role key to bypass RLS
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('fileName', fileName);
-      formData.append('leagueId', league.league_id);
-      formData.append('teamName', teamName);
-      
-      const response = await fetch('/api/team-logos/upload-direct', {
-        method: 'POST',
-        body: formData
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Upload failed');
-      }
-      
-      const uploadResult = await response.json();
+      // Upload directly to Supabase storage
+      const { data, error } = await supabase.storage
+        .from('team-logos')
+        .upload(fileName, file, {
+          upsert: true // This will overwrite existing files
+        });
 
-      console.log("Upload successful:", uploadResult);
+      if (error) {
+        console.error("Upload error:", error);
+        throw error;
+      }
+
+      console.log("Upload successful:", data);
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('team-logos')
+        .getPublicUrl(fileName);
+
+      console.log("Public URL:", publicUrl);
 
       // Update local state
       setTeamLogos(prev => ({
         ...prev,
-        [teamName]: uploadResult.publicUrl
+        [teamName]: publicUrl
       }));
       
       alert('Team logo uploaded successfully!');

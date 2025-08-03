@@ -8,6 +8,11 @@ import multer from 'multer';
 const upload = multer({ storage: multer.memoryStorage() });
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Test endpoint to verify routes are working
+  app.get("/api/test", (req, res) => {
+    res.json({ message: "API routes are working!", timestamp: new Date().toISOString() });
+  });
+
   // Team logo upload endpoint - Get upload URL
   app.post("/api/team-logos/upload", async (req, res) => {
     try {
