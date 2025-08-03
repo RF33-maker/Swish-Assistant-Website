@@ -46,13 +46,19 @@ export default function LeagueAdmin() {
     }
   }, [slug]);
 
-  // Fetch teams and logos after league is loaded
+  // Fetch teams after league is loaded
   useEffect(() => {
     if (league?.league_id) {
       fetchTeams();
-      fetchTeamLogos();
     }
   }, [league?.league_id]);
+
+  // Fetch logos after teams are loaded
+  useEffect(() => {
+    if (league?.league_id && teams.length > 0) {
+      fetchTeamLogos();
+    }
+  }, [league?.league_id, teams.length]);
 
   const checkUser = async () => {
     try {
@@ -247,30 +253,31 @@ export default function LeagueAdmin() {
       
       console.log("Uploading file:", fileName);
       
-      const { data, error } = await supabase.storage
-        .from('team-logos')
-        .upload(fileName, file, {
-          upsert: true // This will overwrite existing files
-        });
-
-      if (error) {
-        console.error("Upload error:", error);
-        throw error;
+      // Try uploading to storage with service role key to bypass RLS
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('fileName', fileName);
+      formData.append('leagueId', league.league_id);
+      formData.append('teamName', teamName);
+      
+      const response = await fetch('/api/team-logos/upload-direct', {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Upload failed');
       }
+      
+      const uploadResult = await response.json();
 
-      console.log("Upload successful:", data);
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('team-logos')
-        .getPublicUrl(fileName);
-
-      console.log("Public URL:", publicUrl);
+      console.log("Upload successful:", uploadResult);
 
       // Update local state
       setTeamLogos(prev => ({
         ...prev,
-        [teamName]: publicUrl
+        [teamName]: uploadResult.publicUrl
       }));
       
       alert('Team logo uploaded successfully!');

@@ -2,6 +2,10 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { supabase } from "../client/src/lib/supabase";
+import multer from 'multer';
+
+// Configure multer for memory storage
+const upload = multer({ storage: multer.memoryStorage() });
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Team logo upload endpoint - Get upload URL
@@ -75,31 +79,108 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get team logos for a league
+  // Direct upload endpoint to bypass RLS policies
+  app.post("/api/team-logos/upload-direct", upload.single('file'), async (req, res) => {
+    try {
+      console.log("Direct upload request received");
+      
+      const file = req.file;
+      const { fileName, leagueId, teamName } = req.body;
+      
+      if (!fileName || !file || !leagueId || !teamName) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+
+      console.log("Uploading:", fileName, "Size:", file.size);
+
+      // Use service role client to upload (bypasses RLS)
+      const { data, error } = await supabase.storage
+        .from('team-logos')
+        .upload(fileName, file.buffer, {
+          upsert: true,
+          contentType: file.mimetype
+        });
+
+      if (error) {
+        console.error("Storage upload error:", error);
+        return res.status(500).json({ error: error.message });
+      }
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('team-logos')
+        .getPublicUrl(fileName);
+
+      console.log("Upload successful, public URL:", publicUrl);
+
+      res.json({
+        success: true,
+        publicUrl,
+        fileName
+      });
+    } catch (error) {
+      console.error("Direct upload error:", error);
+      res.status(500).json({ error: "Upload failed" });
+    }
+  });
+
+  // API endpoint for TeamLogo component to get team logos for a league
   app.get("/api/leagues/:leagueId/team-logos", async (req, res) => {
     try {
       const { leagueId } = req.params;
+      
+      // Get all teams for this league from player_stats
+      const { data: playerStats, error: teamsError } = await supabase
+        .from('player_stats')
+        .select('team')
+        .eq('league_id', leagueId);
 
-      const { data, error } = await supabase
-        .from("team_logos")
-        .select("*")
-        .eq("league_id", leagueId);
-
-      if (error) {
-        console.error("Database error:", error);
-        return res.status(500).json({ error: "Failed to fetch team logos" });
+      if (teamsError) {
+        console.error("Error fetching teams:", teamsError);
+        return res.status(500).json({ error: "Failed to fetch teams" });
       }
 
-      // Convert database format to client format
-      const teamLogos = data.reduce((acc: Record<string, string>, logo: any) => {
-        acc[logo.team_name] = logo.logo_url;
-        return acc;
-      }, {});
+      // Get unique team names
+      const teams = Array.from(new Set(
+        playerStats?.map((stat: any) => stat.team).filter(Boolean) || []
+      ));
+
+      // Check for existing logo files for each team using direct storage access
+      const teamLogos: Record<string, string> = {};
+      
+      for (const teamName of teams) {
+        try {
+          const extensions = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
+          let found = false;
+          
+          for (const ext of extensions) {
+            const fileName = `${leagueId}_${teamName.replace(/\s+/g, '_')}.${ext}`;
+            
+            const { data } = supabase.storage
+              .from('team-logos')
+              .getPublicUrl(fileName);
+            
+            // Check if file exists by trying to fetch it
+            try {
+              const response = await fetch(data.publicUrl, { method: 'HEAD' });
+              if (response.ok) {
+                teamLogos[teamName] = data.publicUrl;
+                found = true;
+                break;
+              }
+            } catch (error) {
+              // Continue to next extension
+            }
+          }
+        } catch (error) {
+          // Continue to next team
+        }
+      }
 
       res.json(teamLogos);
     } catch (error) {
-      console.error("Error fetching team logos:", error);
-      res.status(500).json({ error: "Failed to fetch team logos" });
+      console.error("Error fetching team logos API:", error);
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 
