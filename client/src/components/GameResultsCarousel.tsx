@@ -128,41 +128,46 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
       {[...games, ...games].map((game, index) => (
         <div
           key={`${game.game_id}-${index}`}
-          className="bg-gray-800 rounded-lg px-4 py-3 flex-shrink-0 w-64 cursor-pointer hover:bg-gray-700 transition-colors"
+          className="bg-gray-800 rounded-lg px-6 py-4 flex-shrink-0 w-80 cursor-pointer hover:bg-gray-700 transition-colors border border-gray-700"
           onClick={() => onGameClick(game.game_id)}
         >
-          <div className="text-xs text-gray-400 text-center mb-1">
-            {formatDate(game.game_date)}
+          {/* Header with date and status */}
+          <div className="flex justify-between items-center mb-3">
+            <div className="text-xs font-medium text-gray-300 bg-gray-700 px-2 py-1 rounded">
+              {game.status}
+            </div>
+            <div className="text-xs text-gray-400">
+              {formatDate(game.game_date)}
+            </div>
           </div>
-          <div className="flex items-center justify-between">
-            <div className="text-center">
-              <div className="flex items-center justify-center gap-1 mb-1">
-                <TeamLogo teamName={game.away_team} leagueId={leagueId} size={8} />
-                <div className="text-white font-bold text-sm">
+          
+          {/* Team matchup */}
+          <div className="space-y-2">
+            {/* Away team */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <TeamLogo teamName={game.away_team} leagueId={leagueId} size={24} />
+                <div className="text-white font-bold text-lg">
                   {getTeamAbbr(game.away_team)}
                 </div>
               </div>
-              <div className="text-2xl font-bold text-white">
+              <div className="text-3xl font-bold text-white">
                 {game.away_score}
               </div>
             </div>
-            <div className="text-gray-400 text-xs px-2">
-              VS
-            </div>
-            <div className="text-center">
-              <div className="flex items-center justify-center gap-1 mb-1">
-                <TeamLogo teamName={game.home_team} leagueId={leagueId} size={8} />
-                <div className="text-white font-bold text-sm">
+            
+            {/* Home team */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <TeamLogo teamName={game.home_team} leagueId={leagueId} size={24} />
+                <div className="text-white font-bold text-lg">
                   {getTeamAbbr(game.home_team)}
                 </div>
               </div>
-              <div className="text-2xl font-bold text-white">
+              <div className="text-3xl font-bold text-white">
                 {game.home_score}
               </div>
             </div>
-          </div>
-          <div className="text-xs text-gray-400 text-center mt-1">
-            {game.status}
           </div>
         </div>
       ))}
