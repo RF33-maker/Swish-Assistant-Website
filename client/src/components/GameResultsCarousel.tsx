@@ -145,8 +145,8 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
           <div className="space-y-2">
             {/* Away team */}
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <TeamLogo teamName={game.away_team} leagueId={leagueId} size={24} />
+              <div className="flex items-center gap-2">
+                <TeamLogo teamName={game.away_team} leagueId={leagueId} size={16} />
                 <div className="text-white font-bold text-lg">
                   {getTeamAbbr(game.away_team)}
                 </div>
@@ -158,8 +158,8 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
             
             {/* Home team */}
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <TeamLogo teamName={game.home_team} leagueId={leagueId} size={24} />
+              <div className="flex items-center gap-2">
+                <TeamLogo teamName={game.home_team} leagueId={leagueId} size={16} />
                 <div className="text-white font-bold text-lg">
                   {getTeamAbbr(game.home_team)}
                 </div>
