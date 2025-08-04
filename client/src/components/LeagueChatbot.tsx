@@ -16,9 +16,10 @@ interface Message {
 interface LeagueChatbotProps {
   leagueId: string;
   leagueName: string;
+  onResponseReceived?: (response: string) => void;
 }
 
-export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotProps) {
+export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived }: LeagueChatbotProps) {
   const { user, isLoading: authLoading } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
@@ -79,6 +80,12 @@ export default function LeagueChatbot({ leagueId, leagueName }: LeagueChatbotPro
       };
 
       setMessages(prev => [...prev, botMessage]);
+      
+      // Call the response callback if provided
+      if (onResponseReceived) {
+        const responseContent = typeof response === 'string' ? response : response.content;
+        onResponseReceived(responseContent);
+      }
     } catch (error) {
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),

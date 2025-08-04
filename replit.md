@@ -47,6 +47,9 @@ A professional React and Tailwind CSS website with login functionality and an in
   - FIXED: Removed deprecated 'is_public' filter to show all team data in Coaches Hub
   - FIXED: Game details modal text readability with dark text on light orange background
   - ADDED: Coaches Hub button in league navigation (authentication-only access) replacing Insights link
+  - ADDED: Comprehensive scouting reports system in Coaches Hub with document editing capabilities
+  - ADDED: Direct League Assistant integration with scouting reports - AI responses can be inserted into documents
+  - IMPLEMENTED: Scouting reports with localStorage fallback for data persistence and document management
 - **2025-02-03**: Fixed team data loading timing issues and storage bucket access problems
   - Resolved useEffect dependency timing causing "No teams found" display after teams were successfully loaded
   - Fixed team logo upload functionality by removing automatic bucket creation (bucket already exists)

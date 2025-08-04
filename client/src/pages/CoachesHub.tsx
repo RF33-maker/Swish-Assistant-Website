@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { supabase } from '@/lib/supabase';
 import TeamPerformanceTrends from '@/components/TeamPerformanceTrends';
 import LeagueChatbot from '@/components/LeagueChatbot';
-import { TrendingUp, BarChart3, Users, Target, Award, Eye, MessageCircle, Search } from 'lucide-react';
+import { TrendingUp, BarChart3, Users, Target, Award, Eye, MessageCircle, Search, FileText, Save, Plus, Edit3, ArrowDown } from 'lucide-react';
 import { Link } from 'wouter';
 import SwishLogo from '@/assets/Swish Assistant Logo.png';
 
@@ -15,10 +15,19 @@ export default function CoachesHub() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredLeagues, setFilteredLeagues] = useState<any[]>([]);
+  const [scoutingReports, setScoutingReports] = useState<any[]>([]);
+  const [activeReport, setActiveReport] = useState<any>(null);
+  const [reportContent, setReportContent] = useState('');
+  const [reportTitle, setReportTitle] = useState('');
+  const [isCreatingReport, setIsCreatingReport] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [chatbotResponse, setChatbotResponse] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (user) {
       fetchUserLeagues();
+      fetchScoutingReports();
     }
   }, [user]);
 
@@ -73,6 +82,159 @@ export default function CoachesHub() {
       console.error('Error fetching player stats:', error);
       setPlayerStats([]);
     }
+  };
+
+  const fetchScoutingReports = async () => {
+    if (!user) return;
+    
+    try {
+      // First try to create the table if it doesn't exist
+      await supabase.rpc('exec', {
+        sql: `
+          CREATE TABLE IF NOT EXISTS scouting_reports (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            title VARCHAR(255) NOT NULL,
+            content TEXT,
+            league_id UUID REFERENCES leagues(league_id),
+            created_by UUID NOT NULL,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+          );
+        `
+      }).catch(() => {}); // Ignore errors if table exists or RPC not available
+
+      const { data, error } = await supabase
+        .from('scouting_reports')
+        .select('*')
+        .eq('created_by', user.id)
+        .order('updated_at', { ascending: false });
+
+      if (error) {
+        // If table doesn't exist, use localStorage as fallback
+        if (error.code === '42P01') {
+          const stored = localStorage.getItem(`scouting_reports_${user.id}`);
+          setScoutingReports(stored ? JSON.parse(stored) : []);
+          return;
+        }
+        throw error;
+      }
+      setScoutingReports(data || []);
+    } catch (error) {
+      console.error('Error fetching scouting reports:', error);
+    }
+  };
+
+  const createNewReport = () => {
+    setActiveReport(null);
+    setReportTitle('');
+    setReportContent('');
+    setIsCreatingReport(true);
+  };
+
+  const saveReport = async () => {
+    if (!user || !reportTitle.trim()) return;
+    
+    setIsSaving(true);
+    try {
+      const reportData = {
+        id: activeReport?.id || generateUUID(),
+        title: reportTitle.trim(),
+        content: reportContent,
+        league_id: selectedLeague?.league_id || null,
+        created_by: user.id,
+        created_at: activeReport?.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      try {
+        if (activeReport) {
+          // Update existing report
+          const { error } = await supabase
+            .from('scouting_reports')
+            .update(reportData)
+            .eq('id', activeReport.id);
+          
+          if (error) throw error;
+        } else {
+          // Create new report
+          const { data, error } = await supabase
+            .from('scouting_reports')
+            .insert([reportData])
+            .select()
+            .single();
+          
+          if (error) throw error;
+          setActiveReport(data);
+        }
+        
+        await fetchScoutingReports();
+      } catch (dbError: any) {
+        // Fallback to localStorage if database fails
+        if (dbError.code === '42P01' || dbError.message?.includes('does not exist')) {
+          const stored = localStorage.getItem(`scouting_reports_${user.id}`);
+          const reports = stored ? JSON.parse(stored) : [];
+          
+          if (activeReport) {
+            const index = reports.findIndex((r: any) => r.id === activeReport.id);
+            if (index >= 0) reports[index] = reportData;
+          } else {
+            reports.unshift(reportData);
+            setActiveReport(reportData);
+          }
+          
+          localStorage.setItem(`scouting_reports_${user.id}`, JSON.stringify(reports));
+          setScoutingReports(reports);
+        } else {
+          throw dbError;
+        }
+      }
+      
+      setIsCreatingReport(false);
+    } catch (error) {
+      console.error('Error saving report:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const generateUUID = () => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c == 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  };
+
+  const loadReport = (report: any) => {
+    setActiveReport(report);
+    setReportTitle(report.title);
+    setReportContent(report.content);
+    setIsCreatingReport(false);
+  };
+
+  const insertChatbotResponse = () => {
+    if (!chatbotResponse.trim()) return;
+    
+    const insertText = `\n\n**AI Insight:**\n${chatbotResponse.trim()}\n\n`;
+    const currentContent = reportContent;
+    const cursorPosition = textareaRef.current?.selectionStart || currentContent.length;
+    
+    const newContent = 
+      currentContent.slice(0, cursorPosition) + 
+      insertText + 
+      currentContent.slice(cursorPosition);
+    
+    setReportContent(newContent);
+    setChatbotResponse('');
+    
+    // Focus back to textarea after insert
+    setTimeout(() => {
+      textareaRef.current?.focus();
+      textareaRef.current?.setSelectionRange(
+        cursorPosition + insertText.length,
+        cursorPosition + insertText.length
+      );
+    }, 100);
   };
 
   if (loading) {
@@ -333,6 +495,140 @@ export default function CoachesHub() {
                 </div>
               )}
 
+              {/* Scouting Reports Section */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <FileText className="w-5 h-5 text-orange-600" />
+                    <h2 className="text-lg font-semibold text-slate-800">Scouting Reports</h2>
+                  </div>
+                  <button
+                    onClick={createNewReport}
+                    className="flex items-center gap-2 bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition text-sm"
+                  >
+                    <Plus className="w-4 h-4" />
+                    New Report
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Reports List */}
+                  <div className="lg:col-span-1">
+                    <h3 className="text-sm font-semibold text-slate-700 mb-3">Recent Reports</h3>
+                    <div className="space-y-2 max-h-96 overflow-y-auto">
+                      {scoutingReports.length > 0 ? (
+                        scoutingReports.map((report) => (
+                          <div
+                            key={report.id}
+                            onClick={() => loadReport(report)}
+                            className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                              activeReport?.id === report.id
+                                ? 'border-orange-500 bg-orange-50'
+                                : 'border-gray-200 hover:border-orange-300 hover:bg-orange-25'
+                            }`}
+                          >
+                            <div className="font-medium text-slate-800 text-sm truncate">
+                              {report.title}
+                            </div>
+                            <div className="text-xs text-slate-500 mt-1">
+                              {new Date(report.updated_at).toLocaleDateString()}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-center py-8 text-slate-500">
+                          <FileText className="w-12 h-12 mx-auto mb-3 text-slate-300" />
+                          <p className="text-sm">No reports yet</p>
+                          <p className="text-xs">Create your first scouting report</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Report Editor */}
+                  <div className="lg:col-span-2">
+                    {(isCreatingReport || activeReport) ? (
+                      <div className="space-y-4">
+                        {/* Report Header */}
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="text"
+                            placeholder="Report Title"
+                            value={reportTitle}
+                            onChange={(e) => setReportTitle(e.target.value)}
+                            className="flex-1 text-lg font-semibold border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                          />
+                          <button
+                            onClick={saveReport}
+                            disabled={!reportTitle.trim() || isSaving}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${
+                              !reportTitle.trim() || isSaving
+                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                : 'bg-green-600 text-white hover:bg-green-700'
+                            }`}
+                          >
+                            <Save className="w-4 h-4" />
+                            {isSaving ? 'Saving...' : 'Save'}
+                          </button>
+                        </div>
+
+                        {/* AI Response Integration */}
+                        {chatbotResponse && (
+                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <MessageCircle className="w-4 h-4 text-blue-600" />
+                                <span className="text-sm font-medium text-blue-800">AI Assistant Response</span>
+                              </div>
+                              <button
+                                onClick={insertChatbotResponse}
+                                className="flex items-center gap-1 bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700 transition"
+                              >
+                                <ArrowDown className="w-3 h-3" />
+                                Insert into Report
+                              </button>
+                            </div>
+                            <div className="text-sm text-blue-700 bg-white rounded p-2 border">
+                              {chatbotResponse}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Report Content */}
+                        <div>
+                          <textarea
+                            ref={textareaRef}
+                            placeholder="Write your scouting report here... You can ask the League Assistant questions and insert the responses directly into your report."
+                            value={reportContent}
+                            onChange={(e) => setReportContent(e.target.value)}
+                            className="w-full h-96 border border-gray-300 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 resize-none"
+                          />
+                          <div className="flex justify-between items-center mt-2 text-xs text-slate-500">
+                            <span>{reportContent.length} characters</span>
+                            <span>Tip: Use the League Assistant to get insights, then insert them into your report</span>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-16 text-slate-500">
+                        <Edit3 className="w-16 h-16 mx-auto mb-4 text-slate-300" />
+                        <h3 className="text-lg font-semibold mb-2">Create or Select a Report</h3>
+                        <p className="text-sm mb-4">
+                          Use scouting reports to document team analysis, player observations, and strategic insights.
+                        </p>
+                        <button
+                          onClick={createNewReport}
+                          className="inline-flex items-center gap-2 bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition"
+                        >
+                          <Plus className="w-4 h-4" />
+                          Create New Report
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               {/* Team Performance Trends */}
               {selectedLeague && playerStats.length > 0 ? (
                 <div>
@@ -405,7 +701,8 @@ export default function CoachesHub() {
                   </p>
                   <LeagueChatbot 
                     leagueId={selectedLeague.league_id} 
-                    leagueName={selectedLeague.name || 'League'} 
+                    leagueName={selectedLeague.name || 'League'}
+                    onResponseReceived={setChatbotResponse}
                   />
                 </div>
               )}
