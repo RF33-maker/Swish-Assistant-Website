@@ -89,19 +89,23 @@ export default function CoachesHub() {
     
     try {
       // First try to create the table if it doesn't exist
-      await supabase.rpc('exec', {
-        sql: `
-          CREATE TABLE IF NOT EXISTS scouting_reports (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            title VARCHAR(255) NOT NULL,
-            content TEXT,
-            league_id UUID REFERENCES leagues(league_id),
-            created_by UUID NOT NULL,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-            updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-          );
-        `
-      }).catch(() => {}); // Ignore errors if table exists or RPC not available
+      try {
+        await supabase.rpc('exec', {
+          sql: `
+            CREATE TABLE IF NOT EXISTS scouting_reports (
+              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+              title VARCHAR(255) NOT NULL,
+              content TEXT,
+              league_id UUID REFERENCES leagues(league_id),
+              created_by UUID NOT NULL,
+              created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+              updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            );
+          `
+        });
+      } catch (e) {
+        // Ignore errors if table exists or RPC not available
+      }
 
       const { data, error } = await supabase
         .from('scouting_reports')
@@ -321,6 +325,69 @@ export default function CoachesHub() {
             </Link>
           </div>
         ) : (
+          <>
+          {/* League Assistant - Full Width Section */}
+          {selectedLeague && (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 mb-8">
+            <div className="flex items-center gap-4 mb-6">
+              <MessageCircle className="w-8 h-8 text-orange-600" />
+              <h2 className="text-2xl font-semibold text-slate-800">League Assistant</h2>
+              <span className="px-3 py-1 bg-gradient-to-r from-orange-500 to-yellow-500 text-white text-sm rounded-full font-medium">
+                PREMIUM
+              </span>
+            </div>
+            <p className="text-lg text-slate-600 mb-8">
+              Ask questions about your team's performance, player statistics, or get strategic insights. AI responses will appear below and can be inserted directly into your scouting reports.
+            </p>
+            <div className="min-h-[650px] w-full">
+              <LeagueChatbot 
+                leagueId={selectedLeague.league_id} 
+                leagueName={selectedLeague.name || 'League'}
+                onResponseReceived={setChatbotResponse}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* AI Response Capture Card */}
+        {chatbotResponse && (
+          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg p-8 mb-8">
+            <div className="flex items-center gap-4 mb-6">
+              <Bot className="w-8 h-8 text-blue-600" />
+              <h3 className="text-xl font-semibold text-blue-800">Latest AI Response</h3>
+            </div>
+            
+            <div className="bg-white rounded-lg p-6 mb-6 border border-blue-200">
+              <div className="text-lg text-slate-700 max-h-48 overflow-y-auto leading-relaxed">
+                {chatbotResponse}
+              </div>
+            </div>
+
+            <div className="flex gap-4">
+              <button
+                onClick={insertChatbotResponse}
+                className="flex items-center justify-center gap-3 bg-blue-600 text-white px-8 py-4 rounded-lg hover:bg-blue-700 transition text-lg font-medium"
+              >
+                <ArrowDown className="w-5 h-5" />
+                Insert into Report
+              </button>
+              <button
+                onClick={() => setChatbotResponse('')}
+                className="px-6 py-4 text-blue-600 hover:text-blue-800 transition text-lg"
+              >
+                Clear
+              </button>
+            </div>
+            
+            <p className="text-base text-blue-600 mt-4 text-center">
+              {(isCreatingReport || activeReport) 
+                ? "✓ Ready to insert into open report" 
+                : "💡 Will create a new report automatically"
+              }
+            </p>
+          </div>
+        )}
+
           <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
             {/* Main Content */}
             <div className="xl:col-span-3 space-y-8">
@@ -701,23 +768,28 @@ export default function CoachesHub() {
               </div>
             </div>
 
-            {/* Sidebar */}
-            <div className="xl:col-span-1 space-y-6">
-              {/* League Assistant with Response Capture */}
+            {/* Right Column - League Assistant (Made much wider) */}
+            <div className="lg:col-span-1 space-y-6">
+              {/* League Assistant with Response Capture - Full Width */}
               {selectedLeague && (
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                  <div className="flex items-center gap-2 mb-4">
-                    <MessageCircle className="w-5 h-5 text-orange-600" />
-                    <h3 className="font-semibold text-slate-800">League Assistant</h3>
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <MessageCircle className="w-6 h-6 text-orange-600" />
+                    <h3 className="text-xl font-semibold text-slate-800">League Assistant</h3>
+                    <span className="px-3 py-1 bg-gradient-to-r from-orange-500 to-yellow-500 text-white text-sm rounded-full font-medium">
+                      PREMIUM
+                    </span>
                   </div>
-                  <p className="text-sm text-slate-600 mb-4">
-                    Ask questions about your team's performance, player statistics, or get strategic insights.
+                  <p className="text-base text-slate-600 mb-6">
+                    Ask questions about your team's performance, player statistics, or get strategic insights. Responses will appear below for easy insertion into reports.
                   </p>
-                  <LeagueChatbot 
-                    leagueId={selectedLeague.league_id} 
-                    leagueName={selectedLeague.name || 'League'}
-                    onResponseReceived={setChatbotResponse}
-                  />
+                  <div className="min-h-[500px] w-full">
+                    <LeagueChatbot 
+                      leagueId={selectedLeague.league_id} 
+                      leagueName={selectedLeague.name || 'League'}
+                      onResponseReceived={setChatbotResponse}
+                    />
+                  </div>
                 </div>
               )}
 
@@ -793,6 +865,7 @@ export default function CoachesHub() {
               </div>
             </div>
           </div>
+          </>
         )}
       </div>
     </div>
