@@ -522,7 +522,14 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
               Leaders
             </a>
             <a href="#" className="hover:text-orange-500">Schedule</a>
-            <a href="#" className="hover:text-orange-500">Insights</a>
+            {currentUser && (
+              <button
+                onClick={() => navigate("/coaches-hub")}
+                className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm"
+              >
+                Coaches Hub
+              </button>
+            )}
           </div>
         </header>
 
