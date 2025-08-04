@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, Calendar, Users, Trophy, TrendingUp, Clock, Target } from "lucide-react";
+import { X, Calendar, Users, Trophy, TrendingUp, Clock, Target, Bot, Sparkles, Zap } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 interface PlayerGameStats {
@@ -44,6 +44,9 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
     teams: string[];
     teamScores: Record<string, number>;
   } | null>(null);
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
 
   useEffect(() => {
     const fetchGameDetails = async () => {
@@ -95,6 +98,49 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
 
     fetchGameDetails();
   }, [gameId, isOpen]);
+
+  const fetchAISummary = async () => {
+    if (!gameId) return;
+    
+    setSummaryLoading(true);
+    
+    try {
+      // First check if summary already exists
+      const { data: existingSummary, error: fetchError } = await supabase
+        .from('summaries')
+        .select('summary')
+        .eq('game_id', gameId)
+        .single();
+
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        console.error('Error fetching summary:', fetchError);
+        return;
+      }
+
+      if (existingSummary) {
+        // Add delay for AI effect even if summary exists
+        setTimeout(() => {
+          setAiSummary(existingSummary.summary);
+          setShowSummary(true);
+          setSummaryLoading(false);
+        }, 2000);
+      } else {
+        // Simulate AI processing time
+        setTimeout(() => {
+          setAiSummary("AI game summary feature is being developed. This will provide detailed game analysis including key plays, player performances, turning points, and strategic insights once connected to the summaries database.");
+          setShowSummary(true);
+          setSummaryLoading(false);
+        }, 3000);
+      }
+    } catch (error) {
+      console.error('Error with AI summary:', error);
+      setTimeout(() => {
+        setAiSummary("Unable to generate AI summary at this time. Please try again later.");
+        setShowSummary(true);
+        setSummaryLoading(false);
+      }, 2000);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -174,6 +220,88 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                   </div>
                 </div>
               )}
+
+              {/* AI Game Summary Section */}
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="relative">
+                      <Bot className="w-6 h-6 text-blue-600" />
+                      {summaryLoading && (
+                        <div className="absolute -inset-1 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full animate-spin">
+                          <div className="w-8 h-8 bg-blue-50 rounded-full"></div>
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-blue-800">AI Game Analysis</h3>
+                      <p className="text-sm text-blue-600">Powered by advanced game intelligence</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="px-2 py-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs rounded-full font-medium">
+                      PREMIUM
+                    </div>
+                    <Sparkles className="w-4 h-4 text-purple-500" />
+                  </div>
+                </div>
+
+                {!showSummary ? (
+                  <div className="text-center">
+                    <button
+                      onClick={fetchAISummary}
+                      disabled={summaryLoading}
+                      className={`relative px-6 py-3 rounded-lg font-medium text-white transition-all duration-300 ${
+                        summaryLoading
+                          ? 'bg-gradient-to-r from-blue-500 to-purple-500 animate-pulse cursor-not-allowed'
+                          : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 hover:scale-105 active:scale-95'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        {summaryLoading ? (
+                          <>
+                            <Zap className="w-4 h-4 animate-bounce" />
+                            <span className="animate-pulse">AI Analyzing Game...</span>
+                            <div className="flex gap-1">
+                              <div className="w-1 h-1 bg-white rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                              <div className="w-1 h-1 bg-white rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                              <div className="w-1 h-1 bg-white rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <Bot className="w-4 h-4" />
+                            <span>Generate AI Game Summary</span>
+                            <Sparkles className="w-4 h-4" />
+                          </>
+                        )}
+                      </div>
+                    </button>
+                    <p className="text-sm text-blue-600 mt-2">
+                      Get detailed insights on key plays, player performances, and game-changing moments
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-white rounded-lg border border-blue-200 p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Sparkles className="w-5 h-5 text-purple-500" />
+                      <span className="text-sm font-medium text-blue-800">AI Analysis Complete</span>
+                    </div>
+                    <div className="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap">
+                      {aiSummary}
+                    </div>
+                    <button
+                      onClick={() => {
+                        setShowSummary(false);
+                        setAiSummary(null);
+                      }}
+                      className="mt-3 text-xs text-blue-600 hover:text-blue-800 transition-colors"
+                    >
+                      Generate New Analysis
+                    </button>
+                  </div>
+                )}
+              </div>
 
               {/* Team Filter Buttons */}
               {gameInfo && (
