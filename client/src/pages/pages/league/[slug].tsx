@@ -391,8 +391,10 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
       Array.from(gameMap.values()).forEach(game => {
         // Calculate team scores by summing player points
         const teamScores = game.players.reduce((acc: Record<string, number>, stat: any) => {
-          if (!acc[stat.team]) acc[stat.team] = 0;
-          acc[stat.team] += stat.points || 0;
+          const teamName = stat.team;
+          if (!teamName) return acc;
+          if (!acc[teamName]) acc[teamName] = 0;
+          acc[teamName] += stat.points || 0;
           return acc;
         }, {});
 

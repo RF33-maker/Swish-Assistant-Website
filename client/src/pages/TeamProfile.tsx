@@ -98,7 +98,7 @@ export default function TeamProfile() {
         const { data: allPlayerStats, error } = await supabase
           .from("player_stats")
           .select("*")
-          .or(`team.eq.${decodedTeamName},team_name.eq.${decodedTeamName}`);
+          .eq("team", decodedTeamName);
 
         if (error) {
           console.error("Error fetching team data:", error);
@@ -124,11 +124,11 @@ export default function TeamProfile() {
             }
             
             // Track teams and scores in this game
-            acc[player.game_id].teams.add(player.team || player.team_name);
-            if (!acc[player.game_id].teamScores[player.team || player.team_name]) {
-              acc[player.game_id].teamScores[player.team || player.team_name] = 0;
+            acc[player.game_id].teams.add(player.team);
+            if (!acc[player.game_id].teamScores[player.team]) {
+              acc[player.game_id].teamScores[player.team] = 0;
             }
-            acc[player.game_id].teamScores[player.team || player.team_name] += player.points || 0;
+            acc[player.game_id].teamScores[player.team] += player.points || 0;
             
             return acc;
           }, {});

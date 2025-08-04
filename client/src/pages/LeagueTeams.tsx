@@ -116,12 +116,12 @@ export default function LeagueTeams() {
 
         if (allPlayerStats && allPlayerStats.length > 0) {
           // Get unique teams from player stats
-          const uniqueTeams = Array.from(new Set(allPlayerStats.map(stat => stat.team || stat.team_name).filter(Boolean)));
+          const uniqueTeams = Array.from(new Set(allPlayerStats.map(stat => stat.team).filter(Boolean)));
           
           const teamsWithData = await Promise.all(uniqueTeams.map(async (teamName) => {
             // Get team stats
             const teamPlayers = allPlayerStats.filter(stat => 
-              (stat.team || stat.team_name) === teamName
+              stat.team === teamName
             );
             
             // Calculate team totals and averages using game_id to properly determine opponents
@@ -139,11 +139,11 @@ export default function LeagueTeams() {
               }
               
               // Track teams and scores in this game
-              acc[player.game_id].teams.add(player.team || player.team_name);
-              if (!acc[player.game_id].teamScores[player.team || player.team_name]) {
-                acc[player.game_id].teamScores[player.team || player.team_name] = 0;
+              acc[player.game_id].teams.add(player.team);
+              if (!acc[player.game_id].teamScores[player.team]) {
+                acc[player.game_id].teamScores[player.team] = 0;
               }
-              acc[player.game_id].teamScores[player.team || player.team_name] += player.points || 0;
+              acc[player.game_id].teamScores[player.team] += player.points || 0;
               
               return acc;
             }, {});
