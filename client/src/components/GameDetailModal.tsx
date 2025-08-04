@@ -203,34 +203,34 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                     <div>
-                      <div className="text-slate-600">Field Goals</div>
-                      <div className="font-medium">
+                      <div className="text-slate-800 font-medium">Field Goals</div>
+                      <div className="font-semibold text-slate-900">
                         {selectedTeamStats.totalFgMade}/{selectedTeamStats.totalFgAttempted} 
                         {selectedTeamStats.totalFgAttempted > 0 && (
-                          <span className="text-slate-500 ml-1">
+                          <span className="text-slate-700 ml-1">
                             ({((selectedTeamStats.totalFgMade / selectedTeamStats.totalFgAttempted) * 100).toFixed(1)}%)
                           </span>
                         )}
                       </div>
                     </div>
                     <div>
-                      <div className="text-slate-600">3-Pointers</div>
-                      <div className="font-medium">
+                      <div className="text-slate-800 font-medium">3-Pointers</div>
+                      <div className="font-semibold text-slate-900">
                         {selectedTeamStats.totalThreeMade}/{selectedTeamStats.totalThreeAttempted}
                         {selectedTeamStats.totalThreeAttempted > 0 && (
-                          <span className="text-slate-500 ml-1">
+                          <span className="text-slate-700 ml-1">
                             ({((selectedTeamStats.totalThreeMade / selectedTeamStats.totalThreeAttempted) * 100).toFixed(1)}%)
                           </span>
                         )}
                       </div>
                     </div>
                     <div>
-                      <div className="text-slate-600">Total Rebounds</div>
-                      <div className="font-medium">{selectedTeamStats.totalRebounds}</div>
+                      <div className="text-slate-800 font-medium">Total Rebounds</div>
+                      <div className="font-semibold text-slate-900">{selectedTeamStats.totalRebounds}</div>
                     </div>
                     <div>
-                      <div className="text-slate-600">Total Assists</div>
-                      <div className="font-medium">{selectedTeamStats.totalAssists}</div>
+                      <div className="text-slate-800 font-medium">Total Assists</div>
+                      <div className="font-semibold text-slate-900">{selectedTeamStats.totalAssists}</div>
                     </div>
                   </div>
                 </div>
