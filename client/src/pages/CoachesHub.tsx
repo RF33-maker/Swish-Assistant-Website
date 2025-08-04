@@ -768,69 +768,10 @@ export default function CoachesHub() {
               </div>
             </div>
 
-            {/* Right Column - League Assistant (Made much wider) */}
+            {/* Right Column - Other Features */}
             <div className="lg:col-span-1 space-y-6">
-              {/* League Assistant with Response Capture - Full Width */}
-              {selectedLeague && (
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                  <div className="flex items-center gap-3 mb-4">
-                    <MessageCircle className="w-6 h-6 text-orange-600" />
-                    <h3 className="text-xl font-semibold text-slate-800">League Assistant</h3>
-                    <span className="px-3 py-1 bg-gradient-to-r from-orange-500 to-yellow-500 text-white text-sm rounded-full font-medium">
-                      PREMIUM
-                    </span>
-                  </div>
-                  <p className="text-base text-slate-600 mb-6">
-                    Ask questions about your team's performance, player statistics, or get strategic insights. Responses will appear below for easy insertion into reports.
-                  </p>
-                  <div className="min-h-[500px] w-full">
-                    <LeagueChatbot 
-                      leagueId={selectedLeague.league_id} 
-                      leagueName={selectedLeague.name || 'League'}
-                      onResponseReceived={setChatbotResponse}
-                    />
-                  </div>
-                </div>
-              )}
 
-              {/* AI Response Card */}
-              {chatbotResponse && (
-                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Bot className="w-5 h-5 text-blue-600" />
-                    <h3 className="font-semibold text-blue-800">Latest AI Response</h3>
-                  </div>
-                  
-                  <div className="bg-white rounded-lg p-3 mb-4 border border-blue-200">
-                    <div className="text-sm text-slate-700 max-h-32 overflow-y-auto">
-                      {chatbotResponse}
-                    </div>
-                  </div>
 
-                  <div className="flex gap-2">
-                    <button
-                      onClick={insertChatbotResponse}
-                      className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition text-sm font-medium"
-                    >
-                      <ArrowDown className="w-4 h-4" />
-                      Insert into Report
-                    </button>
-                    <button
-                      onClick={() => setChatbotResponse('')}
-                      className="px-3 py-2 text-blue-600 hover:text-blue-800 transition text-sm"
-                    >
-                      Clear
-                    </button>
-                  </div>
-                  
-                  <p className="text-xs text-blue-600 mt-2 text-center">
-                    {(isCreatingReport || activeReport) 
-                      ? "✓ Ready to insert into open report" 
-                      : "💡 Will create a new report automatically"
-                    }
-                  </p>
-                </div>
-              )}
 
               {/* Quick Actions */}
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">

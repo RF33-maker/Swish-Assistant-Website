@@ -153,7 +153,7 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
               suggestions: [`How is ${player.name} doing?`, `Who are ${player.team}'s top players?`]
             };
           } else {
-            return `I couldn't find a player named "${playerName}" in ${leagueName}. Try asking about one of these players:\n\n${playersData.data.slice(0, 5).map(p => `• ${p.name} (${p.team})`).join('\n')}`;
+            return `I couldn't find a player named "${playerName}" in ${leagueName}. Try asking about one of these players:\n\n${playersData.data?.slice(0, 5).map(p => `• ${p.name} (${p.team})`).join('\n') || 'No player data available'}`;
           }
         }
       }
@@ -399,6 +399,14 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
                         };
                         
                         setMessages(prev => [...prev, botMessage]);
+                        
+                        // Trigger response received callback for scouting reports
+                        if (onResponseReceived) {
+                          onResponseReceived(typeof response === 'string' ? response : response.content);
+                        }
+                        if (onResponseReceived) {
+                          onResponseReceived(typeof response === 'string' ? response : response.content);
+                        }
                       } catch (error) {
                         const errorMessage: Message = {
                           id: (Date.now() + 1).toString(),
