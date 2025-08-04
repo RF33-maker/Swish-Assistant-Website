@@ -31,6 +31,14 @@ A professional React and Tailwind CSS website with login functionality and an in
 - Responsive design with mobile support
 
 ## Recent Changes
+- **2025-02-04**: Fixed league standings calculation to use actual game results instead of arbitrary thresholds
+  - Completely rewrote standings calculation to read home/away team data from Supabase player_stats table
+  - Now compares actual team scores by summing player points per game to determine winners/losers
+  - Added comprehensive statistics: Points For, Points Against, Point Differential, Win Percentage
+  - Enhanced standings table with professional sports formatting showing Record, Win%, PF, PA, Diff
+  - Teams now sorted properly by win percentage, then point differential, then average points
+  - Point differential displayed with color coding (green for positive, red for negative)
+  - Fixed game counting logic to properly group by game_id instead of game_date for accurate statistics
 - **2025-02-03**: Fixed team data loading timing issues and storage bucket access problems
   - Resolved useEffect dependency timing causing "No teams found" display after teams were successfully loaded
   - Fixed team logo upload functionality by removing automatic bucket creation (bucket already exists)

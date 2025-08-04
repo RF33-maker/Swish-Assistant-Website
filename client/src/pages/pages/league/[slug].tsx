@@ -367,48 +367,67 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
       return null;
     };
 
-    // Calculate team standings from player stats
+    // Calculate team standings from player stats using actual game results
     const calculateStandings = (playerStats: any[]) => {
-      // Group stats by team and game to get proper game-level data
-      const gamesByTeamAndDate: { [key: string]: { team: string, game_date: string, totalPoints: number, opponent?: string } } = {};
+      // Group stats by game_id to get complete game data
+      const gameMap = new Map<string, any>();
       
-      // First pass: aggregate player stats by team and game date
       playerStats.forEach(stat => {
-        const team = stat.team || stat.team_name;
-        if (!team || !stat.game_date) return;
-        
-        const gameKey = `${team}_${stat.game_date}`;
-        
-        if (!gamesByTeamAndDate[gameKey]) {
-          gamesByTeamAndDate[gameKey] = {
-            team,
+        if (!gameMap.has(stat.game_id)) {
+          gameMap.set(stat.game_id, {
+            game_id: stat.game_id,
             game_date: stat.game_date,
-            totalPoints: 0,
-            opponent: stat.opponent
-          };
+            home_team: stat.home_team,
+            away_team: stat.away_team,
+            players: []
+          });
         }
-        
-        gamesByTeamAndDate[gameKey].totalPoints += stat.points || 0;
+        gameMap.get(stat.game_id).players.push(stat);
       });
+
+      // Calculate scores for each game and determine winners/losers
+      const teamStats: { [team: string]: { totalPoints: number, games: number, wins: number, losses: number, pointsAgainst: number } } = {};
       
-      // Now calculate team standings from game-level data
-      const teamStats: { [team: string]: { totalPoints: number, games: number, wins: number, losses: number } } = {};
-      
-      Object.values(gamesByTeamAndDate).forEach(game => {
-        if (!teamStats[game.team]) {
-          teamStats[game.team] = { totalPoints: 0, games: 0, wins: 0, losses: 0 };
-        }
+      Array.from(gameMap.values()).forEach(game => {
+        // Calculate team scores by summing player points
+        const teamScores = game.players.reduce((acc: Record<string, number>, stat: any) => {
+          if (!acc[stat.team]) acc[stat.team] = 0;
+          acc[stat.team] += stat.points || 0;
+          return acc;
+        }, {});
+
+        const teams = Object.keys(teamScores);
+        if (teams.length !== 2) return; // Skip if not exactly 2 teams
         
-        teamStats[game.team].totalPoints += game.totalPoints;
-        teamStats[game.team].games += 1;
+        const [team1, team2] = teams;
+        const team1Score = teamScores[team1];
+        const team2Score = teamScores[team2];
         
-        // For now, we'll use a simple heuristic for wins/losses based on points scored
-        // Teams with >50 points in a game are likely to have won (this can be adjusted)
-        if (game.totalPoints >= 50) {
-          teamStats[game.team].wins += 1;
-        } else {
-          teamStats[game.team].losses += 1;
+        // Initialize team stats if they don't exist
+        [team1, team2].forEach(team => {
+          if (!teamStats[team]) {
+            teamStats[team] = { totalPoints: 0, games: 0, wins: 0, losses: 0, pointsAgainst: 0 };
+          }
+        });
+        
+        // Update team stats
+        teamStats[team1].totalPoints += team1Score;
+        teamStats[team1].pointsAgainst += team2Score;
+        teamStats[team1].games += 1;
+        
+        teamStats[team2].totalPoints += team2Score;
+        teamStats[team2].pointsAgainst += team1Score;
+        teamStats[team2].games += 1;
+        
+        // Determine winner and loser based on actual scores
+        if (team1Score > team2Score) {
+          teamStats[team1].wins += 1;
+          teamStats[team2].losses += 1;
+        } else if (team2Score > team1Score) {
+          teamStats[team2].wins += 1;
+          teamStats[team1].losses += 1;
         }
+        // Note: Ties are not counted as wins or losses
       });
       
       // Convert to standings format
@@ -418,14 +437,15 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
         losses: stats.losses,
         winPct: stats.games > 0 ? Math.round((stats.wins / stats.games) * 1000) / 1000 : 0,
         pointsFor: stats.totalPoints,
-        pointsAgainst: 0, // We don't have opponent data yet
-        pointsDiff: 0,
+        pointsAgainst: stats.pointsAgainst,
+        pointsDiff: stats.totalPoints - stats.pointsAgainst,
         games: stats.games,
         avgPoints: stats.games > 0 ? Math.round((stats.totalPoints / stats.games) * 10) / 10 : 0,
         record: `${stats.wins}-${stats.losses}`
       })).sort((a, b) => {
-        // Sort by win percentage first, then by average points
+        // Sort by win percentage first, then by point differential, then by average points
         if (b.winPct !== a.winPct) return b.winPct - a.winPct;
+        if (b.pointsDiff !== a.pointsDiff) return b.pointsDiff - a.pointsDiff;
         return b.avgPoints - a.avgPoints;
       });
 
@@ -629,9 +649,10 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
                         <th className="text-left py-3 px-2 font-semibold text-slate-700">#</th>
                         <th className="text-left py-3 px-2 font-semibold text-slate-700">Team</th>
                         <th className="text-center py-3 px-2 font-semibold text-slate-700">Record</th>
-                        <th className="text-center py-3 px-2 font-semibold text-slate-700">GP</th>
-                        <th className="text-right py-3 px-2 font-semibold text-slate-700">Total PTS</th>
-                        <th className="text-right py-3 px-2 font-semibold text-slate-700">Avg PTS</th>
+                        <th className="text-center py-3 px-2 font-semibold text-slate-700">Win%</th>
+                        <th className="text-right py-3 px-2 font-semibold text-slate-700">PF</th>
+                        <th className="text-right py-3 px-2 font-semibold text-slate-700">PA</th>
+                        <th className="text-right py-3 px-2 font-semibold text-slate-700">Diff</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -650,19 +671,21 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
                             </div>
                           </td>
                           <td className="py-3 px-2 text-center font-medium text-slate-700">{team.record}</td>
-                          <td className="py-3 px-2 text-center text-slate-600">{team.games}</td>
+                          <td className="py-3 px-2 text-center text-slate-600">{(team.winPct * 100).toFixed(1)}%</td>
                           <td className="py-3 px-2 text-right text-slate-600">{team.pointsFor}</td>
-                          <td className="py-3 px-2 text-right font-medium text-orange-600">{team.avgPoints}</td>
+                          <td className="py-3 px-2 text-right text-slate-600">{team.pointsAgainst}</td>
+                          <td className={`py-3 px-2 text-right font-medium ${team.pointsDiff > 0 ? 'text-green-600' : team.pointsDiff < 0 ? 'text-red-600' : 'text-slate-600'}`}>{team.pointsDiff > 0 ? '+' : ''}{team.pointsDiff}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                   <div className="mt-4 text-xs text-slate-500">
-                    <div className="flex gap-6">
+                    <div className="flex gap-4 flex-wrap text-xs">
                       <span>Record = Wins-Losses</span>
-                      <span>GP = Games Played</span>
-                      <span>Total PTS = Total Points Scored</span>
-                      <span>Avg PTS = Average Points Per Game</span>
+                      <span>Win% = Win Percentage</span>
+                      <span>PF = Points For</span>
+                      <span>PA = Points Against</span>
+                      <span>Diff = Point Differential</span>
                     </div>
                   </div>
                 </div>
