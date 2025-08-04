@@ -65,8 +65,7 @@ export default function CoachesHub() {
       const { data, error } = await supabase
         .from('player_stats')
         .select('*')
-        .eq('league_id', selectedLeague.league_id)
-        .eq('is_public', true);
+        .eq('league_id', selectedLeague.league_id);
 
       if (error) throw error;
       setPlayerStats(data || []);
@@ -312,7 +311,7 @@ export default function CoachesHub() {
                       <div>
                         <p className="text-sm text-slate-500">Games Recorded</p>
                         <p className="text-2xl font-bold text-slate-800">
-                          {new Set(playerStats.map(p => `${p.game_date}_${p.team}`)).size}
+                          {new Set(playerStats.map(p => p.game_id)).size}
                         </p>
                       </div>
                     </div>

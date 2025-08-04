@@ -42,6 +42,11 @@ A professional React and Tailwind CSS website with login functionality and an in
   - FIXED: Resolved "unknown opponents" issue by properly calculating opponents from game_id data
   - FIXED: Corrected database column references from non-existent 'team_name' to correct 'team' column
   - FIXED: Team profile pages now load correctly with proper data fetching and opponent identification
+  - FIXED: Team Performance Trends data accuracy by grouping by game_id instead of game_date
+  - FIXED: Games count calculation in Coaches Hub to use unique game_id values
+  - FIXED: Removed deprecated 'is_public' filter to show all team data in Coaches Hub
+  - FIXED: Game details modal text readability with dark text on light orange background
+  - ADDED: Coaches Hub button in league navigation (authentication-only access) replacing Insights link
 - **2025-02-03**: Fixed team data loading timing issues and storage bucket access problems
   - Resolved useEffect dependency timing causing "No teams found" display after teams were successfully loaded
   - Fixed team logo upload functionality by removing automatic bucket creation (bucket already exists)

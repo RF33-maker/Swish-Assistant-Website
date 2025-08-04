@@ -55,22 +55,24 @@ export default function TeamPerformanceTrends({ playerStats, leagueId }: TeamPer
   const calculateTeamTrends = () => {
     if (!playerStats || playerStats.length === 0) return;
 
-    // Group stats by team and game date
-    const teamGameStats: { [team: string]: { [date: string]: GamePerformance } } = {};
+    // Group stats by team and game_id to properly separate games
+    const teamGameStats: { [team: string]: { [gameId: string]: GamePerformance & { gameId: string } } } = {};
     
     playerStats.forEach(stat => {
-      const team = stat.team || stat.team_name;
+      const team = stat.team;
+      const gameId = stat.game_id;
       const date = stat.game_date;
       
-      if (!team || !date) return;
+      if (!team || !gameId || !date) return;
       
       if (!teamGameStats[team]) {
         teamGameStats[team] = {};
       }
       
-      if (!teamGameStats[team][date]) {
-        teamGameStats[team][date] = {
+      if (!teamGameStats[team][gameId]) {
+        teamGameStats[team][gameId] = {
           date,
+          gameId,
           points: 0,
           rebounds: 0,
           assists: 0,
@@ -79,10 +81,10 @@ export default function TeamPerformanceTrends({ playerStats, leagueId }: TeamPer
       }
       
       // Aggregate team stats for this game
-      teamGameStats[team][date].points += stat.points || 0;
-      teamGameStats[team][date].rebounds += stat.rebounds_total || 0;
-      teamGameStats[team][date].assists += stat.assists || 0;
-      teamGameStats[team][date].fieldGoalPercent += stat.field_goal_percent || 0;
+      teamGameStats[team][gameId].points += stat.points || 0;
+      teamGameStats[team][gameId].rebounds += stat.rebounds_total || 0;
+      teamGameStats[team][gameId].assists += stat.assists || 0;
+      teamGameStats[team][gameId].fieldGoalPercent += stat.field_goal_percent || 0;
     });
 
     // Calculate trends for each team
