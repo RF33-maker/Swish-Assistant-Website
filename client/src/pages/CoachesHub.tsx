@@ -540,6 +540,41 @@ export default function CoachesHub() {
                 </div>
               )}
 
+              {/* Team Performance Trends */}
+              {selectedLeague && playerStats.length > 0 ? (
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                  <div className="mb-6">
+                    <div className="flex items-center gap-3 mb-2">
+                      <TrendingUp className="w-5 h-5 text-orange-600" />
+                      <h2 className="text-lg font-semibold text-slate-800">Team Performance Analysis</h2>
+                    </div>
+                    <p className="text-slate-600">
+                      Analyze your teams' performance trends, identify improvement patterns, and track consistency across games.
+                    </p>
+                  </div>
+                  
+                  <TeamPerformanceTrends 
+                    playerStats={playerStats} 
+                    leagueId={selectedLeague.league_id} 
+                  />
+                </div>
+              ) : selectedLeague ? (
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
+                  <BarChart3 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-slate-800 mb-2">No Game Data Available</h3>
+                  <p className="text-slate-600 mb-4">
+                    Upload player statistics to see detailed team performance trends and coaching insights.
+                  </p>
+                  <Link 
+                    href="/league-admin" 
+                    className="inline-flex items-center gap-2 bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition"
+                  >
+                    <Award className="w-4 h-4" />
+                    Upload Stats
+                  </Link>
+                </div>
+              ) : null}
+
               {/* LLM Coaching Material Access - Coming Soon */}
               <div className="relative bg-white rounded-lg shadow-sm border border-gray-200 p-6 overflow-hidden">
                 {/* Blur overlay */}
@@ -785,37 +820,7 @@ export default function CoachesHub() {
                 </div>
               </div>
 
-              {/* Team Performance Trends */}
-              {selectedLeague && playerStats.length > 0 ? (
-                <div>
-                  <div className="mb-6">
-                    <h2 className="text-xl font-semibold text-slate-800 mb-2">Team Performance Analysis</h2>
-                    <p className="text-slate-600">
-                      Analyze your teams' performance trends, identify improvement patterns, and track consistency across games.
-                    </p>
-                  </div>
-                  
-                  <TeamPerformanceTrends 
-                    playerStats={playerStats} 
-                    leagueId={selectedLeague.league_id} 
-                  />
-                </div>
-              ) : selectedLeague ? (
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
-                  <BarChart3 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold text-slate-800 mb-2">No Game Data Available</h3>
-                  <p className="text-slate-600 mb-4">
-                    Upload player statistics to see detailed team performance trends and coaching insights.
-                  </p>
-                  <Link 
-                    href="/league-admin" 
-                    className="inline-flex items-center gap-2 bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition"
-                  >
-                    <Award className="w-4 h-4" />
-                    Upload Stats
-                  </Link>
-                </div>
-              ) : null}
+
 
               {/* Coaching Tips */}
               <div className="bg-gradient-to-r from-orange-50 to-yellow-50 border border-orange-200 rounded-lg p-6">
