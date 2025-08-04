@@ -124,20 +124,43 @@ export default function LeagueTeams() {
               (stat.team || stat.team_name) === teamName
             );
             
-            // Calculate team totals and averages
-            const gamesByDate = teamPlayers.reduce((acc: Record<string, Game>, player: any) => {
-              if (!acc[player.game_date]) {
-                acc[player.game_date] = {
-                  totalPoints: 0,
-                  date: player.game_date,
-                  opponent: player.opponent || 'Unknown'
+            // Calculate team totals and averages using game_id to properly determine opponents
+            const gamesByGameId = teamPlayers.reduce((acc: Record<string, any>, player: any) => {
+              if (!acc[player.game_id]) {
+                acc[player.game_id] = {
+                  game_id: player.game_id,
+                  game_date: player.game_date,
+                  home_team: player.home_team,
+                  away_team: player.away_team,
+                  teams: new Set(),
+                  teamScores: {},
+                  ourTeam: teamName
                 };
               }
-              acc[player.game_date].totalPoints += player.points || 0;
+              
+              // Track teams and scores in this game
+              acc[player.game_id].teams.add(player.team || player.team_name);
+              if (!acc[player.game_id].teamScores[player.team || player.team_name]) {
+                acc[player.game_id].teamScores[player.team || player.team_name] = 0;
+              }
+              acc[player.game_id].teamScores[player.team || player.team_name] += player.points || 0;
+              
               return acc;
             }, {});
+
+            // Convert to games with proper opponent data
+            const games = Object.values(gamesByGameId).map((gameData: any) => {
+              const teams = Array.from(gameData.teams) as string[];
+              const opponent = teams.find(team => team !== teamName) || 'Unknown';
+              const ourScore = gameData.teamScores[teamName] || 0;
+              
+              return {
+                totalPoints: ourScore,
+                date: gameData.game_date,
+                opponent: opponent
+              };
+            });
             
-            const games = Object.values(gamesByDate);
             const recentGames = games.slice(-5); // Last 5 games
             
             // Get roster with stats

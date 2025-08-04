@@ -109,20 +109,42 @@ export default function TeamProfile() {
 
         // Process team data
         if (allPlayerStats && allPlayerStats.length > 0) {
-          // Calculate team totals and averages
-          const gamesByDate = allPlayerStats.reduce((acc, player) => {
-            if (!acc[player.game_date]) {
-              acc[player.game_date] = {
-                totalPoints: 0,
-                date: player.game_date,
-                opponent: player.opponent || 'Unknown'
+          // Calculate team totals and averages using game_id to properly determine opponents
+          const gamesByGameId = allPlayerStats.reduce((acc: Record<string, any>, player: any) => {
+            if (!acc[player.game_id]) {
+              acc[player.game_id] = {
+                game_id: player.game_id,
+                game_date: player.game_date,
+                home_team: player.home_team,
+                away_team: player.away_team,
+                teams: new Set(),
+                teamScores: {},
+                ourTeam: decodedTeamName
               };
             }
-            acc[player.game_date].totalPoints += player.points || 0;
+            
+            // Track teams and scores in this game
+            acc[player.game_id].teams.add(player.team || player.team_name);
+            if (!acc[player.game_id].teamScores[player.team || player.team_name]) {
+              acc[player.game_id].teamScores[player.team || player.team_name] = 0;
+            }
+            acc[player.game_id].teamScores[player.team || player.team_name] += player.points || 0;
+            
             return acc;
           }, {});
-          
-          const games = Object.values(gamesByDate) as Game[];
+
+          // Convert to games with proper opponent data
+          const games = Object.values(gamesByGameId).map((gameData: any) => {
+            const teams = Array.from(gameData.teams) as string[];
+            const opponent = teams.find(team => team !== decodedTeamName) || 'Unknown';
+            const ourScore = gameData.teamScores[decodedTeamName] || 0;
+            
+            return {
+              totalPoints: ourScore,
+              date: gameData.game_date,
+              opponent: opponent
+            };
+          });
           const recentGames = games.slice(-10); // Last 10 games
           
           // Get roster with stats
@@ -285,7 +307,7 @@ export default function TeamProfile() {
           >
             Home
           </button>
-          {team.league && (
+          {team?.league && (
             <button
               onClick={() => navigate(`/league/${team.league.slug}`)}
               className="text-slate-600 hover:text-orange-500"
