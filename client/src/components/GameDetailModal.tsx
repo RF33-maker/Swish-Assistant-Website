@@ -133,6 +133,10 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
         
         console.log(`Looking for game on ${datePart} with teams containing: ${team1Code}, ${team3Code}`);
         
+        // Debug: show what we're looking for vs what's available
+        const availableGamesOnDate = summaries.filter(s => s.ref_id && s.ref_id.includes(datePart));
+        console.log(`Games available on ${datePart}:`, availableGamesOnDate.map(s => s.ref_id));
+        
         // Find summary that matches the date and potentially team codes
         existingSummary = summaries.find(summary => {
           if (!summary.ref_id || !summary.ref_id.includes(datePart)) return false;
@@ -142,20 +146,22 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
           const cri = team1Code.toLowerCase();
           const fre = team3Code.toLowerCase();
           
-          // Map common team code patterns
+          // Map common team code patterns based on the actual data
           const teamMappings = {
             'cri': 'crickhowell',
             'fre': 'freeball', 
             'bri': 'bristol',
             'glo': 'gloucester',
             'daw': 'dawgs',
-            'emp': 'empees'
+            'emp': 'empees',
+            'jus': 'just_us'
           };
           
           const team1Name = teamMappings[cri] || cri;
           const team2Name = teamMappings[fre] || fre;
           
-          return refId.includes(team1Name) || refId.includes(team2Name);
+          // Both teams must be in the ref_id for a valid match
+          return refId.includes(team1Name) && refId.includes(team2Name);
         });
         
         if (existingSummary) {
