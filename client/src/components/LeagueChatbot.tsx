@@ -70,7 +70,7 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
 
     try {
       const response = await queryLeagueData(message, leagueId);
-      
+
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: 'bot',
@@ -80,7 +80,7 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
       };
 
       setMessages(prev => [...prev, botMessage]);
-      
+
       // Call the response callback if provided
       if (onResponseReceived) {
         const responseContent = typeof response === 'string' ? response : response.content;
@@ -102,7 +102,7 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
   const queryLeagueData = async (question: string, leagueId: string): Promise<{ content: string; suggestions?: string[] } | string> => {
     try {
       const lowerQuestion = question.toLowerCase();
-      
+
       // Gather comprehensive league data for OpenAI context
       const [playersData, gamesData] = await Promise.all([
         supabase
@@ -133,20 +133,20 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
       console.log('Games data available:', !!gamesData.data, gamesData.data?.length || 0);
 
       // Enhanced Pattern-based intelligent responses
-      
+
       // Player team lookup
       if (lowerQuestion.includes('who does') && (lowerQuestion.includes('play for') || lowerQuestion.includes('play on'))) {
         const playerNameMatch = lowerQuestion.match(/who does (.+?) play/);
         if (playerNameMatch) {
           const playerName = playerNameMatch[1].trim();
           console.log('Looking for player:', playerName);
-          
+
           const player = playersData.data?.find(p => 
             p.name.toLowerCase().includes(playerName) ||
             playerName.includes(p.name.toLowerCase().split(' ')[0]) ||
             p.name.toLowerCase().split(' ')[0] === playerName.split(' ')[0]
           );
-          
+
           if (player) {
             return {
               content: `${player.name} plays for ${player.team}.`,
@@ -164,13 +164,13 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
         if (nameMatch) {
           const searchName = nameMatch[1].trim();
           console.log('Searching for player performance:', searchName);
-          
+
           const player = playersData.data?.find(p => 
             p.name.toLowerCase().includes(searchName) ||
             searchName.includes(p.name.toLowerCase().split(' ')[0]) ||
             p.name.toLowerCase().split(' ')[0] === searchName.split(' ')[0]
           );
-          
+
           if (player) {
             return {
               content: `${player.name} is having a solid season with ${player.team}!\n\nSeason totals: ${player.points} pts, ${player.rebounds_total} reb, ${player.assists} ast, ${player.steals} stl, ${player.blocks} blk\n\n${player.points >= 30 ? '🔥 Strong scorer who can put up big numbers!' : player.rebounds_total >= 15 ? '💪 Solid presence in the paint with good rebounding!' : player.assists >= 10 ? '🎯 Great court vision and playmaking ability!' : '⚡ Well-rounded contributor on both ends!'}`,
@@ -184,7 +184,7 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
       if (lowerQuestion.includes('best team') || lowerQuestion.includes('top team')) {
         if (gamesData.data && gamesData.data.length > 0) {
           const teamRecords: { [team: string]: { wins: number; losses: number; pointsFor: number; pointsAgainst: number } } = {};
-          
+
           gamesData.data.forEach(game => {
             if (!teamRecords[game.home_team]) {
               teamRecords[game.home_team] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0 };
@@ -192,12 +192,12 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
             if (!teamRecords[game.away_team]) {
               teamRecords[game.away_team] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0 };
             }
-            
+
             teamRecords[game.home_team].pointsFor += game.home_score;
             teamRecords[game.home_team].pointsAgainst += game.away_score;
             teamRecords[game.away_team].pointsFor += game.away_score;
             teamRecords[game.away_team].pointsAgainst += game.home_score;
-            
+
             if (game.home_score > game.away_score) {
               teamRecords[game.home_team].wins++;
               teamRecords[game.away_team].losses++;
@@ -206,19 +206,19 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
               teamRecords[game.home_team].losses++;
             }
           });
-          
+
           const sortedTeams = Object.entries(teamRecords).sort((a, b) => {
             const aWinPct = a[1].wins / (a[1].wins + a[1].losses);
             const bWinPct = b[1].wins / (b[1].wins + b[1].losses);
             return bWinPct - aWinPct;
           });
-          
+
           if (sortedTeams.length > 0) {
             const [teamName, record] = sortedTeams[0];
             const winPct = ((record.wins / (record.wins + record.losses)) * 100).toFixed(1);
             const avgFor = (record.pointsFor / (record.wins + record.losses)).toFixed(1);
             const avgAgainst = (record.pointsAgainst / (record.wins + record.losses)).toFixed(1);
-            
+
             return `${teamName} is the top team in ${leagueName}.\n\nRecord: ${record.wins}-${record.losses} (${winPct}% win rate)\nAveraging ${avgFor} points per game\nAllowing ${avgAgainst} points per game\n\n💡 Want to know more? Try asking:\n• "Who are ${teamName}'s top players?"\n• "Show me recent games"`;
           }
         }
@@ -231,7 +231,7 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
             ...p,
             efficiency: p.points + p.rebounds_total + p.assists + p.steals + p.blocks
           })).sort((a, b) => b.efficiency - a.efficiency).slice(0, 5);
-          
+
           const topPlayer = efficiencyPlayers[0];
           const efficiencyList = efficiencyPlayers.map((p, i) => 
             `${i + 1}. ${p.name} (${p.team}) - ${p.efficiency} total production`
@@ -259,7 +259,7 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
       // General response with data
       if (playersData.data && playersData.data.length > 0) {
         const topPlayer = playersData.data[0];
-        
+
         return `Here's what's happening in ${leagueName}:\n\n🏀 League Leaders:\n• Top Scorer: ${topPlayer.name} (${topPlayer.team}) - ${topPlayer.points} points\n• Games Played: ${gamesData.data?.length || 'Several'} recent games\n• Teams Competing: ${new Set(playersData.data.map(p => p.team)).size} active teams\n\n💡 Try asking me:\n• "How is [Player Name] doing?"\n• "Who is the best team?"\n• "Who are the most efficient players?"`;
       }
 
@@ -268,7 +268,7 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
 
     } catch (error) {
       console.error('Error querying league data:', error);
-      
+
       // Fallback to simple data response if OpenAI fails
       try {
         const { data: players } = await supabase
@@ -314,14 +314,14 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
             PREMIUM
           </span>
         </div>
-        
+
         <div className="text-center py-6">
           <Lock className="w-12 h-12 text-orange-400 mx-auto mb-3" />
           <h4 className="font-medium text-slate-800 mb-2">Premium Feature</h4>
           <p className="text-sm text-slate-600 mb-4">
             Get instant insights about {leagueName} - player stats, game results, and more!
           </p>
-          
+
           <div className="bg-orange-50 rounded-lg p-3 mb-4">
             <div className="flex items-center gap-2 text-sm text-orange-700 mb-2">
               <BarChart3 className="w-4 h-4" />
@@ -334,7 +334,7 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
               <li>• Player performance stats</li>
             </ul>
           </div>
-          
+
           <Button onClick={handleLogin} className="w-full bg-gradient-to-r from-orange-500 to-yellow-500 hover:from-orange-600 hover:to-yellow-600 text-white">
             <User className="w-4 h-4 mr-2" />
             Login to Access
@@ -369,27 +369,27 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
               <p className="text-base text-slate-600 mb-4">
                 Ask me about {leagueName} stats! Here are some suggestions:
               </p>
-              
+
               <div className="space-y-3">
                 {suggestedQuestions.map((question, index) => (
                   <button
                     key={index}
                     onClick={async () => {
                       if (!user || isLoading) return;
-                      
+
                       const userMessage: Message = {
                         id: Date.now().toString(),
                         type: 'user',
                         content: question,
                         timestamp: new Date()
                       };
-                      
+
                       setMessages(prev => [...prev, userMessage]);
                       setIsLoading(true);
-                      
+
                       try {
                         const response = await queryLeagueData(question, leagueId);
-                        
+
                         const botMessage: Message = {
                           id: (Date.now() + 1).toString(),
                           type: 'bot',
@@ -397,9 +397,9 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
                           timestamp: new Date(),
                           suggestions: typeof response === 'string' ? undefined : response.suggestions
                         };
-                        
+
                         setMessages(prev => [...prev, botMessage]);
-                        
+
                         // Trigger response received callback for scouting reports
                         if (onResponseReceived) {
                           onResponseReceived(typeof response === 'string' ? response : response.content);
@@ -416,7 +416,7 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
                         };
                         setMessages(prev => [...prev, errorMessage]);
                       }
-                      
+
                       setIsLoading(false);
                     }}
                     className="w-full text-left p-4 text-base bg-orange-50 hover:bg-orange-100 rounded-lg text-slate-700 transition-colors border border-orange-200 hover:border-orange-300"
@@ -459,20 +459,20 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
                             key={index}
                             onClick={async () => {
                               if (!user || isLoading) return;
-                              
+
                               const userMessage: Message = {
                                 id: Date.now().toString(),
                                 type: 'user',
                                 content: suggestion,
                                 timestamp: new Date()
                               };
-                              
+
                               setMessages(prev => [...prev, userMessage]);
                               setIsLoading(true);
-                              
+
                               try {
                                 const response = await queryLeagueData(suggestion, leagueId);
-                                
+
                                 const botMessage: Message = {
                                   id: (Date.now() + 1).toString(),
                                   type: 'bot',
@@ -480,7 +480,7 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
                                   timestamp: new Date(),
                                   suggestions: typeof response === 'string' ? undefined : response.suggestions
                                 };
-                                
+
                                 setMessages(prev => [...prev, botMessage]);
                               } catch (error) {
                                 const errorMessage: Message = {
@@ -491,7 +491,7 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
                                 };
                                 setMessages(prev => [...prev, errorMessage]);
                               }
-                              
+
                               setIsLoading(false);
                             }}
                             className="px-3 py-1 text-sm bg-orange-100 hover:bg-orange-200 text-orange-700 rounded-md transition-colors border border-orange-200 hover:border-orange-300"
