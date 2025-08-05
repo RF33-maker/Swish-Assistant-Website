@@ -108,37 +108,43 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
       // First check if summary already exists
       const { data: existingSummary, error: fetchError } = await supabase
         .from('summaries')
-        .select('summary')
+        .select('*')
         .eq('game_id', gameId)
         .single();
 
       if (fetchError && fetchError.code !== 'PGRST116') {
         console.error('Error fetching summary:', fetchError);
-        return;
+        // Continue to fallback instead of returning
       }
 
-      if (existingSummary) {
+      if (existingSummary && !fetchError) {
+        console.log('Found existing summary:', existingSummary);
+        // Get the summary content from the database
+        const summaryText = existingSummary.content || 
+                           'Game summary found but content is empty.';
+        
         // Add delay for AI effect even if summary exists
         setTimeout(() => {
-          setAiSummary(existingSummary.summary);
+          setAiSummary(summaryText);
           setShowSummary(true);
           setSummaryLoading(false);
-        }, 2000);
+        }, 1500);
       } else {
-        // Simulate AI processing time
+        // No summary found in database
+        console.log('No summary found for game_id:', gameId);
         setTimeout(() => {
-          setAiSummary("AI game summary feature is being developed. This will provide detailed game analysis including key plays, player performances, turning points, and strategic insights once connected to the summaries database.");
+          setAiSummary("No AI game summary available for this game yet. Summaries are generated after game completion and may take some time to appear.");
           setShowSummary(true);
           setSummaryLoading(false);
-        }, 3000);
+        }, 1500);
       }
     } catch (error) {
       console.error('Error with AI summary:', error);
       setTimeout(() => {
-        setAiSummary("Unable to generate AI summary at this time. Please try again later.");
+        setAiSummary("Unable to load AI summary at this time. Please try again later.");
         setShowSummary(true);
         setSummaryLoading(false);
-      }, 2000);
+      }, 1000);
     }
   };
 
