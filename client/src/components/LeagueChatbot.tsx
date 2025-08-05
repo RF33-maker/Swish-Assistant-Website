@@ -101,9 +101,58 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
 
   const queryLeagueData = async (question: string, leagueId: string): Promise<{ content: string; suggestions?: string[] } | string> => {
     try {
+      // First try to use the backend API
+      const backendUrl = import.meta.env.VITE_BACKEND_URL;
+      
+      if (backendUrl) {
+        console.log('🚀 Attempting backend chat request...');
+        console.log('Backend URL:', backendUrl);
+        console.log('Question:', question);
+        console.log('League ID:', leagueId);
+
+        try {
+          const response = await fetch(`${backendUrl}/api/chat/league`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              question: question,
+              league_id: leagueId,
+              context: "coaching_chatbot"
+            }),
+            signal: AbortSignal.timeout(10000) // 10 second timeout
+          });
+
+          console.log('Backend response status:', response.status);
+          console.log('Backend response headers:', Object.fromEntries(response.headers.entries()));
+
+          if (response.ok) {
+            const data = await response.json();
+            console.log('✅ Backend response received:', data);
+            
+            if (data.response || data.answer) {
+              return {
+                content: data.response || data.answer,
+                suggestions: data.suggestions || []
+              };
+            }
+          } else {
+            const errorText = await response.text();
+            console.error('❌ Backend response error:', response.status, errorText);
+          }
+        } catch (backendError) {
+          console.error('❌ Backend request failed:', backendError);
+        }
+      } else {
+        console.log('⚠️ No backend URL configured, using fallback');
+      }
+
+      // Fallback to local Supabase processing
+      console.log('🔄 Falling back to local Supabase processing...');
       const lowerQuestion = question.toLowerCase();
 
-      // Gather comprehensive league data for OpenAI context
+      // Gather comprehensive league data for local processing
       const [playersData, gamesData] = await Promise.all([
         supabase
           .from('player_stats')
@@ -119,14 +168,14 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
           .limit(15)
       ]);
 
-      console.log('League data retrieved for OpenAI:', { 
+      console.log('League data retrieved for local processing:', { 
         players: playersData.data?.length || 0, 
         games: gamesData.data?.length || 0 
       });
       console.log('Players query result:', playersData);
       console.log('Games query result:', gamesData);
 
-      console.log('Context prepared, generating intelligent response...');
+      console.log('Context prepared, generating local response...');
       console.log('Question:', question);
       console.log('Lower question:', lowerQuestion);
       console.log('Players data available:', !!playersData.data, playersData.data?.length || 0);
