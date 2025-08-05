@@ -106,11 +106,34 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
     
     try {
       // First check if summary already exists
-      const { data: existingSummary, error: fetchError } = await supabase
-        .from('summaries')
-        .select('*')
-        .eq('game_id', gameId)
-        .single();
+      // Try different possible column names for game identification
+      let existingSummary = null;
+      let fetchError = null;
+      
+      // Try common column variations
+      const possibleColumns = ['game_id', 'id', 'game', 'match_id'];
+      
+      for (const column of possibleColumns) {
+        try {
+          const { data, error } = await supabase
+            .from('summaries')
+            .select('*')
+            .eq(column, gameId)
+            .single();
+          
+          if (data && !error) {
+            existingSummary = data;
+            console.log(`Found summary using column "${column}":`, data);
+            break;
+          } else if (error && error.code !== 'PGRST116' && error.code !== '42703') {
+            fetchError = error;
+            break;
+          }
+        } catch (err) {
+          // Continue to next column
+          continue;
+        }
+      }
 
       if (fetchError && fetchError.code !== 'PGRST116') {
         console.error('Error fetching summary:', fetchError);
@@ -130,8 +153,20 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
           setSummaryLoading(false);
         }, 1500);
       } else {
-        // No summary found in database
+        // No summary found - let's check what's in the table
         console.log('No summary found for game_id:', gameId);
+        
+        // Debug: List all summaries to see structure
+        try {
+          const { data: allSummaries } = await supabase
+            .from('summaries')
+            .select('*')
+            .limit(5);
+          console.log('Available summaries (first 5):', allSummaries);
+        } catch (debugError) {
+          console.log('Could not fetch summaries for debugging:', debugError);
+        }
+        
         setTimeout(() => {
           setAiSummary("No AI game summary available for this game yet. Summaries are generated after game completion and may take some time to appear.");
           setShowSummary(true);
