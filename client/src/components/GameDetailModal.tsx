@@ -105,33 +105,63 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
     setSummaryLoading(true);
     
     try {
-      // First check if summary already exists
-      // Try different possible column names for game identification
+      // Convert game_id format to ref_id format
+      // game_id: "2025-07-11_CRI_vs_FRE" 
+      // ref_id: "crickhowell_elite_freeball_2025-07-11"
+      
+      // First try direct match with ref_id
       let existingSummary = null;
       let fetchError = null;
       
-      // Try common column variations
-      const possibleColumns = ['game_id', 'id', 'game', 'match_id'];
-      
-      for (const column of possibleColumns) {
-        try {
-          const { data, error } = await supabase
-            .from('summaries')
-            .select('*')
-            .eq(column, gameId)
-            .single();
+      // Try to find summary by ref_id using pattern matching
+      const { data: summaries, error } = await supabase
+        .from('summaries')
+        .select('*')
+        .eq('summary_type', 'game');
+
+      if (error) {
+        fetchError = error;
+        console.error('Error fetching summaries:', error);
+      } else if (summaries && summaries.length > 0) {
+        console.log('Available summaries:', summaries);
+        
+        // Extract date and teams from gameId (format: "2025-07-11_CRI_vs_FRE")
+        const parts = gameId.split('_');
+        const datePart = parts[0]; // "2025-07-11"
+        const team1Code = parts[1]; // "CRI"  
+        const team3Code = parts[3]; // "FRE"
+        
+        console.log(`Looking for game on ${datePart} with teams containing: ${team1Code}, ${team3Code}`);
+        
+        // Find summary that matches the date and potentially team codes
+        existingSummary = summaries.find(summary => {
+          if (!summary.ref_id || !summary.ref_id.includes(datePart)) return false;
           
-          if (data && !error) {
-            existingSummary = data;
-            console.log(`Found summary using column "${column}":`, data);
-            break;
-          } else if (error && error.code !== 'PGRST116' && error.code !== '42703') {
-            fetchError = error;
-            break;
-          }
-        } catch (err) {
-          // Continue to next column
-          continue;
+          // Check if ref_id contains patterns matching team codes
+          const refId = summary.ref_id.toLowerCase();
+          const cri = team1Code.toLowerCase();
+          const fre = team3Code.toLowerCase();
+          
+          // Map common team code patterns
+          const teamMappings = {
+            'cri': 'crickhowell',
+            'fre': 'freeball', 
+            'bri': 'bristol',
+            'glo': 'gloucester',
+            'daw': 'dawgs',
+            'emp': 'empees'
+          };
+          
+          const team1Name = teamMappings[cri] || cri;
+          const team2Name = teamMappings[fre] || fre;
+          
+          return refId.includes(team1Name) || refId.includes(team2Name);
+        });
+        
+        if (existingSummary) {
+          console.log('Found matching summary:', existingSummary);
+        } else {
+          console.log('No matching summary found for date and teams');
         }
       }
 
@@ -153,20 +183,8 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
           setSummaryLoading(false);
         }, 1500);
       } else {
-        // No summary found - let's check what's in the table
+        // No summary found
         console.log('No summary found for game_id:', gameId);
-        
-        // Debug: List all summaries to see structure
-        try {
-          const { data: allSummaries } = await supabase
-            .from('summaries')
-            .select('*')
-            .limit(5);
-          console.log('Available summaries (first 5):', allSummaries);
-        } catch (debugError) {
-          console.log('Could not fetch summaries for debugging:', debugError);
-        }
-        
         setTimeout(() => {
           setAiSummary("No AI game summary available for this game yet. Summaries are generated after game completion and may take some time to appear.");
           setShowSummary(true);
