@@ -24,6 +24,7 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
   const [isDragging, setIsDragging] = useState(false);
   const [startX, setStartX] = useState(0);
   const [scrollLeft, setScrollLeft] = useState(0);
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   useEffect(() => {
     const fetchGameResults = async () => {
@@ -143,6 +144,32 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
     setIsDragging(false);
   };
 
+  // Handle infinite scroll looping
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container || games.length === 0 || isTransitioning) return;
+
+    const handleScroll = () => {
+      const { scrollLeft, scrollWidth, clientWidth } = container;
+      const cardWidth = 320 + 16; // card width + gap
+      const totalOriginalWidth = games.length * cardWidth;
+      
+      // If scrolled past the original set (near the end)
+      if (scrollLeft >= totalOriginalWidth - 50) {
+        setIsTransitioning(true);
+        container.style.scrollBehavior = 'auto';
+        container.scrollLeft = scrollLeft - totalOriginalWidth;
+        setTimeout(() => {
+          setIsTransitioning(false);
+          container.style.scrollBehavior = 'smooth';
+        }, 50);
+      }
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [games, isTransitioning]);
+
   if (loading) {
     return (
       <div className="overflow-x-auto scrollbar-hide">
@@ -196,9 +223,10 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
       }}
     >
       <div className="flex gap-4 px-4 py-2" style={{ minWidth: 'max-content' }}>
-        {games.map((game, index) => (
+        {/* Render games twice for seamless infinite scroll */}
+        {[...games, ...games].map((game, index) => (
           <div
-            key={game.game_id}
+            key={`${game.game_id}-${index}`}
             className="bg-gray-800 rounded-lg px-6 py-4 flex-shrink-0 cursor-pointer hover:bg-gray-700 transition-colors border border-gray-700"
             style={{ width: '320px', minWidth: '320px', maxWidth: '320px' }}
             onClick={() => !isDragging && onGameClick(game.game_id)}
@@ -244,27 +272,6 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
           </div>
         </div>
       ))}
-        
-        {/* Dynamic End Cap Design */}
-        <div className="flex-shrink-0 flex items-center justify-center bg-gradient-to-r from-gray-800 to-gray-700 rounded-lg border border-gray-600 p-6 mx-4" style={{ width: '280px', minWidth: '280px', height: 'auto' }}>
-          <div className="text-center space-y-3">
-            <div className="text-gray-300 text-sm font-medium">
-              End of Game Results
-            </div>
-            <div className="w-12 h-0.5 bg-orange-400 mx-auto"></div>
-            <div className="text-gray-400 text-xs">
-              {games.length} games displayed
-            </div>
-            <div className="flex justify-center space-x-2 mt-3">
-              <div className="w-1.5 h-1.5 bg-orange-400 rounded-full opacity-60"></div>
-              <div className="w-1.5 h-1.5 bg-orange-400 rounded-full opacity-40"></div>
-              <div className="w-1.5 h-1.5 bg-orange-400 rounded-full opacity-20"></div>
-            </div>
-          </div>
-        </div>
-        
-        {/* Final spacer */}
-        <div className="flex-shrink-0 w-4"></div>
       </div>
     </div>
   );
