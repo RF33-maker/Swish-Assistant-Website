@@ -379,7 +379,7 @@ export default function TeamProfile() {
               <div className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-slate-600">Total Games</span>
-                  <span className="font-semibold">{team.totalGames}</span>
+                  <span className="font-semibold text-orange-600">{team.totalGames}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-600">Average Points</span>
@@ -387,12 +387,12 @@ export default function TeamProfile() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-600">Roster Size</span>
-                  <span className="font-semibold">{team.roster.length} Players</span>
+                  <span className="font-semibold text-orange-600">{team.roster.length} Players</span>
                 </div>
                 {team.topPlayer && (
                   <div className="flex justify-between">
                     <span className="text-slate-600">Top Scorer</span>
-                    <span className="font-semibold">{team.topPlayer.name}</span>
+                    <span className="font-semibold text-orange-600">{team.topPlayer.name}</span>
                   </div>
                 )}
               </div>
