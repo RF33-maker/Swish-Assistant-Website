@@ -27,6 +27,7 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isOverlayMode, setIsOverlayMode] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [, setLocation] = useLocation(); // Hook for routing
 
@@ -417,25 +418,58 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-orange-200 overflow-hidden">
-      <div 
-        className="flex items-center justify-between p-5 bg-gradient-to-r from-orange-50 to-yellow-50 cursor-pointer"
-        onClick={() => setIsExpanded(!isExpanded)}
-      >
-        <div className="flex items-center gap-3">
-          <MessageCircle className="w-6 h-6 text-orange-500" />
-          <h3 className="text-lg font-semibold text-slate-800">League Assistant</h3>
-          <span className="px-3 py-1 bg-gradient-to-r from-orange-500 to-yellow-500 text-white text-sm rounded-full font-medium">
-            PREMIUM
-          </span>
-        </div>
-        <Button variant="ghost" size="sm" className="text-lg">
-          {isExpanded ? '−' : '+'}
-        </Button>
-      </div>
+    <>
+      {/* Overlay backdrop */}
+      {isOverlayMode && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-40"
+          onClick={() => setIsOverlayMode(false)}
+        />
+      )}
 
-      {isExpanded && (
-        <div className="p-6">
+      {/* Main chatbot container */}
+      <div className={`bg-white rounded-xl shadow-sm border border-orange-200 overflow-hidden transition-all duration-300 ${
+        isOverlayMode 
+          ? 'fixed top-4 left-4 right-4 bottom-4 z-50 max-w-5xl mx-auto shadow-2xl' 
+          : 'relative'
+      }`}>
+        <div 
+          className="flex items-center justify-between p-5 bg-gradient-to-r from-orange-50 to-yellow-50 cursor-pointer"
+          onClick={() => {
+            if (!isOverlayMode) {
+              setIsExpanded(!isExpanded);
+            }
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <MessageCircle className="w-6 h-6 text-orange-500" />
+            <h3 className="text-lg font-semibold text-slate-800">League Assistant</h3>
+            <span className="px-3 py-1 bg-gradient-to-r from-orange-500 to-yellow-500 text-white text-sm rounded-full font-medium">
+              PREMIUM
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            {(isExpanded || isOverlayMode) && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsOverlayMode(!isOverlayMode);
+                }}
+                className="text-sm hover:bg-orange-100"
+              >
+                {isOverlayMode ? 'Minimize' : 'Expand'}
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" className="text-lg">
+              {(isExpanded || isOverlayMode) ? '−' : '+'}
+            </Button>
+          </div>
+        </div>
+
+      {(isExpanded || isOverlayMode) && (
+        <div className={`p-6 ${isOverlayMode ? 'h-full flex flex-col' : ''}`}>
           {messages.length === 0 ? (
             <div className="space-y-4">
               <p className="text-base text-slate-600 mb-4">
@@ -498,7 +532,9 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
               </div>
             </div>
           ) : (
-            <div className="space-y-8 max-h-[600px] overflow-y-auto mb-8 p-6 bg-slate-50 rounded-lg">
+            <div className={`space-y-8 overflow-y-auto mb-8 p-6 bg-slate-50 rounded-lg ${
+              isOverlayMode ? 'flex-1 max-h-none' : 'max-h-[600px]'
+            }`}>
               {messages.map((message) => (
                 <div
                   key={message.id}
@@ -625,26 +661,37 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
             </div>
           )}
 
-          <div className="flex gap-3 mt-4">
+          <div className={`flex gap-3 mt-4 ${isOverlayMode ? 'flex-shrink-0' : ''}`}>
             <Input
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               placeholder="Ask about stats, games, players..."
               onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-              className="text-base py-4 px-4"
+              className={`text-base py-4 px-4 ${isOverlayMode ? 'text-lg py-5' : ''}`}
               disabled={isLoading}
             />
             <Button
               onClick={() => handleSendMessage()}
               disabled={!inputMessage.trim() || isLoading}
               size="default"
-              className="bg-orange-500 hover:bg-orange-600 text-white px-6"
+              className={`bg-orange-500 hover:bg-orange-600 text-white px-6 ${isOverlayMode ? 'px-8 py-5' : ''}`}
             >
-              <Send className="w-4 h-4" />
+              <Send className={`w-4 h-4 ${isOverlayMode ? 'w-5 h-5' : ''}`} />
             </Button>
           </div>
         </div>
       )}
+
+      {/* Close button for overlay mode */}
+      {isOverlayMode && (
+        <button
+          onClick={() => setIsOverlayMode(false)}
+          className="fixed top-6 right-6 z-60 w-8 h-8 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center text-lg font-bold transition-colors"
+        >
+          ×
+        </button>
+      )}
     </div>
+    </>
   );
 }
