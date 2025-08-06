@@ -178,7 +178,7 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
   };
 
   return (
-    <div className="w-full">
+    <div className="w-full overflow-hidden">
       <div 
         ref={scrollContainerRef}
         className={`overflow-x-auto scrollbar-hide select-none px-4 -mx-4 ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
@@ -196,12 +196,12 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
           WebkitOverflowScrolling: 'touch'
         }}
       >
-        <div className="flex gap-4 min-w-max py-2">
-        {/* Duplicate games for seamless loop */}
-        {[...games, ...games].map((game, index) => (
+        <div className="flex gap-4 py-2" style={{ minWidth: 'max-content' }}>
+        {games.map((game, index) => (
           <div
-            key={`${game.game_id}-${index}`}
-            className="bg-gray-800 rounded-lg px-6 py-4 flex-shrink-0 w-80 cursor-pointer hover:bg-gray-700 transition-colors border border-gray-700"
+            key={game.game_id}
+            className="bg-gray-800 rounded-lg px-6 py-4 flex-shrink-0 cursor-pointer hover:bg-gray-700 transition-colors border border-gray-700"
+            style={{ width: '320px', minWidth: '320px', maxWidth: '320px' }}
             onClick={() => !isDragging && onGameClick(game.game_id)}
             onMouseDown={(e) => e.preventDefault()} // Prevent text selection
           >
