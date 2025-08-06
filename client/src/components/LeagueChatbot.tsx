@@ -28,8 +28,38 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
   const [isLoading, setIsLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const [isOverlayMode, setIsOverlayMode] = useState(false);
+  const [isActivelyUsed, setIsActivelyUsed] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [, setLocation] = useLocation(); // Hook for routing
+
+  // Auto-expand when user starts interacting
+  useEffect(() => {
+    if (messages.length > 0 || inputMessage.trim().length > 0) {
+      setIsActivelyUsed(true);
+      setIsExpanded(true);
+    }
+  }, [messages.length, inputMessage]);
+
+  // Auto-collapse after period of inactivity
+  useEffect(() => {
+    if (!isActivelyUsed) return;
+
+    const timer = setTimeout(() => {
+      if (messages.length === 0 && inputMessage.trim().length === 0) {
+        setIsActivelyUsed(false);
+        setIsExpanded(false);
+      }
+    }, 30000); // 30 seconds of inactivity
+
+    return () => clearTimeout(timer);
+  }, [messages, inputMessage, isActivelyUsed]);
+
+  const handleMinimize = () => {
+    setIsActivelyUsed(false);
+    setIsExpanded(false);
+    setMessages([]);
+    setInputMessage('');
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -428,13 +458,19 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
       )}
 
       {/* Main chatbot container */}
-      <div className={`bg-white rounded-xl shadow-sm border border-orange-200 overflow-hidden transition-all duration-300 ${
+      <div className={`bg-white rounded-xl border border-orange-200 overflow-hidden transition-all duration-500 ease-in-out ${
         isOverlayMode 
           ? 'fixed top-4 left-4 right-4 bottom-4 z-50 max-w-5xl mx-auto shadow-2xl' 
-          : 'relative'
+          : isActivelyUsed || isExpanded
+            ? 'relative shadow-lg transform scale-[1.02]'
+            : 'relative shadow-sm'
       }`}>
         <div 
-          className="flex items-center justify-between p-5 bg-gradient-to-r from-orange-50 to-yellow-50 cursor-pointer"
+          className={`flex items-center justify-between p-5 cursor-pointer transition-all duration-300 ${
+            isActivelyUsed || isExpanded
+              ? 'bg-gradient-to-r from-orange-100 to-yellow-100'
+              : 'bg-gradient-to-r from-orange-50 to-yellow-50'
+          }`}
           onClick={() => {
             if (!isOverlayMode) {
               setIsExpanded(!isExpanded);
@@ -442,25 +478,44 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
           }}
         >
           <div className="flex items-center gap-3">
-            <MessageCircle className="w-6 h-6 text-orange-500" />
+            <MessageCircle className={`w-6 h-6 transition-all duration-300 ${
+              isActivelyUsed || isExpanded ? 'text-orange-600' : 'text-orange-500'
+            }`} />
             <h3 className="text-lg font-semibold text-slate-800">League Assistant</h3>
-            <span className="px-3 py-1 bg-gradient-to-r from-orange-500 to-yellow-500 text-white text-sm rounded-full font-medium">
-              PREMIUM
+            <span className={`px-3 py-1 bg-gradient-to-r from-orange-500 to-yellow-500 text-white text-sm rounded-full font-medium transition-all duration-300 ${
+              isActivelyUsed || isExpanded ? 'scale-105' : ''
+            }`}>
+              {isActivelyUsed ? 'ACTIVE' : 'PREMIUM'}
             </span>
           </div>
           <div className="flex items-center gap-2">
             {(isExpanded || isOverlayMode) && (
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsOverlayMode(!isOverlayMode);
-                }}
-                className="text-sm hover:bg-orange-100"
-              >
-                {isOverlayMode ? 'Minimize' : 'Expand'}
-              </Button>
+              <>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsOverlayMode(!isOverlayMode);
+                  }}
+                  className="text-sm hover:bg-orange-100"
+                >
+                  {isOverlayMode ? 'Minimize' : 'Expand'}
+                </Button>
+                {!isOverlayMode && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleMinimize();
+                    }}
+                    className="text-sm hover:bg-orange-100 text-slate-600"
+                  >
+                    Reset
+                  </Button>
+                )}
+              </>
             )}
             <Button variant="ghost" size="sm" className="text-lg">
               {(isExpanded || isOverlayMode) ? '−' : '+'}
@@ -469,7 +524,9 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
         </div>
 
       {(isExpanded || isOverlayMode) && (
-        <div className={`p-6 ${isOverlayMode ? 'h-full flex flex-col' : ''}`}>
+        <div className={`p-6 transition-all duration-500 ease-in-out ${
+          isOverlayMode ? 'h-full flex flex-col' : 'animate-in slide-in-from-top-2'
+        }`}>
           {messages.length === 0 ? (
             <div className="space-y-4">
               <p className="text-base text-slate-600 mb-4">
@@ -667,7 +724,15 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
               onChange={(e) => setInputMessage(e.target.value)}
               placeholder="Ask about stats, games, players..."
               onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-              className={`text-base py-4 px-4 ${isOverlayMode ? 'text-lg py-5' : ''}`}
+              onFocus={() => {
+                setIsActivelyUsed(true);
+                setIsExpanded(true);
+              }}
+              className={`text-base py-4 px-4 transition-all duration-300 ${
+                isOverlayMode ? 'text-lg py-5' : ''
+              } ${
+                isActivelyUsed || isExpanded ? 'border-orange-300 ring-2 ring-orange-100' : ''
+              }`}
               disabled={isLoading}
             />
             <Button
