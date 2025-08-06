@@ -7,8 +7,8 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIU
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// Python backend configuration
-const backendUrl = import.meta.env.VITE_BACKEND_URL || 'your-flask-backend-url';
+// Python backend configuration - local development
+const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
 
 // API utilities for Flask backend
 export const backendApi = {
