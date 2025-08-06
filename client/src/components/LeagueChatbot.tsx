@@ -498,7 +498,7 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
                     e.stopPropagation();
                     setIsOverlayMode(!isOverlayMode);
                   }}
-                  className="text-sm hover:bg-orange-100"
+                  className="text-sm text-slate-800 hover:bg-orange-100"
                 >
                   {isOverlayMode ? 'Minimize' : 'Expand'}
                 </Button>
@@ -517,7 +517,7 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
                 )}
               </>
             )}
-            <Button variant="ghost" size="sm" className="text-lg">
+            <Button variant="ghost" size="sm" className="text-lg text-slate-800">
               {(isExpanded || isOverlayMode) ? '−' : '+'}
             </Button>
           </div>
