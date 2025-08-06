@@ -102,16 +102,16 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
   const queryLeagueData = async (question: string, leagueId: string): Promise<{ content: string; suggestions?: string[] } | string> => {
     try {
       // First try to use the backend API
-      const backendUrl = import.meta.env.VITE_BACKEND_URL;
+      const BASE = import.meta.env.VITE_BACKEND_URL;
       
-      if (backendUrl) {
+      if (BASE) {
         console.log('🚀 Attempting backend chat request...');
-        console.log('Backend URL:', backendUrl);
+        console.log('Backend URL:', BASE);
         console.log('Question:', question);
         console.log('League ID:', leagueId);
 
         try {
-          const response = await fetch(`${backendUrl}/api/chat/league`, {
+          const response = await fetch(`${BASE}/api/chat/league/[slug]`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
