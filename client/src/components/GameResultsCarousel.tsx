@@ -178,25 +178,24 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
   };
 
   return (
-    <div className="w-full overflow-hidden">
-      <div 
-        ref={scrollContainerRef}
-        className={`overflow-x-auto scrollbar-hide select-none px-4 -mx-4 ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
-        onWheel={handleWheel}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseLeave}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        style={{ 
-          scrollbarWidth: 'none', 
-          msOverflowStyle: 'none',
-          WebkitOverflowScrolling: 'touch'
-        }}
-      >
-        <div className="flex gap-4 py-2" style={{ minWidth: 'max-content' }}>
+    <div 
+      ref={scrollContainerRef}
+      className={`w-full overflow-x-auto scrollbar-hide select-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+      onWheel={handleWheel}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseLeave}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      style={{ 
+        scrollbarWidth: 'none', 
+        msOverflowStyle: 'none',
+        WebkitOverflowScrolling: 'touch'
+      }}
+    >
+      <div className="flex gap-4 px-4 py-2" style={{ minWidth: 'max-content' }}>
         {games.map((game, index) => (
           <div
             key={game.game_id}
@@ -245,7 +244,6 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
           </div>
         </div>
       ))}
-        </div>
       </div>
     </div>
   );
