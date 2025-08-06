@@ -111,7 +111,7 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
         console.log('League ID:', leagueId);
 
         try {
-          const response = await fetch(`${BASE}/api/chat/league/[slug]`, {
+          const response = await fetch(`${BASE}/api/chat/league`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
