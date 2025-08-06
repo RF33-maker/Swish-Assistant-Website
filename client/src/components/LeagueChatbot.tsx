@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/use-auth';
 import { supabase } from '@/lib/supabase';
-import { useRouter } from 'next/router';
+import { useLocation } from 'wouter';
 
 interface Message {
   id: string;
@@ -28,7 +28,7 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
   const [isLoading, setIsLoading] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const router = useRouter(); // Hook for routing
+  const [, setLocation] = useLocation(); // Hook for routing
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -533,9 +533,9 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
                                 key={index}
                                 onClick={() => {
                                   if (button.type === 'player') {
-                                    router.push(`/players/${button.id}`); // Navigate to player profile
+                                    setLocation(`/player/${button.id}`); // Navigate to player profile
                                   } else if (button.type === 'team') {
-                                    router.push(`/teams/${button.id}`); // Navigate to team profile
+                                    setLocation(`/team/${button.id}`); // Navigate to team profile
                                   }
                                 }}
                                 variant="outline"
