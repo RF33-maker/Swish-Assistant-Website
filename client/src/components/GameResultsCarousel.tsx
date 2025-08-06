@@ -180,7 +180,7 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
   return (
     <div 
       ref={scrollContainerRef}
-      className={`w-full overflow-x-auto scrollbar-hide select-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+      className={`w-full overflow-x-auto scrollbar-hide select-none bg-gray-900 ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
       onWheel={handleWheel}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
@@ -244,6 +244,8 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
           </div>
         </div>
       ))}
+        {/* Add padding spacer at the end to prevent background showing */}
+        <div className="flex-shrink-0 w-4"></div>
       </div>
     </div>
   );
