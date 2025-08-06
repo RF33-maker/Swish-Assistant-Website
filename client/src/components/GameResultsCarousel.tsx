@@ -21,7 +21,9 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
   const [games, setGames] = useState<GameResult[]>([]);
   const [loading, setLoading] = useState(true);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
 
   useEffect(() => {
     const fetchGameResults = async () => {
@@ -92,7 +94,54 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
     }
   }, [leagueId]);
 
+  // Mouse wheel scroll handler
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollLeft += e.deltaY;
+    }
+  };
 
+  // Touch/mouse drag handlers
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsDragging(true);
+    setStartX(e.pageX - (scrollContainerRef.current?.offsetLeft || 0));
+    setScrollLeft(scrollContainerRef.current?.scrollLeft || 0);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging || !scrollContainerRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - (scrollContainerRef.current.offsetLeft || 0);
+    const walk = (x - startX) * 2; // Scroll speed multiplier
+    scrollContainerRef.current.scrollLeft = scrollLeft - walk;
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleMouseLeave = () => {
+    setIsDragging(false);
+  };
+
+  // Touch handlers for mobile
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setIsDragging(true);
+    setStartX(e.touches[0].pageX - (scrollContainerRef.current?.offsetLeft || 0));
+    setScrollLeft(scrollContainerRef.current?.scrollLeft || 0);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging || !scrollContainerRef.current) return;
+    const x = e.touches[0].pageX - (scrollContainerRef.current.offsetLeft || 0);
+    const walk = (x - startX) * 2;
+    scrollContainerRef.current.scrollLeft = scrollLeft - walk;
+  };
+
+  const handleTouchEnd = () => {
+    setIsDragging(false);
+  };
 
   if (loading) {
     return (
@@ -129,14 +178,31 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
   };
 
   return (
-    <div className="w-full overflow-x-auto scrollbar-hide bg-gray-900">
+    <div 
+      ref={scrollContainerRef}
+      className={`w-full overflow-x-auto scrollbar-hide select-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+      onWheel={handleWheel}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseLeave}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      style={{ 
+        scrollbarWidth: 'none', 
+        msOverflowStyle: 'none',
+        WebkitOverflowScrolling: 'touch'
+      }}
+    >
       <div className="flex gap-4 px-4 py-2" style={{ minWidth: 'max-content' }}>
         {games.map((game, index) => (
           <div
             key={game.game_id}
             className="bg-gray-800 rounded-lg px-6 py-4 flex-shrink-0 cursor-pointer hover:bg-gray-700 transition-colors border border-gray-700"
             style={{ width: '320px', minWidth: '320px', maxWidth: '320px' }}
-            onClick={() => onGameClick(game.game_id)}
+            onClick={() => !isDragging && onGameClick(game.game_id)}
+            onMouseDown={(e) => e.preventDefault()} // Prevent text selection
           >
           {/* Header with date and status */}
           <div className="flex justify-between items-center mb-3">
