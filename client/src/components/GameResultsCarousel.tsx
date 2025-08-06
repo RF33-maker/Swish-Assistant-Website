@@ -244,7 +244,26 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
           </div>
         </div>
       ))}
-        {/* Add padding spacer at the end to prevent background showing */}
+        
+        {/* Dynamic End Cap Design */}
+        <div className="flex-shrink-0 flex items-center justify-center bg-gradient-to-r from-gray-800 to-gray-700 rounded-lg border border-gray-600 p-6 mx-4" style={{ width: '280px', minWidth: '280px', height: 'auto' }}>
+          <div className="text-center space-y-3">
+            <div className="text-gray-300 text-sm font-medium">
+              End of Game Results
+            </div>
+            <div className="w-12 h-0.5 bg-orange-400 mx-auto"></div>
+            <div className="text-gray-400 text-xs">
+              {games.length} games displayed
+            </div>
+            <div className="flex justify-center space-x-2 mt-3">
+              <div className="w-1.5 h-1.5 bg-orange-400 rounded-full opacity-60"></div>
+              <div className="w-1.5 h-1.5 bg-orange-400 rounded-full opacity-40"></div>
+              <div className="w-1.5 h-1.5 bg-orange-400 rounded-full opacity-20"></div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Final spacer */}
         <div className="flex-shrink-0 w-4"></div>
       </div>
     </div>
