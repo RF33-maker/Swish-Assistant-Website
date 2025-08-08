@@ -33,10 +33,19 @@ function useAuthProviderValue(): AuthContextType {
   } = useQuery<SelectUser | null, Error>({
     queryKey: ["user"],
     queryFn: async () => {
-      const { data, error } = await supabase.auth.getUser();
-      if (error) throw new Error(error.message);
-      return data?.user ?? null;
+      try {
+        const { data, error } = await supabase.auth.getUser();
+        if (error) {
+          console.log("Auth error (not throwing):", error.message);
+          return null; // Return null instead of throwing
+        }
+        return data?.user ?? null;
+      } catch (err) {
+        console.log("Auth catch error (not throwing):", err);
+        return null; // Return null instead of throwing
+      }
     },
+    retry: false, // Don't retry auth failures
   });
 
   const loginMutation = useMutation({

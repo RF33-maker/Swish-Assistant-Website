@@ -7,6 +7,9 @@ import Ballpark from "@/assets/ballparksports.jpg"
 import GCK from "@/assets/GCK.jpg"
 import UL from "@/assets/uploadimage.png"
 import Chatbot from "@/assets/Chatbotimage.png"
+import LeaguePage from "@/assets/League-page.png"
+import ChatbotExample from "@/assets/Chatbotexample.png"
+import { Button } from "@/components/ui/button"
 
 export default function LandingPage() {
   const [query, setQuery] = useState("")
@@ -21,19 +24,57 @@ export default function LandingPage() {
         return
       }
 
-      const { data, error } = await supabase
-      .from("leagues")
-      .select("name, slug")
-      .or(`name.ilike.%${query}%`)
-      .eq("is_public", true);
+      // Search both leagues and players
+      console.log("🔍 Searching for:", query);
 
+      const [leaguesResponse, playersResponse] = await Promise.all([
+        supabase
+          .from("leagues")
+          .select("name, slug")
+          .or(`name.ilike.%${query}%`)
+          .eq("is_public", true),
+        supabase
+          .from("player_stats")
+          .select("name, team, id")
+          .ilike("name", `%${query}%`)
+          .limit(10)
+      ]);
+
+      console.log("📊 Players response:", playersResponse);
+      console.log("📊 Players data:", playersResponse.data);
+      console.log("📊 Players error:", playersResponse.error);
+
+      const leagues = leaguesResponse.data || [];
+      const players = playersResponse.data || [];
+
+      // Remove duplicate players (same name) and format
+      const uniquePlayers = players.reduce((acc: any[], player) => {
+        if (!acc.some(p => p.name === player.name)) {
+          acc.push({
+            name: player.name,
+            team: player.team,
+            player_id: player.id,
+            type: 'player'
+          });
+        }
+        return acc;
+      }, []);
+
+      // Format leagues
+      const formattedLeagues = leagues.map(league => ({
+        ...league,
+        type: 'league'
+      }));
+
+      // Combine and limit results
+      const combined = [...formattedLeagues, ...uniquePlayers].slice(0, 8);
 
       console.log("Query input:", query)
-      console.log("Returned data:", data)
-      console.log("Returned suggestions:", data);
-      console.log("Returned error:", error)
+      console.log("Leagues found:", leagues.length)
+      console.log("Players found:", uniquePlayers.length)
+      console.log("Combined suggestions:", combined);
 
-      setSuggestions(data || [])
+      setSuggestions(combined)
     }
 
     const delayDebounce = setTimeout(fetchSuggestions, 300)
@@ -41,10 +82,15 @@ export default function LandingPage() {
   }, [query])
 
 
-  const handleSelect = (slug: string) => {
+  const handleSelect = (item: any) => {
     setQuery("")
     setSuggestions([])
-    setLocation(`/league/${slug}`)
+
+    if (item.type === 'league') {
+      setLocation(`/league/${item.slug}`)
+    } else if (item.type === 'player') {
+      setLocation(`/player/${item.player_id}`)
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -92,6 +138,8 @@ export default function LandingPage() {
           <span className="font-bold text-xl text-orange-600"></span>
         </div>
         <nav className="flex gap-6 text-sm text-slate-600 font-medium">
+          <a href="#features" className="hover:text-orange-600 transition-colors">Features</a>
+          <a href="#pricing" className="hover:text-orange-600 transition-colors">Pricing</a>
           <a href="/auth">Get Started</a>
           <a href="/auth">Login</a>
         </nav>
@@ -117,7 +165,7 @@ export default function LandingPage() {
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search for player or league..."
+              placeholder="Search for players or leagues..."
               className="flex-1 px-5 py-4 text-base text-white focus:outline-none"
             />
             <button
@@ -129,14 +177,36 @@ export default function LandingPage() {
           </form>
 
           {suggestions.length > 0 && (
-            <ul className="absolute z-50 w-full bg-gray-800 border border-gray-700 mt-1 rounded-md shadow-md max-h-60 overflow-y-auto">
-              {suggestions.map((league, index) => (
+            <ul className="absolute z-50 w-full bg-white border border-orange-200 mt-1 rounded-md shadow-lg max-h-60 overflow-y-auto">
+              {suggestions.map((item, index) => (
                 <li
                   key={index}
-                  onClick={() => handleSelect(league.slug)}
-                  className="px-5 py-3 cursor-pointer hover:bg-orange-600 text-left text-white"
+                  onClick={() => handleSelect(item)}
+                  className="px-5 py-3 cursor-pointer hover:bg-orange-50 text-left border-b border-orange-100 last:border-b-0 transition-colors duration-200"
                 >
-                  {league.name}
+                  <div className="flex items-center gap-3">
+                    {item.type === 'league' ? (
+                      <div className="h-8 w-8 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center">
+                        <span className="text-white text-sm">🏆</span>
+                      </div>
+                    ) : (
+                      <div className="h-8 w-8 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center">
+                        <span className="text-white text-sm">👤</span>
+                      </div>
+                    )}
+                    <div className="flex-1">
+                      <div className="font-medium text-orange-900 text-sm">{item.name}</div>
+                      {item.type === 'player' && (
+                        <div className="text-xs text-orange-600">{item.team}</div>
+                      )}
+                      {item.type === 'league' && (
+                        <div className="text-xs text-orange-600">League</div>
+                      )}
+                    </div>
+                    <div className="text-xs text-orange-700 capitalize bg-orange-100 px-2 py-1 rounded-full font-medium">
+                      {item.type}
+                    </div>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -150,7 +220,7 @@ export default function LandingPage() {
             ? trendingLeagues.map((league, i) => (
                 <button
                   key={i}
-                  onClick={() => handleSelect(league.slug)}
+                  onClick={() => handleSelect({ type: 'league', slug: league.slug })}
                   className="bg-orange-100 hover:bg-orange-200 text-sm text-orange-800 px-5 py-3 rounded-lg text-left transition"
                 >
                   🔥 Trending: {league.name}
@@ -163,7 +233,7 @@ export default function LandingPage() {
               ].map((league, i) => (
                 <button
                   key={i}
-                  onClick={() => handleSelect(league.slug)}
+                  onClick={() => handleSelect({ type: 'league', slug: league.slug })}
                   className="bg-orange-100 hover:bg-orange-200 text-sm text-orange-800 px-5 py-3 rounded-lg text-left transition"
                 >
                   🔥 Trending: {league.name}
@@ -175,7 +245,7 @@ export default function LandingPage() {
       </main>
 
       {/*used by teams and leagues across the UK*/}
-    
+
       <section className="w-full bg-orange-500 py-10 text-white">
         <h2 className="text-center text-sm uppercase mb-6">
           Already being used by teams and these leagues
@@ -234,10 +304,10 @@ export default function LandingPage() {
           {/* Left: Text Content */}
           <div>
             <h3 className="text-2xl font-bold text-slate-900 mb-4">
-              Ask the AI Anything
+              Ask the Swish Agent about your league
             </h3>
             <p className="text-gray-600 mb-4">
-              Use natural language to ask questions like “Who leads the league in assists?” or “Show me Rhys Farrell’s last 5 games.”
+              Use the Swish Agent to ask questions like “Who leads the league in assists?” or “Show me John Smith's last 5 games.”
             </p>
             <ul className="text-left text-gray-600 list-disc list-inside space-y-2">
               <li>Chatbot understands players, teams & stats</li>
@@ -263,8 +333,8 @@ export default function LandingPage() {
           {/* Left: Visual */}
           <div className="w-full flex justify-center">
             <img
-              src="/assets/demo-upload.png" // Replace with your screenshot
-              alt="Upload Example"
+              src={LeaguePage}
+              alt="League Page Example"
               className="rounded-xl shadow-lg w-full max-w-md"
             />
           </div>
@@ -307,7 +377,7 @@ export default function LandingPage() {
           {/* Right: Visual */}
           <div className="w-full flex justify-center">
             <img
-              src="/assets/demo-chatbot.png" // Swap this with your visual
+              src={ChatbotExample}
               alt="Chatbot Example"
               className="rounded-xl shadow-lg w-full max-w-md"
             />
@@ -315,10 +385,335 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Newsletter Signup Section */}
+      <section className="py-16 bg-gradient-to-br from-orange-50 to-orange-100 relative overflow-hidden">
+        {/* Background Logo */}
+        <div className="absolute inset-0 flex items-center justify-center opacity-5">
+          <img 
+            src={SwishLogo} 
+            alt="Swish Logo Background" 
+            className="w-96 h-96 object-contain transform rotate-12"
+          />
+        </div>
 
-      {/* [rest of your landing page unchanged] */}
+        <div className="max-w-4xl mx-auto px-6 text-center relative z-10">
+          <h3 className="text-3xl font-bold text-slate-900 mb-4">
+            Stay Updated with Swish Assistant
+          </h3>
+          <p className="text-gray-600 mb-8 max-w-2xl mx-auto">
+            Get the latest news, feature updates, and tips delivered straight to your inbox. 
+            Be the first to know about new league management features and AI improvements.
+          </p>
+
+          <form className="flex flex-col sm:flex-row gap-4 max-w-lg mx-auto">
+            <input
+              type="email"
+              placeholder="Enter your email address"
+              className="flex-1 px-4 py-3 rounded-lg border border-orange-200 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent bg-white/80 backdrop-blur-sm"
+              required
+            />
+            <button
+              type="submit"
+              className="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6 py-3 rounded-lg transition-colors duration-200 shadow-lg"
+            >
+              Subscribe
+            </button>
+          </form>
+
+          <p className="text-sm text-gray-500 mt-4">
+            No spam, unsubscribe at any time. We respect your privacy.
+          </p>
+        </div>
+      </section>
+
+      {/* Features Section - anchor target */}
+      <section id="features" className="py-16 bg-white">
+        <div className="max-w-6xl mx-auto px-6 text-center">
+          <h2 className="text-3xl font-bold text-slate-900 mb-4">
+            Everything you need to manage your basketball league
+          </h2>
+          <p className="text-gray-600 mb-12 max-w-2xl mx-auto">
+            From uploading game stats to creating detailed scouting reports, 
+            Swish Assistant has all the tools you need in one place.
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl">📊</span>
+              </div>
+              <h3 className="text-lg font-semibold text-slate-900 mb-2">Auto Stats Processing</h3>
+              <p className="text-gray-600 text-sm">Upload FIBA LiveStats PDFs and get instant stat extraction</p>
+            </div>
+
+            <div className="text-center">
+              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl">🤖</span>
+              </div>
+              <h3 className="text-lg font-semibold text-slate-900 mb-2">AI Assistant</h3>
+              <p className="text-gray-600 text-sm">Ask questions and get instant insights about your league</p>
+            </div>
+
+            <div className="text-center">
+              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl">📈</span>
+              </div>
+              <h3 className="text-lg font-semibold text-slate-900 mb-2">Visual Analytics</h3>
+              <p className="text-gray-600 text-sm">Beautiful charts and performance tracking for teams and players</p>
+            </div>
+
+            <div className="text-center">
+              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl">🏆</span>
+              </div>
+              <h3 className="text-lg font-semibold text-slate-900 mb-2">Public Leagues</h3>
+              <p className="text-gray-600 text-sm">Showcase your league stats and let players engage with the data</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Pricing Section */}
+      <section id="pricing" className="py-16 bg-gradient-to-br from-slate-50 to-orange-50">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-slate-900 mb-4">
+              Choose the right plan for your team
+            </h2>
+            <p className="text-gray-600 max-w-2xl mx-auto">
+              From individual coaches to full league management, we have a plan that fits your needs and budget.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+
+            {/* Free Tier */}
+            <div className="bg-white rounded-xl shadow-lg border-2 border-gray-200 p-6 relative">
+              <div className="text-center">
+                <h3 className="text-xl font-bold text-slate-900 mb-2">Free</h3>
+                <div className="text-3xl font-bold text-slate-900 mb-1">£0</div>
+                <p className="text-gray-600 text-sm mb-6">Perfect for trying out</p>
+
+                <ul className="text-left space-y-3 mb-8">
+                  <li className="flex items-center gap-2 text-sm">
+                    <span className="text-green-500">✓</span>
+                    <span>1 private league only</span>
+                  </li>
+                  <li className="flex items-center gap-2 text-sm">
+                    <span className="text-green-500">✓</span>
+                    <span>View all public leagues</span>
+                  </li>
+                  <li className="flex items-center gap-2 text-sm">
+                    <span className="text-green-500">✓</span>
+                    <span>Limited AI queries</span>
+                  </li>
+                  <li className="flex items-center gap-2 text-sm">
+                    <span className="text-gray-400">✗</span>
+                    <span className="text-gray-400">Public league hosting</span>
+                  </li>
+                </ul>
+
+                <Button 
+                  size="lg" 
+                  variant="outline"
+                  className="w-full border-orange-200 text-orange-700 hover:bg-orange-50"
+                  onClick={() => window.location.href = '/auth'}
+                >
+                  Get Started Free
+                </Button>
+              </div>
+            </div>
+
+            {/* Individual Tier */}
+            <div className="bg-white rounded-xl shadow-lg border-2 border-orange-200 p-6 relative">
+              <div className="text-center">
+                <h3 className="text-xl font-bold text-slate-900 mb-2">Individual</h3>
+                <div className="text-3xl font-bold text-orange-600 mb-1">£5</div>
+                <p className="text-gray-600 text-sm mb-6">per month</p>
+
+                <ul className="text-left space-y-3 mb-8">
+                  <li className="flex items-center gap-2 text-sm">
+                    <span className="text-green-500">✓</span>
+                    <span>Public league hosting</span>
+                  </li>
+                  <li className="flex items-center gap-2 text-sm">
+                    <span className="text-green-500">✓</span>
+                    <span>Full AI league assistant</span>
+                  </li>
+                  <li className="flex items-center gap-2 text-sm">
+                    <span className="text-green-500">✓</span>
+                    <span>1 scouting report/month</span>
+                  </li>
+                  <li className="flex items-center gap-2 text-sm">
+                    <span className="text-green-500">✓</span>
+                    <span>Advanced analytics</span>
+                  </li>
+                </ul>
+
+                <Button 
+                  size="lg"
+                  className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+                  onClick={() => window.location.href = '/auth?plan=individual&price=5'}
+                >
+                  Choose Individual
+                </Button>
+              </div>
+            </div>
+
+            {/* All Access Tier */}
+            <div className="bg-white rounded-xl shadow-lg border-2 border-purple-200 p-6 relative">
+              <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                <span className="bg-purple-600 text-white px-3 py-1 rounded-full text-xs font-semibold">POPULAR</span>
+              </div>
+              <div className="text-center">
+                <h3 className="text-xl font-bold text-slate-900 mb-2">All Access</h3>
+                <div className="text-3xl font-bold text-purple-600 mb-1">£15</div>
+                <p className="text-gray-600 text-sm mb-6">per month</p>
+
+                <ul className="text-left space-y-3 mb-8">
+                  <li className="flex items-center gap-2 text-sm">
+                    <span className="text-green-500">✓</span>
+                    <span>Multiple league creation</span>
+                  </li>
+                  <li className="flex items-center gap-2 text-sm">
+                    <span className="text-green-500">✓</span>
+                    <span>Full AI assistant features</span>
+                  </li>
+                  <li className="flex items-center gap-2 text-sm">
+                    <span className="text-green-500">✓</span>
+                    <span>Full league branding</span>
+                  </li>
+                  <li className="flex items-center gap-2 text-sm">
+                    <span className="text-green-500">✓</span>
+                    <span>Unlimited scouting reports</span>
+                  </li>
+                </ul>
+
+                <Button 
+                  size="lg"
+                  className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+                  onClick={() => window.location.href = '/auth?plan=all-access&price=15'}
+                >
+                  Choose All Access
+                </Button>
+              </div>
+            </div>
+
+            {/* Full League/Season Tier */}
+            <div className="bg-white rounded-xl shadow-lg border-2 border-blue-200 p-6 relative">
+              <div className="text-center">
+                <h3 className="text-xl font-bold text-slate-900 mb-2">Full League</h3>
+                <div className="text-3xl font-bold text-blue-600 mb-1">Custom</div>
+                <p className="text-gray-600 text-sm mb-6">contact us</p>
+
+                <ul className="text-left space-y-3 mb-8">
+                  <li className="flex items-center gap-2 text-sm">
+                    <span className="text-green-500">✓</span>
+                    <span>All teams included</span>
+                  </li>
+                  <li className="flex items-center gap-2 text-sm">
+                    <span className="text-green-500">✓</span>
+                    <span>Players & coaches access</span>
+                  </li>
+                  <li className="flex items-center gap-2 text-sm">
+                    <span className="text-green-500">✓</span>
+                    <span>Dedicated support</span>
+                  </li>
+                  <li className="flex items-center gap-2 text-sm">
+                    <span className="text-green-500">✓</span>
+                    <span>White-label options</span>
+                  </li>
+                </ul>
+
+                <Button 
+                  size="lg"
+                  className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+                  onClick={() => window.location.href = '/auth?plan=full-league&contact=true'}
+                >
+                  Contact Sales
+                </Button>
+              </div>
+            </div>
+
+          </div>
+
+          <div className="text-center mt-12">
+            <p className="text-gray-600 text-sm">
+              All plans include secure data storage and regular backups. 
+              <a href="#support" className="text-orange-600 hover:text-orange-700 underline ml-1">Need help choosing?</a>
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-slate-900 text-white py-12">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+
+            {/* Company Info */}
+            <div className="md:col-span-2">
+              <div className="flex items-center gap-2 mb-4">
+                <img src={SwishLogo} alt="Swish Logo" className="h-8" />
+                <span className="font-bold text-xl text-orange-400">Swish Assistant</span>
+              </div>
+              <p className="text-gray-300 mb-4">
+                Revolutionizing basketball league management with AI-powered analytics, 
+                automated stat tracking, and intelligent insights for coaches and players.
+              </p>
+            </div>
+
+            {/* Quick Links */}
+            <div>
+              <h4 className="font-semibold text-lg mb-4 text-orange-400">Quick Links</h4>
+              <ul className="space-y-2">
+                <li><a href="/auth" className="text-gray-300 hover:text-white transition-colors">Get Started</a></li>
+                <li><a href="/auth" className="text-gray-300 hover:text-white transition-colors">Login</a></li>
+                <li><a href="#features" className="text-gray-300 hover:text-white transition-colors">Features</a></li>
+                <li><a href="#pricing" className="text-gray-300 hover:text-white transition-colors">Pricing</a></li>
+              </ul>
+            </div>
+
+            {/* Legal */}
+            <div>
+              <h4 className="font-semibold text-lg mb-4 text-orange-400">Legal</h4>
+              <ul className="space-y-2">
+                <li><a href="#privacy" className="text-gray-300 hover:text-white transition-colors">Privacy Policy</a></li>
+                <li><a href="#terms" className="text-gray-300 hover:text-white transition-colors">Terms of Service</a></li>
+                <li><a href="#cookies" className="text-gray-300 hover:text-white transition-colors">Cookie Policy</a></li>
+                <li><a href="#support" className="text-gray-300 hover:text-white transition-colors">Support</a></li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-700 mt-8 pt-8 flex flex-col sm:flex-row justify-between items-center">
+            <p className="text-gray-400 text-sm">
+              &copy; {new Date().getFullYear()} Swish Assistant. All rights reserved.
+            </p>
+            <div className="flex gap-6 mt-4 sm:mt-0">
+              <a href="#twitter" className="text-gray-400 hover:text-white transition-colors">
+                <span className="sr-only">Twitter</span>
+                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M8.29 20.251c7.547 0 11.675-6.253 11.675-11.675 0-.178 0-.355-.012-.53A8.348 8.348 0 0022 5.92a8.19 8.19 0 01-2.357.646 4.118 4.118 0 001.804-2.27 8.224 8.224 0 01-2.605.996 4.107 4.107 0 00-6.993 3.743 11.65 11.65 0 01-8.457-4.287 4.106 4.106 0 001.27 5.477A4.072 4.072 0 012.8 9.713v.052a4.105 4.105 0 003.292 4.022 4.095 4.095 0 01-1.853.07 4.108 4.108 0 003.834 2.85A8.233 8.233 0 012 18.407a11.616 11.616 0 006.29 1.84" />
+                </svg>
+              </a>
+              <a href="#linkedin" className="text-gray-400 hover:text-white transition-colors">
+                <span className="sr-only">LinkedIn</span>
+                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                </svg>
+              </a>
+              <a href="#instagram" className="text-gray-400 hover:text-white transition-colors">
+                <span className="sr-only">Instagram</span>
+                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12.017 0C5.396 0 .029 5.367.029 11.987c0 6.624 5.367 11.99 11.988 11.99s11.987-5.366 11.987-11.99C23.971 5.367 18.641.001 12.017.001zM8.449 16.988c-1.297 0-2.448-.49-3.328-1.297L6.438 14l1.313 1.315c.504.504 1.202.778 1.933.778 1.509 0 2.734-1.224 2.734-2.733s-1.225-2.734-2.734-2.734c-.731 0-1.429.275-1.933.778L6.438 12.72 5.121 11.404c.88-.808 2.031-1.297 3.328-1.297 2.641 0 4.783 2.142 4.783 4.783s-2.142 4.783-4.783 4.783z"/>
+                </svg>
+              </a>
+            </div>
+          </div>
+        </div>
+      </footer>
+
     </div>
   )
 }
-
-

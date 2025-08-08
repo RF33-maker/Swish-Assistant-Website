@@ -5,6 +5,12 @@ import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import LeagueDefaultImage from "@/assets/league-default.png";
 import React from "react";
 import { GameSummaryRow } from "./GameSummaryRow";
+import GameResultsCarousel from "@/components/GameResultsCarousel";
+import GameDetailModal from "@/components/GameDetailModal";
+import LeagueChatbot from "@/components/LeagueChatbot";
+import { TeamLogo } from "@/components/TeamLogo";
+import { TeamLogoUploader } from "@/components/TeamLogoUploader";
+
 
 
   export default function LeaguePage() {
@@ -27,6 +33,15 @@ import { GameSummaryRow } from "./GameSummaryRow";
     const [sortField, setSortField] = useState("points");
     const [sortOrder, setSortOrder] = useState("desc");
     const [sortBy, setSortBy] = useState("points");
+    const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
+    const [isGameModalOpen, setIsGameModalOpen] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [instagramUrl, setInstagramUrl] = useState("");
+  const [isEditingInstagram, setIsEditingInstagram] = useState(false);
+  const [updatingInstagram, setUpdatingInstagram] = useState(false);
+
     
 
 
@@ -57,14 +72,37 @@ import { GameSummaryRow } from "./GameSummaryRow";
 
 
     useEffect(() => {
-      const fetchLeague = async () => {
+      const fetchUserAndLeague = async () => {
+        // First get the current user
+        const { data: { user } } = await supabase.auth.getUser();
+        setCurrentUser(user);
+        
+        // Then fetch league data
         const { data, error } = await supabase
           .from("leagues")
           .select("*")
           .eq("slug", slug)
           .single();
+        
         console.log("Resolved league from slug:", slug, "→ ID:", data?.league_id);
+        console.log("League data:", data);
+        console.log("Current user:", user);
+        console.log("Fetch error:", error);
 
+        if (data) {
+          setLeague(data);
+          // Now check ownership with the fetched user data
+          const ownerStatus = user?.id === data.user_id || user?.id === data.created_by;
+          setIsOwner(ownerStatus);
+          setInstagramUrl(data.instagram_embed_url || "");
+          console.log("Is owner?", ownerStatus, "User ID:", user?.id, "League owner ID:", data.user_id);
+        }
+        
+        if (error) {
+          console.error("Failed to fetch league:", error);
+          // Still set empty league data to show the page structure
+          setLeague(null);
+        }
 
         if (data?.league_id) {
           const fetchTopStats = async () => {
@@ -109,16 +147,18 @@ import { GameSummaryRow } from "./GameSummaryRow";
             setTopAssists(assistData);
             setGameSummaries(recentGames || []);
             setPlayerStats(allPlayerStats || []);
+            
+            // Calculate standings from game data
+            calculateStandings(allPlayerStats || []);
           };
+
+
 
           fetchTopStats();
         }
-
-        if (error) console.error("Failed to fetch league:", error);
-        setLeague(data);
       };
 
-      fetchLeague();
+      fetchUserAndLeague();
     }, [slug]);
 
     const handleSearch = () => {
@@ -163,6 +203,256 @@ import { GameSummaryRow } from "./GameSummaryRow";
     const topRebounders = getTopList("rebounds_total");
     const topAssistsList = getTopList("assists");
 
+    const handleGameClick = (gameId: string) => {
+      setSelectedGameId(gameId);
+      setIsGameModalOpen(true);
+    };
+
+    const handleCloseGameModal = () => {
+      setIsGameModalOpen(false);
+      setSelectedGameId(null);
+    };
+
+    const handleBannerUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file || !league?.league_id || !currentUser) {
+        console.error('Missing requirements:', { file: !!file, league_id: league?.league_id, user: !!currentUser });
+        return;
+      }
+
+      setUploadingBanner(true);
+      try {
+        console.log('Starting banner upload for league:', league.league_id);
+        
+        // Upload file to Supabase storage
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${league.league_id}_${Date.now()}.${fileExt}`;
+        
+        console.log('Uploading file:', fileName);
+        const { data, error: uploadError } = await supabase.storage
+          .from('league-banners')
+          .upload(fileName, file);
+
+        if (uploadError) {
+          console.error('Upload error:', uploadError);
+          alert(`Failed to upload banner: ${uploadError.message}`);
+          return;
+        }
+
+        console.log('File uploaded successfully:', data);
+
+        // Get public URL without cache-busting for database storage
+        const { data: { publicUrl } } = supabase.storage
+          .from('league-banners')
+          .getPublicUrl(fileName);
+        
+        console.log('Public URL:', publicUrl);
+
+        // First check if banner_url column exists by trying a simple select
+        const { data: checkData, error: checkError } = await supabase
+          .from('leagues')
+          .select('banner_url')
+          .eq('league_id', league.league_id)
+          .single();
+        
+        console.log('Column check result:', checkData, checkError);
+
+        // Try updating by slug instead of league_id
+        const { data: updateData, error: updateError } = await supabase
+          .from('leagues')
+          .update({ banner_url: publicUrl })
+          .eq('slug', slug)
+          .select();
+
+        if (updateError) {
+          console.error('Database update error:', updateError);
+          alert(`Failed to update banner in database: ${updateError.message}`);
+          return;
+        }
+
+        console.log('Database updated successfully:', updateData);
+
+        // Update local state immediately with the new banner URL
+        const updatedLeagueData = { ...league, banner_url: publicUrl };
+        setLeague(updatedLeagueData);
+        console.log('Updated local league state with banner URL:', publicUrl);
+        
+        // Force a refetch to ensure the banner persists
+        setTimeout(async () => {
+          const { data: updatedLeague, error: fetchError } = await supabase
+            .from('leagues')
+            .select('*')
+            .eq('slug', slug)
+            .single();
+          
+          if (fetchError) {
+            console.error('Refetch error:', fetchError);
+          } else {
+            console.log('Refetched league data:', updatedLeague);
+            setLeague(updatedLeague);
+          }
+        }, 1000);
+        
+        alert('Banner updated successfully!');
+      } catch (error) {
+        console.error('Banner upload error:', error);
+        alert(`Failed to upload banner: ${error.message}`);
+      } finally {
+        setUploadingBanner(false);
+        // Reset file input
+        event.target.value = '';
+      }
+    };
+
+    // Handle Instagram URL update
+    const handleInstagramUpdate = async () => {
+      if (!isOwner || !league) return;
+      
+      setUpdatingInstagram(true);
+      try {
+        const { data, error } = await supabase
+          .from('leagues')
+          .update({ instagram_embed_url: instagramUrl })
+          .eq('league_id', league.league_id)
+          .select()
+          .single();
+
+        if (error) {
+          console.error('Instagram update error:', error);
+          alert('Failed to update Instagram URL');
+          return;
+        }
+
+        setLeague({ ...league, instagram_embed_url: instagramUrl });
+        setIsEditingInstagram(false);
+        alert('Instagram URL updated successfully!');
+      } catch (error) {
+        console.error('Instagram update error:', error);
+        alert(`Failed to update Instagram URL: ${error.message}`);
+      } finally {
+        setUpdatingInstagram(false);
+      }
+    };
+
+    // Convert Instagram profile URL to embed URL for latest posts
+    const getInstagramEmbedUrl = (url: string) => {
+      if (!url) return null;
+      
+      console.log('Processing Instagram URL:', url);
+      
+      // Clean the URL by removing query parameters
+      const cleanUrl = url.split('?')[0];
+      
+      // Check if it's a profile URL (instagram.com/username)
+      const profileRegex = /(?:instagram\.com\/)([A-Za-z0-9._]+)(?:\/)?$/;
+      const profileMatch = cleanUrl.match(profileRegex);
+      
+      if (profileMatch) {
+        const embedUrl = `https://www.instagram.com/${profileMatch[1]}/embed`;
+        console.log('Generated profile embed URL:', embedUrl);
+        return embedUrl;
+      }
+      
+      // Fallback: Extract post ID from specific post URLs
+      const postRegex = /(?:instagram\.com\/p\/|instagram\.com\/reel\/)([A-Za-z0-9_-]+)/;
+      const postMatch = cleanUrl.match(postRegex);
+      
+      if (postMatch) {
+        const embedUrl = `https://www.instagram.com/p/${postMatch[1]}/embed`;
+        console.log('Generated post embed URL:', embedUrl);
+        return embedUrl;
+      }
+      
+      console.log('No match found for URL:', url);
+      return null;
+    };
+
+    // Calculate team standings from player stats using actual game results
+    const calculateStandings = (playerStats: any[]) => {
+      // Group stats by game_id to get complete game data
+      const gameMap = new Map<string, any>();
+      
+      playerStats.forEach(stat => {
+        if (!gameMap.has(stat.game_id)) {
+          gameMap.set(stat.game_id, {
+            game_id: stat.game_id,
+            game_date: stat.game_date,
+            home_team: stat.home_team,
+            away_team: stat.away_team,
+            players: []
+          });
+        }
+        gameMap.get(stat.game_id).players.push(stat);
+      });
+
+      // Calculate scores for each game and determine winners/losers
+      const teamStats: { [team: string]: { totalPoints: number, games: number, wins: number, losses: number, pointsAgainst: number } } = {};
+      
+      Array.from(gameMap.values()).forEach(game => {
+        // Calculate team scores by summing player points
+        const teamScores = game.players.reduce((acc: Record<string, number>, stat: any) => {
+          const teamName = stat.team;
+          if (!teamName) return acc;
+          if (!acc[teamName]) acc[teamName] = 0;
+          acc[teamName] += stat.points || 0;
+          return acc;
+        }, {});
+
+        const teams = Object.keys(teamScores);
+        if (teams.length !== 2) return; // Skip if not exactly 2 teams
+        
+        const [team1, team2] = teams;
+        const team1Score = teamScores[team1];
+        const team2Score = teamScores[team2];
+        
+        // Initialize team stats if they don't exist
+        [team1, team2].forEach(team => {
+          if (!teamStats[team]) {
+            teamStats[team] = { totalPoints: 0, games: 0, wins: 0, losses: 0, pointsAgainst: 0 };
+          }
+        });
+        
+        // Update team stats
+        teamStats[team1].totalPoints += team1Score;
+        teamStats[team1].pointsAgainst += team2Score;
+        teamStats[team1].games += 1;
+        
+        teamStats[team2].totalPoints += team2Score;
+        teamStats[team2].pointsAgainst += team1Score;
+        teamStats[team2].games += 1;
+        
+        // Determine winner and loser based on actual scores
+        if (team1Score > team2Score) {
+          teamStats[team1].wins += 1;
+          teamStats[team2].losses += 1;
+        } else if (team2Score > team1Score) {
+          teamStats[team2].wins += 1;
+          teamStats[team1].losses += 1;
+        }
+        // Note: Ties are not counted as wins or losses
+      });
+      
+      // Convert to standings format
+      const standingsArray = Object.entries(teamStats).map(([team, stats]) => ({
+        team,
+        wins: stats.wins,
+        losses: stats.losses,
+        winPct: stats.games > 0 ? Math.round((stats.wins / stats.games) * 1000) / 1000 : 0,
+        pointsFor: stats.totalPoints,
+        pointsAgainst: stats.pointsAgainst,
+        pointsDiff: stats.totalPoints - stats.pointsAgainst,
+        games: stats.games,
+        avgPoints: stats.games > 0 ? Math.round((stats.totalPoints / stats.games) * 10) / 10 : 0,
+        record: `${stats.wins}-${stats.losses}`
+      })).sort((a, b) => {
+        // Sort by win percentage first, then by point differential, then by average points
+        if (b.winPct !== a.winPct) return b.winPct - a.winPct;
+        if (b.pointsDiff !== a.pointsDiff) return b.pointsDiff - a.pointsDiff;
+        return b.avgPoints - a.avgPoints;
+      });
+
+      setStandings(standingsArray);
+    };
 
     if (!league) {
       return <div className="p-6 text-slate-600">Loading league...</div>;
@@ -216,10 +506,30 @@ import { GameSummaryRow } from "./GameSummaryRow";
           </div>
 
           <div className="flex gap-6 text-sm font-medium text-slate-600">
-            <a href="#" className="hover:text-orange-500">Overview</a>
+            <a 
+              href="#" 
+              className="hover:text-orange-500 cursor-pointer"
+              onClick={() => navigate(`/league/${slug}/teams`)}
+            >
+              Teams
+            </a>
             <a href="#" className="hover:text-orange-500">Stats</a>
+            <a 
+              href="#" 
+              className="hover:text-orange-500 cursor-pointer"
+              onClick={() => navigate(`/league-leaders/${slug}`)}
+            >
+              Leaders
+            </a>
             <a href="#" className="hover:text-orange-500">Schedule</a>
-            <a href="#" className="hover:text-orange-500">Insights</a>
+            {currentUser && (
+              <button
+                onClick={() => navigate("/coaches-hub")}
+                className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm"
+              >
+                Coaches Hub
+              </button>
+            )}
           </div>
         </header>
 
@@ -239,36 +549,80 @@ import { GameSummaryRow } from "./GameSummaryRow";
               <p className="text-sm text-white/90 mt-1">
                 Organised by {league?.organiser_name || "BallParkSports"}
               </p>
+
             </div>
+            
+            {/* Banner Upload Button for League Owner */}
+            {isOwner && (
+              <div className="absolute top-4 right-4">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    console.log('File input changed:', e.target.files?.[0]);
+                    handleBannerUpload(e);
+                  }}
+                  className="hidden"
+                  id="banner-upload"
+                  disabled={uploadingBanner}
+                />
+                <label
+                  htmlFor="banner-upload"
+                  className={`inline-flex items-center gap-2 px-4 py-2 bg-white/90 hover:bg-white text-slate-700 text-sm font-medium rounded-lg cursor-pointer transition-colors ${
+                    uploadingBanner ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                  onClick={() => console.log('Label clicked for banner upload')}
+                >
+                  {uploadingBanner ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
+                      Change Banner
+                    </>
+                  )}
+                </label>
+
+              </div>
+            )}
+            
+
           </div>
         </section>
 
-        <div className="bg-white rounded-xl shadow p-6">
-          <h2 className="text-lg font-semibold text-slate-800">AI Game Summary</h2>
-          <p className="text-sm text-slate-600 mt-2">
-            {aiSummary || "2023/24 season Gloucester City Kings had a strong showing this season, led by ${scorerData?.name} who averaged ${scorerData?.points} points per game."}
-          </p>
-        </div>
+        {/* Horizontal Game Results Ticker */}
+        {league?.league_id && (
+          <section className="bg-gray-900 text-white py-4 overflow-hidden">
+            <div className="relative">
+              <div className="flex animate-scroll whitespace-nowrap">
+                <GameResultsCarousel 
+                  leagueId={league.league_id} 
+                  onGameClick={handleGameClick}
+                />
+              </div>
+            </div>
+          </section>
+        )}
 
         <main className="max-w-7xl mx-auto px-6 py-10 grid grid-cols-1 md:grid-cols-3 gap-8">
           <section className="md:col-span-2 space-y-6">
-            <div className="bg-white rounded-xl shadow p-6">
-              <h2 className="text-lg font-semibold text-slate-800">Recent Game Summaries</h2>
-              {gameSummaries.length > 0 ? (
-                <ul className="mt-4 space-y-2">
-                  {gameSummaries.map((game, index) => (
-                    <li key={index} className="text-sm text-slate-600">
-                      {game.name} ({game.team_name}) scored {game.points} pts, {game.assists} ast, {game.rebounds_total} reb on {game.game_date}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-slate-600 mt-2">No recent games available.</p>
-              )}
-            </div>
 
+            {/* League Leaders */}
             <section id="stats" className="bg-white rounded-xl shadow p-6">
-              <h2 className="text-lg font-semibold text-slate-800 mb-6">Top Performers</h2>
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-lg font-semibold text-slate-800">League Leaders</h2>
+                <button
+                  onClick={() => navigate(`/league-leaders/${slug}`)}
+                  className="text-sm text-orange-500 hover:text-orange-600 font-medium hover:underline"
+                >
+                  View All Leaders →
+                </button>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                 {([
                   { title: "Top Scorers", list: topScorers, label: "PPG", key: "avg" },
@@ -288,25 +642,69 @@ import { GameSummaryRow } from "./GameSummaryRow";
                           </li>
                         ))}
                     </ul>
-                    <div className="text-right pt-2">
-                      <button
-                        onClick={() => {
-                          const sortKey = sortMap[title as keyof typeof sortMap];
-                          if (sortKey) {
-                            setSortBy(sortKey);
-                            setSortOrder("desc");
-                            document.getElementById("player-stat-explorer")?.scrollIntoView({ behavior: "smooth" });
-                          }
-                        }}
-                        className="text-sm text-orange-500 hover:underline"
-                      >
-                        Full List →
-                      </button>
-                    </div>
                   </div>
                 ))}
               </div>
             </section>
+
+            {/* League Standings */}
+            <div className="bg-white rounded-xl shadow p-6">
+              <h2 className="text-lg font-semibold text-slate-800 mb-4">League Standings</h2>
+              {standings.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="text-left py-3 px-2 font-semibold text-slate-700">#</th>
+                        <th className="text-left py-3 px-2 font-semibold text-slate-700">Team</th>
+                        <th className="text-center py-3 px-2 font-semibold text-slate-700">Record</th>
+                        <th className="text-center py-3 px-2 font-semibold text-slate-700">Win%</th>
+                        <th className="text-right py-3 px-2 font-semibold text-slate-700">PF</th>
+                        <th className="text-right py-3 px-2 font-semibold text-slate-700">PA</th>
+                        <th className="text-right py-3 px-2 font-semibold text-slate-700">Diff</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {standings.map((team, index) => (
+                        <tr 
+                          key={team.team} 
+                          className={`border-b border-gray-100 hover:bg-orange-50 transition-colors ${
+                            index < 3 ? 'bg-green-50' : index >= standings.length - 2 ? 'bg-red-50' : ''
+                          }`}
+                        >
+                          <td className="py-3 px-2 font-medium text-slate-600">{index + 1}</td>
+                          <td className="py-3 px-2 font-medium text-slate-800">
+                            <div className="flex items-center gap-2">
+                              <TeamLogo teamName={team.team} leagueId={league?.league_id} size="sm" />
+                              {team.team}
+                            </div>
+                          </td>
+                          <td className="py-3 px-2 text-center font-medium text-slate-700">{team.record}</td>
+                          <td className="py-3 px-2 text-center text-slate-600">{(team.winPct * 100).toFixed(1)}%</td>
+                          <td className="py-3 px-2 text-right text-slate-600">{team.pointsFor}</td>
+                          <td className="py-3 px-2 text-right text-slate-600">{team.pointsAgainst}</td>
+                          <td className={`py-3 px-2 text-right font-medium ${team.pointsDiff > 0 ? 'text-green-600' : team.pointsDiff < 0 ? 'text-red-600' : 'text-slate-600'}`}>{team.pointsDiff > 0 ? '+' : ''}{team.pointsDiff}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="mt-4 text-xs text-slate-500">
+                    <div className="flex gap-4 flex-wrap text-xs">
+                      <span>Record = Wins-Losses</span>
+                      <span>Win% = Win Percentage</span>
+                      <span>PF = Points For</span>
+                      <span>PA = Points Against</span>
+                      <span>Diff = Point Differential</span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <p className="text-sm">No standings available</p>
+                  <p className="text-xs mt-1">Standings will appear once games are played</p>
+                </div>
+              )}
+            </div>
 
             <div className="bg-white rounded-xl shadow p-6">
               <h2 className="text-lg font-semibold text-slate-800">Player Stat Explorer</h2>
@@ -422,21 +820,129 @@ import { GameSummaryRow } from "./GameSummaryRow";
 
           </section>
 
-          <aside className="bg-white rounded-xl shadow p-4 space-y-6">
+          <aside className="space-y-6">
+            {/* League Admin Panel */}
+            {isOwner && league?.league_id && (
+              <div className="bg-white rounded-xl shadow p-6 border-l-4 border-blue-500">
+                <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                  <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  League Admin
+                </h3>
+                
+                <div className="space-y-4">
+                  <p className="text-sm text-slate-600 mb-4">
+                    Manage all aspects of your league from the dedicated admin area.
+                  </p>
+                  
+                  <button
+                    onClick={() => navigate(`/league-admin/${slug}`)}
+                    className="w-full bg-blue-500 hover:bg-blue-600 text-white px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Open League Admin
+                  </button>
+                  
+                  <div className="text-xs text-slate-500 space-y-1">
+                    <p>• Team Logo Management</p>
+                    <p>• Banner & Media Settings</p>
+                    <p>• Social Media Integration</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* League Chatbot */}
+            {league?.league_id && (
+              <LeagueChatbot 
+                leagueId={league.league_id} 
+                leagueName={league.name || 'League'} 
+              />
+            )}
+
             {/* Instagram Embed */}
-            <div>
-              <h3 className="text-sm font-semibold text-slate-700 mb-2">Instagram Feed</h3>
-              <iframe
-                src="https://www.instagram.com/p/EXAMPLE/embed"
-                width="100%"
-                height="400"
-                className="rounded-md"
-                allow="autoplay; clipboard-write; encrypted-media; picture-in-picture"
-              ></iframe>
+            <div className="bg-white rounded-xl shadow p-4">
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="text-sm font-semibold text-slate-700">Instagram Feed</h3>
+                {isOwner && (
+                  <button
+                    onClick={() => setIsEditingInstagram(!isEditingInstagram)}
+                    className="text-xs text-orange-500 hover:text-orange-600 font-medium"
+                  >
+                    {isEditingInstagram ? 'Cancel' : 'Edit'}
+                  </button>
+                )}
+              </div>
+
+              {isEditingInstagram && isOwner ? (
+                <div className="space-y-3">
+                  <input
+                    type="text"
+                    placeholder="Enter Instagram profile URL (e.g., https://www.instagram.com/yourleague) or specific post URL"
+                    value={instagramUrl}
+                    onChange={(e) => setInstagramUrl(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md"
+                  />
+                  <p className="text-xs text-gray-500">
+                    💡 Use profile URL to automatically show latest posts, or specific post URL for a fixed post
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleInstagramUpdate}
+                      disabled={updatingInstagram}
+                      className={`px-3 py-1 text-xs font-medium rounded ${
+                        updatingInstagram 
+                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                          : 'bg-orange-500 text-white hover:bg-orange-600'
+                      }`}
+                    >
+                      {updatingInstagram ? 'Updating...' : 'Save'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsEditingInstagram(false);
+                        setInstagramUrl(league?.instagram_embed_url || "");
+                      }}
+                      className="px-3 py-1 text-xs font-medium bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  {league?.instagram_embed_url && getInstagramEmbedUrl(league.instagram_embed_url) ? (
+                    <iframe
+                      src={getInstagramEmbedUrl(league.instagram_embed_url)}
+                      width="100%"
+                      height="400"
+                      className="rounded-md border"
+                      allow="autoplay; clipboard-write; encrypted-media; picture-in-picture"
+                    ></iframe>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      <p className="text-sm">No Instagram post added yet</p>
+                      {isOwner && (
+                        <button
+                          onClick={() => setIsEditingInstagram(true)}
+                          className="mt-2 text-xs text-orange-500 hover:text-orange-600 underline"
+                        >
+                          Add Instagram Post
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* YouTube Embed */}
-            <div>
+            <div className="bg-white rounded-xl shadow p-4">
               <h3 className="text-sm font-semibold text-slate-700 mb-2">Latest Highlights</h3>
               <iframe
                 width="100%"
@@ -450,7 +956,7 @@ import { GameSummaryRow } from "./GameSummaryRow";
             </div>
 
             {/* Comment Section Placeholder */}
-            <div>
+            <div className="bg-white rounded-xl shadow p-4">
               <h3 className="text-sm font-semibold text-slate-700 mb-2">Community Comments</h3>
               <p className="text-xs text-slate-500">💬 Only logged-in users can post.</p>
               <div className="text-xs italic text-slate-400 mt-2">Coming soon...</div>
@@ -459,6 +965,15 @@ import { GameSummaryRow } from "./GameSummaryRow";
 
 
         </main>
+
+        {/* Game Detail Modal */}
+        {selectedGameId && (
+          <GameDetailModal
+            gameId={selectedGameId}
+            isOpen={isGameModalOpen}
+            onClose={handleCloseGameModal}
+          />
+        )}
       </div>
     );
   }

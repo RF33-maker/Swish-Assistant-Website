@@ -1,42 +1,13 @@
 # React Frontend with Express Backend
 
 ## Overview
-A professional React and Tailwind CSS website with login functionality and an interactive homepage. This project uses:
-- **Frontend**: React with Vite, Tailwind CSS, shadcn/ui components
-- **Database**: Supabase for data storage and authentication
-- **Backend**: External Python Flask backend (https://sab-backend.onrender.com) for file processing, document parsing, and chatbot
-- **Routing**: Wouter for client-side routing
-
-## Project Architecture
-
-### Frontend Structure
-- `client/src/` - React application source
-- `client/src/pages/` - Page components
-- `client/src/components/` - Reusable components
-- `client/src/lib/` - Utility libraries and configurations
-- `client/src/hooks/` - Custom React hooks
-
-### Backend Integration
-- **Supabase**: Database and authentication service
-- **Python Flask Backend**: External service for file upload, parsing, and chatbot
-- `client/src/lib/supabase.ts` - Supabase client and backend API utilities
-- `shared/schema.ts` - Data types for local development
-
-### Key Features
-- Supabase authentication integration
-- Protected routes with authentication guards
-- Home page with hero section, feature cards, and interactive components
-- File upload to Supabase storage with Python backend processing
-- Document parsing and chatbot functionality via Flask backend
-- Responsive design with mobile support
-
-## Recent Changes
-- **2025-01-25**: Fixed frontend-backend communication issues and restored proper architecture
-  - Restored Supabase configuration for database and authentication
-  - Connected frontend to external Python Flask backend (https://sab-backend.onrender.com)
-  - Added backendApi utilities for file upload, document parsing, and chatbot functionality
-  - Configured environment variables for VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, and VITE_BACKEND_URL
-  - Fixed frontend to work as standalone React app without Express backend dependency
+This project delivers a professional React and Tailwind CSS website featuring user authentication and an interactive homepage. Its primary purpose is to provide a robust platform for managing league data, team statistics, and integrating AI-powered coaching tools. Key capabilities include:
+- Secure user authentication and protected routes.
+- Display of league standings, team profiles, and player statistics.
+- File upload and document parsing for enhanced data analysis.
+- AI-powered chatbot and analysis for coaching insights.
+- Dynamic content updates like league banners and team logos.
+The business vision is to create a comprehensive sports league management and analysis platform, leveraging AI to offer unique coaching and performance insights, targeting amateur and semi-professional sports organizations.
 
 ## User Preferences
 - Use modern React patterns with hooks
@@ -44,8 +15,27 @@ A professional React and Tailwind CSS website with login functionality and an in
 - Focus on clean, professional UI/UX
 - Maintain separation between frontend and backend concerns
 
-## Development Setup
-- Run `npm run dev` to start the React frontend with Vite on port 3000
-- Configure environment variables: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, VITE_BACKEND_URL
-- Frontend connects to Supabase for data and external Python Flask backend for processing
-- Authentication handled through Supabase auth service
+## System Architecture
+The application is structured into a React frontend and integrates with external backend services.
+
+**Frontend (React with Vite, Tailwind CSS, shadcn/ui, Wouter):**
+- **Structure**: Organized into `pages/` for main views, `components/` for reusable UI elements, `lib/` for utilities and configurations, and `hooks/` for custom React hooks.
+- **UI/UX Decisions**: Emphasizes a clean, professional design with a focus on readability and intuitive navigation. Utilizes a softer orange color palette (orange-50/100/300/400/700/800) for better aesthetics, with white backgrounds and soft orange borders (border-orange-200/300) for cards. Playful micro-interactions, hover animations, and smooth transitions are incorporated.
+- **Technical Implementations**:
+    - **Authentication**: Supabase handles user authentication and session management, securing routes.
+    - **Routing**: `Wouter` is used for client-side routing, enabling dynamic page navigation.
+    - **Data Display**: Features interactive tables for league standings with detailed statistics (Win%, PF, PA, Diff), sorted by win percentage. Animated team performance trend visualizer shows team progress over time.
+    - **Content Management**: Provides administrative interfaces for league owners to upload custom banners and manage team logos, which are integrated throughout the platform (standings, profiles, scoreboards).
+    - **Search & Filtering**: Comprehensive search for players and leagues, with filtering capabilities on player lists.
+    - **Coaching Tools**: Dedicated Coaches Hub with integrated League Assistant (chatbot) for insights, scouting reports with document editing capabilities, and a "Coming Soon" section for LLM coaching material.
+- **Feature Specifications**:
+    - **League Management**: Centralized `/league-admin/:slug` route for owners to manage logos, banners, and Instagram integration.
+    - **Team Pages**: Dedicated `/league/:slug/teams` for displaying all teams in a league, and `/team/:teamName` for individual team profiles with statistics and recent games.
+    - **Player Profiles**: Individual player pages at `/player/[id]` showing season averages and game-by-game stats, with AI-powered analysis.
+    - **Game Results**: Redesigned game results section with horizontal scrolling ticker and detailed game view modals with team-filtered box scores.
+    - **Statistical Leaderboards**: `/league-leaders/[slug]` displays top players across 9 statistical categories.
+
+## External Dependencies
+- **Supabase**: Used for database storage, user authentication, and object storage (e.g., `team-logos`, `league-banners`).
+- **Python Flask Backend (https://sab-backend.onrender.com)**: An external service that handles file processing, document parsing, and AI-powered chatbot functionality (e.g., player analysis using OpenAI API).
+- **Instagram**: Integrated for displaying league-owner configured Instagram profiles or specific posts in the sidebar.

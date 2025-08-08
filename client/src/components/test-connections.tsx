@@ -12,12 +12,19 @@ export default function TestConnections() {
   const testSupabase = async () => {
     setSupabaseStatus('testing');
     try {
-      const { data, error } = await supabase.from('leagues').select('id').limit(1);
-      if (error) throw error;
+      // Test leagues table
+      const { data: leaguesData, error: leaguesError } = await supabase.from('leagues').select('id').limit(1);
+      if (leaguesError) throw leaguesError;
+
+      // Test player_stats table and show structure
+      const { data: playerStatsData, error: playerStatsError } = await supabase.from('player_stats').select('*').limit(1);
+      console.log('Player stats table sample:', playerStatsData);
+      console.log('Player stats table error:', playerStatsError);
+      
       setSupabaseStatus('success');
       toast({
         title: "Supabase Connected",
-        description: "Successfully connected to Supabase database",
+        description: `Connected! Found ${playerStatsData?.length || 0} player stats records. Check console for table structure.`,
       });
     } catch (error) {
       setSupabaseStatus('error');

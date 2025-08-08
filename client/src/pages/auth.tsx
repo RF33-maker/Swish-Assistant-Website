@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation } from "wouter";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Layers, User, LucideGithub, Mail } from "lucide-react";
 import { FcGoogle } from "react-icons/fc";
 import { SiLinkedin } from "react-icons/si";
@@ -38,15 +38,42 @@ const registerSchema = insertUserSchema.extend({
 export default function AuthPage() {
   const { user, loginMutation, registerMutation } = useAuth();
   const [_, setLocation] = useLocation();
+  const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
+  const [planPrice, setPlanPrice] = useState<string | null>(null);
+  const [isContactSales, setIsContactSales] = useState(false);
 
   console.log("User in AuthPage:", user);
+
+  // Get plan from URL parameters
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const plan = urlParams.get('plan');
+    const price = urlParams.get('price');
+    const contact = urlParams.get('contact');
+    
+    if (plan) {
+      setSelectedPlan(plan);
+      setPlanPrice(price);
+      setIsContactSales(contact === 'true');
+    }
+  }, []);
 
   // Redirect if user is already logged in
   useEffect(() => {
     if (user) {
-      setLocation("/dashboard");
+      if (selectedPlan && selectedPlan !== 'free') {
+        if (isContactSales) {
+          // Redirect to contact sales page or show contact info
+          setLocation("/contact-sales");
+        } else {
+          // Redirect to payment page with plan details
+          setLocation(`/payment?plan=${selectedPlan}&price=${planPrice}`);
+        }
+      } else {
+        setLocation("/dashboard");
+      }
     }
-  }, [user, setLocation]);
+  }, [user, setLocation, selectedPlan, planPrice, isContactSales]);
 
   const loginForm = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
