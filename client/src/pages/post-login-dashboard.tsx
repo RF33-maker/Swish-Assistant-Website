@@ -23,7 +23,7 @@ export default function DashboardLanding() {
         </p>
 
         <div className="mt-16 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <Card className="border-orange-200 shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer transform hover:scale-105 group" onClick={() => navigate("/league-management")}>
+            <Card className="bg-white border-orange-200 shadow-lg shadow-orange-500/20 hover:shadow-xl hover:shadow-orange-500/40 transition-all duration-300 cursor-pointer transform hover:scale-105 group" onClick={() => navigate("/league-management")}>
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-3">
                   <div className="h-12 w-12 rounded-full bg-orange-600 group-hover:bg-orange-700 flex items-center justify-center transition-all duration-300 group-hover:rotate-12 group-hover:scale-110">
@@ -51,7 +51,7 @@ export default function DashboardLanding() {
               </CardContent>
             </Card>
 
-            <Card className="border-orange-200 shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer transform hover:scale-105 group" onClick={() => navigate("/coaches-hub")}>
+            <Card className="bg-white border-orange-200 shadow-lg shadow-orange-500/20 hover:shadow-xl hover:shadow-orange-500/40 transition-all duration-300 cursor-pointer transform hover:scale-105 group" onClick={() => navigate("/coaches-hub")}>
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-3">
                   <div className="h-12 w-12 rounded-full bg-orange-600 group-hover:bg-orange-700 flex items-center justify-center transition-all duration-300 group-hover:rotate-12 group-hover:scale-110">

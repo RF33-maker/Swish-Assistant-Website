@@ -175,7 +175,7 @@ export default function PlayersListPage() {
 
         {/* Player Cards */}
         {filteredPlayers.length === 0 ? (
-          <Card className="border-orange-200">
+          <Card className="bg-white border-orange-200 shadow-lg shadow-orange-500/20">
             <CardContent className="p-8 text-center">
               <User className="h-16 w-16 text-orange-300 mx-auto mb-4" />
               <h3 className="text-xl font-semibold text-orange-900 mb-2">No Players Found</h3>
@@ -192,7 +192,7 @@ export default function PlayersListPage() {
             {filteredPlayers.map((player, index) => (
               <Card 
                 key={`${player.name}-${player.player_id}`}
-                className="border-orange-200 shadow-lg hover:shadow-2xl transition-all duration-300 cursor-pointer transform hover:scale-105 hover:-translate-y-2 group animate-slide-in-up hover:animate-glow"
+                className="bg-white border-orange-200 shadow-lg shadow-orange-500/20 hover:shadow-2xl hover:shadow-orange-500/40 transition-all duration-300 cursor-pointer transform hover:scale-105 hover:-translate-y-2 group animate-slide-in-up"
                 onClick={() => handlePlayerClick(player.player_id)}
                 style={{ animationDelay: `${index * 100}ms` }}
               >

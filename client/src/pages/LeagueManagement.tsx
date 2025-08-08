@@ -211,7 +211,7 @@ export default function LeagueManagement() {
       <main className="max-w-7xl mx-auto px-6 py-8">
         {/* Create League Form */}
         {showCreateForm && (
-          <Card className="mb-8 border-orange-200">
+          <Card className="mb-8 bg-white border-orange-200 shadow-lg shadow-orange-500/20 hover:shadow-xl hover:shadow-orange-500/30 transition-all duration-300">
             <CardHeader>
               <CardTitle className="text-orange-800">Create New League</CardTitle>
               <CardDescription>
@@ -261,7 +261,7 @@ export default function LeagueManagement() {
 
         {/* Leagues Grid */}
         {leagues.length === 0 ? (
-          <Card className="border-orange-200">
+          <Card className="bg-white border-orange-200 shadow-lg shadow-orange-500/20 hover:shadow-xl hover:shadow-orange-500/30 transition-all duration-300">
             <CardContent className="p-12 text-center">
               <Trophy className="h-16 w-16 text-orange-300 mx-auto mb-4" />
               <h3 className="text-xl font-semibold text-orange-900 mb-2">No Leagues Yet</h3>
@@ -282,7 +282,7 @@ export default function LeagueManagement() {
             {leagues.map((league) => (
               <Card 
                 key={league.league_id}
-                className="border-orange-200 shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer transform hover:scale-105 group"
+                className="bg-white border-orange-200 shadow-lg shadow-orange-500/20 hover:shadow-xl hover:shadow-orange-500/40 transition-all duration-300 cursor-pointer transform hover:scale-105 group"
                 onClick={() => handleLeagueClick(league.slug)}
               >
                 <CardHeader className="pb-3">
