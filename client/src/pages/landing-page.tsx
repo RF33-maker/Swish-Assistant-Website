@@ -383,8 +383,17 @@ export default function LandingPage() {
       </section>
 
       {/* Newsletter Signup Section */}
-      <section className="py-16 bg-gradient-to-br from-orange-50 to-orange-100">
-        <div className="max-w-4xl mx-auto px-6 text-center">
+      <section className="py-16 bg-gradient-to-br from-orange-50 to-orange-100 relative overflow-hidden">
+        {/* Background Logo */}
+        <div className="absolute inset-0 flex items-center justify-center opacity-5">
+          <img 
+            src={SwishLogo} 
+            alt="Swish Logo Background" 
+            className="w-96 h-96 object-contain transform rotate-12"
+          />
+        </div>
+        
+        <div className="max-w-4xl mx-auto px-6 text-center relative z-10">
           <h3 className="text-3xl font-bold text-slate-900 mb-4">
             Stay Updated with Swish Assistant
           </h3>
@@ -397,12 +406,12 @@ export default function LandingPage() {
             <input
               type="email"
               placeholder="Enter your email address"
-              className="flex-1 px-4 py-3 rounded-lg border border-orange-200 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent"
+              className="flex-1 px-4 py-3 rounded-lg border border-orange-200 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent bg-white/80 backdrop-blur-sm"
               required
             />
             <button
               type="submit"
-              className="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6 py-3 rounded-lg transition-colors duration-200"
+              className="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6 py-3 rounded-lg transition-colors duration-200 shadow-lg"
             >
               Subscribe
             </button>
