@@ -19,6 +19,7 @@ import TeamsList from "@/pages/TeamsList";
 import LeagueTeams from "@/pages/LeagueTeams";
 import TeamLogoManager from "@/pages/TeamLogoManager";
 import LeagueAdmin from "@/pages/LeagueAdmin";
+import LeagueManagement from "@/pages/LeagueManagement";
 import { AuthProvider } from "./hooks/use-auth";
 import { ProtectedRoute } from "./lib/protected-route";
 import ResetPassword from "./pages/reset-password";
@@ -46,7 +47,12 @@ function Router() {
       {/* Protected routes */}
       <ProtectedRoute path="/dashboard" component={PostLoginDashboard} />
       <ProtectedRoute path="/coaches-hub" component={CoachesHub} />
+      <ProtectedRoute path="/league-management" component={LeagueManagement} />
       <ProtectedRoute path="/league-admin/:slug" component={LeagueAdmin} />
+      <ProtectedRoute path="/teams/:slug" component={TeamsList} />
+      <ProtectedRoute path="/team/:teamName/:slug" component={TeamProfile} />
+      <ProtectedRoute path="/league-teams/:slug" component={LeagueTeams} />
+      <ProtectedRoute path="/team-logos/:slug" component={TeamLogoManager} />
       <ProtectedRoute path="/profile" component={ProfilePage} />
       <ProtectedRoute path="/settings" component={SettingsPage} />
 
