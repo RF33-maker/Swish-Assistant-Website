@@ -299,10 +299,10 @@ export default function LandingPage() {
           {/* Left: Text Content */}
           <div>
             <h3 className="text-2xl font-bold text-slate-900 mb-4">
-              Ask the AI Anything
+              Ask the Swish Agent about your league
             </h3>
             <p className="text-gray-600 mb-4">
-              Use natural language to ask questions like “Who leads the league in assists?” or “Show me Rhys Farrell’s last 5 games.”
+              Use the Swish Agent to ask questions like “Who leads the league in assists?” or “Show me John Smith's last 5 games.”
             </p>
             <ul className="text-left text-gray-600 list-disc list-inside space-y-2">
               <li>Chatbot understands players, teams & stats</li>
