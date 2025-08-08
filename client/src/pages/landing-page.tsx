@@ -328,7 +328,7 @@ export default function LandingPage() {
           {/* Left: Visual */}
           <div className="w-full flex justify-center">
             <img
-              src="/assets/demo-upload.png" // Replace with your screenshot
+              src="/assets/League-page.png" // Replace with your screenshot
               alt="Upload Example"
               className="rounded-xl shadow-lg w-full max-w-md"
             />
@@ -372,7 +372,7 @@ export default function LandingPage() {
           {/* Right: Visual */}
           <div className="w-full flex justify-center">
             <img
-              src="/assets/demo-chatbot.png" // Swap this with your visual
+              src="/assets/Chatbotexample.png" // Swap this with your visual
               alt="Chatbot Example"
               className="rounded-xl shadow-lg w-full max-w-md"
             />
