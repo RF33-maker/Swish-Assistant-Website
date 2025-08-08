@@ -16,6 +16,16 @@ export default function DashboardLanding() {
   return (
     <div className="bg-white py-24 sm:py-32">
       <div className="mx-auto max-w-6xl px-6">
+        <div className="flex items-center justify-between w-full mb-8">
+          <Button 
+            variant="outline" 
+            onClick={() => navigate("/")}
+            className="border-orange-200 text-orange-700 hover:bg-orange-50 hover:border-orange-300"
+          >
+            ← Back to Home
+          </Button>
+        </div>
+        
         <div className="flex flex-col items-center gap-3 mb-2">
           <img 
             src={SwishLogo} 
