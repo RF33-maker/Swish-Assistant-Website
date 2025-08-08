@@ -8,6 +8,7 @@ import {
   CardContent,
 } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import SwishLogo from "@/assets/Swish Assistant Logo.png"
 
 export default function DashboardLanding() {
   const [, navigate] = useLocation();
@@ -15,9 +16,16 @@ export default function DashboardLanding() {
   return (
     <div className="bg-white py-24 sm:py-32">
       <div className="mx-auto max-w-6xl px-6">
-        <h2 className="text-center text-orange-600 font-semibold text-sm uppercase tracking-wide">
-          Swish Assistant
-        </h2>
+        <div className="flex flex-col items-center gap-3 mb-2">
+          <img 
+            src={SwishLogo} 
+            alt="Swish Assistant" 
+            className="h-16 w-auto object-contain"
+          />
+          <h2 className="text-center text-orange-600 font-semibold text-sm uppercase tracking-wide">
+            Swish Assistant
+          </h2>
+        </div>
         <p className="mt-2 text-center text-4xl sm:text-5xl font-extrabold text-slate-900">
           Choose your mode
         </p>
