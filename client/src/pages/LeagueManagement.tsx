@@ -30,6 +30,7 @@ export default function LeagueManagement() {
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newLeagueName, setNewLeagueName] = useState("");
+  const [isPublic, setIsPublic] = useState(true);
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
@@ -109,7 +110,7 @@ export default function LeagueManagement() {
           slug: slug,
           user_id: user.id,
           created_by: user.id,
-          is_public: true,
+          is_public: isPublic,
           approved: true
         })
         .select()
@@ -131,6 +132,7 @@ export default function LeagueManagement() {
       });
 
       setNewLeagueName("");
+      setIsPublic(true);
       setShowCreateForm(false);
       fetchUserLeagues(); // Refresh the list
     } catch (error) {
@@ -218,7 +220,7 @@ export default function LeagueManagement() {
                 Enter a name for your new league. A URL-friendly slug will be generated automatically.
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
               <div className="flex gap-4">
                 <Input
                   placeholder="Enter league name..."
@@ -226,7 +228,42 @@ export default function LeagueManagement() {
                   onChange={(e) => setNewLeagueName(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && createLeague()}
                   className="flex-1 border-orange-200 focus:border-orange-400"
-                />
+                /></div>
+              
+              <div className="flex items-center justify-between p-4 bg-orange-50 rounded-lg border border-orange-200">
+                <div className="flex-1">
+                  <h4 className="font-medium text-orange-900 mb-1">League Visibility</h4>
+                  <p className="text-sm text-orange-700">
+                    {isPublic 
+                      ? "Public leagues can be discovered and viewed by anyone" 
+                      : "Private leagues are only visible to you and invited members"
+                    }
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className={`text-sm font-medium ${!isPublic ? 'text-orange-900' : 'text-orange-600'}`}>
+                    Private
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsPublic(!isPublic)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 ${
+                      isPublic ? 'bg-orange-600' : 'bg-gray-300'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        isPublic ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                  <span className={`text-sm font-medium ${isPublic ? 'text-orange-900' : 'text-orange-600'}`}>
+                    Public
+                  </span>
+                </div>
+              </div>
+              
+              <div className="flex gap-4">
                 <Button
                   onClick={createLeague}
                   disabled={!newLeagueName.trim() || creating}
@@ -249,6 +286,7 @@ export default function LeagueManagement() {
                   onClick={() => {
                     setShowCreateForm(false);
                     setNewLeagueName("");
+                    setIsPublic(true);
                   }}
                   className="border-orange-200 text-orange-700 hover:bg-orange-50"
                 >
