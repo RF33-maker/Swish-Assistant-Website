@@ -496,19 +496,19 @@ export default function LandingPage() {
                 <ul className="text-left space-y-3 mb-8">
                   <li className="flex items-center gap-2 text-sm">
                     <span className="text-green-500">✓</span>
-                    <span>1 league</span>
+                    <span>1 private league only</span>
                   </li>
                   <li className="flex items-center gap-2 text-sm">
                     <span className="text-green-500">✓</span>
-                    <span>Basic stats upload</span>
+                    <span>View all public leagues</span>
                   </li>
                   <li className="flex items-center gap-2 text-sm">
                     <span className="text-green-500">✓</span>
-                    <span>Public league view</span>
+                    <span>Limited AI queries</span>
                   </li>
                   <li className="flex items-center gap-2 text-sm">
                     <span className="text-gray-400">✗</span>
-                    <span className="text-gray-400">AI assistant</span>
+                    <span className="text-gray-400">Public league hosting</span>
                   </li>
                 </ul>
                 
@@ -528,15 +528,15 @@ export default function LandingPage() {
                 <ul className="text-left space-y-3 mb-8">
                   <li className="flex items-center gap-2 text-sm">
                     <span className="text-green-500">✓</span>
-                    <span>3 leagues</span>
+                    <span>Public league hosting</span>
                   </li>
                   <li className="flex items-center gap-2 text-sm">
                     <span className="text-green-500">✓</span>
-                    <span>AI assistant access</span>
+                    <span>Full AI league assistant</span>
                   </li>
                   <li className="flex items-center gap-2 text-sm">
                     <span className="text-green-500">✓</span>
-                    <span>Scouting reports</span>
+                    <span>1 scouting report/month</span>
                   </li>
                   <li className="flex items-center gap-2 text-sm">
                     <span className="text-green-500">✓</span>
@@ -563,19 +563,19 @@ export default function LandingPage() {
                 <ul className="text-left space-y-3 mb-8">
                   <li className="flex items-center gap-2 text-sm">
                     <span className="text-green-500">✓</span>
-                    <span>Unlimited leagues</span>
+                    <span>Multiple league creation</span>
                   </li>
                   <li className="flex items-center gap-2 text-sm">
                     <span className="text-green-500">✓</span>
-                    <span>Priority AI support</span>
+                    <span>Full AI assistant features</span>
                   </li>
                   <li className="flex items-center gap-2 text-sm">
                     <span className="text-green-500">✓</span>
-                    <span>Custom branding</span>
+                    <span>Full league branding</span>
                   </li>
                   <li className="flex items-center gap-2 text-sm">
                     <span className="text-green-500">✓</span>
-                    <span>Export capabilities</span>
+                    <span>Unlimited scouting reports</span>
                   </li>
                 </ul>
                 
