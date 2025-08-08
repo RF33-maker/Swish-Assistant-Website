@@ -7,6 +7,8 @@ import Ballpark from "@/assets/ballparksports.jpg"
 import GCK from "@/assets/GCK.jpg"
 import UL from "@/assets/uploadimage.png"
 import Chatbot from "@/assets/Chatbotimage.png"
+import LeaguePage from "@/assets/League-page.png"
+import ChatbotExample from "@/assets/Chatbotexample.png"
 
 export default function LandingPage() {
   const [query, setQuery] = useState("")
@@ -328,8 +330,8 @@ export default function LandingPage() {
           {/* Left: Visual */}
           <div className="w-full flex justify-center">
             <img
-              src="/assets/League-page.png" // Replace with your screenshot
-              alt="Upload Example"
+              src={LeaguePage}
+              alt="League Page Example"
               className="rounded-xl shadow-lg w-full max-w-md"
             />
           </div>
@@ -372,7 +374,7 @@ export default function LandingPage() {
           {/* Right: Visual */}
           <div className="w-full flex justify-center">
             <img
-              src="/assets/Chatbotexample.png" // Swap this with your visual
+              src={ChatbotExample}
               alt="Chatbot Example"
               className="rounded-xl shadow-lg w-full max-w-md"
             />
