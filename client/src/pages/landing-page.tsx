@@ -9,6 +9,7 @@ import UL from "@/assets/uploadimage.png"
 import Chatbot from "@/assets/Chatbotimage.png"
 import LeaguePage from "@/assets/League-page.png"
 import ChatbotExample from "@/assets/Chatbotexample.png"
+import { Button } from "@/components/ui/button"
 
 export default function LandingPage() {
   const [query, setQuery] = useState("")
@@ -25,7 +26,7 @@ export default function LandingPage() {
 
       // Search both leagues and players
       console.log("🔍 Searching for:", query);
-      
+
       const [leaguesResponse, playersResponse] = await Promise.all([
         supabase
           .from("leagues")
@@ -84,7 +85,7 @@ export default function LandingPage() {
   const handleSelect = (item: any) => {
     setQuery("")
     setSuggestions([])
-    
+
     if (item.type === 'league') {
       setLocation(`/league/${item.slug}`)
     } else if (item.type === 'player') {
@@ -244,7 +245,7 @@ export default function LandingPage() {
       </main>
 
       {/*used by teams and leagues across the UK*/}
-    
+
       <section className="w-full bg-orange-500 py-10 text-white">
         <h2 className="text-center text-sm uppercase mb-6">
           Already being used by teams and these leagues
@@ -394,7 +395,7 @@ export default function LandingPage() {
             className="w-96 h-96 object-contain transform rotate-12"
           />
         </div>
-        
+
         <div className="max-w-4xl mx-auto px-6 text-center relative z-10">
           <h3 className="text-3xl font-bold text-slate-900 mb-4">
             Stay Updated with Swish Assistant
@@ -403,7 +404,7 @@ export default function LandingPage() {
             Get the latest news, feature updates, and tips delivered straight to your inbox. 
             Be the first to know about new league management features and AI improvements.
           </p>
-          
+
           <form className="flex flex-col sm:flex-row gap-4 max-w-lg mx-auto">
             <input
               type="email"
@@ -418,7 +419,7 @@ export default function LandingPage() {
               Subscribe
             </button>
           </form>
-          
+
           <p className="text-sm text-gray-500 mt-4">
             No spam, unsubscribe at any time. We respect your privacy.
           </p>
@@ -435,7 +436,7 @@ export default function LandingPage() {
             From uploading game stats to creating detailed scouting reports, 
             Swish Assistant has all the tools you need in one place.
           </p>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             <div className="text-center">
               <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -444,7 +445,7 @@ export default function LandingPage() {
               <h3 className="text-lg font-semibold text-slate-900 mb-2">Auto Stats Processing</h3>
               <p className="text-gray-600 text-sm">Upload FIBA LiveStats PDFs and get instant stat extraction</p>
             </div>
-            
+
             <div className="text-center">
               <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <span className="text-2xl">🤖</span>
@@ -452,7 +453,7 @@ export default function LandingPage() {
               <h3 className="text-lg font-semibold text-slate-900 mb-2">AI Assistant</h3>
               <p className="text-gray-600 text-sm">Ask questions and get instant insights about your league</p>
             </div>
-            
+
             <div className="text-center">
               <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <span className="text-2xl">📈</span>
@@ -460,7 +461,7 @@ export default function LandingPage() {
               <h3 className="text-lg font-semibold text-slate-900 mb-2">Visual Analytics</h3>
               <p className="text-gray-600 text-sm">Beautiful charts and performance tracking for teams and players</p>
             </div>
-            
+
             <div className="text-center">
               <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <span className="text-2xl">🏆</span>
@@ -483,16 +484,16 @@ export default function LandingPage() {
               From individual coaches to full league management, we have a plan that fits your needs and budget.
             </p>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            
+
             {/* Free Tier */}
             <div className="bg-white rounded-xl shadow-lg border-2 border-gray-200 p-6 relative">
               <div className="text-center">
                 <h3 className="text-xl font-bold text-slate-900 mb-2">Free</h3>
                 <div className="text-3xl font-bold text-slate-900 mb-1">£0</div>
                 <p className="text-gray-600 text-sm mb-6">Perfect for trying out</p>
-                
+
                 <ul className="text-left space-y-3 mb-8">
                   <li className="flex items-center gap-2 text-sm">
                     <span className="text-green-500">✓</span>
@@ -511,10 +512,15 @@ export default function LandingPage() {
                     <span className="text-gray-400">Public league hosting</span>
                   </li>
                 </ul>
-                
-                <button className="w-full bg-gray-600 hover:bg-gray-700 text-white font-semibold py-3 rounded-lg transition-colors">
-                  Get Started
-                </button>
+
+                <Button 
+                  size="lg" 
+                  variant="outline"
+                  className="w-full border-orange-200 text-orange-700 hover:bg-orange-50"
+                  onClick={() => window.location.href = '/auth'}
+                >
+                  Get Started Free
+                </Button>
               </div>
             </div>
 
@@ -524,7 +530,7 @@ export default function LandingPage() {
                 <h3 className="text-xl font-bold text-slate-900 mb-2">Individual</h3>
                 <div className="text-3xl font-bold text-orange-600 mb-1">£5</div>
                 <p className="text-gray-600 text-sm mb-6">per month</p>
-                
+
                 <ul className="text-left space-y-3 mb-8">
                   <li className="flex items-center gap-2 text-sm">
                     <span className="text-green-500">✓</span>
@@ -543,10 +549,14 @@ export default function LandingPage() {
                     <span>Advanced analytics</span>
                   </li>
                 </ul>
-                
-                <button className="w-full bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 rounded-lg transition-colors">
+
+                <Button 
+                  size="lg"
+                  className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+                  onClick={() => window.location.href = '/auth?plan=individual&price=5'}
+                >
                   Choose Individual
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -559,7 +569,7 @@ export default function LandingPage() {
                 <h3 className="text-xl font-bold text-slate-900 mb-2">All Access</h3>
                 <div className="text-3xl font-bold text-purple-600 mb-1">£15</div>
                 <p className="text-gray-600 text-sm mb-6">per month</p>
-                
+
                 <ul className="text-left space-y-3 mb-8">
                   <li className="flex items-center gap-2 text-sm">
                     <span className="text-green-500">✓</span>
@@ -578,10 +588,14 @@ export default function LandingPage() {
                     <span>Unlimited scouting reports</span>
                   </li>
                 </ul>
-                
-                <button className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 rounded-lg transition-colors">
+
+                <Button 
+                  size="lg"
+                  className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+                  onClick={() => window.location.href = '/auth?plan=all-access&price=15'}
+                >
                   Choose All Access
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -591,7 +605,7 @@ export default function LandingPage() {
                 <h3 className="text-xl font-bold text-slate-900 mb-2">Full League</h3>
                 <div className="text-3xl font-bold text-blue-600 mb-1">Custom</div>
                 <p className="text-gray-600 text-sm mb-6">contact us</p>
-                
+
                 <ul className="text-left space-y-3 mb-8">
                   <li className="flex items-center gap-2 text-sm">
                     <span className="text-green-500">✓</span>
@@ -610,15 +624,19 @@ export default function LandingPage() {
                     <span>White-label options</span>
                   </li>
                 </ul>
-                
-                <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors">
+
+                <Button 
+                  size="lg"
+                  className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+                  onClick={() => window.location.href = '/auth?plan=full-league&contact=true'}
+                >
                   Contact Sales
-                </button>
+                </Button>
               </div>
             </div>
 
           </div>
-          
+
           <div className="text-center mt-12">
             <p className="text-gray-600 text-sm">
               All plans include secure data storage and regular backups. 
@@ -632,7 +650,7 @@ export default function LandingPage() {
       <footer className="bg-slate-900 text-white py-12">
         <div className="max-w-6xl mx-auto px-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-            
+
             {/* Company Info */}
             <div className="md:col-span-2">
               <div className="flex items-center gap-2 mb-4">
@@ -699,5 +717,3 @@ export default function LandingPage() {
     </div>
   )
 }
-
-

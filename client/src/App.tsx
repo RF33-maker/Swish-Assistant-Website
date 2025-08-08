@@ -23,9 +23,11 @@ import LeagueManagement from "@/pages/LeagueManagement";
 import { AuthProvider } from "./hooks/use-auth";
 import { ProtectedRoute } from "./lib/protected-route";
 import ResetPassword from "./pages/reset-password";
-import SettingsPage from "./pages/settings-page";
+import SettingsPage from "@/pages/settings-page";
 import ProfilePage from "./pages/profile-page";
 import TestConnections from "./components/test-connections";
+import PaymentPage from "@/pages/payment";
+import ContactSalesPage from "@/pages/contact-sales";
 
 function Router() {
   return (
@@ -55,6 +57,8 @@ function Router() {
       <ProtectedRoute path="/team-logos/:slug" component={TeamLogoManager} />
       <ProtectedRoute path="/profile" component={ProfilePage} />
       <ProtectedRoute path="/settings" component={SettingsPage} />
+      <ProtectedRoute path="/payment" component={PaymentPage} />
+      <ProtectedRoute path="/contact-sales" component={ContactSalesPage} />
 
 
       {/* Fallback */}
