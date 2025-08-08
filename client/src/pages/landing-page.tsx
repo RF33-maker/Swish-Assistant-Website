@@ -382,8 +382,106 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Newsletter Signup Section */}
+      <section className="py-16 bg-gradient-to-br from-orange-50 to-orange-100">
+        <div className="max-w-4xl mx-auto px-6 text-center">
+          <h3 className="text-3xl font-bold text-slate-900 mb-4">
+            Stay Updated with Swish Assistant
+          </h3>
+          <p className="text-gray-600 mb-8 max-w-2xl mx-auto">
+            Get the latest news, feature updates, and tips delivered straight to your inbox. 
+            Be the first to know about new league management features and AI improvements.
+          </p>
+          
+          <form className="flex flex-col sm:flex-row gap-4 max-w-lg mx-auto">
+            <input
+              type="email"
+              placeholder="Enter your email address"
+              className="flex-1 px-4 py-3 rounded-lg border border-orange-200 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent"
+              required
+            />
+            <button
+              type="submit"
+              className="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6 py-3 rounded-lg transition-colors duration-200"
+            >
+              Subscribe
+            </button>
+          </form>
+          
+          <p className="text-sm text-gray-500 mt-4">
+            No spam, unsubscribe at any time. We respect your privacy.
+          </p>
+        </div>
+      </section>
 
-      {/* [rest of your landing page unchanged] */}
+      {/* Footer */}
+      <footer className="bg-slate-900 text-white py-12">
+        <div className="max-w-6xl mx-auto px-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+            
+            {/* Company Info */}
+            <div className="md:col-span-2">
+              <div className="flex items-center gap-2 mb-4">
+                <img src={SwishLogo} alt="Swish Logo" className="h-8" />
+                <span className="font-bold text-xl text-orange-400">Swish Assistant</span>
+              </div>
+              <p className="text-gray-300 mb-4">
+                Revolutionizing basketball league management with AI-powered analytics, 
+                automated stat tracking, and intelligent insights for coaches and players.
+              </p>
+            </div>
+
+            {/* Quick Links */}
+            <div>
+              <h4 className="font-semibold text-lg mb-4 text-orange-400">Quick Links</h4>
+              <ul className="space-y-2">
+                <li><a href="/auth" className="text-gray-300 hover:text-white transition-colors">Get Started</a></li>
+                <li><a href="/auth" className="text-gray-300 hover:text-white transition-colors">Login</a></li>
+                <li><a href="#features" className="text-gray-300 hover:text-white transition-colors">Features</a></li>
+                <li><a href="#pricing" className="text-gray-300 hover:text-white transition-colors">Pricing</a></li>
+              </ul>
+            </div>
+
+            {/* Legal */}
+            <div>
+              <h4 className="font-semibold text-lg mb-4 text-orange-400">Legal</h4>
+              <ul className="space-y-2">
+                <li><a href="#privacy" className="text-gray-300 hover:text-white transition-colors">Privacy Policy</a></li>
+                <li><a href="#terms" className="text-gray-300 hover:text-white transition-colors">Terms of Service</a></li>
+                <li><a href="#cookies" className="text-gray-300 hover:text-white transition-colors">Cookie Policy</a></li>
+                <li><a href="#support" className="text-gray-300 hover:text-white transition-colors">Support</a></li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-700 mt-8 pt-8 flex flex-col sm:flex-row justify-between items-center">
+            <p className="text-gray-400 text-sm">
+              &copy; {new Date().getFullYear()} Swish Assistant. All rights reserved.
+            </p>
+            <div className="flex gap-6 mt-4 sm:mt-0">
+              <a href="#twitter" className="text-gray-400 hover:text-white transition-colors">
+                <span className="sr-only">Twitter</span>
+                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M8.29 20.251c7.547 0 11.675-6.253 11.675-11.675 0-.178 0-.355-.012-.53A8.348 8.348 0 0022 5.92a8.19 8.19 0 01-2.357.646 4.118 4.118 0 001.804-2.27 8.224 8.224 0 01-2.605.996 4.107 4.107 0 00-6.993 3.743 11.65 11.65 0 01-8.457-4.287 4.106 4.106 0 001.27 5.477A4.072 4.072 0 012.8 9.713v.052a4.105 4.105 0 003.292 4.022 4.095 4.095 0 01-1.853.07 4.108 4.108 0 003.834 2.85A8.233 8.233 0 012 18.407a11.616 11.616 0 006.29 1.84" />
+                </svg>
+              </a>
+              <a href="#linkedin" className="text-gray-400 hover:text-white transition-colors">
+                <span className="sr-only">LinkedIn</span>
+                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                </svg>
+              </a>
+              <a href="#instagram" className="text-gray-400 hover:text-white transition-colors">
+                <span className="sr-only">Instagram</span>
+                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12.017 0C5.396 0 .029 5.367.029 11.987c0 6.624 5.367 11.99 11.988 11.99s11.987-5.366 11.987-11.99C23.971 5.367 18.641.001 12.017.001zM8.449 16.988c-1.297 0-2.448-.49-3.328-1.297L6.438 14l1.313 1.315c.504.504 1.202.778 1.933.778 1.509 0 2.734-1.224 2.734-2.733s-1.225-2.734-2.734-2.734c-.731 0-1.429.275-1.933.778L6.438 12.72 5.121 11.404c.88-.808 2.031-1.297 3.328-1.297 2.641 0 4.783 2.142 4.783 4.783s-2.142 4.783-4.783 4.783z"/>
+                </svg>
+              </a>
+            </div>
+          </div>
+        </div>
+      </footer>
+
     </div>
   )
 }
