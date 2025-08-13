@@ -21,7 +21,7 @@ export function AnalyticsDashboard({ selectedLeague, playerStats, onLeagueSelect
   }, [leagues, searchQuery]);
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 h-full overflow-y-auto">
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
       <div className="flex items-center gap-3 mb-6">
         <BarChart3 className="w-6 h-6 text-orange-600" />
         <h2 className="text-xl font-bold text-slate-800">Analytics Dashboard</h2>
@@ -44,7 +44,7 @@ export function AnalyticsDashboard({ selectedLeague, playerStats, onLeagueSelect
 
           {/* League Results */}
           {searchQuery && (
-            <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-md">
+            <div className="border border-gray-200 rounded-md">
               {filteredLeagues.length > 0 ? (
                 filteredLeagues.map(league => (
                   <button

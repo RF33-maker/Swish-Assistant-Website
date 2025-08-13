@@ -150,8 +150,8 @@ export default function CoachesHub() {
           </div>
         ) : (
           <div className="space-y-8">
-            {/* Professional 3-Pane Layout - Top Section */}
-            <div className="flex gap-6 h-[500px]">
+            {/* Professional 3-Pane Layout - Extended Section */}
+            <div className="flex gap-6 min-h-[800px]">
               {/* Left Pane - Analytics Dashboard */}
               <div className="w-96 flex-shrink-0">
                 <AnalyticsDashboard
