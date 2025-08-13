@@ -6,7 +6,7 @@ import LeagueChatbot from '@/components/LeagueChatbot';
 import { TrendingUp, BarChart3, Users, Target, Award, Eye, MessageCircle, Search, FileText, Save, Plus, Edit3, ArrowDown, Bot, BookOpen, Brain, Sparkles, Edit, Palette } from 'lucide-react';
 import { Link } from 'wouter';
 import SwishLogo from '@/assets/Swish Assistant Logo.png';
-import NotionEditor from '@/components/scout-editor/NotionEditor';
+import InlineScoutingEditor from '@/components/scout-editor/InlineScoutingEditor';
 
 export default function CoachesHub() {
   const { user } = useAuth();
@@ -16,21 +16,15 @@ export default function CoachesHub() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredLeagues, setFilteredLeagues] = useState<any[]>([]);
-  const [scoutingReports, setScoutingReports] = useState<any[]>([]);
-  const [activeReport, setActiveReport] = useState<any>(null);
-  const [reportContent, setReportContent] = useState('');
-  const [reportTitle, setReportTitle] = useState('');
-  const [isCreatingReport, setIsCreatingReport] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+
   const [chatbotResponse, setChatbotResponse] = useState('');
   const [showChatbotInReport, setShowChatbotInReport] = useState(false);
-  const [showNotionEditor, setShowNotionEditor] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
 
   useEffect(() => {
     if (user) {
       fetchUserLeagues();
-      fetchScoutingReports();
+
     }
   }, [user]);
 
@@ -87,176 +81,17 @@ export default function CoachesHub() {
     }
   };
 
-  const fetchScoutingReports = async () => {
-    if (!user) return;
-    
-    try {
-      // First try to create the table if it doesn't exist
-      try {
-        await supabase.rpc('exec', {
-          sql: `
-            CREATE TABLE IF NOT EXISTS scouting_reports (
-              id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-              title VARCHAR(255) NOT NULL,
-              content TEXT,
-              league_id UUID REFERENCES leagues(league_id),
-              created_by UUID NOT NULL,
-              created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-              updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-            );
-          `
-        });
-      } catch (e) {
-        // Ignore errors if table exists or RPC not available
-      }
 
-      const { data, error } = await supabase
-        .from('scouting_reports')
-        .select('*')
-        .eq('created_by', user.id)
-        .order('updated_at', { ascending: false });
 
-      if (error) {
-        // If table doesn't exist, use localStorage as fallback
-        if (error.code === '42P01') {
-          const stored = localStorage.getItem(`scouting_reports_${user.id}`);
-          setScoutingReports(stored ? JSON.parse(stored) : []);
-          return;
-        }
-        throw error;
-      }
-      setScoutingReports(data || []);
-    } catch (error) {
-      console.error('Error fetching scouting reports:', error);
-    }
-  };
 
-  const createNewReport = () => {
-    setActiveReport(null);
-    setReportTitle('');
-    setReportContent('');
-    setIsCreatingReport(true);
-  };
 
-  const saveReport = async () => {
-    if (!user || !reportTitle.trim()) return;
-    
-    setIsSaving(true);
-    try {
-      const reportData = {
-        id: activeReport?.id || generateUUID(),
-        title: reportTitle.trim(),
-        content: reportContent,
-        league_id: selectedLeague?.league_id || null,
-        created_by: user.id,
-        created_at: activeReport?.created_at || new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
 
-      try {
-        if (activeReport) {
-          // Update existing report
-          const { error } = await supabase
-            .from('scouting_reports')
-            .update(reportData)
-            .eq('id', activeReport.id);
-          
-          if (error) throw error;
-        } else {
-          // Create new report
-          const { data, error } = await supabase
-            .from('scouting_reports')
-            .insert([reportData])
-            .select()
-            .single();
-          
-          if (error) throw error;
-          setActiveReport(data);
-        }
-        
-        await fetchScoutingReports();
-      } catch (dbError: any) {
-        // Fallback to localStorage if database fails
-        if (dbError.code === '42P01' || dbError.message?.includes('does not exist')) {
-          const stored = localStorage.getItem(`scouting_reports_${user.id}`);
-          const reports = stored ? JSON.parse(stored) : [];
-          
-          if (activeReport) {
-            const index = reports.findIndex((r: any) => r.id === activeReport.id);
-            if (index >= 0) reports[index] = reportData;
-          } else {
-            reports.unshift(reportData);
-            setActiveReport(reportData);
-          }
-          
-          localStorage.setItem(`scouting_reports_${user.id}`, JSON.stringify(reports));
-          setScoutingReports(reports);
-        } else {
-          throw dbError;
-        }
-      }
-      
-      setIsCreatingReport(false);
-    } catch (error) {
-      console.error('Error saving report:', error);
-    } finally {
-      setIsSaving(false);
-    }
-  };
 
-  const generateUUID = () => {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-      const r = Math.random() * 16 | 0;
-      const v = c == 'x' ? r : (r & 0x3 | 0x8);
-      return v.toString(16);
-    });
-  };
 
-  const loadReport = (report: any) => {
-    setActiveReport(report);
-    setReportTitle(report.title);
-    setReportContent(report.content);
-    setIsCreatingReport(false);
-  };
 
-  const insertChatbotResponse = () => {
-    if (!chatbotResponse.trim()) return;
-    
-    // Check if a report is open
-    if (!isCreatingReport && !activeReport) {
-      // Auto-create a new report if none is open
-      createNewReport();
-      setReportTitle('AI Insights Report');
-      setTimeout(() => {
-        insertResponseIntoEditor();
-      }, 100);
-    } else {
-      insertResponseIntoEditor();
-    }
-  };
 
-  const insertResponseIntoEditor = () => {
-    const insertText = `\n\n**AI Insight:**\n${chatbotResponse.trim()}\n\n`;
-    const currentContent = reportContent;
-    const cursorPosition = textareaRef.current?.selectionStart || currentContent.length;
-    
-    const newContent = 
-      currentContent.slice(0, cursorPosition) + 
-      insertText + 
-      currentContent.slice(cursorPosition);
-    
-    setReportContent(newContent);
-    setChatbotResponse('');
-    
-    // Focus back to textarea after insert
-    setTimeout(() => {
-      textareaRef.current?.focus();
-      textareaRef.current?.setSelectionRange(
-        cursorPosition + insertText.length,
-        cursorPosition + insertText.length
-      );
-    }, 100);
-  };
+
+
 
   if (loading) {
     return (
@@ -653,211 +488,57 @@ export default function CoachesHub() {
               </div>
 
               {/* Enhanced Scouting Reports Section */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center justify-between mb-6">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-3">
                   <div className="flex items-center gap-3">
                     <FileText className="w-5 h-5 text-orange-600" />
                     <h2 className="text-lg font-semibold text-slate-800">Scouting Reports</h2>
-                    <span className="px-3 py-1 bg-gradient-to-r from-orange-500 to-yellow-500 text-white text-xs rounded-full font-medium">
-                      ENHANCED
+                    <span className="px-2 py-1 bg-gradient-to-r from-orange-500 to-yellow-500 text-white text-xs rounded-full font-medium">
+                      NEW
                     </span>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => setShowChatbotInReport(!showChatbotInReport)}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition text-sm font-medium ${
-                        showChatbotInReport 
-                          ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                    >
-                      <MessageCircle className="w-4 h-4" />
-                      {showChatbotInReport ? 'Hide Assistant' : 'Show Assistant'}
-                    </button>
-                    <button
-                      onClick={() => setShowNotionEditor(true)}
-                      className="flex items-center gap-2 bg-gradient-to-r from-orange-600 to-yellow-600 text-white px-4 py-2 rounded-lg hover:from-orange-700 hover:to-yellow-700 transition text-sm font-medium"
-                    >
-                      <Palette className="w-4 h-4" />
-                      Notion Editor
-                    </button>
-                    <button
-                      onClick={createNewReport}
-                      className="flex items-center gap-2 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition text-sm"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Simple Report
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => setShowChatbotInReport(!showChatbotInReport)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg transition text-sm font-medium ${
+                      showChatbotInReport 
+                        ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    {showChatbotInReport ? 'Hide Assistant' : 'Show Assistant'}
+                  </button>
                 </div>
 
-                {/* New Notion Editor Preview */}
-                <div className="mb-6 p-4 bg-gradient-to-r from-orange-50 to-yellow-50 border border-orange-200 rounded-lg">
-                  <div className="flex items-start gap-4">
-                    <div className="p-2 bg-orange-100 rounded-lg">
-                      <Palette className="w-5 h-5 text-orange-600" />
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-slate-800 mb-2">New: Notion-Style Editor</h3>
-                      <p className="text-sm text-slate-600 mb-3">
-                        Create professional scouting reports with templates, AI integration, and beautiful formatting. 
-                        Features block-based editing, smart variables, and PDF export.
-                      </p>
-                      <div className="flex items-center gap-3">
-                        <button
-                          onClick={() => setShowNotionEditor(true)}
-                          className="flex items-center gap-2 bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition text-sm font-medium"
-                        >
-                          <Palette className="w-4 h-4" />
-                          Try Notion Editor
-                        </button>
-                        <div className="flex items-center gap-1 text-xs text-orange-600">
-                          <Sparkles className="w-3 h-3" />
-                          <span>Templates • AI Integration • PDF Export</span>
-                        </div>
+                {/* Inline Notion-Style Editor */}
+                <div className="space-y-6">
+                  <InlineScoutingEditor
+                    leagueContext={selectedLeague ? {
+                      leagueId: selectedLeague.id,
+                      leagueName: selectedLeague.name,
+                    } : undefined}
+                    onChatInsert={(content: string) => {
+                      setChatbotResponse(content);
+                    }}
+                  />
+
+                  {/* Chatbot Integration */}
+                  {showChatbotInReport && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <MessageCircle className="w-5 h-5 text-blue-600" />
+                        <h4 className="font-semibold text-blue-800">League Assistant</h4>
+                        <span className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded">
+                          AI responses will auto-insert into your report
+                        </span>
                       </div>
+                      <LeagueChatbot
+                        selectedLeague={selectedLeague}
+                        onResponseUpdate={setChatbotResponse}
+                        isCompact={true}
+                      />
                     </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {/* Reports List */}
-                  <div className="lg:col-span-1">
-                    <h3 className="text-sm font-semibold text-slate-700 mb-3">Recent Reports</h3>
-                    <div className="space-y-2 max-h-96 overflow-y-auto">
-                      {scoutingReports.length > 0 ? (
-                        scoutingReports.map((report) => (
-                          <div
-                            key={report.id}
-                            onClick={() => loadReport(report)}
-                            className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                              activeReport?.id === report.id
-                                ? 'border-orange-500 bg-orange-50'
-                                : 'border-gray-200 hover:border-orange-300 hover:bg-orange-25'
-                            }`}
-                          >
-                            <div className="font-medium text-slate-800 text-sm truncate">
-                              {report.title}
-                            </div>
-                            <div className="text-xs text-slate-500 mt-1">
-                              {new Date(report.updated_at).toLocaleDateString()}
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="text-center py-8 text-slate-500">
-                          <FileText className="w-12 h-12 mx-auto mb-3 text-slate-300" />
-                          <p className="text-sm">No reports yet</p>
-                          <p className="text-xs">Create your first scouting report</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Report Editor */}
-                  <div className="lg:col-span-2">
-                    {(isCreatingReport || activeReport) ? (
-                      <div className="space-y-4">
-                        {/* Report Header */}
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="text"
-                            placeholder="Report Title"
-                            value={reportTitle}
-                            onChange={(e) => setReportTitle(e.target.value)}
-                            className="flex-1 text-lg font-semibold border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                          />
-                          <button
-                            onClick={saveReport}
-                            disabled={!reportTitle.trim() || isSaving}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition ${
-                              !reportTitle.trim() || isSaving
-                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                : 'bg-green-600 text-white hover:bg-green-700'
-                            }`}
-                          >
-                            <Save className="w-4 h-4" />
-                            {isSaving ? 'Saving...' : 'Save'}
-                          </button>
-                        </div>
-
-                        {/* Show Chatbot in Report Area when toggled */}
-                        {showChatbotInReport && selectedLeague && (
-                          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg p-4 mb-4">
-                            <div className="flex items-center gap-2 mb-3">
-                              <MessageCircle className="w-5 h-5 text-blue-600" />
-                              <h4 className="font-semibold text-blue-800">League Assistant</h4>
-                              <span className="px-2 py-1 bg-gradient-to-r from-orange-500 to-yellow-500 text-white text-xs rounded-full font-medium">
-                                PREMIUM
-                              </span>
-                            </div>
-                            <p className="text-sm text-blue-700 mb-4">
-                              Ask questions about team performance and get insights to enhance your scouting report.
-                            </p>
-                            <div className="bg-white rounded-lg border border-blue-200 overflow-hidden">
-                              <LeagueChatbot 
-                                leagueId={selectedLeague.league_id} 
-                                leagueName={selectedLeague.name || 'League'}
-                                onResponseReceived={setChatbotResponse}
-                              />
-                            </div>
-                          </div>
-                        )}
-
-                        {/* AI Response Integration */}
-                        {chatbotResponse && (
-                          <div className="bg-green-50 border-2 border-green-200 rounded-lg p-4">
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-2">
-                                <Bot className="w-4 h-4 text-green-600" />
-                                <span className="text-sm font-medium text-green-800">AI Response Ready</span>
-                              </div>
-                              <button
-                                onClick={insertChatbotResponse}
-                                className="flex items-center gap-1 bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700 transition"
-                              >
-                                <ArrowDown className="w-3 h-3" />
-                                Insert into Report
-                              </button>
-                            </div>
-                            <div className="text-sm text-green-700 bg-white rounded p-2 border max-h-24 overflow-y-auto">
-                              {chatbotResponse}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Report Content */}
-                        <div>
-                          <textarea
-                            ref={textareaRef}
-                            placeholder="Write your scouting report here... You can ask the League Assistant questions and insert the responses directly into your report."
-                            value={reportContent}
-                            onChange={(e) => setReportContent(e.target.value)}
-                            className="w-full h-96 border border-gray-300 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 resize-none"
-                          />
-                          <div className="flex justify-between items-center mt-2 text-xs text-slate-500">
-                            <span>{reportContent.length} characters</span>
-                            <span>Tip: Use the League Assistant to get insights, then insert them into your report</span>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-center py-16 text-slate-500">
-                        <Edit3 className="w-16 h-16 mx-auto mb-4 text-slate-300" />
-                        <h3 className="text-lg font-semibold mb-2">Create or Select a Report</h3>
-                        <p className="text-sm mb-4">
-                          Use scouting reports to document team analysis, player observations, and strategic insights.
-                        </p>
-                        <button
-                          onClick={createNewReport}
-                          className="inline-flex items-center gap-2 bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition"
-                        >
-                          <Plus className="w-4 h-4" />
-                          Create New Report
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                  )}
                 </div>
               </div>
 
@@ -931,24 +612,7 @@ export default function CoachesHub() {
         )}
       </div>
 
-      {/* Notion Editor Modal */}
-      {showNotionEditor && (
-        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-start justify-center p-4 overflow-y-auto">
-          <div className="w-full max-w-7xl bg-white rounded-lg shadow-xl mt-8 mb-8">
-            <NotionEditor
-              leagueContext={selectedLeague ? {
-                leagueId: selectedLeague.id,
-                leagueName: selectedLeague.name,
-              } : undefined}
-              onClose={() => setShowNotionEditor(false)}
-              onChatInsert={(content: string) => {
-                // Handle chat integration if needed
-                setChatbotResponse(content);
-              }}
-            />
-          </div>
-        </div>
-      )}
+
     </div>
   );
 }
