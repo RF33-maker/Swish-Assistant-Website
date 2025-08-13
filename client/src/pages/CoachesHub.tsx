@@ -135,8 +135,16 @@ export default function CoachesHub() {
 
       <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Welcome Section */}
-        <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl border border-orange-100 p-8 mb-8">
-          <div className="max-w-4xl mx-auto text-center">
+        <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl border border-orange-100 p-8 mb-8 relative overflow-hidden">
+          {/* Background Logo */}
+          <div className="absolute top-4 right-4 w-32 h-32 opacity-5 pointer-events-none">
+            <img 
+              src={SwishLogo} 
+              alt="Swish Assistant" 
+              className="w-full h-full object-contain filter grayscale"
+            />
+          </div>
+          <div className="max-w-4xl mx-auto text-center relative z-10">
             <div className="flex items-center justify-center mb-6">
               <div className="p-3 bg-orange-100 rounded-full mr-4">
                 <Target className="w-8 h-8 text-orange-600" />
