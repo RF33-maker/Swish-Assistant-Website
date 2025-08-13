@@ -260,19 +260,19 @@ export default function UnifiedScoutingEditor({ leagueContext, onChatInsert }: U
               <TabsList className="grid w-full grid-cols-3 h-12 bg-gray-100 p-1 rounded-lg">
                 <TabsTrigger 
                   value="blocks" 
-                  className="text-sm font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all"
+                  className="text-sm font-medium data-[state=active]:bg-orange-500 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
                 >
                   Blocks
                 </TabsTrigger>
                 <TabsTrigger 
                   value="templates" 
-                  className="text-sm font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all"
+                  className="text-sm font-medium data-[state=active]:bg-orange-500 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
                 >
                   Templates
                 </TabsTrigger>
                 <TabsTrigger 
                   value="assistant" 
-                  className="text-sm font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all"
+                  className="text-sm font-medium data-[state=active]:bg-orange-500 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
                 >
                   AI Assistant
                 </TabsTrigger>
@@ -384,19 +384,19 @@ export default function UnifiedScoutingEditor({ leagueContext, onChatInsert }: U
                 <TabsList className="grid w-full grid-cols-3 m-4 h-12 bg-gray-100 p-1 rounded-lg">
                   <TabsTrigger 
                     value="blocks"
-                    className="text-sm font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all"
+                    className="text-sm font-medium data-[state=active]:bg-orange-500 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
                   >
                     Blocks
                   </TabsTrigger>
                   <TabsTrigger 
                     value="templates"
-                    className="text-sm font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all"
+                    className="text-sm font-medium data-[state=active]:bg-orange-500 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
                   >
                     Templates
                   </TabsTrigger>
                   <TabsTrigger 
                     value="assistant"
-                    className="text-sm font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all"
+                    className="text-sm font-medium data-[state=active]:bg-orange-500 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
                   >
                     AI
                   </TabsTrigger>
