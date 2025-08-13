@@ -7,7 +7,7 @@ import { TrendingUp, BarChart3, Users, Target, Award, Eye, MessageCircle, Search
 import { Link } from 'wouter';
 import SwishLogo from '@/assets/Swish Assistant Logo.png';
 import InlineScoutingEditor from '@/components/scout-editor/InlineScoutingEditor';
-import MobileScoutingEditor from '@/components/scout-editor/MobileScoutingEditor';
+import UnifiedScoutingEditor from '@/components/scout-editor/UnifiedScoutingEditor';
 import { ThreePaneEditor } from '@/components/scout-editor/ThreePaneEditor';
 import { AnalyticsDashboard } from '@/components/analytics/AnalyticsDashboard';
 
@@ -191,8 +191,8 @@ export default function CoachesHub() {
                 </div>
               </div>
 
-              {/* Mobile-Friendly Notion-Style Editor */}
-              <MobileScoutingEditor
+              {/* Unified Scouting Editor */}
+              <UnifiedScoutingEditor
                 leagueContext={selectedLeague ? {
                   leagueId: selectedLeague.id,
                   leagueName: selectedLeague.name,
