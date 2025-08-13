@@ -254,26 +254,51 @@ export default function UnifiedScoutingEditor({ leagueContext, onChatInsert }: U
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Desktop Sidebar */}
-        <aside className="hidden md:flex w-80 bg-white border-r flex-col">
+        <aside className="hidden md:flex w-80 bg-gray-50 border-r border-gray-200 flex-col">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-            <TabsList className="grid w-full grid-cols-3 m-2">
-              <TabsTrigger value="blocks" className="text-xs">Blocks</TabsTrigger>
-              <TabsTrigger value="templates" className="text-xs">Templates</TabsTrigger>
-              <TabsTrigger value="assistant" className="text-xs">AI Assistant</TabsTrigger>
-            </TabsList>
+            <div className="p-4 border-b border-gray-200 bg-white">
+              <TabsList className="grid w-full grid-cols-3 h-12 bg-gray-100 p-1 rounded-lg">
+                <TabsTrigger 
+                  value="blocks" 
+                  className="text-sm font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all"
+                >
+                  Blocks
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="templates" 
+                  className="text-sm font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all"
+                >
+                  Templates
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="assistant" 
+                  className="text-sm font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all"
+                >
+                  AI Assistant
+                </TabsTrigger>
+              </TabsList>
+            </div>
 
-            <div className="flex-1 overflow-y-auto p-3">
-              <TabsContent value="blocks" className="mt-0 space-y-3">
+            <div className="flex-1 overflow-y-auto p-4">
+              <TabsContent value="blocks" className="mt-0 space-y-2">
+                <div className="mb-4">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-2">Content Blocks</h3>
+                  <p className="text-xs text-gray-500">Add structured content to your report</p>
+                </div>
                 {blockTypes.map((block) => (
-                  <Card key={block.id} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => insertBlock(block)}>
-                    <CardContent className="p-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center">
-                          <block.icon className="w-4 h-4 text-orange-600" />
+                  <Card 
+                    key={block.id} 
+                    className="cursor-pointer hover:shadow-sm hover:border-orange-200 transition-all duration-200 border border-gray-200 bg-white" 
+                    onClick={() => insertBlock(block)}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-100 to-orange-50 flex items-center justify-center flex-shrink-0 border border-orange-100">
+                          <block.icon className="w-5 h-5 text-orange-600" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm">{block.name}</div>
-                          <div className="text-xs text-slate-500 truncate">{block.description}</div>
+                          <div className="font-semibold text-sm text-gray-900 mb-1">{block.name}</div>
+                          <div className="text-xs text-gray-600 leading-relaxed">{block.description}</div>
                         </div>
                       </div>
                     </CardContent>
@@ -281,15 +306,26 @@ export default function UnifiedScoutingEditor({ leagueContext, onChatInsert }: U
                 ))}
               </TabsContent>
 
-              <TabsContent value="templates" className="mt-0 space-y-3">
+              <TabsContent value="templates" className="mt-0 space-y-2">
+                <div className="mb-4">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-2">Report Templates</h3>
+                  <p className="text-xs text-gray-500">Quick-start templates for common reports</p>
+                </div>
                 {gameTemplates.map((template, index) => (
-                  <Card key={index} className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => insertTemplate(template)}>
-                    <CardContent className="p-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
-                          <FileText className="w-4 h-4 text-blue-600" />
+                  <Card 
+                    key={index} 
+                    className="cursor-pointer hover:shadow-sm hover:border-blue-200 transition-all duration-200 border border-gray-200 bg-white" 
+                    onClick={() => insertTemplate(template)}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-100 to-blue-50 flex items-center justify-center flex-shrink-0 border border-blue-100">
+                          <FileText className="w-5 h-5 text-blue-600" />
                         </div>
-                        <div className="font-medium text-sm">{template.name}</div>
+                        <div className="flex-1">
+                          <div className="font-semibold text-sm text-gray-900">{template.name}</div>
+                          <div className="text-xs text-gray-600 mt-1">Professional template ready to customize</div>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
@@ -297,6 +333,10 @@ export default function UnifiedScoutingEditor({ leagueContext, onChatInsert }: U
               </TabsContent>
 
               <TabsContent value="assistant" className="mt-0">
+                <div className="mb-4">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-2">AI Assistant</h3>
+                  <p className="text-xs text-gray-500">Get intelligent insights and content suggestions</p>
+                </div>
                 {leagueContext ? (
                   <div className="h-full">
                     <LeagueChatbot
@@ -311,11 +351,13 @@ export default function UnifiedScoutingEditor({ leagueContext, onChatInsert }: U
                     />
                   </div>
                 ) : (
-                  <Card>
+                  <Card className="border border-gray-200">
                     <CardContent className="p-6 text-center">
-                      <Sparkles className="w-12 h-12 mx-auto mb-4 text-slate-400" />
-                      <h3 className="font-medium mb-2">No League Selected</h3>
-                      <p className="text-sm text-slate-500">Select a league to enable AI assistant</p>
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-100 to-purple-50 flex items-center justify-center mx-auto mb-4 border border-purple-100">
+                        <Sparkles className="w-6 h-6 text-purple-600" />
+                      </div>
+                      <h3 className="font-semibold text-gray-900 mb-2">No League Selected</h3>
+                      <p className="text-sm text-gray-600">Select a league to enable AI assistant</p>
                     </CardContent>
                   </Card>
                 )}
@@ -339,10 +381,25 @@ export default function UnifiedScoutingEditor({ leagueContext, onChatInsert }: U
               </div>
               
               <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
-                <TabsList className="grid w-full grid-cols-3 m-4">
-                  <TabsTrigger value="blocks">Blocks</TabsTrigger>
-                  <TabsTrigger value="templates">Templates</TabsTrigger>
-                  <TabsTrigger value="assistant">AI</TabsTrigger>
+                <TabsList className="grid w-full grid-cols-3 m-4 h-12 bg-gray-100 p-1 rounded-lg">
+                  <TabsTrigger 
+                    value="blocks"
+                    className="text-sm font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all"
+                  >
+                    Blocks
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="templates"
+                    className="text-sm font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all"
+                  >
+                    Templates
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="assistant"
+                    className="text-sm font-medium data-[state=active]:bg-white data-[state=active]:shadow-sm transition-all"
+                  >
+                    AI
+                  </TabsTrigger>
                 </TabsList>
 
                 <div className="px-4 pb-4 overflow-y-auto max-h-[calc(100vh-200px)]">
