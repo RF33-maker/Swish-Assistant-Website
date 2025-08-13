@@ -135,26 +135,37 @@ export default function TeamPerformanceTrends({ playerStats, leagueId }: TeamPer
   };
 
   const loadTeamLogos = async () => {
-    if (!leagueId || !playerStats || playerStats.length === 0) return;
+    if (!leagueId || !playerStats || playerStats.length === 0) {
+      return;
+    }
 
     const uniqueTeams = Array.from(new Set(playerStats.map(stat => stat.team).filter(Boolean)));
     const logoMap: Record<string, string> = {};
 
+    // Try multiple file extensions for each team
+    const extensions = ['png', 'jpg', 'jpeg', 'webp'];
+
     for (const teamName of uniqueTeams) {
-      try {
-        const fileName = `${leagueId}_${teamName.replace(/\s+/g, '_')}.png`;
-        
-        const { data } = supabase.storage
-          .from('team-logos')
-          .getPublicUrl(fileName);
+      let foundLogo = false;
+      
+      for (const ext of extensions) {
+        try {
+          const fileName = `${leagueId}_${teamName.replace(/\s+/g, '_')}.${ext}`;
           
-        // Check if file exists by trying to fetch it
-        const response = await fetch(data.publicUrl, { method: 'HEAD' });
-        if (response.ok) {
-          logoMap[teamName] = data.publicUrl;
+          const { data } = supabase.storage
+            .from('team-logos')
+            .getPublicUrl(fileName);
+            
+          // Check if file exists by trying to fetch it
+          const response = await fetch(data.publicUrl, { method: 'HEAD' });
+          if (response.ok) {
+            logoMap[teamName] = data.publicUrl;
+            foundLogo = true;
+            break;
+          }
+        } catch (error) {
+          // Continue to next extension
         }
-      } catch (error) {
-        // Logo doesn't exist, that's okay
       }
     }
 
@@ -255,15 +266,15 @@ export default function TeamPerformanceTrends({ playerStats, leagueId }: TeamPer
             >
               {/* Team Logo Background */}
               {teamLogos[teamTrend.team] && (
-                <div className="absolute top-2 right-2 w-16 h-16 opacity-10 pointer-events-none">
+                <div className="absolute top-2 right-2 w-24 h-24 opacity-20 pointer-events-none z-0">
                   <img 
                     src={teamLogos[teamTrend.team]} 
                     alt={`${teamTrend.team} logo`}
-                    className="w-full h-full object-contain grayscale"
+                    className="w-full h-full object-contain filter grayscale hover:grayscale-0 transition-all duration-500"
                   />
                 </div>
               )}
-              <div className="flex items-start justify-between mb-3">
+              <div className="flex items-start justify-between mb-3 relative z-10">
                 <div>
                   <h4 className="font-medium text-slate-800 mb-1">{teamTrend.team}</h4>
                   <div className="flex items-center gap-2">
@@ -281,7 +292,7 @@ export default function TeamPerformanceTrends({ playerStats, leagueId }: TeamPer
                 </div>
               </div>
 
-              <div className="mb-3">
+              <div className="mb-3 relative z-10">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs text-slate-500">Recent Form</span>
                   <span className="text-xs text-slate-400">{teamTrend.games.length} games</span>
