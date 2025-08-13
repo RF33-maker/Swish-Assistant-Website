@@ -126,3 +126,54 @@
   }
 
 }
+
+/* Mobile A4 Editor Styles */
+.a4-page {
+  aspect-ratio: 1 / 1.414;
+  width: min(100%, 820px);
+  background: #fff;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
+  margin-inline: auto;
+  border-radius: 12px;
+}
+
+@media (max-width: 640px) {
+  .a4-viewport {
+    overflow: hidden;
+    touch-action: pan-y;
+  }
+  
+  .a4-zoom {
+    transform-origin: top center;
+  }
+}
+
+.bottom-bar {
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+
+.ProseMirror {
+  outline: none;
+  padding: 1rem;
+  min-height: 600px;
+}
+
+.ProseMirror h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 1.5rem 0 1rem 0;
+  color: #1e293b;
+}
+
+.ProseMirror h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 1.25rem 0 0.75rem 0;
+  color: #334155;
+}
+
+.ProseMirror p {
+  margin: 0.75rem 0;
+  line-height: 1.7;
+  color: #374151;
+}

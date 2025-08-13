@@ -7,6 +7,7 @@ import { TrendingUp, BarChart3, Users, Target, Award, Eye, MessageCircle, Search
 import { Link } from 'wouter';
 import SwishLogo from '@/assets/Swish Assistant Logo.png';
 import InlineScoutingEditor from '@/components/scout-editor/InlineScoutingEditor';
+import MobileScoutingEditor from '@/components/scout-editor/MobileScoutingEditor';
 import { ThreePaneEditor } from '@/components/scout-editor/ThreePaneEditor';
 import { AnalyticsDashboard } from '@/components/analytics/AnalyticsDashboard';
 
@@ -174,59 +175,32 @@ export default function CoachesHub() {
               </div>
             </div>
 
-            {/* Scouting Reports Section - Below Professional Layout */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-6">
+            {/* Scouting Reports Section - Enhanced Mobile-Friendly Editor */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+              <div className="flex items-center justify-between p-6 border-b border-gray-200">
                 <div className="flex items-center gap-3">
                   <FileText className="w-6 h-6 text-orange-600" />
                   <h2 className="text-xl font-bold text-slate-800">Scouting Reports</h2>
                   <span className="px-2 py-1 bg-gradient-to-r from-orange-500 to-yellow-500 text-white text-xs rounded-full font-medium">
-                    NEW
+                    ENHANCED
                   </span>
                 </div>
-                <button
-                  onClick={() => setShowChatbotInReport(!showChatbotInReport)}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg transition text-sm font-medium ${
-                    showChatbotInReport 
-                      ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  <MessageCircle className="w-4 h-4" />
-                  {showChatbotInReport ? 'Hide Assistant' : 'Show Assistant'}
-                </button>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500 hidden sm:inline">Mobile-optimized A4 editor</span>
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                </div>
               </div>
 
-              {/* Inline Notion-Style Editor */}
-              <div className="space-y-6">
-                <InlineScoutingEditor
-                  leagueContext={selectedLeague ? {
-                    leagueId: selectedLeague.id,
-                    leagueName: selectedLeague.name,
-                  } : undefined}
-                  onChatInsert={(content: string) => {
-                    setChatbotResponse(content);
-                  }}
-                />
-
-                {/* Chatbot Integration */}
-                {showChatbotInReport && (
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <MessageCircle className="w-5 h-5 text-blue-600" />
-                      <h4 className="font-semibold text-blue-800">League Assistant</h4>
-                      <span className="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded">
-                        AI responses will auto-insert into your report
-                      </span>
-                    </div>
-                    <LeagueChatbot
-                      leagueId={selectedLeague?.league_id}
-                      leagueName={selectedLeague?.name || 'League'}
-                      onResponseReceived={setChatbotResponse}
-                    />
-                  </div>
-                )}
-              </div>
+              {/* Mobile-Friendly Notion-Style Editor */}
+              <MobileScoutingEditor
+                leagueContext={selectedLeague ? {
+                  leagueId: selectedLeague.id,
+                  leagueName: selectedLeague.name,
+                } : undefined}
+                onChatInsert={(content: string) => {
+                  setChatbotResponse(content);
+                }}
+              />
             </div>
 
             {/* Team Profiles Section */}
