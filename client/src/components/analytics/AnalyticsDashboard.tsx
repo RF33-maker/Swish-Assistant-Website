@@ -1,222 +1,186 @@
-import { useState } from 'react';
-import { 
-  ChevronRight, 
-  TrendingUp, 
-  TrendingDown, 
-  Minus,
-  Users,
-  BarChart3,
-  Calendar
-} from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { BarChart3, Users, TrendingUp, Search, Target } from 'lucide-react';
+import SwishLogo from '@/assets/Swish Assistant Logo.png';
 
 interface AnalyticsDashboardProps {
-  selectedLeague?: any;
+  selectedLeague: any;
   playerStats: any[];
   onLeagueSelect: (league: any) => void;
   leagues: any[];
 }
 
-export function AnalyticsDashboard({ 
-  selectedLeague, 
-  playerStats, 
-  onLeagueSelect, 
-  leagues 
-}: AnalyticsDashboardProps) {
+export function AnalyticsDashboard({ selectedLeague, playerStats, onLeagueSelect, leagues }: AnalyticsDashboardProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [filteredLeagues, setFilteredLeagues] = useState<any[]>([]);
 
-  // Calculate team performance data
-  const teamStats = selectedLeague && playerStats.length > 0 ? 
-    calculateTeamPerformance(playerStats) : [];
+  useEffect(() => {
+    const filtered = leagues.filter(league => 
+      league.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+    setFilteredLeagues(filtered);
+  }, [leagues, searchQuery]);
 
   return (
-    <div className="space-y-6">
-      {/* League Selector */}
-      <div className="bg-slate-700 text-white rounded-lg p-4 cursor-pointer hover:bg-slate-600 transition">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-orange-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">
-              USA
-            </div>
-            <div>
-              <div className="font-semibold">
-                {selectedLeague?.name || 'Summer League D1 2025'}
-              </div>
-              <div className="text-sm text-slate-300">
-                Last sync: {new Date().toLocaleDateString()} • {playerStats.length} records
-              </div>
-            </div>
-          </div>
-          <ChevronRight className="w-5 h-5" />
-        </div>
-      </div>
-
-      {/* Metric Cards */}
-      <div className="grid grid-cols-3 gap-4">
-        <MetricCard
-          icon={Users}
-          label="Total Players"
-          value={new Set(playerStats.map(p => p.name)).size}
-          color="bg-green-100 text-green-600"
-        />
-        <MetricCard
-          icon={BarChart3}
-          label="Games Tracked"
-          value={new Set(playerStats.map(p => p.game_id)).size}
-          color="bg-blue-100 text-blue-600"
-        />
-        <MetricCard
-          icon={Calendar}
-          label="Teams Tracked"
-          value={new Set(playerStats.map(p => p.team).filter(Boolean)).size}
-          color="bg-orange-100 text-orange-600"
-        />
-      </div>
-
-      {/* Team Performance Trends */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-orange-600" />
-            Team Performance Trends
-          </h3>
-          <ChevronRight className="w-5 h-5 text-gray-400" />
-        </div>
-
-        <div className="space-y-3">
-          {teamStats.map((team, index) => (
-            <TeamPerformanceRow key={team.name} team={team} />
-          ))}
-        </div>
-      </div>
-
-      {/* Insights Panel */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
-        <h4 className="font-semibold text-slate-800 mb-3">Insights</h4>
-        <div className="space-y-2">
-          <InsightChip 
-            type="improving" 
-            text="Bristol Hurricanes showing 5.4% improvement"
-            action="Generate Four Factors report"
-          />
-          <InsightChip 
-            type="declining" 
-            text="Ruckus performance declining 3.1%"
-            action="Review defensive strategy"
-          />
-          <InsightChip 
-            type="stable" 
-            text="Just Us maintaining consistent 65.5 avg"
-            action="Optimize current tactics"
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MetricCard({ icon: Icon, label, value, color }: any) {
-  return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4">
-      <div className="flex items-center gap-3">
-        <div className={`p-2 rounded-lg ${color}`}>
-          <Icon className="w-5 h-5" />
-        </div>
-        <div>
-          <div className="text-sm text-gray-600">{label}</div>
-          <div className="text-2xl font-bold text-slate-800">{value}</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function TeamPerformanceRow({ team }: any) {
-  const TrendIcon = team.trend > 0 ? TrendingUp : team.trend < 0 ? TrendingDown : Minus;
-  const trendColor = team.trend > 0 ? 'text-green-600' : team.trend < 0 ? 'text-red-600' : 'text-gray-600';
-  
-  return (
-    <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 hover:border-orange-300 cursor-pointer transition">
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-red-600 rounded-lg flex items-center justify-center text-white font-bold text-xs">
-            {team.logo}
-          </div>
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-xs">
-            {team.opponent}
-          </div>
-        </div>
-        <div>
-          <div className="font-semibold text-slate-800">{team.name}</div>
-          <div className="text-sm text-gray-600">
-            {team.avgPoints} • {team.trend > 0 ? '+' : ''}{team.trend.toFixed(1)}%
-          </div>
-          <div className="text-xs text-gray-500">Recent Form</div>
-        </div>
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 h-full overflow-y-auto">
+      <div className="flex items-center gap-3 mb-6">
+        <BarChart3 className="w-6 h-6 text-orange-600" />
+        <h2 className="text-xl font-bold text-slate-800">Analytics Dashboard</h2>
       </div>
       
-      <div className="flex items-center gap-3">
-        <div className="text-right">
-          <div className="font-bold text-slate-800">{team.score}</div>
-          <div className={`text-sm flex items-center gap-1 ${trendColor}`}>
-            <TrendIcon className="w-4 h-4" />
-            {Math.abs(team.trend).toFixed(1)}%
+      {/* League Selection */}
+      <div className="mb-6">
+        <div className="space-y-4">
+          {/* Search Bar */}
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search your leagues..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full border border-gray-300 rounded-md px-4 py-2 pl-10 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+            />
+            <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
           </div>
-        </div>
-        <div className="text-xs text-gray-500">
-          {team.games} games
+
+          {/* League Results */}
+          {searchQuery && (
+            <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-md">
+              {filteredLeagues.length > 0 ? (
+                filteredLeagues.map(league => (
+                  <button
+                    key={league.league_id}
+                    onClick={() => {
+                      onLeagueSelect(league);
+                      setSearchQuery('');
+                    }}
+                    className="w-full text-left px-4 py-2 hover:bg-orange-50 focus:bg-orange-50 focus:outline-none transition text-sm"
+                  >
+                    <div className="font-medium text-slate-800">{league.name}</div>
+                    <div className="text-xs text-slate-500">Created {new Date(league.created_at).toLocaleDateString()}</div>
+                  </button>
+                ))
+              ) : (
+                <div className="px-4 py-3 text-sm text-slate-500">No leagues found matching "{searchQuery}"</div>
+              )}
+            </div>
+          )}
+
+          {/* Selected League Display */}
+          {selectedLeague && (
+            <div className="flex items-center justify-between p-3 bg-orange-50 border border-orange-200 rounded-md">
+              <div className="flex items-center gap-3">
+                <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                <div>
+                  <span className="font-medium text-slate-800">{selectedLeague.name}</span>
+                  <span className="text-sm text-slate-500 ml-2">
+                    ({playerStats.length} records)
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => onLeagueSelect(null)}
+                className="text-slate-400 hover:text-slate-600 transition"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {/* Quick League Access for single league */}
+          {leagues.length === 1 && !selectedLeague && (
+            <button
+              onClick={() => onLeagueSelect(leagues[0])}
+              className="w-full p-3 border-2 border-dashed border-orange-300 rounded-md hover:border-orange-400 hover:bg-orange-50 transition text-center"
+            >
+              <div className="font-medium text-slate-800">{leagues[0].name}</div>
+              <div className="text-sm text-orange-600">Click to select</div>
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Quick Stats Cards */}
+      {selectedLeague && playerStats.length > 0 && (
+        <div className="grid grid-cols-1 gap-4 mb-6">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <Users className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-sm text-slate-500">Total Players</p>
+                <p className="text-2xl font-bold text-slate-800">
+                  {new Set(playerStats.map(p => p.name)).size}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-green-100 rounded-lg">
+                <BarChart3 className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <p className="text-sm text-slate-500">Games Recorded</p>
+                <p className="text-2xl font-bold text-slate-800">
+                  {new Set(playerStats.map(p => p.game_id)).size}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-orange-100 rounded-lg">
+                <TrendingUp className="w-5 h-5 text-orange-600" />
+              </div>
+              <div>
+                <p className="text-sm text-slate-500">Teams Tracked</p>
+                <p className="text-2xl font-bold text-slate-800">
+                  {new Set(playerStats.map(p => p.team).filter(Boolean)).size}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Coaching Tips */}
+      {selectedLeague && (
+        <div className="bg-gradient-to-r from-orange-50 to-yellow-50 border border-orange-200 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <img 
+              src={SwishLogo} 
+              alt="Coaching Tips" 
+              className="w-6 h-6 mt-1 object-contain"
+            />
+            <div>
+              <h3 className="font-semibold text-slate-800 mb-2">AI Insights</h3>
+              <div className="text-sm text-slate-700 space-y-2">
+                <p>
+                  <strong>↗️ Green:</strong> Teams improving
+                </p>
+                <p>
+                  <strong>↘️ Red:</strong> Teams declining
+                </p>
+                <p>
+                  <strong>➡️ Stable:</strong> Consistent performance
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!selectedLeague && (
+        <div className="text-center py-8 text-slate-500">
+          <Target className="w-16 h-16 mx-auto mb-4 text-slate-300" />
+          <h3 className="text-lg font-semibold mb-2">Select a League</h3>
+          <p className="text-sm">Choose a league above to view analytics</p>
+        </div>
+      )}
     </div>
   );
-}
-
-function InsightChip({ type, text, action }: any) {
-  const colors = {
-    improving: 'bg-green-100 text-green-800 border-green-200',
-    declining: 'bg-red-100 text-red-800 border-red-200',
-    stable: 'bg-gray-100 text-gray-800 border-gray-200'
-  };
-
-  return (
-    <div className={`p-3 rounded-lg border ${colors[type]}`}>
-      <div className="text-sm font-medium mb-1">{text}</div>
-      <div className="text-xs opacity-80">{action}</div>
-    </div>
-  );
-}
-
-function calculateTeamPerformance(playerStats: any[]) {
-  // Sample team data matching the reference image
-  return [
-    {
-      name: 'Bristol Hurricanes',
-      avgPoints: 75.2,
-      trend: 5.4,
-      score: 75.2,
-      games: 4,
-      logo: 'BH',
-      opponent: 'SH',
-      recentForm: [1, 1, 0, 1, 1] // W/L pattern
-    },
-    {
-      name: 'Just Us', 
-      avgPoints: 65.5,
-      trend: 6.3,
-      score: 65.5,
-      games: 4,
-      logo: 'JU',
-      opponent: 'SH', 
-      recentForm: [1, 0, 1, 1, 1]
-    },
-    {
-      name: 'Ruckus',
-      avgPoints: 64.0,
-      trend: -3.1,
-      score: 64.0,
-      games: 4,
-      logo: 'RU',
-      opponent: 'SH',
-      recentForm: [0, 1, 0, 1, 0]
-    }
-  ];
 }
