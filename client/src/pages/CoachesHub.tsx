@@ -3,9 +3,10 @@ import { useAuth } from '@/hooks/use-auth';
 import { supabase } from '@/lib/supabase';
 import TeamPerformanceTrends from '@/components/TeamPerformanceTrends';
 import LeagueChatbot from '@/components/LeagueChatbot';
-import { TrendingUp, BarChart3, Users, Target, Award, Eye, MessageCircle, Search, FileText, Save, Plus, Edit3, ArrowDown, Bot, BookOpen, Brain, Sparkles } from 'lucide-react';
+import { TrendingUp, BarChart3, Users, Target, Award, Eye, MessageCircle, Search, FileText, Save, Plus, Edit3, ArrowDown, Bot, BookOpen, Brain, Sparkles, Edit, Palette } from 'lucide-react';
 import { Link } from 'wouter';
 import SwishLogo from '@/assets/Swish Assistant Logo.png';
+import NotionEditor from '@/components/scout-editor/NotionEditor';
 
 export default function CoachesHub() {
   const { user } = useAuth();
@@ -23,6 +24,7 @@ export default function CoachesHub() {
   const [isSaving, setIsSaving] = useState(false);
   const [chatbotResponse, setChatbotResponse] = useState('');
   const [showChatbotInReport, setShowChatbotInReport] = useState(false);
+  const [showNotionEditor, setShowNotionEditor] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -650,12 +652,15 @@ export default function CoachesHub() {
                 </div>
               </div>
 
-              {/* Scouting Reports Section */}
+              {/* Enhanced Scouting Reports Section */}
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-3">
                     <FileText className="w-5 h-5 text-orange-600" />
                     <h2 className="text-lg font-semibold text-slate-800">Scouting Reports</h2>
+                    <span className="px-3 py-1 bg-gradient-to-r from-orange-500 to-yellow-500 text-white text-xs rounded-full font-medium">
+                      ENHANCED
+                    </span>
                   </div>
                   <div className="flex items-center gap-3">
                     <button
@@ -670,12 +675,48 @@ export default function CoachesHub() {
                       {showChatbotInReport ? 'Hide Assistant' : 'Show Assistant'}
                     </button>
                     <button
+                      onClick={() => setShowNotionEditor(true)}
+                      className="flex items-center gap-2 bg-gradient-to-r from-orange-600 to-yellow-600 text-white px-4 py-2 rounded-lg hover:from-orange-700 hover:to-yellow-700 transition text-sm font-medium"
+                    >
+                      <Palette className="w-4 h-4" />
+                      Notion Editor
+                    </button>
+                    <button
                       onClick={createNewReport}
-                      className="flex items-center gap-2 bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition text-sm"
+                      className="flex items-center gap-2 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition text-sm"
                     >
                       <Plus className="w-4 h-4" />
-                      New Report
+                      Simple Report
                     </button>
+                  </div>
+                </div>
+
+                {/* New Notion Editor Preview */}
+                <div className="mb-6 p-4 bg-gradient-to-r from-orange-50 to-yellow-50 border border-orange-200 rounded-lg">
+                  <div className="flex items-start gap-4">
+                    <div className="p-2 bg-orange-100 rounded-lg">
+                      <Palette className="w-5 h-5 text-orange-600" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-slate-800 mb-2">New: Notion-Style Editor</h3>
+                      <p className="text-sm text-slate-600 mb-3">
+                        Create professional scouting reports with templates, AI integration, and beautiful formatting. 
+                        Features block-based editing, smart variables, and PDF export.
+                      </p>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => setShowNotionEditor(true)}
+                          className="flex items-center gap-2 bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition text-sm font-medium"
+                        >
+                          <Palette className="w-4 h-4" />
+                          Try Notion Editor
+                        </button>
+                        <div className="flex items-center gap-1 text-xs text-orange-600">
+                          <Sparkles className="w-3 h-3" />
+                          <span>Templates • AI Integration • PDF Export</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -889,6 +930,25 @@ export default function CoachesHub() {
           </>
         )}
       </div>
+
+      {/* Notion Editor Modal */}
+      {showNotionEditor && (
+        <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-start justify-center p-4 overflow-y-auto">
+          <div className="w-full max-w-7xl bg-white rounded-lg shadow-xl mt-8 mb-8">
+            <NotionEditor
+              leagueContext={selectedLeague ? {
+                leagueId: selectedLeague.id,
+                leagueName: selectedLeague.name,
+              } : undefined}
+              onClose={() => setShowNotionEditor(false)}
+              onChatInsert={(content: string) => {
+                // Handle chat integration if needed
+                setChatbotResponse(content);
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
