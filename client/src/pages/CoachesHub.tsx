@@ -164,102 +164,18 @@ export default function CoachesHub() {
           </div>
         ) : (
           <>
-          {/* League Assistant Info Banner - Only shown when not in use */}
-          {selectedLeague && !showChatbotInReport && (
-            <div className="bg-gradient-to-r from-orange-50 to-yellow-50 border border-orange-200 rounded-lg p-6 mb-8">
-              <div className="flex items-center gap-3 mb-4">
-                <MessageCircle className="w-6 h-6 text-orange-600" />
-                <h3 className="text-xl font-semibold text-slate-800">League Assistant Available</h3>
-                <span className="px-3 py-1 bg-gradient-to-r from-orange-500 to-yellow-500 text-white text-sm rounded-full font-medium">
-                  PREMIUM
-                </span>
-              </div>
-              <p className="text-base text-slate-600 mb-4">
-                Get instant insights about your team's performance, player statistics, and strategic analysis directly within your scouting reports.
-              </p>
-              <div className="bg-white rounded-lg border border-orange-200 p-4">
-                <p className="text-sm text-slate-700 mb-3">
-                  💡 <strong>Integrated Experience:</strong> Use the League Assistant while writing your reports!
-                </p>
-                <div className="flex items-center gap-2 text-sm text-orange-700">
-                  <span>→</span>
-                  <span>Click <strong>"Show Assistant"</strong> in the Scouting Reports section below to get started</span>
-                </div>
-              </div>
-            </div>
-          )}
 
-          <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
-            {/* Main Content */}
-            <div className="xl:col-span-3 space-y-8">
-              {/* Team Profile Section */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <Users className="w-5 h-5 text-orange-600" />
-                  <h2 className="text-lg font-semibold text-slate-800">Team Profiles</h2>
-                </div>
-                
-                <div className="space-y-4">
-                  {/* Team Search */}
-                  <div className="relative">
-                    <input
-                      type="text"
-                      placeholder="Search teams..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full border border-gray-300 rounded-md px-4 py-2 pl-10 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                    />
-                    <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
-                  </div>
 
-                  {/* Team Results */}
-                  {searchQuery && (
-                    <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-md">
-                      {filteredLeagues.length > 0 ? (
-                        filteredLeagues.map(league => (
-                          <div key={league.league_id} className="p-3 border-b border-gray-100 last:border-b-0">
-                            <div className="font-medium text-slate-800 mb-1">{league.name}</div>
-                            <div className="text-xs text-slate-500 mb-2">View team profiles in this league</div>
-                            <Link 
-                              to="/teams"
-                              className="inline-flex items-center gap-1 text-orange-600 hover:text-orange-700 text-sm font-medium"
-                            >
-                              <Users className="w-3 h-3" />
-                              Browse Teams
-                            </Link>
-                          </div>
-                        ))
-                      ) : (
-                        <div className="px-4 py-3 text-sm text-slate-500">No teams found matching "{searchQuery}"</div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Quick Team Access */}
-                  {!searchQuery && (
-                    <div className="text-center py-8 text-slate-500">
-                      <Users className="w-12 h-12 mx-auto mb-3 text-slate-300" />
-                      <h3 className="font-medium mb-1">Explore Team Profiles</h3>
-                      <p className="text-sm mb-4">Search for teams to view detailed profiles, rosters, and statistics</p>
-                      <Link 
-                        to="/teams"
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200 transition font-medium"
-                      >
-                        <Users className="w-4 h-4" />
-                        View All Teams
-                      </Link>
-                    </div>
-                  )}
-                </div>
+          <div className="space-y-8">
+            {/* 1. ANALYTICS SECTION - First */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center gap-3 mb-6">
+                <BarChart3 className="w-6 h-6 text-orange-600" />
+                <h2 className="text-xl font-bold text-slate-800">Team Performance Analytics</h2>
               </div>
               
               {/* League Selection for Analytics */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <Search className="w-5 h-5 text-orange-600" />
-                  <h2 className="text-lg font-semibold text-slate-800">Analytics Selection</h2>
-                </div>
-                
+              <div className="mb-6">
                 <div className="space-y-4">
                   {/* Search Bar */}
                   <div className="relative">
@@ -332,8 +248,8 @@ export default function CoachesHub() {
 
               {/* Quick Stats Cards */}
               {selectedLeague && playerStats.length > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <div className="flex items-center gap-3">
                       <div className="p-2 bg-blue-100 rounded-lg">
                         <Users className="w-5 h-5 text-blue-600" />
@@ -347,7 +263,7 @@ export default function CoachesHub() {
                     </div>
                   </div>
 
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                     <div className="flex items-center gap-3">
                       <div className="p-2 bg-green-100 rounded-lg">
                         <BarChart3 className="w-5 h-5 text-green-600" />
@@ -361,7 +277,7 @@ export default function CoachesHub() {
                     </div>
                   </div>
 
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                  <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
                     <div className="flex items-center gap-3">
                       <div className="p-2 bg-orange-100 rounded-lg">
                         <TrendingUp className="w-5 h-5 text-orange-600" />
@@ -379,24 +295,41 @@ export default function CoachesHub() {
 
               {/* Team Performance Trends */}
               {selectedLeague && playerStats.length > 0 ? (
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                  <div className="mb-6">
-                    <div className="flex items-center gap-3 mb-2">
-                      <TrendingUp className="w-5 h-5 text-orange-600" />
-                      <h2 className="text-lg font-semibold text-slate-800">Team Performance Analysis</h2>
-                    </div>
-                    <p className="text-slate-600">
-                      Analyze your teams' performance trends, identify improvement patterns, and track consistency across games.
-                    </p>
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                  <div className="lg:col-span-3">
+                    <TeamPerformanceTrends 
+                      playerStats={playerStats} 
+                      leagueId={selectedLeague.league_id} 
+                    />
                   </div>
                   
-                  <TeamPerformanceTrends 
-                    playerStats={playerStats} 
-                    leagueId={selectedLeague.league_id} 
-                  />
+                  {/* Coaching Tips */}
+                  <div className="bg-gradient-to-r from-orange-50 to-yellow-50 border border-orange-200 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <img 
+                        src={SwishLogo} 
+                        alt="Coaching Tips" 
+                        className="w-6 h-6 mt-1 object-contain"
+                      />
+                      <div>
+                        <h3 className="font-semibold text-slate-800 mb-2">Insights</h3>
+                        <div className="text-sm text-slate-700 space-y-2">
+                          <p>
+                            <strong>↗️ Green:</strong> Teams improving
+                          </p>
+                          <p>
+                            <strong>↘️ Red:</strong> Teams declining
+                          </p>
+                          <p>
+                            <strong>➡️ Stable:</strong> Consistent performance
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               ) : selectedLeague ? (
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
+                <div className="text-center py-8">
                   <BarChart3 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                   <h3 className="text-lg font-semibold text-slate-800 mb-2">No Game Data Available</h3>
                   <p className="text-slate-600 mb-4">
@@ -410,7 +343,16 @@ export default function CoachesHub() {
                     Upload Stats
                   </Link>
                 </div>
-              ) : null}
+              ) : (
+                <div className="text-center py-8 text-slate-500">
+                  <BarChart3 className="w-16 h-16 mx-auto mb-4 text-slate-300" />
+                  <h3 className="text-lg font-semibold mb-2">Select a League</h3>
+                  <p className="text-sm">Choose a league above to view analytics and performance trends</p>
+                </div>
+              )}
+            </div>
+
+            {/* 2. SCOUTING REPORTS SECTION - Second */}
 
               {/* LLM Coaching Material Access - Coming Soon */}
               <div className="relative bg-white rounded-lg shadow-sm border border-gray-200 p-6 overflow-hidden">
@@ -487,42 +429,41 @@ export default function CoachesHub() {
                 </div>
               </div>
 
-              {/* Enhanced Scouting Reports Section */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-3">
-                  <div className="flex items-center gap-3">
-                    <FileText className="w-5 h-5 text-orange-600" />
-                    <h2 className="text-lg font-semibold text-slate-800">Scouting Reports</h2>
-                    <span className="px-2 py-1 bg-gradient-to-r from-orange-500 to-yellow-500 text-white text-xs rounded-full font-medium">
-                      NEW
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => setShowChatbotInReport(!showChatbotInReport)}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg transition text-sm font-medium ${
-                      showChatbotInReport 
-                        ? 'bg-blue-600 text-white hover:bg-blue-700' 
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    <MessageCircle className="w-4 h-4" />
-                    {showChatbotInReport ? 'Hide Assistant' : 'Show Assistant'}
-                  </button>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <FileText className="w-6 h-6 text-orange-600" />
+                  <h2 className="text-xl font-bold text-slate-800">Scouting Reports</h2>
+                  <span className="px-2 py-1 bg-gradient-to-r from-orange-500 to-yellow-500 text-white text-xs rounded-full font-medium">
+                    NEW
+                  </span>
                 </div>
+                <button
+                  onClick={() => setShowChatbotInReport(!showChatbotInReport)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg transition text-sm font-medium ${
+                    showChatbotInReport 
+                      ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  {showChatbotInReport ? 'Hide Assistant' : 'Show Assistant'}
+                </button>
+              </div>
 
-                {/* Inline Notion-Style Editor */}
-                <div className="space-y-6">
-                  <InlineScoutingEditor
-                    leagueContext={selectedLeague ? {
-                      leagueId: selectedLeague.id,
-                      leagueName: selectedLeague.name,
-                    } : undefined}
-                    onChatInsert={(content: string) => {
-                      setChatbotResponse(content);
-                    }}
-                  />
+              {/* Inline Notion-Style Editor */}
+              <div className="space-y-6">
+                <InlineScoutingEditor
+                  leagueContext={selectedLeague ? {
+                    leagueId: selectedLeague.id,
+                    leagueName: selectedLeague.name,
+                  } : undefined}
+                  onChatInsert={(content: string) => {
+                    setChatbotResponse(content);
+                  }}
+                />
 
-                  {/* Chatbot Integration */}
+                {/* Chatbot Integration */}
                   {showChatbotInReport && (
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                       <div className="flex items-center gap-2 mb-3">
@@ -533,9 +474,9 @@ export default function CoachesHub() {
                         </span>
                       </div>
                       <LeagueChatbot
-                        selectedLeague={selectedLeague}
-                        onResponseUpdate={setChatbotResponse}
-                        isCompact={true}
+                        leagueId={selectedLeague?.league_id}
+                        leagueName={selectedLeague?.name || 'League'}
+                        onResponseReceived={setChatbotResponse}
                       />
                     </div>
                   )}
@@ -544,66 +485,66 @@ export default function CoachesHub() {
 
 
 
-              {/* Coaching Tips */}
-              <div className="bg-gradient-to-r from-orange-50 to-yellow-50 border border-orange-200 rounded-lg p-6">
-                <div className="flex items-start gap-3">
-                  <img 
-                    src={SwishLogo} 
-                    alt="Coaching Tips" 
-                    className="w-6 h-6 mt-1 object-contain"
-                  />
-                  <div>
-                    <h3 className="font-semibold text-slate-800 mb-2">Coaching Insights</h3>
-                    <div className="text-sm text-slate-700 space-y-2">
-                      <p>
-                        <strong>Green Trends (↗️):</strong> Teams showing improvement - consider maintaining current strategies and building momentum.
-                      </p>
-                      <p>
-                        <strong>Red Trends (↘️):</strong> Teams declining - review game film, adjust tactics, or focus on player development areas.
-                      </p>
-                      <p>
-                        <strong>Stable Trends (➡️):</strong> Consistent performance - evaluate if current level meets goals or needs enhancement.
-                      </p>
-                    </div>
+            {/* 3. TEAM PROFILES SECTION - Third */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center gap-3 mb-6">
+                <Users className="w-6 h-6 text-orange-600" />
+                <h2 className="text-xl font-bold text-slate-800">Team Profiles</h2>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {/* Quick Actions */}
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-slate-800 mb-3">Quick Actions</h3>
+                  <div className="space-y-2">
+                    <Link 
+                      href="/league-admin"
+                      className="flex items-center gap-2 text-sm text-orange-600 hover:text-orange-700 transition"
+                    >
+                      <Award className="w-4 h-4" />
+                      Upload Player Stats
+                    </Link>
+                    {selectedLeague && (
+                      <Link 
+                        href={`/league/${selectedLeague.slug}`}
+                        className="flex items-center gap-2 text-sm text-orange-600 hover:text-orange-700 transition"
+                      >
+                        <Eye className="w-4 h-4" />
+                        View Public League Page
+                      </Link>
+                    )}
+                    {selectedLeague && (
+                      <Link 
+                        href={`/league-leaders/${selectedLeague.slug}`}
+                        className="flex items-center gap-2 text-sm text-orange-600 hover:text-orange-700 transition"
+                      >
+                        <TrendingUp className="w-4 h-4" />
+                        View League Leaders
+                      </Link>
+                    )}
                   </div>
                 </div>
-              </div>
-            </div>
-
-            {/* Right Column - Other Features */}
-            <div className="lg:col-span-1 space-y-6">
-
-
-
-              {/* Quick Actions */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-                <h3 className="font-semibold text-slate-800 mb-4">Quick Actions</h3>
+                
+                {/* Team Management Features */}
                 <div className="space-y-3">
-                  <Link 
-                    href="/league-admin"
-                    className="flex items-center gap-2 text-sm text-orange-600 hover:text-orange-700 transition"
-                  >
-                    <Award className="w-4 h-4" />
-                    Upload Player Stats
-                  </Link>
-                  {selectedLeague && (
-                    <Link 
-                      href={`/league/${selectedLeague.slug}`}
-                      className="flex items-center gap-2 text-sm text-orange-600 hover:text-orange-700 transition"
-                    >
-                      <Eye className="w-4 h-4" />
-                      View Public League Page
-                    </Link>
-                  )}
-                  {selectedLeague && (
-                    <Link 
-                      href={`/league-leaders/${selectedLeague.slug}`}
-                      className="flex items-center gap-2 text-sm text-orange-600 hover:text-orange-700 transition"
-                    >
-                      <TrendingUp className="w-4 h-4" />
-                      View League Leaders
-                    </Link>
-                  )}
+                  <h3 className="font-semibold text-slate-800 mb-3">Team Management</h3>
+                  <div className="text-sm text-slate-600 space-y-2">
+                    <p>• Roster tracking and management</p>
+                    <p>• Player performance analysis</p>
+                    <p>• Team statistics overview</p>
+                    <p>• Historical performance data</p>
+                  </div>
+                </div>
+                
+                {/* Coming Soon */}
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-slate-800 mb-3">Coming Soon</h3>
+                  <div className="text-sm text-slate-500 space-y-2">
+                    <p>• Advanced team comparisons</p>
+                    <p>• Injury tracking system</p>
+                    <p>• Practice planning tools</p>
+                    <p>• Custom team reports</p>
+                  </div>
                 </div>
               </div>
             </div>
