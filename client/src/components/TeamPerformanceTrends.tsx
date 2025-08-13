@@ -188,8 +188,8 @@ export default function TeamPerformanceTrends({ playerStats, leagueId }: TeamPer
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-orange-200 p-6">
-      <div className="flex items-center gap-2 mb-6">
+    <div className="bg-white rounded-lg shadow-sm border border-orange-200 p-6 h-full flex flex-col">
+      <div className="flex items-center gap-2 mb-6 flex-shrink-0">
         <Activity className="w-5 h-5 text-orange-600" />
         <h3 className="text-lg font-semibold text-slate-800">Team Performance Trends</h3>
         <div className="ml-auto flex items-center gap-2 text-sm text-slate-500">
@@ -198,7 +198,8 @@ export default function TeamPerformanceTrends({ playerStats, leagueId }: TeamPer
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="flex-1 overflow-y-auto">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
         {teamTrends.map((teamTrend, index) => (
           <AnimatePresence key={teamTrend.team}>
             <motion.div
@@ -290,25 +291,26 @@ export default function TeamPerformanceTrends({ playerStats, leagueId }: TeamPer
             </motion.div>
           </AnimatePresence>
         ))}
-      </div>
-
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: teamTrends.length * 0.1 + 0.5 }}
-        className="mt-6 p-4 bg-orange-50 border border-orange-200 rounded-lg"
-      >
-        <div className="flex items-start gap-3">
-          <BarChart3 className="w-5 h-5 text-orange-600 mt-0.5" />
-          <div>
-            <h4 className="font-medium text-slate-800 mb-1">Performance Insights</h4>
-            <p className="text-sm text-slate-600">
-              Click on any team card to see detailed performance metrics. Trends are calculated by comparing 
-              the first and second half of games played. Green trends indicate improvement, red indicates decline.
-            </p>
-          </div>
         </div>
-      </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: teamTrends.length * 0.1 + 0.5 }}
+          className="mt-6 p-4 bg-orange-50 border border-orange-200 rounded-lg"
+        >
+          <div className="flex items-start gap-3">
+            <BarChart3 className="w-5 h-5 text-orange-600 mt-0.5" />
+            <div>
+              <h4 className="font-medium text-slate-800 mb-1">Performance Insights</h4>
+              <p className="text-sm text-slate-600">
+                Click on any team card to see detailed performance metrics. Trends are calculated by comparing 
+                the first and second half of games played. Green trends indicate improvement, red indicates decline.
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      </div>
     </div>
   );
 }
