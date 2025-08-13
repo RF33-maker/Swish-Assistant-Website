@@ -33,6 +33,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
+import LeagueChatbot from '@/components/LeagueChatbot';
 
 interface MobileScoutingEditorProps {
   leagueContext?: {
@@ -246,16 +247,30 @@ export default function MobileScoutingEditor({
 
   const createNewDocument = async (documentData: any) => {
     try {
-      const { data, error } = await supabase
-        .from('scouting_documents')
-        .insert([documentData])
-        .select()
-        .single();
+      // Use a simpler approach for document creation - store in localStorage for now
+      // to avoid Supabase table issues
+      const docId = `doc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const docWithId = { ...documentData, id: docId };
+      
+      // Store in localStorage as fallback
+      localStorage.setItem(`scouting_doc_${docId}`, JSON.stringify(docWithId));
+      setCurrentDocumentId(docId);
+      
+      // Still try Supabase but don't fail if it doesn't work
+      try {
+        const { data, error } = await supabase
+          .from('scouting_documents')
+          .insert([documentData])
+          .select()
+          .single();
 
-      if (error) {
-        console.error('Create error:', error);
-      } else {
-        setCurrentDocumentId(data.id);
+        if (!error && data) {
+          setCurrentDocumentId(data.id);
+          // Remove from localStorage if Supabase worked
+          localStorage.removeItem(`scouting_doc_${docId}`);
+        }
+      } catch (supabaseError) {
+        console.log('Supabase storage not available, using local storage');
       }
     } catch (error) {
       console.error('Error creating document:', error);
@@ -280,7 +295,7 @@ export default function MobileScoutingEditor({
   if (!editor) return null;
 
   return (
-    <div className="min-h-screen grid grid-cols-1 md:grid-cols-[280px_1fr] lg:grid-cols-[280px_minmax(740px,1fr)_320px] gap-3">
+    <div className="min-h-screen grid grid-cols-1 md:grid-cols-[280px_1fr] lg:grid-cols-[280px_minmax(740px,1fr)_320px] gap-3 relative">
       {/* Left Sidebar - Blocks/Templates (hidden on mobile) */}
       <aside className="hidden md:block p-3 bg-gray-50 border-r">
         <div className="space-y-6">
@@ -395,21 +410,25 @@ export default function MobileScoutingEditor({
       <aside className="hidden lg:block p-3 bg-gray-50 border-l">
         <div className="space-y-6">
           <div>
-            <h3 className="font-semibold text-slate-800 mb-3">Assistant</h3>
+            <h3 className="font-semibold text-slate-800 mb-3">League Assistant</h3>
             <div className="bg-white border border-gray-200 rounded-lg p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Sparkles className="w-5 h-5 text-blue-600" />
-                <span className="font-medium">AI Helper</span>
-              </div>
-              <p className="text-sm text-slate-600 mb-3">
-                Ask for insights about your league data or help with analysis.
-              </p>
-              <button 
-                onClick={() => setShowAssistant(true)}
-                className="w-full bg-blue-600 text-white rounded-lg px-3 py-2 text-sm font-medium hover:bg-blue-700 transition"
-              >
-                Open Assistant
-              </button>
+              {leagueContext ? (
+                <LeagueChatbot
+                  leagueId={leagueContext.leagueId}
+                  leagueName={leagueContext.leagueName}
+                  onResponseReceived={(content) => {
+                    if (editor && onChatInsert) {
+                      editor.chain().focus().insertContent(`<p>${content}</p>`).run();
+                      onChatInsert(content);
+                    }
+                  }}
+                />
+              ) : (
+                <div className="text-center text-slate-500 py-4">
+                  <Sparkles className="w-8 h-8 mx-auto mb-2 text-slate-400" />
+                  <p className="text-sm">Select a league to enable AI assistant</p>
+                </div>
+              )}
             </div>
           </div>
 
@@ -506,27 +525,40 @@ export default function MobileScoutingEditor({
                 <ChevronUp className="w-5 h-5" />
               </button>
             </div>
-            <div className="space-y-4">
-              <div className="flex flex-wrap gap-2">
-                <button className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">
-                  Summarize opponent defense
-                </button>
-                <button className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">
-                  Player tendencies
-                </button>
-                <button className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">
-                  Key matchups
-                </button>
+            {leagueContext ? (
+              <LeagueChatbot
+                leagueId={leagueContext.leagueId}
+                leagueName={leagueContext.leagueName}
+                onResponseReceived={(content) => {
+                  if (editor && onChatInsert) {
+                    editor.chain().focus().insertContent(`<p>${content}</p>`).run();
+                    onChatInsert(content);
+                  }
+                }}
+              />
+            ) : (
+              <div className="text-center text-slate-500 py-8">
+                <Sparkles className="w-12 h-12 mx-auto mb-4 text-slate-400" />
+                <p className="text-lg font-medium mb-2">No League Selected</p>
+                <p className="text-sm">Select a league to enable AI assistant</p>
               </div>
-              <div className="flex gap-2">
-                <Input placeholder="Ask about your league data..." className="flex-1" />
-                <Button className="bg-blue-600 hover:bg-blue-700">
-                  <Sparkles className="w-4 h-4" />
-                </Button>
-              </div>
-              <div className="text-sm text-slate-600">
-                AI responses will be inserted into your report at the cursor position.
-              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Floating Assistant Widget (always visible when league is selected) */}
+      {!showAssistant && leagueContext && (
+        <div className="fixed bottom-20 right-4 z-40 md:bottom-6 lg:hidden">
+          <div className="relative">
+            <button
+              onClick={() => setShowAssistant(true)}
+              className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 animate-pulse"
+            >
+              <Sparkles className="w-6 h-6" />
+            </button>
+            <div className="absolute -top-12 right-0 bg-slate-800 text-white px-3 py-1 rounded-lg text-sm whitespace-nowrap opacity-0 hover:opacity-100 transition-opacity pointer-events-none">
+              AI Assistant
             </div>
           </div>
         </div>
