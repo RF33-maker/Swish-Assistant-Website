@@ -134,6 +134,70 @@ export default function CoachesHub() {
       </div>
 
       <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Welcome Section */}
+        <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl border border-orange-100 p-8 mb-8">
+          <div className="max-w-4xl mx-auto text-center">
+            <div className="flex items-center justify-center mb-6">
+              <div className="p-3 bg-orange-100 rounded-full mr-4">
+                <Target className="w-8 h-8 text-orange-600" />
+              </div>
+              <h1 className="text-3xl font-bold text-slate-800">Welcome to the Coaches Hub</h1>
+            </div>
+            
+            <p className="text-lg text-slate-600 mb-8 leading-relaxed">
+              Your comprehensive coaching command center. Analyze performance, track trends, and create detailed scouting reports 
+              to elevate your team's game to the next level.
+            </p>
+
+            <div className="grid md:grid-cols-3 gap-6 mb-8">
+              <div className="bg-white rounded-lg p-6 shadow-sm border border-orange-100 hover:shadow-md transition-shadow">
+                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <BarChart3 className="w-6 h-6 text-blue-600" />
+                </div>
+                <h3 className="font-semibold text-slate-800 mb-2">View League Analytics</h3>
+                <p className="text-sm text-slate-600">
+                  Access comprehensive statistics, team performance trends, and player insights across all your leagues.
+                </p>
+              </div>
+
+              <div className="bg-white rounded-lg p-6 shadow-sm border border-orange-100 hover:shadow-md transition-shadow">
+                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <TrendingUp className="w-6 h-6 text-green-600" />
+                </div>
+                <h3 className="font-semibold text-slate-800 mb-2">Track Performance</h3>
+                <p className="text-sm text-slate-600">
+                  Monitor team trends, analyze game-by-game performance, and identify key patterns in your league data.
+                </p>
+              </div>
+
+              <div className="bg-white rounded-lg p-6 shadow-sm border border-orange-100 hover:shadow-md transition-shadow">
+                <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <FileText className="w-6 h-6 text-purple-600" />
+                </div>
+                <h3 className="font-semibold text-slate-800 mb-2">Create Scouting Reports</h3>
+                <p className="text-sm text-slate-600">
+                  Build professional scouting reports with AI assistance, document analysis, and rich editing tools.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-4">
+              <div className="flex items-center gap-2 text-sm text-slate-500">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span>AI-Powered Insights</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-slate-500">
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                <span>Real-Time Analytics</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-slate-500">
+                <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></div>
+                <span>Professional Reports</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {leagues.length === 0 ? (
           <div className="text-center py-12">
             <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
