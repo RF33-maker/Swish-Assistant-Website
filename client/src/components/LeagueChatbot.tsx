@@ -21,14 +21,21 @@ interface LeagueChatbotProps {
   onResponseReceived?: (response: string) => void;
 }
 
-export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived }: LeagueChatbotProps) {
+interface LeagueChatbotProps {
+  leagueId: string;
+  leagueName: string;
+  onResponseReceived?: (response: string) => void;
+  isPanelMode?: boolean; // New prop to indicate it's in a side panel
+}
+
+export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived, isPanelMode = false }: LeagueChatbotProps) {
   const { user, isLoading: authLoading } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(isPanelMode);
   const [isOverlayMode, setIsOverlayMode] = useState(false);
-  const [isActivelyUsed, setIsActivelyUsed] = useState(false);
+  const [isActivelyUsed, setIsActivelyUsed] = useState(isPanelMode);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [, setLocation] = useLocation(); // Hook for routing
 
@@ -462,6 +469,128 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
     );
   }
 
+  // In panel mode, always show expanded and don't allow overlay
+  if (isPanelMode) {
+    return (
+      <div className="bg-white rounded-xl border border-orange-200 overflow-hidden h-full flex flex-col shadow-lg">
+        {/* Header - Always visible in panel mode */}
+        <div className="bg-gradient-to-r from-orange-100 to-yellow-100 p-4 border-b border-orange-200">
+          <div className="flex items-center gap-3">
+            <MessageCircle className="w-5 h-5 text-orange-600" />
+            <h3 className="text-lg font-semibold text-slate-800">League Assistant</h3>
+            <span className="px-3 py-1 bg-gradient-to-r from-orange-500 to-yellow-500 text-white text-sm rounded-full font-medium">
+              ACTIVE
+            </span>
+          </div>
+        </div>
+
+        {/* Chat Content - Flexible height */}
+        <div className="flex-1 flex flex-col p-4 min-h-0">
+          {messages.length === 0 ? (
+            <div className="space-y-4 flex-1">
+              <p className="text-base text-slate-600 mb-4">
+                Ask me about {leagueName} stats!
+              </p>
+              <div className="space-y-3">
+                {suggestedQuestions.slice(0, 3).map((question, index) => (
+                  <div key={index} className="flex gap-2 items-start p-3 bg-orange-50 rounded-lg border border-orange-200">
+                    <div className="flex-1 text-sm text-slate-700">
+                      {question}
+                    </div>
+                    <Button
+                      onClick={() => handleSendMessage(question)}
+                      disabled={isLoading}
+                      size="sm"
+                      className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 flex-shrink-0"
+                    >
+                      <Send className="w-3 h-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="flex-1 space-y-4 overflow-y-auto mb-4 min-h-0">
+              {messages.map((message) => (
+                <div
+                  key={message.id}
+                  className={`flex gap-2 ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  {message.type === 'bot' && (
+                    <Bot className="w-5 h-5 text-orange-500 mt-1 flex-shrink-0" />
+                  )}
+                  <div className="flex flex-col max-w-[85%]">
+                    <div
+                      className={`p-3 rounded-lg text-sm leading-relaxed ${
+                        message.type === 'user'
+                          ? 'bg-orange-500 text-white'
+                          : 'bg-white text-slate-800 shadow-sm border border-slate-200'
+                      }`}
+                    >
+                      <div className="whitespace-pre-line">{message.content}</div>
+                    </div>
+                    
+                    {/* Suggestion buttons - compact for panel */}
+                    {message.type === 'bot' && message.suggestions && message.suggestions.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {message.suggestions.slice(0, 2).map((suggestion, index) => (
+                          <button
+                            key={index}
+                            onClick={() => handleSendMessage(suggestion)}
+                            className="px-2 py-1 text-xs bg-orange-50 hover:bg-orange-100 text-orange-700 rounded transition-colors border border-orange-200"
+                            disabled={isLoading}
+                          >
+                            {suggestion}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {message.type === 'user' && (
+                    <User className="w-5 h-5 text-slate-400 mt-1 flex-shrink-0" />
+                  )}
+                </div>
+              ))}
+              {isLoading && (
+                <div className="flex gap-2 justify-start">
+                  <Bot className="w-5 h-5 text-orange-500 mt-1 flex-shrink-0" />
+                  <div className="bg-white text-slate-800 p-3 rounded-lg text-sm shadow-sm border border-slate-200">
+                    <div className="flex items-center gap-1">
+                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div>
+                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+          )}
+
+          {/* Input Area - Always at bottom */}
+          <div className="flex gap-2 pt-2 border-t border-gray-200">
+            <Input
+              value={inputMessage}
+              onChange={(e) => setInputMessage(e.target.value)}
+              placeholder="Ask about stats, games, players..."
+              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
+              className="text-sm py-2 px-3 border-2 border-orange-300 ring-2 ring-orange-100"
+              disabled={isLoading}
+            />
+            <Button
+              onClick={() => handleSendMessage()}
+              disabled={!inputMessage.trim() || isLoading}
+              size="sm"
+              className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-2"
+            >
+              <Send className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       {/* Overlay backdrop */}
@@ -487,7 +616,7 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
               : 'bg-gradient-to-r from-orange-50 to-yellow-50'
           }`}
           onClick={() => {
-            if (!isOverlayMode) {
+            if (!isOverlayMode && !isPanelMode) {
               setIsExpanded(!isExpanded);
             }
           }}

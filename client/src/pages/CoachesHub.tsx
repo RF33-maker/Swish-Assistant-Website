@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import TeamPerformanceTrends from '@/components/TeamPerformanceTrends';
 import LeagueChatbot from '@/components/LeagueChatbot';
 import { TrendingUp, BarChart3, Users, Target, Award, Eye, MessageCircle, Search, FileText, Save, Plus, Edit3, ArrowDown, Bot, BookOpen, Brain, Sparkles, Edit, Palette } from 'lucide-react';
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { Link } from 'wouter';
 import SwishLogo from '@/assets/Swish Assistant Logo.png';
 import InlineScoutingEditor from '@/components/scout-editor/InlineScoutingEditor';
@@ -223,7 +224,7 @@ export default function CoachesHub() {
           </div>
         ) : (
           <div className="space-y-8">
-            {/* Professional 3-Pane Layout - Extended Section */}
+            {/* Resizable 3-Pane Layout with Draggable Chatbot */}
             <div className="flex gap-6 min-h-[800px]">
               {/* Left Pane - Analytics Dashboard */}
               <div className="w-96 flex-shrink-0">
@@ -235,15 +236,52 @@ export default function CoachesHub() {
                 />
               </div>
 
-              {/* Right Pane - Team Performance Trends */}
+              {/* Resizable Right Section - Editor and Chatbot */}
               <div className="flex-1 min-w-0">
-                <ThreePaneEditor
-                  selectedLeague={selectedLeague}
-                  playerStats={playerStats}
-                  onChatInsert={(content: string) => {
-                    setChatbotResponse(content);
-                  }}
-                />
+                <ResizablePanelGroup 
+                  direction="horizontal" 
+                  className="min-h-[800px] rounded-lg border"
+                >
+                  {/* Editor Panel */}
+                  <ResizablePanel defaultSize={65} minSize={30}>
+                    <div className="h-full">
+                      <ThreePaneEditor
+                        selectedLeague={selectedLeague}
+                        playerStats={playerStats}
+                        onChatInsert={(content: string) => {
+                          setChatbotResponse(content);
+                        }}
+                      />
+                    </div>
+                  </ResizablePanel>
+                  
+                  {/* Resizable Handle */}
+                  <ResizableHandle withHandle />
+                  
+                  {/* Chatbot Panel */}
+                  <ResizablePanel defaultSize={35} minSize={25} maxSize={60}>
+                    <div className="h-full p-4 bg-gray-50 overflow-auto">
+                      {selectedLeague && (
+                        <LeagueChatbot
+                          leagueId={selectedLeague.league_id}
+                          leagueName={selectedLeague.name}
+                          onResponseReceived={(response: string) => {
+                            setChatbotResponse(response);
+                          }}
+                          isPanelMode={true}
+                        />
+                      )}
+                      {!selectedLeague && (
+                        <div className="h-full flex items-center justify-center text-gray-500">
+                          <div className="text-center">
+                            <MessageCircle className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                            <p>Select a league to use the chatbot</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </ResizablePanel>
+                </ResizablePanelGroup>
               </div>
             </div>
 
