@@ -543,69 +543,32 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
           isOverlayMode ? 'h-full flex flex-col' : 'animate-in slide-in-from-top-2'
         }`}>
           {messages.length === 0 ? (
-            <div className="space-y-4">
+            <div className="space-y-4 mb-6">
               <p className="text-base text-slate-600 mb-4">
                 Ask me about {leagueName} stats! Here are some suggestions:
               </p>
 
               <div className="space-y-3">
                 {suggestedQuestions.map((question, index) => (
-                  <button
-                    key={index}
-                    onClick={async () => {
-                      if (!user || isLoading) return;
-
-                      const userMessage: Message = {
-                        id: Date.now().toString(),
-                        type: 'user',
-                        content: question,
-                        timestamp: new Date()
-                      };
-
-                      setMessages(prev => [...prev, userMessage]);
-                      setIsLoading(true);
-
-                      try {
-                        const response = await queryLeagueData(question, leagueId);
-
-                        const botMessage: Message = {
-                          id: (Date.now() + 1).toString(),
-                          type: 'bot',
-                          content: typeof response === 'string' ? response : response.content,
-                          timestamp: new Date(),
-                          suggestions: typeof response === 'string' ? undefined : response.suggestions,
-                          navigationButtons: typeof response === 'string' ? undefined : response.navigationButtons
-                        };
-
-                        setMessages(prev => [...prev, botMessage]);
-
-                        // Trigger response received callback for scouting reports
-                        if (onResponseReceived) {
-                          onResponseReceived(typeof response === 'string' ? response : response.content);
-                        }
-                      } catch (error) {
-                        const errorMessage: Message = {
-                          id: (Date.now() + 1).toString(),
-                          type: 'bot',
-                          content: "I'm sorry, I encountered an error while processing your request. Please try again.",
-                          timestamp: new Date()
-                        };
-                        setMessages(prev => [...prev, errorMessage]);
-                      }
-
-                      setIsLoading(false);
-                    }}
-                    className="w-full text-left p-4 text-base bg-orange-50 hover:bg-orange-100 rounded-lg text-slate-700 transition-colors border border-orange-200 hover:border-orange-300"
-                    disabled={isLoading}
-                  >
-                    {question}
-                  </button>
+                  <div key={index} className="flex gap-2 items-center p-4 bg-orange-50 rounded-lg border border-orange-200">
+                    <div className="flex-1 text-base text-slate-700">
+                      {question}
+                    </div>
+                    <Button
+                      onClick={() => handleSendMessage(question)}
+                      disabled={isLoading}
+                      size="sm"
+                      className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 flex-shrink-0"
+                    >
+                      <Send className="w-4 h-4" />
+                    </Button>
+                  </div>
                 ))}
               </div>
             </div>
           ) : (
-            <div className={`space-y-8 overflow-y-auto mb-8 p-6 bg-slate-50 rounded-lg ${
-              isOverlayMode ? 'flex-1 max-h-none' : 'max-h-[600px]'
+            <div className={`space-y-8 overflow-y-auto mb-6 p-6 bg-slate-50 rounded-lg ${
+              isOverlayMode ? 'flex-1 max-h-none' : 'max-h-[400px]'
             }`}>
               {messages.map((message) => (
                 <div
@@ -717,7 +680,7 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
           )}
 
           {/* Input Area - Always visible when expanded */}
-          <div className={`flex gap-3 mt-6 pt-4 border-t border-gray-200 ${isOverlayMode ? 'flex-shrink-0' : ''}`}>
+          <div className={`flex gap-3 pt-4 border-t border-gray-200 ${isOverlayMode ? 'flex-shrink-0' : ''}`}>
             <Input
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
