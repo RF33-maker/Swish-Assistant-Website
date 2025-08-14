@@ -635,20 +635,20 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
                       <div className="mt-3 space-y-2">
                         {/* Navigation Buttons */}
                         {message.navigationButtons && message.navigationButtons.length > 0 && (
-                          <div className="flex flex-wrap gap-2">
+                          <div className="flex flex-wrap gap-2 mt-3">
                             {message.navigationButtons.map((button, index) => (
                               <Button
                                 key={index}
                                 onClick={() => {
                                   if (button.type === 'player') {
-                                    setLocation(`/player/${button.id}`); // Navigate to player profile
+                                    setLocation(`/player/${button.id}`);
                                   } else if (button.type === 'team') {
-                                    setLocation(`/team/${button.id}`); // Navigate to team profile
+                                    setLocation(`/team/${button.id}`);
                                   }
                                 }}
                                 variant="outline"
                                 size="sm"
-                                className="bg-orange-100 hover:bg-orange-200 text-orange-700 border border-orange-200 hover:border-orange-300"
+                                className="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 hover:border-blue-300"
                               >
                                 <ExternalLink className="w-3 h-3 mr-1" />
                                 {button.label}
@@ -659,54 +659,37 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
 
                         {/* Suggestion Buttons */}
                         {message.suggestions && message.suggestions.length > 0 && (
-                          <div className="flex flex-wrap gap-2">
+                          <div className="flex flex-wrap gap-2 mt-3">
                             {message.suggestions.map((suggestion, index) => (
                               <button
                                 key={index}
-                                onClick={async () => {
-                                  if (!user || isLoading) return;
-
-                                  const userMessage: Message = {
-                                    id: Date.now().toString(),
-                                    type: 'user',
-                                    content: suggestion,
-                                    timestamp: new Date()
-                                  };
-
-                                  setMessages(prev => [...prev, userMessage]);
-                                  setIsLoading(true);
-
-                                  try {
-                                    const response = await queryLeagueData(suggestion, leagueId);
-
-                                    const botMessage: Message = {
-                                      id: (Date.now() + 1).toString(),
-                                      type: 'bot',
-                                      content: typeof response === 'string' ? response : response.content,
-                                      timestamp: new Date(),
-                                      suggestions: typeof response === 'string' ? undefined : response.suggestions,
-                                      navigationButtons: typeof response === 'string' ? undefined : response.navigationButtons
-                                    };
-
-                                    setMessages(prev => [...prev, botMessage]);
-                                  } catch (error) {
-                                    const errorMessage: Message = {
-                                      id: (Date.now() + 1).toString(),
-                                      type: 'bot',
-                                      content: "I'm sorry, I encountered an error while processing your request. Please try again.",
-                                      timestamp: new Date()
-                                    };
-                                    setMessages(prev => [...prev, errorMessage]);
-                                  }
-
-                                  setIsLoading(false);
-                                }}
-                                className="px-3 py-1 text-sm bg-orange-100 hover:bg-orange-200 text-orange-700 rounded-md transition-colors border border-orange-200 hover:border-orange-300"
+                                onClick={() => handleSendMessage(suggestion)}
+                                className="px-3 py-2 text-sm bg-orange-50 hover:bg-orange-100 text-orange-700 rounded-lg transition-colors border border-orange-200 hover:border-orange-300 font-medium"
                                 disabled={isLoading}
                               >
                                 {suggestion}
                               </button>
                             ))}
+                          </div>
+                        )}
+
+                        {/* Always show follow-up suggestions for bot messages */}
+                        {message.type === 'bot' && (!message.suggestions || message.suggestions.length === 0) && (
+                          <div className="flex flex-wrap gap-2 mt-3">
+                            <button
+                              onClick={() => handleSendMessage("Tell me more")}
+                              className="px-3 py-2 text-sm bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-lg transition-colors border border-gray-200 hover:border-gray-300"
+                              disabled={isLoading}
+                            >
+                              Tell me more
+                            </button>
+                            <button
+                              onClick={() => handleSendMessage("Show me stats")}
+                              className="px-3 py-2 text-sm bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-lg transition-colors border border-gray-200 hover:border-gray-300"
+                              disabled={isLoading}
+                            >
+                              Show me stats
+                            </button>
                           </div>
                         )}
                       </div>
@@ -733,20 +716,21 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
             </div>
           )}
 
-          <div className={`flex gap-3 mt-4 ${isOverlayMode ? 'flex-shrink-0' : ''}`}>
+          {/* Input Area - Always visible when expanded */}
+          <div className={`flex gap-3 mt-6 pt-4 border-t border-gray-200 ${isOverlayMode ? 'flex-shrink-0' : ''}`}>
             <Input
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               placeholder="Ask about stats, games, players..."
-              onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
               onFocus={() => {
                 setIsActivelyUsed(true);
                 setIsExpanded(true);
               }}
-              className={`text-base py-4 px-4 transition-all duration-300 ${
+              className={`text-base py-4 px-4 transition-all duration-300 border-2 ${
                 isOverlayMode ? 'text-lg py-5' : ''
               } ${
-                isActivelyUsed || isExpanded ? 'border-orange-300 ring-2 ring-orange-100' : ''
+                isActivelyUsed || isExpanded ? 'border-orange-300 ring-2 ring-orange-100' : 'border-gray-300'
               }`}
               disabled={isLoading}
             />
@@ -754,7 +738,7 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
               onClick={() => handleSendMessage()}
               disabled={!inputMessage.trim() || isLoading}
               size="default"
-              className={`bg-orange-500 hover:bg-orange-600 text-white px-6 ${isOverlayMode ? 'px-8 py-5' : ''}`}
+              className={`bg-orange-500 hover:bg-orange-600 text-white px-6 py-4 ${isOverlayMode ? 'px-8 py-5' : ''}`}
             >
               <Send className={`w-4 h-4 ${isOverlayMode ? 'w-5 h-5' : ''}`} />
             </Button>
