@@ -83,7 +83,7 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
 
   const handleSendMessage = async (messageText?: string) => {
     const message = messageText || inputMessage;
-    if (!message.trim() || !user || isLoading) return;
+    if (!message.trim() || !user || isLoading || !leagueId) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -403,6 +403,21 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
           </span>
         </div>
         <div className="text-center text-slate-500">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!leagueId) {
+    return (
+      <div className="bg-white rounded-xl shadow-sm border border-orange-200 p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <MessageCircle className="w-5 h-5 text-orange-500" />
+          <h3 className="font-semibold text-slate-800">League Assistant</h3>
+          <span className="px-2 py-1 bg-gradient-to-r from-orange-500 to-yellow-500 text-white text-xs rounded-full font-medium">
+            PREMIUM
+          </span>
+        </div>
+        <div className="text-center text-slate-500">Please select a league to use the assistant.</div>
       </div>
     );
   }

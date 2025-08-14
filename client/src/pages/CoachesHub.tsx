@@ -266,7 +266,7 @@ export default function CoachesHub() {
               {/* Unified Scouting Editor */}
               <UnifiedScoutingEditor
                 leagueContext={selectedLeague ? {
-                  leagueId: selectedLeague.id,
+                  leagueId: selectedLeague.league_id,
                   leagueName: selectedLeague.name,
                 } : undefined}
                 onChatInsert={(content: string) => {
