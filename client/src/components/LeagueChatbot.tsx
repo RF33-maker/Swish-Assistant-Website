@@ -212,6 +212,11 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
         players: playersData.length, 
         games: gamesData.length 
       });
+      
+      // Debug: Log available player names
+      if (playersData.length > 0) {
+        console.log('Available players:', playersData.map(p => p.name).join(', '));
+      }
 
       // Enhanced Pattern-based intelligent responses
 
@@ -222,11 +227,26 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
           const playerName = playerNameMatch[1].trim();
           console.log('Looking for player:', playerName);
 
-          const player = playersData.find(p => 
-            p.name.toLowerCase().includes(playerName) ||
-            playerName.includes(p.name.toLowerCase().split(' ')[0]) ||
-            p.name.toLowerCase().split(' ')[0] === playerName.split(' ')[0]
-          );
+          const player = playersData.find(p => {
+            const playerNameLower = playerName.toLowerCase();
+            const pNameLower = p.name.toLowerCase();
+            
+            // Direct match
+            if (pNameLower.includes(playerNameLower) || playerNameLower.includes(pNameLower)) {
+              return true;
+            }
+            
+            // Split and check individual words
+            const searchWords = playerNameLower.split(' ');
+            const playerWords = pNameLower.split(' ');
+            
+            // Check if any search word matches any player word
+            return searchWords.some(searchWord => 
+              playerWords.some(playerWord => 
+                playerWord.includes(searchWord) || searchWord.includes(playerWord)
+              )
+            );
+          });
 
           if (player) {
             return {
@@ -235,7 +255,11 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
               navigationButtons: [{ label: `${player.name}'s Profile`, id: player.id, type: 'player' }]
             };
           } else {
-            return `I couldn't find a player named "${playerName}" in ${leagueName}. Try asking about one of these players:\n\n${playersData.slice(0, 5).map(p => `• ${p.name} (${p.team})`).join('\n') || 'No player data available'}`;
+            const availablePlayers = playersData.slice(0, 5).map(p => `• ${p.name} (${p.team})`).join('\n');
+            return {
+              content: `I couldn't find a player named "${playerName}" in ${leagueName}. Here are some available players:\n\n${availablePlayers || 'No player data available'}`,
+              suggestions: playersData.slice(0, 3).map(p => `How is ${p.name} doing?`)
+            };
           }
         }
       }
@@ -247,17 +271,38 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
           const searchName = nameMatch[1].trim();
           console.log('Searching for player performance:', searchName);
 
-          const player = playersData.find(p => 
-            p.name.toLowerCase().includes(searchName) ||
-            searchName.includes(p.name.toLowerCase().split(' ')[0]) ||
-            p.name.toLowerCase().split(' ')[0] === searchName.split(' ')[0]
-          );
+          const player = playersData.find(p => {
+            const searchNameLower = searchName.toLowerCase();
+            const pNameLower = p.name.toLowerCase();
+            
+            // Direct match
+            if (pNameLower.includes(searchNameLower) || searchNameLower.includes(pNameLower)) {
+              return true;
+            }
+            
+            // Split and check individual words
+            const searchWords = searchNameLower.split(' ');
+            const playerWords = pNameLower.split(' ');
+            
+            // Check if any search word matches any player word
+            return searchWords.some(searchWord => 
+              playerWords.some(playerWord => 
+                playerWord.includes(searchWord) || searchWord.includes(playerWord)
+              )
+            );
+          });
 
           if (player) {
             return {
               content: `${player.name} is having a solid season with ${player.team}!\n\nSeason totals: ${player.points} pts, ${player.rebounds_total} reb, ${player.assists} ast, ${player.steals} stl, ${player.blocks} blk\n\n${player.points >= 30 ? '🔥 Strong scorer who can put up big numbers!' : player.rebounds_total >= 15 ? '💪 Solid presence in the paint with good rebounding!' : player.assists >= 10 ? '🎯 Great court vision and playmaking ability!' : '⚡ Well-rounded contributor on both ends!'}`,
               suggestions: [`Who is ${player.name}'s team?`, `Who does ${player.team} play next?`],
               navigationButtons: [{ label: `${player.name}'s Profile`, id: player.id, type: 'player' }]
+            };
+          } else {
+            const availablePlayers = playersData.slice(0, 5).map(p => `• ${p.name} (${p.team})`).join('\n');
+            return {
+              content: `I couldn't find a player named "${searchName}" in ${leagueName}. Here are some available players:\n\n${availablePlayers || 'No player data available'}`,
+              suggestions: playersData.slice(0, 3).map(p => `How is ${p.name} doing?`)
             };
           }
         }
