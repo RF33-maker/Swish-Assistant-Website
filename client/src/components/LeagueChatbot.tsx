@@ -251,14 +251,14 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
           if (player) {
             return {
               content: `${player.name} plays for ${player.team}.`,
-              suggestions: [`How is ${player.name} doing?`, `Who are ${player.team}'s top players?`],
+              suggestions: [`How is ${player.name} performing?`, `Who are ${player.team}'s top players?`],
               navigationButtons: [{ label: `${player.name}'s Profile`, id: player.id, type: 'player' }]
             };
           } else {
             const availablePlayers = playersData.slice(0, 5).map(p => `• ${p.name} (${p.team})`).join('\n');
             return {
               content: `I couldn't find a player named "${playerName}" in ${leagueName}. Here are some available players:\n\n${availablePlayers || 'No player data available'}`,
-              suggestions: playersData.slice(0, 3).map(p => `How is ${p.name} doing?`)
+              suggestions: playersData.slice(0, 3).map(p => `How is ${p.name} performing?`)
             };
           }
         }
@@ -302,7 +302,7 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
             const availablePlayers = playersData.slice(0, 5).map(p => `• ${p.name} (${p.team})`).join('\n');
             return {
               content: `I couldn't find a player named "${searchName}" in ${leagueName}. Here are some available players:\n\n${availablePlayers || 'No player data available'}`,
-              suggestions: playersData.slice(0, 3).map(p => `How is ${p.name} doing?`)
+              suggestions: playersData.slice(0, 3).map(p => `How is ${p.name} performing?`)
             };
           }
         }
@@ -374,8 +374,8 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
           ).join('\n');
 
           return {
-            content: `Most Efficient Players in ${leagueName}:\n(Based on total statistical production)\n\n${efficiencyList}\n\n${topPlayer.name} leads with ${topPlayer.efficiency} total production.\n\n💡 Want more details? Try asking:\n• "How is ${topPlayer.name} doing?"\n• "Who leads in rebounds?"`,
-            suggestions: [`How is ${topPlayer.name} doing?`, `Who leads in rebounds?`],
+            content: `Most Efficient Players in ${leagueName}:\n(Based on total statistical production)\n\n${efficiencyList}\n\n${topPlayer.name} leads with ${topPlayer.efficiency} total production.\n\n💡 Want more details? Try asking:\n• "How is ${topPlayer.name} performing?"\n• "Who leads in rebounds?"`,
+            suggestions: [`How is ${topPlayer.name} performing?`, `Who leads in rebounds?`],
             navigationButtons: [{ label: `${topPlayer.name}'s Profile`, id: topPlayer.id, type: 'player' }]
           };
         }
@@ -386,8 +386,8 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
         const topRebounder = playersData.length > 0 ? playersData.find(p => p.rebounds_total === Math.max(...playersData.map(player => player.rebounds_total))) : null;
         if (topRebounder) {
           return {
-            content: `Rebounding Leaders in ${leagueName}:\n\n${playersData.sort((a, b) => b.rebounds_total - a.rebounds_total).slice(0, 5).map((p, i) => `${i + 1}. ${p.name} (${p.team}) - ${p.rebounds_total} rebounds`).join('\n')}\n\n💡 Want player details? Try asking:\n• "How is ${topRebounder.name} doing?"\n• "Who are the most efficient players?"`,
-            suggestions: [`How is ${topRebounder.name} doing?`, `Who are the most efficient players?`],
+            content: `Rebounding Leaders in ${leagueName}:\n\n${playersData.sort((a, b) => b.rebounds_total - a.rebounds_total).slice(0, 5).map((p, i) => `${i + 1}. ${p.name} (${p.team}) - ${p.rebounds_total} rebounds`).join('\n')}\n\n💡 Want player details? Try asking:\n• "How is ${topRebounder.name} performing?"\n• "Who are the most efficient players?"`,
+            suggestions: [`How is ${topRebounder.name} performing?`, `Who are the most efficient players?`],
             navigationButtons: [{ label: `${topRebounder.name}'s Profile`, id: topRebounder.id, type: 'player' }]
           };
         }
@@ -397,8 +397,8 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
         const topScorer = playersData.length > 0 ? playersData[0] : null;
         if (topScorer) {
           return {
-            content: `Scoring Leaders in ${leagueName}:\n\n${playersData.slice(0, 5).map((p, i) => `${i + 1}. ${p.name} (${p.team}) - ${p.points} points`).join('\n')}\n\n💡 Want more details? Try asking:\n• "How is ${topScorer.name} doing?"\n• "Who is the best team?"`,
-            suggestions: [`How is ${topScorer.name} doing?`, `Who is the best team?`],
+            content: `Scoring Leaders in ${leagueName}:\n\n${playersData.slice(0, 5).map((p, i) => `${i + 1}. ${p.name} (${p.team}) - ${p.points} points`).join('\n')}\n\n💡 Want more details? Try asking:\n• "How is ${topScorer.name} performing?"\n• "Who is the best team?"`,
+            suggestions: [`How is ${topScorer.name} performing?`, `Who is the best team?`],
             navigationButtons: [{ label: `${topScorer.name}'s Profile`, id: topScorer.id, type: 'player' }]
           };
         }
@@ -409,8 +409,8 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
         const topPlayer = playersData[0];
 
         return {
-          content: `Here's what's happening in ${leagueName}:\n\n🏀 League Leaders:\n• Top Scorer: ${topPlayer.name} (${topPlayer.team}) - ${topPlayer.points} points\n• Games Played: ${gamesData.length || 'Several'} recent games\n• Teams Competing: ${new Set(playersData.map(p => p.team)).size} active teams\n\n💡 Try asking me:\n• "How is [Player Name] doing?"\n• "Who is the best team?"\n• "Who are the most efficient players?"`,
-          suggestions: [`How is ${topPlayer.name} doing?`, `Who is the best team?`, `Who are the most efficient players?`],
+          content: `Here's what's happening in ${leagueName}:\n\n🏀 League Leaders:\n• Top Scorer: ${topPlayer.name} (${topPlayer.team}) - ${topPlayer.points} points\n• Games Played: ${gamesData.length || 'Several'} recent games\n• Teams Competing: ${new Set(playersData.map(p => p.team)).size} active teams\n\n💡 Try asking me:\n• "How is [Player Name] performing?"\n• "Who is the best team?"\n• "Who are the most efficient players?"`,
+          suggestions: [`How is ${topPlayer.name} performing?`, `Who is the best team?`, `Who are the most efficient players?`],
           navigationButtons: [{ label: `${topPlayer.name}'s Profile`, id: topPlayer.id, type: 'player' }]
         };
       }
