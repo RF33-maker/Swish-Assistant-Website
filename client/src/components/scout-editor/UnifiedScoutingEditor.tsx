@@ -28,8 +28,13 @@ import {
   BarChart3,
   Menu,
   X,
-  Plus
+  Plus,
+  Palette
 } from 'lucide-react';
+import { safelyParseReport } from "@/utils/parseReport";
+import { ScoutingReport } from "@/types/reportSchema";
+import ReportPreview from "@/components/scout-templates/ReportPreview";
+import { templates } from "@/components/scout-templates";
 
 interface UnifiedScoutingEditorProps {
   leagueContext?: {
@@ -37,6 +42,11 @@ interface UnifiedScoutingEditorProps {
     leagueName: string;
   };
   onChatInsert?: (content: string) => void;
+  reportData?: any;
+  onReportDataChange?: (data: any) => void;
+  selectedTemplateId?: string;
+  onTemplateChange?: (id: string) => void;
+  parseError?: string | null;
 }
 
 const blockTypes = [
@@ -90,19 +100,40 @@ const blockTypes = [
 const gameTemplates = [
   {
     name: 'Game Analysis',
-    content: '<h1>Game Analysis Report</h1><h2>Team Overview</h2><p>Analysis content here...</p><h2>Key Players</h2><p>Player analysis...</p><h2>Strategic Insights</h2><p>Strategic recommendations...</p>'
+    content: '<h1>Game Analysis Report</h1><h2>Team Overview</h2><p>Analysis content here...</p><h2>Key Players</h2><p>Player analysis...</p><h2>Strategic Insights</h2><p>Strategic recommendations...</p>',
+    type: 'document'
   },
   {
     name: 'Player Scouting',
-    content: '<h1>Player Scouting Report</h1><h2>Player Profile</h2><p>Basic information and position...</p><h2>Strengths</h2><p>Key strengths...</p><h2>Areas for Improvement</h2><p>Development areas...</p>'
+    content: '<h1>Player Scouting Report</h1><h2>Player Profile</h2><p>Basic information and position...</p><h2>Strengths</h2><p>Key strengths...</p><h2>Areas for Improvement</h2><p>Development areas...</p>',
+    type: 'document'
   },
   {
     name: 'Opponent Preview',
-    content: '<h1>Opponent Preview</h1><h2>Team Style</h2><p>Playing style and strategy...</p><h2>Key Matchups</h2><p>Important matchups to watch...</p><h2>Game Plan</h2><p>Strategic approach...</p>'
+    content: '<h1>Opponent Preview</h1><h2>Team Style</h2><p>Playing style and strategy...</p><h2>Key Matchups</h2><p>Important matchups to watch...</p><h2>Game Plan</h2><p>Strategic approach...</p>',
+    type: 'document'
   }
 ];
 
-export default function UnifiedScoutingEditor({ leagueContext, onChatInsert }: UnifiedScoutingEditorProps) {
+// Add professional scouting report templates
+const scoutingReportTemplates = [
+  {
+    name: 'Clean Pro',
+    id: 'clean-pro',
+    description: 'Professional player scouting card with stats and analysis',
+    type: 'visual'
+  }
+];
+
+export default function UnifiedScoutingEditor({ 
+  leagueContext, 
+  onChatInsert, 
+  reportData, 
+  onReportDataChange, 
+  selectedTemplateId = "clean-pro", 
+  onTemplateChange, 
+  parseError 
+}: UnifiedScoutingEditorProps) {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('blocks');
   const [currentDocumentId, setCurrentDocumentId] = useState<string | null>(null);
@@ -174,6 +205,49 @@ export default function UnifiedScoutingEditor({ leagueContext, onChatInsert }: U
       editor.chain().focus().setContent(template.content).run();
       setDocumentTitle(template.name);
     }
+  };
+
+  const handleScoutingTemplateSelect = (templateId: string) => {
+    onTemplateChange?.(templateId);
+  };
+
+  const handleSampleDataPreview = () => {
+    // Sample data to demonstrate the template
+    const sampleData: ScoutingReport = {
+      meta: {
+        player: "Sample Player",
+        team: "Demo Team", 
+        opponent: "Opposition FC",
+        gameDate: "2025-01-15",
+        position: "Point Guard",
+        age: 22,
+        height: "6'2\"",
+        weight: "185 lbs",
+        photoUrl: null
+      },
+      stats: {
+        ppg: 18.5,
+        rpg: 6.2,
+        apg: 4.8,
+        spg: 1.5,
+        bpg: 0.8,
+        fgPct: 45.2,
+        tpPct: 38.7,
+        ftPct: 82.4
+      },
+      strengths: [
+        "Excellent court vision and passing ability",
+        "Strong three-point shooting percentage", 
+        "Good defensive positioning and anticipation",
+        "High basketball IQ and decision making"
+      ],
+      weaknesses: [
+        "Could improve strength for finishing at the rim",
+        "Sometimes rushes shots under pressure",
+        "Needs to work on left-hand dribbling"
+      ]
+    };
+    onReportDataChange?.(sampleData);
   };
 
   const exportDocument = () => {
@@ -303,30 +377,89 @@ export default function UnifiedScoutingEditor({ leagueContext, onChatInsert }: U
                     ))}
                   </TabsContent>
 
-                  <TabsContent value="templates" className="mt-0 space-y-2">
-                    <div className="mb-4">
-                      <h3 className="text-sm font-semibold text-gray-900 mb-2">Report Templates</h3>
-                      <p className="text-xs text-gray-500">Quick-start templates for common reports</p>
+                  <TabsContent value="templates" className="mt-0 space-y-4">
+                    {/* Document Templates Section */}
+                    <div>
+                      <div className="mb-3">
+                        <h3 className="text-sm font-semibold text-gray-900 mb-1">Document Templates</h3>
+                        <p className="text-xs text-gray-500">Quick-start templates for common reports</p>
+                      </div>
+                      <div className="space-y-2">
+                        {gameTemplates.map((template, index) => (
+                          <Card 
+                            key={index} 
+                            className="cursor-pointer hover:shadow-sm hover:border-blue-200 transition-all duration-200 border border-gray-200 bg-white" 
+                            onClick={() => insertTemplate(template)}
+                          >
+                            <CardContent className="p-4">
+                              <div className="flex items-start gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-100 to-blue-50 flex items-center justify-center flex-shrink-0 border border-blue-100">
+                                  <FileText className="w-5 h-5 text-blue-600" />
+                                </div>
+                                <div className="flex-1">
+                                  <div className="font-semibold text-sm text-gray-900">{template.name}</div>
+                                  <div className="text-xs text-gray-600 mt-1">Professional template ready to customize</div>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
                     </div>
-                    {gameTemplates.map((template, index) => (
-                      <Card 
-                        key={index} 
-                        className="cursor-pointer hover:shadow-sm hover:border-blue-200 transition-all duration-200 border border-gray-200 bg-white" 
-                        onClick={() => insertTemplate(template)}
-                      >
-                        <CardContent className="p-4">
-                          <div className="flex items-start gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-100 to-blue-50 flex items-center justify-center flex-shrink-0 border border-blue-100">
-                              <FileText className="w-5 h-5 text-blue-600" />
+
+                    {/* Visual Scouting Report Templates */}
+                    <div>
+                      <div className="mb-3">
+                        <h3 className="text-sm font-semibold text-gray-900 mb-1">Visual Report Templates</h3>
+                        <p className="text-xs text-gray-500">Professional visual scouting report cards</p>
+                      </div>
+                      
+                      {/* Template Selection */}
+                      <div className="mb-4">
+                        <div className="flex items-center gap-3 mb-3">
+                          <span className="text-xs font-medium text-slate-700">Choose Template:</span>
+                          <select
+                            className="text-xs border border-gray-300 rounded-md px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                            value={selectedTemplateId}
+                            onChange={(e) => handleScoutingTemplateSelect(e.target.value)}
+                          >
+                            {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                          </select>
+                        </div>
+                        {parseError && (
+                          <div className="text-xs text-red-600 bg-red-50 px-2 py-1 rounded border border-red-200 mb-3">
+                            {parseError}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Template Preview */}
+                      {reportData ? (
+                        <div className="border rounded-lg overflow-hidden bg-white">
+                          <ReportPreview data={reportData} templateId={selectedTemplateId} />
+                        </div>
+                      ) : (
+                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center bg-gray-50">
+                          <div className="space-y-3">
+                            <div className="w-12 h-12 bg-gray-200 rounded-full mx-auto flex items-center justify-center">
+                              <Palette className="w-6 h-6 text-gray-400" />
                             </div>
-                            <div className="flex-1">
-                              <div className="font-semibold text-sm text-gray-900">{template.name}</div>
-                              <div className="text-xs text-gray-600 mt-1">Professional template ready to customize</div>
+                            <div>
+                              <h4 className="text-sm font-medium text-slate-800 mb-2">No Report Data</h4>
+                              <p className="text-xs text-slate-600 mb-3">
+                                Use the AI Assistant to generate a scouting report in JSON format
+                              </p>
+                              <button 
+                                onClick={handleSampleDataPreview}
+                                className="text-xs px-3 py-1.5 bg-orange-100 text-orange-700 rounded-md hover:bg-orange-200 transition-colors"
+                              >
+                                Preview with Sample Data
+                              </button>
                             </div>
                           </div>
-                        </CardContent>
-                      </Card>
-                    ))}
+                        </div>
+                      )}
+                    </div>
                   </TabsContent>
 
                   <TabsContent value="assistant" className="mt-0">
@@ -343,6 +476,11 @@ export default function UnifiedScoutingEditor({ leagueContext, onChatInsert }: U
                             if (editor && onChatInsert) {
                               editor.chain().focus().insertContent(`<p>${content}</p>`).run();
                               onChatInsert(content);
+                            }
+                            // Also try to parse as scouting report data
+                            const parsed = safelyParseReport(content);
+                            if (parsed) { 
+                              onReportDataChange?.(parsed); 
                             }
                           }}
                           isPanelMode={true}
