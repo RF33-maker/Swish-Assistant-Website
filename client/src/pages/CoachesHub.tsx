@@ -285,7 +285,10 @@ export default function CoachesHub() {
                       <span className="text-sm font-medium text-blue-800">Teams</span>
                     </div>
                     <div className="text-2xl font-bold text-blue-900">
-                      {Array.from(new Set(playerStats.map(stat => stat.team))).filter(Boolean).length}
+                      {(() => {
+                        const teams = Array.from(new Set(playerStats.map(stat => stat.team))).filter(Boolean);
+                        return teams.length;
+                      })()}
                     </div>
                   </div>
                   
@@ -295,7 +298,10 @@ export default function CoachesHub() {
                       <span className="text-sm font-medium text-green-800">Players</span>
                     </div>
                     <div className="text-2xl font-bold text-green-900">
-                      {Array.from(new Set(playerStats.map(stat => stat.player))).filter(Boolean).length}
+                      {(() => {
+                        const players = Array.from(new Set(playerStats.map(stat => stat.player))).filter(Boolean);
+                        return players.length;
+                      })()}
                     </div>
                   </div>
                   
@@ -305,88 +311,138 @@ export default function CoachesHub() {
                       <span className="text-sm font-medium text-purple-800">Games</span>
                     </div>
                     <div className="text-2xl font-bold text-purple-900">
-                      {Math.round(playerStats.length / Array.from(new Set(playerStats.map(stat => stat.player))).filter(Boolean).length) || 0}
+                      {(() => {
+                        // Count unique game dates
+                        const gameDates = Array.from(new Set(playerStats.map(stat => stat.game_date))).filter(Boolean);
+                        return gameDates.length;
+                      })()}
                     </div>
                   </div>
                   
                   <div className="bg-gradient-to-br from-orange-50 to-orange-100 p-4 rounded-lg border border-orange-200">
                     <div className="flex items-center gap-2 mb-2">
-                      <TrendingUp className="w-4 h-4 text-orange-600" />
-                      <span className="text-sm font-medium text-orange-800">Avg PPG</span>
+                      <Award className="w-4 h-4 text-orange-600" />
+                      <span className="text-sm font-medium text-orange-800">Top Team</span>
                     </div>
-                    <div className="text-2xl font-bold text-orange-900">
-                      {Math.round(playerStats.reduce((sum, stat) => sum + (parseInt(stat.points) || 0), 0) / playerStats.length) || 0}
+                    <div className="text-lg font-bold text-orange-900">
+                      {(() => {
+                        // Calculate team totals and find highest scoring team
+                        const teamTotals = playerStats.reduce((acc, stat) => {
+                          const team = stat.team;
+                          if (!team) return acc;
+                          if (!acc[team]) acc[team] = 0;
+                          acc[team] += parseInt(stat.points) || 0;
+                          return acc;
+                        }, {});
+                        
+                        const topTeam = Object.entries(teamTotals).reduce((top, [team, points]) => 
+                          points > top.points ? { team, points } : top, 
+                          { team: 'N/A', points: 0 }
+                        );
+                        
+                        return topTeam.team !== 'N/A' ? topTeam.team : 'No Data';
+                      })()}
                     </div>
                   </div>
                 </div>
 
-                {/* Top Players Summary - Horizontal Layout */}
+                {/* Team Stats Summary - Horizontal Layout */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="bg-gray-50 p-4 rounded-lg border">
                     <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
                       <Award className="w-4 h-4 text-yellow-600" />
-                      Top Scorers
+                      Top Scoring Teams
                     </h4>
                     <div className="space-y-2">
-                      {playerStats
-                        .reduce((acc: Record<string, any>, stat) => {
-                          const key = stat.player;
-                          if (!acc[key]) acc[key] = { name: stat.player, points: 0 };
-                          acc[key].points += parseInt(stat.points) || 0;
+                      {(() => {
+                        // Calculate team totals
+                        const teamTotals = playerStats.reduce((acc: Record<string, any>, stat) => {
+                          const team = stat.team;
+                          if (!team) return acc;
+                          if (!acc[team]) acc[team] = { name: team, points: 0, games: new Set() };
+                          acc[team].points += parseInt(stat.points) || 0;
+                          acc[team].games.add(stat.game_date);
                           return acc;
-                        }, {})
-                        && Object.values(playerStats.reduce((acc: Record<string, any>, stat) => {
-                          const key = stat.player;
-                          if (!acc[key]) acc[key] = { name: stat.player, points: 0 };
-                          acc[key].points += parseInt(stat.points) || 0;
-                          return acc;
-                        }, {}))
-                        .sort((a: any, b: any) => b.points - a.points)
-                        .slice(0, 3)
-                        .map((player: any, index) => (
-                          <div key={index} className="flex items-center justify-between py-1">
-                            <div className="flex items-center gap-2">
-                              <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white ${
-                                index === 0 ? 'bg-yellow-500' : index === 1 ? 'bg-gray-400' : 'bg-amber-600'
-                              }`}>
-                                {index + 1}
+                        }, {});
+                        
+                        return Object.values(teamTotals)
+                          .map((team: any) => ({ ...team, avgPPG: Math.round(team.points / team.games.size) }))
+                          .sort((a: any, b: any) => b.points - a.points)
+                          .slice(0, 3)
+                          .map((team: any, index) => (
+                            <div key={index} className="flex items-center justify-between py-1">
+                              <div className="flex items-center gap-2">
+                                <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white ${
+                                  index === 0 ? 'bg-yellow-500' : index === 1 ? 'bg-gray-400' : 'bg-amber-600'
+                                }`}>
+                                  {index + 1}
+                                </div>
+                                <span className="text-sm font-medium text-gray-900">{team.name}</span>
                               </div>
-                              <span className="text-sm font-medium text-gray-900">{player.name}</span>
+                              <span className="text-sm font-bold text-gray-700">{team.points} pts ({team.avgPPG} avg)</span>
                             </div>
-                            <span className="text-sm font-bold text-gray-700">{player.points} pts</span>
-                          </div>
-                        ))}
+                          ));
+                      })()}
                     </div>
                   </div>
 
                   <div className="bg-gray-50 p-4 rounded-lg border">
                     <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
                       <Target className="w-4 h-4 text-green-600" />
-                      League Leaders
+                      Team Leaders
                     </h4>
                     <div className="space-y-2">
-                      <div className="flex justify-between items-center py-1">
-                        <span className="text-sm text-gray-600">Most Assists</span>
-                        <span className="text-sm font-medium text-gray-900">
-                          {Math.max(...playerStats.map(stat => parseInt(stat.assists) || 0))}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center py-1">
-                        <span className="text-sm text-gray-600">Most Rebounds</span>
-                        <span className="text-sm font-medium text-gray-900">
-                          {Math.max(...playerStats.map(stat => parseInt(stat.rebounds) || 0))}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center py-1">
-                        <span className="text-sm text-gray-600">Best FG%</span>
-                        <span className="text-sm font-medium text-gray-900">
-                          {Math.max(...playerStats.map(stat => {
-                            const made = parseInt(stat.field_goals_made) || 0;
-                            const attempted = parseInt(stat.field_goals_attempted) || 0;
-                            return attempted > 0 ? Math.round((made / attempted) * 100) : 0;
-                          }))}%
-                        </span>
-                      </div>
+                      {(() => {
+                        // Calculate team stats
+                        const teamStats = playerStats.reduce((acc: Record<string, any>, stat) => {
+                          const team = stat.team;
+                          if (!team) return acc;
+                          if (!acc[team]) acc[team] = { assists: 0, rebounds: 0, fgMade: 0, fgAttempted: 0 };
+                          acc[team].assists += parseInt(stat.assists) || 0;
+                          acc[team].rebounds += parseInt(stat.rebounds) || 0;
+                          acc[team].fgMade += parseInt(stat.field_goals_made) || 0;
+                          acc[team].fgAttempted += parseInt(stat.field_goals_attempted) || 0;
+                          return acc;
+                        }, {});
+
+                        const topAssistTeam = Object.entries(teamStats).reduce((top, [team, stats]: any) => 
+                          stats.assists > top.assists ? { team, assists: stats.assists } : top, 
+                          { team: 'N/A', assists: 0 }
+                        );
+
+                        const topReboundTeam = Object.entries(teamStats).reduce((top, [team, stats]: any) => 
+                          stats.rebounds > top.rebounds ? { team, rebounds: stats.rebounds } : top, 
+                          { team: 'N/A', rebounds: 0 }
+                        );
+
+                        const topFGTeam = Object.entries(teamStats).reduce((top, [team, stats]: any) => {
+                          const fg = stats.fgAttempted > 0 ? Math.round((stats.fgMade / stats.fgAttempted) * 100) : 0;
+                          return fg > top.fg ? { team, fg } : top;
+                        }, { team: 'N/A', fg: 0 });
+
+                        return (
+                          <>
+                            <div className="flex justify-between items-center py-1">
+                              <span className="text-sm text-gray-600">Most Assists</span>
+                              <span className="text-sm font-medium text-gray-900">
+                                {topAssistTeam.team} ({topAssistTeam.assists})
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center py-1">
+                              <span className="text-sm text-gray-600">Most Rebounds</span>
+                              <span className="text-sm font-medium text-gray-900">
+                                {topReboundTeam.team} ({topReboundTeam.rebounds})
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center py-1">
+                              <span className="text-sm text-gray-600">Best FG%</span>
+                              <span className="text-sm font-medium text-gray-900">
+                                {topFGTeam.team} ({topFGTeam.fg}%)
+                              </span>
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>
