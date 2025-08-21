@@ -85,6 +85,7 @@ import {
     }, [search]);
 
 
+
     useEffect(() => {
       const fetchUserAndLeague = async () => {
         // First get the current user
@@ -630,6 +631,9 @@ import {
               onClick={() => {
                 setActiveSection('stats');
                 setDisplayedPlayerCount(20); // Reset to initial count when switching to stats
+                if (allPlayerAverages.length === 0) {
+                  fetchAllPlayerAverages();
+                }
               }}
             >
               Stats

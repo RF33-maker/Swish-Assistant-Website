@@ -211,7 +211,7 @@ export default function LeagueLeadersPage() {
               : "0.0%"
           }))
           .filter(p => p.total_three_points_attempted >= 1) // Minimum 1 attempt
-          .sort((a, b) => b.three_point_percentage - a.three_point_percentage)
+          .sort((a, b) => b.three_pt_percentage - a.three_pt_percentage)
           .slice(0, 5);
 
         processedStats.free_throw_percentage = playersWithEnoughGames
