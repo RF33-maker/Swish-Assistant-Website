@@ -241,8 +241,8 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
             const playerWords = pNameLower.split(' ');
             
             // Check if any search word matches any player word
-            return searchWords.some(searchWord => 
-              playerWords.some(playerWord => 
+            return searchWords.some((searchWord: string) => 
+              playerWords.some((playerWord: string) => 
                 playerWord.includes(searchWord) || searchWord.includes(playerWord)
               )
             );
@@ -285,8 +285,8 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
             const playerWords = pNameLower.split(' ');
             
             // Check if any search word matches any player word
-            return searchWords.some(searchWord => 
-              playerWords.some(playerWord => 
+            return searchWords.some((searchWord: string) => 
+              playerWords.some((playerWord: string) => 
                 playerWord.includes(searchWord) || searchWord.includes(playerWord)
               )
             );
@@ -586,6 +586,29 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
                             disabled={isLoading}
                           >
                             {suggestion}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Navigation buttons - Player profile links */}
+                    {message.type === 'bot' && message.navigationButtons && message.navigationButtons.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {message.navigationButtons.map((button, index) => (
+                          <button
+                            key={index}
+                            onClick={() => {
+                              if (button.type === 'player') {
+                                setLocation(`/player/${button.id}`);
+                              } else if (button.type === 'team') {
+                                setLocation(`/team/${button.id}`);
+                              }
+                            }}
+                            className="px-2 py-1 text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 rounded transition-colors border border-blue-200 flex items-center gap-1"
+                          >
+                            <User className="w-3 h-3" />
+                            {button.label}
+                            <ExternalLink className="w-2 h-2" />
                           </button>
                         ))}
                       </div>
