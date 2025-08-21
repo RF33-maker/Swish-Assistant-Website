@@ -3,7 +3,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { supabase } from '@/lib/supabase';
 import TeamPerformanceTrends from '@/components/TeamPerformanceTrends';
 import LeagueChatbot from '@/components/LeagueChatbot';
-import { TrendingUp, BarChart3, Users, Target, Award, Eye, MessageCircle, Search, FileText, Save, Plus, Edit3, ArrowDown, Bot, BookOpen, Brain, Sparkles, Edit, Palette } from 'lucide-react';
+import { TrendingUp, BarChart3, Users, Target, Award, Eye, MessageCircle, Search, FileText, Save, Plus, Edit3, ArrowDown, Bot, BookOpen, Brain, Sparkles, Edit, Palette, User, Calendar } from 'lucide-react';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { Link } from 'wouter';
 import SwishLogo from '@/assets/Swish Assistant Logo.png';
@@ -224,64 +224,185 @@ export default function CoachesHub() {
           </div>
         ) : (
           <div className="space-y-8">
-            {/* Resizable 3-Pane Layout with Draggable Chatbot */}
+            {/* League Selection */}
+            {selectedLeague && (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                    <div>
+                      <span className="font-medium text-slate-800">{selectedLeague.name}</span>
+                      <span className="text-sm text-slate-500 ml-2">Active League</span>
+                    </div>
+                  </div>
+                  <div className="text-sm text-slate-500">
+                    {playerStats.length} player records
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Analytics Dashboard - Horizontal Layout Above Main Content */}
+            {selectedLeague && (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div className="flex items-center gap-3 mb-6">
+                  <BarChart3 className="w-6 h-6 text-orange-600" />
+                  <h2 className="text-xl font-bold text-slate-800">League Analytics Overview</h2>
+                </div>
+
+                {/* Analytics Metrics Grid - Full Width */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Users className="w-4 h-4 text-blue-600" />
+                      <span className="text-sm font-medium text-blue-800">Teams</span>
+                    </div>
+                    <div className="text-2xl font-bold text-blue-900">
+                      {Array.from(new Set(playerStats.map(stat => stat.team))).filter(Boolean).length}
+                    </div>
+                  </div>
+                  
+                  <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-lg border border-green-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <User className="w-4 h-4 text-green-600" />
+                      <span className="text-sm font-medium text-green-800">Players</span>
+                    </div>
+                    <div className="text-2xl font-bold text-green-900">
+                      {Array.from(new Set(playerStats.map(stat => stat.player))).filter(Boolean).length}
+                    </div>
+                  </div>
+                  
+                  <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-lg border border-purple-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Calendar className="w-4 h-4 text-purple-600" />
+                      <span className="text-sm font-medium text-purple-800">Games</span>
+                    </div>
+                    <div className="text-2xl font-bold text-purple-900">
+                      {Math.round(playerStats.length / Array.from(new Set(playerStats.map(stat => stat.player))).filter(Boolean).length) || 0}
+                    </div>
+                  </div>
+                  
+                  <div className="bg-gradient-to-br from-orange-50 to-orange-100 p-4 rounded-lg border border-orange-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <TrendingUp className="w-4 h-4 text-orange-600" />
+                      <span className="text-sm font-medium text-orange-800">Avg PPG</span>
+                    </div>
+                    <div className="text-2xl font-bold text-orange-900">
+                      {Math.round(playerStats.reduce((sum, stat) => sum + (parseInt(stat.points) || 0), 0) / playerStats.length) || 0}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Top Players Summary - Horizontal Layout */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-gray-50 p-4 rounded-lg border">
+                    <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                      <Award className="w-4 h-4 text-yellow-600" />
+                      Top Scorers
+                    </h4>
+                    <div className="space-y-2">
+                      {playerStats
+                        .reduce((acc: Record<string, any>, stat) => {
+                          const key = stat.player;
+                          if (!acc[key]) acc[key] = { name: stat.player, points: 0 };
+                          acc[key].points += parseInt(stat.points) || 0;
+                          return acc;
+                        }, {})
+                        && Object.values(playerStats.reduce((acc: Record<string, any>, stat) => {
+                          const key = stat.player;
+                          if (!acc[key]) acc[key] = { name: stat.player, points: 0 };
+                          acc[key].points += parseInt(stat.points) || 0;
+                          return acc;
+                        }, {}))
+                        .sort((a: any, b: any) => b.points - a.points)
+                        .slice(0, 3)
+                        .map((player: any, index) => (
+                          <div key={index} className="flex items-center justify-between py-1">
+                            <div className="flex items-center gap-2">
+                              <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white ${
+                                index === 0 ? 'bg-yellow-500' : index === 1 ? 'bg-gray-400' : 'bg-amber-600'
+                              }`}>
+                                {index + 1}
+                              </div>
+                              <span className="text-sm font-medium text-gray-900">{player.name}</span>
+                            </div>
+                            <span className="text-sm font-bold text-gray-700">{player.points} pts</span>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-50 p-4 rounded-lg border">
+                    <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                      <Target className="w-4 h-4 text-green-600" />
+                      League Leaders
+                    </h4>
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center py-1">
+                        <span className="text-sm text-gray-600">Most Assists</span>
+                        <span className="text-sm font-medium text-gray-900">
+                          {Math.max(...playerStats.map(stat => parseInt(stat.assists) || 0))}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center py-1">
+                        <span className="text-sm text-gray-600">Most Rebounds</span>
+                        <span className="text-sm font-medium text-gray-900">
+                          {Math.max(...playerStats.map(stat => parseInt(stat.rebounds) || 0))}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center py-1">
+                        <span className="text-sm text-gray-600">Best FG%</span>
+                        <span className="text-sm font-medium text-gray-900">
+                          {Math.max(...playerStats.map(stat => {
+                            const made = parseInt(stat.field_goals_made) || 0;
+                            const attempted = parseInt(stat.field_goals_attempted) || 0;
+                            return attempted > 0 ? Math.round((made / attempted) * 100) : 0;
+                          }))}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Main Content - Team Performance Trends and League Assistant */}
             <div className="flex gap-6 min-h-[800px]">
-              {/* Left Pane - Analytics Dashboard */}
-              <div className="w-96 flex-shrink-0">
-                <AnalyticsDashboard
-                  selectedLeague={selectedLeague}
-                  playerStats={playerStats}
-                  onLeagueSelect={setSelectedLeague}
-                  leagues={leagues}
-                />
+              {/* Left Section - Team Performance Trends */}
+              <div className="flex-1">
+                {selectedLeague && <TeamPerformanceTrends leagueId={selectedLeague.league_id} />}
               </div>
 
-              {/* Resizable Right Section - Editor and Chatbot */}
-              <div className="flex-1 min-w-0">
-                <ResizablePanelGroup 
-                  direction="horizontal" 
-                  className="min-h-[800px] rounded-lg border"
-                >
-                  {/* Editor Panel */}
-                  <ResizablePanel defaultSize={65} minSize={30}>
-                    <div className="h-full">
-                      <ThreePaneEditor
-                        selectedLeague={selectedLeague}
-                        playerStats={playerStats}
-                        onChatInsert={(content: string) => {
-                          setChatbotResponse(content);
+              {/* Right Section - League Assistant */}
+              <div className="w-96 flex-shrink-0">
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 h-full">
+                  <div className="p-4 border-b border-gray-200">
+                    <div className="flex items-center gap-2">
+                      <MessageCircle className="w-5 h-5 text-orange-600" />
+                      <h3 className="font-semibold text-slate-800">League Assistant</h3>
+                    </div>
+                  </div>
+                  <div className="p-4 h-full overflow-auto">
+                    {selectedLeague && (
+                      <LeagueChatbot
+                        leagueId={selectedLeague.league_id}
+                        leagueName={selectedLeague.name}
+                        onResponseReceived={(response: string) => {
+                          setChatbotResponse(response);
                         }}
+                        isPanelMode={true}
                       />
-                    </div>
-                  </ResizablePanel>
-                  
-                  {/* Resizable Handle */}
-                  <ResizableHandle withHandle />
-                  
-                  {/* Chatbot Panel */}
-                  <ResizablePanel defaultSize={35} minSize={25} maxSize={60}>
-                    <div className="h-full p-4 bg-gray-50 overflow-auto">
-                      {selectedLeague && (
-                        <LeagueChatbot
-                          leagueId={selectedLeague.league_id}
-                          leagueName={selectedLeague.name}
-                          onResponseReceived={(response: string) => {
-                            setChatbotResponse(response);
-                          }}
-                          isPanelMode={true}
-                        />
-                      )}
-                      {!selectedLeague && (
-                        <div className="h-full flex items-center justify-center text-gray-500">
-                          <div className="text-center">
-                            <MessageCircle className="w-12 h-12 mx-auto mb-3 text-gray-400" />
-                            <p>Select a league to use the chatbot</p>
-                          </div>
+                    )}
+                    {!selectedLeague && (
+                      <div className="h-full flex items-center justify-center text-gray-500">
+                        <div className="text-center">
+                          <MessageCircle className="w-12 h-12 mx-auto mb-3 text-gray-400" />
+                          <p>Select a league to use the chatbot</p>
                         </div>
-                      )}
-                    </div>
-                  </ResizablePanel>
-                </ResizablePanelGroup>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 
