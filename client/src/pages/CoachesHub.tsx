@@ -370,7 +370,7 @@ export default function CoachesHub() {
             <div className="flex gap-6 min-h-[800px]">
               {/* Left Section - Team Performance Trends */}
               <div className="flex-1">
-                {selectedLeague && <TeamPerformanceTrends leagueId={selectedLeague.league_id} />}
+                {selectedLeague && <TeamPerformanceTrends leagueId={selectedLeague.league_id} playerStats={playerStats} />}
               </div>
 
               {/* Right Section - League Assistant */}
