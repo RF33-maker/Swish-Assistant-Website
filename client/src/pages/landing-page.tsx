@@ -474,8 +474,8 @@ export default function LandingPage() {
       </section>
 
       {/* Pricing Section */}
-      <section id="pricing" className="py-16 bg-gradient-to-br from-slate-50 to-orange-50">
-        <div className="max-w-6xl mx-auto px-6">
+      <section id="pricing" className="py-16 bg-gradient-to-br from-slate-50 to-orange-50 relative">
+        <div className="max-w-6xl mx-auto px-6 relative">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-slate-900 mb-4">
               Choose the right plan for your team
@@ -485,163 +485,185 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* Blurred pricing content */}
+          <div className="blur-sm pointer-events-none">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 
-            {/* Free Tier */}
-            <div className="bg-white rounded-xl shadow-lg border-2 border-gray-200 p-6 relative">
-              <div className="text-center">
-                <h3 className="text-xl font-bold text-slate-900 mb-2">Free</h3>
-                <div className="text-3xl font-bold text-slate-900 mb-1">£0</div>
-                <p className="text-gray-600 text-sm mb-6">Perfect for trying out</p>
+              {/* Free Tier */}
+              <div className="bg-white rounded-xl shadow-lg border-2 border-gray-200 p-6 relative">
+                <div className="text-center">
+                  <h3 className="text-xl font-bold text-slate-900 mb-2">Free</h3>
+                  <div className="text-3xl font-bold text-slate-900 mb-1">£0</div>
+                  <p className="text-gray-600 text-sm mb-6">Perfect for trying out</p>
 
-                <ul className="text-left space-y-3 mb-8">
-                  <li className="flex items-center gap-2 text-sm">
-                    <span className="text-green-500">✓</span>
-                    <span>1 private league only</span>
-                  </li>
-                  <li className="flex items-center gap-2 text-sm">
-                    <span className="text-green-500">✓</span>
-                    <span>View all public leagues</span>
-                  </li>
-                  <li className="flex items-center gap-2 text-sm">
-                    <span className="text-green-500">✓</span>
-                    <span>Limited AI queries</span>
-                  </li>
-                  <li className="flex items-center gap-2 text-sm">
-                    <span className="text-gray-400">✗</span>
-                    <span className="text-gray-400">Public league hosting</span>
-                  </li>
-                </ul>
+                  <ul className="text-left space-y-3 mb-8">
+                    <li className="flex items-center gap-2 text-sm">
+                      <span className="text-green-500">✓</span>
+                      <span>1 private league only</span>
+                    </li>
+                    <li className="flex items-center gap-2 text-sm">
+                      <span className="text-green-500">✓</span>
+                      <span>View all public leagues</span>
+                    </li>
+                    <li className="flex items-center gap-2 text-sm">
+                      <span className="text-green-500">✓</span>
+                      <span>Limited AI queries</span>
+                    </li>
+                    <li className="flex items-center gap-2 text-sm">
+                      <span className="text-gray-400">✗</span>
+                      <span className="text-gray-400">Public league hosting</span>
+                    </li>
+                  </ul>
 
-                <Button 
-                  size="lg" 
-                  variant="outline"
-                  className="w-full border-orange-200 text-orange-700 hover:bg-orange-50"
-                  onClick={() => window.location.href = '/auth'}
-                >
-                  Get Started Free
-                </Button>
+                  <Button 
+                    size="lg" 
+                    variant="outline"
+                    className="w-full border-orange-200 text-orange-700 hover:bg-orange-50"
+                  >
+                    Get Started Free
+                  </Button>
+                </div>
               </div>
+
+              {/* Individual Tier */}
+              <div className="bg-white rounded-xl shadow-lg border-2 border-orange-200 p-6 relative">
+                <div className="text-center">
+                  <h3 className="text-xl font-bold text-slate-900 mb-2">Individual</h3>
+                  <div className="text-3xl font-bold text-orange-600 mb-1">£5</div>
+                  <p className="text-gray-600 text-sm mb-6">per month</p>
+
+                  <ul className="text-left space-y-3 mb-8">
+                    <li className="flex items-center gap-2 text-sm">
+                      <span className="text-green-500">✓</span>
+                      <span>Public league hosting</span>
+                    </li>
+                    <li className="flex items-center gap-2 text-sm">
+                      <span className="text-green-500">✓</span>
+                      <span>Full AI league assistant</span>
+                    </li>
+                    <li className="flex items-center gap-2 text-sm">
+                      <span className="text-green-500">✓</span>
+                      <span>1 scouting report/month</span>
+                    </li>
+                    <li className="flex items-center gap-2 text-sm">
+                      <span className="text-green-500">✓</span>
+                      <span>Advanced analytics</span>
+                    </li>
+                  </ul>
+
+                  <Button 
+                    size="lg"
+                    className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+                  >
+                    Choose Individual
+                  </Button>
+                </div>
+              </div>
+
+              {/* All Access Tier */}
+              <div className="bg-white rounded-xl shadow-lg border-2 border-purple-200 p-6 relative">
+                <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                  <span className="bg-purple-600 text-white px-3 py-1 rounded-full text-xs font-semibold">POPULAR</span>
+                </div>
+                <div className="text-center">
+                  <h3 className="text-xl font-bold text-slate-900 mb-2">All Access</h3>
+                  <div className="text-3xl font-bold text-purple-600 mb-1">£15</div>
+                  <p className="text-gray-600 text-sm mb-6">per month</p>
+
+                  <ul className="text-left space-y-3 mb-8">
+                    <li className="flex items-center gap-2 text-sm">
+                      <span className="text-green-500">✓</span>
+                      <span>Multiple league creation</span>
+                    </li>
+                    <li className="flex items-center gap-2 text-sm">
+                      <span className="text-green-500">✓</span>
+                      <span>Full AI assistant features</span>
+                    </li>
+                    <li className="flex items-center gap-2 text-sm">
+                      <span className="text-green-500">✓</span>
+                      <span>Full league branding</span>
+                    </li>
+                    <li className="flex items-center gap-2 text-sm">
+                      <span className="text-green-500">✓</span>
+                      <span>Unlimited scouting reports</span>
+                    </li>
+                  </ul>
+
+                  <Button 
+                    size="lg"
+                    className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+                  >
+                    Choose All Access
+                  </Button>
+                </div>
+              </div>
+
+              {/* Full League/Season Tier */}
+              <div className="bg-white rounded-xl shadow-lg border-2 border-blue-200 p-6 relative">
+                <div className="text-center">
+                  <h3 className="text-xl font-bold text-slate-900 mb-2">Full League</h3>
+                  <div className="text-3xl font-bold text-blue-600 mb-1">Custom</div>
+                  <p className="text-gray-600 text-sm mb-6">contact us</p>
+
+                  <ul className="text-left space-y-3 mb-8">
+                    <li className="flex items-center gap-2 text-sm">
+                      <span className="text-green-500">✓</span>
+                      <span>All teams included</span>
+                    </li>
+                    <li className="flex items-center gap-2 text-sm">
+                      <span className="text-green-500">✓</span>
+                      <span>Players & coaches access</span>
+                    </li>
+                    <li className="flex items-center gap-2 text-sm">
+                      <span className="text-green-500">✓</span>
+                      <span>Dedicated support</span>
+                    </li>
+                    <li className="flex items-center gap-2 text-sm">
+                      <span className="text-green-500">✓</span>
+                      <span>White-label options</span>
+                    </li>
+                  </ul>
+
+                  <Button 
+                    size="lg"
+                    className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+                  >
+                    Contact Sales
+                  </Button>
+                </div>
+              </div>
+
             </div>
 
-            {/* Individual Tier */}
-            <div className="bg-white rounded-xl shadow-lg border-2 border-orange-200 p-6 relative">
-              <div className="text-center">
-                <h3 className="text-xl font-bold text-slate-900 mb-2">Individual</h3>
-                <div className="text-3xl font-bold text-orange-600 mb-1">£5</div>
-                <p className="text-gray-600 text-sm mb-6">per month</p>
-
-                <ul className="text-left space-y-3 mb-8">
-                  <li className="flex items-center gap-2 text-sm">
-                    <span className="text-green-500">✓</span>
-                    <span>Public league hosting</span>
-                  </li>
-                  <li className="flex items-center gap-2 text-sm">
-                    <span className="text-green-500">✓</span>
-                    <span>Full AI league assistant</span>
-                  </li>
-                  <li className="flex items-center gap-2 text-sm">
-                    <span className="text-green-500">✓</span>
-                    <span>1 scouting report/month</span>
-                  </li>
-                  <li className="flex items-center gap-2 text-sm">
-                    <span className="text-green-500">✓</span>
-                    <span>Advanced analytics</span>
-                  </li>
-                </ul>
-
-                <Button 
-                  size="lg"
-                  className="w-full bg-orange-500 hover:bg-orange-600 text-white"
-                  onClick={() => window.location.href = '/auth?plan=individual&price=5'}
-                >
-                  Choose Individual
-                </Button>
-              </div>
+            <div className="text-center mt-12">
+              <p className="text-gray-600 text-sm">
+                All plans include secure data storage and regular backups. 
+                <a href="#support" className="text-orange-600 hover:text-orange-700 underline ml-1">Need help choosing?</a>
+              </p>
             </div>
-
-            {/* All Access Tier */}
-            <div className="bg-white rounded-xl shadow-lg border-2 border-purple-200 p-6 relative">
-              <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                <span className="bg-purple-600 text-white px-3 py-1 rounded-full text-xs font-semibold">POPULAR</span>
-              </div>
-              <div className="text-center">
-                <h3 className="text-xl font-bold text-slate-900 mb-2">All Access</h3>
-                <div className="text-3xl font-bold text-purple-600 mb-1">£15</div>
-                <p className="text-gray-600 text-sm mb-6">per month</p>
-
-                <ul className="text-left space-y-3 mb-8">
-                  <li className="flex items-center gap-2 text-sm">
-                    <span className="text-green-500">✓</span>
-                    <span>Multiple league creation</span>
-                  </li>
-                  <li className="flex items-center gap-2 text-sm">
-                    <span className="text-green-500">✓</span>
-                    <span>Full AI assistant features</span>
-                  </li>
-                  <li className="flex items-center gap-2 text-sm">
-                    <span className="text-green-500">✓</span>
-                    <span>Full league branding</span>
-                  </li>
-                  <li className="flex items-center gap-2 text-sm">
-                    <span className="text-green-500">✓</span>
-                    <span>Unlimited scouting reports</span>
-                  </li>
-                </ul>
-
-                <Button 
-                  size="lg"
-                  className="w-full bg-orange-500 hover:bg-orange-600 text-white"
-                  onClick={() => window.location.href = '/auth?plan=all-access&price=15'}
-                >
-                  Choose All Access
-                </Button>
-              </div>
-            </div>
-
-            {/* Full League/Season Tier */}
-            <div className="bg-white rounded-xl shadow-lg border-2 border-blue-200 p-6 relative">
-              <div className="text-center">
-                <h3 className="text-xl font-bold text-slate-900 mb-2">Full League</h3>
-                <div className="text-3xl font-bold text-blue-600 mb-1">Custom</div>
-                <p className="text-gray-600 text-sm mb-6">contact us</p>
-
-                <ul className="text-left space-y-3 mb-8">
-                  <li className="flex items-center gap-2 text-sm">
-                    <span className="text-green-500">✓</span>
-                    <span>All teams included</span>
-                  </li>
-                  <li className="flex items-center gap-2 text-sm">
-                    <span className="text-green-500">✓</span>
-                    <span>Players & coaches access</span>
-                  </li>
-                  <li className="flex items-center gap-2 text-sm">
-                    <span className="text-green-500">✓</span>
-                    <span>Dedicated support</span>
-                  </li>
-                  <li className="flex items-center gap-2 text-sm">
-                    <span className="text-green-500">✓</span>
-                    <span>White-label options</span>
-                  </li>
-                </ul>
-
-                <Button 
-                  size="lg"
-                  className="w-full bg-orange-500 hover:bg-orange-600 text-white"
-                  onClick={() => window.location.href = '/auth?plan=full-league&contact=true'}
-                >
-                  Contact Sales
-                </Button>
-              </div>
-            </div>
-
           </div>
 
-          <div className="text-center mt-12">
-            <p className="text-gray-600 text-sm">
-              All plans include secure data storage and regular backups. 
-              <a href="#support" className="text-orange-600 hover:text-orange-700 underline ml-1">Need help choosing?</a>
-            </p>
+          {/* Beta Overlay Message */}
+          <div className="absolute inset-0 flex items-center justify-center bg-white/30 backdrop-blur-sm z-10">
+            <div className="bg-white rounded-xl shadow-xl border-2 border-orange-200 p-8 max-w-md text-center">
+              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl">🚀</span>
+              </div>
+              <h3 className="text-2xl font-bold text-slate-900 mb-3">Product in Beta</h3>
+              <p className="text-gray-600 mb-6">
+                Pricing coming soon! We're currently in beta testing with select partners.
+              </p>
+              <p className="text-sm text-gray-500 mb-6">
+                Please contact us if you have any questions or would like early access.
+              </p>
+              <Button 
+                size="lg"
+                className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+                onClick={() => window.location.href = '/contact-sales'}
+              >
+                Contact Us
+              </Button>
+            </div>
           </div>
         </div>
       </section>
