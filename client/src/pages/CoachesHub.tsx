@@ -224,10 +224,37 @@ export default function CoachesHub() {
           </div>
         ) : (
           <div className="space-y-8">
-            {/* League Selection */}
-            {selectedLeague && (
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center justify-between">
+            {/* League Selection - Always Show */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-slate-800">Select League</h3>
+                <div className="text-sm text-slate-500">
+                  {leagues.length} available
+                </div>
+              </div>
+              
+              {/* League Dropdown */}
+              <div className="mb-4">
+                <select 
+                  value={selectedLeague?.league_id || ''} 
+                  onChange={(e) => {
+                    const league = leagues.find(l => l.league_id === e.target.value);
+                    setSelectedLeague(league || null);
+                  }}
+                  className="w-full border border-gray-300 rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                >
+                  <option value="">Choose a league to analyze</option>
+                  {leagues.map((league) => (
+                    <option key={league.league_id} value={league.league_id}>
+                      {league.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Selected League Display */}
+              {selectedLeague && (
+                <div className="flex items-center justify-between p-3 bg-orange-50 border border-orange-200 rounded-md">
                   <div className="flex items-center gap-3">
                     <div className="w-3 h-3 bg-green-500 rounded-full"></div>
                     <div>
@@ -239,11 +266,11 @@ export default function CoachesHub() {
                     {playerStats.length} player records
                   </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Analytics Dashboard - Horizontal Layout Above Main Content */}
-            {selectedLeague && (
+            {selectedLeague && playerStats.length > 0 && (
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <div className="flex items-center gap-3 mb-6">
                   <BarChart3 className="w-6 h-6 text-orange-600" />
@@ -370,7 +397,25 @@ export default function CoachesHub() {
             <div className="flex gap-6 min-h-[800px]">
               {/* Left Section - Team Performance Trends */}
               <div className="flex-1">
-                {selectedLeague && <TeamPerformanceTrends leagueId={selectedLeague.league_id} playerStats={playerStats} />}
+                {selectedLeague && playerStats.length > 0 ? (
+                  <TeamPerformanceTrends leagueId={selectedLeague.league_id} playerStats={playerStats} />
+                ) : selectedLeague ? (
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
+                    <BarChart3 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-slate-800 mb-2">No Player Data Found</h3>
+                    <p className="text-slate-600">
+                      Upload player statistics for this league to see performance trends.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
+                    <Search className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-slate-800 mb-2">Select a League</h3>
+                    <p className="text-slate-600">
+                      Choose a league from the dropdown above to view performance trends.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Right Section - League Assistant */}
