@@ -299,8 +299,14 @@ export default function CoachesHub() {
                     </div>
                     <div className="text-2xl font-bold text-green-900">
                       {(() => {
-                        const players = Array.from(new Set(playerStats.map(stat => stat.player))).filter(Boolean);
-                        return players.length;
+                        // Count unique players across all stats
+                        const uniquePlayers = new Set();
+                        playerStats.forEach(stat => {
+                          if (stat.player && stat.player.trim()) {
+                            uniquePlayers.add(stat.player.trim());
+                          }
+                        });
+                        return uniquePlayers.size;
                       })()}
                     </div>
                   </div>
@@ -312,9 +318,14 @@ export default function CoachesHub() {
                     </div>
                     <div className="text-2xl font-bold text-purple-900">
                       {(() => {
-                        // Count unique game dates
-                        const gameDates = Array.from(new Set(playerStats.map(stat => stat.game_date))).filter(Boolean);
-                        return gameDates.length;
+                        // Count unique game dates more carefully
+                        const uniqueGameDates = new Set();
+                        playerStats.forEach(stat => {
+                          if (stat.game_date && stat.game_date.trim()) {
+                            uniqueGameDates.add(stat.game_date.trim());
+                          }
+                        });
+                        return uniqueGameDates.size;
                       })()}
                     </div>
                   </div>
@@ -326,21 +337,35 @@ export default function CoachesHub() {
                     </div>
                     <div className="text-lg font-bold text-orange-900">
                       {(() => {
-                        // Calculate team totals and find highest scoring team
-                        const teamTotals = playerStats.reduce((acc, stat) => {
+                        // Calculate team totals by game, then aggregate
+                        const gameTeamTotals = playerStats.reduce((acc: Record<string, any>, stat) => {
                           const team = stat.team;
-                          if (!team) return acc;
-                          if (!acc[team]) acc[team] = 0;
-                          acc[team] += parseInt(stat.points) || 0;
+                          const gameDate = stat.game_date;
+                          if (!team || !gameDate) return acc;
+                          
+                          const gameKey = `${team}-${gameDate}`;
+                          if (!acc[gameKey]) {
+                            acc[gameKey] = { team, gameDate, points: 0 };
+                          }
+                          acc[gameKey].points += parseInt(stat.points) || 0;
                           return acc;
                         }, {});
                         
-                        const topTeam = Object.entries(teamTotals).reduce((top, [team, points]) => 
+                        // Aggregate by team
+                        const teamTotals = Object.values(gameTeamTotals).reduce((acc: Record<string, any>, game: any) => {
+                          if (!acc[game.team]) {
+                            acc[game.team] = 0;
+                          }
+                          acc[game.team] += game.points;
+                          return acc;
+                        }, {});
+                        
+                        const topTeam = Object.entries(teamTotals).reduce((top, [team, points]: any) => 
                           points > top.points ? { team, points } : top, 
-                          { team: 'N/A', points: 0 }
+                          { team: 'No Data', points: 0 }
                         );
                         
-                        return topTeam.team !== 'N/A' ? topTeam.team : 'No Data';
+                        return topTeam.points > 0 ? topTeam.team : 'No Data';
                       })()}
                     </div>
                   </div>
@@ -355,18 +380,32 @@ export default function CoachesHub() {
                     </h4>
                     <div className="space-y-2">
                       {(() => {
-                        // Calculate team totals
-                        const teamTotals = playerStats.reduce((acc: Record<string, any>, stat) => {
+                        // Calculate team totals by game (not individual player stats)
+                        const gameTeamTotals = playerStats.reduce((acc: Record<string, any>, stat) => {
                           const team = stat.team;
-                          if (!team) return acc;
-                          if (!acc[team]) acc[team] = { name: team, points: 0, games: new Set() };
-                          acc[team].points += parseInt(stat.points) || 0;
-                          acc[team].games.add(stat.game_date);
+                          const gameDate = stat.game_date;
+                          if (!team || !gameDate) return acc;
+                          
+                          const gameKey = `${team}-${gameDate}`;
+                          if (!acc[gameKey]) {
+                            acc[gameKey] = { team, gameDate, points: 0 };
+                          }
+                          acc[gameKey].points += parseInt(stat.points) || 0;
+                          return acc;
+                        }, {});
+                        
+                        // Aggregate by team
+                        const teamTotals = Object.values(gameTeamTotals).reduce((acc: Record<string, any>, game: any) => {
+                          if (!acc[game.team]) {
+                            acc[game.team] = { name: game.team, points: 0, games: 0 };
+                          }
+                          acc[game.team].points += game.points;
+                          acc[game.team].games += 1;
                           return acc;
                         }, {});
                         
                         return Object.values(teamTotals)
-                          .map((team: any) => ({ ...team, avgPPG: Math.round(team.points / team.games.size) }))
+                          .map((team: any) => ({ ...team, avgPPG: team.games > 0 ? Math.round(team.points / team.games) : 0 }))
                           .sort((a: any, b: any) => b.points - a.points)
                           .slice(0, 3)
                           .map((team: any, index) => (
@@ -393,51 +432,68 @@ export default function CoachesHub() {
                     </h4>
                     <div className="space-y-2">
                       {(() => {
-                        // Calculate team stats
-                        const teamStats = playerStats.reduce((acc: Record<string, any>, stat) => {
+                        // Calculate team stats by game first, then aggregate
+                        const gameTeamStats = playerStats.reduce((acc: Record<string, any>, stat) => {
                           const team = stat.team;
-                          if (!team) return acc;
-                          if (!acc[team]) acc[team] = { assists: 0, rebounds: 0, fgMade: 0, fgAttempted: 0 };
-                          acc[team].assists += parseInt(stat.assists) || 0;
-                          acc[team].rebounds += parseInt(stat.rebounds) || 0;
-                          acc[team].fgMade += parseInt(stat.field_goals_made) || 0;
-                          acc[team].fgAttempted += parseInt(stat.field_goals_attempted) || 0;
+                          const gameDate = stat.game_date;
+                          if (!team || !gameDate) return acc;
+                          
+                          const gameKey = `${team}-${gameDate}`;
+                          if (!acc[gameKey]) {
+                            acc[gameKey] = { team, gameDate, assists: 0, rebounds: 0, fgMade: 0, fgAttempted: 0 };
+                          }
+                          acc[gameKey].assists += parseInt(stat.assists) || 0;
+                          acc[gameKey].rebounds += parseInt(stat.rebounds) || 0;
+                          acc[gameKey].fgMade += parseInt(stat.field_goals_made) || 0;
+                          acc[gameKey].fgAttempted += parseInt(stat.field_goals_attempted) || 0;
+                          return acc;
+                        }, {});
+
+                        // Aggregate by team
+                        const teamStats = Object.values(gameTeamStats).reduce((acc: Record<string, any>, game: any) => {
+                          if (!acc[game.team]) {
+                            acc[game.team] = { assists: 0, rebounds: 0, fgMade: 0, fgAttempted: 0 };
+                          }
+                          acc[game.team].assists += game.assists;
+                          acc[game.team].rebounds += game.rebounds;
+                          acc[game.team].fgMade += game.fgMade;
+                          acc[game.team].fgAttempted += game.fgAttempted;
                           return acc;
                         }, {});
 
                         const topAssistTeam = Object.entries(teamStats).reduce((top, [team, stats]: any) => 
                           stats.assists > top.assists ? { team, assists: stats.assists } : top, 
-                          { team: 'N/A', assists: 0 }
+                          { team: 'No Data', assists: 0 }
                         );
 
                         const topReboundTeam = Object.entries(teamStats).reduce((top, [team, stats]: any) => 
                           stats.rebounds > top.rebounds ? { team, rebounds: stats.rebounds } : top, 
-                          { team: 'N/A', rebounds: 0 }
+                          { team: 'No Data', rebounds: 0 }
                         );
 
                         const topFGTeam = Object.entries(teamStats).reduce((top, [team, stats]: any) => {
                           const fg = stats.fgAttempted > 0 ? Math.round((stats.fgMade / stats.fgAttempted) * 100) : 0;
                           return fg > top.fg ? { team, fg } : top;
-                        }, { team: 'N/A', fg: 0 });
+                        }, { team: 'No Data', fg: 0 });
 
                         return (
                           <>
                             <div className="flex justify-between items-center py-1">
                               <span className="text-sm text-gray-600">Most Assists</span>
                               <span className="text-sm font-medium text-gray-900">
-                                {topAssistTeam.team} ({topAssistTeam.assists})
+                                {topAssistTeam.assists > 0 ? `${topAssistTeam.team} (${topAssistTeam.assists})` : 'No Data'}
                               </span>
                             </div>
                             <div className="flex justify-between items-center py-1">
                               <span className="text-sm text-gray-600">Most Rebounds</span>
                               <span className="text-sm font-medium text-gray-900">
-                                {topReboundTeam.team} ({topReboundTeam.rebounds})
+                                {topReboundTeam.rebounds > 0 ? `${topReboundTeam.team} (${topReboundTeam.rebounds})` : 'No Data'}
                               </span>
                             </div>
                             <div className="flex justify-between items-center py-1">
                               <span className="text-sm text-gray-600">Best FG%</span>
                               <span className="text-sm font-medium text-gray-900">
-                                {topFGTeam.team} ({topFGTeam.fg}%)
+                                {topFGTeam.fg > 0 ? `${topFGTeam.team} (${topFGTeam.fg}%)` : 'No Data'}
                               </span>
                             </div>
                           </>
