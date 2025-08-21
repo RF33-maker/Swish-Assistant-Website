@@ -75,10 +75,7 @@ export default function CoachesHub() {
 
       if (error) throw error;
       
-      // Debug: Log the actual data structure
-      console.log('Player stats data sample:', data?.[0]);
-      console.log('Available fields:', data?.[0] ? Object.keys(data[0]) : 'No data');
-      console.log('Total records:', data?.length);
+      // Data structure confirmed
       
       setPlayerStats(data || []);
     } catch (error) {
@@ -305,21 +302,19 @@ export default function CoachesHub() {
                     </div>
                     <div className="text-2xl font-bold text-green-900">
                       {(() => {
-                        // Debug and count unique players
+                        // Count unique players
                         const uniquePlayers = new Set();
-                        console.log('Analyzing player stats for player count:', playerStats.length, 'records');
                         
                         playerStats.forEach((stat, index) => {
-                          // Try different possible field names for player
-                          const playerField = stat.player || stat.player_name || stat.name;
-                          if (index < 5) console.log(`Record ${index}:`, stat); // Log first 5 records
+                          // Use the correct field name: 'name'
+                          const playerField = stat.name;
                           
                           if (playerField && typeof playerField === 'string' && playerField.trim()) {
                             uniquePlayers.add(playerField.trim());
                           }
                         });
                         
-                        console.log('Unique players found:', Array.from(uniquePlayers));
+                        // Players counted successfully
                         return uniquePlayers.size;
                       })()}
                     </div>
@@ -332,21 +327,19 @@ export default function CoachesHub() {
                     </div>
                     <div className="text-2xl font-bold text-purple-900">
                       {(() => {
-                        // Debug and count unique game dates
+                        // Count unique game dates
                         const uniqueGameDates = new Set();
-                        console.log('Analyzing game dates from player stats...');
                         
                         playerStats.forEach((stat, index) => {
-                          // Try different possible field names for game date
-                          const dateField = stat.game_date || stat.date || stat.game_day || stat.created_at;
-                          if (index < 5) console.log(`Game date field in record ${index}:`, dateField);
+                          // Use the correct field name: 'game_date'
+                          const dateField = stat.game_date;
                           
                           if (dateField && typeof dateField === 'string' && dateField.trim()) {
                             uniqueGameDates.add(dateField.trim());
                           }
                         });
                         
-                        console.log('Unique game dates found:', Array.from(uniqueGameDates));
+                        // Game dates counted successfully
                         return uniqueGameDates.size;
                       })()}
                     </div>
@@ -465,7 +458,7 @@ export default function CoachesHub() {
                             acc[gameKey] = { team, gameDate, assists: 0, rebounds: 0, fgMade: 0, fgAttempted: 0 };
                           }
                           acc[gameKey].assists += parseInt(stat.assists) || 0;
-                          acc[gameKey].rebounds += parseInt(stat.rebounds) || 0;
+                          acc[gameKey].rebounds += parseInt(stat.rebounds_total) || 0;
                           acc[gameKey].fgMade += parseInt(stat.field_goals_made) || 0;
                           acc[gameKey].fgAttempted += parseInt(stat.field_goals_attempted) || 0;
                           return acc;
@@ -488,17 +481,7 @@ export default function CoachesHub() {
                           { team: 'No Data', assists: 0 }
                         );
 
-                        // Debug rebounds data
-                        console.log('Team stats for rebounds analysis:', teamStats);
-                        playerStats.slice(0, 3).forEach((stat, i) => {
-                          console.log(`Sample rebounds data ${i}:`, {
-                            rebounds: stat.rebounds,
-                            reb: stat.reb,
-                            total_rebounds: stat.total_rebounds,
-                            defensive_rebounds: stat.defensive_rebounds,
-                            offensive_rebounds: stat.offensive_rebounds
-                          });
-                        });
+                        // Clean up debug logs
 
                         const topReboundTeam = Object.entries(teamStats).reduce((top, [team, stats]: any) => 
                           stats.rebounds > top.rebounds ? { team, rebounds: stats.rebounds } : top, 
