@@ -403,6 +403,8 @@ import {
           return;
         }
 
+        console.log("📊 Sample player stat data:", playerStats?.[0]); // Debug log to see actual field names
+
       // Group stats by player and calculate averages
       const playerMap = new Map();
       
@@ -443,6 +445,11 @@ import {
         player.totalFGA += stat.field_goals_attempted || 0;
         player.total3PM += stat.three_pt_made || 0;
         player.total3PA += stat.three_pt_attempted || 0;
+        
+        // Debug log for three-point data
+        if (stat.three_pt_made || stat.three_pt_attempted) {
+          console.log(`🏀 3PT data for ${stat.name}: Made=${stat.three_pt_made}, Attempted=${stat.three_pt_attempted}`);
+        }
         player.totalFTM += stat.free_throws_made || 0;
         player.totalFTA += stat.free_throws_attempted || 0;
         player.totalPersonalFouls += stat.personal_fouls || 0;
