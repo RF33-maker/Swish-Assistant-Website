@@ -12,6 +12,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/use-auth';
 import { toast } from '@/hooks/use-toast';
 import LeagueChatbot from '@/components/LeagueChatbot';
+import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import {
   FileText,
   Save,
@@ -103,7 +104,7 @@ const gameTemplates = [
 
 export default function UnifiedScoutingEditor({ leagueContext, onChatInsert }: UnifiedScoutingEditorProps) {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState('editor');
+  const [activeTab, setActiveTab] = useState('blocks');
   const [currentDocumentId, setCurrentDocumentId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [documentTitle, setDocumentTitle] = useState('New Scouting Report');
@@ -125,41 +126,35 @@ export default function UnifiedScoutingEditor({ leagueContext, onChatInsert }: U
 
   const saveDocument = async () => {
     if (!editor || !user || isSaving) return;
-
+    
     setIsSaving(true);
     try {
       const content = editor.getHTML();
-      const docId = currentDocumentId || `doc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
-      const documentData = {
-        id: docId,
-        title: documentTitle,
-        content,
-        user_id: user.id,
-        updated_at: new Date().toISOString()
-      };
-
-      // Store locally as primary storage
-      localStorage.setItem(`scouting_doc_${docId}`, JSON.stringify(documentData));
-      
-      if (!currentDocumentId) {
-        setCurrentDocumentId(docId);
-      }
-
-      // Try Supabase as backup
-      try {
-        if (currentDocumentId) {
-          await supabase
-            .from('scouting_documents')
-            .update(documentData)
-            .eq('id', currentDocumentId);
-        } else {
-          await supabase
-            .from('scouting_documents')
-            .insert([documentData]);
+      if (currentDocumentId) {
+        await supabase
+          .from('scouting_reports')
+          .update({
+            title: documentTitle,
+            content,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', currentDocumentId);
+      } else {
+        const { data, error } = await supabase
+          .from('scouting_reports')
+          .insert({
+            title: documentTitle,
+            content,
+            user_id: user.id,
+            league_id: leagueContext?.leagueId || null
+          })
+          .select('id')
+          .single();
+        
+        if (data) {
+          setCurrentDocumentId(data.id);
         }
-      } catch (error) {
-        // Silently fail - localStorage is our primary storage
       }
     } catch (error) {
       console.error('Error saving document:', error);
@@ -168,9 +163,9 @@ export default function UnifiedScoutingEditor({ leagueContext, onChatInsert }: U
     }
   };
 
-  const insertBlock = (blockType: typeof blockTypes[0]) => {
+  const insertBlock = (block: typeof blockTypes[0]) => {
     if (editor) {
-      editor.chain().focus().insertContent(blockType.template).run();
+      editor.chain().focus().insertContent(block.template).run();
     }
   };
 
@@ -253,118 +248,144 @@ export default function UnifiedScoutingEditor({ leagueContext, onChatInsert }: U
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Desktop Sidebar */}
-        <aside className="hidden md:flex w-80 bg-gray-50 border-r border-gray-200 flex-col">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-            <div className="p-4 border-b border-gray-200 bg-white">
-              <TabsList className="grid w-full grid-cols-3 h-12 bg-gray-100 p-1 rounded-lg">
-                <TabsTrigger 
-                  value="blocks" 
-                  className="text-sm font-medium data-[state=active]:bg-orange-500 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
-                >
-                  Blocks
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="templates" 
-                  className="text-sm font-medium data-[state=active]:bg-orange-500 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
-                >
-                  Templates
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="assistant" 
-                  className="text-sm font-medium data-[state=active]:bg-orange-500 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
-                >
-                  AI Assistant
-                </TabsTrigger>
-              </TabsList>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4">
-              <TabsContent value="blocks" className="mt-0 space-y-2">
-                <div className="mb-4">
-                  <h3 className="text-sm font-semibold text-gray-900 mb-2">Content Blocks</h3>
-                  <p className="text-xs text-gray-500">Add structured content to your report</p>
+        <PanelGroup direction="horizontal">
+          {/* Desktop Sidebar */}
+          <Panel defaultSize={30} minSize={20} maxSize={50} className="hidden md:flex">
+            <aside className="w-full bg-gray-50 border-r border-gray-200 flex flex-col">
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
+                <div className="p-4 border-b border-gray-200 bg-white">
+                  <TabsList className="grid w-full grid-cols-3 h-12 bg-gray-100 p-1 rounded-lg">
+                    <TabsTrigger 
+                      value="blocks" 
+                      className="text-sm font-medium data-[state=active]:bg-orange-500 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
+                    >
+                      Blocks
+                    </TabsTrigger>
+                    <TabsTrigger 
+                      value="templates" 
+                      className="text-sm font-medium data-[state=active]:bg-orange-500 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
+                    >
+                      Templates
+                    </TabsTrigger>
+                    <TabsTrigger 
+                      value="assistant" 
+                      className="text-sm font-medium data-[state=active]:bg-orange-500 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
+                    >
+                      AI Assistant
+                    </TabsTrigger>
+                  </TabsList>
                 </div>
-                {blockTypes.map((block) => (
-                  <Card 
-                    key={block.id} 
-                    className="cursor-pointer hover:shadow-sm hover:border-orange-200 transition-all duration-200 border border-gray-200 bg-white" 
-                    onClick={() => insertBlock(block)}
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-100 to-orange-50 flex items-center justify-center flex-shrink-0 border border-orange-100">
-                          <block.icon className="w-5 h-5 text-orange-600" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="font-semibold text-sm text-gray-900 mb-1">{block.name}</div>
-                          <div className="text-xs text-gray-600 leading-relaxed">{block.description}</div>
-                        </div>
+
+                <div className="flex-1 overflow-y-auto p-4">
+                  <TabsContent value="blocks" className="mt-0 space-y-2">
+                    <div className="mb-4">
+                      <h3 className="text-sm font-semibold text-gray-900 mb-2">Content Blocks</h3>
+                      <p className="text-xs text-gray-500">Add structured content to your report</p>
+                    </div>
+                    {blockTypes.map((block) => (
+                      <Card 
+                        key={block.id} 
+                        className="cursor-pointer hover:shadow-sm hover:border-orange-200 transition-all duration-200 border border-gray-200 bg-white" 
+                        onClick={() => insertBlock(block)}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-start gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-100 to-orange-50 flex items-center justify-center flex-shrink-0 border border-orange-100">
+                              <block.icon className="w-5 h-5 text-orange-600" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-semibold text-sm text-gray-900 mb-1">{block.name}</div>
+                              <div className="text-xs text-gray-600 leading-relaxed">{block.description}</div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </TabsContent>
+
+                  <TabsContent value="templates" className="mt-0 space-y-2">
+                    <div className="mb-4">
+                      <h3 className="text-sm font-semibold text-gray-900 mb-2">Report Templates</h3>
+                      <p className="text-xs text-gray-500">Quick-start templates for common reports</p>
+                    </div>
+                    {gameTemplates.map((template, index) => (
+                      <Card 
+                        key={index} 
+                        className="cursor-pointer hover:shadow-sm hover:border-blue-200 transition-all duration-200 border border-gray-200 bg-white" 
+                        onClick={() => insertTemplate(template)}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-start gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-100 to-blue-50 flex items-center justify-center flex-shrink-0 border border-blue-100">
+                              <FileText className="w-5 h-5 text-blue-600" />
+                            </div>
+                            <div className="flex-1">
+                              <div className="font-semibold text-sm text-gray-900">{template.name}</div>
+                              <div className="text-xs text-gray-600 mt-1">Professional template ready to customize</div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </TabsContent>
+
+                  <TabsContent value="assistant" className="mt-0">
+                    <div className="mb-4">
+                      <h3 className="text-sm font-semibold text-gray-900 mb-2">AI Assistant</h3>
+                      <p className="text-xs text-gray-500">Get intelligent insights and content suggestions</p>
+                    </div>
+                    {leagueContext ? (
+                      <div className="h-full">
+                        <LeagueChatbot
+                          leagueId={leagueContext.leagueId}
+                          leagueName={leagueContext.leagueName}
+                          onResponseReceived={(content) => {
+                            if (editor && onChatInsert) {
+                              editor.chain().focus().insertContent(`<p>${content}</p>`).run();
+                              onChatInsert(content);
+                            }
+                          }}
+                          isPanelMode={true}
+                        />
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </TabsContent>
-
-              <TabsContent value="templates" className="mt-0 space-y-2">
-                <div className="mb-4">
-                  <h3 className="text-sm font-semibold text-gray-900 mb-2">Report Templates</h3>
-                  <p className="text-xs text-gray-500">Quick-start templates for common reports</p>
+                    ) : (
+                      <Card className="border border-gray-200">
+                        <CardContent className="p-6 text-center">
+                          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-100 to-purple-50 flex items-center justify-center mx-auto mb-4 border border-purple-100">
+                            <Sparkles className="w-6 h-6 text-purple-600" />
+                          </div>
+                          <h3 className="font-semibold text-gray-900 mb-2">No League Selected</h3>
+                          <p className="text-sm text-gray-600">Select a league to enable AI assistant</p>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </TabsContent>
                 </div>
-                {gameTemplates.map((template, index) => (
-                  <Card 
-                    key={index} 
-                    className="cursor-pointer hover:shadow-sm hover:border-blue-200 transition-all duration-200 border border-gray-200 bg-white" 
-                    onClick={() => insertTemplate(template)}
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-100 to-blue-50 flex items-center justify-center flex-shrink-0 border border-blue-100">
-                          <FileText className="w-5 h-5 text-blue-600" />
-                        </div>
-                        <div className="flex-1">
-                          <div className="font-semibold text-sm text-gray-900">{template.name}</div>
-                          <div className="text-xs text-gray-600 mt-1">Professional template ready to customize</div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </TabsContent>
+              </Tabs>
+            </aside>
+          </Panel>
 
-              <TabsContent value="assistant" className="mt-0">
-                <div className="mb-4">
-                  <h3 className="text-sm font-semibold text-gray-900 mb-2">AI Assistant</h3>
-                  <p className="text-xs text-gray-500">Get intelligent insights and content suggestions</p>
-                </div>
-                {leagueContext ? (
-                  <div className="h-full">
-                    <LeagueChatbot
-                      leagueId={leagueContext.leagueId}
-                      leagueName={leagueContext.leagueName}
-                      onResponseReceived={(content) => {
-                        if (editor && onChatInsert) {
-                          editor.chain().focus().insertContent(`<p>${content}</p>`).run();
-                          onChatInsert(content);
-                        }
-                      }}
+          {/* Orange Resize Handle */}
+          <PanelResizeHandle className="hidden md:flex items-center justify-center w-2 bg-orange-500 hover:bg-orange-600 transition-colors cursor-col-resize group">
+            <div className="w-1 h-8 bg-white rounded-full opacity-80 group-hover:opacity-100 transition-opacity shadow-sm"></div>
+          </PanelResizeHandle>
+
+          {/* Editor Area */}
+          <Panel defaultSize={70} minSize={50}>
+            <main className="flex-1 flex flex-col bg-white h-full">
+              <div className="flex-1 overflow-y-auto">
+                <div className="max-w-4xl mx-auto">
+                  <div className="a4-page p-8 my-6">
+                    <EditorContent 
+                      editor={editor} 
+                      className="prose prose-slate max-w-none focus:outline-none"
                     />
                   </div>
-                ) : (
-                  <Card className="border border-gray-200">
-                    <CardContent className="p-6 text-center">
-                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-100 to-purple-50 flex items-center justify-center mx-auto mb-4 border border-purple-100">
-                        <Sparkles className="w-6 h-6 text-purple-600" />
-                      </div>
-                      <h3 className="font-semibold text-gray-900 mb-2">No League Selected</h3>
-                      <p className="text-sm text-gray-600">Select a league to enable AI assistant</p>
-                    </CardContent>
-                  </Card>
-                )}
-              </TabsContent>
-            </div>
-          </Tabs>
-        </aside>
+                </div>
+              </div>
+            </main>
+          </Panel>
+        </PanelGroup>
 
         {/* Mobile Sidebar Overlay */}
         {showMobileMenu && (
@@ -462,6 +483,7 @@ export default function UnifiedScoutingEditor({ leagueContext, onChatInsert }: U
                           }
                           setShowMobileMenu(false);
                         }}
+                        isPanelMode={true}
                       />
                     ) : (
                       <Card>
@@ -478,20 +500,6 @@ export default function UnifiedScoutingEditor({ leagueContext, onChatInsert }: U
             </div>
           </div>
         )}
-
-        {/* Editor Area */}
-        <main className="flex-1 flex flex-col bg-white">
-          <div className="flex-1 overflow-y-auto">
-            <div className="max-w-4xl mx-auto">
-              <div className="a4-page p-8 my-6">
-                <EditorContent 
-                  editor={editor} 
-                  className="prose prose-slate max-w-none focus:outline-none"
-                />
-              </div>
-            </div>
-          </div>
-        </main>
       </div>
 
       {/* Floating Assistant Button (Mobile) */}
