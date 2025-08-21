@@ -41,6 +41,8 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
   const [instagramUrl, setInstagramUrl] = useState("");
   const [isEditingInstagram, setIsEditingInstagram] = useState(false);
   const [updatingInstagram, setUpdatingInstagram] = useState(false);
+  const [activeSection, setActiveSection] = useState('overview'); // 'overview', 'stats', 'teams', 'schedule'
+  const [allPlayerAverages, setAllPlayerAverages] = useState<any[]>([]);
 
     
 
@@ -155,6 +157,7 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
 
 
           fetchTopStats();
+          fetchAllPlayerAverages();
         }
       };
 
@@ -367,6 +370,90 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
       return null;
     };
 
+    const fetchAllPlayerAverages = async () => {
+      if (!league?.league_id) return;
+
+      const { data: playerStats, error } = await supabase
+        .from("player_stats")
+        .select("*")
+        .eq("league_id", league.league_id);
+
+      if (error) {
+        console.error("Error fetching player averages:", error);
+        return;
+      }
+
+      // Group stats by player and calculate averages
+      const playerMap = new Map();
+      
+      playerStats?.forEach(stat => {
+        const playerKey = stat.name;
+        if (!playerMap.has(playerKey)) {
+          playerMap.set(playerKey, {
+            name: stat.name,
+            team: stat.team,
+            id: stat.id,
+            games: 0,
+            totalPoints: 0,
+            totalRebounds: 0,
+            totalAssists: 0,
+            totalSteals: 0,
+            totalBlocks: 0,
+            totalTurnovers: 0,
+            totalFGM: 0,
+            totalFGA: 0,
+            total3PM: 0,
+            total3PA: 0,
+            totalFTM: 0,
+            totalFTA: 0,
+            totalMinutes: 0,
+            totalPersonalFouls: 0
+          });
+        }
+
+        const player = playerMap.get(playerKey);
+        player.games += 1;
+        player.totalPoints += stat.points || 0;
+        player.totalRebounds += stat.rebounds_total || 0;
+        player.totalAssists += stat.assists || 0;
+        player.totalSteals += stat.steals || 0;
+        player.totalBlocks += stat.blocks || 0;
+        player.totalTurnovers += stat.turnovers || 0;
+        player.totalFGM += stat.field_goals_made || 0;
+        player.totalFGA += stat.field_goals_attempted || 0;
+        player.total3PM += stat.three_pt_made || 0;
+        player.total3PA += stat.three_pt_attempted || 0;
+        player.totalFTM += stat.free_throws_made || 0;
+        player.totalFTA += stat.free_throws_attempted || 0;
+        player.totalPersonalFouls += stat.personal_fouls || 0;
+        
+        // Parse minutes
+        const minutesParts = stat.minutes_played?.split(':');
+        if (minutesParts && minutesParts.length === 2) {
+          const minutes = parseInt(minutesParts[0]) + parseInt(minutesParts[1]) / 60;
+          player.totalMinutes += minutes;
+        }
+      });
+
+      // Calculate averages and percentages
+      const averagesList = Array.from(playerMap.values()).map(player => ({
+        ...player,
+        avgPoints: (player.totalPoints / player.games).toFixed(1),
+        avgRebounds: (player.totalRebounds / player.games).toFixed(1),
+        avgAssists: (player.totalAssists / player.games).toFixed(1),
+        avgSteals: (player.totalSteals / player.games).toFixed(1),
+        avgBlocks: (player.totalBlocks / player.games).toFixed(1),
+        avgTurnovers: (player.totalTurnovers / player.games).toFixed(1),
+        avgMinutes: (player.totalMinutes / player.games).toFixed(1),
+        avgPersonalFouls: (player.totalPersonalFouls / player.games).toFixed(1),
+        fgPercentage: player.totalFGA > 0 ? ((player.totalFGM / player.totalFGA) * 100).toFixed(1) : '0.0',
+        threePercentage: player.total3PA > 0 ? ((player.total3PM / player.total3PA) * 100).toFixed(1) : '0.0',
+        ftPercentage: player.totalFTA > 0 ? ((player.totalFTM / player.totalFTA) * 100).toFixed(1) : '0.0'
+      })).sort((a, b) => parseFloat(b.avgPoints) - parseFloat(a.avgPoints));
+
+      setAllPlayerAverages(averagesList);
+    };
+
     // Calculate team standings from player stats using actual game results
     const calculateStandings = (playerStats: any[]) => {
       // Group stats by game_id to get complete game data
@@ -508,18 +595,31 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
           <div className="flex gap-6 text-sm font-medium text-slate-600">
             <a 
               href="#" 
-              className="hover:text-orange-500 cursor-pointer"
-              onClick={() => navigate(`/league/${slug}/teams`)}
+              className={`hover:text-orange-500 cursor-pointer ${activeSection === 'teams' ? 'text-orange-500 font-semibold' : ''}`}
+              onClick={() => setActiveSection('teams')}
             >
               Teams
             </a>
-            <a href="#" className="hover:text-orange-500">Stats</a>
+            <a 
+              href="#" 
+              className={`hover:text-orange-500 cursor-pointer ${activeSection === 'stats' ? 'text-orange-500 font-semibold' : ''}`}
+              onClick={() => setActiveSection('stats')}
+            >
+              Stats
+            </a>
             <a 
               href="#" 
               className="hover:text-orange-500 cursor-pointer"
               onClick={() => navigate(`/league-leaders/${slug}`)}
             >
               Leaders
+            </a>
+            <a 
+              href="#" 
+              className={`hover:text-orange-500 cursor-pointer ${activeSection === 'overview' ? 'text-orange-500 font-semibold' : ''}`}
+              onClick={() => setActiveSection('overview')}
+            >
+              Overview
             </a>
             <a href="#" className="hover:text-orange-500">Schedule</a>
             {currentUser && (
@@ -611,9 +711,97 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
 
         <main className="max-w-7xl mx-auto px-6 py-10 grid grid-cols-1 md:grid-cols-3 gap-8">
           <section className="md:col-span-2 space-y-6">
+            
+            {/* Stats Section - Comprehensive Player Averages */}
+            {activeSection === 'stats' && (
+              <div className="bg-white rounded-xl shadow p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-lg font-semibold text-slate-800">Player Statistics - {league?.name}</h2>
+                  <div className="text-sm text-gray-500">
+                    {allPlayerAverages.length} players
+                  </div>
+                </div>
+                
+                {allPlayerAverages.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200">
+                          <th className="text-left py-3 px-2 font-semibold text-slate-700 sticky left-0 bg-white">Player</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">GP</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">MIN</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">PTS</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">REB</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">AST</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">STL</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">BLK</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">TO</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FG%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">3P%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FT%</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {allPlayerAverages.map((player, index) => (
+                          <tr 
+                            key={`${player.name}-${index}`}
+                            className="border-b border-gray-100 hover:bg-orange-50 transition-colors cursor-pointer"
+                            onClick={() => navigate(`/player/${player.id}`)}
+                          >
+                            <td className="py-3 px-2 font-medium text-slate-800 sticky left-0 bg-white hover:bg-orange-50">
+                              <div className="min-w-0">
+                                <div className="font-medium text-slate-900">{player.name}</div>
+                                <div className="text-xs text-slate-500 truncate">{player.team}</div>
+                              </div>
+                            </td>
+                            <td className="py-3 px-2 text-center text-slate-600">{player.games}</td>
+                            <td className="py-3 px-2 text-center text-slate-600">{player.avgMinutes}</td>
+                            <td className="py-3 px-2 text-center font-medium text-orange-600">{player.avgPoints}</td>
+                            <td className="py-3 px-2 text-center text-slate-600">{player.avgRebounds}</td>
+                            <td className="py-3 px-2 text-center text-slate-600">{player.avgAssists}</td>
+                            <td className="py-3 px-2 text-center text-slate-600">{player.avgSteals}</td>
+                            <td className="py-3 px-2 text-center text-slate-600">{player.avgBlocks}</td>
+                            <td className="py-3 px-2 text-center text-slate-600">{player.avgTurnovers}</td>
+                            <td className="py-3 px-2 text-center text-slate-600">{player.fgPercentage}%</td>
+                            <td className="py-3 px-2 text-center text-slate-600">{player.threePercentage}%</td>
+                            <td className="py-3 px-2 text-center text-slate-600">{player.ftPercentage}%</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div className="mt-4 text-xs text-slate-500">
+                      <div className="flex gap-4 flex-wrap">
+                        <span>GP = Games Played</span>
+                        <span>MIN = Minutes Per Game</span>
+                        <span>PTS = Points Per Game</span>
+                        <span>REB = Rebounds Per Game</span>
+                        <span>AST = Assists Per Game</span>
+                        <span>STL = Steals Per Game</span>
+                        <span>BLK = Blocks Per Game</span>
+                        <span>TO = Turnovers Per Game</span>
+                        <span>FG% = Field Goal Percentage</span>
+                        <span>3P% = Three Point Percentage</span>
+                        <span>FT% = Free Throw Percentage</span>
+                      </div>
+                      <div className="mt-2 text-xs text-slate-400">
+                        Click on any player to view their detailed profile
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <p className="text-sm">No player statistics available</p>
+                    <p className="text-xs mt-1">Stats will appear once games are played and uploaded</p>
+                  </div>
+                )}
+              </div>
+            )}
 
-            {/* League Leaders */}
-            <section id="stats" className="bg-white rounded-xl shadow p-6">
+            {/* Overview Section - Default view */}
+            {activeSection === 'overview' && (
+              <>
+                {/* League Leaders */}
+                <div className="bg-white rounded-xl shadow p-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-lg font-semibold text-slate-800">League Leaders</h2>
                 <button
@@ -645,7 +833,7 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
                   </div>
                 ))}
               </div>
-            </section>
+                </div>
 
             {/* League Standings */}
             <div className="bg-white rounded-xl shadow p-6">
@@ -817,16 +1005,18 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
               )}
 
             </div>
-
+              </>
+            )}
           </section>
 
+          {/* Sidebar */}
           <aside className="space-y-6">
             {/* League Admin Panel */}
             {isOwner && league?.league_id && (
               <div className="bg-white rounded-xl shadow p-6 border-l-4 border-blue-500">
                 <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
                   <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.5 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
                   League Admin
@@ -962,8 +1152,6 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
               <div className="text-xs italic text-slate-400 mt-2">Coming soon...</div>
             </div>
           </aside>
-
-
         </main>
 
         {/* Game Detail Modal */}
