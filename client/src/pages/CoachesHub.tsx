@@ -308,7 +308,7 @@ export default function CoachesHub() {
                     <button
                       key={league.league_id}
                       onClick={() => setSelectedLeague(league)}
-                      className="px-3 py-1 text-xs bg-gray-100 hover:bg-orange-100 hover:text-orange-800 rounded-full transition-colors"
+                      className="px-3 py-1 text-xs text-gray-700 bg-gray-100 hover:bg-orange-100 hover:text-orange-800 rounded-full transition-colors border border-gray-200"
                     >
                       {league.name}
                     </button>
