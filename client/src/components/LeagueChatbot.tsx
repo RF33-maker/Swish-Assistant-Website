@@ -641,7 +641,7 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
       {/* Overlay backdrop */}
       {isOverlayMode && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-40"
+          className="fixed inset-0 bg-black bg-opacity-50 z-[9998]"
           onClick={() => setIsOverlayMode(false)}
         />
       )}
@@ -649,7 +649,7 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
       {/* Main chatbot container */}
       <div className={`bg-white rounded-xl border border-orange-200 overflow-hidden transition-all duration-500 ease-in-out ${
         isOverlayMode 
-          ? 'fixed top-4 left-4 right-4 bottom-4 z-50 max-w-5xl mx-auto shadow-2xl' 
+          ? 'fixed top-4 left-4 right-4 bottom-4 z-[9999] max-w-5xl mx-auto shadow-2xl' 
           : isActivelyUsed || isExpanded
             ? 'relative shadow-lg transform scale-[1.02]'
             : 'relative shadow-sm'
