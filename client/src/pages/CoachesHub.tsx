@@ -28,7 +28,7 @@ export default function CoachesHub() {
   const [chatbotResponse, setChatbotResponse] = useState('');
   const [showChatbotInReport, setShowChatbotInReport] = useState(false);
   
-  // New scouting report template states
+  // Templates section states
   const [reportData, setReportData] = useState<ScoutingReport | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("clean-pro");
   const [parseError, setParseError] = useState<string | null>(null);
@@ -667,28 +667,111 @@ export default function CoachesHub() {
                   setChatbotResponse(content);
                 }}
               />
+            </div>
 
-              {/* Template Picker and Preview Section */}
-              <div className="p-6 border-t border-gray-200">
-                <div className="flex items-center justify-between mb-4">
+            {/* Templates Section */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+              <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                <div className="flex items-center gap-3">
+                  <Palette className="w-6 h-6 text-orange-600" />
+                  <h2 className="text-xl font-bold text-slate-800">Report Templates</h2>
+                  <span className="px-2 py-1 bg-gradient-to-r from-blue-500 to-purple-500 text-white text-xs rounded-full font-medium">
+                    NEW
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500 hidden sm:inline">Professional scouting templates</span>
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                </div>
+              </div>
+
+              {/* Template Selection and Preview */}
+              <div className="p-6">
+                <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-3">
-                    <span className="text-sm text-slate-600">Choose Template</span>
+                    <span className="text-sm font-medium text-slate-700">Choose Template:</span>
                     <select
-                      className="text-sm border rounded-md px-2 py-1"
+                      className="text-sm border border-gray-300 rounded-md px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                       value={selectedTemplateId}
                       onChange={(e) => setSelectedTemplateId(e.target.value)}
                     >
                       {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                     </select>
                   </div>
-                  {parseError && <div className="text-xs text-red-600">{parseError}</div>}
+                  {parseError && (
+                    <div className="text-xs text-red-600 bg-red-50 px-2 py-1 rounded border border-red-200">
+                      {parseError}
+                    </div>
+                  )}
                 </div>
 
-                {reportData
-                  ? <ReportPreview data={reportData} templateId={selectedTemplateId} />
-                  : <div className="text-sm text-slate-500 border rounded-md p-4">
-                      Ask the chatbot for a scouting report (JSON) to populate the template.
-                    </div>}
+                {/* Template Preview */}
+                {reportData ? (
+                  <ReportPreview data={reportData} templateId={selectedTemplateId} />
+                ) : (
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center bg-gray-50">
+                    <div className="space-y-4">
+                      <div className="w-16 h-16 bg-gray-200 rounded-full mx-auto flex items-center justify-center">
+                        <FileText className="w-8 h-8 text-gray-400" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-medium text-slate-800 mb-2">No Report Data</h3>
+                        <p className="text-sm text-slate-600 mb-4">
+                          Ask the League Assistant chatbot for a scouting report in JSON format to populate the template preview.
+                        </p>
+                        <div className="flex flex-col items-center gap-3">
+                          <div className="text-xs text-slate-500 bg-white px-3 py-2 rounded border">
+                            💡 Try: "Generate a scouting report for [player name] in JSON format"
+                          </div>
+                          <button 
+                            onClick={() => {
+                              // Sample data to demonstrate the template
+                              const sampleData: ScoutingReport = {
+                                meta: {
+                                  player: "Sample Player",
+                                  team: "Demo Team", 
+                                  opponent: "Opposition FC",
+                                  gameDate: "2025-01-15",
+                                  position: "Point Guard",
+                                  age: 22,
+                                  height: "6'2\"",
+                                  weight: "185 lbs",
+                                  photoUrl: null
+                                },
+                                stats: {
+                                  ppg: 18.5,
+                                  rpg: 6.2,
+                                  apg: 4.8,
+                                  spg: 1.5,
+                                  bpg: 0.8,
+                                  fgPct: 45.2,
+                                  tpPct: 38.7,
+                                  ftPct: 82.4
+                                },
+                                strengths: [
+                                  "Excellent court vision and passing ability",
+                                  "Strong three-point shooting percentage", 
+                                  "Good defensive positioning and anticipation",
+                                  "High basketball IQ and decision making"
+                                ],
+                                weaknesses: [
+                                  "Could improve strength for finishing at the rim",
+                                  "Sometimes rushes shots under pressure",
+                                  "Needs to work on left-hand dribbling"
+                                ]
+                              };
+                              setReportData(sampleData);
+                              setParseError(null);
+                            }}
+                            className="text-xs px-4 py-2 bg-orange-100 text-orange-700 rounded-md hover:bg-orange-200 transition-colors"
+                          >
+                            Preview with Sample Data
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
