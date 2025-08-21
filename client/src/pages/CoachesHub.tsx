@@ -259,7 +259,7 @@ export default function CoachesHub() {
                           setSelectedLeague(league);
                           setSearchQuery('');
                         }}
-                        className="w-full text-left px-4 py-2 text-sm hover:bg-orange-50 hover:text-orange-800 focus:outline-none focus:bg-orange-50 focus:text-orange-800"
+                        className="w-full text-left px-4 py-2 text-sm text-gray-900 hover:bg-orange-50 hover:text-orange-800 focus:outline-none focus:bg-orange-50 focus:text-orange-800"
                       >
                         <div className="font-medium">{league.name}</div>
                       </button>
