@@ -11,6 +11,10 @@ import InlineScoutingEditor from '@/components/scout-editor/InlineScoutingEditor
 import UnifiedScoutingEditor from '@/components/scout-editor/UnifiedScoutingEditor';
 import { ThreePaneEditor } from '@/components/scout-editor/ThreePaneEditor';
 import { AnalyticsDashboard } from '@/components/analytics/AnalyticsDashboard';
+import { safelyParseReport } from "@/utils/parseReport";
+import { ScoutingReport } from "@/types/reportSchema";
+import ReportPreview from "@/components/scout-templates/ReportPreview";
+import { templates } from "@/components/scout-templates";
 
 export default function CoachesHub() {
   const { user } = useAuth();
@@ -23,6 +27,11 @@ export default function CoachesHub() {
 
   const [chatbotResponse, setChatbotResponse] = useState('');
   const [showChatbotInReport, setShowChatbotInReport] = useState(false);
+  
+  // New scouting report template states
+  const [reportData, setReportData] = useState<ScoutingReport | null>(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("clean-pro");
+  const [parseError, setParseError] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -607,6 +616,14 @@ export default function CoachesHub() {
                         leagueName={selectedLeague.name}
                         onResponseReceived={(response: string) => {
                           setChatbotResponse(response);
+                          const parsed = safelyParseReport(response);
+                          if (parsed) { 
+                            setReportData(parsed); 
+                            setParseError(null); 
+                          } else { 
+                            setReportData(null); 
+                            setParseError("Could not parse a valid report JSON."); 
+                          }
                         }}
                         isPanelMode={true}
                       />
@@ -650,6 +667,29 @@ export default function CoachesHub() {
                   setChatbotResponse(content);
                 }}
               />
+
+              {/* Template Picker and Preview Section */}
+              <div className="p-6 border-t border-gray-200">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-slate-600">Choose Template</span>
+                    <select
+                      className="text-sm border rounded-md px-2 py-1"
+                      value={selectedTemplateId}
+                      onChange={(e) => setSelectedTemplateId(e.target.value)}
+                    >
+                      {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                  </div>
+                  {parseError && <div className="text-xs text-red-600">{parseError}</div>}
+                </div>
+
+                {reportData
+                  ? <ReportPreview data={reportData} templateId={selectedTemplateId} />
+                  : <div className="text-sm text-slate-500 border rounded-md p-4">
+                      Ask the chatbot for a scouting report (JSON) to populate the template.
+                    </div>}
+              </div>
             </div>
 
             {/* Team Profiles Section */}

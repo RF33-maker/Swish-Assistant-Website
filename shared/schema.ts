@@ -70,6 +70,17 @@ export const documentAssets = pgTable("document_assets", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Scouting reports table for the new template system
+export const scoutingReports = pgTable("scouting_reports", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  leagueId: uuid("league_id").notNull(),
+  playerName: text("player_name").notNull(),
+  templateId: text("template_id").notNull(), // e.g. "clean-pro"
+  data: jsonb("data").notNull(), // ScoutingReport payload
+  createdBy: uuid("created_by"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const insertScoutingDocumentSchema = createInsertSchema(scoutingDocuments).pick({
   title: true,
   content: true,
@@ -98,6 +109,14 @@ export const insertDocumentAssetSchema = createInsertSchema(documentAssets).pick
   metadata: true,
 });
 
+export const insertScoutingReportSchema = createInsertSchema(scoutingReports).pick({
+  leagueId: true,
+  playerName: true,
+  templateId: true,
+  data: true,
+  createdBy: true,
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertTeamLogo = z.infer<typeof insertTeamLogoSchema>;
@@ -109,3 +128,5 @@ export type DocumentTemplate = typeof documentTemplates.$inferSelect;
 export type InsertDocumentTemplate = z.infer<typeof insertDocumentTemplateSchema>;
 export type DocumentAsset = typeof documentAssets.$inferSelect;
 export type InsertDocumentAsset = z.infer<typeof insertDocumentAssetSchema>;
+export type ScoutingReportRecord = typeof scoutingReports.$inferSelect;
+export type InsertScoutingReport = z.infer<typeof insertScoutingReportSchema>;
