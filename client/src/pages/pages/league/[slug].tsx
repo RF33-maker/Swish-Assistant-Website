@@ -43,6 +43,7 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
   const [updatingInstagram, setUpdatingInstagram] = useState(false);
   const [activeSection, setActiveSection] = useState('overview'); // 'overview', 'stats', 'teams', 'schedule'
   const [allPlayerAverages, setAllPlayerAverages] = useState<any[]>([]);
+  const [displayedPlayerCount, setDisplayedPlayerCount] = useState(20); // For pagination
 
     
 
@@ -603,7 +604,10 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
             <a 
               href="#" 
               className={`hover:text-orange-500 cursor-pointer ${activeSection === 'stats' ? 'text-orange-500 font-semibold' : ''}`}
-              onClick={() => setActiveSection('stats')}
+              onClick={() => {
+                setActiveSection('stats');
+                setDisplayedPlayerCount(20); // Reset to initial count when switching to stats
+              }}
             >
               Stats
             </a>
@@ -718,7 +722,7 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
                 <div className="flex justify-between items-center mb-6">
                   <h2 className="text-lg font-semibold text-slate-800">Player Statistics - {league?.name}</h2>
                   <div className="text-sm text-gray-500">
-                    {allPlayerAverages.length} players
+                    Showing {Math.min(displayedPlayerCount, allPlayerAverages.length)} of {allPlayerAverages.length} players
                   </div>
                 </div>
                 
@@ -742,7 +746,7 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
                         </tr>
                       </thead>
                       <tbody>
-                        {allPlayerAverages.map((player, index) => (
+                        {allPlayerAverages.slice(0, displayedPlayerCount).map((player, index) => (
                           <tr 
                             key={`${player.name}-${index}`}
                             className="border-b border-gray-100 hover:bg-orange-50 transition-colors cursor-pointer"
@@ -769,6 +773,44 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
                         ))}
                       </tbody>
                     </table>
+                    
+                    {/* Expand Button - Show when there are more players to display */}
+                    {displayedPlayerCount < allPlayerAverages.length && (
+                      <div className="mt-4 text-center">
+                        <button
+                          onClick={() => setDisplayedPlayerCount(displayedPlayerCount + 20)}
+                          className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2 mx-auto"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                          </svg>
+                          Show {Math.min(20, allPlayerAverages.length - displayedPlayerCount)} More Players
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Show All/Collapse Button when expanded */}
+                    {displayedPlayerCount > 20 && (
+                      <div className="mt-2 text-center">
+                        <div className="flex gap-3 justify-center">
+                          {displayedPlayerCount < allPlayerAverages.length && (
+                            <button
+                              onClick={() => setDisplayedPlayerCount(allPlayerAverages.length)}
+                              className="text-orange-500 hover:text-orange-600 font-medium text-sm hover:underline"
+                            >
+                              Show All ({allPlayerAverages.length} players)
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setDisplayedPlayerCount(20)}
+                            className="text-slate-500 hover:text-slate-600 font-medium text-sm hover:underline"
+                          >
+                            Collapse to Top 20
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="mt-4 text-xs text-slate-500">
                       <div className="flex gap-4 flex-wrap">
                         <span>GP = Games Played</span>
