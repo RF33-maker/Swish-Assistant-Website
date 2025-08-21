@@ -327,20 +327,19 @@ export default function CoachesHub() {
                     </div>
                     <div className="text-2xl font-bold text-purple-900">
                       {(() => {
-                        // Count unique game dates
-                        const uniqueGameDates = new Set();
+                        // Count unique game_ids (more accurate than dates)
+                        const uniqueGameIds = new Set();
                         
-                        playerStats.forEach((stat, index) => {
-                          // Use the correct field name: 'game_date'
-                          const dateField = stat.game_date;
+                        playerStats.forEach((stat) => {
+                          // Use game_id for more accurate count
+                          const gameId = stat.game_id;
                           
-                          if (dateField && typeof dateField === 'string' && dateField.trim()) {
-                            uniqueGameDates.add(dateField.trim());
+                          if (gameId && typeof gameId === 'string' && gameId.trim()) {
+                            uniqueGameIds.add(gameId.trim());
                           }
                         });
                         
-                        // Game dates counted successfully
-                        return uniqueGameDates.size;
+                        return uniqueGameIds.size;
                       })()}
                     </div>
                   </div>
@@ -352,22 +351,22 @@ export default function CoachesHub() {
                     </div>
                     <div className="text-lg font-bold text-orange-900">
                       {(() => {
-                        // Calculate team totals by game, then aggregate
-                        const gameTeamTotals = playerStats.reduce((acc: Record<string, any>, stat) => {
+                        // Calculate team totals by game_id (same method as TeamPerformanceTrends)
+                        const teamGameTotals = playerStats.reduce((acc: Record<string, any>, stat) => {
                           const team = stat.team;
-                          const gameDate = stat.game_date;
-                          if (!team || !gameDate) return acc;
+                          const gameId = stat.game_id;
+                          if (!team || !gameId) return acc;
                           
-                          const gameKey = `${team}-${gameDate}`;
+                          const gameKey = `${team}-${gameId}`;
                           if (!acc[gameKey]) {
-                            acc[gameKey] = { team, gameDate, points: 0 };
+                            acc[gameKey] = { team, gameId, points: 0 };
                           }
                           acc[gameKey].points += parseInt(stat.points) || 0;
                           return acc;
                         }, {});
                         
                         // Aggregate by team
-                        const teamTotals = Object.values(gameTeamTotals).reduce((acc: Record<string, any>, game: any) => {
+                        const teamTotals = Object.values(teamGameTotals).reduce((acc: Record<string, any>, game: any) => {
                           if (!acc[game.team]) {
                             acc[game.team] = 0;
                           }
@@ -395,22 +394,22 @@ export default function CoachesHub() {
                     </h4>
                     <div className="space-y-2">
                       {(() => {
-                        // Calculate team totals by game (not individual player stats)
-                        const gameTeamTotals = playerStats.reduce((acc: Record<string, any>, stat) => {
+                        // Calculate team totals by game_id (consistent with TeamPerformanceTrends)
+                        const teamGameTotals = playerStats.reduce((acc: Record<string, any>, stat) => {
                           const team = stat.team;
-                          const gameDate = stat.game_date;
-                          if (!team || !gameDate) return acc;
+                          const gameId = stat.game_id;
+                          if (!team || !gameId) return acc;
                           
-                          const gameKey = `${team}-${gameDate}`;
+                          const gameKey = `${team}-${gameId}`;
                           if (!acc[gameKey]) {
-                            acc[gameKey] = { team, gameDate, points: 0 };
+                            acc[gameKey] = { team, gameId, points: 0 };
                           }
                           acc[gameKey].points += parseInt(stat.points) || 0;
                           return acc;
                         }, {});
                         
                         // Aggregate by team
-                        const teamTotals = Object.values(gameTeamTotals).reduce((acc: Record<string, any>, game: any) => {
+                        const teamTotals = Object.values(teamGameTotals).reduce((acc: Record<string, any>, game: any) => {
                           if (!acc[game.team]) {
                             acc[game.team] = { name: game.team, points: 0, games: 0 };
                           }
@@ -447,15 +446,15 @@ export default function CoachesHub() {
                     </h4>
                     <div className="space-y-2">
                       {(() => {
-                        // Calculate team stats by game first, then aggregate
+                        // Calculate team stats by game_id first, then aggregate
                         const gameTeamStats = playerStats.reduce((acc: Record<string, any>, stat) => {
                           const team = stat.team;
-                          const gameDate = stat.game_date;
-                          if (!team || !gameDate) return acc;
+                          const gameId = stat.game_id;
+                          if (!team || !gameId) return acc;
                           
-                          const gameKey = `${team}-${gameDate}`;
+                          const gameKey = `${team}-${gameId}`;
                           if (!acc[gameKey]) {
-                            acc[gameKey] = { team, gameDate, assists: 0, rebounds: 0, fgMade: 0, fgAttempted: 0 };
+                            acc[gameKey] = { team, gameId, assists: 0, rebounds: 0, fgMade: 0, fgAttempted: 0 };
                           }
                           acc[gameKey].assists += parseInt(stat.assists) || 0;
                           acc[gameKey].rebounds += parseInt(stat.rebounds_total) || 0;
