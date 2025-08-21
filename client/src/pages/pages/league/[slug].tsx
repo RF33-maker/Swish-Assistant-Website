@@ -10,6 +10,14 @@ import GameDetailModal from "@/components/GameDetailModal";
 import LeagueChatbot from "@/components/LeagueChatbot";
 import { TeamLogo } from "@/components/TeamLogo";
 import { TeamLogoUploader } from "@/components/TeamLogoUploader";
+import { 
+  LoadingSkeleton, 
+  PlayerRowSkeleton, 
+  StandingsRowSkeleton, 
+  LeaderCardSkeleton,
+  ProfileSkeleton,
+  CompactLoadingSkeleton
+} from "@/components/skeletons/LoadingSkeleton";
 
 
 
@@ -44,6 +52,9 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
   const [activeSection, setActiveSection] = useState('overview'); // 'overview', 'stats', 'teams', 'schedule'
   const [allPlayerAverages, setAllPlayerAverages] = useState<any[]>([]);
   const [displayedPlayerCount, setDisplayedPlayerCount] = useState(20); // For pagination
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
+  const [isLoadingStandings, setIsLoadingStandings] = useState(false);
+  const [isLoadingLeaders, setIsLoadingLeaders] = useState(false);
 
     
 
@@ -108,6 +119,9 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
         }
 
         if (data?.league_id) {
+          setIsLoadingLeaders(true);
+          setIsLoadingStandings(true);
+          
           const fetchTopStats = async () => {
             const { data: scorerData } = await supabase
               .from("player_stats")
@@ -153,9 +167,11 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
             
             // Calculate standings from game data
             calculateStandings(allPlayerStats || []);
+            
+            // Reset loading states
+            setIsLoadingLeaders(false);
+            setIsLoadingStandings(false);
           };
-
-
 
           fetchTopStats();
           fetchAllPlayerAverages();
@@ -374,15 +390,17 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
     const fetchAllPlayerAverages = async () => {
       if (!league?.league_id) return;
 
-      const { data: playerStats, error } = await supabase
-        .from("player_stats")
-        .select("*")
-        .eq("league_id", league.league_id);
+      setIsLoadingStats(true);
+      try {
+        const { data: playerStats, error } = await supabase
+          .from("player_stats")
+          .select("*")
+          .eq("league_id", league.league_id);
 
-      if (error) {
-        console.error("Error fetching player averages:", error);
-        return;
-      }
+        if (error) {
+          console.error("Error fetching player averages:", error);
+          return;
+        }
 
       // Group stats by player and calculate averages
       const playerMap = new Map();
@@ -453,6 +471,11 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
       })).sort((a, b) => parseFloat(b.avgPoints) - parseFloat(a.avgPoints));
 
       setAllPlayerAverages(averagesList);
+      } catch (error) {
+        console.error("Error in fetchAllPlayerAverages:", error);
+      } finally {
+        setIsLoadingStats(false);
+      }
     };
 
     // Calculate team standings from player stats using actual game results
@@ -726,7 +749,33 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
                   </div>
                 </div>
                 
-                {allPlayerAverages.length > 0 ? (
+                {isLoadingStats ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200">
+                          <th className="text-left py-3 px-2 font-semibold text-slate-700 sticky left-0 bg-white">Player</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">GP</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">MIN</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">PTS</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">REB</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">AST</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">STL</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">BLK</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">TO</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FG%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">3P%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FT%</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Array.from({ length: 10 }).map((_, index) => (
+                          <PlayerRowSkeleton key={`skeleton-${index}`} />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : allPlayerAverages.length > 0 ? (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
@@ -854,33 +903,60 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
                 </button>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                {([
-                  { title: "Top Scorers", list: topScorers, label: "PPG", key: "avg" },
-                  { title: "Top Rebounders", list: topRebounders, label: "RPG", key: "avg" },
-                  { title: "Top Playmakers", list: topAssistsList, label: "APG", key: "avg" },
-                ] as const).map(({ title, list, label, key }) => (
-                  <div key={title} className="bg-gray-50 rounded-lg p-4 shadow-inner">
-                    <h3 className="text-sm font-semibold text-slate-700 mb-3 text-center">{title}</h3>
-                    <ul className="space-y-1 text-sm text-slate-800">
-                      {Array.isArray(list) &&
-                        list.map((p, i) => (
-                          <li key={`${title}-${p.name}-${i}`} className="flex justify-between">
-                            <span>{p.name}</span>
-                            <span className="font-medium text-orange-500">
-                              {p[key]} {label}
-                            </span>
-                          </li>
-                        ))}
-                    </ul>
-                  </div>
-                ))}
+                {isLoadingLeaders ? (
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <LeaderCardSkeleton key={`leader-skeleton-${i}`} />
+                  ))
+                ) : (
+                  ([
+                    { title: "Top Scorers", list: topScorers, label: "PPG", key: "avg" },
+                    { title: "Top Rebounders", list: topRebounders, label: "RPG", key: "avg" },
+                    { title: "Top Playmakers", list: topAssistsList, label: "APG", key: "avg" },
+                  ] as const).map(({ title, list, label, key }) => (
+                    <div key={title} className="bg-gray-50 rounded-lg p-4 shadow-inner">
+                      <h3 className="text-sm font-semibold text-slate-700 mb-3 text-center">{title}</h3>
+                      <ul className="space-y-1 text-sm text-slate-800">
+                        {Array.isArray(list) &&
+                          list.map((p, i) => (
+                            <li key={`${title}-${p.name}-${i}`} className="flex justify-between">
+                              <span>{p.name}</span>
+                              <span className="font-medium text-orange-500">
+                                {p[key]} {label}
+                              </span>
+                            </li>
+                          ))}
+                      </ul>
+                    </div>
+                  ))
+                )}
               </div>
                 </div>
 
             {/* League Standings */}
             <div className="bg-white rounded-xl shadow p-6">
               <h2 className="text-lg font-semibold text-slate-800 mb-4">League Standings</h2>
-              {standings.length > 0 ? (
+              {isLoadingStandings ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="text-left py-3 px-2 font-semibold text-slate-700">#</th>
+                        <th className="text-left py-3 px-2 font-semibold text-slate-700">Team</th>
+                        <th className="text-center py-3 px-2 font-semibold text-slate-700">Record</th>
+                        <th className="text-center py-3 px-2 font-semibold text-slate-700">Win%</th>
+                        <th className="text-right py-3 px-2 font-semibold text-slate-700">PF</th>
+                        <th className="text-right py-3 px-2 font-semibold text-slate-700">PA</th>
+                        <th className="text-right py-3 px-2 font-semibold text-slate-700">Diff</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Array.from({ length: 6 }).map((_, index) => (
+                        <StandingsRowSkeleton key={`standings-skeleton-${index}`} />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : standings.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
