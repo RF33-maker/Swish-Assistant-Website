@@ -126,8 +126,8 @@ export default function LeagueLeadersPage() {
           playerData.total_blocks += stat.blocks || 0;
           playerData.total_field_goals_made += stat.field_goals_made || 0;
           playerData.total_field_goals_attempted += stat.field_goals_attempted || 0;
-          playerData.total_three_points_made += stat.three_points_made || 0;
-          playerData.total_three_points_attempted += stat.three_points_attempted || 0;
+          playerData.total_three_points_made += stat.three_pt_made || 0;
+          playerData.total_three_points_attempted += stat.three_pt_attempted || 0;
           playerData.total_free_throws_made += stat.free_throws_made || 0;
           playerData.total_free_throws_attempted += stat.free_throws_attempted || 0;
           playerData.games_played += 1;
@@ -211,7 +211,7 @@ export default function LeagueLeadersPage() {
               : "0.0%"
           }))
           .filter(p => p.total_three_points_attempted >= 1) // Minimum 1 attempt
-          .sort((a, b) => b.three_pt_percentage - a.three_pt_percentage)
+          .sort((a, b) => b.three_point_percentage - a.three_point_percentage)
           .slice(0, 5);
 
         processedStats.free_throw_percentage = playersWithEnoughGames
