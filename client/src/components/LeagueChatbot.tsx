@@ -638,22 +638,33 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
 
   return (
     <>
-      {/* Overlay backdrop */}
+      {/* Overlay backdrop - render to document body */}
       {isOverlayMode && (
         <div 
           className="fixed inset-0 bg-black bg-opacity-50 z-[9998]"
           onClick={() => setIsOverlayMode(false)}
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}
         />
       )}
 
       {/* Main chatbot container */}
       <div className={`bg-white rounded-xl border border-orange-200 overflow-hidden transition-all duration-500 ease-in-out ${
         isOverlayMode 
-          ? 'fixed top-4 left-4 right-4 bottom-4 z-[9999] max-w-5xl mx-auto shadow-2xl' 
+          ? 'fixed z-[9999] shadow-2xl' 
           : isActivelyUsed || isExpanded
             ? 'relative shadow-lg transform scale-[1.02]'
             : 'relative shadow-sm'
-      }`}>
+      }`}
+      style={isOverlayMode ? {
+        position: 'fixed',
+        top: '1rem',
+        left: '1rem',
+        right: '1rem',
+        bottom: '1rem',
+        maxWidth: '80rem',
+        margin: '0 auto',
+        zIndex: 9999
+      } : {}}>
         <div 
           className={`flex items-center justify-between p-5 cursor-pointer transition-all duration-300 ${
             isActivelyUsed || isExpanded
@@ -680,17 +691,19 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
           <div className="flex items-center gap-2">
             {(isExpanded || isOverlayMode) && (
               <>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsOverlayMode(!isOverlayMode);
-                  }}
-                  className="text-sm text-slate-800 hover:bg-orange-100"
-                >
-                  {isOverlayMode ? 'Minimize' : 'Expand'}
-                </Button>
+                {!isPanelMode && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsOverlayMode(!isOverlayMode);
+                    }}
+                    className="text-sm text-slate-800 hover:bg-orange-100"
+                  >
+                    {isOverlayMode ? 'Minimize' : 'Expand'}
+                  </Button>
+                )}
                 {!isOverlayMode && (
                   <Button 
                     variant="ghost" 
