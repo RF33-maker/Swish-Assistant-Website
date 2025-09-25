@@ -4,8 +4,10 @@ import { supabase } from "@/lib/supabase"
 import SwishLogo from "@/assets/Swish Assistant Logo.png"
 import CMBC from "@/assets/cmbc.jpg"
 import Ballpark from "@/assets/ballparksports.jpg"
-import GCK from "@/assets/GCK.jpg"
 import UL from "@/assets/uploadimage.png"
+import BCB from "@/assets/BCB Logo.jpg"
+import SLB from "@/assets/Super-League-Basketball-Logo.png"
+import NBLBE from "@/assets/NBLBE.jpg"
 import Chatbot from "@/assets/Chatbotimage.png"
 import LeaguePage from "@/assets/League-page.png"
 import ChatbotExample from "@/assets/Chatbotexample.png"
@@ -151,7 +153,7 @@ export default function LandingPage() {
       />
       <main className="flex flex-col items-center justify-center px-6 pt-6 pb-36 text-center">
         <h1 className="text-4xl sm:text-5xl font-extrabold text-slate-900 max-w-2xl leading-tight">
-          Our sport, your leagues, your stats, powered by AI. <br />
+          Our sport, your leagues, your stats <br />
           <span className="text-orange-500">Search below.</span>
         </h1>
 
@@ -227,8 +229,8 @@ export default function LandingPage() {
                 </button>
               ))
             : [
-                { name: "British Championship Basketball Trophy", slug: "uwe-summer-league-d1" },
-                { name: "British Championship Basketball", slug: "uwe-summer-league-d2" },
+                { name: "British Championship Basketball Trophy", slug: "british-championship-basketball" },
+                { name: "British Championship Basketball", slug: "british-championship-basketball" },
                 { name: "Super League Basketball", slug: "nbl-d3-gck" },
               ].map((league, i) => (
                 <button
@@ -248,12 +250,12 @@ export default function LandingPage() {
 
       <section className="w-full bg-orange-500 py-10 text-white">
         <h2 className="text-center text-sm uppercase mb-6">
-          Already being used by teams and these leagues
+          Already hosting these leagues and more!
         </h2>
 
         <div className="w-full flex justify-center">
           <div className="flex gap-12 overflow-x-auto px-4 max-w-6xl">
-            {[Ballpark, CMBC, GCK].map((img, i) => (
+            {[Ballpark, CMBC, NBLBE, BCB, SLB].map((img, i) => (
               <div key={i} className="flex items-center justify-center h-24">
                 <img
                   src={img}
