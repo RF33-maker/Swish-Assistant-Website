@@ -49,6 +49,29 @@ interface UnifiedScoutingEditorProps {
   parseError?: string | null;
 }
 
+const isVisualTemplate = Boolean(selectedTemplateId && selectedTemplateId.length > 0);
+
+const EMPTY_REPORT: ScoutingReport = {
+  meta: {
+    player: "—",
+    team: "—",
+    opponent: null,
+    gameDate: null,
+    position: null,
+    age: null,
+    height: null,
+    weight: null,
+    photoUrl: null,
+  },
+  stats: {
+    ppg: null, rpg: null, apg: null, spg: null, bpg: null,
+    fgPct: null, tpPct: null, ftPct: null,
+  },
+  strengths: [],
+  weaknesses: [],
+};
+
+
 const blockTypes = [
   {
     id: 'text',
@@ -414,52 +437,71 @@ export default function UnifiedScoutingEditor({
                         <p className="text-xs text-gray-500">Professional visual scouting report cards</p>
                       </div>
                       
-                      {/* Template Selection */}
-                      <div className="mb-4">
-                        <div className="flex items-center gap-3 mb-3">
-                          <span className="text-xs font-medium text-slate-700">Choose Template:</span>
-                          <select
-                            className="text-xs border border-gray-300 rounded-md px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                            value={selectedTemplateId}
-                            onChange={(e) => handleScoutingTemplateSelect(e.target.value)}
-                          >
-                            {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                          </select>
-                        </div>
-                        {parseError && (
-                          <div className="text-xs text-red-600 bg-red-50 px-2 py-1 rounded border border-red-200 mb-3">
-                            {parseError}
-                          </div>
-                        )}
-                      </div>
+                      {/* Templates – Catalog (left) + Live Preview (right) */}
+                      <div className="grid grid-cols-1 lg:grid-cols-[1fr_620px] gap-4">
+                        {/* LEFT: Catalog */}
+                        <div className="space-y-3">
+                   
+                          
+                          {/* Catalog grid */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {templates.map((t) => {
+                              const selected = selectedTemplateId === t.id;
+                              return (
+                                <div
+                                  key={t.id}
+                                  className={`cursor-pointer rounded-lg border transition ${
+                                    selected
+                                      ? "border-orange-400 ring-1 ring-orange-300 bg-orange-50/40"
+                                      : "border-gray-200 hover:shadow-sm bg-white"
+                                  }`}
+                                  onClick={() => handleScoutingTemplateSelect(t.id)}
+                                >
+                                  <div className="p-3">
+                                    <div className="flex items-center justify-between">
+                                      <div>
+                                        <div className="text-sm font-semibold text-slate-900">{t.name}</div>
+                                        <div className="text-xs text-slate-500">Visual scouting card</div>
+                                      </div>
+                                      {selected && (
+                                        <span className="inline-flex items-center rounded-full bg-orange-100 text-orange-700 px-2 py-0.5 text-[10px] font-medium">
+                                          Selected
+                                        </span>
+                                      )}
+                                    </div>
 
-                      {/* Template Preview */}
-                      {reportData ? (
-                        <div className="border rounded-lg overflow-hidden bg-white">
-                          <ReportPreview data={reportData} templateId={selectedTemplateId} />
-                        </div>
-                      ) : (
-                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center bg-gray-50">
-                          <div className="space-y-3">
-                            <div className="w-12 h-12 bg-gray-200 rounded-full mx-auto flex items-center justify-center">
-                              <Palette className="w-6 h-6 text-gray-400" />
-                            </div>
-                            <div>
-                              <h4 className="text-sm font-medium text-slate-800 mb-2">No Report Data</h4>
-                              <p className="text-xs text-slate-600 mb-3">
-                                Use the AI Assistant to generate a scouting report in JSON format
-                              </p>
-                              <button 
-                                onClick={handleSampleDataPreview}
-                                className="text-xs px-3 py-1.5 bg-orange-100 text-orange-700 rounded-md hover:bg-orange-200 transition-colors"
-                              >
-                                Preview with Sample Data
-                              </button>
-                            </div>
+                                    {/* Thumbnail placeholder */}
+                                    <div className="mt-3 h-16 rounded-md bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200" />
+
+                                    <div className="mt-3 flex items-center justify-end">
+                                      <button
+                                        className="text-xs px-2.5 py-1.5 rounded-md bg-orange-600 text-white hover:bg-orange-700"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleScoutingTemplateSelect(t.id);
+                                        }}
+                                      >
+                                        {selected ? "Use Again" : "Select"}
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
+
+                          {/* Parse warning (non-blocking) */}
+                          {parseError && (
+                            <div className="text-xs text-red-600 bg-red-50 px-2 py-1 rounded border border-red-200">
+                              {parseError}
+                            </div>
+                          )}
                         </div>
-                      )}
+
+                       
+                      </div>
                     </div>
+                    
                   </TabsContent>
 
                   <TabsContent value="assistant" className="mt-0">
