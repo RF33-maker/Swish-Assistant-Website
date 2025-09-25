@@ -20,12 +20,7 @@ interface GameResultsCarouselProps {
 export default function GameResultsCarousel({ leagueId, onGameClick }: GameResultsCarouselProps) {
   const [games, setGames] = useState<GameResult[]>([]);
   const [loading, setLoading] = useState(true);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [startX, setStartX] = useState(0);
-  const [scrollLeft, setScrollLeft] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
-  const animationFrameRef = useRef<number>();
 
   useEffect(() => {
     const fetchGameResults = async () => {
@@ -150,104 +145,8 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
     }
   }, [leagueId]);
 
-  // Auto-scroll functionality
-  useEffect(() => {
-    if (games.length === 0 || loading || isPaused || isDragging) return;
-
-    const scroll = () => {
-      if (scrollContainerRef.current) {
-        const container = scrollContainerRef.current;
-        const scrollSpeed = 0.8; // pixels per frame
-        
-        // Calculate the width of one complete set of games
-        const gameWidth = 320 + 16; // card width + gap
-        const totalGameWidth = gameWidth * games.length;
-        
-        // Scroll to the right
-        container.scrollLeft += scrollSpeed;
-        
-        // Reset scroll position when we've scrolled exactly one set of games
-        // This ensures seamless looping without gaps
-        if (container.scrollLeft >= totalGameWidth) {
-          container.scrollLeft = container.scrollLeft - totalGameWidth;
-        }
-      }
-      
-      if (!isPaused && !isDragging) {
-        animationFrameRef.current = requestAnimationFrame(scroll);
-      }
-    };
-
-    animationFrameRef.current = requestAnimationFrame(scroll);
-
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-    };
-  }, [games, loading, isPaused, isDragging]);
-
-  // Mouse wheel scroll handler
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollLeft += e.deltaY;
-    }
-  };
-
-  // Touch/mouse drag handlers
-  const handleMouseDown = (e: React.MouseEvent) => {
-    setIsDragging(true);
-    setIsPaused(true);
-    setStartX(e.pageX - (scrollContainerRef.current?.offsetLeft || 0));
-    setScrollLeft(scrollContainerRef.current?.scrollLeft || 0);
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging || !scrollContainerRef.current) return;
-    e.preventDefault();
-    const x = e.pageX - (scrollContainerRef.current.offsetLeft || 0);
-    const walk = (x - startX) * 2; // Scroll speed multiplier
-    scrollContainerRef.current.scrollLeft = scrollLeft - walk;
-  };
-
-  const handleMouseUp = () => {
-    setIsDragging(false);
-    setTimeout(() => setIsPaused(false), 1000); // Resume after 1 second
-  };
-
-  const handleMouseLeave = () => {
-    setIsDragging(false);
-    setTimeout(() => setIsPaused(false), 1000); // Resume after 1 second
-  };
-
-  const handleMouseEnter = () => {
-    setIsPaused(true);
-  };
-
-  const handleMouseLeaveContainer = () => {
-    setIsPaused(false);
-  };
-
-  // Touch handlers for mobile
-  const handleTouchStart = (e: React.TouchEvent) => {
-    setIsDragging(true);
-    setIsPaused(true);
-    setStartX(e.touches[0].pageX - (scrollContainerRef.current?.offsetLeft || 0));
-    setScrollLeft(scrollContainerRef.current?.scrollLeft || 0);
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!isDragging || !scrollContainerRef.current) return;
-    const x = e.touches[0].pageX - (scrollContainerRef.current.offsetLeft || 0);
-    const walk = (x - startX) * 2;
-    scrollContainerRef.current.scrollLeft = scrollLeft - walk;
-  };
-
-  const handleTouchEnd = () => {
-    setIsDragging(false);
-    setTimeout(() => setIsPaused(false), 1000); // Resume after 1 second
-  };
+  // Calculate animation duration based on number of games
+  const animationDuration = games.length > 0 ? games.length * 8 : 40; // 8 seconds per game
 
   if (loading) {
     return (
@@ -283,35 +182,27 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
     return teamName.substring(0, 3).toUpperCase();
   };
 
-  // Create tripled games array for truly seamless infinite scroll
-  const duplicatedGames = [...games, ...games, ...games];
+  // Create duplicated games array for infinite scroll
+  const duplicatedGames = [...games, ...games];
 
   return (
-    <div 
-      ref={scrollContainerRef}
-      className={`w-full overflow-x-auto scrollbar-hide select-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
-      onWheel={handleWheel}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeaveContainer}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      style={{ 
-        scrollbarWidth: 'none', 
-        msOverflowStyle: 'none',
-        WebkitOverflowScrolling: 'touch'
-      }}
-    >
-      <div className="flex gap-4 px-4 py-2" style={{ minWidth: 'max-content' }}>
+    <div className="w-full overflow-hidden">
+      <div 
+        className="flex gap-4 px-4 py-2"
+        style={{
+          width: 'fit-content',
+          animation: `scroll ${animationDuration}s linear infinite`,
+          animationPlayState: isPaused ? 'paused' : 'running'
+        }}
+        onMouseEnter={() => setIsPaused(true)}
+        onMouseLeave={() => setIsPaused(false)}
+      >
         {duplicatedGames.map((game, index) => (
           <div
             key={`carousel-game-${index}`}
             className="bg-gray-800 rounded-lg px-6 py-4 flex-shrink-0 cursor-pointer hover:bg-gray-700 transition-colors border border-gray-700"
             style={{ width: '320px', minWidth: '320px', maxWidth: '320px' }}
-            onClick={() => !isDragging && onGameClick(game.game_id)}
+            onClick={() => onGameClick(game.game_id)}
             onMouseDown={(e) => e.preventDefault()} // Prevent text selection
           >
           {/* Header with date and status */}
