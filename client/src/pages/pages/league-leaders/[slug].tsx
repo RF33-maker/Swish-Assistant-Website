@@ -97,11 +97,13 @@ export default function LeagueLeadersPage() {
         allPlayerStats.forEach(stat => {
           // Use the correct team field from the data structure
           const teamName = stat.team || stat.team_name || 'Unknown Team';
-          const playerKey = `${stat.name}_${teamName}`; // Use name + team as key
+          // Create player name from firstname and familyname
+          const playerName = `${stat.firstname || ''} ${stat.familyname || ''}`.trim() || stat.name || 'Unknown Player';
+          const playerKey = `${playerName}_${teamName}`; // Use name + team as key
           if (!playerStatsMap.has(playerKey)) {
             playerStatsMap.set(playerKey, {
               player_id: stat.player_id || stat.id, // Use player_id if available, otherwise use id
-              name: stat.name,
+              name: playerName,
               team_name: teamName,
               total_points: 0,
               total_rebounds: 0,
@@ -119,17 +121,17 @@ export default function LeagueLeadersPage() {
           }
 
           const playerData = playerStatsMap.get(playerKey);
-          playerData.total_points += stat.points || 0;
-          playerData.total_rebounds += stat.rebounds_total || 0;
-          playerData.total_assists += stat.assists || 0;
-          playerData.total_steals += stat.steals || 0;
-          playerData.total_blocks += stat.blocks || 0;
-          playerData.total_field_goals_made += stat.field_goals_made || 0;
-          playerData.total_field_goals_attempted += stat.field_goals_attempted || 0;
-          playerData.total_three_points_made += stat.three_pt_made || 0;
-          playerData.total_three_points_attempted += stat.three_pt_attempted || 0;
-          playerData.total_free_throws_made += stat.free_throws_made || 0;
-          playerData.total_free_throws_attempted += stat.free_throws_attempted || 0;
+          playerData.total_points += stat.spoints || 0;
+          playerData.total_rebounds += stat.sreboundstotal || 0;
+          playerData.total_assists += stat.sassists || 0;
+          playerData.total_steals += stat.ssteals || 0;
+          playerData.total_blocks += stat.sblocks || 0;
+          playerData.total_field_goals_made += stat.sfieldgoalsmade || 0;
+          playerData.total_field_goals_attempted += stat.sfieldgoalsattempted || 0;
+          playerData.total_three_points_made += stat.sthreepointersmade || 0;
+          playerData.total_three_points_attempted += stat.sthreepointersattempted || 0;
+          playerData.total_free_throws_made += stat.sfreethrowsmade || 0;
+          playerData.total_free_throws_attempted += stat.sfreethrowsattempted || 0;
           playerData.games_played += 1;
         });
 
