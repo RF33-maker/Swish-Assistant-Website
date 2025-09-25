@@ -505,40 +505,40 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                             </div>
                           </td>
                           <td className="p-3 text-center text-slate-800">
-                            {player.minutes_played && (
+                            {player.sminutes && (
                               <div className="flex items-center justify-center gap-1">
                                 <Clock className="w-3 h-3 text-slate-400" />
-                                <span className="text-slate-800">{player.minutes_played}</span>
+                                <span className="text-slate-800">{player.sminutes}</span>
                               </div>
                             )}
                           </td>
                           <td className="p-3 text-center font-semibold text-orange-600">{player.spoints}</td>
                           <td className="p-3 text-center text-slate-800">
-                            {player.field_goals_made !== undefined && player.field_goals_attempted !== undefined ? (
+                            {player.sfieldgoalsmade !== undefined && player.sfieldgoalsattempted !== undefined ? (
                               <div>
-                                <div className="font-medium">{player.field_goals_made}/{player.field_goals_attempted}</div>
-                                {player.field_goal_percent && (
-                                  <div className="text-xs text-slate-500">{player.field_goal_percent}%</div>
+                                <div className="font-medium">{player.sfieldgoalsmade}/{player.sfieldgoalsattempted}</div>
+                                {player.sfieldgoalspercentage && (
+                                  <div className="text-xs text-slate-500">{player.sfieldgoalspercentage}%</div>
                                 )}
                               </div>
                             ) : <span className="text-slate-400">-</span>}
                           </td>
                           <td className="p-3 text-center text-slate-800">
-                            {player.three_pt_made !== undefined && player.three_pt_attempted !== undefined ? (
+                            {player.sthreepointersmade !== undefined && player.sthreepointersattempted !== undefined ? (
                               <div>
-                                <div className="font-medium">{player.three_pt_made}/{player.three_pt_attempted}</div>
-                                {player.three_pt_percent && (
-                                  <div className="text-xs text-slate-500">{player.three_pt_percent}%</div>
+                                <div className="font-medium">{player.sthreepointersmade}/{player.sthreepointersattempted}</div>
+                                {player.sthreepointerspercentage && (
+                                  <div className="text-xs text-slate-500">{player.sthreepointerspercentage}%</div>
                                 )}
                               </div>
                             ) : <span className="text-slate-400">-</span>}
                           </td>
                           <td className="p-3 text-center text-slate-800">
-                            {player.free_throws_made !== undefined && player.free_throws_attempted !== undefined ? (
+                            {player.sfreethrowsmade !== undefined && player.sfreethrowsattempted !== undefined ? (
                               <div>
-                                <div className="font-medium">{player.free_throws_made}/{player.free_throws_attempted}</div>
-                                {player.free_throw_percent && (
-                                  <div className="text-xs text-slate-500">{player.free_throw_percent}%</div>
+                                <div className="font-medium">{player.sfreethrowsmade}/{player.sfreethrowsattempted}</div>
+                                {player.sfreethrowspercentage && (
+                                  <div className="text-xs text-slate-500">{player.sfreethrowspercentage}%</div>
                                 )}
                               </div>
                             ) : <span className="text-slate-400">-</span>}
@@ -552,9 +552,9 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                             )}
                           </td>
                           <td className="p-3 text-center font-medium text-slate-800">{player.sassists}</td>
-                          <td className="p-3 text-center font-medium text-slate-800">{player.steals || 0}</td>
-                          <td className="p-3 text-center font-medium text-slate-800">{player.blocks || 0}</td>
-                          <td className="p-3 text-center font-medium text-red-600">{player.turnovers || 0}</td>
+                          <td className="p-3 text-center font-medium text-slate-800">{player.ssteals || 0}</td>
+                          <td className="p-3 text-center font-medium text-slate-800">{player.sblocks || 0}</td>
+                          <td className="p-3 text-center font-medium text-red-600">{player.sturnovers || 0}</td>
                           <td className="p-3 text-center">
                             {player.plus_minus !== undefined && (
                               <span className={`font-medium ${player.plus_minus >= 0 ? 'text-green-600' : 'text-red-600'}`}>
