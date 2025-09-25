@@ -514,23 +514,57 @@ import {
           
 
         if (teamStatsData && teamStatsData.length > 0 && !teamStatsError) {
-          // Calculate standings from team_stats table
-          const teamStatsMap: { [team: string]: { wins: number, losses: number, pointsFor: number, pointsAgainst: number, games: number } } = {};
+          // Group team stats by numeric_id to find games (teams that played each other)
+          const gameMap = new Map<string, any[]>();
           
           teamStatsData.forEach(stat => {
-            const team = stat.teamName;
-            if (!teamStatsMap[team]) {
-              teamStatsMap[team] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0 };
+            const numericId = stat.numeric_id;
+            if (numericId && stat.name) { // Only process records with team names and numeric_id
+              if (!gameMap.has(numericId)) {
+                gameMap.set(numericId, []);
+              }
+              gameMap.get(numericId)!.push(stat);
             }
-            
-            teamStatsMap[team].pointsFor += stat.teamScore || 0;
-            teamStatsMap[team].pointsAgainst += stat.opponentScore || 0;
-            teamStatsMap[team].games += 1;
-            
-            if (stat.won) {
-              teamStatsMap[team].wins += 1;
-            } else {
-              teamStatsMap[team].losses += 1;
+          });
+
+          // Calculate standings from games
+          const teamStatsMap: { [team: string]: { wins: number, losses: number, pointsFor: number, pointsAgainst: number, games: number } } = {};
+          
+          // Process each game (teams with same numeric_id played each other)
+          gameMap.forEach((gameTeams, numericId) => {
+            if (gameTeams.length === 2) { // Valid game with 2 teams
+              const [team1, team2] = gameTeams;
+              
+              // Use tot_spoints as team score
+              const team1Score = team1.tot_spoints || 0;
+              const team2Score = team2.tot_spoints || 0;
+              
+              // Initialize teams if not exists
+              if (!teamStatsMap[team1.name]) {
+                teamStatsMap[team1.name] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0 };
+              }
+              if (!teamStatsMap[team2.name]) {
+                teamStatsMap[team2.name] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0 };
+              }
+              
+              // Record scores
+              teamStatsMap[team1.name].pointsFor += team1Score;
+              teamStatsMap[team1.name].pointsAgainst += team2Score;
+              teamStatsMap[team1.name].games += 1;
+              
+              teamStatsMap[team2.name].pointsFor += team2Score;
+              teamStatsMap[team2.name].pointsAgainst += team1Score;
+              teamStatsMap[team2.name].games += 1;
+              
+              // Determine winner
+              if (team1Score > team2Score) {
+                teamStatsMap[team1.name].wins += 1;
+                teamStatsMap[team2.name].losses += 1;
+              } else if (team2Score > team1Score) {
+                teamStatsMap[team2.name].wins += 1;
+                teamStatsMap[team1.name].losses += 1;
+              }
+              // If tied, no wins/losses added
             }
           });
 
@@ -553,7 +587,6 @@ import {
             return b.avgPoints - a.avgPoints;
           });
 
-          setStandings(standingsArray);
           setStandings(standingsArray);
           return;
         }

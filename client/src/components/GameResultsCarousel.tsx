@@ -34,44 +34,50 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
         const { data: teamStatsData, error: teamStatsError } = await supabase
           .from("team_stats")
           .select("*")
-          .eq("leagueId", leagueId)
-          .order("gameDate", { ascending: false });
+          .eq("league_id", leagueId)
+          .order("created_at", { ascending: false });
 
         if (teamStatsData && teamStatsData.length > 0 && !teamStatsError) {
-          // Process team_stats data to create game results
-          const gameMap = new Map<string, GameResult>();
+          // Group team stats by numeric_id to create game results
+          const gameMap = new Map<string, any[]>();
           
           teamStatsData.forEach(stat => {
-            const gameId = stat.gameId;
-            if (!gameMap.has(gameId)) {
-              gameMap.set(gameId, {
-                game_id: gameId,
-                game_date: stat.gameDate,
-                home_team: stat.isHome ? stat.teamName : stat.opponent,
-                away_team: stat.isHome ? stat.opponent : stat.teamName,
-                home_score: stat.isHome ? stat.teamScore : stat.opponentScore,
-                away_score: stat.isHome ? stat.opponentScore : stat.teamScore,
-                status: "FINAL"
-              });
-            } else {
-              // Update the other team's score
-              const game = gameMap.get(gameId)!;
-              if (stat.isHome) {
-                game.home_team = stat.teamName;
-                game.home_score = stat.teamScore;
-              } else {
-                game.away_team = stat.teamName;
-                game.away_score = stat.teamScore;
+            const numericId = stat.numeric_id;
+            if (numericId && stat.name) { // Only process records with team names and numeric_id
+              if (!gameMap.has(numericId)) {
+                gameMap.set(numericId, []);
               }
+              gameMap.get(numericId)!.push(stat);
             }
           });
 
-          const gamesFromTeamStats = Array.from(gameMap.values())
+          // Convert to game results
+          const gamesFromTeamStats: GameResult[] = [];
+          
+          gameMap.forEach((gameTeams, numericId) => {
+            if (gameTeams.length === 2) { // Valid game with 2 teams
+              const [team1, team2] = gameTeams;
+              const team1Score = team1.tot_spoints || 0;
+              const team2Score = team2.tot_spoints || 0;
+              
+              gamesFromTeamStats.push({
+                game_id: numericId,
+                game_date: team1.created_at || new Date().toISOString(),
+                home_team: team1.name,
+                away_team: team2.name,
+                home_score: team1Score,
+                away_score: team2Score,
+                status: "FINAL"
+              });
+            }
+          });
+
+          // Sort by date and take recent 10
+          const sortedGames = gamesFromTeamStats
             .sort((a, b) => new Date(b.game_date).getTime() - new Date(a.game_date).getTime())
             .slice(0, 10);
 
-          console.log("🎮 Game results loaded from team_stats table:", gamesFromTeamStats.length, "games");
-          setGames(gamesFromTeamStats);
+          setGames(sortedGames);
           return;
         }
 
