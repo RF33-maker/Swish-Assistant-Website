@@ -219,9 +219,11 @@ import {
 
     const getTopList = (key: string) => {
       const grouped = playerStats.reduce((acc, curr) => {
-        const playerKey = curr.name;
+        // Create player name from firstname and familyname fields
+        const playerName = `${curr.firstname || ''} ${curr.familyname || ''}`.trim() || curr.name || 'Unknown Player';
+        const playerKey = playerName;
         if (!acc[playerKey]) {
-          acc[playerKey] = { ...curr, games: 1 };
+          acc[playerKey] = { ...curr, name: playerName, games: 1 };
         } else {
           acc[playerKey][key] += curr[key];
           acc[playerKey].games += 1;
