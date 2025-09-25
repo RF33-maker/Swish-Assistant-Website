@@ -227,9 +227,9 @@ export default function LandingPage() {
                 </button>
               ))
             : [
-                { name: "UWE Summer League D1", slug: "uwe-summer-league-d1" },
-                { name: "UWE Summer League D2", slug: "uwe-summer-league-d2" },
-                { name: "NBL D3 Gloucester City Kings", slug: "nbl-d3-gck" },
+                { name: "British Championship Basketball Trophy", slug: "uwe-summer-league-d1" },
+                { name: "British Championship Basketball", slug: "uwe-summer-league-d2" },
+                { name: "Super League Basketball", slug: "nbl-d3-gck" },
               ].map((league, i) => (
                 <button
                   key={i}
