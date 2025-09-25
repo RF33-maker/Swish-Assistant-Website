@@ -19,6 +19,69 @@ export const teamLogos = pgTable("team_logos", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Player stats table for storing individual player performance data
+export const playerStats = pgTable("player_stats", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  league_id: varchar("league_id", { length: 255 }).notNull(),
+  user_id: varchar("user_id", { length: 255 }),
+  game_id: varchar("game_id", { length: 255 }),
+  game_date: timestamp("game_date"),
+  team: varchar("team", { length: 255 }),
+  name: varchar("name", { length: 255 }),
+  number: integer("number"),
+  position: varchar("position", { length: 10 }),
+  starter: boolean("starter").default(false),
+  captain: boolean("captain").default(false),
+  
+  // Basic game info
+  home_team: varchar("home_team", { length: 255 }),
+  away_team: varchar("away_team", { length: 255 }),
+  is_home_player: boolean("is_home_player"),
+  
+  // Stats with 's' prefix (as used in existing code)
+  spoints: integer("spoints").default(0),
+  sminutes: varchar("sminutes", { length: 50 }).default("0:00"),
+  sfieldgoalsmade: integer("sfieldgoalsmade").default(0),
+  sfieldgoalsattempted: integer("sfieldgoalsattempted").default(0),
+  sfieldgoalspercentage: integer("sfieldgoalspercentage").default(0),
+  sthreepointersmade: integer("sthreepointersmade").default(0),
+  sthreepointersattempted: integer("sthreepointersattempted").default(0),
+  sthreepointerspercentage: integer("sthreepointerspercentage").default(0),
+  stwopointersmade: integer("stwopointersmade").default(0),
+  stwopointersattempted: integer("stwopointersattempted").default(0),
+  stwopointerspercentage: integer("stwopointerspercentage").default(0),
+  sfreethrowsmade: integer("sfreethrowsmade").default(0),
+  sfreethrowsattempted: integer("sfreethrowsattempted").default(0),
+  sfreethrowspercentage: integer("sfreethrowspercentage").default(0),
+  sreboundstotal: integer("sreboundstotal").default(0),
+  sreboundsoffensive: integer("sreboundsoffensive").default(0),
+  sreboundsdefensive: integer("sreboundsdefensive").default(0),
+  sassists: integer("sassists").default(0),
+  ssteals: integer("ssteals").default(0),
+  sblocks: integer("sblocks").default(0),
+  sblocksreceived: integer("sblocksreceived").default(0),
+  sturnovers: integer("sturnovers").default(0),
+  sfoulspersonal: integer("sfoulspersonal").default(0),
+  sfoulstechnical: integer("sfoulstechnical").default(0),
+  
+  // Efficiency ratings
+  eff_1: integer("eff_1").default(0),
+  eff_2: integer("eff_2").default(0), 
+  eff_3: integer("eff_3").default(0),
+  eff_4: integer("eff_4").default(0),
+  eff_5: integer("eff_5").default(0),
+  eff_6: integer("eff_6").default(0),
+  eff_7: integer("eff_7").default(0),
+  
+  // Alternative field names also used in code
+  points: integer("points").default(0),
+  rebounds_total: integer("rebounds_total").default(0),
+  assists: integer("assists").default(0),
+  
+  is_public: boolean("is_public").default(true),
+  created_at: timestamp("created_at").defaultNow(),
+});
+
 // Team stats table for storing aggregated team performance data
 export const teamStats = pgTable("team_stats", {
   id: serial("id").primaryKey(),
@@ -57,6 +120,57 @@ export const insertTeamLogoSchema = createInsertSchema(teamLogos).pick({
   teamName: true,
   logoUrl: true,
   uploadedBy: true,
+});
+
+export const insertPlayerStatsSchema = createInsertSchema(playerStats).pick({
+  league_id: true,
+  user_id: true,
+  game_id: true,
+  game_date: true,
+  team: true,
+  name: true,
+  number: true,
+  position: true,
+  starter: true,
+  captain: true,
+  home_team: true,
+  away_team: true,
+  is_home_player: true,
+  spoints: true,
+  sminutes: true,
+  sfieldgoalsmade: true,
+  sfieldgoalsattempted: true,
+  sfieldgoalspercentage: true,
+  sthreepointersmade: true,
+  sthreepointersattempted: true,
+  sthreepointerspercentage: true,
+  stwopointersmade: true,
+  stwopointersattempted: true,
+  stwopointerspercentage: true,
+  sfreethrowsmade: true,
+  sfreethrowsattempted: true,
+  sfreethrowspercentage: true,
+  sreboundstotal: true,
+  sreboundsoffensive: true,
+  sreboundsdefensive: true,
+  sassists: true,
+  ssteals: true,
+  sblocks: true,
+  sblocksreceived: true,
+  sturnovers: true,
+  sfoulspersonal: true,
+  sfoulstechnical: true,
+  eff_1: true,
+  eff_2: true,
+  eff_3: true,
+  eff_4: true,
+  eff_5: true,
+  eff_6: true,
+  eff_7: true,
+  points: true,
+  rebounds_total: true,
+  assists: true,
+  is_public: true,
 });
 
 export const insertTeamStatsSchema = createInsertSchema(teamStats).pick({
@@ -173,6 +287,8 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertTeamLogo = z.infer<typeof insertTeamLogoSchema>;
 export type TeamLogo = typeof teamLogos.$inferSelect;
+export type InsertPlayerStats = z.infer<typeof insertPlayerStatsSchema>;
+export type PlayerStats = typeof playerStats.$inferSelect;
 export type InsertTeamStats = z.infer<typeof insertTeamStatsSchema>;
 export type TeamStats = typeof teamStats.$inferSelect;
 
