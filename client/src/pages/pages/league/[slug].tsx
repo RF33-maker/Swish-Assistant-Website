@@ -86,7 +86,25 @@ import {
       return () => clearTimeout(delay);
     }, [search]);
 
+    // Filter players based on search in stats section (player names only)
+    useEffect(() => {
+      console.log("🔍 Filtering players. Search term:", statsSearch);
+      console.log("📊 All players:", allPlayerAverages.length);
+      
+      if (!statsSearch.trim()) {
+        setFilteredPlayerAverages(allPlayerAverages);
+        console.log("✅ No search term, showing all players");
+        return;
+      }
 
+      const filtered = allPlayerAverages.filter(player => 
+        player.name.toLowerCase().includes(statsSearch.toLowerCase())
+      );
+      
+      console.log("🎯 Filtered players:", filtered.length, "matching:", statsSearch);
+      setFilteredPlayerAverages(filtered);
+      setDisplayedPlayerCount(20); // Reset pagination when searching
+    }, [statsSearch, allPlayerAverages]);
 
     useEffect(() => {
       const fetchUserAndLeague = async () => {
@@ -882,7 +900,7 @@ import {
                   <div className="relative">
                     <input
                       type="text"
-                      placeholder="Search players or teams..."
+                      placeholder="Search players..."
                       value={statsSearch}
                       onChange={(e) => setStatsSearch(e.target.value)}
                       className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
