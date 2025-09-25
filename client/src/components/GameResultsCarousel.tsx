@@ -157,7 +157,7 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
     const scroll = () => {
       if (scrollContainerRef.current) {
         const container = scrollContainerRef.current;
-        const scrollSpeed = 0.5; // pixels per frame
+        const scrollSpeed = 0.8; // pixels per frame
         
         // Calculate the width of one complete set of games
         const gameWidth = 320 + 16; // card width + gap
@@ -166,9 +166,10 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
         // Scroll to the right
         container.scrollLeft += scrollSpeed;
         
-        // Reset scroll position when we've scrolled past the first set
+        // Reset scroll position when we've scrolled exactly one set of games
+        // This ensures seamless looping without gaps
         if (container.scrollLeft >= totalGameWidth) {
-          container.scrollLeft = 0;
+          container.scrollLeft = container.scrollLeft - totalGameWidth;
         }
       }
       
@@ -282,8 +283,8 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
     return teamName.substring(0, 3).toUpperCase();
   };
 
-  // Create duplicated games array for infinite scroll
-  const duplicatedGames = [...games, ...games];
+  // Create tripled games array for truly seamless infinite scroll
+  const duplicatedGames = [...games, ...games, ...games];
 
   return (
     <div 
