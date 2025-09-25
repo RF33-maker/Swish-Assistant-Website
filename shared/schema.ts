@@ -19,6 +19,34 @@ export const teamLogos = pgTable("team_logos", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Team stats table for storing aggregated team performance data
+export const teamStats = pgTable("team_stats", {
+  id: serial("id").primaryKey(),
+  leagueId: varchar("league_id", { length: 255 }).notNull(),
+  teamName: varchar("team_name", { length: 255 }).notNull(),
+  gameId: varchar("game_id", { length: 255 }).notNull(),
+  gameDate: timestamp("game_date").notNull(),
+  opponent: varchar("opponent", { length: 255 }).notNull(),
+  isHome: boolean("is_home").notNull().default(false),
+  teamScore: integer("team_score").notNull().default(0),
+  opponentScore: integer("opponent_score").notNull().default(0),
+  won: boolean("won").notNull().default(false),
+  fieldGoalsMade: integer("field_goals_made").default(0),
+  fieldGoalsAttempted: integer("field_goals_attempted").default(0),
+  threePointsMade: integer("three_points_made").default(0),
+  threePointsAttempted: integer("three_points_attempted").default(0),
+  freeThrowsMade: integer("free_throws_made").default(0),
+  freeThrowsAttempted: integer("free_throws_attempted").default(0),
+  totalRebounds: integer("total_rebounds").default(0),
+  assists: integer("assists").default(0),
+  steals: integer("steals").default(0),
+  blocks: integer("blocks").default(0),
+  turnovers: integer("turnovers").default(0),
+  personalFouls: integer("personal_fouls").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -29,6 +57,30 @@ export const insertTeamLogoSchema = createInsertSchema(teamLogos).pick({
   teamName: true,
   logoUrl: true,
   uploadedBy: true,
+});
+
+export const insertTeamStatsSchema = createInsertSchema(teamStats).pick({
+  leagueId: true,
+  teamName: true,
+  gameId: true,
+  gameDate: true,
+  opponent: true,
+  isHome: true,
+  teamScore: true,
+  opponentScore: true,
+  won: true,
+  fieldGoalsMade: true,
+  fieldGoalsAttempted: true,
+  threePointsMade: true,
+  threePointsAttempted: true,
+  freeThrowsMade: true,
+  freeThrowsAttempted: true,
+  totalRebounds: true,
+  assists: true,
+  steals: true,
+  blocks: true,
+  turnovers: true,
+  personalFouls: true,
 });
 
 // Enhanced scouting documents table for Notion-style editor
@@ -121,6 +173,8 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertTeamLogo = z.infer<typeof insertTeamLogoSchema>;
 export type TeamLogo = typeof teamLogos.$inferSelect;
+export type InsertTeamStats = z.infer<typeof insertTeamStatsSchema>;
+export type TeamStats = typeof teamStats.$inferSelect;
 
 export type ScoutingDocument = typeof scoutingDocuments.$inferSelect;
 export type InsertScoutingDocument = z.infer<typeof insertScoutingDocumentSchema>;

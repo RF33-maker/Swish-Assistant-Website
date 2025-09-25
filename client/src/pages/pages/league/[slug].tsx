@@ -126,31 +126,31 @@ import {
           const fetchTopStats = async () => {
             const { data: scorerData } = await supabase
               .from("player_stats")
-              .select("name, points")
+              .select("firstname, familyname, spoints")
               .eq("league_id", data.league_id)
-              .order("points", { ascending: false })
-              .limit(1)
+              .order("spoints", { ascending: false })
+              .limit(5)
               .single();
 
             const { data: reboundData } = await supabase
               .from("player_stats")
-              .select("name, rebounds_total")
+              .select("firstname, familyname, sreboundstotal")
               .eq("league_id", data.league_id)
-              .order("rebounds_total", { ascending: false })
-              .limit(1)
+              .order("sreboundstotal", { ascending: false })
+              .limit(5)
               .single();
 
             const { data: assistData } = await supabase
               .from("player_stats")
-              .select("name, assists")
+              .select("firstname, familyname, sassists")
               .eq("league_id", data.league_id)
-              .order("assists", { ascending: false })
-              .limit(1)
+              .order("sassists", { ascending: false })
+              .limit(5)
               .single();
 
             const { data: recentGames } = await supabase
               .from("player_stats")
-              .select("name, team_name, game_date, points, assists, rebounds_total")
+              .select("firstname, familyname, team, game_date, spoints, sassists, sreboundstotal")
               .eq("league_id", data.league_id)
               .order("game_date", { ascending: false })
               .limit(5);
@@ -189,9 +189,9 @@ import {
     };
 
     const sortMap: Record<string, string> = {
-      "Top Scorers": "points",
-      "Top Rebounders": "rebounds_total",
-      "Top Playmakers": "assists",
+      "Top Scorers": "spoints",
+      "Top Rebounders": "sreboundstotal",
+      "Top Playmakers": "sassists",
     };
 
     const sortedStats = [...playerStats].sort((a, b) => {
@@ -220,9 +220,9 @@ import {
       return players.sort((a, b) => b.avg - a.avg).slice(0, 5);
     };
 
-    const topScorers = getTopList("points");
-    const topRebounders = getTopList("rebounds_total");
-    const topAssistsList = getTopList("assists");
+    const topScorers = getTopList("spoints");
+    const topRebounders = getTopList("sreboundstotal");
+    const topAssistsList = getTopList("sassists");
 
     const handleGameClick = (gameId: string) => {
       setSelectedGameId(gameId);
