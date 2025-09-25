@@ -98,18 +98,55 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
         if (stats && stats.length > 0) {
           console.log("📊 Sample player stat record:", stats[0]);
           
-          // Since player team fields are null, we need to assign players to teams
-          // We'll split players roughly evenly between the two teams
+          // Since player team fields are null, we need to assign players to teams intelligently
+          // We'll use team scores and player stats to determine the best assignment
           const teams = Object.keys(teamsInfo);
-          console.log("🏀 Available teams:", teams);
+          console.log("🏀 Available teams:", teams, "Expected scores:", teamsInfo);
           
           if (teams.length >= 2) {
-            // Assign players alternately to teams to distribute them
-            const playersWithTeams = stats.map((player, index) => ({
-              ...player,
-              team: teams[index % teams.length] // Alternate between teams
-            }));
+            // Sort players by points (highest first) for better assignment
+            const sortedStats = [...stats].sort((a, b) => (b.spoints || 0) - (a.spoints || 0));
+            const [team1, team2] = teams;
             
+            console.log("🎯 Target scores:", { [team1]: teamsInfo[team1], [team2]: teamsInfo[team2] });
+            
+            // Try to assign players to teams based on which assignment gets closer to target scores
+            const team1Players: any[] = [];
+            const team2Players: any[] = [];
+            let team1Score = 0;
+            let team2Score = 0;
+            
+            // Simple greedy assignment - assign each player to the team that needs more points
+            sortedStats.forEach((player, index) => {
+              const playerPoints = player.spoints || 0;
+              const team1Needed = teamsInfo[team1] - team1Score;
+              const team2Needed = teamsInfo[team2] - team2Score;
+              
+              // Assign to team that needs more points, or alternate if roughly equal
+              if (team1Needed > team2Needed) {
+                team1Players.push({ ...player, team: team1 });
+                team1Score += playerPoints;
+              } else if (team2Needed > team1Needed) {
+                team2Players.push({ ...player, team: team2 });
+                team2Score += playerPoints;
+              } else {
+                // If equal need, alternate or balance team sizes
+                if (team1Players.length <= team2Players.length) {
+                  team1Players.push({ ...player, team: team1 });
+                  team1Score += playerPoints;
+                } else {
+                  team2Players.push({ ...player, team: team2 });
+                  team2Score += playerPoints;
+                }
+              }
+            });
+            
+            console.log("🏆 Team assignments:", {
+              [team1]: { players: team1Players.length, calculatedScore: team1Score, targetScore: teamsInfo[team1] },
+              [team2]: { players: team2Players.length, calculatedScore: team2Score, targetScore: teamsInfo[team2] }
+            });
+            
+            const playersWithTeams = [...team1Players, ...team2Players];
             setGameStats(playersWithTeams);
           } else {
             // If we don't have team info, just use the raw stats
