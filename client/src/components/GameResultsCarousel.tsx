@@ -24,6 +24,8 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
   const [isDragging, setIsDragging] = useState(false);
   const [startX, setStartX] = useState(0);
   const [scrollLeft, setScrollLeft] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const animationFrameRef = useRef<number>();
 
   useEffect(() => {
     const fetchGameResults = async () => {
@@ -148,6 +150,42 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
     }
   }, [leagueId]);
 
+  // Auto-scroll functionality
+  useEffect(() => {
+    if (games.length === 0 || loading || isPaused || isDragging) return;
+
+    const scroll = () => {
+      if (scrollContainerRef.current) {
+        const container = scrollContainerRef.current;
+        const scrollSpeed = 0.5; // pixels per frame
+        
+        // Calculate the width of one complete set of games
+        const gameWidth = 320 + 16; // card width + gap
+        const totalGameWidth = gameWidth * games.length;
+        
+        // Scroll to the right
+        container.scrollLeft += scrollSpeed;
+        
+        // Reset scroll position when we've scrolled past the first set
+        if (container.scrollLeft >= totalGameWidth) {
+          container.scrollLeft = 0;
+        }
+      }
+      
+      if (!isPaused && !isDragging) {
+        animationFrameRef.current = requestAnimationFrame(scroll);
+      }
+    };
+
+    animationFrameRef.current = requestAnimationFrame(scroll);
+
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, [games, loading, isPaused, isDragging]);
+
   // Mouse wheel scroll handler
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault();
@@ -159,6 +197,7 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
   // Touch/mouse drag handlers
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsDragging(true);
+    setIsPaused(true);
     setStartX(e.pageX - (scrollContainerRef.current?.offsetLeft || 0));
     setScrollLeft(scrollContainerRef.current?.scrollLeft || 0);
   };
@@ -173,15 +212,26 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
 
   const handleMouseUp = () => {
     setIsDragging(false);
+    setTimeout(() => setIsPaused(false), 1000); // Resume after 1 second
   };
 
   const handleMouseLeave = () => {
     setIsDragging(false);
+    setTimeout(() => setIsPaused(false), 1000); // Resume after 1 second
+  };
+
+  const handleMouseEnter = () => {
+    setIsPaused(true);
+  };
+
+  const handleMouseLeaveContainer = () => {
+    setIsPaused(false);
   };
 
   // Touch handlers for mobile
   const handleTouchStart = (e: React.TouchEvent) => {
     setIsDragging(true);
+    setIsPaused(true);
     setStartX(e.touches[0].pageX - (scrollContainerRef.current?.offsetLeft || 0));
     setScrollLeft(scrollContainerRef.current?.scrollLeft || 0);
   };
@@ -195,6 +245,7 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
 
   const handleTouchEnd = () => {
     setIsDragging(false);
+    setTimeout(() => setIsPaused(false), 1000); // Resume after 1 second
   };
 
   if (loading) {
@@ -231,6 +282,9 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
     return teamName.substring(0, 3).toUpperCase();
   };
 
+  // Create duplicated games array for infinite scroll
+  const duplicatedGames = [...games, ...games];
+
   return (
     <div 
       ref={scrollContainerRef}
@@ -239,7 +293,8 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseLeave}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeaveContainer}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -250,9 +305,9 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
       }}
     >
       <div className="flex gap-4 px-4 py-2" style={{ minWidth: 'max-content' }}>
-        {games.map((game, index) => (
+        {duplicatedGames.map((game, index) => (
           <div
-            key={game.game_id}
+            key={`carousel-game-${index}`}
             className="bg-gray-800 rounded-lg px-6 py-4 flex-shrink-0 cursor-pointer hover:bg-gray-700 transition-colors border border-gray-700"
             style={{ width: '320px', minWidth: '320px', maxWidth: '320px' }}
             onClick={() => !isDragging && onGameClick(game.game_id)}
