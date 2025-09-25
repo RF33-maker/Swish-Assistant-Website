@@ -422,16 +422,18 @@ import {
           return;
         }
 
-        console.log("📊 Sample player stat data:", playerStats?.[0]); // Debug log to see actual field names
+        // console.log("📊 Sample player stat data:", playerStats?.[0]); // Debug log to see actual field names
 
       // Group stats by player and calculate averages
       const playerMap = new Map();
       
       playerStats?.forEach(stat => {
-        const playerKey = stat.name;
+        // Create player name from firstname and familyname
+        const playerName = `${stat.firstname || ''} ${stat.familyname || ''}`.trim() || stat.name || 'Unknown Player';
+        const playerKey = playerName;
         if (!playerMap.has(playerKey)) {
           playerMap.set(playerKey, {
-            name: stat.name,
+            name: playerName,
             team: stat.team,
             id: stat.id,
             games: 0,
@@ -454,27 +456,22 @@ import {
 
         const player = playerMap.get(playerKey);
         player.games += 1;
-        player.totalPoints += stat.points || 0;
-        player.totalRebounds += stat.rebounds_total || 0;
-        player.totalAssists += stat.assists || 0;
-        player.totalSteals += stat.steals || 0;
-        player.totalBlocks += stat.blocks || 0;
-        player.totalTurnovers += stat.turnovers || 0;
-        player.totalFGM += stat.field_goals_made || 0;
-        player.totalFGA += stat.field_goals_attempted || 0;
-        player.total3PM += stat.three_pt_made || 0;
-        player.total3PA += stat.three_pt_attempted || 0;
+        player.totalPoints += stat.spoints || 0;
+        player.totalRebounds += stat.sreboundstotal || 0;
+        player.totalAssists += stat.sassists || 0;
+        player.totalSteals += stat.ssteals || 0;
+        player.totalBlocks += stat.sblocks || 0;
+        player.totalTurnovers += stat.sturnovers || 0;
+        player.totalFGM += stat.sfieldgoalsmade || 0;
+        player.totalFGA += stat.sfieldgoalsattempted || 0;
+        player.total3PM += stat.sthreepointersmade || 0;
+        player.total3PA += stat.sthreepointersattempted || 0;
+        player.totalFTM += stat.sfreethrowsmade || 0;
+        player.totalFTA += stat.sfreethrowsattempted || 0;
+        player.totalPersonalFouls += stat.sfoulspersonal || 0;
         
-        // Debug log for three-point data
-        if (stat.three_pt_made || stat.three_pt_attempted) {
-          console.log(`🏀 3PT data for ${stat.name}: Made=${stat.three_pt_made}, Attempted=${stat.three_pt_attempted}`);
-        }
-        player.totalFTM += stat.free_throws_made || 0;
-        player.totalFTA += stat.free_throws_attempted || 0;
-        player.totalPersonalFouls += stat.personal_fouls || 0;
-        
-        // Parse minutes
-        const minutesParts = stat.minutes_played?.split(':');
+        // Parse minutes from sminutes field
+        const minutesParts = stat.sminutes?.split(':');
         if (minutesParts && minutesParts.length === 2) {
           const minutes = parseInt(minutesParts[0]) + parseInt(minutesParts[1]) / 60;
           player.totalMinutes += minutes;
