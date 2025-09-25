@@ -57,21 +57,21 @@ export default function TeamLogoManager() {
         setLeague(leagueData);
         setIsOwner(currentUser?.id === leagueData.user_id);
 
-        // Fetch all player stats for this league to get unique teams
-        const { data: allPlayerStats, error: statsError } = await supabase
-          .from("player_stats")
-          .select("team, team_name")
+        // Fetch teams from team_stats table which has proper team names
+        const { data: teamStats, error: statsError } = await supabase
+          .from("team_stats")
+          .select("name")
           .eq("league_id", leagueData.league_id);
 
         if (statsError) {
-          console.error("Error fetching player stats:", statsError);
+          console.error("Error fetching team stats:", statsError);
           return;
         }
 
-        if (allPlayerStats && allPlayerStats.length > 0) {
-          // Get unique teams from player stats
-          const uniqueTeams = Array.from(new Set(allPlayerStats.map(stat => 
-            stat.team || stat.team_name
+        if (teamStats && teamStats.length > 0) {
+          // Get unique teams from team stats
+          const uniqueTeams = Array.from(new Set(teamStats.map(stat => 
+            stat.name
           ).filter(Boolean)));
           
           // Fetch existing team logos
