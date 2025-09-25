@@ -126,31 +126,31 @@ import {
           const fetchTopStats = async () => {
             const { data: scorerData } = await supabase
               .from("player_stats")
-              .select("firstname, familyname, spoints")
+              .select("name, spoints")
               .eq("league_id", data.league_id)
               .order("spoints", { ascending: false })
-              .limit(5)
+              .limit(1)
               .single();
 
             const { data: reboundData } = await supabase
               .from("player_stats")
-              .select("firstname, familyname, sreboundstotal")
+              .select("name, sreboundstotal")
               .eq("league_id", data.league_id)
               .order("sreboundstotal", { ascending: false })
-              .limit(5)
+              .limit(1)
               .single();
 
             const { data: assistData } = await supabase
               .from("player_stats")
-              .select("firstname, familyname, sassists")
+              .select("name, sassists")
               .eq("league_id", data.league_id)
               .order("sassists", { ascending: false })
-              .limit(5)
+              .limit(1)
               .single();
 
             const { data: recentGames } = await supabase
               .from("player_stats")
-              .select("firstname, familyname, team, game_date, spoints, sassists, sreboundstotal")
+              .select("name, team, game_date, spoints, sassists, sreboundstotal")
               .eq("league_id", data.league_id)
               .order("game_date", { ascending: false })
               .limit(5);
@@ -166,8 +166,8 @@ import {
             setGameSummaries(recentGames || []);
             setPlayerStats(allPlayerStats || []);
             
-            // Calculate standings from game data
-            calculateStandings(allPlayerStats || []);
+            // Calculate standings using team_stats first, fallback to player_stats
+            await calculateStandingsWithTeamStats(data.league_id, allPlayerStats || []);
             
             // Reset loading states
             setIsLoadingLeaders(false);
@@ -484,6 +484,69 @@ import {
       } finally {
         setIsLoadingStats(false);
       }
+    };
+
+    // Calculate team standings using team_stats table first, fallback to player_stats
+    const calculateStandingsWithTeamStats = async (leagueId: string, playerStats: any[]) => {
+      try {
+        // First try to get standings from team_stats table
+        const { data: teamStatsData, error: teamStatsError } = await supabase
+          .from("team_stats")
+          .select("*")
+          .eq("leagueId", leagueId)
+          .order("gameDate", { ascending: false });
+
+        if (teamStatsData && teamStatsData.length > 0 && !teamStatsError) {
+          // Calculate standings from team_stats table
+          const teamStatsMap: { [team: string]: { wins: number, losses: number, pointsFor: number, pointsAgainst: number, games: number } } = {};
+          
+          teamStatsData.forEach(stat => {
+            const team = stat.teamName;
+            if (!teamStatsMap[team]) {
+              teamStatsMap[team] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0 };
+            }
+            
+            teamStatsMap[team].pointsFor += stat.teamScore || 0;
+            teamStatsMap[team].pointsAgainst += stat.opponentScore || 0;
+            teamStatsMap[team].games += 1;
+            
+            if (stat.won) {
+              teamStatsMap[team].wins += 1;
+            } else {
+              teamStatsMap[team].losses += 1;
+            }
+          });
+
+          // Convert to standings format
+          const standingsArray = Object.entries(teamStatsMap).map(([team, stats]) => ({
+            team,
+            wins: stats.wins,
+            losses: stats.losses,
+            winPct: stats.games > 0 ? Math.round((stats.wins / stats.games) * 1000) / 1000 : 0,
+            pointsFor: stats.pointsFor,
+            pointsAgainst: stats.pointsAgainst,
+            pointsDiff: stats.pointsFor - stats.pointsAgainst,
+            games: stats.games,
+            avgPoints: stats.games > 0 ? Math.round((stats.pointsFor / stats.games) * 10) / 10 : 0,
+            record: `${stats.wins}-${stats.losses}`
+          })).sort((a, b) => {
+            // Sort by win percentage first, then by point differential, then by average points
+            if (b.winPct !== a.winPct) return b.winPct - a.winPct;
+            if (b.pointsDiff !== a.pointsDiff) return b.pointsDiff - a.pointsDiff;
+            return b.avgPoints - a.avgPoints;
+          });
+
+          setStandings(standingsArray);
+          console.log("📊 Standings calculated from team_stats table:", standingsArray);
+          return;
+        }
+      } catch (error) {
+        console.error("Error fetching team_stats, falling back to player_stats:", error);
+      }
+
+      // Fallback to calculating from player_stats
+      console.log("📊 Using fallback: calculating standings from player_stats");
+      calculateStandings(playerStats);
     };
 
     // Calculate team standings from player stats using actual game results
