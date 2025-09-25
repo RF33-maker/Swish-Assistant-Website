@@ -30,6 +30,54 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
       setLoading(true);
       
       try {
+        // First try to get game results from team_stats table
+        const { data: teamStatsData, error: teamStatsError } = await supabase
+          .from("team_stats")
+          .select("*")
+          .eq("leagueId", leagueId)
+          .order("gameDate", { ascending: false });
+
+        if (teamStatsData && teamStatsData.length > 0 && !teamStatsError) {
+          // Process team_stats data to create game results
+          const gameMap = new Map<string, GameResult>();
+          
+          teamStatsData.forEach(stat => {
+            const gameId = stat.gameId;
+            if (!gameMap.has(gameId)) {
+              gameMap.set(gameId, {
+                game_id: gameId,
+                game_date: stat.gameDate,
+                home_team: stat.isHome ? stat.teamName : stat.opponent,
+                away_team: stat.isHome ? stat.opponent : stat.teamName,
+                home_score: stat.isHome ? stat.teamScore : stat.opponentScore,
+                away_score: stat.isHome ? stat.opponentScore : stat.teamScore,
+                status: "FINAL"
+              });
+            } else {
+              // Update the other team's score
+              const game = gameMap.get(gameId)!;
+              if (stat.isHome) {
+                game.home_team = stat.teamName;
+                game.home_score = stat.teamScore;
+              } else {
+                game.away_team = stat.teamName;
+                game.away_score = stat.teamScore;
+              }
+            }
+          });
+
+          const gamesFromTeamStats = Array.from(gameMap.values())
+            .sort((a, b) => new Date(b.game_date).getTime() - new Date(a.game_date).getTime())
+            .slice(0, 10);
+
+          console.log("🎮 Game results loaded from team_stats table:", gamesFromTeamStats.length, "games");
+          setGames(gamesFromTeamStats);
+          return;
+        }
+
+        // Fallback to player_stats approach
+        console.log("🎮 Using fallback: processing game results from player_stats");
+        
         // Get all player stats grouped by game
         const { data: playerStats, error } = await supabase
           .from("player_stats")
@@ -63,7 +111,7 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
           // Calculate team scores (sum of all player points per team)
           const teamScores = game.players.reduce((acc: any, player: any) => {
             if (!acc[player.team]) acc[player.team] = 0;
-            acc[player.team] += player.points || 0;
+            acc[player.team] += player.spoints || 0; // Use spoints for consistency
             return acc;
           }, {});
 
