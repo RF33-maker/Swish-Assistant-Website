@@ -929,7 +929,7 @@ import {
                       </tbody>
                     </table>
                   </div>
-                ) : allPlayerAverages.length > 0 ? (
+                ) : filteredPlayerAverages.length > 0 ? (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
@@ -949,7 +949,7 @@ import {
                         </tr>
                       </thead>
                       <tbody>
-                        {allPlayerAverages.slice(0, displayedPlayerCount).map((player, index) => (
+                        {filteredPlayerAverages.slice(0, displayedPlayerCount).map((player, index) => (
                           <tr 
                             key={`${player.name}-${index}`}
                             className="border-b border-gray-100 hover:bg-orange-50 transition-colors cursor-pointer"
@@ -978,7 +978,7 @@ import {
                     </table>
                     
                     {/* Expand Button - Show when there are more players to display */}
-                    {displayedPlayerCount < allPlayerAverages.length && (
+                    {displayedPlayerCount < filteredPlayerAverages.length && (
                       <div className="mt-4 text-center">
                         <button
                           onClick={() => setDisplayedPlayerCount(displayedPlayerCount + 20)}
@@ -987,7 +987,7 @@ import {
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
                           </svg>
-                          Show {Math.min(20, allPlayerAverages.length - displayedPlayerCount)} More Players
+                          Show {Math.min(20, filteredPlayerAverages.length - displayedPlayerCount)} More Players
                         </button>
                       </div>
                     )}
@@ -996,12 +996,12 @@ import {
                     {displayedPlayerCount > 20 && (
                       <div className="mt-2 text-center">
                         <div className="flex gap-3 justify-center">
-                          {displayedPlayerCount < allPlayerAverages.length && (
+                          {displayedPlayerCount < filteredPlayerAverages.length && (
                             <button
-                              onClick={() => setDisplayedPlayerCount(allPlayerAverages.length)}
+                              onClick={() => setDisplayedPlayerCount(filteredPlayerAverages.length)}
                               className="text-orange-500 hover:text-orange-600 font-medium text-sm hover:underline"
                             >
-                              Show All ({allPlayerAverages.length} players)
+                              Show All ({filteredPlayerAverages.length} players)
                             </button>
                           )}
                           <button
