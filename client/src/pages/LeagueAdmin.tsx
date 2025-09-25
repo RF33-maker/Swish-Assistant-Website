@@ -108,10 +108,10 @@ export default function LeagueAdmin() {
     console.log("Fetching teams for league:", league.league_id);
     
     try {
-      // Get all team data from player_stats
+      // Get all team data from team_stats table (which has proper team names)
       const result = await supabase
-        .from('player_stats')
-        .select('team')
+        .from('team_stats')
+        .select('name')
         .eq('league_id', league.league_id);
         
       console.log("Team query result:", result);
@@ -131,7 +131,7 @@ export default function LeagueAdmin() {
       // Get unique team names from the data
       const uniqueTeams = Array.from(new Set(
         result.data
-          .map((stat: any) => stat.team)
+          .map((stat: any) => stat.name)
           .filter(Boolean)
       ));
       
