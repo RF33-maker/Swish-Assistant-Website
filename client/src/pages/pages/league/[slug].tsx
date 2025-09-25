@@ -1083,7 +1083,7 @@ import {
                     <tbody>
                       {[...playerStats]
                         .filter((p) =>
-                          p.name.toLowerCase().includes(playerSearch.toLowerCase())
+                          p.name && p.name.toLowerCase().includes(playerSearch.toLowerCase())
                         )
                         .sort((a, b) => {
                           const aVal = a[sortField] ?? 0;
