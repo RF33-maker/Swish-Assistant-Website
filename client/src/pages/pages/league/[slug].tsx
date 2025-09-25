@@ -132,7 +132,6 @@ import {
               .limit(1)
               .single();
             
-            console.log("🏀 Scorer query result:", { scorerData, scorerError });
 
             const { data: reboundData } = await supabase
               .from("player_stats")
@@ -162,27 +161,6 @@ import {
               .select("*")
               .eq("league_id", data.league_id);
             
-            console.log("📊 All player stats query:", { 
-              count: allPlayerStats?.length, 
-              error: allStatsError,
-              sampleData: allPlayerStats?.[0]
-            });
-            
-            // Look for records with actual data using correct field names
-            const recordsWithNames = allPlayerStats?.filter(stat => stat.firstname || stat.familyname);
-            const recordsWithStats = allPlayerStats?.filter(stat => stat.spoints > 0 || stat.sreboundstotal > 0 || stat.sassists > 0);
-            console.log("🔍 Records with names:", recordsWithNames?.length);
-            console.log("🔍 Records with stats > 0:", recordsWithStats?.length);
-            
-            // Process records to show names properly
-            const processedStats = recordsWithStats?.map(stat => ({
-              ...stat,
-              fullName: stat.firstname && stat.familyname ? 
-                `${stat.firstname} ${stat.familyname}` : 
-                stat.firstname || stat.familyname || 'Unknown'
-            }));
-            
-            console.log("🔍 Sample processed record:", processedStats?.[0]);
 
             // Process the data to combine names and handle missing fields
             const processPlayerData = (player: any) => {
@@ -528,12 +506,12 @@ import {
     // Calculate team standings using team_stats table first, fallback to player_stats
     const calculateStandingsWithTeamStats = async (leagueId: string, playerStats: any[]) => {
       try {
-        // First try to get standings from team_stats table
+        // First try to get standings from team_stats table - let's check what columns exist
         const { data: teamStatsData, error: teamStatsError } = await supabase
           .from("team_stats")
           .select("*")
-          .eq("leagueId", leagueId)
-          .order("gameDate", { ascending: false });
+          .eq("league_id", leagueId);  // Remove the order clause to avoid column issues
+          
 
         if (teamStatsData && teamStatsData.length > 0 && !teamStatsError) {
           // Calculate standings from team_stats table
@@ -576,16 +554,16 @@ import {
           });
 
           setStandings(standingsArray);
-          console.log("📊 Standings calculated from team_stats table:", standingsArray);
+          setStandings(standingsArray);
           return;
         }
       } catch (error) {
-        console.error("Error fetching team_stats, falling back to player_stats:", error);
+        // Silently fall back to player_stats if team_stats data is incomplete
       }
 
-      // Fallback to calculating from player_stats
-      console.log("📊 Using fallback: calculating standings from player_stats");
-      calculateStandings(playerStats);
+      // Fallback: Since team_stats lacks team names and game data, show placeholder
+      // standings will need proper team_stats data structure to function
+      setStandings([]);
     };
 
     // Calculate team standings from player stats using actual game results
