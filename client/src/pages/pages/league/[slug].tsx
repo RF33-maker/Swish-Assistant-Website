@@ -124,17 +124,19 @@ import {
           setIsLoadingStandings(true);
           
           const fetchTopStats = async () => {
-            const { data: scorerData } = await supabase
+            const { data: scorerData, error: scorerError } = await supabase
               .from("player_stats")
-              .select("name, spoints")
+              .select("firstname, familyname, spoints")
               .eq("league_id", data.league_id)
               .order("spoints", { ascending: false })
               .limit(1)
               .single();
+            
+            console.log("🏀 Scorer query result:", { scorerData, scorerError });
 
             const { data: reboundData } = await supabase
               .from("player_stats")
-              .select("name, sreboundstotal")
+              .select("firstname, familyname, sreboundstotal")
               .eq("league_id", data.league_id)
               .order("sreboundstotal", { ascending: false })
               .limit(1)
@@ -142,7 +144,7 @@ import {
 
             const { data: assistData } = await supabase
               .from("player_stats")
-              .select("name, sassists")
+              .select("firstname, familyname, sassists")
               .eq("league_id", data.league_id)
               .order("sassists", { ascending: false })
               .limit(1)
@@ -150,20 +152,57 @@ import {
 
             const { data: recentGames } = await supabase
               .from("player_stats")
-              .select("name, team, game_date, spoints, sassists, sreboundstotal")
+              .select("firstname, familyname, created_at, spoints, sassists, sreboundstotal")
               .eq("league_id", data.league_id)
-              .order("game_date", { ascending: false })
+              .order("created_at", { ascending: false })
               .limit(5);
 
-            const { data: allPlayerStats } = await supabase
+            const { data: allPlayerStats, error: allStatsError } = await supabase
               .from("player_stats")
               .select("*")
               .eq("league_id", data.league_id);
+            
+            console.log("📊 All player stats query:", { 
+              count: allPlayerStats?.length, 
+              error: allStatsError,
+              sampleData: allPlayerStats?.[0]
+            });
+            
+            // Look for records with actual data using correct field names
+            const recordsWithNames = allPlayerStats?.filter(stat => stat.firstname || stat.familyname);
+            const recordsWithStats = allPlayerStats?.filter(stat => stat.spoints > 0 || stat.sreboundstotal > 0 || stat.sassists > 0);
+            console.log("🔍 Records with names:", recordsWithNames?.length);
+            console.log("🔍 Records with stats > 0:", recordsWithStats?.length);
+            
+            // Process records to show names properly
+            const processedStats = recordsWithStats?.map(stat => ({
+              ...stat,
+              fullName: stat.firstname && stat.familyname ? 
+                `${stat.firstname} ${stat.familyname}` : 
+                stat.firstname || stat.familyname || 'Unknown'
+            }));
+            
+            console.log("🔍 Sample processed record:", processedStats?.[0]);
 
-            setTopScorer(scorerData);
-            setTopRebounder(reboundData);
-            setTopAssists(assistData);
-            setGameSummaries(recentGames || []);
+            // Process the data to combine names and handle missing fields
+            const processPlayerData = (player: any) => {
+              if (!player) return null;
+              return {
+                ...player,
+                name: player.firstname && player.familyname ? 
+                  `${player.firstname} ${player.familyname}` : 
+                  player.firstname || player.familyname || 'Unknown Player',
+                team: 'Team Not Available' // Since team data is missing
+              };
+            };
+            
+            setTopScorer(processPlayerData(scorerData));
+            setTopRebounder(processPlayerData(reboundData));
+            setTopAssists(processPlayerData(assistData));
+            
+            // Process recent games (using recent stat entries instead since we don't have game data)
+            const processedRecentGames = recentGames?.map(processPlayerData) || [];
+            setGameSummaries(processedRecentGames);
             setPlayerStats(allPlayerStats || []);
             
             // Calculate standings using team_stats first, fallback to player_stats
