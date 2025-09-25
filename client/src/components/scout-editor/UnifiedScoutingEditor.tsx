@@ -49,8 +49,6 @@ interface UnifiedScoutingEditorProps {
   parseError?: string | null;
 }
 
-const isVisualTemplate = Boolean(selectedTemplateId && selectedTemplateId.length > 0);
-
 const EMPTY_REPORT: ScoutingReport = {
   meta: {
     player: "—",
