@@ -56,11 +56,39 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
       setLoading(true);
       
       try {
+        console.log("🎮 Fetching game details for gameId:", gameId);
+        
+        // First get team information from team_stats
+        const { data: teamStatsData, error: teamError } = await supabase
+          .from("team_stats")
+          .select("*")
+          .eq("numeric_id", gameId);
+          
+        console.log("🏀 Team stats query result:", { teamError, teamStatsData, count: teamStatsData?.length });
+
+        let teamsInfo: { [key: string]: number } = {};
+        let gameDate = new Date().toISOString();
+        
+        if (teamStatsData && teamStatsData.length > 0) {
+          // Get teams and scores from team_stats
+          teamStatsData.forEach(teamStat => {
+            if (teamStat.name) {
+              teamsInfo[teamStat.name] = teamStat.tot_spoints || 0;
+            }
+          });
+          // Use the created_at from team_stats for the game date
+          gameDate = teamStatsData[0].created_at || new Date().toISOString();
+          console.log("🏆 Teams from team_stats:", Object.keys(teamsInfo), "Scores:", teamsInfo);
+        }
+        
+        // Then get player stats
         const { data: stats, error } = await supabase
           .from("player_stats")
           .select("*")
           .eq("numeric_id", gameId)
           .order("spoints", { ascending: false });
+
+        console.log("📊 Player stats query result:", { error, stats, count: stats?.length });
 
         if (error) {
           console.error("Error fetching game details:", error);
@@ -68,22 +96,31 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
         }
 
         if (stats && stats.length > 0) {
-          // Calculate team scores
-          const teamScores = stats.reduce((acc: Record<string, number>, stat) => {
-            if (!acc[stat.team]) acc[stat.team] = 0;
-            acc[stat.team] += stat.spoints || 0;
-            return acc;
-          }, {});
-
-          const teams = Object.keys(teamScores);
+          console.log("📊 Sample player stat record:", stats[0]);
+          
+          // Since player team fields are null, we need to assign players to teams
+          // We'll split players roughly evenly between the two teams
+          const teams = Object.keys(teamsInfo);
+          console.log("🏀 Available teams:", teams);
+          
+          if (teams.length >= 2) {
+            // Assign players alternately to teams to distribute them
+            const playersWithTeams = stats.map((player, index) => ({
+              ...player,
+              team: teams[index % teams.length] // Alternate between teams
+            }));
+            
+            setGameStats(playersWithTeams);
+          } else {
+            // If we don't have team info, just use the raw stats
+            setGameStats(stats);
+          }
           
           setGameInfo({
-            date: stats[0].game_date,
+            date: gameDate,
             teams,
-            teamScores,
+            teamScores: teamsInfo,
           });
-
-          setGameStats(stats);
           
           // Set first team as default selection
           if (teams.length > 0 && !selectedTeam) {
