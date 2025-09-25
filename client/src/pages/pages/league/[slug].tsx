@@ -819,7 +819,7 @@ import {
                 {league?.name || "League Name"}
               </h2>
               <p className="text-sm text-white/90 mt-1">
-                Organised by {league?.organiser_name || "BallParkSports"}
+                Organised by BallBarSports
               </p>
 
             </div>

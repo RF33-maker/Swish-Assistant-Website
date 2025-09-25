@@ -4,11 +4,12 @@ import { supabase } from "@/lib/supabase";
 
 interface PlayerGameStats {
   id: string;
-  name: string;
+  firstname: string;
+  familyname: string;
   team: string;
   number?: number;
   minutes_played?: string;
-  points: number;
+  spoints: number;
   field_goals_made?: number;
   field_goals_attempted?: number;
   field_goal_percent?: number;
@@ -18,10 +19,10 @@ interface PlayerGameStats {
   free_throws_made?: number;
   free_throws_attempted?: number;
   free_throw_percent?: number;
-  rebounds_total: number;
+  sreboundstotal: number;
   rebounds_o?: number;
   rebounds_d?: number;
-  assists: number;
+  sassists: number;
   steals?: number;
   blocks?: number;
   turnovers?: number;
@@ -58,8 +59,8 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
         const { data: stats, error } = await supabase
           .from("player_stats")
           .select("*")
-          .eq("game_id", gameId)
-          .order("points", { ascending: false });
+          .eq("numeric_id", gameId)
+          .order("spoints", { ascending: false });
 
         if (error) {
           console.error("Error fetching game details:", error);
@@ -70,7 +71,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
           // Calculate team scores
           const teamScores = stats.reduce((acc: Record<string, number>, stat) => {
             if (!acc[stat.team]) acc[stat.team] = 0;
-            acc[stat.team] += stat.points || 0;
+            acc[stat.team] += stat.spoints || 0;
             return acc;
           }, {});
 
@@ -219,8 +220,8 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
       totalFgAttempted: teamPlayers.reduce((sum, p) => sum + (p.field_goals_attempted || 0), 0),
       totalThreeMade: teamPlayers.reduce((sum, p) => sum + (p.three_pt_made || 0), 0),
       totalThreeAttempted: teamPlayers.reduce((sum, p) => sum + (p.three_pt_attempted || 0), 0),
-      totalRebounds: teamPlayers.reduce((sum, p) => sum + (p.rebounds_total || 0), 0),
-      totalAssists: teamPlayers.reduce((sum, p) => sum + (p.assists || 0), 0),
+      totalRebounds: teamPlayers.reduce((sum, p) => sum + (p.sreboundstotal || 0), 0),
+      totalAssists: teamPlayers.reduce((sum, p) => sum + (p.sassists || 0), 0),
     };
   });
 
@@ -460,7 +461,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                         <tr key={player.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-orange-50 transition-colors`}>
                           <td className="p-3">
                             <div>
-                              <div className="font-medium text-slate-800">{player.name}</div>
+                              <div className="font-medium text-slate-800">{player.firstname} {player.familyname}</div>
                               {player.number && (
                                 <div className="text-xs text-slate-500">#{player.number}</div>
                               )}
@@ -474,7 +475,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                               </div>
                             )}
                           </td>
-                          <td className="p-3 text-center font-semibold text-orange-600">{player.points}</td>
+                          <td className="p-3 text-center font-semibold text-orange-600">{player.spoints}</td>
                           <td className="p-3 text-center text-slate-800">
                             {player.field_goals_made !== undefined && player.field_goals_attempted !== undefined ? (
                               <div>
@@ -506,14 +507,14 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                             ) : <span className="text-slate-400">-</span>}
                           </td>
                           <td className="p-3 text-center text-slate-800">
-                            <div className="font-medium">{player.rebounds_total}</div>
+                            <div className="font-medium">{player.sreboundstotal}</div>
                             {(player.rebounds_o || player.rebounds_d) && (
                               <div className="text-xs text-slate-500">
                                 {player.rebounds_o || 0}O {player.rebounds_d || 0}D
                               </div>
                             )}
                           </td>
-                          <td className="p-3 text-center font-medium text-slate-800">{player.assists}</td>
+                          <td className="p-3 text-center font-medium text-slate-800">{player.sassists}</td>
                           <td className="p-3 text-center font-medium text-slate-800">{player.steals || 0}</td>
                           <td className="p-3 text-center font-medium text-slate-800">{player.blocks || 0}</td>
                           <td className="p-3 text-center font-medium text-red-600">{player.turnovers || 0}</td>
@@ -576,19 +577,19 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                     <div className="bg-white rounded-md p-3">
                       <div className="text-orange-600 font-medium">Top Scorer</div>
                       <div className="text-slate-800">
-                        {selectedTeamPlayers.sort((a, b) => (b.points || 0) - (a.points || 0))[0]?.name} - {selectedTeamPlayers.sort((a, b) => (b.points || 0) - (a.points || 0))[0]?.points} points
+                        {selectedTeamPlayers.sort((a, b) => (b.spoints || 0) - (a.spoints || 0))[0]?.firstname} {selectedTeamPlayers.sort((a, b) => (b.spoints || 0) - (a.spoints || 0))[0]?.familyname} - {selectedTeamPlayers.sort((a, b) => (b.spoints || 0) - (a.spoints || 0))[0]?.spoints} points
                       </div>
                     </div>
                     <div className="bg-white rounded-md p-3">
                       <div className="text-orange-600 font-medium">Best Rebounder</div>
                       <div className="text-slate-800">
-                        {selectedTeamPlayers.sort((a, b) => (b.rebounds_total || 0) - (a.rebounds_total || 0))[0]?.name} - {selectedTeamPlayers.sort((a, b) => (b.rebounds_total || 0) - (a.rebounds_total || 0))[0]?.rebounds_total} rebounds
+                        {selectedTeamPlayers.sort((a, b) => (b.sreboundstotal || 0) - (a.sreboundstotal || 0))[0]?.firstname} {selectedTeamPlayers.sort((a, b) => (b.sreboundstotal || 0) - (a.sreboundstotal || 0))[0]?.familyname} - {selectedTeamPlayers.sort((a, b) => (b.sreboundstotal || 0) - (a.sreboundstotal || 0))[0]?.sreboundstotal} rebounds
                       </div>
                     </div>
                     <div className="bg-white rounded-md p-3">
                       <div className="text-orange-600 font-medium">Best Playmaker</div>
                       <div className="text-slate-800">
-                        {selectedTeamPlayers.sort((a, b) => (b.assists || 0) - (a.assists || 0))[0]?.name} - {selectedTeamPlayers.sort((a, b) => (b.assists || 0) - (a.assists || 0))[0]?.assists} assists
+                        {selectedTeamPlayers.sort((a, b) => (b.sassists || 0) - (a.sassists || 0))[0]?.firstname} {selectedTeamPlayers.sort((a, b) => (b.sassists || 0) - (a.sassists || 0))[0]?.familyname} - {selectedTeamPlayers.sort((a, b) => (b.sassists || 0) - (a.sassists || 0))[0]?.sassists} assists
                       </div>
                     </div>
                   </div>
