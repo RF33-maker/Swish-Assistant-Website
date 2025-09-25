@@ -51,6 +51,8 @@ import {
   const [updatingInstagram, setUpdatingInstagram] = useState(false);
   const [activeSection, setActiveSection] = useState('overview'); // 'overview', 'stats', 'teams', 'schedule'
   const [allPlayerAverages, setAllPlayerAverages] = useState<any[]>([]);
+  const [filteredPlayerAverages, setFilteredPlayerAverages] = useState<any[]>([]);
+  const [statsSearch, setStatsSearch] = useState("");
   const [displayedPlayerCount, setDisplayedPlayerCount] = useState(20); // For pagination
   const [isLoadingStats, setIsLoadingStats] = useState(false);
   const [isLoadingStandings, setIsLoadingStandings] = useState(false);
@@ -495,6 +497,7 @@ import {
       })).sort((a, b) => parseFloat(b.avgPoints) - parseFloat(a.avgPoints));
 
       setAllPlayerAverages(averagesList);
+      setFilteredPlayerAverages(averagesList);
       } catch (error) {
         console.error("Error in fetchAllPlayerAverages:", error);
       } finally {
@@ -750,6 +753,7 @@ import {
               onClick={() => {
                 setActiveSection('stats');
                 setDisplayedPlayerCount(20); // Reset to initial count when switching to stats
+                setStatsSearch(""); // Reset search when switching to stats
                 if (allPlayerAverages.length === 0) {
                   fetchAllPlayerAverages();
                 }
@@ -1001,6 +1005,16 @@ import {
                         Click on any player to view their detailed profile
                       </div>
                     </div>
+                  </div>
+                ) : statsSearch ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <div className="mb-2">No players found matching "{statsSearch}"</div>
+                    <button
+                      onClick={() => setStatsSearch("")}
+                      className="text-orange-500 hover:text-orange-600 underline"
+                    >
+                      Clear search
+                    </button>
                   </div>
                 ) : (
                   <div className="text-center py-8 text-gray-500">
