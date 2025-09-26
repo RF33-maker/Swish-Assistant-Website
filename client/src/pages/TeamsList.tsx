@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { Link } from 'wouter';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Users, Search, Trophy, TrendingUp, ChevronRight } from 'lucide-react';
+import { Users, Search, Trophy, TrendingUp, ChevronRight, ArrowLeft } from 'lucide-react';
+import { Link as WouterLink } from 'wouter';
 import SwishLogo from '@/assets/Swish Assistant Logo.png';
+import { TeamLogo } from '@/components/TeamLogo';
 
 interface Team {
   name: string;
@@ -65,7 +67,7 @@ export default function TeamsList() {
           teamsMap.set(teamKey, {
             name: teamName,
             league_id: stat.league_id,
-            league_name: stat.leagues?.name,
+            league_name: stat.leagues?.[0]?.name,
             players: new Set(),
             total_points: 0,
             games: 0
@@ -127,6 +129,11 @@ export default function TeamsList() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3">
+              <WouterLink to="/">
+                <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                  <ArrowLeft className="w-5 h-5 text-gray-600" />
+                </button>
+              </WouterLink>
               <div className="p-2 bg-orange-100 rounded-lg">
                 <img 
                   src={SwishLogo} 
@@ -152,9 +159,7 @@ export default function TeamsList() {
               <Link key={`${team.name}-${team.league_id}`} to={`/team/${encodeURIComponent(team.name)}`}>
                 <div className="p-4 hover:bg-gray-50 transition-colors flex items-center justify-between group">
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-gradient-to-br from-orange-100 to-orange-200 rounded-lg flex items-center justify-center">
-                      <Users className="w-6 h-6 text-orange-600" />
-                    </div>
+                    <TeamLogo teamName={team.name} leagueId={team.league_id} size="md" />
                     <div>
                       <h3 className="font-semibold text-slate-800 text-lg">{team.name}</h3>
                       {team.league_name && (
