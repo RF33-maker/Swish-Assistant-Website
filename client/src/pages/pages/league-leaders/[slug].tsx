@@ -61,10 +61,10 @@ export default function LeagueLeadersPage() {
           return;
         }
 
-        // Fetch all player stats for the league
+        // Fetch all player stats for the league with full names from players table
         const { data: allPlayerStats, error: statsError } = await supabase
           .from("player_stats")
-          .select("*")
+          .select("*, players:player_id(full_name)")
           .eq("league_id", leagueData.league_id);
 
         if (statsError) {
@@ -97,9 +97,14 @@ export default function LeagueLeadersPage() {
         allPlayerStats.forEach(stat => {
           // Use the correct team field from the data structure
           const teamName = stat.team || stat.team_name || 'Unknown Team';
-          // Create player name from firstname and familyname
-          const playerName = `${stat.firstname || ''} ${stat.familyname || ''}`.trim() || stat.name || 'Unknown Player';
-          const playerKey = `${playerName}_${teamName}`; // Use name + team as key
+          // Use full_name from players table, fallback to existing name, then combine firstname/familyname
+          const playerName = stat.full_name || 
+                            stat.players?.full_name || 
+                            stat.name || 
+                            `${stat.firstname || ''} ${stat.familyname || ''}`.trim() || 
+                            'Unknown Player';
+          // Use player_id for grouping to avoid name mismatches, fallback to record id
+          const playerKey = stat.player_id || stat.id;
           if (!playerStatsMap.has(playerKey)) {
             playerStatsMap.set(playerKey, {
               player_id: stat.player_id || stat.id, // Use player_id if available, otherwise use id
