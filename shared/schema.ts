@@ -42,6 +42,7 @@ export const playerStats = pgTable("player_stats", {
   game_id: varchar("game_id", { length: 255 }),
   game_date: timestamp("game_date"),
   team: varchar("team", { length: 255 }),
+  team_name: varchar("team_name", { length: 255 }),
   name: varchar("name", { length: 255 }), // Keep for backward compatibility
   full_name: varchar("full_name", { length: 255 }),
   number: integer("number"),
@@ -155,6 +156,7 @@ export const insertPlayerStatsSchema = createInsertSchema(playerStats).pick({
   game_id: true,
   game_date: true,
   team: true,
+  team_name: true,
   name: true,
   full_name: true,
   number: true,

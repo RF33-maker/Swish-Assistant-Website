@@ -81,10 +81,10 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
           console.log("🏆 Teams from team_stats:", Object.keys(teamsInfo), "Scores:", teamsInfo);
         }
         
-        // Then get player stats
+        // Then get player stats with full names from players table
         const { data: stats, error } = await supabase
           .from("player_stats")
-          .select("*")
+          .select("*, players:player_id(full_name)")
           .eq("numeric_id", gameId)
           .order("spoints", { ascending: false });
 
@@ -98,71 +98,51 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
         if (stats && stats.length > 0) {
           console.log("📊 Sample player stat record:", stats[0]);
           
-          // Since player team fields are null, we need to assign players to teams intelligently
-          // We'll use team scores and player stats to determine the best assignment
-          const teams = Object.keys(teamsInfo);
-          console.log("🏀 Available teams:", teams, "Expected scores:", teamsInfo);
+          // Process stats to use full names and proper team assignments
+          const processedStats = stats.map(stat => ({
+            ...stat,
+            // Use full_name from players table, fallback to existing name, then combine firstname/familyname
+            firstname: stat.full_name || 
+                      stat.players?.full_name || 
+                      stat.name || 
+                      `${stat.firstname || ''} ${stat.familyname || ''}`.trim() || 
+                      'Unknown Player',
+            familyname: '', // Clear since we're using full name in firstname
+            // Use team_name field for proper team assignment
+            team: stat.team_name || stat.team || 'Unknown Team'
+          }));
           
-          if (teams.length >= 2) {
-            // Sort players by points (highest first) for better assignment
-            const sortedStats = [...stats].sort((a, b) => (b.spoints || 0) - (a.spoints || 0));
-            const [team1, team2] = teams;
-            
-            console.log("🎯 Target scores:", { [team1]: teamsInfo[team1], [team2]: teamsInfo[team2] });
-            
-            // Try to assign players to teams based on which assignment gets closer to target scores
-            const team1Players: any[] = [];
-            const team2Players: any[] = [];
-            let team1Score = 0;
-            let team2Score = 0;
-            
-            // Simple greedy assignment - assign each player to the team that needs more points
-            sortedStats.forEach((player, index) => {
-              const playerPoints = player.spoints || 0;
-              const team1Needed = teamsInfo[team1] - team1Score;
-              const team2Needed = teamsInfo[team2] - team2Score;
-              
-              // Assign to team that needs more points, or alternate if roughly equal
-              if (team1Needed > team2Needed) {
-                team1Players.push({ ...player, team: team1 });
-                team1Score += playerPoints;
-              } else if (team2Needed > team1Needed) {
-                team2Players.push({ ...player, team: team2 });
-                team2Score += playerPoints;
-              } else {
-                // If equal need, alternate or balance team sizes
-                if (team1Players.length <= team2Players.length) {
-                  team1Players.push({ ...player, team: team1 });
-                  team1Score += playerPoints;
-                } else {
-                  team2Players.push({ ...player, team: team2 });
-                  team2Score += playerPoints;
-                }
+          // Get unique teams from the processed stats
+          const teamsFromStats = Array.from(new Set(processedStats.map(stat => stat.team).filter(Boolean)));
+          console.log("🏀 Teams from player stats:", teamsFromStats);
+          
+          // Update teams info if we have better data from stats
+          if (teamsFromStats.length > 0) {
+            const updatedTeamsInfo = { ...teamsInfo };
+            teamsFromStats.forEach(team => {
+              if (!updatedTeamsInfo[team]) {
+                // Calculate team score from player stats if not available from team_stats
+                const teamScore = processedStats
+                  .filter(stat => stat.team === team)
+                  .reduce((sum, stat) => sum + (stat.spoints || 0), 0);
+                updatedTeamsInfo[team] = teamScore;
               }
             });
             
-            console.log("🏆 Team assignments:", {
-              [team1]: { players: team1Players.length, calculatedScore: team1Score, targetScore: teamsInfo[team1] },
-              [team2]: { players: team2Players.length, calculatedScore: team2Score, targetScore: teamsInfo[team2] }
+            setGameInfo({
+              date: gameDate,
+              teams: teamsFromStats,
+              teamScores: updatedTeamsInfo,
             });
             
-            const playersWithTeams = [...team1Players, ...team2Players];
-            setGameStats(playersWithTeams);
-          } else {
-            // If we don't have team info, just use the raw stats
-            setGameStats(stats);
+            // Set first team as default selection
+            if (teamsFromStats.length > 0 && !selectedTeam) {
+              setSelectedTeam(teamsFromStats[0]);
+            }
           }
           
-          setGameInfo({
-            date: gameDate,
-            teams,
-            teamScores: teamsInfo,
-          });
-          
-          // Set first team as default selection
-          if (teams.length > 0 && !selectedTeam) {
-            setSelectedTeam(teams[0]);
-          }
+          console.log("✅ Final processed stats:", processedStats.slice(0, 2));
+          setGameStats(processedStats);
         }
       } catch (error) {
         console.error("Error processing game details:", error);
