@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'wouter';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Users, Search, Trophy, TrendingUp } from 'lucide-react';
+import { Users, Search, Trophy, TrendingUp, ChevronRight } from 'lucide-react';
 import SwishLogo from '@/assets/Swish Assistant Logo.png';
 
 interface Team {
@@ -35,13 +35,16 @@ export default function TeamsList() {
     try {
       setLoading(true);
 
-      // Get unique teams from player_stats with league info
+      // Get unique teams from player_stats with league info, using team_name field
       const { data: teamsData, error } = await supabase
         .from('player_stats')
         .select(`
+          team_name,
           team,
           league_id,
-          points,
+          spoints,
+          full_name,
+          name,
           leagues!inner(name)
         `);
 
@@ -54,10 +57,13 @@ export default function TeamsList() {
       const teamsMap = new Map();
       
       teamsData?.forEach(stat => {
-        const teamKey = `${stat.team}-${stat.league_id}`;
+        const teamName = stat.team_name || stat.team;
+        if (!teamName) return;
+        
+        const teamKey = `${teamName}-${stat.league_id}`;
         if (!teamsMap.has(teamKey)) {
           teamsMap.set(teamKey, {
-            name: stat.team,
+            name: teamName,
             league_id: stat.league_id,
             league_name: stat.leagues?.name,
             players: new Set(),
@@ -67,8 +73,8 @@ export default function TeamsList() {
         }
         
         const team = teamsMap.get(teamKey);
-        team.players.add(stat.name || 'Unknown Player');
-        team.total_points += stat.points || 0;
+        team.players.add(stat.full_name || stat.name || 'Unknown Player');
+        team.total_points += stat.spoints || 0;
         team.games += 1;
       });
 
@@ -129,8 +135,8 @@ export default function TeamsList() {
                 />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-slate-800">Team Directory</h1>
-                <p className="text-sm text-slate-600">Browse all teams across leagues</p>
+                <h1 className="text-xl font-bold text-slate-800">Teams</h1>
+                <p className="text-sm text-slate-600">View team profiles</p>
               </div>
             </div>
           </div>
@@ -138,59 +144,26 @@ export default function TeamsList() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Search */}
-        <div className="mb-8">
-          <div className="relative max-w-md">
-            <input
-              type="text"
-              placeholder="Search teams or leagues..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full border border-gray-300 rounded-md px-4 py-2 pl-10 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-            />
-            <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
-          </div>
-        </div>
 
-        {/* Teams Grid */}
+        {/* Teams List */}
         {filteredTeams.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredTeams.map((team, index) => (
+          <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-200">
+            {filteredTeams.map((team) => (
               <Link key={`${team.name}-${team.league_id}`} to={`/team/${encodeURIComponent(team.name)}`}>
-                <Card className="h-full hover:shadow-lg transition cursor-pointer border-orange-200 hover:border-orange-300">
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <div className="w-12 h-12 bg-gradient-to-br from-orange-100 to-orange-200 rounded-lg flex items-center justify-center">
-                        <Users className="w-6 h-6 text-orange-600" />
-                      </div>
-                      <span className="text-sm font-medium text-orange-600">
-                        #{index + 1}
-                      </span>
+                <div className="p-4 hover:bg-gray-50 transition-colors flex items-center justify-between group">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-gradient-to-br from-orange-100 to-orange-200 rounded-lg flex items-center justify-center">
+                      <Users className="w-6 h-6 text-orange-600" />
                     </div>
-                  </CardHeader>
-                  <CardContent>
-                    <h3 className="font-bold text-slate-800 mb-2 text-lg">{team.name}</h3>
-                    <p className="text-sm text-slate-600 mb-4">{team.league_name}</p>
-                    
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-slate-600">Players</span>
-                        <span className="font-semibold text-slate-800">{team.player_count}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-slate-600">Avg Points</span>
-                        <span className="font-semibold text-slate-800">{team.avg_points}</span>
-                      </div>
+                    <div>
+                      <h3 className="font-semibold text-slate-800 text-lg">{team.name}</h3>
+                      {team.league_name && (
+                        <p className="text-sm text-slate-600">{team.league_name}</p>
+                      )}
                     </div>
-
-                    <div className="mt-4 pt-4 border-t border-gray-200">
-                      <div className="flex items-center gap-2 text-orange-600">
-                        <TrendingUp className="w-4 h-4" />
-                        <span className="text-sm font-medium">View Profile</span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-orange-600 transition-colors" />
+                </div>
               </Link>
             ))}
           </div>
@@ -198,13 +171,10 @@ export default function TeamsList() {
           <div className="text-center py-12">
             <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">
-              {searchQuery ? 'No teams found' : 'No teams available'}
+              No teams available
             </h3>
             <p className="text-gray-600">
-              {searchQuery 
-                ? `No teams match "${searchQuery}". Try a different search term.`
-                : 'There are no teams to display at the moment.'
-              }
+              There are no teams to display at the moment.
             </p>
           </div>
         )}
