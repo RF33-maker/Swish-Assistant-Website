@@ -208,6 +208,38 @@ import {
             // Calculate standings using team_stats first, fallback to player_stats
             await calculateStandingsWithTeamStats(data.league_id, allPlayerStats || []);
             
+            // Fetch schedule data
+            const { data: scheduleData, error: scheduleError } = await supabase
+              .from('player_stats')
+              .select('game_date, game_id, home_team, away_team')
+              .eq('league_id', data.league_id)
+              .not('game_date', 'is', null)
+              .not('home_team', 'is', null)
+              .not('away_team', 'is', null)
+              .not('game_id', 'is', null);
+
+            if (scheduleData && !scheduleError) {
+              // Group by unique games
+              const uniqueGames = scheduleData.reduce((acc, game) => {
+                const key = `${game.game_id}-${game.game_date}`;
+                if (!acc[key]) {
+                  acc[key] = {
+                    game_id: game.game_id,
+                    game_date: game.game_date,
+                    home_team: game.home_team,
+                    away_team: game.away_team
+                  };
+                }
+                return acc;
+              }, {} as Record<string, any>);
+              
+              const sortedSchedule = Object.values(uniqueGames).sort((a: any, b: any) => 
+                new Date(b.game_date).getTime() - new Date(a.game_date).getTime()
+              );
+              
+              setSchedule(sortedSchedule);
+            }
+            
             // Reset loading states
             setIsLoadingLeaders(false);
             setIsLoadingStandings(false);
@@ -789,6 +821,13 @@ import {
             </a>
             <a 
               href="#" 
+              className={`hover:text-orange-500 cursor-pointer ${activeSection === 'schedule' ? 'text-orange-500 font-semibold' : ''}`}
+              onClick={() => setActiveSection('schedule')}
+            >
+              Schedule
+            </a>
+            <a 
+              href="#" 
               className="hover:text-orange-500 cursor-pointer"
               onClick={() => navigate(`/league-leaders/${slug}`)}
             >
@@ -1100,6 +1139,52 @@ import {
                   <div className="text-center py-8 text-gray-500">
                     <p className="text-sm">No teams available</p>
                     <p className="text-xs mt-1">Teams will appear once games are played</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Schedule Section */}
+            {activeSection === 'schedule' && (
+              <div className="bg-white rounded-xl shadow p-6">
+                <h2 className="text-lg font-semibold text-slate-800 mb-6">Game Schedule</h2>
+                {schedule.length > 0 ? (
+                  <div className="divide-y divide-gray-200">
+                    {schedule.map((game, index) => (
+                      <div key={`game-${game.game_id}-${index}`} className="p-4 hover:bg-gray-50 transition-colors">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-6">
+                            <div className="text-sm text-slate-600 min-w-[100px]">
+                              {new Date(game.game_date).toLocaleDateString('en-US', { 
+                                weekday: 'short',
+                                month: 'short', 
+                                day: 'numeric',
+                                year: 'numeric'
+                              })}
+                            </div>
+                            <div className="flex items-center gap-4">
+                              <div className="flex items-center gap-2">
+                                <TeamLogo teamName={game.home_team} leagueId={league?.league_id || ""} size="sm" />
+                                <span className="font-medium text-slate-800">{game.home_team}</span>
+                              </div>
+                              <span className="text-slate-500 text-sm">vs</span>
+                              <div className="flex items-center gap-2">
+                                <TeamLogo teamName={game.away_team} leagueId={league?.league_id || ""} size="sm" />
+                                <span className="font-medium text-slate-800">{game.away_team}</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-sm text-slate-500">
+                            Game #{game.game_id}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <p className="text-sm">No games scheduled</p>
+                    <p className="text-xs mt-1">Games will appear when scheduled</p>
                   </div>
                 )}
               </div>
