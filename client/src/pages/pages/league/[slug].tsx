@@ -208,36 +208,49 @@ import {
             // Calculate standings using team_stats first, fallback to player_stats
             await calculateStandingsWithTeamStats(data.league_id, allPlayerStats || []);
             
-            // Fetch schedule data
+            // Fetch schedule data - get games with teams that actually played
             const { data: scheduleData, error: scheduleError } = await supabase
               .from('player_stats')
-              .select('game_date, game_id, home_team, away_team')
+              .select('game_date, game_id, team_name, team')
               .eq('league_id', data.league_id)
-              .not('game_date', 'is', null)
-              .not('home_team', 'is', null)
-              .not('away_team', 'is', null)
-              .not('game_id', 'is', null);
+              .not('game_date', 'is', null);
 
             if (scheduleData && !scheduleError) {
-              // Group by unique games
-              const uniqueGames = scheduleData.reduce((acc, game) => {
+              console.log("📅 Raw schedule data:", scheduleData.length, "records");
+              
+              // Group by game_id to find team matchups
+              const gameGroups = scheduleData.reduce((acc, game) => {
+                const teamName = game.team_name || game.team;
+                if (!teamName) return acc;
+                
                 const key = `${game.game_id}-${game.game_date}`;
                 if (!acc[key]) {
                   acc[key] = {
                     game_id: game.game_id,
                     game_date: game.game_date,
-                    home_team: game.home_team,
-                    away_team: game.away_team
+                    teams: new Set()
                   };
                 }
+                acc[key].teams.add(teamName);
                 return acc;
               }, {} as Record<string, any>);
               
-              const sortedSchedule = Object.values(uniqueGames).sort((a: any, b: any) => 
-                new Date(b.game_date).getTime() - new Date(a.game_date).getTime()
-              );
+              // Convert to schedule format - only include games with exactly 2 teams
+              const games = Object.values(gameGroups)
+                .filter((game: any) => game.teams.size === 2)
+                .map((game: any) => {
+                  const teams = Array.from(game.teams);
+                  return {
+                    game_id: game.game_id,
+                    game_date: game.game_date,
+                    team1: teams[0],
+                    team2: teams[1]
+                  };
+                })
+                .sort((a, b) => new Date(b.game_date).getTime() - new Date(a.game_date).getTime());
               
-              setSchedule(sortedSchedule);
+              console.log("📅 Processed schedule:", games);
+              setSchedule(games);
             }
             
             // Reset loading states
@@ -1154,7 +1167,7 @@ import {
                       <div key={`game-${game.game_id}-${index}`} className="p-4 hover:bg-gray-50 transition-colors">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-6">
-                            <div className="text-sm text-slate-600 min-w-[100px]">
+                            <div className="text-sm text-slate-600 min-w-[120px]">
                               {new Date(game.game_date).toLocaleDateString('en-US', { 
                                 weekday: 'short',
                                 month: 'short', 
@@ -1164,18 +1177,18 @@ import {
                             </div>
                             <div className="flex items-center gap-4">
                               <div className="flex items-center gap-2">
-                                <TeamLogo teamName={game.home_team} leagueId={league?.league_id || ""} size="sm" />
-                                <span className="font-medium text-slate-800">{game.home_team}</span>
+                                <TeamLogo teamName={game.team1} leagueId={league?.league_id || ""} size="sm" />
+                                <span className="font-medium text-slate-800">{game.team1}</span>
                               </div>
                               <span className="text-slate-500 text-sm">vs</span>
                               <div className="flex items-center gap-2">
-                                <TeamLogo teamName={game.away_team} leagueId={league?.league_id || ""} size="sm" />
-                                <span className="font-medium text-slate-800">{game.away_team}</span>
+                                <TeamLogo teamName={game.team2} leagueId={league?.league_id || ""} size="sm" />
+                                <span className="font-medium text-slate-800">{game.team2}</span>
                               </div>
                             </div>
                           </div>
                           <div className="text-sm text-slate-500">
-                            Game #{game.game_id}
+                            {game.game_id}
                           </div>
                         </div>
                       </div>
