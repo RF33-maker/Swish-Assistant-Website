@@ -56,7 +56,7 @@ export default function PlayerStatsPage() {
   console.log('🎯 ROUTE DEBUG - Player ID:', playerId);
   const [playerStats, setPlayerStats] = useState<PlayerStat[]>([]);
   const [seasonAverages, setSeasonAverages] = useState<SeasonAverages | null>(null);
-  const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string } | null>(null);
+  const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string; position?: string; number?: number } | null>(null);
   const [playerLeagues, setPlayerLeagues] = useState<{ id: string; name: string; slug: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -75,34 +75,64 @@ export default function PlayerStatsPage() {
     const fetchPlayerData = async () => {
       setLoading(true);
       try {
-        console.log('🔍 Step 1: Fetching player record by ID...');
+        console.log('🔍 Step 1: Fetching player record by player_id...');
         
-        // First get the player's name from the specific record ID
-        const { data: playerRecord, error: playerError } = await supabase
-          .from('player_stats')
-          .select('name, team')
+        // First check if playerId is a player_id or old record id
+        let actualPlayerId = playerId;
+        let playerInfo = null;
+
+        // Try to get player info from players table using playerId as player_id
+        const { data: playerFromPlayersTable, error: playersError } = await supabase
+          .from('players')
+          .select('*')
           .eq('id', playerId)
           .single();
 
-        console.log('📋 Step 1 Result - Player record:', playerRecord);
-        console.log('📋 Step 1 Error:', playerError);
+        if (playerFromPlayersTable && !playersError) {
+          // Found in players table - use this info
+          playerInfo = {
+            name: playerFromPlayersTable.name,
+            team: playerFromPlayersTable.team,
+            position: playerFromPlayersTable.position,
+            number: playerFromPlayersTable.number
+          };
+          actualPlayerId = playerId;
+          console.log('📋 Found player in players table:', playerInfo);
+        } else {
+          // Fallback: treat playerId as old record ID and get player_id from player_stats
+          console.log('🔍 Fallback: Looking up by old record ID...');
+          const { data: playerRecord, error: playerError } = await supabase
+            .from('player_stats')
+            .select('player_id, name, team, position, number')
+            .eq('id', playerId)
+            .single();
 
-        if (playerError || !playerRecord) {
-          console.error('❌ Could not find player with ID:', playerId, 'Error:', playerError);
-          toast({
-            title: "Player Not Found",
-            description: "Could not find player with the specified ID",
-            variant: "destructive",
-          });
-          setLoading(false);
-          return;
+          if (playerError || !playerRecord || !playerRecord.player_id) {
+            console.error('❌ Could not find player with ID:', playerId, 'Error:', playerError);
+            toast({
+              title: "Player Not Found",
+              description: "Could not find player with the specified ID",
+              variant: "destructive",
+            });
+            setLoading(false);
+            return;
+          }
+
+          actualPlayerId = playerRecord.player_id;
+          playerInfo = {
+            name: playerRecord.name,
+            team: playerRecord.team,
+            position: playerRecord.position,
+            number: playerRecord.number
+          };
+          console.log('📋 Found player via record lookup:', playerInfo);
         }
 
-        console.log('🔍 Step 2: Getting all stats for player:', playerRecord.name);
+        console.log('🔍 Step 2: Getting all stats for player_id:', actualPlayerId);
         const { data: stats, error: statsError } = await supabase
           .from('player_stats')
           .select('*')
-          .eq('name', playerRecord.name)
+          .eq('player_id', actualPlayerId)
           .order('game_date', { ascending: false });
 
         console.log('📊 Step 2 Result - Found', stats?.length || 0, 'stat records');
@@ -120,8 +150,9 @@ export default function PlayerStatsPage() {
           return;
         }
 
-        console.log('✅ Step 3: Setting player stats...');
+        console.log('✅ Step 3: Setting player stats and info...');
         setPlayerStats(stats || []);
+        setPlayerInfo(playerInfo);
 
         // Step 4: Get unique leagues for this player
         if (stats && stats.length > 0) {

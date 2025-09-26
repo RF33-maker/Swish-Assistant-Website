@@ -19,15 +19,29 @@ export const teamLogos = pgTable("team_logos", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Players table for storing player information
+export const players = pgTable("players", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: varchar("name", { length: 255 }).notNull(),
+  team: varchar("team", { length: 255 }),
+  position: varchar("position", { length: 10 }),
+  number: integer("number"),
+  league_id: varchar("league_id", { length: 255 }).notNull(),
+  is_active: boolean("is_active").default(true),
+  created_at: timestamp("created_at").defaultNow(),
+  updated_at: timestamp("updated_at").defaultNow(),
+});
+
 // Player stats table for storing individual player performance data
 export const playerStats = pgTable("player_stats", {
   id: uuid("id").primaryKey().defaultRandom(),
   league_id: varchar("league_id", { length: 255 }).notNull(),
+  player_id: uuid("player_id").notNull(), // References players.id
   user_id: varchar("user_id", { length: 255 }),
   game_id: varchar("game_id", { length: 255 }),
   game_date: timestamp("game_date"),
   team: varchar("team", { length: 255 }),
-  name: varchar("name", { length: 255 }),
+  name: varchar("name", { length: 255 }), // Keep for backward compatibility
   number: integer("number"),
   position: varchar("position", { length: 10 }),
   starter: boolean("starter").default(false),
@@ -122,8 +136,18 @@ export const insertTeamLogoSchema = createInsertSchema(teamLogos).pick({
   uploadedBy: true,
 });
 
+export const insertPlayersSchema = createInsertSchema(players).pick({
+  name: true,
+  team: true,
+  position: true,
+  number: true,
+  league_id: true,
+  is_active: true,
+});
+
 export const insertPlayerStatsSchema = createInsertSchema(playerStats).pick({
   league_id: true,
+  player_id: true,
   user_id: true,
   game_id: true,
   game_date: true,
