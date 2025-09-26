@@ -23,6 +23,7 @@ export const teamLogos = pgTable("team_logos", {
 export const players = pgTable("players", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: varchar("name", { length: 255 }).notNull(),
+  full_name: varchar("full_name", { length: 255 }),
   team: varchar("team", { length: 255 }),
   position: varchar("position", { length: 10 }),
   number: integer("number"),
@@ -42,6 +43,7 @@ export const playerStats = pgTable("player_stats", {
   game_date: timestamp("game_date"),
   team: varchar("team", { length: 255 }),
   name: varchar("name", { length: 255 }), // Keep for backward compatibility
+  full_name: varchar("full_name", { length: 255 }),
   number: integer("number"),
   position: varchar("position", { length: 10 }),
   starter: boolean("starter").default(false),
@@ -138,6 +140,7 @@ export const insertTeamLogoSchema = createInsertSchema(teamLogos).pick({
 
 export const insertPlayersSchema = createInsertSchema(players).pick({
   name: true,
+  full_name: true,
   team: true,
   position: true,
   number: true,
@@ -153,6 +156,7 @@ export const insertPlayerStatsSchema = createInsertSchema(playerStats).pick({
   game_date: true,
   team: true,
   name: true,
+  full_name: true,
   number: true,
   position: true,
   starter: true,

@@ -432,9 +432,10 @@ import {
 
       setIsLoadingStats(true);
       try {
+        // First, try to fetch with full_name, if not available fallback to existing fields
         const { data: playerStats, error } = await supabase
           .from("player_stats")
-          .select("*")
+          .select("*, players:player_id(full_name)")
           .eq("league_id", league.league_id);
 
         if (error) {
@@ -448,9 +449,14 @@ import {
       const playerMap = new Map();
       
       playerStats?.forEach(stat => {
-        // Create player name from firstname and familyname
-        const playerName = `${stat.firstname || ''} ${stat.familyname || ''}`.trim() || stat.name || 'Unknown Player';
-        const playerKey = playerName;
+        // Use full_name from players table, fallback to existing name, then combine firstname/familyname
+        const playerName = stat.full_name || 
+                          stat.players?.full_name || 
+                          stat.name || 
+                          `${stat.firstname || ''} ${stat.familyname || ''}`.trim() || 
+                          'Unknown Player';
+        // Use player_id for grouping to avoid name mismatches, fallback to record id
+        const playerKey = stat.player_id || stat.id;
         if (!playerMap.has(playerKey)) {
           playerMap.set(playerKey, {
             name: playerName,
