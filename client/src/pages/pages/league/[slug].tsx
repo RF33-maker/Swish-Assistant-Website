@@ -10,6 +10,8 @@ import GameDetailModal from "@/components/GameDetailModal";
 import LeagueChatbot from "@/components/LeagueChatbot";
 import { TeamLogo } from "@/components/TeamLogo";
 import { TeamLogoUploader } from "@/components/TeamLogoUploader";
+import { ChevronRight } from "lucide-react";
+import { Link } from "wouter";
 import { 
   LoadingSkeleton, 
   PlayerRowSkeleton, 
@@ -1071,6 +1073,36 @@ import {
                   <div className="text-center py-8 text-gray-500">
                     <p className="text-sm">No player statistics available</p>
                     <p className="text-xs mt-1">Stats will appear once games are played and uploaded</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Teams Section */}
+            {activeSection === 'teams' && (
+              <div className="bg-white rounded-xl shadow p-6">
+                <h2 className="text-lg font-semibold text-slate-800 mb-6">Teams</h2>
+                {standings.length > 0 ? (
+                  <div className="divide-y divide-gray-200">
+                    {standings.map((team) => (
+                      <Link key={team.name} to={`/team/${encodeURIComponent(team.name)}`}>
+                        <div className="p-4 hover:bg-gray-50 transition-colors flex items-center justify-between group cursor-pointer">
+                          <div className="flex items-center gap-4">
+                            <TeamLogo teamName={team.name} leagueId={league?.league_id} size="md" />
+                            <div>
+                              <h3 className="font-semibold text-slate-800 text-lg">{team.name}</h3>
+                              <p className="text-sm text-slate-600">{team.record} • {(team.winPct * 100).toFixed(1)}% Win Rate</p>
+                            </div>
+                          </div>
+                          <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-orange-600 transition-colors" />
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <p className="text-sm">No teams available</p>
+                    <p className="text-xs mt-1">Teams will appear once games are played</p>
                   </div>
                 )}
               </div>
