@@ -208,49 +208,51 @@ import {
             // Calculate standings using team_stats first, fallback to player_stats
             await calculateStandingsWithTeamStats(data.league_id, allPlayerStats || []);
             
-            // Fetch schedule data - get games with teams that actually played
+            // Fetch schedule data directly from game_schedule table
             const { data: scheduleData, error: scheduleError } = await supabase
-              .from('player_stats')
-              .select('game_date, game_id, team_name, team')
-              .eq('league_id', data.league_id)
-              .not('game_date', 'is', null);
+              .from('game_schedule')
+              .select('*');
+
+            console.log("📅 Fetching all from game_schedule table");
+            console.log("📅 Schedule data:", scheduleData);
+            console.log("📅 Schedule error:", scheduleError);
 
             if (scheduleData && !scheduleError) {
-              console.log("📅 Raw schedule data:", scheduleData.length, "records");
+              console.log("📅 Raw schedule data from game_schedule:", scheduleData.length, "records");
+              console.log("📅 Sample record:", scheduleData[0]);
               
-              // Group by game_id to find team matchups
-              const gameGroups = scheduleData.reduce((acc, game) => {
-                const teamName = game.team_name || game.team;
-                if (!teamName) return acc;
-                
-                const key = `${game.game_id}-${game.game_date}`;
-                if (!acc[key]) {
-                  acc[key] = {
-                    game_id: game.game_id,
-                    game_date: game.game_date,
-                    teams: new Set()
-                  };
-                }
-                acc[key].teams.add(teamName);
-                return acc;
-              }, {} as Record<string, any>);
+              // Process the schedule data from game_schedule table
+              // Filter for this league if there's a league identifier, otherwise show all
+              const filteredSchedule = scheduleData.filter((game: any) => {
+                // Check various possible league identifier fields
+                return !game.league_id || 
+                       game.league_id === data.league_id || 
+                       game.league === data.league_id || 
+                       game.league_slug === slug ||
+                       true; // Show all if no league identifier
+              });
               
-              // Convert to schedule format - only include games with exactly 2 teams
-              const games = Object.values(gameGroups)
-                .filter((game: any) => game.teams.size === 2)
-                .map((game: any) => {
-                  const teams = Array.from(game.teams);
-                  return {
-                    game_id: game.game_id,
-                    game_date: game.game_date,
-                    team1: teams[0],
-                    team2: teams[1]
-                  };
-                })
-                .sort((a, b) => new Date(b.game_date).getTime() - new Date(a.game_date).getTime());
+              const games = filteredSchedule.map((game: any) => ({
+                game_id: game.game_id || game.id || game.fixture_id,
+                game_date: game.match_date || game.game_date || game.date || game.fixture_date,
+                team1: game.home_team || game.team1 || game.home,
+                team2: game.away_team || game.team2 || game.away,
+                kickoff_time: game.kickoff_time || game.time || game.start_time,
+                venue: game.venue || game.location || game.ground
+              })).filter((game) => game.team1 && game.team2) // Only include games with both teams
+              .sort((a, b) => {
+                if (!a.game_date || !b.game_date) return 0;
+                const dateA = new Date(a.game_date).getTime();
+                const dateB = new Date(b.game_date).getTime();
+                return dateB - dateA; // Most recent first
+              });
               
-              console.log("📅 Processed schedule:", games);
+              console.log("📅 Processed schedule from game_schedule:", games);
               setSchedule(games);
+            } else if (scheduleError) {
+              console.error("📅 Error fetching from game_schedule:", scheduleError);
+              // Fallback to empty schedule
+              setSchedule([]);
             }
             
             // Reset loading states
@@ -1168,12 +1170,19 @@ import {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-6">
                             <div className="text-sm text-slate-600 min-w-[120px]">
-                              {new Date(game.game_date).toLocaleDateString('en-US', { 
-                                weekday: 'short',
-                                month: 'short', 
-                                day: 'numeric',
-                                year: 'numeric'
-                              })}
+                              <div>
+                                {new Date(game.game_date).toLocaleDateString('en-US', { 
+                                  weekday: 'short',
+                                  month: 'short', 
+                                  day: 'numeric',
+                                  year: 'numeric'
+                                })}
+                              </div>
+                              {game.kickoff_time && (
+                                <div className="text-xs text-slate-500 mt-1">
+                                  {game.kickoff_time}
+                                </div>
+                              )}
                             </div>
                             <div className="flex items-center gap-4">
                               <div className="flex items-center gap-2">
@@ -1187,8 +1196,13 @@ import {
                               </div>
                             </div>
                           </div>
-                          <div className="text-sm text-slate-500">
-                            {game.game_id}
+                          <div className="text-sm text-slate-500 text-right">
+                            <div>{game.game_id}</div>
+                            {game.venue && (
+                              <div className="text-xs text-slate-400 mt-1">
+                                {game.venue}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
