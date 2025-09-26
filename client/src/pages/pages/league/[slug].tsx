@@ -1084,12 +1084,12 @@ import {
                 <h2 className="text-lg font-semibold text-slate-800 mb-6">Teams</h2>
                 {standings.length > 0 ? (
                   <div className="divide-y divide-gray-200">
-                    {standings.map((team, index) => (
-                      <Link key={`team-${team.name}-${index}`} to={`/team/${encodeURIComponent(team.name)}`}>
+                    {standings.map((teamData, index) => (
+                      <Link key={`team-${teamData.team}-${index}`} to={`/team/${encodeURIComponent(teamData.team)}`}>
                         <div className="p-4 hover:bg-gray-50 transition-colors flex items-center justify-between group cursor-pointer">
                           <div className="flex items-center gap-4">
-                            <TeamLogo teamName={team.name} leagueId={league?.league_id || ""} size="md" />
-                            <h3 className="font-semibold text-slate-800 text-lg">{team.name}</h3>
+                            <TeamLogo teamName={teamData.team} leagueId={league?.league_id || ""} size="md" />
+                            <h3 className="font-semibold text-slate-800 text-lg">{teamData.team}</h3>
                           </div>
                           <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-orange-600 transition-colors" />
                         </div>
