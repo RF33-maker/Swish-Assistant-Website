@@ -208,31 +208,24 @@ import {
             // Calculate standings using team_stats first, fallback to player_stats
             await calculateStandingsWithTeamStats(data.league_id, allPlayerStats || []);
             
-            // Fetch schedule data directly from game_schedule table
+            // Fetch schedule data directly from game_schedule table with league_id filter
             const { data: scheduleData, error: scheduleError } = await supabase
               .from('game_schedule')
-              .select('*');
+              .select('*')
+              .eq('league_id', data.league_id);
 
-            console.log("📅 Fetching all from game_schedule table");
+            console.log("📅 Fetching from game_schedule table for league:", data.league_id);
             console.log("📅 Schedule data:", scheduleData);
             console.log("📅 Schedule error:", scheduleError);
 
             if (scheduleData && !scheduleError) {
               console.log("📅 Raw schedule data from game_schedule:", scheduleData.length, "records");
-              console.log("📅 Sample record:", scheduleData[0]);
+              if (scheduleData.length > 0) {
+                console.log("📅 Sample record:", scheduleData[0]);
+              }
               
               // Process the schedule data from game_schedule table
-              // Filter for this league if there's a league identifier, otherwise show all
-              const filteredSchedule = scheduleData.filter((game: any) => {
-                // Check various possible league identifier fields
-                return !game.league_id || 
-                       game.league_id === data.league_id || 
-                       game.league === data.league_id || 
-                       game.league_slug === slug ||
-                       true; // Show all if no league identifier
-              });
-              
-              const games = filteredSchedule.map((game: any) => ({
+              const games = scheduleData.map((game: any) => ({
                 game_id: game.game_id || game.id || game.fixture_id,
                 game_date: game.match_date || game.game_date || game.date || game.fixture_date,
                 team1: game.home_team || game.team1 || game.home,
