@@ -216,13 +216,13 @@ type GameSchedule = {
             // Calculate standings using team_stats first, fallback to player_stats
             await calculateStandingsWithTeamStats(data.league_id, allPlayerStats || []);
             
-            // Fetch schedule data directly from game_schedule table with league_id filter
+            // Fetch schedule data directly from game_schedule table filtering by competitionname
             const { data: scheduleData, error: scheduleError } = await supabase
               .from('game_schedule')
-              .select('*')
-              .eq('league_id', data.league_id);
+              .select('competitionname, matchtime, hometeam, awayteam')
+              .ilike('competitionname', `%${data.name}%`);
 
-            console.log("📅 Fetching from game_schedule table for league:", data.league_id);
+            console.log("📅 Fetching from game_schedule table for league:", data.name);
             console.log("📅 Schedule data:", scheduleData);
             console.log("📅 Schedule error:", scheduleError);
 
@@ -239,13 +239,17 @@ type GameSchedule = {
               }
               
               const games: GameSchedule[] = scheduleData.map((game: any) => ({
-                game_id: game.game_id || game.id || game.fixture_id || game.match_id || 'unknown',
-                game_date: game.match_date || game.game_date || game.date || game.fixture_date || game.scheduled_date,
-                team1: game.home_team || game.team1 || game.home || game.team_home || game.homeside,
-                team2: game.away_team || game.team2 || game.away || game.team_away || game.awayside,
-                kickoff_time: game.kickoff_time || game.time || game.start_time || game.matchtime,
-                venue: game.venue || game.location || game.ground || game.stadium
-              })).filter((game) => game.team1 && game.team2 && game.team1 !== 'unknown' && game.team2 !== 'unknown')
+                game_id: `${game.hometeam}-vs-${game.awayteam}-${game.matchtime}`.replace(/[^a-zA-Z0-9-]/g, '-'),
+                game_date: game.matchtime,
+                team1: game.hometeam,
+                team2: game.awayteam,
+                kickoff_time: new Date(game.matchtime).toLocaleTimeString('en-US', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: true
+                }),
+                venue: undefined // No venue column available
+              })).filter((game) => game.team1 && game.team2)
               .sort((a, b) => {
                 if (!a.game_date || !b.game_date) return 0;
                 const dateA = new Date(a.game_date).getTime();
