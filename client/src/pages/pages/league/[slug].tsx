@@ -216,33 +216,13 @@ type GameSchedule = {
             // Calculate standings using team_stats first, fallback to player_stats
             await calculateStandingsWithTeamStats(data.league_id, allPlayerStats || []);
             
-            // Fetch schedule data directly from game_schedule table filtering by competitionname
-            // Try multiple search patterns to match the competition name
-            let scheduleData = null;
-            let scheduleError = null;
-            
-            // First try searching for "BCB" or "Trophy" as they appear in the screenshot
-            const searchPatterns = [
-              'BCB%Trophy%', // Matches "BCB Trophy 2025-2026" etc
-              '%Trophy%',    // Fallback to any competition with "Trophy"
-              `%${data.name}%` // Original search as final fallback
-            ];
-            
-            for (const pattern of searchPatterns) {
-              const { data: tempData, error: tempError } = await supabase
-                .from('game_schedule')
-                .select('competitionname, matchtime, hometeam, awayteam')
-                .ilike('competitionname', pattern);
-              
-              if (tempData && tempData.length > 0) {
-                scheduleData = tempData;
-                scheduleError = tempError;
-                console.log(`📅 Found matches with pattern: ${pattern}`);
-                break;
-              }
-            }
+            // Fetch schedule data directly from game_schedule table filtering by league_id
+            const { data: scheduleData, error: scheduleError } = await supabase
+              .from('game_schedule')
+              .select('competitionname, matchtime, hometeam, awayteam, league_id, game_key')
+              .eq('league_id', data.league_id);
 
-            console.log("📅 Fetching from game_schedule table for league:", data.name);
+            console.log("📅 Fetching from game_schedule table for league_id:", data.league_id);
             console.log("📅 Schedule data:", scheduleData);
             console.log("📅 Schedule error:", scheduleError);
 
@@ -259,7 +239,7 @@ type GameSchedule = {
               }
               
               const games: GameSchedule[] = scheduleData.map((game: any) => ({
-                game_id: `${game.hometeam}-vs-${game.awayteam}-${game.matchtime}`.replace(/[^a-zA-Z0-9-]/g, '-'),
+                game_id: game.game_key || `${game.hometeam}-vs-${game.awayteam}`,
                 game_date: game.matchtime,
                 team1: game.hometeam,
                 team2: game.awayteam,
@@ -268,7 +248,7 @@ type GameSchedule = {
                   minute: '2-digit',
                   hour12: true
                 }),
-                venue: undefined // No venue column available
+                venue: game.competitionname // Show competition name as venue/context
               })).filter((game) => game.team1 && game.team2)
               .sort((a, b) => {
                 if (!a.game_date || !b.game_date) return 0;
