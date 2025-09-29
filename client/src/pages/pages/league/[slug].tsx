@@ -21,6 +21,14 @@ import {
   CompactLoadingSkeleton
 } from "@/components/skeletons/LoadingSkeleton";
 
+type GameSchedule = {
+  game_id: string;
+  game_date: string;
+  team1: string;
+  team2: string;
+  kickoff_time?: string;
+  venue?: string;
+};
 
 
   export default function LeaguePage() {
@@ -32,7 +40,7 @@ import {
     const [topRebounder, setTopRebounder] = useState<PlayerStat | null>(null);
     const [topAssists, setTopAssists] = useState<PlayerStat | null>(null);
     const [standings, setStandings] = useState([]);
-    const [schedule, setSchedule] = useState([]);
+    const [schedule, setSchedule] = useState<GameSchedule[]>([]);
     const [suggestions, setSuggestions] = useState<any[]>([]);
     const [gameSummaries, setGameSummaries] = useState<any[]>([]);
     const [playerStats, setPlayerStats] = useState<any[]>([]);
@@ -225,14 +233,19 @@ import {
               }
               
               // Process the schedule data from game_schedule table
-              const games = scheduleData.map((game: any) => ({
-                game_id: game.game_id || game.id || game.fixture_id,
-                game_date: game.match_date || game.game_date || game.date || game.fixture_date,
-                team1: game.home_team || game.team1 || game.home,
-                team2: game.away_team || game.team2 || game.away,
-                kickoff_time: game.kickoff_time || game.time || game.start_time,
-                venue: game.venue || game.location || game.ground
-              })).filter((game) => game.team1 && game.team2) // Only include games with both teams
+              // Log the first record to see actual column structure
+              if (scheduleData.length > 0) {
+                console.log('📅 Available columns in game_schedule:', Object.keys(scheduleData[0]));
+              }
+              
+              const games: GameSchedule[] = scheduleData.map((game: any) => ({
+                game_id: game.game_id || game.id || game.fixture_id || game.match_id || 'unknown',
+                game_date: game.match_date || game.game_date || game.date || game.fixture_date || game.scheduled_date,
+                team1: game.home_team || game.team1 || game.home || game.team_home || game.home_side,
+                team2: game.away_team || game.team2 || game.away || game.team_away || game.away_side,
+                kickoff_time: game.kickoff_time || game.time || game.start_time || game.match_time,
+                venue: game.venue || game.location || game.ground || game.stadium
+              })).filter((game) => game.team1 && game.team2 && game.team1 !== 'unknown' && game.team2 !== 'unknown')
               .sort((a, b) => {
                 if (!a.game_date || !b.game_date) return 0;
                 const dateA = new Date(a.game_date).getTime();
