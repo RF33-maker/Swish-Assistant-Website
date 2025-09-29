@@ -241,9 +241,9 @@ type GameSchedule = {
               const games: GameSchedule[] = scheduleData.map((game: any) => ({
                 game_id: game.game_id || game.id || game.fixture_id || game.match_id || 'unknown',
                 game_date: game.match_date || game.game_date || game.date || game.fixture_date || game.scheduled_date,
-                team1: game.home_team || game.team1 || game.home || game.team_home || game.home_side,
-                team2: game.away_team || game.team2 || game.away || game.team_away || game.away_side,
-                kickoff_time: game.kickoff_time || game.time || game.start_time || game.match_time,
+                team1: game.home_team || game.team1 || game.home || game.team_home || game.homeside,
+                team2: game.away_team || game.team2 || game.away || game.team_away || game.awayside,
+                kickoff_time: game.kickoff_time || game.time || game.start_time || game.matchtime,
                 venue: game.venue || game.location || game.ground || game.stadium
               })).filter((game) => game.team1 && game.team2 && game.team1 !== 'unknown' && game.team2 !== 'unknown')
               .sort((a, b) => {
