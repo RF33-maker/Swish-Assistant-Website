@@ -217,10 +217,30 @@ type GameSchedule = {
             await calculateStandingsWithTeamStats(data.league_id, allPlayerStats || []);
             
             // Fetch schedule data directly from game_schedule table filtering by competitionname
-            const { data: scheduleData, error: scheduleError } = await supabase
-              .from('game_schedule')
-              .select('competitionname, matchtime, hometeam, awayteam')
-              .ilike('competitionname', `%${data.name}%`);
+            // Try multiple search patterns to match the competition name
+            let scheduleData = null;
+            let scheduleError = null;
+            
+            // First try searching for "BCB" or "Trophy" as they appear in the screenshot
+            const searchPatterns = [
+              'BCB%Trophy%', // Matches "BCB Trophy 2025-2026" etc
+              '%Trophy%',    // Fallback to any competition with "Trophy"
+              `%${data.name}%` // Original search as final fallback
+            ];
+            
+            for (const pattern of searchPatterns) {
+              const { data: tempData, error: tempError } = await supabase
+                .from('game_schedule')
+                .select('competitionname, matchtime, hometeam, awayteam')
+                .ilike('competitionname', pattern);
+              
+              if (tempData && tempData.length > 0) {
+                scheduleData = tempData;
+                scheduleError = tempError;
+                console.log(`📅 Found matches with pattern: ${pattern}`);
+                break;
+              }
+            }
 
             console.log("📅 Fetching from game_schedule table for league:", data.name);
             console.log("📅 Schedule data:", scheduleData);
