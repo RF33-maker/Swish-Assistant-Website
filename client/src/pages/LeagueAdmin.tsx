@@ -39,6 +39,7 @@ export default function LeagueAdmin() {
   const [teams, setTeams] = useState<string[]>([]);
   const [teamLogos, setTeamLogos] = useState<Record<string, string>>({});
   const [uploadingLogo, setUploadingLogo] = useState<string | null>(null);
+  const [userLeagues, setUserLeagues] = useState<League[]>([]);
 
   useEffect(() => {
     checkUser();
@@ -46,6 +47,12 @@ export default function LeagueAdmin() {
       fetchLeague();
     }
   }, [slug]);
+
+  useEffect(() => {
+    if (currentUser) {
+      fetchUserLeagues();
+    }
+  }, [currentUser]);
 
   // Fetch teams after league is loaded
   useEffect(() => {
@@ -67,6 +74,27 @@ export default function LeagueAdmin() {
       setCurrentUser(user);
     } catch (error) {
       console.error("Error checking user:", error);
+    }
+  };
+
+  const fetchUserLeagues = async () => {
+    if (!currentUser) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('leagues')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching user leagues:', error);
+        return;
+      }
+
+      setUserLeagues(data || []);
+    } catch (error) {
+      console.error('Error fetching user leagues:', error);
     }
   };
 
@@ -481,7 +509,7 @@ export default function LeagueAdmin() {
 
           {/* PDF Upload Section */}
           <div className="lg:col-span-2 bg-white rounded-xl shadow overflow-hidden">
-            <UploadSection />
+            <UploadSection leagues={userLeagues} />
           </div>
 
           {/* Team Logo Management */}

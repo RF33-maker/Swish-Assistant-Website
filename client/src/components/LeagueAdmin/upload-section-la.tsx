@@ -97,10 +97,11 @@ const UploadSectionLA = ({ leagues }: any) => {
             className="mt-1 block w-full border-gray-300 rounded-md shadow-sm"
             value={selectedLeagueId}
             onChange={(e) => setSelectedLeagueId(e.target.value)}
+            data-testid="select-league"
           >
             <option value="">-- Choose a League --</option>
             {leagues?.map((league: any) => (
-              <option key={league.id} value={league.id}>
+              <option key={league.league_id} value={league.league_id}>
                 {league.name}
               </option>
             ))}
