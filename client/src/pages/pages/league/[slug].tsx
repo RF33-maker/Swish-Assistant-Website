@@ -1060,7 +1060,12 @@ type GameSchedule = {
               <a 
                 href="#" 
                 className={`hover:text-orange-500 cursor-pointer whitespace-nowrap ${activeSection === 'comparison' ? 'text-orange-500 font-semibold' : ''}`}
-                onClick={() => setActiveSection('comparison')}
+                onClick={() => {
+                  setActiveSection('comparison');
+                  if (allPlayerAverages.length === 0) {
+                    fetchAllPlayerAverages();
+                  }
+                }}
               >
                 Compare Players
               </a>

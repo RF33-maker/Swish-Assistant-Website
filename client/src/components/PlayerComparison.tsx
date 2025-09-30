@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
-import { ArrowUpIcon, ArrowDownIcon, MinusIcon } from "lucide-react";
+import { ArrowUpIcon, ArrowDownIcon, MinusIcon, Search } from "lucide-react";
 
 interface PlayerComparisonProps {
   leagueId: string;
@@ -13,6 +13,31 @@ export function PlayerComparison({ leagueId, allPlayers }: PlayerComparisonProps
   const [player1Stats, setPlayer1Stats] = useState<any>(null);
   const [player2Stats, setPlayer2Stats] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Search states
+  const [search1, setSearch1] = useState("");
+  const [search2, setSearch2] = useState("");
+  const [showDropdown1, setShowDropdown1] = useState(false);
+  const [showDropdown2, setShowDropdown2] = useState(false);
+  
+  // Refs for click outside
+  const dropdown1Ref = useRef<HTMLDivElement>(null);
+  const dropdown2Ref = useRef<HTMLDivElement>(null);
+  
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdown1Ref.current && !dropdown1Ref.current.contains(event.target as Node)) {
+        setShowDropdown1(false);
+      }
+      if (dropdown2Ref.current && !dropdown2Ref.current.contains(event.target as Node)) {
+        setShowDropdown2(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const fetchPlayerStats = async (playerId: string) => {
     const { data: stats, error } = await supabase
@@ -65,7 +90,7 @@ export function PlayerComparison({ leagueId, allPlayers }: PlayerComparisonProps
     });
 
     return {
-      name: stats[0].name || stats[0].full_name,
+      name: stats[0].name || stats[0].full_name || `${stats[0].firstname || ''} ${stats[0].familyname || ''}`.trim(),
       team: stats[0].team,
       games,
       ppg: (totalPoints / games).toFixed(1),
@@ -119,18 +144,27 @@ export function PlayerComparison({ leagueId, allPlayers }: PlayerComparisonProps
     }
   }, [player1Id, player2Id]);
 
-  const getComparisonIcon = (val1: number, val2: number, lowerIsBetter = false) => {
-    if (val1 === val2) {
-      return <MinusIcon className="w-4 h-4 text-gray-400" />;
-    }
-    
-    const isP1Better = lowerIsBetter ? val1 < val2 : val1 > val2;
-    
-    if (isP1Better) {
-      return <ArrowUpIcon className="w-4 h-4 text-green-600" />;
-    } else {
-      return <ArrowDownIcon className="w-4 h-4 text-red-600" />;
-    }
+  // Filter players based on search
+  const filteredPlayers1 = allPlayers.filter(player => 
+    player.name?.toLowerCase().includes(search1.toLowerCase()) ||
+    player.team?.toLowerCase().includes(search1.toLowerCase())
+  ).slice(0, 10);
+
+  const filteredPlayers2 = allPlayers.filter(player => 
+    player.name?.toLowerCase().includes(search2.toLowerCase()) ||
+    player.team?.toLowerCase().includes(search2.toLowerCase())
+  ).slice(0, 10);
+
+  const selectPlayer1 = (player: any) => {
+    setPlayer1Id(player.playerKey);
+    setSearch1(`${player.name} - ${player.team}`);
+    setShowDropdown1(false);
+  };
+
+  const selectPlayer2 = (player: any) => {
+    setPlayer2Id(player.playerKey);
+    setSearch2(`${player.name} - ${player.team}`);
+    setShowDropdown2(false);
   };
 
   const ComparisonRow = ({ 
@@ -170,42 +204,86 @@ export function PlayerComparison({ leagueId, allPlayers }: PlayerComparisonProps
       
       {/* Player Selection */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div>
+        {/* Player 1 Search */}
+        <div className="relative" ref={dropdown1Ref}>
           <label className="block text-sm font-medium text-slate-700 mb-2">
             Player 1
           </label>
-          <select
-            value={player1Id}
-            onChange={(e) => setPlayer1Id(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-            data-testid="select-player1"
-          >
-            <option value="">Select a player...</option>
-            {allPlayers.map((player) => (
-              <option key={player.id} value={player.id}>
-                {player.name} - {player.team}
-              </option>
-            ))}
-          </select>
+          <div className="relative">
+            <input
+              type="text"
+              value={search1}
+              onChange={(e) => {
+                setSearch1(e.target.value);
+                setShowDropdown1(true);
+                if (!e.target.value) {
+                  setPlayer1Id("");
+                  setPlayer1Stats(null);
+                }
+              }}
+              onFocus={() => setShowDropdown1(true)}
+              placeholder="Search for a player..."
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              data-testid="input-player1-search"
+            />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+          </div>
+          {showDropdown1 && search1 && filteredPlayers1.length > 0 && (
+            <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+              {filteredPlayers1.map((player, idx) => (
+                <div
+                  key={idx}
+                  onClick={() => selectPlayer1(player)}
+                  className="px-4 py-2 hover:bg-orange-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                  data-testid={`option-player1-${idx}`}
+                >
+                  <div className="font-medium text-slate-800">{player.name}</div>
+                  <div className="text-xs text-slate-600">{player.team} • {player.avgPoints} PPG</div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         
-        <div>
+        {/* Player 2 Search */}
+        <div className="relative" ref={dropdown2Ref}>
           <label className="block text-sm font-medium text-slate-700 mb-2">
             Player 2
           </label>
-          <select
-            value={player2Id}
-            onChange={(e) => setPlayer2Id(e.target.value)}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-            data-testid="select-player2"
-          >
-            <option value="">Select a player...</option>
-            {allPlayers.map((player) => (
-              <option key={player.id} value={player.id}>
-                {player.name} - {player.team}
-              </option>
-            ))}
-          </select>
+          <div className="relative">
+            <input
+              type="text"
+              value={search2}
+              onChange={(e) => {
+                setSearch2(e.target.value);
+                setShowDropdown2(true);
+                if (!e.target.value) {
+                  setPlayer2Id("");
+                  setPlayer2Stats(null);
+                }
+              }}
+              onFocus={() => setShowDropdown2(true)}
+              placeholder="Search for a player..."
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              data-testid="input-player2-search"
+            />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+          </div>
+          {showDropdown2 && search2 && filteredPlayers2.length > 0 && (
+            <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+              {filteredPlayers2.map((player, idx) => (
+                <div
+                  key={idx}
+                  onClick={() => selectPlayer2(player)}
+                  className="px-4 py-2 hover:bg-orange-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                  data-testid={`option-player2-${idx}`}
+                >
+                  <div className="font-medium text-slate-800">{player.name}</div>
+                  <div className="text-xs text-slate-600">{player.team} • {player.avgPoints} PPG</div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -281,7 +359,10 @@ export function PlayerComparison({ leagueId, allPlayers }: PlayerComparisonProps
         </div>
       ) : (
         <div className="text-center py-8 text-gray-500">
-          <p className="text-sm">Select two players to compare their stats</p>
+          <p className="text-sm">Search and select two players to compare their stats</p>
+          {allPlayers.length === 0 && (
+            <p className="text-xs text-orange-500 mt-2">Loading players...</p>
+          )}
         </div>
       )}
     </div>
