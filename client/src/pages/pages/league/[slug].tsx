@@ -931,7 +931,14 @@ type GameSchedule = {
                   }
                 }}
               >
-                Stats
+                Player Stats
+              </a>
+              <a 
+                href="#" 
+                className={`hover:text-orange-500 cursor-pointer whitespace-nowrap ${activeSection === 'teamstats' ? 'text-orange-500 font-semibold' : ''}`}
+                onClick={() => setActiveSection('teamstats')}
+              >
+                Team Stats
               </a>
               <a 
                 href="#" 
@@ -1144,6 +1151,79 @@ type GameSchedule = {
                     <p className="text-xs mt-1">Stats will appear once games are played and uploaded</p>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Team Stats Section */}
+            {activeSection === 'teamstats' && (
+              <div className="bg-white rounded-xl shadow p-6">
+                <h2 className="text-lg font-semibold text-slate-800 mb-6">Team Statistics - {league?.name}</h2>
+                {standings.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200">
+                          <th className="text-left py-3 px-4 font-semibold text-slate-700">Team</th>
+                          <th className="text-center py-3 px-4 font-semibold text-slate-700">GP</th>
+                          <th className="text-center py-3 px-4 font-semibold text-slate-700">W</th>
+                          <th className="text-center py-3 px-4 font-semibold text-slate-700">L</th>
+                          <th className="text-center py-3 px-4 font-semibold text-slate-700">Win%</th>
+                          <th className="text-center py-3 px-4 font-semibold text-slate-700">PF</th>
+                          <th className="text-center py-3 px-4 font-semibold text-slate-700">PA</th>
+                          <th className="text-center py-3 px-4 font-semibold text-slate-700">Diff</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {standings.map((teamData, index) => (
+                          <tr 
+                            key={`team-stats-${teamData.team}-${index}`}
+                            className="hover:bg-orange-50 transition-colors cursor-pointer"
+                            onClick={() => navigate(`/team/${encodeURIComponent(teamData.team)}`)}
+                          >
+                            <td className="py-3 px-4">
+                              <div className="flex items-center gap-3">
+                                <TeamLogo teamName={teamData.team} leagueId={league?.league_id || ""} size="sm" />
+                                <span className="font-medium text-slate-800">{teamData.team}</span>
+                              </div>
+                            </td>
+                            <td className="text-center py-3 px-4 text-slate-600">{teamData.gp}</td>
+                            <td className="text-center py-3 px-4 text-slate-600">{teamData.w}</td>
+                            <td className="text-center py-3 px-4 text-slate-600">{teamData.l}</td>
+                            <td className="text-center py-3 px-4 font-medium text-slate-800">
+                              {((teamData.w / teamData.gp) * 100).toFixed(1)}%
+                            </td>
+                            <td className="text-center py-3 px-4 text-slate-600">{teamData.pf}</td>
+                            <td className="text-center py-3 px-4 text-slate-600">{teamData.pa}</td>
+                            <td className={`text-center py-3 px-4 font-medium ${
+                              (teamData.pf - teamData.pa) > 0 ? 'text-green-600' : 'text-red-600'
+                            }`}>
+                              {teamData.pf - teamData.pa > 0 ? '+' : ''}{teamData.pf - teamData.pa}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <p className="text-sm">No team statistics available</p>
+                    <p className="text-xs mt-1">Stats will appear once games are played</p>
+                  </div>
+                )}
+                <div className="mt-6 pt-4 border-t border-gray-200">
+                  <div className="text-xs text-slate-500 space-y-1">
+                    <div className="font-semibold text-slate-600 mb-2">Legend:</div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                      <span>GP = Games Played</span>
+                      <span>W = Wins</span>
+                      <span>L = Losses</span>
+                      <span>Win% = Win Percentage</span>
+                      <span>PF = Points For</span>
+                      <span>PA = Points Against</span>
+                      <span>Diff = Point Differential</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
