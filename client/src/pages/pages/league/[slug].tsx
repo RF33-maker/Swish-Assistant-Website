@@ -20,6 +20,7 @@ import {
   ProfileSkeleton,
   CompactLoadingSkeleton
 } from "@/components/skeletons/LoadingSkeleton";
+import { PlayerComparison } from "@/components/PlayerComparison";
 
 type GameSchedule = {
   game_id: string;
@@ -1059,6 +1060,13 @@ type GameSchedule = {
               </a>
               <a 
                 href="#" 
+                className={`hover:text-orange-500 cursor-pointer whitespace-nowrap ${activeSection === 'comparison' ? 'text-orange-500 font-semibold' : ''}`}
+                onClick={() => setActiveSection('comparison')}
+              >
+                Compare Players
+              </a>
+              <a 
+                href="#" 
                 className={`hover:text-orange-500 cursor-pointer whitespace-nowrap ${activeSection === 'overview' ? 'text-orange-500 font-semibold' : ''}`}
                 onClick={() => setActiveSection('overview')}
               >
@@ -1578,6 +1586,14 @@ type GameSchedule = {
                   </div>
                 )}
               </div>
+            )}
+
+            {/* Player Comparison Section */}
+            {activeSection === 'comparison' && (
+              <PlayerComparison 
+                leagueId={league?.league_id || ""} 
+                allPlayers={allPlayerAverages}
+              />
             )}
 
             {/* Overview Section - Default view */}
