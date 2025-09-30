@@ -67,6 +67,9 @@ type GameSchedule = {
   const [isLoadingStats, setIsLoadingStats] = useState(false);
   const [isLoadingStandings, setIsLoadingStandings] = useState(false);
   const [isLoadingLeaders, setIsLoadingLeaders] = useState(false);
+  const [teamStatsView, setTeamStatsView] = useState<'totals' | 'averages'>('averages'); // Toggle for team stats
+  const [teamStatsData, setTeamStatsData] = useState<any[]>([]);
+  const [isLoadingTeamStats, setIsLoadingTeamStats] = useState(false);
 
     
 
@@ -588,6 +591,101 @@ type GameSchedule = {
       }
     };
 
+    // Fetch and aggregate team statistics
+    const fetchTeamStats = async () => {
+      if (!league?.league_id) return;
+      
+      setIsLoadingTeamStats(true);
+      try {
+        const { data: rawTeamStats, error } = await supabase
+          .from("team_stats")
+          .select("*")
+          .eq("league_id", league.league_id);
+
+        if (error) {
+          console.error("Error fetching team stats:", error);
+          setIsLoadingTeamStats(false);
+          return;
+        }
+
+        if (!rawTeamStats || rawTeamStats.length === 0) {
+          setTeamStatsData([]);
+          setIsLoadingTeamStats(false);
+          return;
+        }
+
+        // Aggregate stats by team
+        const teamMap = new Map<string, any>();
+
+        rawTeamStats.forEach(stat => {
+          if (!stat.name) return; // Skip records without team name
+
+          if (!teamMap.has(stat.name)) {
+            teamMap.set(stat.name, {
+              teamName: stat.name,
+              gamesPlayed: 0,
+              totalPoints: 0,
+              totalFGM: 0,
+              totalFGA: 0,
+              total3PM: 0,
+              total3PA: 0,
+              total2PM: 0,
+              total2PA: 0,
+              totalFTM: 0,
+              totalFTA: 0,
+              totalRebounds: 0,
+              totalAssists: 0,
+              totalSteals: 0,
+              totalBlocks: 0,
+              totalTurnovers: 0,
+              totalFouls: 0
+            });
+          }
+
+          const team = teamMap.get(stat.name)!;
+          team.gamesPlayed += 1;
+          team.totalPoints += stat.tot_spoints || 0;
+          team.totalFGM += stat.tot_sfieldgoalsmade || 0;
+          team.totalFGA += stat.tot_sfieldgoalsattempted || 0;
+          team.total3PM += stat.tot_sthreepointersmade || 0;
+          team.total3PA += stat.tot_sthreepointersattempted || 0;
+          team.total2PM += stat.tot_stwopointersmade || 0;
+          team.total2PA += stat.tot_stwopointersattempted || 0;
+          team.totalFTM += stat.tot_sfreethrowsmade || 0;
+          team.totalFTA += stat.tot_sfreethrowsattempted || 0;
+          team.totalRebounds += stat.tot_sreboundstotal || 0;
+          team.totalAssists += stat.tot_sassists || 0;
+          team.totalSteals += stat.tot_ssteals || 0;
+          team.totalBlocks += stat.tot_sblocks || 0;
+          team.totalTurnovers += stat.tot_sturnovers || 0;
+          team.totalFouls += stat.tot_sfoulspersonal || 0;
+        });
+
+        // Calculate percentages and averages
+        const aggregatedStats = Array.from(teamMap.values()).map(team => ({
+          ...team,
+          // Percentages (use totals for accurate calculation)
+          fgPercentage: team.totalFGA > 0 ? ((team.totalFGM / team.totalFGA) * 100).toFixed(1) : '0.0',
+          threePtPercentage: team.total3PA > 0 ? ((team.total3PM / team.total3PA) * 100).toFixed(1) : '0.0',
+          twoPtPercentage: team.total2PA > 0 ? ((team.total2PM / team.total2PA) * 100).toFixed(1) : '0.0',
+          ftPercentage: team.totalFTA > 0 ? ((team.totalFTM / team.totalFTA) * 100).toFixed(1) : '0.0',
+          // Averages
+          ppg: team.gamesPlayed > 0 ? (team.totalPoints / team.gamesPlayed).toFixed(1) : '0.0',
+          rpg: team.gamesPlayed > 0 ? (team.totalRebounds / team.gamesPlayed).toFixed(1) : '0.0',
+          apg: team.gamesPlayed > 0 ? (team.totalAssists / team.gamesPlayed).toFixed(1) : '0.0',
+          spg: team.gamesPlayed > 0 ? (team.totalSteals / team.gamesPlayed).toFixed(1) : '0.0',
+          bpg: team.gamesPlayed > 0 ? (team.totalBlocks / team.gamesPlayed).toFixed(1) : '0.0',
+          tpg: team.gamesPlayed > 0 ? (team.totalTurnovers / team.gamesPlayed).toFixed(1) : '0.0'
+        })).sort((a, b) => parseFloat(b.ppg) - parseFloat(a.ppg)); // Sort by PPG
+
+        setTeamStatsData(aggregatedStats);
+      } catch (error) {
+        console.error("Error processing team stats:", error);
+      } finally {
+        setIsLoadingTeamStats(false);
+      }
+    };
+
     // Calculate team standings using team_stats table first, fallback to player_stats
     const calculateStandingsWithTeamStats = async (leagueId: string, playerStats: any[]) => {
       try {
@@ -936,7 +1034,12 @@ type GameSchedule = {
               <a 
                 href="#" 
                 className={`hover:text-orange-500 cursor-pointer whitespace-nowrap ${activeSection === 'teamstats' ? 'text-orange-500 font-semibold' : ''}`}
-                onClick={() => setActiveSection('teamstats')}
+                onClick={() => {
+                  setActiveSection('teamstats');
+                  if (teamStatsData.length === 0) {
+                    fetchTeamStats();
+                  }
+                }}
               >
                 Team Stats
               </a>
@@ -1157,48 +1260,197 @@ type GameSchedule = {
             {/* Team Stats Section */}
             {activeSection === 'teamstats' && (
               <div className="bg-white rounded-xl shadow p-6">
-                <h2 className="text-lg font-semibold text-slate-800 mb-6">Team Statistics - {league?.name}</h2>
-                {standings.length > 0 ? (
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-lg font-semibold text-slate-800">Team Statistics - {league?.name}</h2>
+                  
+                  {/* Toggle for Totals/Averages */}
+                  <div className="flex gap-2 bg-gray-100 rounded-lg p-1">
+                    <button
+                      onClick={() => setTeamStatsView('averages')}
+                      className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                        teamStatsView === 'averages'
+                          ? 'bg-orange-500 text-white'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                      data-testid="button-averages-toggle"
+                    >
+                      Averages
+                    </button>
+                    <button
+                      onClick={() => setTeamStatsView('totals')}
+                      className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                        teamStatsView === 'totals'
+                          ? 'bg-orange-500 text-white'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                      data-testid="button-totals-toggle"
+                    >
+                      Totals
+                    </button>
+                  </div>
+                </div>
+
+                {isLoadingTeamStats ? (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-gray-200">
-                          <th className="text-left py-3 px-4 font-semibold text-slate-700">Team</th>
-                          <th className="text-center py-3 px-4 font-semibold text-slate-700">GP</th>
-                          <th className="text-center py-3 px-4 font-semibold text-slate-700">W</th>
-                          <th className="text-center py-3 px-4 font-semibold text-slate-700">L</th>
-                          <th className="text-center py-3 px-4 font-semibold text-slate-700">Win%</th>
-                          <th className="text-center py-3 px-4 font-semibold text-slate-700">PF</th>
-                          <th className="text-center py-3 px-4 font-semibold text-slate-700">PA</th>
-                          <th className="text-center py-3 px-4 font-semibold text-slate-700">Diff</th>
+                          <th className="text-left py-3 px-2 font-semibold text-slate-700 sticky left-0 bg-white">Team</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">GP</th>
+                          {teamStatsView === 'averages' ? (
+                            <>
+                              <th className="text-center py-3 px-2 font-semibold text-slate-700">PPG</th>
+                              <th className="text-center py-3 px-2 font-semibold text-slate-700">RPG</th>
+                              <th className="text-center py-3 px-2 font-semibold text-slate-700">APG</th>
+                              <th className="text-center py-3 px-2 font-semibold text-slate-700">FG%</th>
+                              <th className="text-center py-3 px-2 font-semibold text-slate-700">3P%</th>
+                              <th className="text-center py-3 px-2 font-semibold text-slate-700">2P%</th>
+                              <th className="text-center py-3 px-2 font-semibold text-slate-700">FT%</th>
+                            </>
+                          ) : (
+                            <>
+                              <th className="text-center py-3 px-2 font-semibold text-slate-700">PTS</th>
+                              <th className="text-center py-3 px-2 font-semibold text-slate-700">REB</th>
+                              <th className="text-center py-3 px-2 font-semibold text-slate-700">AST</th>
+                              <th className="text-center py-3 px-2 font-semibold text-slate-700">FGM</th>
+                              <th className="text-center py-3 px-2 font-semibold text-slate-700">3PM</th>
+                              <th className="text-center py-3 px-2 font-semibold text-slate-700">FTM</th>
+                            </>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Array.from({ length: 8 }).map((_, index) => (
+                          <tr key={`skeleton-${index}`} className="border-b border-gray-100">
+                            <td className="py-3 px-2">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 bg-gray-200 rounded-full animate-pulse"></div>
+                                <div className="h-4 bg-gray-200 rounded w-24 animate-pulse"></div>
+                              </div>
+                            </td>
+                            <td className="py-3 px-2">
+                              <div className="h-4 bg-gray-200 rounded w-8 mx-auto animate-pulse"></div>
+                            </td>
+                            <td className="py-3 px-2">
+                              <div className="h-4 bg-gray-200 rounded w-12 mx-auto animate-pulse"></div>
+                            </td>
+                            <td className="py-3 px-2">
+                              <div className="h-4 bg-gray-200 rounded w-12 mx-auto animate-pulse"></div>
+                            </td>
+                            <td className="py-3 px-2">
+                              <div className="h-4 bg-gray-200 rounded w-12 mx-auto animate-pulse"></div>
+                            </td>
+                            <td className="py-3 px-2">
+                              <div className="h-4 bg-gray-200 rounded w-12 mx-auto animate-pulse"></div>
+                            </td>
+                            <td className="py-3 px-2">
+                              <div className="h-4 bg-gray-200 rounded w-12 mx-auto animate-pulse"></div>
+                            </td>
+                            <td className="py-3 px-2">
+                              <div className="h-4 bg-gray-200 rounded w-12 mx-auto animate-pulse"></div>
+                            </td>
+                            {teamStatsView === 'averages' && (
+                              <td className="py-3 px-2">
+                                <div className="h-4 bg-gray-200 rounded w-12 mx-auto animate-pulse"></div>
+                              </td>
+                            )}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : teamStatsData.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200">
+                          <th className="text-left py-3 px-2 font-semibold text-slate-700 sticky left-0 bg-white">Team</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">GP</th>
+                          {teamStatsView === 'averages' ? (
+                            <>
+                              <th className="text-center py-3 px-2 font-semibold text-slate-700">PPG</th>
+                              <th className="text-center py-3 px-2 font-semibold text-slate-700">RPG</th>
+                              <th className="text-center py-3 px-2 font-semibold text-slate-700">APG</th>
+                              <th className="text-center py-3 px-2 font-semibold text-slate-700">FG%</th>
+                              <th className="text-center py-3 px-2 font-semibold text-slate-700">3P%</th>
+                              <th className="text-center py-3 px-2 font-semibold text-slate-700">2P%</th>
+                              <th className="text-center py-3 px-2 font-semibold text-slate-700">FT%</th>
+                            </>
+                          ) : (
+                            <>
+                              <th className="text-center py-3 px-2 font-semibold text-slate-700">PTS</th>
+                              <th className="text-center py-3 px-2 font-semibold text-slate-700">REB</th>
+                              <th className="text-center py-3 px-2 font-semibold text-slate-700">AST</th>
+                              <th className="text-center py-3 px-2 font-semibold text-slate-700">FGM</th>
+                              <th className="text-center py-3 px-2 font-semibold text-slate-700">3PM</th>
+                              <th className="text-center py-3 px-2 font-semibold text-slate-700">FTM</th>
+                            </>
+                          )}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                        {standings.map((teamData, index) => (
+                        {teamStatsData.map((team, index) => (
                           <tr 
-                            key={`team-stats-${teamData.team}-${index}`}
+                            key={`team-stats-${team.teamName}-${index}`}
                             className="hover:bg-orange-50 transition-colors cursor-pointer"
-                            onClick={() => navigate(`/team/${encodeURIComponent(teamData.team)}`)}
+                            onClick={() => navigate(`/team/${encodeURIComponent(team.teamName)}`)}
+                            data-testid={`row-team-${team.teamName}`}
                           >
-                            <td className="py-3 px-4">
+                            <td className="py-3 px-2 sticky left-0 bg-white hover:bg-orange-50">
                               <div className="flex items-center gap-3">
-                                <TeamLogo teamName={teamData.team} leagueId={league?.league_id || ""} size="sm" />
-                                <span className="font-medium text-slate-800">{teamData.team}</span>
+                                <TeamLogo teamName={team.teamName} leagueId={league?.league_id || ""} size="sm" />
+                                <span className="font-medium text-slate-800">{team.teamName}</span>
                               </div>
                             </td>
-                            <td className="text-center py-3 px-4 text-slate-600">{teamData.gp}</td>
-                            <td className="text-center py-3 px-4 text-slate-600">{teamData.w}</td>
-                            <td className="text-center py-3 px-4 text-slate-600">{teamData.l}</td>
-                            <td className="text-center py-3 px-4 font-medium text-slate-800">
-                              {((teamData.w / teamData.gp) * 100).toFixed(1)}%
+                            <td className="text-center py-3 px-2 text-slate-600" data-testid={`text-gp-${team.teamName}`}>
+                              {team.gamesPlayed}
                             </td>
-                            <td className="text-center py-3 px-4 text-slate-600">{teamData.pf}</td>
-                            <td className="text-center py-3 px-4 text-slate-600">{teamData.pa}</td>
-                            <td className={`text-center py-3 px-4 font-medium ${
-                              (teamData.pf - teamData.pa) > 0 ? 'text-green-600' : 'text-red-600'
-                            }`}>
-                              {teamData.pf - teamData.pa > 0 ? '+' : ''}{teamData.pf - teamData.pa}
-                            </td>
+                            {teamStatsView === 'averages' ? (
+                              <>
+                                <td className="text-center py-3 px-2 font-medium text-orange-600" data-testid={`text-ppg-${team.teamName}`}>
+                                  {team.ppg}
+                                </td>
+                                <td className="text-center py-3 px-2 text-slate-600" data-testid={`text-rpg-${team.teamName}`}>
+                                  {team.rpg}
+                                </td>
+                                <td className="text-center py-3 px-2 text-slate-600" data-testid={`text-apg-${team.teamName}`}>
+                                  {team.apg}
+                                </td>
+                                <td className="text-center py-3 px-2 text-slate-600" data-testid={`text-fg%-${team.teamName}`}>
+                                  {team.fgPercentage}%
+                                </td>
+                                <td className="text-center py-3 px-2 text-slate-600" data-testid={`text-3p%-${team.teamName}`}>
+                                  {team.threePtPercentage}%
+                                </td>
+                                <td className="text-center py-3 px-2 text-slate-600" data-testid={`text-2p%-${team.teamName}`}>
+                                  {team.twoPtPercentage}%
+                                </td>
+                                <td className="text-center py-3 px-2 text-slate-600" data-testid={`text-ft%-${team.teamName}`}>
+                                  {team.ftPercentage}%
+                                </td>
+                              </>
+                            ) : (
+                              <>
+                                <td className="text-center py-3 px-2 font-medium text-orange-600" data-testid={`text-total-pts-${team.teamName}`}>
+                                  {team.totalPoints}
+                                </td>
+                                <td className="text-center py-3 px-2 text-slate-600" data-testid={`text-total-reb-${team.teamName}`}>
+                                  {team.totalRebounds}
+                                </td>
+                                <td className="text-center py-3 px-2 text-slate-600" data-testid={`text-total-ast-${team.teamName}`}>
+                                  {team.totalAssists}
+                                </td>
+                                <td className="text-center py-3 px-2 text-slate-600" data-testid={`text-total-fgm-${team.teamName}`}>
+                                  {team.totalFGM}
+                                </td>
+                                <td className="text-center py-3 px-2 text-slate-600" data-testid={`text-total-3pm-${team.teamName}`}>
+                                  {team.total3PM}
+                                </td>
+                                <td className="text-center py-3 px-2 text-slate-600" data-testid={`text-total-ftm-${team.teamName}`}>
+                                  {team.totalFTM}
+                                </td>
+                              </>
+                            )}
                           </tr>
                         ))}
                       </tbody>
@@ -1210,17 +1462,33 @@ type GameSchedule = {
                     <p className="text-xs mt-1">Stats will appear once games are played</p>
                   </div>
                 )}
+                
+                {/* Legend */}
                 <div className="mt-6 pt-4 border-t border-gray-200">
                   <div className="text-xs text-slate-500 space-y-1">
                     <div className="font-semibold text-slate-600 mb-2">Legend:</div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                       <span>GP = Games Played</span>
-                      <span>W = Wins</span>
-                      <span>L = Losses</span>
-                      <span>Win% = Win Percentage</span>
-                      <span>PF = Points For</span>
-                      <span>PA = Points Against</span>
-                      <span>Diff = Point Differential</span>
+                      {teamStatsView === 'averages' ? (
+                        <>
+                          <span>PPG = Points Per Game</span>
+                          <span>RPG = Rebounds Per Game</span>
+                          <span>APG = Assists Per Game</span>
+                          <span>FG% = Field Goal %</span>
+                          <span>3P% = Three Point %</span>
+                          <span>2P% = Two Point %</span>
+                          <span>FT% = Free Throw %</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>PTS = Total Points</span>
+                          <span>REB = Total Rebounds</span>
+                          <span>AST = Total Assists</span>
+                          <span>FGM = Field Goals Made</span>
+                          <span>3PM = Three Pointers Made</span>
+                          <span>FTM = Free Throws Made</span>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
