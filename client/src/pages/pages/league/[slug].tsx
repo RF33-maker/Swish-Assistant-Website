@@ -822,59 +822,14 @@ type GameSchedule = {
             )}
           </div>
 
-          <div className="flex gap-6 text-sm font-medium text-slate-600">
-            <a 
-              href="#" 
-              className={`hover:text-orange-500 cursor-pointer ${activeSection === 'teams' ? 'text-orange-500 font-semibold' : ''}`}
-              onClick={() => setActiveSection('teams')}
+          {currentUser && (
+            <button
+              onClick={() => navigate("/coaches-hub")}
+              className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm"
             >
-              Teams
-            </a>
-            <a 
-              href="#" 
-              className={`hover:text-orange-500 cursor-pointer ${activeSection === 'stats' ? 'text-orange-500 font-semibold' : ''}`}
-              onClick={() => {
-                setActiveSection('stats');
-                setDisplayedPlayerCount(20); // Reset to initial count when switching to stats
-                setStatsSearch(""); // Reset search when switching to stats
-                if (allPlayerAverages.length === 0) {
-                  fetchAllPlayerAverages();
-                }
-              }}
-            >
-              Stats
-            </a>
-            <a 
-              href="#" 
-              className={`hover:text-orange-500 cursor-pointer ${activeSection === 'schedule' ? 'text-orange-500 font-semibold' : ''}`}
-              onClick={() => setActiveSection('schedule')}
-            >
-              Schedule
-            </a>
-            <a 
-              href="#" 
-              className="hover:text-orange-500 cursor-pointer"
-              onClick={() => navigate(`/league-leaders/${slug}`)}
-            >
-              Leaders
-            </a>
-            <a 
-              href="#" 
-              className={`hover:text-orange-500 cursor-pointer ${activeSection === 'overview' ? 'text-orange-500 font-semibold' : ''}`}
-              onClick={() => setActiveSection('overview')}
-            >
-              Overview
-            </a>
-            <a href="#" className="hover:text-orange-500">Schedule</a>
-            {currentUser && (
-              <button
-                onClick={() => navigate("/coaches-hub")}
-                className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm"
-              >
-                Coaches Hub
-              </button>
-            )}
-          </div>
+              Coaches Hub
+            </button>
+          )}
         </header>
 
         <section className="mb-10">
@@ -952,6 +907,56 @@ type GameSchedule = {
             </div>
           </section>
         )}
+
+        {/* Navigation Tabs - Moved below carousel */}
+        <div className="bg-white border-b border-gray-200">
+          <div className="max-w-7xl mx-auto px-6">
+            <div className="flex gap-6 text-sm font-medium text-slate-600 py-4 overflow-x-auto">
+              <a 
+                href="#" 
+                className={`hover:text-orange-500 cursor-pointer whitespace-nowrap ${activeSection === 'teams' ? 'text-orange-500 font-semibold' : ''}`}
+                onClick={() => setActiveSection('teams')}
+              >
+                Teams
+              </a>
+              <a 
+                href="#" 
+                className={`hover:text-orange-500 cursor-pointer whitespace-nowrap ${activeSection === 'stats' ? 'text-orange-500 font-semibold' : ''}`}
+                onClick={() => {
+                  setActiveSection('stats');
+                  setDisplayedPlayerCount(20);
+                  setStatsSearch("");
+                  if (allPlayerAverages.length === 0) {
+                    fetchAllPlayerAverages();
+                  }
+                }}
+              >
+                Stats
+              </a>
+              <a 
+                href="#" 
+                className={`hover:text-orange-500 cursor-pointer whitespace-nowrap ${activeSection === 'schedule' ? 'text-orange-500 font-semibold' : ''}`}
+                onClick={() => setActiveSection('schedule')}
+              >
+                Schedule
+              </a>
+              <a 
+                href="#" 
+                className="hover:text-orange-500 cursor-pointer whitespace-nowrap"
+                onClick={() => navigate(`/league-leaders/${slug}`)}
+              >
+                Leaders
+              </a>
+              <a 
+                href="#" 
+                className={`hover:text-orange-500 cursor-pointer whitespace-nowrap ${activeSection === 'overview' ? 'text-orange-500 font-semibold' : ''}`}
+                onClick={() => setActiveSection('overview')}
+              >
+                Overview
+              </a>
+            </div>
+          </div>
+        </div>
 
         <main className="max-w-7xl mx-auto px-6 py-10 grid grid-cols-1 md:grid-cols-3 gap-8">
           <section className="md:col-span-2 space-y-6">
