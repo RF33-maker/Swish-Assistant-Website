@@ -495,10 +495,10 @@ type GameSchedule = {
 
       setIsLoadingStats(true);
       try {
-        // First, try to fetch with full_name, if not available fallback to existing fields
+        // Fetch player stats directly from player_stats table (no separate players table)
         const { data: playerStats, error } = await supabase
           .from("player_stats")
-          .select("*, players:player_id(full_name)")
+          .select("*")
           .eq("league_id", league.league_id);
 
         if (error) {
@@ -506,15 +506,14 @@ type GameSchedule = {
           return;
         }
 
-        // console.log("📊 Sample player stat data:", playerStats?.[0]); // Debug log to see actual field names
+        console.log("📊 Fetched player stats:", playerStats?.length, "records");
 
       // Group stats by player and calculate averages
       const playerMap = new Map();
       
       playerStats?.forEach(stat => {
-        // Use full_name from players table, fallback to existing name, then combine firstname/familyname
+        // Build player name from firstname and familyname in player_stats
         const playerName = stat.full_name || 
-                          stat.players?.full_name || 
                           stat.name || 
                           `${stat.firstname || ''} ${stat.familyname || ''}`.trim() || 
                           'Unknown Player';
