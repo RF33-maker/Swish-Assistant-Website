@@ -71,6 +71,11 @@ type GameSchedule = {
   const [teamStatsView, setTeamStatsView] = useState<'totals' | 'averages'>('averages'); // Toggle for team stats
   const [teamStatsData, setTeamStatsData] = useState<any[]>([]);
   const [isLoadingTeamStats, setIsLoadingTeamStats] = useState(false);
+  const [standingsView, setStandingsView] = useState<'poolA' | 'poolB' | 'full'>('full'); // Toggle for standings view
+  const [poolAStandings, setPoolAStandings] = useState<any[]>([]);
+  const [poolBStandings, setPoolBStandings] = useState<any[]>([]);
+  const [fullLeagueStandings, setFullLeagueStandings] = useState<any[]>([]);
+  const [previousRankings, setPreviousRankings] = useState<Record<string, number>>({});
 
     
 
@@ -219,6 +224,9 @@ type GameSchedule = {
             
             // Calculate standings using team_stats first, fallback to player_stats
             await calculateStandingsWithTeamStats(data.league_id, allPlayerStats || []);
+            
+            // Calculate pool-based standings with movement tracking
+            await calculatePoolStandings(data.league_id);
             
             // Fetch schedule data directly from game_schedule table filtering by league_id
             const { data: scheduleData, error: scheduleError } = await supabase
@@ -869,6 +877,158 @@ type GameSchedule = {
       setStandings(standingsArray);
     };
 
+    // Calculate pool-based standings with movement tracking
+    const calculatePoolStandings = async (leagueId: string) => {
+      try {
+        setIsLoadingStandings(true);
+        
+        // Fetch team stats
+        const { data: teamStatsData, error: teamStatsError } = await supabase
+          .from("team_stats")
+          .select("*")
+          .eq("league_id", leagueId);
+
+        if (teamStatsError || !teamStatsData || teamStatsData.length === 0) {
+          setPoolAStandings([]);
+          setPoolBStandings([]);
+          setFullLeagueStandings([]);
+          setIsLoadingStandings(false);
+          return;
+        }
+
+        // Fetch game schedule to get pool information
+        const { data: scheduleData, error: scheduleError } = await supabase
+          .from("game_schedule")
+          .select("*")
+          .eq("league_id", leagueId);
+
+        // Build team-to-pool mapping from game_schedule
+        const teamPoolMap: Record<string, string> = {};
+        if (scheduleData && !scheduleError) {
+          scheduleData.forEach((game: any) => {
+            if (game.hometeam && game.pool) teamPoolMap[game.hometeam] = game.pool;
+            if (game.awayteam && game.pool) teamPoolMap[game.awayteam] = game.pool;
+          });
+        }
+
+        // Group by game (numeric_id) and calculate standings
+        const gameMap = new Map<string, any[]>();
+        teamStatsData.forEach(stat => {
+          const numericId = stat.numeric_id;
+          if (numericId && stat.name) {
+            if (!gameMap.has(numericId)) {
+              gameMap.set(numericId, []);
+            }
+            gameMap.get(numericId)!.push(stat);
+          }
+        });
+
+        // Calculate standings
+        const teamStatsMap: Record<string, { wins: number, losses: number, pointsFor: number, pointsAgainst: number, games: number, pool?: string }> = {};
+        
+        gameMap.forEach((gameTeams) => {
+          if (gameTeams.length === 2) {
+            const [team1, team2] = gameTeams;
+            const team1Score = team1.tot_spoints || 0;
+            const team2Score = team2.tot_spoints || 0;
+            
+            // Initialize teams
+            if (!teamStatsMap[team1.name]) {
+              teamStatsMap[team1.name] = { 
+                wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0,
+                pool: teamPoolMap[team1.name]
+              };
+            }
+            if (!teamStatsMap[team2.name]) {
+              teamStatsMap[team2.name] = { 
+                wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0,
+                pool: teamPoolMap[team2.name]
+              };
+            }
+            
+            // Record scores
+            teamStatsMap[team1.name].pointsFor += team1Score;
+            teamStatsMap[team1.name].pointsAgainst += team2Score;
+            teamStatsMap[team1.name].games += 1;
+            
+            teamStatsMap[team2.name].pointsFor += team2Score;
+            teamStatsMap[team2.name].pointsAgainst += team1Score;
+            teamStatsMap[team2.name].games += 1;
+            
+            // Determine winner
+            if (team1Score > team2Score) {
+              teamStatsMap[team1.name].wins += 1;
+              teamStatsMap[team2.name].losses += 1;
+            } else if (team2Score > team1Score) {
+              teamStatsMap[team2.name].wins += 1;
+              teamStatsMap[team1.name].losses += 1;
+            }
+          }
+        });
+
+        // Convert to standings format with movement tracking
+        const formatStandings = (teams: any[], poolFilter?: string) => {
+          const filtered = poolFilter 
+            ? teams.filter(t => t.pool === poolFilter)
+            : teams;
+          
+          return filtered
+            .sort((a, b) => {
+              if (b.winPct !== a.winPct) return b.winPct - a.winPct;
+              if (b.pointsDiff !== a.pointsDiff) return b.pointsDiff - a.pointsDiff;
+              return b.avgPoints - a.avgPoints;
+            })
+            .map((team, index) => {
+              const currentRank = index + 1;
+              const previousRank = previousRankings[team.team];
+              let movement = 'same';
+              
+              if (previousRank !== undefined) {
+                if (currentRank < previousRank) movement = 'up';
+                else if (currentRank > previousRank) movement = 'down';
+              }
+              
+              return { ...team, rank: currentRank, movement };
+            });
+        };
+
+        const allTeamsArray = Object.entries(teamStatsMap).map(([team, stats]) => ({
+          team,
+          wins: stats.wins,
+          losses: stats.losses,
+          winPct: stats.games > 0 ? Math.round((stats.wins / stats.games) * 1000) / 1000 : 0,
+          pointsFor: stats.pointsFor,
+          pointsAgainst: stats.pointsAgainst,
+          pointsDiff: stats.pointsFor - stats.pointsAgainst,
+          games: stats.games,
+          avgPoints: stats.games > 0 ? Math.round((stats.pointsFor / stats.games) * 10) / 10 : 0,
+          record: `${stats.wins}-${stats.losses}`,
+          pool: stats.pool
+        }));
+
+        // Set standings for each view
+        const fullStandings = formatStandings(allTeamsArray);
+        const poolAStandings = formatStandings(allTeamsArray, 'A');
+        const poolBStandings = formatStandings(allTeamsArray, 'B');
+
+        setFullLeagueStandings(fullStandings);
+        setPoolAStandings(poolAStandings);
+        setPoolBStandings(poolBStandings);
+
+        // Update previous rankings for next calculation
+        const newRankings: Record<string, number> = {};
+        fullStandings.forEach((team, index) => {
+          newRankings[team.team] = index + 1;
+        });
+        setPreviousRankings(newRankings);
+
+      } catch (error) {
+        console.error("Error calculating pool standings:", error);
+      } finally {
+        setIsLoadingStandings(false);
+      }
+    };
+
     if (!league) {
       return <div className="p-6 text-slate-600">Loading league...</div>;
     }
@@ -1019,6 +1179,18 @@ type GameSchedule = {
               </a>
               <a 
                 href="#" 
+                className={`hover:text-orange-500 cursor-pointer whitespace-nowrap ${activeSection === 'standings' ? 'text-orange-500 font-semibold' : ''}`}
+                onClick={() => {
+                  setActiveSection('standings');
+                  if (league?.league_id && fullLeagueStandings.length === 0) {
+                    calculatePoolStandings(league.league_id);
+                  }
+                }}
+              >
+                Standings
+              </a>
+              <a 
+                href="#" 
                 className={`hover:text-orange-500 cursor-pointer whitespace-nowrap ${activeSection === 'stats' ? 'text-orange-500 font-semibold' : ''}`}
                 onClick={() => {
                   setActiveSection('stats');
@@ -1082,6 +1254,112 @@ type GameSchedule = {
 
         <main className="max-w-7xl mx-auto px-6 py-10 grid grid-cols-1 md:grid-cols-3 gap-8">
           <section className="md:col-span-2 space-y-6">
+            
+            {/* Standings Section */}
+            {activeSection === 'standings' && (
+              <div className="bg-white rounded-xl shadow p-6">
+                <h2 className="text-lg font-semibold text-slate-800 mb-6">League Standings</h2>
+                
+                {/* Pool Tabs */}
+                <div className="flex gap-2 mb-6 border-b border-gray-200">
+                  <button
+                    onClick={() => setStandingsView('poolA')}
+                    className={`px-4 py-2 font-medium transition-colors ${
+                      standingsView === 'poolA' 
+                        ? 'text-orange-600 border-b-2 border-orange-600' 
+                        : 'text-gray-600 hover:text-orange-500'
+                    }`}
+                  >
+                    Pool A
+                  </button>
+                  <button
+                    onClick={() => setStandingsView('poolB')}
+                    className={`px-4 py-2 font-medium transition-colors ${
+                      standingsView === 'poolB' 
+                        ? 'text-orange-600 border-b-2 border-orange-600' 
+                        : 'text-gray-600 hover:text-orange-500'
+                    }`}
+                  >
+                    Pool B
+                  </button>
+                  <button
+                    onClick={() => setStandingsView('full')}
+                    className={`px-4 py-2 font-medium transition-colors ${
+                      standingsView === 'full' 
+                        ? 'text-orange-600 border-b-2 border-orange-600' 
+                        : 'text-gray-600 hover:text-orange-500'
+                    }`}
+                  >
+                    Full League
+                  </button>
+                </div>
+
+                {isLoadingStandings ? (
+                  <div className="text-center py-8">
+                    <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                    <p className="text-gray-600 mt-4">Loading standings...</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200">
+                          <th className="text-left py-3 px-2 font-semibold text-slate-700">Rank</th>
+                          <th className="text-left py-3 px-2 font-semibold text-slate-700">Team</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">W</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">L</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">Win%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">PF</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">PA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">Diff</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(standingsView === 'poolA' ? poolAStandings : 
+                          standingsView === 'poolB' ? poolBStandings : 
+                          fullLeagueStandings).map((team, index) => (
+                          <tr 
+                            key={`${team.team}-${index}`}
+                            className="border-b border-gray-100 hover:bg-orange-50 transition-colors"
+                          >
+                            <td className="py-3 px-2 text-slate-600 font-medium">{team.rank}</td>
+                            <td className="py-3 px-2 text-slate-800 font-medium">{team.team}</td>
+                            <td className="py-3 px-2 text-center text-slate-600">{team.wins}</td>
+                            <td className="py-3 px-2 text-center text-slate-600">{team.losses}</td>
+                            <td className="py-3 px-2 text-center text-slate-600">{(team.winPct * 100).toFixed(1)}%</td>
+                            <td className="py-3 px-2 text-center text-slate-600">{team.pointsFor}</td>
+                            <td className="py-3 px-2 text-center text-slate-600">{team.pointsAgainst}</td>
+                            <td className="py-3 px-2 text-center font-medium text-slate-700">
+                              {team.pointsDiff > 0 ? `+${team.pointsDiff}` : team.pointsDiff}
+                            </td>
+                            <td className="py-3 px-2 text-center">
+                              {team.movement === 'up' && (
+                                <span className="text-green-600 font-bold">▲</span>
+                              )}
+                              {team.movement === 'down' && (
+                                <span className="text-red-600 font-bold">▼</span>
+                              )}
+                              {team.movement === 'same' && (
+                                <span className="text-gray-400">▬</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    
+                    {(standingsView === 'poolA' ? poolAStandings : 
+                      standingsView === 'poolB' ? poolBStandings : 
+                      fullLeagueStandings).length === 0 && (
+                      <div className="text-center py-8 text-gray-500">
+                        No standings data available
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
             
             {/* Stats Section - Comprehensive Player Averages */}
             {activeSection === 'stats' && (
