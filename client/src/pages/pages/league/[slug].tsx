@@ -255,7 +255,7 @@ type GameSchedule = {
               .select("*")
               .eq("league_id", data.league_id);
 
-            // Create a map of game scores from team_stats
+            // Create a map of game scores from team_stats, using team names as key
             const gameScoresMap = new Map<string, { team1: string, team2: string, team1_score: number, team2_score: number }>();
             if (teamStatsForScores && !teamStatsError) {
               const gameMap = new Map<string, any[]>();
@@ -273,12 +273,17 @@ type GameSchedule = {
               gameMap.forEach((gameTeams, numericId) => {
                 if (gameTeams.length === 2) {
                   const [team1, team2] = gameTeams;
-                  gameScoresMap.set(numericId, {
+                  // Create keys based on team name combinations (both orders)
+                  const key1 = `${team1.name}-vs-${team2.name}`;
+                  const key2 = `${team2.name}-vs-${team1.name}`;
+                  const scoreData = {
                     team1: team1.name,
                     team2: team2.name,
                     team1_score: team1.tot_spoints || 0,
                     team2_score: team2.tot_spoints || 0
-                  });
+                  };
+                  gameScoresMap.set(key1, scoreData);
+                  gameScoresMap.set(key2, scoreData);
                 }
               });
             }
@@ -297,7 +302,9 @@ type GameSchedule = {
               
               const games: GameSchedule[] = scheduleData.map((game: any) => {
                 const gameKey = game.game_key || `${game.hometeam}-vs-${game.awayteam}`;
-                const scoreData = gameScoresMap.get(gameKey);
+                // Look up scores by team name combination
+                const teamKey = `${game.hometeam}-vs-${game.awayteam}`;
+                const scoreData = gameScoresMap.get(teamKey);
                 
                 return {
                   game_id: gameKey,
