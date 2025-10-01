@@ -76,6 +76,7 @@ type GameSchedule = {
   const [poolBStandings, setPoolBStandings] = useState<any[]>([]);
   const [fullLeagueStandings, setFullLeagueStandings] = useState<any[]>([]);
   const [previousRankings, setPreviousRankings] = useState<Record<string, number>>({});
+  const [hasPools, setHasPools] = useState(false); // Track if league has pools
 
     
 
