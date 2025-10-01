@@ -1036,8 +1036,8 @@ type GameSchedule = {
 
         // Set standings for each view
         const fullStandings = formatStandings(allTeamsArray);
-        const poolAStandings = formatStandings(allTeamsArray, 'A');
-        const poolBStandings = formatStandings(allTeamsArray, 'B');
+        const poolAStandings = formatStandings(allTeamsArray, 'Pool A');
+        const poolBStandings = formatStandings(allTeamsArray, 'Pool B');
 
         setFullLeagueStandings(fullStandings);
         setPoolAStandings(poolAStandings);
