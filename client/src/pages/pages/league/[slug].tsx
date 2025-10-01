@@ -1295,26 +1295,30 @@ type GameSchedule = {
                 
                 {/* Pool Tabs */}
                 <div className="flex gap-2 mb-6 border-b border-gray-200">
-                  <button
-                    onClick={() => setStandingsView('poolA')}
-                    className={`px-4 py-2 font-medium transition-colors ${
-                      standingsView === 'poolA' 
-                        ? 'text-orange-600 border-b-2 border-orange-600' 
-                        : 'text-gray-600 hover:text-orange-500'
-                    }`}
-                  >
-                    Pool A
-                  </button>
-                  <button
-                    onClick={() => setStandingsView('poolB')}
-                    className={`px-4 py-2 font-medium transition-colors ${
-                      standingsView === 'poolB' 
-                        ? 'text-orange-600 border-b-2 border-orange-600' 
-                        : 'text-gray-600 hover:text-orange-500'
-                    }`}
-                  >
-                    Pool B
-                  </button>
+                  {hasPools && (
+                    <>
+                      <button
+                        onClick={() => setStandingsView('poolA')}
+                        className={`px-4 py-2 font-medium transition-colors ${
+                          standingsView === 'poolA' 
+                            ? 'text-orange-600 border-b-2 border-orange-600' 
+                            : 'text-gray-600 hover:text-orange-500'
+                        }`}
+                      >
+                        Pool A
+                      </button>
+                      <button
+                        onClick={() => setStandingsView('poolB')}
+                        className={`px-4 py-2 font-medium transition-colors ${
+                          standingsView === 'poolB' 
+                            ? 'text-orange-600 border-b-2 border-orange-600' 
+                            : 'text-gray-600 hover:text-orange-500'
+                        }`}
+                      >
+                        Pool B
+                      </button>
+                    </>
+                  )}
                   <button
                     onClick={() => setStandingsView('full')}
                     className={`px-4 py-2 font-medium transition-colors ${
@@ -1323,7 +1327,7 @@ type GameSchedule = {
                         : 'text-gray-600 hover:text-orange-500'
                     }`}
                   >
-                    Full League
+                    {hasPools ? 'Full League' : 'League Standings'}
                   </button>
                 </div>
 
