@@ -1044,6 +1044,10 @@ type GameSchedule = {
         setPoolAStandings(poolAStandings);
         setPoolBStandings(poolBStandings);
 
+        // Check if pools exist (any team has pool data)
+        const poolsExist = poolAStandings.length > 0 || poolBStandings.length > 0;
+        setHasPools(poolsExist);
+
         // Update previous rankings for next calculation
         const newRankings: Record<string, number> = {};
         fullStandings.forEach((team, index) => {
