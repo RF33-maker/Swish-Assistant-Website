@@ -903,11 +903,21 @@ type GameSchedule = {
           .eq("league_id", leagueId);
 
         // Build team-to-pool mapping from game_schedule
+        // Pool values are in format "0(Pool A)" or "0(Pool B)", extract the pool name
+        const extractPoolName = (poolValue: string): string => {
+          const match = poolValue.match(/\(([^)]+)\)/);
+          return match ? match[1] : poolValue;
+        };
+        
         const teamPoolMap: Record<string, string> = {};
         if (scheduleData && !scheduleError) {
           scheduleData.forEach((game: any) => {
-            if (game.hometeam && game.pool) teamPoolMap[game.hometeam] = game.pool;
-            if (game.awayteam && game.pool) teamPoolMap[game.awayteam] = game.pool;
+            if (game.hometeam && game.pool) {
+              teamPoolMap[game.hometeam] = extractPoolName(game.pool);
+            }
+            if (game.awayteam && game.pool) {
+              teamPoolMap[game.awayteam] = extractPoolName(game.pool);
+            }
           });
         }
 
