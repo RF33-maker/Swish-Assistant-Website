@@ -126,6 +126,13 @@ type GameSchedule = {
       setDisplayedPlayerCount(20); // Reset pagination when searching
     }, [statsSearch, allPlayerAverages]);
 
+    // Reset standings view to 'full' if no pools exist and user is on a pool view
+    useEffect(() => {
+      if (!hasPools && (standingsView === 'poolA' || standingsView === 'poolB')) {
+        setStandingsView('full');
+      }
+    }, [hasPools, standingsView]);
+
     useEffect(() => {
       const fetchUserAndLeague = async () => {
         // First get the current user
