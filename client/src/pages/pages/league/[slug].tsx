@@ -909,18 +909,36 @@ type GameSchedule = {
           return match ? match[1] : poolValue;
         };
         
+        // Normalize team names by trying both with and without " I" suffix
+        const normalizeTeamName = (name: string): string => {
+          return name.trim();
+        };
+        
         const teamPoolMap: Record<string, string> = {};
         if (scheduleData && !scheduleError) {
           scheduleData.forEach((game: any) => {
             if (game.hometeam && game.pool) {
-              teamPoolMap[game.hometeam] = extractPoolName(game.pool);
+              const poolName = extractPoolName(game.pool);
+              // Store with original name
+              teamPoolMap[game.hometeam] = poolName;
+              // Also store without " I" suffix for matching
+              const withoutI = game.hometeam.replace(/ I$/, '');
+              if (withoutI !== game.hometeam) {
+                teamPoolMap[withoutI] = poolName;
+              }
             }
             if (game.awayteam && game.pool) {
-              teamPoolMap[game.awayteam] = extractPoolName(game.pool);
+              const poolName = extractPoolName(game.pool);
+              // Store with original name
+              teamPoolMap[game.awayteam] = poolName;
+              // Also store without " I" suffix for matching
+              const withoutI = game.awayteam.replace(/ I$/, '');
+              if (withoutI !== game.awayteam) {
+                teamPoolMap[withoutI] = poolName;
+              }
             }
           });
         }
-
         // Group by game (numeric_id) and calculate standings
         const gameMap = new Map<string, any[]>();
         teamStatsData.forEach(stat => {
