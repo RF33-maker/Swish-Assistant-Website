@@ -1861,50 +1861,121 @@ type GameSchedule = {
               <div className="bg-white rounded-xl shadow p-6">
                 <h2 className="text-lg font-semibold text-slate-800 mb-6">Game Schedule</h2>
                 {schedule.length > 0 ? (
-                  <div className="divide-y divide-gray-200">
-                    {schedule.map((game, index) => (
-                      <div key={`game-${game.game_id}-${index}`} className="p-4 hover:bg-gray-50 transition-colors">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-6">
-                            <div className="text-sm text-slate-600 min-w-[120px]">
-                              <div>
-                                {new Date(game.game_date).toLocaleDateString('en-US', { 
-                                  weekday: 'short',
-                                  month: 'short', 
-                                  day: 'numeric',
-                                  year: 'numeric'
-                                })}
+                  <>
+                    {(() => {
+                      const now = new Date();
+                      const upcomingGames = schedule
+                        .filter(game => new Date(game.game_date) >= now)
+                        .sort((a, b) => new Date(a.game_date).getTime() - new Date(b.game_date).getTime());
+                      const pastGames = schedule
+                        .filter(game => new Date(game.game_date) < now)
+                        .sort((a, b) => new Date(b.game_date).getTime() - new Date(a.game_date).getTime());
+
+                      return (
+                        <>
+                          {/* Upcoming Games */}
+                          {upcomingGames.length > 0 && (
+                            <div className="mb-8">
+                              <h3 className="text-md font-semibold text-slate-700 mb-4 pb-2 border-b border-orange-200">
+                                Upcoming Games
+                              </h3>
+                              <div className="divide-y divide-gray-200">
+                                {upcomingGames.map((game, index) => (
+                                  <div key={`upcoming-${game.game_id}-${index}`} className="p-4 hover:bg-gray-50 transition-colors">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-6">
+                                        <div className="text-sm text-slate-600 min-w-[120px]">
+                                          <div>
+                                            {new Date(game.game_date).toLocaleDateString('en-US', { 
+                                              weekday: 'short',
+                                              month: 'short', 
+                                              day: 'numeric',
+                                              year: 'numeric'
+                                            })}
+                                          </div>
+                                          {game.kickoff_time && (
+                                            <div className="text-xs text-slate-500 mt-1">
+                                              {game.kickoff_time}
+                                            </div>
+                                          )}
+                                        </div>
+                                        <div className="flex items-center gap-4">
+                                          <div className="flex items-center gap-2">
+                                            <TeamLogo teamName={game.team1} leagueId={league?.league_id || ""} size="sm" />
+                                            <span className="font-medium text-slate-800">{game.team1}</span>
+                                          </div>
+                                          <span className="text-slate-500 text-sm">vs</span>
+                                          <div className="flex items-center gap-2">
+                                            <TeamLogo teamName={game.team2} leagueId={league?.league_id || ""} size="sm" />
+                                            <span className="font-medium text-slate-800">{game.team2}</span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                      {game.venue && (
+                                        <div className="text-xs text-slate-400">
+                                          {game.venue}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
                               </div>
-                              {game.kickoff_time && (
-                                <div className="text-xs text-slate-500 mt-1">
-                                  {game.kickoff_time}
-                                </div>
-                              )}
                             </div>
-                            <div className="flex items-center gap-4">
-                              <div className="flex items-center gap-2">
-                                <TeamLogo teamName={game.team1} leagueId={league?.league_id || ""} size="sm" />
-                                <span className="font-medium text-slate-800">{game.team1}</span>
-                              </div>
-                              <span className="text-slate-500 text-sm">vs</span>
-                              <div className="flex items-center gap-2">
-                                <TeamLogo teamName={game.team2} leagueId={league?.league_id || ""} size="sm" />
-                                <span className="font-medium text-slate-800">{game.team2}</span>
+                          )}
+
+                          {/* Past Games (Results) */}
+                          {pastGames.length > 0 && (
+                            <div>
+                              <h3 className="text-md font-semibold text-slate-700 mb-4 pb-2 border-b border-orange-200">
+                                Results
+                              </h3>
+                              <div className="divide-y divide-gray-200">
+                                {pastGames.map((game, index) => (
+                                  <div key={`past-${game.game_id}-${index}`} className="p-4 hover:bg-gray-50 transition-colors">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-6">
+                                        <div className="text-sm text-slate-600 min-w-[120px]">
+                                          <div>
+                                            {new Date(game.game_date).toLocaleDateString('en-US', { 
+                                              weekday: 'short',
+                                              month: 'short', 
+                                              day: 'numeric',
+                                              year: 'numeric'
+                                            })}
+                                          </div>
+                                          {game.kickoff_time && (
+                                            <div className="text-xs text-slate-500 mt-1">
+                                              {game.kickoff_time}
+                                            </div>
+                                          )}
+                                        </div>
+                                        <div className="flex items-center gap-4">
+                                          <div className="flex items-center gap-2">
+                                            <TeamLogo teamName={game.team1} leagueId={league?.league_id || ""} size="sm" />
+                                            <span className="font-medium text-slate-800">{game.team1}</span>
+                                          </div>
+                                          <span className="text-slate-500 text-sm">vs</span>
+                                          <div className="flex items-center gap-2">
+                                            <TeamLogo teamName={game.team2} leagueId={league?.league_id || ""} size="sm" />
+                                            <span className="font-medium text-slate-800">{game.team2}</span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                      {game.venue && (
+                                        <div className="text-xs text-slate-400">
+                                          {game.venue}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
                               </div>
                             </div>
-                          </div>
-                          <div className="text-sm text-slate-500 text-right">
-                            <div>{game.game_id}</div>
-                            {game.venue && (
-                              <div className="text-xs text-slate-400 mt-1">
-                                {game.venue}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </>
                 ) : (
                   <div className="text-center py-8 text-gray-500">
                     <p className="text-sm">No games scheduled</p>
