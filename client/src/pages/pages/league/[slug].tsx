@@ -29,6 +29,9 @@ type GameSchedule = {
   team2: string;
   kickoff_time?: string;
   venue?: string;
+  team1_score?: number;
+  team2_score?: number;
+  status?: string;
 };
 
 
@@ -246,6 +249,40 @@ type GameSchedule = {
             console.log("📅 Schedule data:", scheduleData);
             console.log("📅 Schedule error:", scheduleError);
 
+            // Also fetch team_stats to get scores
+            const { data: teamStatsForScores, error: teamStatsError } = await supabase
+              .from("team_stats")
+              .select("*")
+              .eq("league_id", data.league_id);
+
+            // Create a map of game scores from team_stats
+            const gameScoresMap = new Map<string, { team1: string, team2: string, team1_score: number, team2_score: number }>();
+            if (teamStatsForScores && !teamStatsError) {
+              const gameMap = new Map<string, any[]>();
+              
+              teamStatsForScores.forEach(stat => {
+                const numericId = stat.numeric_id;
+                if (numericId && stat.name) {
+                  if (!gameMap.has(numericId)) {
+                    gameMap.set(numericId, []);
+                  }
+                  gameMap.get(numericId)!.push(stat);
+                }
+              });
+
+              gameMap.forEach((gameTeams, numericId) => {
+                if (gameTeams.length === 2) {
+                  const [team1, team2] = gameTeams;
+                  gameScoresMap.set(numericId, {
+                    team1: team1.name,
+                    team2: team2.name,
+                    team1_score: team1.tot_spoints || 0,
+                    team2_score: team2.tot_spoints || 0
+                  });
+                }
+              });
+            }
+
             if (scheduleData && !scheduleError) {
               console.log("📅 Raw schedule data from game_schedule:", scheduleData.length, "records");
               if (scheduleData.length > 0) {
@@ -258,18 +295,26 @@ type GameSchedule = {
                 console.log('📅 Available columns in game_schedule:', Object.keys(scheduleData[0]));
               }
               
-              const games: GameSchedule[] = scheduleData.map((game: any) => ({
-                game_id: game.game_key || `${game.hometeam}-vs-${game.awayteam}`,
-                game_date: game.matchtime,
-                team1: game.hometeam,
-                team2: game.awayteam,
-                kickoff_time: new Date(game.matchtime).toLocaleTimeString('en-US', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  hour12: true
-                }),
-                venue: game.competitionname // Show competition name as venue/context
-              })).filter((game) => game.team1 && game.team2)
+              const games: GameSchedule[] = scheduleData.map((game: any) => {
+                const gameKey = game.game_key || `${game.hometeam}-vs-${game.awayteam}`;
+                const scoreData = gameScoresMap.get(gameKey);
+                
+                return {
+                  game_id: gameKey,
+                  game_date: game.matchtime,
+                  team1: game.hometeam,
+                  team2: game.awayteam,
+                  kickoff_time: new Date(game.matchtime).toLocaleTimeString('en-US', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                  }),
+                  venue: game.competitionname,
+                  team1_score: scoreData?.team1_score,
+                  team2_score: scoreData?.team2_score,
+                  status: scoreData ? "FINAL" : undefined
+                };
+              }).filter((game) => game.team1 && game.team2)
               .sort((a, b) => {
                 if (!a.game_date || !b.game_date) return 0;
                 const dateA = new Date(a.game_date).getTime();
@@ -1900,12 +1945,12 @@ type GameSchedule = {
                                           )}
                                         </div>
                                         <div className="flex items-center gap-4">
-                                          <div className="flex items-center gap-2">
+                                          <div className="flex items-center gap-2 min-w-[200px]">
                                             <TeamLogo teamName={game.team1} leagueId={league?.league_id || ""} size="sm" />
                                             <span className="font-medium text-slate-800">{game.team1}</span>
                                           </div>
                                           <span className="text-slate-500 text-sm">vs</span>
-                                          <div className="flex items-center gap-2">
+                                          <div className="flex items-center gap-2 min-w-[200px]">
                                             <TeamLogo teamName={game.team2} leagueId={league?.league_id || ""} size="sm" />
                                             <span className="font-medium text-slate-800">{game.team2}</span>
                                           </div>
@@ -1933,7 +1978,7 @@ type GameSchedule = {
                                 {pastGames.map((game, index) => (
                                   <div key={`past-${game.game_id}-${index}`} className="p-4 hover:bg-gray-50 transition-colors">
                                     <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-6">
+                                      <div className="flex items-center gap-6 flex-1">
                                         <div className="text-sm text-slate-600 min-w-[120px]">
                                           <div>
                                             {new Date(game.game_date).toLocaleDateString('en-US', { 
@@ -1943,26 +1988,40 @@ type GameSchedule = {
                                               year: 'numeric'
                                             })}
                                           </div>
-                                          {game.kickoff_time && (
-                                            <div className="text-xs text-slate-500 mt-1">
-                                              {game.kickoff_time}
+                                          {game.status && (
+                                            <div className="text-xs text-green-600 mt-1 font-medium">
+                                              {game.status}
                                             </div>
                                           )}
                                         </div>
-                                        <div className="flex items-center gap-4">
-                                          <div className="flex items-center gap-2">
-                                            <TeamLogo teamName={game.team1} leagueId={league?.league_id || ""} size="sm" />
-                                            <span className="font-medium text-slate-800">{game.team1}</span>
-                                          </div>
-                                          <span className="text-slate-500 text-sm">vs</span>
-                                          <div className="flex items-center gap-2">
-                                            <TeamLogo teamName={game.team2} leagueId={league?.league_id || ""} size="sm" />
-                                            <span className="font-medium text-slate-800">{game.team2}</span>
+                                        <div className="flex items-center gap-4 flex-1">
+                                          <div className="flex items-center justify-between flex-1 max-w-[500px]">
+                                            <div className="flex items-center gap-2 flex-1">
+                                              <TeamLogo teamName={game.team1} leagueId={league?.league_id || ""} size="sm" />
+                                              <span className="font-medium text-slate-800">{game.team1}</span>
+                                            </div>
+                                            {game.team1_score !== undefined && game.team2_score !== undefined ? (
+                                              <div className="flex items-center gap-3 px-4">
+                                                <span className={`text-xl font-bold ${game.team1_score > game.team2_score ? 'text-green-600' : 'text-slate-600'}`}>
+                                                  {game.team1_score}
+                                                </span>
+                                                <span className="text-slate-400">-</span>
+                                                <span className={`text-xl font-bold ${game.team2_score > game.team1_score ? 'text-green-600' : 'text-slate-600'}`}>
+                                                  {game.team2_score}
+                                                </span>
+                                              </div>
+                                            ) : (
+                                              <span className="text-slate-500 text-sm px-4">vs</span>
+                                            )}
+                                            <div className="flex items-center gap-2 flex-1 justify-end">
+                                              <span className="font-medium text-slate-800">{game.team2}</span>
+                                              <TeamLogo teamName={game.team2} leagueId={league?.league_id || ""} size="sm" />
+                                            </div>
                                           </div>
                                         </div>
                                       </div>
                                       {game.venue && (
-                                        <div className="text-xs text-slate-400">
+                                        <div className="text-xs text-slate-400 ml-4">
                                           {game.venue}
                                         </div>
                                       )}
