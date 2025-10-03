@@ -551,40 +551,46 @@ export default function PlayerStatsPage() {
         {playerInfo && (
           <div className="mb-6 md:mb-8">
             <Card className="border-orange-200 shadow-md animate-slide-in-up bg-white">
-              <CardContent className="p-4 md:pt-6">
-                <div className="flex flex-col md:flex-row items-center md:items-start gap-4">
-                  {/* Profile Picture Section */}
-                  <div className="relative group">
-                    <div className="h-16 w-16 md:h-20 md:w-20 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center animate-float hover:animate-shake cursor-pointer shadow-md">
-                      <User className="h-8 w-8 md:h-10 md:w-10 text-white" />
-                      {/* Camera overlay for profile pic upload */}
-                      <div className="absolute inset-0 rounded-full bg-white bg-opacity-20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-                        <Camera className="h-5 w-5 md:h-6 md:w-6 text-orange-700" />
-                      </div>
-                    </div>
-                    <div className="absolute -bottom-1 -right-1 bg-orange-400 rounded-full p-1.5 shadow-md animate-pulse">
-                      <TrendingUp className="h-3 w-3 text-white" />
+              <CardContent className="p-4 md:p-6">
+                <div className="flex items-center gap-4">
+                  {/* Team Logo */}
+                  <div className="flex-shrink-0">
+                    {playerInfo.team ? (
+                      <img 
+                        src={`https://pzctanccfsklkovvaegg.supabase.co/storage/v1/object/public/team-logos/${playerInfo.team.toLowerCase().replace(/\s+/g, '-')}.png`}
+                        alt={`${playerInfo.team} logo`}
+                        className="h-16 w-16 md:h-20 md:w-20 object-contain rounded-lg"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                          const fallback = target.nextElementSibling as HTMLDivElement;
+                          if (fallback) fallback.style.display = 'flex';
+                        }}
+                      />
+                    ) : null}
+                    <div className="h-16 w-16 md:h-20 md:w-20 rounded-lg bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center" style={{ display: 'none' }}>
+                      <Trophy className="h-8 w-8 md:h-10 md:w-10 text-white" />
                     </div>
                   </div>
                   
                   {/* Player Info */}
-                  <div className="flex-1 min-w-0 text-center md:text-left w-full">
-                    <div className="flex flex-col md:flex-row items-center md:items-start gap-2 md:gap-3 mb-2">
-                      <div className="flex-1 min-w-0">
-                        <h1 className="text-2xl md:text-3xl font-bold text-orange-800 hover:text-orange-700 transition-colors duration-300 break-words">{playerInfo.name}</h1>
-                      </div>
-                      <TrendingUp className="h-5 w-5 md:h-6 md:w-6 text-orange-600 animate-bounce flex-shrink-0" />
-                    </div>
-                    <p className="text-orange-700 flex items-center justify-center md:justify-start gap-2 hover:text-orange-600 transition-colors duration-300 text-base md:text-lg mb-3">
-                      <Trophy className="h-4 w-4 md:h-5 md:w-5 hover:animate-bounce flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <h1 className="text-xl md:text-2xl font-bold text-orange-900 mb-1 break-words" data-testid="text-player-name">{playerInfo.name}</h1>
+                    <p className="text-orange-700 flex items-center gap-2 text-sm md:text-base mb-2" data-testid="text-player-team">
+                      <Trophy className="h-4 w-4 flex-shrink-0" />
                       <span className="break-words">{playerInfo.team}</span>
                     </p>
-                    <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 md:gap-4 text-xs md:text-sm text-orange-700">
+                    <div className="flex flex-wrap items-center gap-3 text-xs md:text-sm text-orange-600">
                       <span className="flex items-center gap-1 whitespace-nowrap">
-                        <div className="h-2 w-2 bg-green-400 rounded-full animate-pulse"></div>
+                        <div className="h-2 w-2 bg-green-400 rounded-full"></div>
                         Active Player
                       </span>
-                      <span className="text-orange-600 font-semibold whitespace-nowrap">Performance Trending ↗</span>
+                      {playerInfo.position && (
+                        <span className="whitespace-nowrap">• {playerInfo.position}</span>
+                      )}
+                      {playerInfo.number && (
+                        <span className="whitespace-nowrap">• #{playerInfo.number}</span>
+                      )}
                     </div>
                   </div>
                 </div>
