@@ -7,6 +7,7 @@ import React from "react";
 import { GameSummaryRow } from "./GameSummaryRow";
 import GameResultsCarousel from "@/components/GameResultsCarousel";
 import GameDetailModal from "@/components/GameDetailModal";
+import GamePreviewModal from "@/components/GamePreviewModal";
 import LeagueChatbot from "@/components/LeagueChatbot";
 import { TeamLogo } from "@/components/TeamLogo";
 import { TeamLogoUploader } from "@/components/TeamLogoUploader";
@@ -58,6 +59,8 @@ type GameSchedule = {
     const [sortBy, setSortBy] = useState("points");
     const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
     const [isGameModalOpen, setIsGameModalOpen] = useState(false);
+    const [selectedPreviewGame, setSelectedPreviewGame] = useState<GameSchedule | null>(null);
+    const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
@@ -1940,8 +1943,8 @@ type GameSchedule = {
                                     key={`upcoming-${game.game_id}-${index}`} 
                                     className="p-4 hover:bg-gray-50 transition-colors cursor-pointer"
                                     onClick={() => {
-                                      // TODO: Open preview modal for upcoming games
-                                      console.log("Upcoming game clicked:", game);
+                                      setSelectedPreviewGame(game);
+                                      setIsPreviewModalOpen(true);
                                     }}
                                     data-testid={`upcoming-game-${index}`}
                                   >
@@ -1996,7 +1999,7 @@ type GameSchedule = {
                                 {pastGames.map((game, index) => (
                                   <div 
                                     key={`past-${game.game_id}-${index}`} 
-                                    className="p-4 hover:bg-orange-50 transition-colors cursor-pointer"
+                                    className={`p-4 transition-colors ${game.numeric_id ? 'cursor-pointer hover:bg-orange-50' : 'cursor-default'}`}
                                     onClick={() => {
                                       if (game.numeric_id) {
                                         handleGameClick(game.numeric_id);
@@ -2469,6 +2472,16 @@ type GameSchedule = {
             gameId={selectedGameId}
             isOpen={isGameModalOpen}
             onClose={handleCloseGameModal}
+          />
+        )}
+
+        {/* Game Preview Modal */}
+        {selectedPreviewGame && league && (
+          <GamePreviewModal
+            game={selectedPreviewGame}
+            leagueId={league.league_id}
+            isOpen={isPreviewModalOpen}
+            onClose={() => setIsPreviewModalOpen(false)}
           />
         )}
       </div>
