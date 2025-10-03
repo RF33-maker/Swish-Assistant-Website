@@ -32,6 +32,16 @@ interface Game {
   totalPoints: number;
   date: string;
   opponent: string;
+  opponentScore?: number;
+  isWin?: boolean;
+}
+
+interface UpcomingGame {
+  matchtime: string;
+  hometeam: string;
+  awayteam: string;
+  isHome: boolean;
+  opponent: string;
 }
 
 interface Team {
@@ -42,6 +52,8 @@ interface Team {
   totalGames: number;
   avgTeamPoints: number;
   league: League | null;
+  wins: number;
+  losses: number;
 }
 
 interface Suggestion {
@@ -54,6 +66,7 @@ export default function TeamProfile() {
   const [location, navigate] = useLocation();
   const [team, setTeam] = useState<Team | null>(null);
   const [playerStats, setPlayerStats] = useState<any[]>([]);
+  const [upcomingGames, setUpcomingGames] = useState<UpcomingGame[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
@@ -134,16 +147,29 @@ export default function TeamProfile() {
             return acc;
           }, {});
 
-          // Convert to games with proper opponent data
+          // Convert to games with proper opponent data and calculate W-L record
+          let wins = 0;
+          let losses = 0;
+          
           const games = Object.values(gamesByGameKey).map((gameData: any) => {
             const teams = Array.from(gameData.teams) as string[];
             const opponent = teams.find(team => team !== decodedTeamName) || 'Unknown';
             const ourScore = gameData.teamScores[decodedTeamName] || 0;
+            const opponentScore = gameData.teamScores[opponent] || 0;
+            const isWin = ourScore > opponentScore;
+            
+            if (isWin) {
+              wins++;
+            } else {
+              losses++;
+            }
             
             return {
               totalPoints: ourScore,
               date: gameData.created_at,
-              opponent: opponent
+              opponent: opponent,
+              opponentScore: opponentScore,
+              isWin: isWin
             };
           });
           const recentGames = games.slice(-10); // Last 10 games
@@ -206,6 +232,26 @@ export default function TeamProfile() {
             league = leagueData as League;
           }
           
+          // Fetch upcoming games from game_schedule table
+          const { data: upcomingGamesData, error: scheduleError } = await supabase
+            .from("game_schedule")
+            .select("*")
+            .or(`hometeam.eq.${decodedTeamName},awayteam.eq.${decodedTeamName}`)
+            .gte("matchtime", new Date().toISOString())
+            .order("matchtime", { ascending: true })
+            .limit(5);
+
+          if (!scheduleError && upcomingGamesData) {
+            const formattedUpcomingGames = upcomingGamesData.map((game: any) => ({
+              matchtime: game.matchtime,
+              hometeam: game.hometeam,
+              awayteam: game.awayteam,
+              isHome: game.hometeam === decodedTeamName,
+              opponent: game.hometeam === decodedTeamName ? game.awayteam : game.hometeam
+            }));
+            setUpcomingGames(formattedUpcomingGames);
+          }
+
           setTeam({
             name: decodedTeamName,
             roster,
@@ -214,7 +260,9 @@ export default function TeamProfile() {
             totalGames: games.length,
             avgTeamPoints: games.length > 0 ? 
               Math.round((games.reduce((sum, game) => sum + game.totalPoints, 0) / games.length) * 10) / 10 : 0,
-            league
+            league,
+            wins,
+            losses
           });
         }
       } catch (error) {
@@ -371,20 +419,33 @@ export default function TeamProfile() {
             </div>
 
             {/* Team Stats Summary */}
-            <div className="bg-white rounded-xl shadow p-4 md:p-6">
+            <div className="bg-gradient-to-br from-orange-50 to-yellow-50 border-2 border-orange-300 rounded-xl shadow-md p-4 md:p-6">
               <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-3 md:mb-4 flex items-center gap-2">
                 <svg className="w-4 h-4 md:w-5 md:h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
                 Team Statistics
               </h2>
-              <div className="space-y-2 md:space-y-3">
+              <div className="space-y-3 md:space-y-4">
+                <div className="bg-white rounded-lg p-3 md:p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <svg className="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span className="text-slate-600 font-medium">W-L Record</span>
+                    </div>
+                    <span className="text-2xl md:text-3xl font-bold text-orange-600" data-testid="team-record">
+                      {team.wins}-{team.losses}
+                    </span>
+                  </div>
+                </div>
                 <div className="flex justify-between text-sm md:text-base">
-                  <span className="text-slate-600">Total Games</span>
+                  <span className="text-slate-600">Games Played</span>
                   <span className="font-semibold text-orange-600">{team.totalGames}</span>
                 </div>
                 <div className="flex justify-between text-sm md:text-base">
-                  <span className="text-slate-600">Average Points</span>
+                  <span className="text-slate-600">Avg Points Per Game</span>
                   <span className="font-semibold text-orange-600">{team.avgTeamPoints} PPG</span>
                 </div>
                 <div className="flex justify-between text-sm md:text-base">
@@ -513,13 +574,66 @@ export default function TeamProfile() {
                       <div className="text-xs md:text-sm text-slate-500">{new Date(game.date).toLocaleDateString()}</div>
                     </div>
                     <div className="text-left md:text-right">
-                      <div className="text-base md:text-lg font-bold text-orange-600">{game.totalPoints}</div>
+                      <div className="flex items-center gap-2">
+                        <div className="text-base md:text-lg font-bold text-orange-600">{game.totalPoints}</div>
+                        {game.isWin !== undefined && (
+                          <span className={`text-xs px-2 py-1 rounded ${game.isWin ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                            {game.isWin ? 'W' : 'L'}
+                          </span>
+                        )}
+                      </div>
                       <div className="text-xs text-slate-500">PTS</div>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
+
+            {/* Upcoming Schedule */}
+            {upcomingGames.length > 0 && (
+              <div className="bg-white rounded-xl shadow p-4 md:p-6">
+                <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-3 md:mb-4 flex items-center gap-2">
+                  <svg className="w-4 h-4 md:w-5 md:h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  Upcoming Schedule ({upcomingGames.length})
+                </h2>
+                <div className="space-y-2 md:space-y-3">
+                  {upcomingGames.map((game: UpcomingGame, index: number) => (
+                    <div 
+                      key={index} 
+                      className="flex flex-col md:flex-row justify-between md:items-center p-3 bg-gradient-to-r from-orange-50 to-yellow-50 border border-orange-200 rounded-lg gap-2 md:gap-0"
+                      data-testid={`upcoming-game-${index}`}
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <div className="font-medium text-slate-800 text-sm md:text-base">
+                            {game.isHome ? 'vs' : '@'} {game.opponent}
+                          </div>
+                          <span className={`text-xs px-2 py-1 rounded ${game.isHome ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
+                            {game.isHome ? 'HOME' : 'AWAY'}
+                          </span>
+                        </div>
+                        <div className="text-xs md:text-sm text-slate-500 mt-1">
+                          {new Date(game.matchtime).toLocaleDateString('en-US', { 
+                            weekday: 'short', 
+                            month: 'short', 
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </div>
+                      </div>
+                      <div className="text-left md:text-right">
+                        <svg className="w-5 h-5 md:w-6 md:h-6 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                        </svg>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </main>
