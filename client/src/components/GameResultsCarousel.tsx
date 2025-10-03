@@ -151,9 +151,9 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
   if (loading) {
     return (
       <div className="overflow-x-auto scrollbar-hide">
-        <div className="flex gap-4 animate-pulse">
+        <div className="flex gap-3 md:gap-4 animate-pulse">
           {[1,2,3,4,5].map(i => (
-            <div key={i} className="bg-gray-800 rounded-lg h-16 w-64 flex-shrink-0"></div>
+            <div key={i} className="bg-gray-800 rounded-lg h-16 w-64 md:w-80 flex-shrink-0"></div>
           ))}
         </div>
       </div>
@@ -185,15 +185,19 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
   // Create duplicated games array for infinite scroll
   const duplicatedGames = [...games, ...games];
 
-  // Calculate fixed track width: (card width + gap) * number of cards
-  const cardWidth = 320; // matches the inline style on each card
-  const gap = 16; // gap-4 = 1rem = 16px
-  const trackWidth = duplicatedGames.length * (cardWidth + gap);
+  // Calculate fixed track width based on screen size
+  const mobileCardWidth = 280;
+  const desktopCardWidth = 320;
+  const mobileGap = 12; // gap-3
+  const desktopGap = 16; // gap-4
+  
+  // Use desktop values for animation calculation
+  const trackWidth = duplicatedGames.length * (desktopCardWidth + desktopGap);
 
   return (
     <div className="w-full overflow-hidden">
       <div 
-        className="flex gap-4 px-4 py-2"
+        className="flex gap-3 md:gap-4 px-3 md:px-4 py-2"
         style={{
           width: `${trackWidth}px`,
           animation: `scroll ${animationDuration}s linear infinite`,
@@ -205,13 +209,13 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
         {duplicatedGames.map((game, index) => (
           <div
             key={`carousel-game-${index}`}
-            className="bg-gray-800 rounded-lg px-6 py-4 flex-shrink-0 cursor-pointer hover:bg-gray-700 transition-colors border border-gray-700"
-            style={{ width: '320px', minWidth: '320px', maxWidth: '320px' }}
+            className="bg-gray-800 rounded-lg p-3 md:p-4 flex-shrink-0 cursor-pointer hover:bg-gray-700 transition-colors border border-gray-700 min-w-[280px] md:min-w-[320px]"
+            style={{ width: '280px' }}
             onClick={() => onGameClick(game.game_id)}
-            onMouseDown={(e) => e.preventDefault()} // Prevent text selection
+            onMouseDown={(e) => e.preventDefault()}
           >
           {/* Header with date and status */}
-          <div className="flex justify-between items-center mb-3">
+          <div className="flex justify-between items-center mb-2 md:mb-3">
             <div className="text-xs font-medium text-gray-300 bg-gray-700 px-2 py-1 rounded">
               {game.status}
             </div>
@@ -226,11 +230,11 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <TeamLogo teamName={game.away_team} leagueId={leagueId} size="sm" />
-                <div className="text-white font-bold text-lg">
+                <div className="text-white font-bold text-sm md:text-base">
                   {getTeamAbbr(game.away_team)}
                 </div>
               </div>
-              <div className="text-3xl font-bold text-white">
+              <div className="text-xl md:text-2xl font-bold text-white">
                 {game.away_score}
               </div>
             </div>
@@ -239,11 +243,11 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <TeamLogo teamName={game.home_team} leagueId={leagueId} size="sm" />
-                <div className="text-white font-bold text-lg">
+                <div className="text-white font-bold text-sm md:text-base">
                   {getTeamAbbr(game.home_team)}
                 </div>
               </div>
-              <div className="text-3xl font-bold text-white">
+              <div className="text-xl md:text-2xl font-bold text-white">
                 {game.home_score}
               </div>
             </div>

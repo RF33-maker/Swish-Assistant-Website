@@ -268,23 +268,23 @@ export default function LeagueLeadersPage() {
     iconColor: string;
   }) => (
     <Card className="bg-white border-orange-200 shadow-[0_4px_20px_rgba(255,115,0,0.1)] hover:shadow-[0_8px_30px_rgba(255,115,0,0.15)] transition-all duration-300">
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-lg font-semibold text-orange-800">
-          <Icon className={`h-5 w-5 ${iconColor}`} />
+      <CardHeader className="pb-2 md:pb-3 p-4 md:p-6">
+        <CardTitle className="flex items-center gap-2 text-base md:text-lg font-semibold text-orange-800">
+          <Icon className={`h-5 w-5 md:h-6 md:w-6 ${iconColor}`} />
           {title}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-2">
+      <CardContent className="space-y-2 p-4 md:p-6 pt-0">
         {players.length > 0 ? (
           players.map((player, index) => (
             <div 
               key={`${player.player_id}-${index}`} 
-              className="flex items-center justify-between p-2 rounded-lg bg-orange-50 hover:bg-orange-100 transition-colors duration-200 cursor-pointer"
+              className="flex items-center justify-between py-2 md:py-3 px-2 md:px-3 rounded-lg bg-orange-50 hover:bg-orange-100 transition-colors duration-200 cursor-pointer"
               onClick={() => player.player_id && navigate(`/player/${player.player_id}`)}
             >
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 md:gap-3">
                 <div className={`
-                  w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white
+                  w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center text-xs md:text-sm font-bold text-white
                   ${index === 0 ? 'bg-gradient-to-br from-yellow-400 to-yellow-600' : 
                     index === 1 ? 'bg-gradient-to-br from-gray-400 to-gray-600' :
                     index === 2 ? 'bg-gradient-to-br from-orange-400 to-orange-600' :
@@ -293,12 +293,12 @@ export default function LeagueLeadersPage() {
                   {index + 1}
                 </div>
                 <div>
-                  <p className="font-medium text-orange-900">{player.name}</p>
-                  <p className="text-sm text-orange-700">{player.team_name || 'Unknown Team'}</p>
+                  <p className="text-sm md:text-base font-medium text-orange-900">{player.name}</p>
+                  <p className="text-xs md:text-sm text-orange-700">{player.team_name || 'Unknown Team'}</p>
                 </div>
               </div>
               <div className="text-right">
-                <p className="font-bold text-orange-800">{player.display_value}</p>
+                <p className="text-sm md:text-base font-bold text-orange-800">{player.display_value}</p>
                 <p className="text-xs text-orange-600">{player.games_played} games</p>
               </div>
             </div>
@@ -345,22 +345,22 @@ export default function LeagueLeadersPage() {
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Header />
 
-      <main className="flex-grow p-6 max-w-7xl mx-auto space-y-8">
+      <main className="flex-grow p-4 md:p-6 max-w-7xl mx-auto space-y-6 md:space-y-8">
         {/* Header Section */}
-        <div className="text-center space-y-4">
-          <div className="flex items-center justify-center gap-3">
-            <Trophy className="h-8 w-8 text-orange-500" />
-            <h1 className="text-4xl font-bold text-orange-600">League Leaders</h1>
+        <div className="text-center space-y-3 md:space-y-4">
+          <div className="flex flex-col md:flex-row items-center justify-center gap-2 md:gap-3">
+            <Trophy className="h-6 w-6 md:h-8 md:w-8 text-orange-500" />
+            <h1 className="text-2xl md:text-4xl font-bold text-orange-600">League Leaders</h1>
           </div>
-          <h2 className="text-2xl font-semibold text-orange-800">{league?.name}</h2>
+          <h2 className="text-xl md:text-2xl font-semibold text-orange-800">{league?.name}</h2>
           {league?.description && (
-            <p className="text-orange-700 max-w-2xl mx-auto">{league.description}</p>
+            <p className="text-sm md:text-base text-orange-700 max-w-2xl mx-auto">{league.description}</p>
           )}
         </div>
 
         {/* Leaderboards Grid */}
         {leaderboardStats && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
             {/* Scoring */}
             <StatLeaderboard
               title="Scoring Leaders"
@@ -436,8 +436,8 @@ export default function LeagueLeadersPage() {
         )}
 
         {/* Note about minimum requirements */}
-        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 text-center">
-          <p className="text-sm text-orange-700">
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 md:p-4 text-center">
+          <p className="text-xs md:text-sm text-orange-700">
             * Shooting percentages require minimum attempts: Field Goals (2+), Three Pointers (1+), Free Throws (1+)
           </p>
         </div>

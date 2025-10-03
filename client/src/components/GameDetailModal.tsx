@@ -283,20 +283,20 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
   const selectedTeamPlayers = selectedTeamStats?.players || [];
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden">
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-2 md:p-4">
+      <div className="bg-white rounded-xl shadow-2xl max-w-full md:max-w-4xl lg:max-w-6xl w-full max-h-[95vh] md:max-h-[90vh] overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-orange-50 to-orange-100">
-          <div>
-            <h2 className="text-2xl font-bold text-slate-800">Game Details</h2>
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between p-4 md:p-6 border-b border-gray-200 bg-gradient-to-r from-orange-50 to-orange-100 gap-3 md:gap-0">
+          <div className="flex-1">
+            <h2 className="text-xl md:text-2xl font-bold text-slate-800">Game Details</h2>
             {gameInfo && (
-              <div className="flex items-center gap-4 mt-2 text-sm text-slate-600">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mt-2 text-xs md:text-sm text-slate-600">
                 <div className="flex items-center gap-1">
-                  <Calendar className="w-4 h-4" />
+                  <Calendar className="w-3 h-3 md:w-4 md:h-4" />
                   {new Date(gameInfo.date).toLocaleDateString()}
                 </div>
-                <div className="flex items-center gap-2">
-                  <Trophy className="w-4 h-4" />
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Trophy className="w-3 h-3 md:w-4 md:h-4" />
                   {gameInfo.teams.map((team, index) => (
                     <span key={team} className="font-medium">
                       {team} {gameInfo.teamScores[team]}
@@ -309,60 +309,60 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-orange-200 rounded-full transition-colors"
+            className="absolute top-3 right-3 md:static p-2 hover:bg-orange-200 rounded-full transition-colors"
           >
-            <X className="w-6 h-6 text-slate-600" />
+            <X className="w-5 h-5 md:w-6 md:h-6 text-slate-600" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="overflow-y-auto max-h-[calc(90vh-120px)]">
+        <div className="overflow-y-auto max-h-[calc(95vh-140px)] md:max-h-[calc(90vh-120px)]">
           {loading ? (
-            <div className="p-8 text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto"></div>
-              <p className="mt-4 text-slate-600">Loading game details...</p>
+            <div className="p-6 md:p-8 text-center">
+              <div className="animate-spin rounded-full h-10 w-10 md:h-12 md:w-12 border-b-2 border-orange-500 mx-auto"></div>
+              <p className="mt-4 text-sm md:text-base text-slate-600">Loading game details...</p>
             </div>
           ) : (
-            <div className="p-6 space-y-6">
+            <div className="p-4 md:p-6 space-y-4 md:space-y-6">
               {/* Final Score Summary */}
               {gameInfo && (
-                <div className="bg-gradient-to-r from-orange-50 to-orange-100 rounded-lg p-4 border border-orange-200">
-                  <div className="flex items-center justify-center">
-                    <div className="text-center">
-                      <div className="text-lg font-semibold text-slate-800">{gameInfo.teams[0]}</div>
-                      <div className="text-3xl font-bold text-orange-600">{gameInfo.teamScores[gameInfo.teams[0]]}</div>
+                <div className="bg-gradient-to-r from-orange-50 to-orange-100 rounded-lg p-3 md:p-4 border border-orange-200">
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-0">
+                    <div className="text-center flex-1">
+                      <div className="text-sm md:text-base lg:text-lg font-semibold text-slate-800 truncate">{gameInfo.teams[0]}</div>
+                      <div className="text-2xl md:text-3xl font-bold text-orange-600">{gameInfo.teamScores[gameInfo.teams[0]]}</div>
                     </div>
-                    <div className="mx-8 text-slate-400 font-medium">FINAL</div>
-                    <div className="text-center">
-                      <div className="text-lg font-semibold text-slate-800">{gameInfo.teams[1]}</div>
-                      <div className="text-3xl font-bold text-orange-600">{gameInfo.teamScores[gameInfo.teams[1]]}</div>
+                    <div className="mx-4 md:mx-8 text-xs md:text-sm text-slate-400 font-medium">FINAL</div>
+                    <div className="text-center flex-1">
+                      <div className="text-sm md:text-base lg:text-lg font-semibold text-slate-800 truncate">{gameInfo.teams[1]}</div>
+                      <div className="text-2xl md:text-3xl font-bold text-orange-600">{gameInfo.teamScores[gameInfo.teams[1]]}</div>
                     </div>
                   </div>
                 </div>
               )}
 
               {/* AI Game Summary Section */}
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-3">
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg p-4 md:p-6">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                  <div className="flex items-center gap-2 md:gap-3">
                     <div className="relative">
-                      <Bot className="w-6 h-6 text-blue-600" />
+                      <Bot className="w-5 h-5 md:w-6 md:h-6 text-blue-600" />
                       {summaryLoading && (
                         <div className="absolute -inset-1 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full animate-spin">
-                          <div className="w-8 h-8 bg-blue-50 rounded-full"></div>
+                          <div className="w-7 h-7 md:w-8 md:h-8 bg-blue-50 rounded-full"></div>
                         </div>
                       )}
                     </div>
                     <div>
-                      <h3 className="text-lg font-semibold text-blue-800">AI Game Analysis</h3>
-                      <p className="text-sm text-blue-600">Powered by advanced game intelligence</p>
+                      <h3 className="text-base md:text-lg font-semibold text-blue-800">AI Game Analysis</h3>
+                      <p className="text-xs md:text-sm text-blue-600">Powered by advanced game intelligence</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="px-2 py-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs rounded-full font-medium">
                       PREMIUM
                     </div>
-                    <Sparkles className="w-4 h-4 text-purple-500" />
+                    <Sparkles className="w-3 h-3 md:w-4 md:h-4 text-purple-500" />
                   </div>
                 </div>
 
@@ -371,7 +371,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                     <button
                       onClick={fetchAISummary}
                       disabled={summaryLoading}
-                      className={`relative px-6 py-3 rounded-lg font-medium text-white transition-all duration-300 ${
+                      className={`relative px-4 md:px-6 py-2 md:py-3 rounded-lg text-sm md:text-base font-medium text-white transition-all duration-300 ${
                         summaryLoading
                           ? 'bg-gradient-to-r from-blue-500 to-purple-500 animate-pulse cursor-not-allowed'
                           : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 hover:scale-105 active:scale-95'
@@ -380,7 +380,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                       <div className="flex items-center gap-2">
                         {summaryLoading ? (
                           <>
-                            <Zap className="w-4 h-4 animate-bounce" />
+                            <Zap className="w-3 h-3 md:w-4 md:h-4 animate-bounce" />
                             <span className="animate-pulse">AI Analyzing Game...</span>
                             <div className="flex gap-1">
                               <div className="w-1 h-1 bg-white rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
@@ -390,24 +390,24 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                           </>
                         ) : (
                           <>
-                            <Bot className="w-4 h-4" />
+                            <Bot className="w-3 h-3 md:w-4 md:h-4" />
                             <span>Generate AI Game Summary</span>
-                            <Sparkles className="w-4 h-4" />
+                            <Sparkles className="w-3 h-3 md:w-4 md:h-4" />
                           </>
                         )}
                       </div>
                     </button>
-                    <p className="text-sm text-blue-600 mt-2">
+                    <p className="text-xs md:text-sm text-blue-600 mt-2 px-2">
                       Get detailed insights on key plays, player performances, and game-changing moments
                     </p>
                   </div>
                 ) : (
-                  <div className="bg-white rounded-lg border border-blue-200 p-4">
+                  <div className="bg-white rounded-lg border border-blue-200 p-3 md:p-4">
                     <div className="flex items-center gap-2 mb-3">
-                      <Sparkles className="w-5 h-5 text-purple-500" />
-                      <span className="text-sm font-medium text-blue-800">AI Analysis Complete</span>
+                      <Sparkles className="w-4 h-4 md:w-5 md:h-5 text-purple-500" />
+                      <span className="text-xs md:text-sm font-medium text-blue-800">AI Analysis Complete</span>
                     </div>
-                    <div className="text-slate-700 text-sm leading-relaxed whitespace-pre-wrap">
+                    <div className="text-slate-700 text-xs md:text-sm leading-relaxed whitespace-pre-wrap">
                       {aiSummary}
                     </div>
                     <button
@@ -425,12 +425,12 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
 
               {/* Team Filter Buttons */}
               {gameInfo && (
-                <div className="flex justify-center gap-2">
+                <div className="flex flex-col sm:flex-row justify-center gap-2 -mx-4 md:mx-0 overflow-x-auto px-4 md:px-0">
                   {gameInfo.teams.map((team) => (
                     <button
                       key={team}
                       onClick={() => setSelectedTeam(team)}
-                      className={`px-6 py-2 rounded-lg font-medium transition-colors ${
+                      className={`px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium transition-colors whitespace-nowrap ${
                         selectedTeam === team
                           ? 'bg-orange-500 text-white shadow-md'
                           : 'bg-white text-slate-700 border border-orange-200 hover:bg-orange-50'
@@ -444,12 +444,12 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
 
               {/* Selected Team Summary */}
               {selectedTeamStats && (
-                <div className="bg-orange-50 rounded-lg p-4 border border-orange-200">
+                <div className="bg-orange-50 rounded-lg p-3 md:p-4 border border-orange-200">
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-xl font-bold text-slate-800">{selectedTeamStats.name}</h3>
-                    <div className="text-3xl font-bold text-orange-600">{selectedTeamStats.score}</div>
+                    <h3 className="text-base md:text-xl font-bold text-slate-800 truncate pr-2">{selectedTeamStats.name}</h3>
+                    <div className="text-2xl md:text-3xl font-bold text-orange-600">{selectedTeamStats.score}</div>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 text-xs md:text-sm">
                     <div>
                       <div className="text-slate-800 font-medium">Field Goals</div>
                       <div className="font-semibold text-slate-900">
@@ -486,34 +486,34 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
 
               {/* Box Score Table for Selected Team */}
               <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                <div className="p-4 bg-gray-50 border-b border-gray-200">
-                  <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-                    <Users className="w-5 h-5" />
+                <div className="p-3 md:p-4 bg-gray-50 border-b border-gray-200">
+                  <h3 className="text-sm md:text-lg font-semibold text-slate-800 flex items-center gap-2">
+                    <Users className="w-4 h-4 md:w-5 md:h-5" />
                     {selectedTeam} Box Score
                   </h3>
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                <div className="overflow-x-auto -mx-4 md:mx-0">
+                  <table className="w-full text-xs md:text-sm">
                     <thead className="bg-gray-50 border-b border-gray-200">
                       <tr>
-                        <th className="text-left p-3 font-medium text-slate-700">Player</th>
-                        <th className="text-center p-3 font-medium text-slate-700">MIN</th>
-                        <th className="text-center p-3 font-medium text-slate-700">PTS</th>
-                        <th className="text-center p-3 font-medium text-slate-700">FG</th>
-                        <th className="text-center p-3 font-medium text-slate-700">3P</th>
-                        <th className="text-center p-3 font-medium text-slate-700">FT</th>
-                        <th className="text-center p-3 font-medium text-slate-700">REB</th>
-                        <th className="text-center p-3 font-medium text-slate-700">AST</th>
-                        <th className="text-center p-3 font-medium text-slate-700">STL</th>
-                        <th className="text-center p-3 font-medium text-slate-700">BLK</th>
-                        <th className="text-center p-3 font-medium text-slate-700">TO</th>
-                        <th className="text-center p-3 font-medium text-slate-700">+/-</th>
+                        <th className="text-left p-2 md:p-3 font-medium text-slate-700 sticky left-0 bg-gray-50 z-10">Player</th>
+                        <th className="text-center p-2 md:p-3 font-medium text-slate-700 hidden md:table-cell">MIN</th>
+                        <th className="text-center p-2 md:p-3 font-medium text-slate-700">PTS</th>
+                        <th className="text-center p-2 md:p-3 font-medium text-slate-700 hidden sm:table-cell">FG</th>
+                        <th className="text-center p-2 md:p-3 font-medium text-slate-700 hidden lg:table-cell">3P</th>
+                        <th className="text-center p-2 md:p-3 font-medium text-slate-700 hidden lg:table-cell">FT</th>
+                        <th className="text-center p-2 md:p-3 font-medium text-slate-700">REB</th>
+                        <th className="text-center p-2 md:p-3 font-medium text-slate-700">AST</th>
+                        <th className="text-center p-2 md:p-3 font-medium text-slate-700 hidden md:table-cell">STL</th>
+                        <th className="text-center p-2 md:p-3 font-medium text-slate-700 hidden md:table-cell">BLK</th>
+                        <th className="text-center p-2 md:p-3 font-medium text-slate-700 hidden lg:table-cell">TO</th>
+                        <th className="text-center p-2 md:p-3 font-medium text-slate-700 hidden lg:table-cell">+/-</th>
                       </tr>
                     </thead>
                     <tbody>
                       {selectedTeamPlayers.map((player, index) => (
                         <tr key={player.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-orange-50 transition-colors`}>
-                          <td className="p-3">
+                          <td className="p-2 md:p-3 sticky left-0 bg-inherit z-10">
                             <div>
                               <div className="font-medium text-slate-800">{player.firstname} {player.familyname}</div>
                               {player.number && (
@@ -521,7 +521,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                               )}
                             </div>
                           </td>
-                          <td className="p-3 text-center text-slate-800">
+                          <td className="p-2 md:p-3 text-center text-slate-800 hidden md:table-cell">
                             {player.sminutes && (
                               <div className="flex items-center justify-center gap-1">
                                 <Clock className="w-3 h-3 text-slate-400" />
@@ -529,8 +529,8 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                               </div>
                             )}
                           </td>
-                          <td className="p-3 text-center font-semibold text-orange-600">{player.spoints}</td>
-                          <td className="p-3 text-center text-slate-800">
+                          <td className="p-2 md:p-3 text-center font-semibold text-orange-600">{player.spoints}</td>
+                          <td className="p-2 md:p-3 text-center text-slate-800 hidden sm:table-cell">
                             {player.sfieldgoalsmade !== undefined && player.sfieldgoalsattempted !== undefined ? (
                               <div>
                                 <div className="font-medium">{player.sfieldgoalsmade}/{player.sfieldgoalsattempted}</div>
@@ -540,7 +540,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                               </div>
                             ) : <span className="text-slate-400">-</span>}
                           </td>
-                          <td className="p-3 text-center text-slate-800">
+                          <td className="p-2 md:p-3 text-center text-slate-800 hidden lg:table-cell">
                             {player.sthreepointersmade !== undefined && player.sthreepointersattempted !== undefined ? (
                               <div>
                                 <div className="font-medium">{player.sthreepointersmade}/{player.sthreepointersattempted}</div>
@@ -550,7 +550,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                               </div>
                             ) : <span className="text-slate-400">-</span>}
                           </td>
-                          <td className="p-3 text-center text-slate-800">
+                          <td className="p-2 md:p-3 text-center text-slate-800 hidden lg:table-cell">
                             {player.sfreethrowsmade !== undefined && player.sfreethrowsattempted !== undefined ? (
                               <div>
                                 <div className="font-medium">{player.sfreethrowsmade}/{player.sfreethrowsattempted}</div>
@@ -560,7 +560,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                               </div>
                             ) : <span className="text-slate-400">-</span>}
                           </td>
-                          <td className="p-3 text-center text-slate-800">
+                          <td className="p-2 md:p-3 text-center text-slate-800">
                             <div className="font-medium">{player.sreboundstotal}</div>
                             {(player.rebounds_o || player.rebounds_d) && (
                               <div className="text-xs text-slate-500">
@@ -568,11 +568,11 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                               </div>
                             )}
                           </td>
-                          <td className="p-3 text-center font-medium text-slate-800">{player.sassists}</td>
-                          <td className="p-3 text-center font-medium text-slate-800">{player.ssteals || 0}</td>
-                          <td className="p-3 text-center font-medium text-slate-800">{player.sblocks || 0}</td>
-                          <td className="p-3 text-center font-medium text-red-600">{player.sturnovers || 0}</td>
-                          <td className="p-3 text-center">
+                          <td className="p-2 md:p-3 text-center font-medium text-slate-800">{player.sassists}</td>
+                          <td className="p-2 md:p-3 text-center font-medium text-slate-800 hidden md:table-cell">{player.ssteals || 0}</td>
+                          <td className="p-2 md:p-3 text-center font-medium text-slate-800 hidden md:table-cell">{player.sblocks || 0}</td>
+                          <td className="p-2 md:p-3 text-center font-medium text-red-600 hidden lg:table-cell">{player.sturnovers || 0}</td>
+                          <td className="p-2 md:p-3 text-center hidden lg:table-cell">
                             {player.plus_minus !== undefined && (
                               <span className={`font-medium ${player.plus_minus >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                 {player.plus_minus >= 0 ? '+' : ''}{player.plus_minus}
