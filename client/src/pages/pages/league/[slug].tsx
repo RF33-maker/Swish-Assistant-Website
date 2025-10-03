@@ -1539,22 +1539,22 @@ type GameSchedule = {
                     </table>
                   </div>
                 ) : filteredPlayerAverages.length > 0 ? (
-                  <div className="overflow-x-auto -mx-4 md:mx-0">
-                    <table className="w-full text-xs md:text-sm min-w-[800px]">
+                  <div className="overflow-x-auto -mx-4 md:mx-0 border border-orange-200 rounded-lg">
+                    <table className="w-full text-xs md:text-sm">
                       <thead>
-                        <tr className="border-b border-gray-200">
-                          <th className="text-left py-2 md:py-3 px-2 font-semibold text-slate-700 sticky left-0 bg-white z-10">Player</th>
-                          <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700">GP</th>
-                          <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700 hidden md:table-cell">MIN</th>
-                          <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700">PTS</th>
-                          <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700">REB</th>
-                          <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700">AST</th>
-                          <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700 hidden md:table-cell">STL</th>
-                          <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700 hidden md:table-cell">BLK</th>
-                          <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700 hidden md:table-cell">TO</th>
-                          <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700 hidden md:table-cell">FG%</th>
-                          <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700 hidden md:table-cell">3P%</th>
-                          <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700 hidden md:table-cell">FT%</th>
+                        <tr className="border-b border-gray-200 bg-orange-50">
+                          <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 sticky left-0 bg-orange-50 z-10 min-w-[100px] md:min-w-[140px]">Player</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[45px]">GP</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">MIN</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">PTS</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">REB</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">AST</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">STL</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">BLK</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">TO</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">FG%</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">3P%</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">FT%</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1563,28 +1563,34 @@ type GameSchedule = {
                             key={`${player.name}-${index}`}
                             className="border-b border-gray-100 hover:bg-orange-50 transition-colors cursor-pointer"
                             onClick={() => navigate(`/player/${player.id}`)}
+                            data-testid={`player-row-${player.id}`}
                           >
-                            <td className="py-2 md:py-3 px-2 font-medium text-slate-800 sticky left-0 bg-white hover:bg-orange-50 z-10">
-                              <div className="min-w-0 min-w-[120px]">
-                                <div className="font-medium text-slate-900 text-xs md:text-sm">{player.name}</div>
-                                <div className="text-xs text-slate-500 truncate">{player.team}</div>
+                            <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 sticky left-0 bg-white hover:bg-orange-50 z-10">
+                              <div className="min-w-0">
+                                <div className="font-medium text-slate-900 text-xs md:text-sm truncate">{player.name}</div>
+                                <div className="text-[10px] md:text-xs text-slate-500 truncate">{player.team}</div>
                               </div>
                             </td>
-                            <td className="py-2 md:py-3 px-2 text-center text-slate-600">{player.games}</td>
-                            <td className="py-2 md:py-3 px-2 text-center text-slate-600 hidden md:table-cell">{player.avgMinutes}</td>
-                            <td className="py-2 md:py-3 px-2 text-center font-medium text-orange-600">{player.avgPoints}</td>
-                            <td className="py-2 md:py-3 px-2 text-center text-slate-600">{player.avgRebounds}</td>
-                            <td className="py-2 md:py-3 px-2 text-center text-slate-600">{player.avgAssists}</td>
-                            <td className="py-2 md:py-3 px-2 text-center text-slate-600 hidden md:table-cell">{player.avgSteals}</td>
-                            <td className="py-2 md:py-3 px-2 text-center text-slate-600 hidden md:table-cell">{player.avgBlocks}</td>
-                            <td className="py-2 md:py-3 px-2 text-center text-slate-600 hidden md:table-cell">{player.avgTurnovers}</td>
-                            <td className="py-2 md:py-3 px-2 text-center text-slate-600 hidden md:table-cell">{player.fgPercentage}%</td>
-                            <td className="py-2 md:py-3 px-2 text-center text-slate-600 hidden md:table-cell">{player.threePercentage}%</td>
-                            <td className="py-2 md:py-3 px-2 text-center text-slate-600 hidden md:table-cell">{player.ftPercentage}%</td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 font-medium">{player.games}</td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 hidden md:table-cell">{player.avgMinutes}</td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center font-semibold text-orange-600">{player.avgPoints}</td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center font-medium text-slate-700">{player.avgRebounds}</td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center font-medium text-slate-700">{player.avgAssists}</td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 hidden md:table-cell">{player.avgSteals}</td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 hidden md:table-cell">{player.avgBlocks}</td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 hidden md:table-cell">{player.avgTurnovers}</td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 hidden md:table-cell">{player.fgPercentage}%</td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 hidden md:table-cell">{player.threePercentage}%</td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 hidden md:table-cell">{player.ftPercentage}%</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
+                    
+                    {/* Scroll hint for mobile */}
+                    <div className="md:hidden bg-orange-50 text-orange-700 text-center py-2 text-xs border-t border-orange-200">
+                      ← Swipe to see all stats →
+                    </div>
                     
                     {/* Expand Button - Show when there are more players to display */}
                     {displayedPlayerCount < filteredPlayerAverages.length && (
