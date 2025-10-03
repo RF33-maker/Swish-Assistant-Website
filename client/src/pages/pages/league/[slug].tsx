@@ -32,6 +32,7 @@ type GameSchedule = {
   team1_score?: number;
   team2_score?: number;
   status?: string;
+  numeric_id?: string;
 };
 
 
@@ -255,8 +256,8 @@ type GameSchedule = {
               .select("*")
               .eq("league_id", data.league_id);
 
-            // Create a map of game scores from team_stats, using team names as key
-            const gameScoresMap = new Map<string, { team1: string, team2: string, team1_score: number, team2_score: number }>();
+            // Create a map of game scores and numeric_ids from team_stats, using team names as key
+            const gameScoresMap = new Map<string, { team1: string, team2: string, team1_score: number, team2_score: number, numeric_id: string }>();
             if (teamStatsForScores && !teamStatsError) {
               const gameMap = new Map<string, any[]>();
               
@@ -280,7 +281,8 @@ type GameSchedule = {
                     team1: team1.name,
                     team2: team2.name,
                     team1_score: team1.tot_spoints || 0,
-                    team2_score: team2.tot_spoints || 0
+                    team2_score: team2.tot_spoints || 0,
+                    numeric_id: numericId
                   };
                   gameScoresMap.set(key1, scoreData);
                   gameScoresMap.set(key2, scoreData);
@@ -302,7 +304,7 @@ type GameSchedule = {
               
               const games: GameSchedule[] = scheduleData.map((game: any) => {
                 const gameKey = game.game_key || `${game.hometeam}-vs-${game.awayteam}`;
-                // Look up scores by team name combination
+                // Look up scores and numeric_id by team name combination
                 const teamKey = `${game.hometeam}-vs-${game.awayteam}`;
                 const scoreData = gameScoresMap.get(teamKey);
                 
@@ -319,7 +321,8 @@ type GameSchedule = {
                   venue: game.competitionname,
                   team1_score: scoreData?.team1_score,
                   team2_score: scoreData?.team2_score,
-                  status: scoreData ? "FINAL" : undefined
+                  status: scoreData ? "FINAL" : undefined,
+                  numeric_id: scoreData?.numeric_id
                 };
               }).filter((game) => game.team1 && game.team2)
               .sort((a, b) => {
@@ -1933,7 +1936,15 @@ type GameSchedule = {
                               </h3>
                               <div className="divide-y divide-gray-200">
                                 {upcomingGames.map((game, index) => (
-                                  <div key={`upcoming-${game.game_id}-${index}`} className="p-4 hover:bg-gray-50 transition-colors">
+                                  <div 
+                                    key={`upcoming-${game.game_id}-${index}`} 
+                                    className="p-4 hover:bg-gray-50 transition-colors cursor-pointer"
+                                    onClick={() => {
+                                      // TODO: Open preview modal for upcoming games
+                                      console.log("Upcoming game clicked:", game);
+                                    }}
+                                    data-testid={`upcoming-game-${index}`}
+                                  >
                                     <div className="flex items-center justify-between">
                                       <div className="flex items-center gap-6">
                                         <div className="text-sm text-slate-600 min-w-[120px]">
@@ -1983,7 +1994,16 @@ type GameSchedule = {
                               </h3>
                               <div className="divide-y divide-gray-200">
                                 {pastGames.map((game, index) => (
-                                  <div key={`past-${game.game_id}-${index}`} className="p-4 hover:bg-gray-50 transition-colors">
+                                  <div 
+                                    key={`past-${game.game_id}-${index}`} 
+                                    className="p-4 hover:bg-orange-50 transition-colors cursor-pointer"
+                                    onClick={() => {
+                                      if (game.numeric_id) {
+                                        handleGameClick(game.numeric_id);
+                                      }
+                                    }}
+                                    data-testid={`past-game-${index}`}
+                                  >
                                     <div className="flex items-center justify-between">
                                       <div className="flex items-center gap-6 flex-1">
                                         <div className="text-sm text-slate-600 min-w-[120px]">
