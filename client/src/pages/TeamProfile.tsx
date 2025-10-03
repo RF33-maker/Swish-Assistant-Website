@@ -108,54 +108,63 @@ export default function TeamProfile() {
       try {
         const decodedTeamName = decodeURIComponent(teamName);
         
-        // Fetch all player stats for this team
-        const { data: allPlayerStats, error } = await supabase
+        // Step 1: Get all stats for this team from player_stats using team_name field
+        const { data: allStats, error: statsError } = await supabase
           .from("player_stats")
           .select("*")
-          .eq("team", decodedTeamName);
+          .eq("team_name", decodedTeamName);
 
-        if (error) {
-          console.error("Error fetching team data:", error);
+        if (statsError) {
+          console.error("Error fetching player stats:", statsError);
           return;
         }
 
-        setPlayerStats(allPlayerStats || []);
+        setPlayerStats(allStats || []);
 
-        // Process team data
-        if (allPlayerStats && allPlayerStats.length > 0) {
-          // Calculate team totals and averages using game_key to properly determine opponents
-          const gamesByGameKey = allPlayerStats.reduce((acc: Record<string, any>, player: any) => {
-            if (!acc[player.game_key]) {
-              acc[player.game_key] = {
-                game_key: player.game_key,
-                created_at: player.created_at,
-                home_team: player.home_team,
-                away_team: player.away_team,
-                teams: new Set(),
-                teamScores: {},
-                ourTeam: decodedTeamName
+        // Step 2: Calculate team stats and get unique player roster
+        if (allStats && allStats.length > 0) {
+          // Group stats by game_key to get unique games
+          const gamesByGameKey = allStats.reduce((acc: Record<string, any>, stat: any) => {
+            if (!acc[stat.game_key]) {
+              acc[stat.game_key] = {
+                game_key: stat.game_key,
+                created_at: stat.created_at,
+                home_team: stat.home_team,
+                away_team: stat.away_team,
+                playerStats: []
               };
             }
-            
-            // Track teams and scores in this game
-            acc[player.game_key].teams.add(player.team);
-            if (!acc[player.game_key].teamScores[player.team]) {
-              acc[player.game_key].teamScores[player.team] = 0;
-            }
-            acc[player.game_key].teamScores[player.team] += player.spoints || 0;
-            
+            acc[stat.game_key].playerStats.push(stat);
             return acc;
           }, {});
 
-          // Convert to games with proper opponent data and calculate W-L record
+          // Get unique player IDs from stats to identify our roster
+          const playerIds = Array.from(new Set(allStats.map((stat: any) => stat.player_id).filter(Boolean)));
+
+          // Calculate team totals for each game and determine W-L record
           let wins = 0;
           let losses = 0;
           
-          const games = Object.values(gamesByGameKey).map((gameData: any) => {
-            const teams = Array.from(gameData.teams) as string[];
-            const opponent = teams.find(team => team !== decodedTeamName) || 'Unknown';
-            const ourScore = gameData.teamScores[decodedTeamName] || 0;
-            const opponentScore = gameData.teamScores[opponent] || 0;
+          const games = await Promise.all(Object.values(gamesByGameKey).map(async (gameData: any) => {
+            // Sum all player points for this team in this game
+            const ourScore = gameData.playerStats.reduce((sum: number, stat: any) => sum + (stat.spoints || 0), 0);
+            
+            // Determine opponent from home/away teams
+            const opponent = gameData.home_team === decodedTeamName ? gameData.away_team : gameData.home_team;
+            
+            // Fetch all stats for this game to calculate opponent score
+            const { data: allGameStats } = await supabase
+              .from("player_stats")
+              .select("spoints, player_id")
+              .eq("game_key", gameData.game_key);
+            
+            // Filter out our team's stats to get opponent stats
+            const opponentStats = allGameStats?.filter((stat: any) => 
+              !playerIds.includes(stat.player_id)
+            ) || [];
+            
+            const opponentScore = opponentStats.reduce((sum: number, stat: any) => sum + (stat.spoints || 0), 0);
+            
             const isWin = ourScore > opponentScore;
             
             if (isWin) {
@@ -171,68 +180,94 @@ export default function TeamProfile() {
               opponentScore: opponentScore,
               isWin: isWin
             };
-          });
-          const recentGames = games.slice(-10); // Last 10 games
+          }));
           
-          // Get roster with stats
-          const roster: PlayerStat[] = allPlayerStats.reduce((acc: PlayerStat[], player: any) => {
-            const existing = acc.find(p => p.name === player.name);
-            if (existing) {
-              existing.totalPoints += player.spoints || 0;
-              existing.totalRebounds += player.sreboundstotal || 0;
-              existing.totalAssists += player.sassists || 0;
-              existing.totalSteals += player.ssteals || 0;
-              existing.totalBlocks += player.sblocks || 0;
-              existing.gamesPlayed += 1;
-            } else {
-              acc.push({
-                player_id: player.player_id,
-                name: player.name,
-                position: player.position || 'Player',
-                totalPoints: player.spoints || 0,
-                totalRebounds: player.sreboundstotal || 0,
-                totalAssists: player.sassists || 0,
-                totalSteals: player.ssteals || 0,
-                totalBlocks: player.sblocks || 0,
-                gamesPlayed: 1,
-                avgPoints: 0,
-                avgRebounds: 0,
-                avgAssists: 0,
-                avgSteals: 0,
-                avgBlocks: 0
+          const recentGames = games.slice(-10);
+
+          // Step 3: Calculate player averages from stats
+          const playerStatsMap = new Map<string, {
+            player_id: string;
+            name: string;
+            position: string;
+            totalPoints: number;
+            totalRebounds: number;
+            totalAssists: number;
+            totalSteals: number;
+            totalBlocks: number;
+            gamesPlayed: number;
+          }>();
+
+          allStats.forEach((stat: any) => {
+            const playerId = stat.player_id || stat.id;
+            const playerName = stat.full_name || stat.name || 'Unknown Player';
+            
+            if (!playerStatsMap.has(playerId)) {
+              playerStatsMap.set(playerId, {
+                player_id: playerId,
+                name: playerName,
+                position: stat.position || 'Player',
+                totalPoints: 0,
+                totalRebounds: 0,
+                totalAssists: 0,
+                totalSteals: 0,
+                totalBlocks: 0,
+                gamesPlayed: 0
               });
             }
-            return acc;
-          }, []);
-          
-          // Calculate averages
-          roster.forEach((player: PlayerStat) => {
-            player.avgPoints = Math.round((player.totalPoints / player.gamesPlayed) * 10) / 10;
-            player.avgRebounds = Math.round((player.totalRebounds / player.gamesPlayed) * 10) / 10;
-            player.avgAssists = Math.round((player.totalAssists / player.gamesPlayed) * 10) / 10;
-            player.avgSteals = Math.round((player.totalSteals / player.gamesPlayed) * 10) / 10;
-            player.avgBlocks = Math.round((player.totalBlocks / player.gamesPlayed) * 10) / 10;
+            
+            const playerData = playerStatsMap.get(playerId)!;
+            playerData.totalPoints += stat.spoints || 0;
+            playerData.totalRebounds += stat.sreboundstotal || 0;
+            playerData.totalAssists += stat.sassists || 0;
+            playerData.totalSteals += stat.ssteals || 0;
+            playerData.totalBlocks += stat.sblocks || 0;
+            playerData.gamesPlayed += 1;
+          });
+
+          // Convert to roster array and calculate averages
+          const rosterWithStats: PlayerStat[] = Array.from(playerStatsMap.values()).map((player) => {
+            const avgPoints = player.gamesPlayed > 0 ? Math.round((player.totalPoints / player.gamesPlayed) * 10) / 10 : 0;
+            const avgRebounds = player.gamesPlayed > 0 ? Math.round((player.totalRebounds / player.gamesPlayed) * 10) / 10 : 0;
+            const avgAssists = player.gamesPlayed > 0 ? Math.round((player.totalAssists / player.gamesPlayed) * 10) / 10 : 0;
+            const avgSteals = player.gamesPlayed > 0 ? Math.round((player.totalSteals / player.gamesPlayed) * 10) / 10 : 0;
+            const avgBlocks = player.gamesPlayed > 0 ? Math.round((player.totalBlocks / player.gamesPlayed) * 10) / 10 : 0;
+            
+            return {
+              player_id: player.player_id,
+              name: player.name,
+              position: player.position,
+              avgPoints,
+              avgRebounds,
+              avgAssists,
+              avgSteals,
+              avgBlocks,
+              totalPoints: player.totalPoints,
+              totalRebounds: player.totalRebounds,
+              totalAssists: player.totalAssists,
+              totalSteals: player.totalSteals,
+              totalBlocks: player.totalBlocks,
+              gamesPlayed: player.gamesPlayed
+            };
           });
           
           // Sort roster by points
-          roster.sort((a: PlayerStat, b: PlayerStat) => b.avgPoints - a.avgPoints);
+          rosterWithStats.sort((a: PlayerStat, b: PlayerStat) => b.avgPoints - a.avgPoints);
           
           // Find top player
-          const topPlayer = roster[0];
+          const topPlayer = rosterWithStats[0];
           
-          // Get league info from first player stat
-          const leagueId = allPlayerStats[0]?.league_id;
+          // Get league info from first stat record
           let league: League | null = null;
-          if (leagueId) {
+          if (allStats[0]?.league_id) {
             const { data: leagueData } = await supabase
               .from("leagues")
               .select("*")
-              .eq("id", leagueId)
+              .eq("id", allStats[0].league_id)
               .single();
             league = leagueData as League;
           }
           
-          // Fetch upcoming games from game_schedule table
+          // Step 5: Fetch upcoming games from game_schedule table
           const { data: upcomingGamesData, error: scheduleError } = await supabase
             .from("game_schedule")
             .select("*")
@@ -254,7 +289,7 @@ export default function TeamProfile() {
 
           setTeam({
             name: decodedTeamName,
-            roster,
+            roster: rosterWithStats,
             topPlayer,
             recentGames,
             totalGames: games.length,
