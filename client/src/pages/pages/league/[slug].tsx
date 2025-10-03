@@ -1136,59 +1136,69 @@ type GameSchedule = {
 
     return (
       <div className="min-h-screen bg-[#fffaf1]">
-        <header className="bg-white shadow-sm sticky top-0 z-50 px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img
-              src={SwishLogo}
-              alt="Swish Assistant"
-              className="h-9 cursor-pointer"
-              onClick={() => navigate("/")}
-            />
-          </div>
+        <header className="bg-white shadow-sm sticky top-0 z-50 px-4 md:px-6 py-3 md:py-4">
+          <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
+            <div className="flex items-center justify-between md:justify-start">
+              <img
+                src={SwishLogo}
+                alt="Swish Assistant"
+                className="h-8 md:h-9 cursor-pointer"
+                onClick={() => navigate("/")}
+              />
+              {currentUser && (
+                <button
+                  onClick={() => navigate("/coaches-hub")}
+                  className="md:hidden bg-orange-500 hover:bg-orange-600 text-white px-3 py-1.5 rounded-lg font-medium transition-colors text-sm"
+                >
+                  Hub
+                </button>
+              )}
+            </div>
 
-          <div className="relative w-full max-w-md mx-6">
-            <input
-              type="text"
-              placeholder="Search leagues or players..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-              className="w-full px-4 py-2 border border-gray-300 rounded-full text-sm"
-            />
-            <button
-              onClick={handleSearch}
-              className="absolute right-0 top-0 h-full px-4 bg-orange-500 hover:bg-orange-600 text-white rounded-full text-sm"
-            >
-              Go
-            </button>
+            <div className="relative w-full md:max-w-md md:mx-6">
+              <input
+                type="text"
+                placeholder="Search leagues or players..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                className="w-full px-4 py-2 border border-gray-300 rounded-full text-sm"
+              />
+              <button
+                onClick={handleSearch}
+                className="absolute right-0 top-0 h-full px-3 md:px-4 bg-orange-500 hover:bg-orange-600 text-white rounded-full text-sm"
+              >
+                Go
+              </button>
 
-            {suggestions.length > 0 && (
-              <ul className="absolute z-50 mt-2 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                {suggestions.map((item, index) => (
-                  <li
-                    key={index}
-                    onClick={() => {
-                      setSearch("");
-                      setSuggestions([]);
-                      navigate(`/league/${item.slug}`);
-                    }}
-                    className="px-4 py-2 cursor-pointer hover:bg-orange-100 text-left text-slate-800"
-                  >
-                    {item.name}
-                  </li>
-                ))}
-              </ul>
+              {suggestions.length > 0 && (
+                <ul className="absolute z-50 mt-2 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                  {suggestions.map((item, index) => (
+                    <li
+                      key={index}
+                      onClick={() => {
+                        setSearch("");
+                        setSuggestions([]);
+                        navigate(`/league/${item.slug}`);
+                      }}
+                      className="px-4 py-2 cursor-pointer hover:bg-orange-100 text-left text-slate-800 text-sm"
+                    >
+                      {item.name}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            {currentUser && (
+              <button
+                onClick={() => navigate("/coaches-hub")}
+                className="hidden md:block bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm whitespace-nowrap"
+              >
+                Coaches Hub
+              </button>
             )}
           </div>
-
-          {currentUser && (
-            <button
-              onClick={() => navigate("/coaches-hub")}
-              className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm"
-            >
-              Coaches Hub
-            </button>
-          )}
         </header>
 
         <section className="mb-10">
@@ -1265,18 +1275,18 @@ type GameSchedule = {
 
         {/* Navigation Tabs - Moved below carousel */}
         <div className="bg-white border-b border-gray-200">
-          <div className="max-w-7xl mx-auto px-6">
-            <div className="flex gap-6 text-sm font-medium text-slate-600 py-4 overflow-x-auto">
+          <div className="max-w-7xl mx-auto px-4 md:px-6">
+            <div className="flex gap-4 md:gap-6 text-sm font-medium text-slate-600 py-3 md:py-4 overflow-x-auto">
               <a 
                 href="#" 
-                className={`hover:text-orange-500 cursor-pointer whitespace-nowrap ${activeSection === 'teams' ? 'text-orange-500 font-semibold' : ''}`}
+                className={`hover:text-orange-500 cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'teams' ? 'text-orange-500 font-semibold border-b-2 border-orange-500' : ''}`}
                 onClick={() => setActiveSection('teams')}
               >
                 Teams
               </a>
               <a 
                 href="#" 
-                className={`hover:text-orange-500 cursor-pointer whitespace-nowrap ${activeSection === 'standings' ? 'text-orange-500 font-semibold' : ''}`}
+                className={`hover:text-orange-500 cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'standings' ? 'text-orange-500 font-semibold border-b-2 border-orange-500' : ''}`}
                 onClick={() => {
                   setActiveSection('standings');
                   if (league?.league_id && fullLeagueStandings.length === 0) {
@@ -1288,7 +1298,7 @@ type GameSchedule = {
               </a>
               <a 
                 href="#" 
-                className={`hover:text-orange-500 cursor-pointer whitespace-nowrap ${activeSection === 'stats' ? 'text-orange-500 font-semibold' : ''}`}
+                className={`hover:text-orange-500 cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'stats' ? 'text-orange-500 font-semibold border-b-2 border-orange-500' : ''}`}
                 onClick={() => {
                   setActiveSection('stats');
                   setDisplayedPlayerCount(20);
@@ -1302,7 +1312,7 @@ type GameSchedule = {
               </a>
               <a 
                 href="#" 
-                className={`hover:text-orange-500 cursor-pointer whitespace-nowrap ${activeSection === 'teamstats' ? 'text-orange-500 font-semibold' : ''}`}
+                className={`hover:text-orange-500 cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'teamstats' ? 'text-orange-500 font-semibold border-b-2 border-orange-500' : ''}`}
                 onClick={() => {
                   setActiveSection('teamstats');
                   if (teamStatsData.length === 0) {
@@ -1314,21 +1324,21 @@ type GameSchedule = {
               </a>
               <a 
                 href="#" 
-                className={`hover:text-orange-500 cursor-pointer whitespace-nowrap ${activeSection === 'schedule' ? 'text-orange-500 font-semibold' : ''}`}
+                className={`hover:text-orange-500 cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'schedule' ? 'text-orange-500 font-semibold border-b-2 border-orange-500' : ''}`}
                 onClick={() => setActiveSection('schedule')}
               >
                 Schedule
               </a>
               <a 
                 href="#" 
-                className="hover:text-orange-500 cursor-pointer whitespace-nowrap"
+                className="hover:text-orange-500 cursor-pointer whitespace-nowrap pb-1"
                 onClick={() => navigate(`/league-leaders/${slug}`)}
               >
                 Leaders
               </a>
               <a 
                 href="#" 
-                className={`hover:text-orange-500 cursor-pointer whitespace-nowrap ${activeSection === 'comparison' ? 'text-orange-500 font-semibold' : ''}`}
+                className={`hover:text-orange-500 cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'comparison' ? 'text-orange-500 font-semibold border-b-2 border-orange-500' : ''}`}
                 onClick={() => {
                   setActiveSection('comparison');
                   if (allPlayerAverages.length === 0) {
@@ -1343,7 +1353,7 @@ type GameSchedule = {
               </a>
               <a 
                 href="#" 
-                className={`hover:text-orange-500 cursor-pointer whitespace-nowrap ${activeSection === 'overview' ? 'text-orange-500 font-semibold' : ''}`}
+                className={`hover:text-orange-500 cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'overview' ? 'text-orange-500 font-semibold border-b-2 border-orange-500' : ''}`}
                 onClick={() => setActiveSection('overview')}
               >
                 Overview
@@ -1352,21 +1362,21 @@ type GameSchedule = {
           </div>
         </div>
 
-        <main className="max-w-7xl mx-auto px-6 py-10 grid grid-cols-1 md:grid-cols-3 gap-8">
+        <main className="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-10 grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
           <section className="md:col-span-2 space-y-6">
             
             {/* Standings Section */}
             {activeSection === 'standings' && (
-              <div className="bg-white rounded-xl shadow p-6">
-                <h2 className="text-lg font-semibold text-slate-800 mb-6">League Standings</h2>
+              <div className="bg-white rounded-xl shadow p-4 md:p-6">
+                <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-4 md:mb-6">League Standings</h2>
                 
                 {/* Pool Tabs */}
-                <div className="flex flex-wrap gap-2 mb-6 border-b border-gray-200">
+                <div className="flex flex-wrap gap-2 mb-4 md:mb-6 border-b border-gray-200">
                   {hasPools && (
                     <>
                       <button
                         onClick={() => setStandingsView('poolA')}
-                        className={`px-3 py-2 md:px-4 text-sm md:text-base font-medium transition-colors ${
+                        className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium transition-colors ${
                           standingsView === 'poolA' 
                             ? 'text-orange-600 border-b-2 border-orange-600' 
                             : 'text-gray-600 hover:text-orange-500'
@@ -1376,7 +1386,7 @@ type GameSchedule = {
                       </button>
                       <button
                         onClick={() => setStandingsView('poolB')}
-                        className={`px-3 py-2 md:px-4 text-sm md:text-base font-medium transition-colors ${
+                        className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium transition-colors ${
                           standingsView === 'poolB' 
                             ? 'text-orange-600 border-b-2 border-orange-600' 
                             : 'text-gray-600 hover:text-orange-500'
@@ -1388,7 +1398,7 @@ type GameSchedule = {
                   )}
                   <button
                     onClick={() => setStandingsView('full')}
-                    className={`px-3 py-2 md:px-4 text-sm md:text-base font-medium transition-colors ${
+                    className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium transition-colors ${
                       standingsView === 'full' 
                         ? 'text-orange-600 border-b-2 border-orange-600' 
                         : 'text-gray-600 hover:text-orange-500'
@@ -1404,19 +1414,19 @@ type GameSchedule = {
                     <p className="text-gray-600 mt-4">Loading standings...</p>
                   </div>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs md:text-sm">
+                  <div className="overflow-x-auto -mx-4 md:mx-0">
+                    <table className="w-full text-xs md:text-sm min-w-[640px]">
                       <thead>
                         <tr className="border-b border-gray-200">
-                          <th className="text-left py-2 px-1 md:py-3 md:px-2 font-semibold text-slate-700">Rank</th>
-                          <th className="text-left py-2 px-1 md:py-3 md:px-2 font-semibold text-slate-700">Team</th>
-                          <th className="text-center py-2 px-1 md:py-3 md:px-2 font-semibold text-slate-700">W</th>
-                          <th className="text-center py-2 px-1 md:py-3 md:px-2 font-semibold text-slate-700">L</th>
-                          <th className="text-center py-2 px-1 md:py-3 md:px-2 font-semibold text-slate-700">Win%</th>
-                          <th className="text-center py-2 px-1 md:py-3 md:px-2 font-semibold text-slate-700">PF</th>
-                          <th className="text-center py-2 px-1 md:py-3 md:px-2 font-semibold text-slate-700">PA</th>
-                          <th className="text-center py-2 px-1 md:py-3 md:px-2 font-semibold text-slate-700">Diff</th>
-                          <th className="text-center py-2 px-1 md:py-3 md:px-2 font-semibold text-slate-700"></th>
+                          <th className="text-left py-2 px-2 md:py-3 font-semibold text-slate-700 sticky left-0 bg-white z-10">Rank</th>
+                          <th className="text-left py-2 px-2 md:py-3 font-semibold text-slate-700 sticky left-8 md:static bg-white z-10">Team</th>
+                          <th className="text-center py-2 px-2 md:py-3 font-semibold text-slate-700">W</th>
+                          <th className="text-center py-2 px-2 md:py-3 font-semibold text-slate-700">L</th>
+                          <th className="text-center py-2 px-2 md:py-3 font-semibold text-slate-700">Win%</th>
+                          <th className="text-center py-2 px-2 md:py-3 font-semibold text-slate-700">PF</th>
+                          <th className="text-center py-2 px-2 md:py-3 font-semibold text-slate-700 hidden md:table-cell">PA</th>
+                          <th className="text-center py-2 px-2 md:py-3 font-semibold text-slate-700 hidden md:table-cell">Diff</th>
+                          <th className="text-center py-2 px-2 md:py-3 font-semibold text-slate-700"></th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1427,17 +1437,17 @@ type GameSchedule = {
                             key={`${team.team}-${index}`}
                             className="border-b border-gray-100 hover:bg-orange-50 transition-colors"
                           >
-                            <td className="py-2 px-1 md:py-3 md:px-2 text-slate-600 font-medium">{team.rank}</td>
-                            <td className="py-2 px-1 md:py-3 md:px-2 text-slate-800 font-medium">{team.team}</td>
-                            <td className="py-2 px-1 md:py-3 md:px-2 text-center text-slate-600">{team.wins}</td>
-                            <td className="py-2 px-1 md:py-3 md:px-2 text-center text-slate-600">{team.losses}</td>
-                            <td className="py-2 px-1 md:py-3 md:px-2 text-center text-slate-600">{(team.winPct * 100).toFixed(1)}%</td>
-                            <td className="py-2 px-1 md:py-3 md:px-2 text-center text-slate-600">{team.pointsFor}</td>
-                            <td className="py-2 px-1 md:py-3 md:px-2 text-center text-slate-600">{team.pointsAgainst}</td>
-                            <td className="py-2 px-1 md:py-3 md:px-2 text-center font-medium text-slate-700">
+                            <td className="py-2 px-2 md:py-3 text-slate-600 font-medium sticky left-0 bg-white z-10">{team.rank}</td>
+                            <td className="py-2 px-2 md:py-3 text-slate-800 font-medium sticky left-8 md:static bg-white z-10 min-w-[150px]">{team.team}</td>
+                            <td className="py-2 px-2 md:py-3 text-center text-slate-600">{team.wins}</td>
+                            <td className="py-2 px-2 md:py-3 text-center text-slate-600">{team.losses}</td>
+                            <td className="py-2 px-2 md:py-3 text-center text-slate-600">{(team.winPct * 100).toFixed(1)}%</td>
+                            <td className="py-2 px-2 md:py-3 text-center text-slate-600">{team.pointsFor}</td>
+                            <td className="py-2 px-2 md:py-3 text-center text-slate-600 hidden md:table-cell">{team.pointsAgainst}</td>
+                            <td className="py-2 px-2 md:py-3 text-center font-medium text-slate-700 hidden md:table-cell">
                               {team.pointsDiff > 0 ? `+${team.pointsDiff}` : team.pointsDiff}
                             </td>
-                            <td className="py-2 px-1 md:py-3 md:px-2 text-center">
+                            <td className="py-2 px-2 md:py-3 text-center">
                               {team.movement === 'up' && (
                                 <span className="text-green-600 font-bold text-xs md:text-sm">▲</span>
                               )}
@@ -1467,10 +1477,10 @@ type GameSchedule = {
             
             {/* Stats Section - Comprehensive Player Averages */}
             {activeSection === 'stats' && (
-              <div className="bg-white rounded-xl shadow p-6">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-lg font-semibold text-slate-800">Player Statistics - {league?.name}</h2>
-                  <div className="text-sm text-gray-500">
+              <div className="bg-white rounded-xl shadow p-4 md:p-6">
+                <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 mb-4 md:mb-6">
+                  <h2 className="text-base md:text-lg font-semibold text-slate-800">Player Statistics - {league?.name}</h2>
+                  <div className="text-xs md:text-sm text-gray-500">
                     Showing {Math.min(displayedPlayerCount, filteredPlayerAverages.length)} of {filteredPlayerAverages.length} players
                     {statsSearch && ` (filtered from ${allPlayerAverages.length})`}
                   </div>
@@ -1529,22 +1539,22 @@ type GameSchedule = {
                     </table>
                   </div>
                 ) : filteredPlayerAverages.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                  <div className="overflow-x-auto -mx-4 md:mx-0">
+                    <table className="w-full text-xs md:text-sm min-w-[800px]">
                       <thead>
                         <tr className="border-b border-gray-200">
-                          <th className="text-left py-3 px-2 font-semibold text-slate-700 sticky left-0 bg-white">Player</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">GP</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">MIN</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">PTS</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">REB</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">AST</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">STL</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">BLK</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">TO</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FG%</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">3P%</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FT%</th>
+                          <th className="text-left py-2 md:py-3 px-2 font-semibold text-slate-700 sticky left-0 bg-white z-10">Player</th>
+                          <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700">GP</th>
+                          <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700 hidden md:table-cell">MIN</th>
+                          <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700">PTS</th>
+                          <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700">REB</th>
+                          <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700">AST</th>
+                          <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700 hidden md:table-cell">STL</th>
+                          <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700 hidden md:table-cell">BLK</th>
+                          <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700 hidden md:table-cell">TO</th>
+                          <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700 hidden md:table-cell">FG%</th>
+                          <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700 hidden md:table-cell">3P%</th>
+                          <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700 hidden md:table-cell">FT%</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1554,23 +1564,23 @@ type GameSchedule = {
                             className="border-b border-gray-100 hover:bg-orange-50 transition-colors cursor-pointer"
                             onClick={() => navigate(`/player/${player.id}`)}
                           >
-                            <td className="py-3 px-2 font-medium text-slate-800 sticky left-0 bg-white hover:bg-orange-50">
-                              <div className="min-w-0">
-                                <div className="font-medium text-slate-900">{player.name}</div>
+                            <td className="py-2 md:py-3 px-2 font-medium text-slate-800 sticky left-0 bg-white hover:bg-orange-50 z-10">
+                              <div className="min-w-0 min-w-[120px]">
+                                <div className="font-medium text-slate-900 text-xs md:text-sm">{player.name}</div>
                                 <div className="text-xs text-slate-500 truncate">{player.team}</div>
                               </div>
                             </td>
-                            <td className="py-3 px-2 text-center text-slate-600">{player.games}</td>
-                            <td className="py-3 px-2 text-center text-slate-600">{player.avgMinutes}</td>
-                            <td className="py-3 px-2 text-center font-medium text-orange-600">{player.avgPoints}</td>
-                            <td className="py-3 px-2 text-center text-slate-600">{player.avgRebounds}</td>
-                            <td className="py-3 px-2 text-center text-slate-600">{player.avgAssists}</td>
-                            <td className="py-3 px-2 text-center text-slate-600">{player.avgSteals}</td>
-                            <td className="py-3 px-2 text-center text-slate-600">{player.avgBlocks}</td>
-                            <td className="py-3 px-2 text-center text-slate-600">{player.avgTurnovers}</td>
-                            <td className="py-3 px-2 text-center text-slate-600">{player.fgPercentage}%</td>
-                            <td className="py-3 px-2 text-center text-slate-600">{player.threePercentage}%</td>
-                            <td className="py-3 px-2 text-center text-slate-600">{player.ftPercentage}%</td>
+                            <td className="py-2 md:py-3 px-2 text-center text-slate-600">{player.games}</td>
+                            <td className="py-2 md:py-3 px-2 text-center text-slate-600 hidden md:table-cell">{player.avgMinutes}</td>
+                            <td className="py-2 md:py-3 px-2 text-center font-medium text-orange-600">{player.avgPoints}</td>
+                            <td className="py-2 md:py-3 px-2 text-center text-slate-600">{player.avgRebounds}</td>
+                            <td className="py-2 md:py-3 px-2 text-center text-slate-600">{player.avgAssists}</td>
+                            <td className="py-2 md:py-3 px-2 text-center text-slate-600 hidden md:table-cell">{player.avgSteals}</td>
+                            <td className="py-2 md:py-3 px-2 text-center text-slate-600 hidden md:table-cell">{player.avgBlocks}</td>
+                            <td className="py-2 md:py-3 px-2 text-center text-slate-600 hidden md:table-cell">{player.avgTurnovers}</td>
+                            <td className="py-2 md:py-3 px-2 text-center text-slate-600 hidden md:table-cell">{player.fgPercentage}%</td>
+                            <td className="py-2 md:py-3 px-2 text-center text-slate-600 hidden md:table-cell">{player.threePercentage}%</td>
+                            <td className="py-2 md:py-3 px-2 text-center text-slate-600 hidden md:table-cell">{player.ftPercentage}%</td>
                           </tr>
                         ))}
                       </tbody>
@@ -1653,15 +1663,15 @@ type GameSchedule = {
 
             {/* Team Stats Section */}
             {activeSection === 'teamstats' && (
-              <div className="bg-white rounded-xl shadow p-6">
-                <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-lg font-semibold text-slate-800">Team Statistics - {league?.name}</h2>
+              <div className="bg-white rounded-xl shadow p-4 md:p-6">
+                <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 md:gap-0 mb-4 md:mb-6">
+                  <h2 className="text-base md:text-lg font-semibold text-slate-800">Team Statistics - {league?.name}</h2>
                   
                   {/* Toggle for Totals/Averages */}
-                  <div className="flex gap-2 bg-gray-100 rounded-lg p-1">
+                  <div className="flex gap-1 md:gap-2 bg-gray-100 rounded-lg p-1">
                     <button
                       onClick={() => setTeamStatsView('averages')}
-                      className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                      className={`px-3 md:px-4 py-1.5 rounded-md text-xs md:text-sm font-medium transition-colors ${
                         teamStatsView === 'averages'
                           ? 'bg-orange-500 text-white'
                           : 'text-slate-600 hover:text-slate-900'
@@ -1672,7 +1682,7 @@ type GameSchedule = {
                     </button>
                     <button
                       onClick={() => setTeamStatsView('totals')}
-                      className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                      className={`px-3 md:px-4 py-1.5 rounded-md text-xs md:text-sm font-medium transition-colors ${
                         teamStatsView === 'totals'
                           ? 'bg-orange-500 text-white'
                           : 'text-slate-600 hover:text-slate-900'
@@ -1754,30 +1764,30 @@ type GameSchedule = {
                     </table>
                   </div>
                 ) : teamStatsData.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                  <div className="overflow-x-auto -mx-4 md:mx-0">
+                    <table className="w-full text-xs md:text-sm min-w-[640px]">
                       <thead>
                         <tr className="border-b border-gray-200">
-                          <th className="text-left py-3 px-2 font-semibold text-slate-700 sticky left-0 bg-white">Team</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">GP</th>
+                          <th className="text-left py-2 md:py-3 px-2 font-semibold text-slate-700 sticky left-0 bg-white z-10">Team</th>
+                          <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700">GP</th>
                           {teamStatsView === 'averages' ? (
                             <>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">PPG</th>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">RPG</th>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">APG</th>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">FG%</th>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">3P%</th>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">2P%</th>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">FT%</th>
+                              <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700">PPG</th>
+                              <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700">RPG</th>
+                              <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700">APG</th>
+                              <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700 hidden md:table-cell">FG%</th>
+                              <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700 hidden md:table-cell">3P%</th>
+                              <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700 hidden md:table-cell">2P%</th>
+                              <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700 hidden md:table-cell">FT%</th>
                             </>
                           ) : (
                             <>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">PTS</th>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">REB</th>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">AST</th>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">FGM</th>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">3PM</th>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">FTM</th>
+                              <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700">PTS</th>
+                              <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700">REB</th>
+                              <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700">AST</th>
+                              <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700 hidden md:table-cell">FGM</th>
+                              <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700 hidden md:table-cell">3PM</th>
+                              <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700 hidden md:table-cell">FTM</th>
                             </>
                           )}
                         </tr>
@@ -1790,57 +1800,57 @@ type GameSchedule = {
                             onClick={() => navigate(`/team/${encodeURIComponent(team.teamName)}`)}
                             data-testid={`row-team-${team.teamName}`}
                           >
-                            <td className="py-3 px-2 sticky left-0 bg-white hover:bg-orange-50">
-                              <div className="flex items-center gap-3">
+                            <td className="py-2 md:py-3 px-2 sticky left-0 bg-white hover:bg-orange-50 z-10">
+                              <div className="flex items-center gap-2">
                                 <TeamLogo teamName={team.teamName} leagueId={league?.league_id || ""} size="sm" />
-                                <span className="font-medium text-slate-800">{team.teamName}</span>
+                                <span className="font-medium text-slate-800 text-xs md:text-sm min-w-[120px]">{team.teamName}</span>
                               </div>
                             </td>
-                            <td className="text-center py-3 px-2 text-slate-600" data-testid={`text-gp-${team.teamName}`}>
+                            <td className="text-center py-2 md:py-3 px-2 text-slate-600" data-testid={`text-gp-${team.teamName}`}>
                               {team.gamesPlayed}
                             </td>
                             {teamStatsView === 'averages' ? (
                               <>
-                                <td className="text-center py-3 px-2 font-medium text-orange-600" data-testid={`text-ppg-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 font-medium text-orange-600" data-testid={`text-ppg-${team.teamName}`}>
                                   {team.ppg}
                                 </td>
-                                <td className="text-center py-3 px-2 text-slate-600" data-testid={`text-rpg-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 text-slate-600" data-testid={`text-rpg-${team.teamName}`}>
                                   {team.rpg}
                                 </td>
-                                <td className="text-center py-3 px-2 text-slate-600" data-testid={`text-apg-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 text-slate-600" data-testid={`text-apg-${team.teamName}`}>
                                   {team.apg}
                                 </td>
-                                <td className="text-center py-3 px-2 text-slate-600" data-testid={`text-fg%-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 text-slate-600 hidden md:table-cell" data-testid={`text-fg%-${team.teamName}`}>
                                   {team.fgPercentage}%
                                 </td>
-                                <td className="text-center py-3 px-2 text-slate-600" data-testid={`text-3p%-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 text-slate-600 hidden md:table-cell" data-testid={`text-3p%-${team.teamName}`}>
                                   {team.threePtPercentage}%
                                 </td>
-                                <td className="text-center py-3 px-2 text-slate-600" data-testid={`text-2p%-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 text-slate-600 hidden md:table-cell" data-testid={`text-2p%-${team.teamName}`}>
                                   {team.twoPtPercentage}%
                                 </td>
-                                <td className="text-center py-3 px-2 text-slate-600" data-testid={`text-ft%-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 text-slate-600 hidden md:table-cell" data-testid={`text-ft%-${team.teamName}`}>
                                   {team.ftPercentage}%
                                 </td>
                               </>
                             ) : (
                               <>
-                                <td className="text-center py-3 px-2 font-medium text-orange-600" data-testid={`text-total-pts-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 font-medium text-orange-600" data-testid={`text-total-pts-${team.teamName}`}>
                                   {team.totalPoints}
                                 </td>
-                                <td className="text-center py-3 px-2 text-slate-600" data-testid={`text-total-reb-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 text-slate-600" data-testid={`text-total-reb-${team.teamName}`}>
                                   {team.totalRebounds}
                                 </td>
-                                <td className="text-center py-3 px-2 text-slate-600" data-testid={`text-total-ast-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 text-slate-600" data-testid={`text-total-ast-${team.teamName}`}>
                                   {team.totalAssists}
                                 </td>
-                                <td className="text-center py-3 px-2 text-slate-600" data-testid={`text-total-fgm-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 text-slate-600 hidden md:table-cell" data-testid={`text-total-fgm-${team.teamName}`}>
                                   {team.totalFGM}
                                 </td>
-                                <td className="text-center py-3 px-2 text-slate-600" data-testid={`text-total-3pm-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 text-slate-600 hidden md:table-cell" data-testid={`text-total-3pm-${team.teamName}`}>
                                   {team.total3PM}
                                 </td>
-                                <td className="text-center py-3 px-2 text-slate-600" data-testid={`text-total-ftm-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 text-slate-600 hidden md:table-cell" data-testid={`text-total-ftm-${team.teamName}`}>
                                   {team.totalFTM}
                                 </td>
                               </>
@@ -1891,25 +1901,25 @@ type GameSchedule = {
 
             {/* Teams Section */}
             {activeSection === 'teams' && (
-              <div className="bg-white rounded-xl shadow p-6">
-                <h2 className="text-lg font-semibold text-slate-800 mb-6">Teams</h2>
+              <div className="bg-white rounded-xl shadow p-4 md:p-6">
+                <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-4 md:mb-6">Teams</h2>
                 {standings.length > 0 ? (
                   <div className="divide-y divide-gray-200">
                     {standings.map((teamData, index) => (
                       <Link key={`team-${teamData.team}-${index}`} to={`/team/${encodeURIComponent(teamData.team)}`}>
-                        <div className="p-4 hover:bg-gray-50 transition-colors flex items-center justify-between group cursor-pointer">
-                          <div className="flex items-center gap-4">
+                        <div className="p-3 md:p-4 hover:bg-gray-50 transition-colors flex items-center justify-between group cursor-pointer">
+                          <div className="flex items-center gap-2 md:gap-4">
                             <TeamLogo teamName={teamData.team} leagueId={league?.league_id || ""} size="md" />
-                            <h3 className="font-semibold text-slate-800 text-lg">{teamData.team}</h3>
+                            <h3 className="font-semibold text-slate-800 text-sm md:text-lg">{teamData.team}</h3>
                           </div>
-                          <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-orange-600 transition-colors" />
+                          <ChevronRight className="w-4 md:w-5 h-4 md:h-5 text-gray-400 group-hover:text-orange-600 transition-colors" />
                         </div>
                       </Link>
                     ))}
                   </div>
                 ) : (
                   <div className="text-center py-8 text-gray-500">
-                    <p className="text-sm">No teams available</p>
+                    <p className="text-xs md:text-sm">No teams available</p>
                     <p className="text-xs mt-1">Teams will appear once games are played</p>
                   </div>
                 )}
@@ -1918,8 +1928,8 @@ type GameSchedule = {
 
             {/* Schedule Section */}
             {activeSection === 'schedule' && (
-              <div className="bg-white rounded-xl shadow p-6">
-                <h2 className="text-lg font-semibold text-slate-800 mb-6">Game Schedule</h2>
+              <div className="bg-white rounded-xl shadow p-4 md:p-6">
+                <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-4 md:mb-6">Game Schedule</h2>
                 {schedule.length > 0 ? (
                   <>
                     {(() => {
@@ -1935,24 +1945,24 @@ type GameSchedule = {
                         <>
                           {/* Upcoming Games */}
                           {upcomingGames.length > 0 && (
-                            <div className="mb-8">
-                              <h3 className="text-md font-semibold text-slate-700 mb-4 pb-2 border-b border-orange-200">
+                            <div className="mb-6 md:mb-8">
+                              <h3 className="text-sm md:text-md font-semibold text-slate-700 mb-3 md:mb-4 pb-2 border-b border-orange-200">
                                 Upcoming Games
                               </h3>
                               <div className="divide-y divide-gray-200">
                                 {upcomingGames.map((game, index) => (
                                   <div 
                                     key={`upcoming-${game.game_id}-${index}`} 
-                                    className="p-4 hover:bg-gray-50 transition-colors cursor-pointer"
+                                    className="p-3 md:p-4 hover:bg-gray-50 transition-colors cursor-pointer"
                                     onClick={() => {
                                       setSelectedPreviewGame(game);
                                       setIsPreviewModalOpen(true);
                                     }}
                                     data-testid={`upcoming-game-${index}`}
                                   >
-                                    <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-6">
-                                        <div className="text-sm text-slate-600 min-w-[120px]">
+                                    <div className="flex flex-col md:flex-row md:items-center gap-3 md:justify-between">
+                                      <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-6 flex-1">
+                                        <div className="text-xs md:text-sm text-slate-600 md:min-w-[120px]">
                                           <div>
                                             {new Date(game.game_date).toLocaleDateString('en-US', { 
                                               weekday: 'short',
@@ -1967,20 +1977,20 @@ type GameSchedule = {
                                             </div>
                                           )}
                                         </div>
-                                        <div className="flex items-center gap-4">
-                                          <div className="flex items-center gap-2 min-w-[200px]">
+                                        <div className="flex items-center gap-2 md:gap-4 flex-1">
+                                          <div className="flex items-center gap-1 md:gap-2 flex-1 md:min-w-[200px]">
                                             <TeamLogo teamName={game.team1} leagueId={league?.league_id || ""} size="sm" />
-                                            <span className="font-medium text-slate-800">{game.team1}</span>
+                                            <span className="font-medium text-slate-800 text-xs md:text-sm truncate">{game.team1}</span>
                                           </div>
-                                          <span className="text-slate-500 text-sm">vs</span>
-                                          <div className="flex items-center gap-2 min-w-[200px]">
+                                          <span className="text-slate-500 text-xs md:text-sm">vs</span>
+                                          <div className="flex items-center gap-1 md:gap-2 flex-1 md:min-w-[200px]">
                                             <TeamLogo teamName={game.team2} leagueId={league?.league_id || ""} size="sm" />
-                                            <span className="font-medium text-slate-800">{game.team2}</span>
+                                            <span className="font-medium text-slate-800 text-xs md:text-sm truncate">{game.team2}</span>
                                           </div>
                                         </div>
                                       </div>
                                       {game.venue && (
-                                        <div className="text-xs text-slate-400">
+                                        <div className="text-xs text-slate-400 truncate md:max-w-[150px]">
                                           {game.venue}
                                         </div>
                                       )}
@@ -1994,14 +2004,14 @@ type GameSchedule = {
                           {/* Past Games (Results) */}
                           {pastGames.length > 0 && (
                             <div>
-                              <h3 className="text-md font-semibold text-slate-700 mb-4 pb-2 border-b border-orange-200">
+                              <h3 className="text-sm md:text-md font-semibold text-slate-700 mb-3 md:mb-4 pb-2 border-b border-orange-200">
                                 Results
                               </h3>
                               <div className="divide-y divide-gray-200">
                                 {pastGames.map((game, index) => (
                                   <div 
                                     key={`past-${game.game_id}-${index}`} 
-                                    className={`p-4 transition-colors ${game.numeric_id ? 'cursor-pointer hover:bg-orange-50' : 'cursor-default'}`}
+                                    className={`p-3 md:p-4 transition-colors ${game.numeric_id ? 'cursor-pointer hover:bg-orange-50' : 'cursor-default'}`}
                                     onClick={() => {
                                       if (game.numeric_id) {
                                         handleGameClick(game.numeric_id);
@@ -2009,9 +2019,9 @@ type GameSchedule = {
                                     }}
                                     data-testid={`past-game-${index}`}
                                   >
-                                    <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-6 flex-1">
-                                        <div className="text-sm text-slate-600 min-w-[120px]">
+                                    <div className="flex flex-col gap-3">
+                                      <div className="flex items-center justify-between">
+                                        <div className="text-xs md:text-sm text-slate-600">
                                           <div>
                                             {new Date(game.game_date).toLocaleDateString('en-US', { 
                                               weekday: 'short',
@@ -2026,37 +2036,35 @@ type GameSchedule = {
                                             </div>
                                           )}
                                         </div>
-                                        <div className="flex items-center gap-4 flex-1">
-                                          <div className="flex items-center justify-between flex-1 max-w-[500px]">
-                                            <div className="flex items-center gap-2 flex-1">
-                                              <TeamLogo teamName={game.team1} leagueId={league?.league_id || ""} size="sm" />
-                                              <span className="font-medium text-slate-800">{game.team1}</span>
-                                            </div>
-                                            {game.team1_score !== undefined && game.team2_score !== undefined ? (
-                                              <div className="flex items-center gap-3 px-4">
-                                                <span className={`text-xl font-bold ${game.team1_score > game.team2_score ? 'text-green-600' : 'text-slate-600'}`}>
-                                                  {game.team1_score}
-                                                </span>
-                                                <span className="text-slate-400">-</span>
-                                                <span className={`text-xl font-bold ${game.team2_score > game.team1_score ? 'text-green-600' : 'text-slate-600'}`}>
-                                                  {game.team2_score}
-                                                </span>
-                                              </div>
-                                            ) : (
-                                              <span className="text-slate-500 text-sm px-4">vs</span>
-                                            )}
-                                            <div className="flex items-center gap-2 flex-1 justify-end">
-                                              <span className="font-medium text-slate-800">{game.team2}</span>
-                                              <TeamLogo teamName={game.team2} leagueId={league?.league_id || ""} size="sm" />
-                                            </div>
+                                        {game.venue && (
+                                          <div className="text-xs text-slate-400 truncate max-w-[120px] md:max-w-none">
+                                            {game.venue}
                                           </div>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-1 md:gap-2 flex-1 min-w-0">
+                                          <TeamLogo teamName={game.team1} leagueId={league?.league_id || ""} size="sm" />
+                                          <span className="font-medium text-slate-800 text-xs md:text-sm truncate">{game.team1}</span>
+                                        </div>
+                                        {game.team1_score !== undefined && game.team2_score !== undefined ? (
+                                          <div className="flex items-center gap-2 md:gap-3 px-2 md:px-4 flex-shrink-0">
+                                            <span className={`text-lg md:text-xl font-bold ${game.team1_score > game.team2_score ? 'text-green-600' : 'text-slate-600'}`}>
+                                              {game.team1_score}
+                                            </span>
+                                            <span className="text-slate-400 text-sm">-</span>
+                                            <span className={`text-lg md:text-xl font-bold ${game.team2_score > game.team1_score ? 'text-green-600' : 'text-slate-600'}`}>
+                                              {game.team2_score}
+                                            </span>
+                                          </div>
+                                        ) : (
+                                          <span className="text-slate-500 text-xs md:text-sm px-2 md:px-4 flex-shrink-0">vs</span>
+                                        )}
+                                        <div className="flex items-center gap-1 md:gap-2 flex-1 justify-end min-w-0">
+                                          <span className="font-medium text-slate-800 text-xs md:text-sm truncate">{game.team2}</span>
+                                          <TeamLogo teamName={game.team2} leagueId={league?.league_id || ""} size="sm" />
                                         </div>
                                       </div>
-                                      {game.venue && (
-                                        <div className="text-xs text-slate-400 ml-4">
-                                          {game.venue}
-                                        </div>
-                                      )}
                                     </div>
                                   </div>
                                 ))}
@@ -2078,13 +2086,13 @@ type GameSchedule = {
 
             {/* Comparison Section */}
             {activeSection === 'comparison' && (
-              <div className="space-y-6">
+              <div className="space-y-4 md:space-y-6">
                 {/* Toggle between Player and Team Comparison */}
-                <div className="bg-white rounded-xl shadow p-4">
+                <div className="bg-white rounded-xl shadow p-3 md:p-4">
                   <div className="flex items-center justify-center gap-2">
                     <button
                       onClick={() => setComparisonMode('player')}
-                      className={`px-6 py-2 rounded-lg font-semibold transition-all ${
+                      className={`px-4 md:px-6 py-1.5 md:py-2 rounded-lg text-sm md:text-base font-semibold transition-all ${
                         comparisonMode === 'player'
                           ? 'bg-orange-500 text-white shadow-md'
                           : 'bg-gray-100 text-slate-600 hover:bg-gray-200'
@@ -2095,7 +2103,7 @@ type GameSchedule = {
                     </button>
                     <button
                       onClick={() => setComparisonMode('team')}
-                      className={`px-6 py-2 rounded-lg font-semibold transition-all ${
+                      className={`px-4 md:px-6 py-1.5 md:py-2 rounded-lg text-sm md:text-base font-semibold transition-all ${
                         comparisonMode === 'team'
                           ? 'bg-orange-500 text-white shadow-md'
                           : 'bg-gray-100 text-slate-600 hover:bg-gray-200'
@@ -2126,17 +2134,17 @@ type GameSchedule = {
             {activeSection === 'overview' && (
               <>
                 {/* League Leaders */}
-                <div className="bg-white rounded-xl shadow p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-lg font-semibold text-slate-800">League Leaders</h2>
+                <div className="bg-white rounded-xl shadow p-4 md:p-6">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-4 md:mb-6">
+                <h2 className="text-base md:text-lg font-semibold text-slate-800">League Leaders</h2>
                 <button
                   onClick={() => navigate(`/league-leaders/${slug}`)}
-                  className="text-sm text-orange-500 hover:text-orange-600 font-medium hover:underline"
+                  className="text-xs md:text-sm text-orange-500 hover:text-orange-600 font-medium hover:underline text-left sm:text-right"
                 >
                   View All Leaders →
                 </button>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
                 {isLoadingLeaders ? (
                   Array.from({ length: 3 }).map((_, i) => (
                     <LeaderCardSkeleton key={`leader-skeleton-${i}`} />
@@ -2147,14 +2155,14 @@ type GameSchedule = {
                     { title: "Top Rebounders", list: topRebounders, label: "RPG", key: "avg" },
                     { title: "Top Playmakers", list: topAssistsList, label: "APG", key: "avg" },
                   ] as const).map(({ title, list, label, key }) => (
-                    <div key={title} className="bg-gray-50 rounded-lg p-4 shadow-inner">
-                      <h3 className="text-sm font-semibold text-slate-700 mb-3 text-center">{title}</h3>
-                      <ul className="space-y-1 text-sm text-slate-800">
+                    <div key={title} className="bg-gray-50 rounded-lg p-3 md:p-4 shadow-inner">
+                      <h3 className="text-xs md:text-sm font-semibold text-slate-700 mb-2 md:mb-3 text-center">{title}</h3>
+                      <ul className="space-y-1 text-xs md:text-sm text-slate-800">
                         {Array.isArray(list) &&
                           list.map((p, i) => (
                             <li key={`${title}-${p.name}-${i}`} className="flex justify-between">
-                              <span>{p.name}</span>
-                              <span className="font-medium text-orange-500">
+                              <span className="truncate mr-2">{p.name}</span>
+                              <span className="font-medium text-orange-500 whitespace-nowrap">
                                 {p[key]} {label}
                               </span>
                             </li>
@@ -2167,8 +2175,8 @@ type GameSchedule = {
                 </div>
 
             {/* League Standings */}
-            <div className="bg-white rounded-xl shadow p-6">
-              <h2 className="text-lg font-semibold text-slate-800 mb-4">League Standings</h2>
+            <div className="bg-white rounded-xl shadow p-4 md:p-6">
+              <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-4">League Standings</h2>
               {isLoadingStandings ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -2191,17 +2199,17 @@ type GameSchedule = {
                   </table>
                 </div>
               ) : standings.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                <div className="overflow-x-auto -mx-4 md:mx-0">
+                  <table className="w-full text-xs md:text-sm min-w-[500px]">
                     <thead>
                       <tr className="border-b border-gray-200">
-                        <th className="text-left py-3 px-2 font-semibold text-slate-700">#</th>
-                        <th className="text-left py-3 px-2 font-semibold text-slate-700">Team</th>
-                        <th className="text-center py-3 px-2 font-semibold text-slate-700">Record</th>
-                        <th className="text-center py-3 px-2 font-semibold text-slate-700">Win%</th>
-                        <th className="text-right py-3 px-2 font-semibold text-slate-700">PF</th>
-                        <th className="text-right py-3 px-2 font-semibold text-slate-700">PA</th>
-                        <th className="text-right py-3 px-2 font-semibold text-slate-700">Diff</th>
+                        <th className="text-left py-2 md:py-3 px-2 font-semibold text-slate-700 sticky left-0 bg-white z-10">#</th>
+                        <th className="text-left py-2 md:py-3 px-2 font-semibold text-slate-700 sticky left-6 md:static bg-white z-10">Team</th>
+                        <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700">Record</th>
+                        <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700">Win%</th>
+                        <th className="text-right py-2 md:py-3 px-2 font-semibold text-slate-700">PF</th>
+                        <th className="text-right py-2 md:py-3 px-2 font-semibold text-slate-700 hidden md:table-cell">PA</th>
+                        <th className="text-right py-2 md:py-3 px-2 font-semibold text-slate-700 hidden md:table-cell">Diff</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2212,29 +2220,29 @@ type GameSchedule = {
                             index < 3 ? 'bg-green-50' : index >= standings.length - 2 ? 'bg-red-50' : ''
                           }`}
                         >
-                          <td className="py-3 px-2 font-medium text-slate-600">{index + 1}</td>
-                          <td className="py-3 px-2 font-medium text-slate-800">
-                            <div className="flex items-center gap-2">
+                          <td className="py-2 md:py-3 px-2 font-medium text-slate-600 sticky left-0 bg-inherit z-10">{index + 1}</td>
+                          <td className="py-2 md:py-3 px-2 font-medium text-slate-800 sticky left-6 md:static bg-inherit z-10">
+                            <div className="flex items-center gap-1 md:gap-2 min-w-[120px]">
                               <TeamLogo teamName={team.team} leagueId={league?.league_id} size="sm" />
-                              {team.team}
+                              <span className="truncate">{team.team}</span>
                             </div>
                           </td>
-                          <td className="py-3 px-2 text-center font-medium text-slate-700">{team.record}</td>
-                          <td className="py-3 px-2 text-center text-slate-600">{(team.winPct * 100).toFixed(1)}%</td>
-                          <td className="py-3 px-2 text-right text-slate-600">{team.pointsFor}</td>
-                          <td className="py-3 px-2 text-right text-slate-600">{team.pointsAgainst}</td>
-                          <td className={`py-3 px-2 text-right font-medium ${team.pointsDiff > 0 ? 'text-green-600' : team.pointsDiff < 0 ? 'text-red-600' : 'text-slate-600'}`}>{team.pointsDiff > 0 ? '+' : ''}{team.pointsDiff}</td>
+                          <td className="py-2 md:py-3 px-2 text-center font-medium text-slate-700">{team.record}</td>
+                          <td className="py-2 md:py-3 px-2 text-center text-slate-600">{(team.winPct * 100).toFixed(1)}%</td>
+                          <td className="py-2 md:py-3 px-2 text-right text-slate-600">{team.pointsFor}</td>
+                          <td className="py-2 md:py-3 px-2 text-right text-slate-600 hidden md:table-cell">{team.pointsAgainst}</td>
+                          <td className={`py-2 md:py-3 px-2 text-right font-medium hidden md:table-cell ${team.pointsDiff > 0 ? 'text-green-600' : team.pointsDiff < 0 ? 'text-red-600' : 'text-slate-600'}`}>{team.pointsDiff > 0 ? '+' : ''}{team.pointsDiff}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                  <div className="mt-4 text-xs text-slate-500">
-                    <div className="flex gap-4 flex-wrap text-xs">
+                  <div className="mt-3 md:mt-4 text-xs text-slate-500">
+                    <div className="flex gap-3 md:gap-4 flex-wrap text-xs">
                       <span>Record = Wins-Losses</span>
                       <span>Win% = Win Percentage</span>
                       <span>PF = Points For</span>
-                      <span>PA = Points Against</span>
-                      <span>Diff = Point Differential</span>
+                      <span className="hidden md:inline">PA = Points Against</span>
+                      <span className="hidden md:inline">Diff = Point Differential</span>
                     </div>
                   </div>
                 </div>
@@ -2246,13 +2254,13 @@ type GameSchedule = {
               )}
             </div>
 
-            <div className="bg-white rounded-xl shadow p-6">
-              <h2 className="text-lg font-semibold text-slate-800">Player Stat Explorer</h2>
+            <div className="bg-white rounded-xl shadow p-4 md:p-6">
+              <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-3 md:mb-4">Player Stat Explorer</h2>
 
               <input
                 type="text"
                 placeholder="Search players..."
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded mb-4"
+                className="w-full px-3 py-2 text-xs md:text-sm border border-gray-300 rounded mb-3 md:mb-4"
                 value={playerSearch}
                 onChange={(e) => setPlayerSearch(e.target.value)}
               />
@@ -2260,11 +2268,11 @@ type GameSchedule = {
               {playerStats.length > 0 ? (
                 <div>
                   {/* Sorting Controls */}
-                  <div className="flex gap-4 mb-3 items-center">
-                    <label className="text-sm text-slate-700 font-medium">
+                  <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 mb-3 items-start sm:items-center">
+                    <label className="text-xs md:text-sm text-slate-700 font-medium flex items-center gap-2">
                       Sort by:
                       <select
-                        className="ml-2 border border-orange-300 text-orange-600 bg-orange-50 px-2 py-1 rounded shadow-sm hover:bg-orange-100 focus:outline-none focus:ring-2 focus:ring-orange-300"
+                        className="border border-orange-300 text-orange-600 bg-orange-50 px-2 py-1 rounded shadow-sm hover:bg-orange-100 focus:outline-none focus:ring-2 focus:ring-orange-300 text-xs md:text-sm"
                         value={sortField}
                         onChange={(e) => setSortField(e.target.value)}
                       >
@@ -2275,7 +2283,7 @@ type GameSchedule = {
                     </label>
 
                     <button
-                      className="flex items-center gap-1 text-sm text-slate-600 hover:text-orange-600 transition"
+                      className="flex items-center gap-1 text-xs md:text-sm text-slate-600 hover:text-orange-600 transition"
                       onClick={() =>
                         setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"))
                       }
@@ -2294,24 +2302,25 @@ type GameSchedule = {
 
 
                   {/* Stats Table */}
-                  <table className="mt-4 w-full text-sm text-left text-slate-700">
-                    <thead>
-                      <tr>
-                        <th className="px-2 py-1">Name</th>
-                        <th className="px-2 py-1">PTS</th>
-                        <th className="px-2 py-1">REB</th>
-                        <th className="px-2 py-1">AST</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {[...playerStats]
-                        .filter((p) =>
-                          p.name && p.name.toLowerCase().includes(playerSearch.toLowerCase())
-                        )
-                        .sort((a, b) => {
-                          const aVal = a[sortField] ?? 0;
-                          const bVal = b[sortField] ?? 0;
-                          return sortOrder === "asc" ? aVal - bVal : bVal - aVal;
+                  <div className="overflow-x-auto -mx-4 md:mx-0">
+                    <table className="mt-4 w-full text-xs md:text-sm text-left text-slate-700 min-w-[400px]">
+                      <thead>
+                        <tr>
+                          <th className="px-2 py-1 md:py-2 sticky left-0 bg-white z-10">Name</th>
+                          <th className="px-2 py-1 md:py-2">PTS</th>
+                          <th className="px-2 py-1 md:py-2">REB</th>
+                          <th className="px-2 py-1 md:py-2">AST</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[...playerStats]
+                          .filter((p) =>
+                            p.name && p.name.toLowerCase().includes(playerSearch.toLowerCase())
+                          )
+                          .sort((a, b) => {
+                            const aVal = a[sortField] ?? 0;
+                            const bVal = b[sortField] ?? 0;
+                            return sortOrder === "asc" ? aVal - bVal : bVal - aVal;
                         })
                         .map((p, i) => {
                           const uniqueKey = `player-${p.id || p.name}-${p.game_date || 'no-date'}-${i}`;
@@ -2323,10 +2332,10 @@ type GameSchedule = {
                                   setExpandedPlayer(expandedPlayer === i ? null : i)
                                 }
                               >
-                                <td className="px-2 py-1">{p.name}</td>
-                                <td className="px-2 py-1">{p.points}</td>
-                                <td className="px-2 py-1">{p.rebounds_total}</td>
-                                <td className="px-2 py-1">{p.assists}</td>
+                                <td className="px-2 py-1 md:py-2 sticky left-0 bg-white z-10 min-w-[120px]">{p.name}</td>
+                                <td className="px-2 py-1 md:py-2">{p.points}</td>
+                                <td className="px-2 py-1 md:py-2">{p.rebounds_total}</td>
+                                <td className="px-2 py-1 md:py-2">{p.assists}</td>
                               </tr>
 
                               {expandedPlayer === i && (
@@ -2349,11 +2358,12 @@ type GameSchedule = {
                             </React.Fragment>
                           );
                         })}
-                    </tbody>
-                  </table>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               ) : (
-                <p className="text-sm text-slate-600 mt-2">No player data available.</p>
+                <p className="text-xs md:text-sm text-slate-600 mt-2">No player data available.</p>
               )}
 
             </div>
