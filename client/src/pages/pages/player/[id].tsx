@@ -131,9 +131,9 @@ export default function PlayerStatsPage() {
         console.log('🔍 Step 2: Getting all stats for player_id:', actualPlayerId);
         const { data: stats, error: statsError } = await supabase
           .from('player_stats')
-          .select('id, player_id, league_id, user_id, game_key, game_date, team, team_name, name, full_name, firstname, familyname, number, position, starter, captain, home_team, away_team, is_home_player, opponent, spoints, sminutes, sfieldgoalsmade, sfieldgoalsattempted, sfieldgoalspercentage, sthreepointersmade, sthreepointersattempted, sthreepointerspercentage, stwopointersmade, stwopointersattempted, stwopointerspercentage, sfreethrowsmade, sfreethrowsattempted, sfreethrowspercentage, sreboundstotal, sreboundsoffensive, sreboundsdefensive, sassists, ssteals, sblocks, sblocksreceived, sturnovers, sfoulspersonal, sfoulstechnical, eff_1, eff_2, eff_3, eff_4, eff_5, eff_6, eff_7, points, rebounds_total, assists, is_public, created_at')
+          .select('*')
           .eq('player_id', actualPlayerId)
-          .order('game_date', { ascending: false });
+          .order('created_at', { ascending: false });
 
         console.log('📊 Step 2 Result - Found', stats?.length || 0, 'stat records');
         console.log('📊 Stats data sample:', stats?.[0]);
@@ -176,12 +176,19 @@ export default function PlayerStatsPage() {
               const userId = stats[0].user_id;
               console.log('🏆 Player user_id:', userId);
               
-              // Query leagues table using user_id to find the actual leagues
-              const { data: leaguesData, error: leaguesError } = await supabase
-                .from('leagues')
-                .select('name, slug, user_id')
-                .eq('user_id', userId)
-                .eq('is_public', true);
+              // Only query leagues if user_id is not null
+              let leaguesData = null;
+              let leaguesError = null;
+              
+              if (userId) {
+                const result = await supabase
+                  .from('leagues')
+                  .select('name, slug, user_id')
+                  .eq('user_id', userId)
+                  .eq('is_public', true);
+                leaguesData = result.data;
+                leaguesError = result.error;
+              }
               
               console.log('🏆 League query result:', { leaguesData, leaguesError });
               
