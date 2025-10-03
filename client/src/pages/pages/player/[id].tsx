@@ -229,23 +229,23 @@ export default function PlayerStatsPage() {
           // Only set playerInfo if it wasn't already set from players table or fallback
           if (!playerInfo) {
             setPlayerInfo({
-              name: stats[0].full_name || `${stats[0].firstname || ''} ${stats[0].familyname || ''}`.trim() || 'Unknown Player',
+              name: stats[0].full_name || stats[0].name || 'Unknown Player',
               team: stats[0].team || stats[0].team_name || 'Unknown Team'
             });
           }
 
           const totals = stats.reduce((acc, game) => ({
-            points: acc.points + (game.points || 0),
-            rebounds: acc.rebounds + (game.rebounds_total || game.rebounds || 0),
-            assists: acc.assists + (game.assists || 0),
-            steals: acc.steals + (game.steals || 0),
-            blocks: acc.blocks + (game.blocks || 0),
-            field_goals_made: acc.field_goals_made + (game.field_goals_made || 0),
-            field_goals_attempted: acc.field_goals_attempted + (game.field_goals_attempted || 0),
-            three_pointers_made: acc.three_pointers_made + (game.three_pt_made || game.three_pointers_made || 0),
-            three_pointers_attempted: acc.three_pointers_attempted + (game.three_pt_attempted || game.three_pointers_attempted || 0),
-            free_throws_made: acc.free_throws_made + (game.free_throws_made || 0),
-            free_throws_attempted: acc.free_throws_attempted + (game.free_throws_attempted || 0),
+            points: acc.points + (game.spoints || game.points || 0),
+            rebounds: acc.rebounds + (game.sreboundstotal || game.rebounds_total || 0),
+            assists: acc.assists + (game.sassists || game.assists || 0),
+            steals: acc.steals + (game.ssteals || 0),
+            blocks: acc.blocks + (game.sblocks || 0),
+            field_goals_made: acc.field_goals_made + (game.sfieldgoalsmade || 0),
+            field_goals_attempted: acc.field_goals_attempted + (game.sfieldgoalsattempted || 0),
+            three_pointers_made: acc.three_pointers_made + (game.sthreepointersmade || 0),
+            three_pointers_attempted: acc.three_pointers_attempted + (game.sthreepointersattempted || 0),
+            free_throws_made: acc.free_throws_made + (game.sfreethrowsmade || 0),
+            free_throws_attempted: acc.free_throws_attempted + (game.sfreethrowsattempted || 0),
           }), {
             points: 0, rebounds: 0, assists: 0, steals: 0, blocks: 0,
             field_goals_made: 0, field_goals_attempted: 0,
