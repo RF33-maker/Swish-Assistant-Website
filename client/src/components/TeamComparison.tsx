@@ -235,60 +235,76 @@ export function TeamComparison({ leagueId, allTeams }: TeamComparisonProps) {
       ) : team1Stats && team2Stats ? (
         <div className="max-w-5xl mx-auto">
           {/* Team Headers with Team Logos */}
-          <div className="flex items-center justify-between mb-8">
+          <div className="flex flex-col md:flex-row items-center justify-between mb-6 md:mb-8 gap-4 md:gap-0">
             {/* Team 1 */}
-            <div className="flex flex-col items-center space-y-3 w-1/3">
-              <TeamLogo 
-                teamName={team1Stats.name}
-                leagueId={leagueId}
-                size={128}
-                className="border-4 border-orange-300 shadow-lg"
-              />
+            <div className="flex flex-col items-center space-y-2 md:space-y-3 w-full md:w-1/3">
+              <div className="w-16 h-16 md:w-32 md:h-32">
+                <TeamLogo 
+                  teamName={team1Stats.name}
+                  leagueId={leagueId}
+                  size={64}
+                  className="border-2 md:border-4 border-orange-300 shadow-lg md:hidden"
+                />
+                <TeamLogo 
+                  teamName={team1Stats.name}
+                  leagueId={leagueId}
+                  size={128}
+                  className="border-4 border-orange-300 shadow-lg hidden md:block"
+                />
+              </div>
               <div className="text-center">
-                <h3 className="text-lg font-bold text-slate-800">{team1Stats.name}</h3>
+                <h3 className="text-base md:text-lg font-bold text-slate-800">{team1Stats.name}</h3>
                 <p className="text-xs text-slate-500 mt-1">{team1Stats.games} games</p>
               </div>
             </div>
 
             {/* VS Divider */}
-            <div className="flex items-center justify-center w-1/3">
-              <div className="text-3xl font-black text-orange-500 tracking-wider">VS</div>
+            <div className="flex items-center justify-center w-full md:w-1/3">
+              <div className="text-2xl md:text-3xl font-black text-orange-500 tracking-wider">VS</div>
             </div>
 
             {/* Team 2 */}
-            <div className="flex flex-col items-center space-y-3 w-1/3">
-              <TeamLogo 
-                teamName={team2Stats.name}
-                leagueId={leagueId}
-                size={128}
-                className="border-4 border-slate-300 shadow-lg"
-              />
+            <div className="flex flex-col items-center space-y-2 md:space-y-3 w-full md:w-1/3">
+              <div className="w-16 h-16 md:w-32 md:h-32">
+                <TeamLogo 
+                  teamName={team2Stats.name}
+                  leagueId={leagueId}
+                  size={64}
+                  className="border-2 md:border-4 border-slate-300 shadow-lg md:hidden"
+                />
+                <TeamLogo 
+                  teamName={team2Stats.name}
+                  leagueId={leagueId}
+                  size={128}
+                  className="border-4 border-slate-300 shadow-lg hidden md:block"
+                />
+              </div>
               <div className="text-center">
-                <h3 className="text-lg font-bold text-slate-800">{team2Stats.name}</h3>
+                <h3 className="text-base md:text-lg font-bold text-slate-800">{team2Stats.name}</h3>
                 <p className="text-xs text-slate-500 mt-1">{team2Stats.games} games</p>
               </div>
             </div>
           </div>
 
           {/* Stats Comparison */}
-          <div className="space-y-4">
+          <div className="space-y-3 md:space-y-4">
             {/* Points Per Game */}
             {(() => {
               const t1Better = parseFloat(team1Stats.ppg) > parseFloat(team2Stats.ppg);
               const t2Better = parseFloat(team2Stats.ppg) > parseFloat(team1Stats.ppg);
               return (
-                <div className="flex items-center justify-between gap-4">
-                  <div className={`flex-1 flex justify-end ${t1Better ? 'opacity-100' : 'opacity-60'}`}>
-                    <div className={`px-6 py-3 rounded-full ${t1Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-2xl min-w-[100px] text-center`}>
+                <div className="flex flex-col md:flex-row items-center justify-between gap-2 md:gap-4">
+                  <div className="w-full md:w-auto md:flex-1 md:flex md:justify-end order-2 md:order-1">
+                    <div className={`px-4 py-2 md:px-6 md:py-3 rounded-full ${t1Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-lg md:text-2xl min-w-[80px] md:min-w-[100px] text-center`}>
                       {team1Stats.ppg}
                     </div>
                   </div>
-                  <div className="text-center min-w-[200px]">
-                    <div className="font-bold text-slate-800 text-lg">Points Per Game</div>
+                  <div className="text-center w-full md:w-auto md:min-w-[200px] order-1 md:order-2">
+                    <div className="font-bold text-slate-800 text-base md:text-lg">Points Per Game</div>
                     <div className="text-xs text-slate-500">PPG</div>
                   </div>
-                  <div className={`flex-1 flex justify-start ${t2Better ? 'opacity-100' : 'opacity-60'}`}>
-                    <div className={`px-6 py-3 rounded-full ${t2Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-2xl min-w-[100px] text-center`}>
+                  <div className="w-full md:w-auto md:flex-1 md:flex md:justify-start order-3">
+                    <div className={`px-4 py-2 md:px-6 md:py-3 rounded-full ${t2Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-lg md:text-2xl min-w-[80px] md:min-w-[100px] text-center`}>
                       {team2Stats.ppg}
                     </div>
                   </div>
@@ -301,18 +317,18 @@ export function TeamComparison({ leagueId, allTeams }: TeamComparisonProps) {
               const t1Better = parseFloat(team1Stats.rpg) > parseFloat(team2Stats.rpg);
               const t2Better = parseFloat(team2Stats.rpg) > parseFloat(team1Stats.rpg);
               return (
-                <div className="flex items-center justify-between gap-4">
-                  <div className={`flex-1 flex justify-end ${t1Better ? 'opacity-100' : 'opacity-60'}`}>
-                    <div className={`px-6 py-3 rounded-full ${t1Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-2xl min-w-[100px] text-center`}>
+                <div className="flex flex-col md:flex-row items-center justify-between gap-2 md:gap-4">
+                  <div className="w-full md:w-auto md:flex-1 md:flex md:justify-end order-2 md:order-1">
+                    <div className={`px-4 py-2 md:px-6 md:py-3 rounded-full ${t1Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-lg md:text-2xl min-w-[80px] md:min-w-[100px] text-center`}>
                       {team1Stats.rpg}
                     </div>
                   </div>
-                  <div className="text-center min-w-[200px]">
-                    <div className="font-bold text-slate-800 text-lg">Rebounds Per Game</div>
+                  <div className="text-center w-full md:w-auto md:min-w-[200px] order-1 md:order-2">
+                    <div className="font-bold text-slate-800 text-base md:text-lg">Rebounds Per Game</div>
                     <div className="text-xs text-slate-500">RPG</div>
                   </div>
-                  <div className={`flex-1 flex justify-start ${t2Better ? 'opacity-100' : 'opacity-60'}`}>
-                    <div className={`px-6 py-3 rounded-full ${t2Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-2xl min-w-[100px] text-center`}>
+                  <div className="w-full md:w-auto md:flex-1 md:flex md:justify-start order-3">
+                    <div className={`px-4 py-2 md:px-6 md:py-3 rounded-full ${t2Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-lg md:text-2xl min-w-[80px] md:min-w-[100px] text-center`}>
                       {team2Stats.rpg}
                     </div>
                   </div>
@@ -325,18 +341,18 @@ export function TeamComparison({ leagueId, allTeams }: TeamComparisonProps) {
               const t1Better = parseFloat(team1Stats.apg) > parseFloat(team2Stats.apg);
               const t2Better = parseFloat(team2Stats.apg) > parseFloat(team1Stats.apg);
               return (
-                <div className="flex items-center justify-between gap-4">
-                  <div className={`flex-1 flex justify-end ${t1Better ? 'opacity-100' : 'opacity-60'}`}>
-                    <div className={`px-6 py-3 rounded-full ${t1Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-2xl min-w-[100px] text-center`}>
+                <div className="flex flex-col md:flex-row items-center justify-between gap-2 md:gap-4">
+                  <div className="w-full md:w-auto md:flex-1 md:flex md:justify-end order-2 md:order-1">
+                    <div className={`px-4 py-2 md:px-6 md:py-3 rounded-full ${t1Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-lg md:text-2xl min-w-[80px] md:min-w-[100px] text-center`}>
                       {team1Stats.apg}
                     </div>
                   </div>
-                  <div className="text-center min-w-[200px]">
-                    <div className="font-bold text-slate-800 text-lg">Assists Per Game</div>
+                  <div className="text-center w-full md:w-auto md:min-w-[200px] order-1 md:order-2">
+                    <div className="font-bold text-slate-800 text-base md:text-lg">Assists Per Game</div>
                     <div className="text-xs text-slate-500">APG</div>
                   </div>
-                  <div className={`flex-1 flex justify-start ${t2Better ? 'opacity-100' : 'opacity-60'}`}>
-                    <div className={`px-6 py-3 rounded-full ${t2Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-2xl min-w-[100px] text-center`}>
+                  <div className="w-full md:w-auto md:flex-1 md:flex md:justify-start order-3">
+                    <div className={`px-4 py-2 md:px-6 md:py-3 rounded-full ${t2Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-lg md:text-2xl min-w-[80px] md:min-w-[100px] text-center`}>
                       {team2Stats.apg}
                     </div>
                   </div>
@@ -349,18 +365,18 @@ export function TeamComparison({ leagueId, allTeams }: TeamComparisonProps) {
               const t1Better = parseFloat(team1Stats.fgPercentage) > parseFloat(team2Stats.fgPercentage);
               const t2Better = parseFloat(team2Stats.fgPercentage) > parseFloat(team1Stats.fgPercentage);
               return (
-                <div className="flex items-center justify-between gap-4">
-                  <div className={`flex-1 flex justify-end ${t1Better ? 'opacity-100' : 'opacity-60'}`}>
-                    <div className={`px-6 py-3 rounded-full ${t1Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-2xl min-w-[100px] text-center`}>
+                <div className="flex flex-col md:flex-row items-center justify-between gap-2 md:gap-4">
+                  <div className="w-full md:w-auto md:flex-1 md:flex md:justify-end order-2 md:order-1">
+                    <div className={`px-4 py-2 md:px-6 md:py-3 rounded-full ${t1Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-lg md:text-2xl min-w-[80px] md:min-w-[100px] text-center`}>
                       {team1Stats.fgPercentage}%
                     </div>
                   </div>
-                  <div className="text-center min-w-[200px]">
-                    <div className="font-bold text-slate-800 text-lg">Field Goal %</div>
+                  <div className="text-center w-full md:w-auto md:min-w-[200px] order-1 md:order-2">
+                    <div className="font-bold text-slate-800 text-base md:text-lg">Field Goal %</div>
                     <div className="text-xs text-slate-500">FG%</div>
                   </div>
-                  <div className={`flex-1 flex justify-start ${t2Better ? 'opacity-100' : 'opacity-60'}`}>
-                    <div className={`px-6 py-3 rounded-full ${t2Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-2xl min-w-[100px] text-center`}>
+                  <div className="w-full md:w-auto md:flex-1 md:flex md:justify-start order-3">
+                    <div className={`px-4 py-2 md:px-6 md:py-3 rounded-full ${t2Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-lg md:text-2xl min-w-[80px] md:min-w-[100px] text-center`}>
                       {team2Stats.fgPercentage}%
                     </div>
                   </div>
@@ -373,18 +389,18 @@ export function TeamComparison({ leagueId, allTeams }: TeamComparisonProps) {
               const t1Better = parseFloat(team1Stats.threePercentage) > parseFloat(team2Stats.threePercentage);
               const t2Better = parseFloat(team2Stats.threePercentage) > parseFloat(team1Stats.threePercentage);
               return (
-                <div className="flex items-center justify-between gap-4">
-                  <div className={`flex-1 flex justify-end ${t1Better ? 'opacity-100' : 'opacity-60'}`}>
-                    <div className={`px-6 py-3 rounded-full ${t1Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-2xl min-w-[100px] text-center`}>
+                <div className="flex flex-col md:flex-row items-center justify-between gap-2 md:gap-4">
+                  <div className="w-full md:w-auto md:flex-1 md:flex md:justify-end order-2 md:order-1">
+                    <div className={`px-4 py-2 md:px-6 md:py-3 rounded-full ${t1Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-lg md:text-2xl min-w-[80px] md:min-w-[100px] text-center`}>
                       {team1Stats.threePercentage}%
                     </div>
                   </div>
-                  <div className="text-center min-w-[200px]">
-                    <div className="font-bold text-slate-800 text-lg">Three Point %</div>
+                  <div className="text-center w-full md:w-auto md:min-w-[200px] order-1 md:order-2">
+                    <div className="font-bold text-slate-800 text-base md:text-lg">Three Point %</div>
                     <div className="text-xs text-slate-500">3P%</div>
                   </div>
-                  <div className={`flex-1 flex justify-start ${t2Better ? 'opacity-100' : 'opacity-60'}`}>
-                    <div className={`px-6 py-3 rounded-full ${t2Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-2xl min-w-[100px] text-center`}>
+                  <div className="w-full md:w-auto md:flex-1 md:flex md:justify-start order-3">
+                    <div className={`px-4 py-2 md:px-6 md:py-3 rounded-full ${t2Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-lg md:text-2xl min-w-[80px] md:min-w-[100px] text-center`}>
                       {team2Stats.threePercentage}%
                     </div>
                   </div>
@@ -397,18 +413,18 @@ export function TeamComparison({ leagueId, allTeams }: TeamComparisonProps) {
               const t1Better = parseFloat(team1Stats.ftPercentage) > parseFloat(team2Stats.ftPercentage);
               const t2Better = parseFloat(team2Stats.ftPercentage) > parseFloat(team1Stats.ftPercentage);
               return (
-                <div className="flex items-center justify-between gap-4">
-                  <div className={`flex-1 flex justify-end ${t1Better ? 'opacity-100' : 'opacity-60'}`}>
-                    <div className={`px-6 py-3 rounded-full ${t1Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-2xl min-w-[100px] text-center`}>
+                <div className="flex flex-col md:flex-row items-center justify-between gap-2 md:gap-4">
+                  <div className="w-full md:w-auto md:flex-1 md:flex md:justify-end order-2 md:order-1">
+                    <div className={`px-4 py-2 md:px-6 md:py-3 rounded-full ${t1Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-lg md:text-2xl min-w-[80px] md:min-w-[100px] text-center`}>
                       {team1Stats.ftPercentage}%
                     </div>
                   </div>
-                  <div className="text-center min-w-[200px]">
-                    <div className="font-bold text-slate-800 text-lg">Free Throw %</div>
+                  <div className="text-center w-full md:w-auto md:min-w-[200px] order-1 md:order-2">
+                    <div className="font-bold text-slate-800 text-base md:text-lg">Free Throw %</div>
                     <div className="text-xs text-slate-500">FT%</div>
                   </div>
-                  <div className={`flex-1 flex justify-start ${t2Better ? 'opacity-100' : 'opacity-60'}`}>
-                    <div className={`px-6 py-3 rounded-full ${t2Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-2xl min-w-[100px] text-center`}>
+                  <div className="w-full md:w-auto md:flex-1 md:flex md:justify-start order-3">
+                    <div className={`px-4 py-2 md:px-6 md:py-3 rounded-full ${t2Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-lg md:text-2xl min-w-[80px] md:min-w-[100px] text-center`}>
                       {team2Stats.ftPercentage}%
                     </div>
                   </div>
@@ -421,18 +437,18 @@ export function TeamComparison({ leagueId, allTeams }: TeamComparisonProps) {
               const t1Better = parseFloat(team1Stats.bpg) > parseFloat(team2Stats.bpg);
               const t2Better = parseFloat(team2Stats.bpg) > parseFloat(team1Stats.bpg);
               return (
-                <div className="flex items-center justify-between gap-4">
-                  <div className={`flex-1 flex justify-end ${t1Better ? 'opacity-100' : 'opacity-60'}`}>
-                    <div className={`px-6 py-3 rounded-full ${t1Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-2xl min-w-[100px] text-center`}>
+                <div className="flex flex-col md:flex-row items-center justify-between gap-2 md:gap-4">
+                  <div className="w-full md:w-auto md:flex-1 md:flex md:justify-end order-2 md:order-1">
+                    <div className={`px-4 py-2 md:px-6 md:py-3 rounded-full ${t1Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-lg md:text-2xl min-w-[80px] md:min-w-[100px] text-center`}>
                       {team1Stats.bpg}
                     </div>
                   </div>
-                  <div className="text-center min-w-[200px]">
-                    <div className="font-bold text-slate-800 text-lg">Blocks Per Game</div>
+                  <div className="text-center w-full md:w-auto md:min-w-[200px] order-1 md:order-2">
+                    <div className="font-bold text-slate-800 text-base md:text-lg">Blocks Per Game</div>
                     <div className="text-xs text-slate-500">BPG</div>
                   </div>
-                  <div className={`flex-1 flex justify-start ${t2Better ? 'opacity-100' : 'opacity-60'}`}>
-                    <div className={`px-6 py-3 rounded-full ${t2Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-2xl min-w-[100px] text-center`}>
+                  <div className="w-full md:w-auto md:flex-1 md:flex md:justify-start order-3">
+                    <div className={`px-4 py-2 md:px-6 md:py-3 rounded-full ${t2Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-lg md:text-2xl min-w-[80px] md:min-w-[100px] text-center`}>
                       {team2Stats.bpg}
                     </div>
                   </div>
@@ -445,18 +461,18 @@ export function TeamComparison({ leagueId, allTeams }: TeamComparisonProps) {
               const t1Better = parseFloat(team1Stats.spg) > parseFloat(team2Stats.spg);
               const t2Better = parseFloat(team2Stats.spg) > parseFloat(team1Stats.spg);
               return (
-                <div className="flex items-center justify-between gap-4">
-                  <div className={`flex-1 flex justify-end ${t1Better ? 'opacity-100' : 'opacity-60'}`}>
-                    <div className={`px-6 py-3 rounded-full ${t1Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-2xl min-w-[100px] text-center`}>
+                <div className="flex flex-col md:flex-row items-center justify-between gap-2 md:gap-4">
+                  <div className="w-full md:w-auto md:flex-1 md:flex md:justify-end order-2 md:order-1">
+                    <div className={`px-4 py-2 md:px-6 md:py-3 rounded-full ${t1Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-lg md:text-2xl min-w-[80px] md:min-w-[100px] text-center`}>
                       {team1Stats.spg}
                     </div>
                   </div>
-                  <div className="text-center min-w-[200px]">
-                    <div className="font-bold text-slate-800 text-lg">Steals Per Game</div>
+                  <div className="text-center w-full md:w-auto md:min-w-[200px] order-1 md:order-2">
+                    <div className="font-bold text-slate-800 text-base md:text-lg">Steals Per Game</div>
                     <div className="text-xs text-slate-500">SPG</div>
                   </div>
-                  <div className={`flex-1 flex justify-start ${t2Better ? 'opacity-100' : 'opacity-60'}`}>
-                    <div className={`px-6 py-3 rounded-full ${t2Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-2xl min-w-[100px] text-center`}>
+                  <div className="w-full md:w-auto md:flex-1 md:flex md:justify-start order-3">
+                    <div className={`px-4 py-2 md:px-6 md:py-3 rounded-full ${t2Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-lg md:text-2xl min-w-[80px] md:min-w-[100px] text-center`}>
                       {team2Stats.spg}
                     </div>
                   </div>

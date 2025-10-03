@@ -1361,12 +1361,12 @@ type GameSchedule = {
                 <h2 className="text-lg font-semibold text-slate-800 mb-6">League Standings</h2>
                 
                 {/* Pool Tabs */}
-                <div className="flex gap-2 mb-6 border-b border-gray-200">
+                <div className="flex flex-wrap gap-2 mb-6 border-b border-gray-200">
                   {hasPools && (
                     <>
                       <button
                         onClick={() => setStandingsView('poolA')}
-                        className={`px-4 py-2 font-medium transition-colors ${
+                        className={`px-3 py-2 md:px-4 text-sm md:text-base font-medium transition-colors ${
                           standingsView === 'poolA' 
                             ? 'text-orange-600 border-b-2 border-orange-600' 
                             : 'text-gray-600 hover:text-orange-500'
@@ -1376,7 +1376,7 @@ type GameSchedule = {
                       </button>
                       <button
                         onClick={() => setStandingsView('poolB')}
-                        className={`px-4 py-2 font-medium transition-colors ${
+                        className={`px-3 py-2 md:px-4 text-sm md:text-base font-medium transition-colors ${
                           standingsView === 'poolB' 
                             ? 'text-orange-600 border-b-2 border-orange-600' 
                             : 'text-gray-600 hover:text-orange-500'
@@ -1388,7 +1388,7 @@ type GameSchedule = {
                   )}
                   <button
                     onClick={() => setStandingsView('full')}
-                    className={`px-4 py-2 font-medium transition-colors ${
+                    className={`px-3 py-2 md:px-4 text-sm md:text-base font-medium transition-colors ${
                       standingsView === 'full' 
                         ? 'text-orange-600 border-b-2 border-orange-600' 
                         : 'text-gray-600 hover:text-orange-500'
@@ -1405,18 +1405,18 @@ type GameSchedule = {
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="w-full text-xs md:text-sm">
                       <thead>
                         <tr className="border-b border-gray-200">
-                          <th className="text-left py-3 px-2 font-semibold text-slate-700">Rank</th>
-                          <th className="text-left py-3 px-2 font-semibold text-slate-700">Team</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">W</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">L</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">Win%</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">PF</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">PA</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">Diff</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700"></th>
+                          <th className="text-left py-2 px-1 md:py-3 md:px-2 font-semibold text-slate-700">Rank</th>
+                          <th className="text-left py-2 px-1 md:py-3 md:px-2 font-semibold text-slate-700">Team</th>
+                          <th className="text-center py-2 px-1 md:py-3 md:px-2 font-semibold text-slate-700">W</th>
+                          <th className="text-center py-2 px-1 md:py-3 md:px-2 font-semibold text-slate-700">L</th>
+                          <th className="text-center py-2 px-1 md:py-3 md:px-2 font-semibold text-slate-700">Win%</th>
+                          <th className="text-center py-2 px-1 md:py-3 md:px-2 font-semibold text-slate-700">PF</th>
+                          <th className="text-center py-2 px-1 md:py-3 md:px-2 font-semibold text-slate-700">PA</th>
+                          <th className="text-center py-2 px-1 md:py-3 md:px-2 font-semibold text-slate-700">Diff</th>
+                          <th className="text-center py-2 px-1 md:py-3 md:px-2 font-semibold text-slate-700"></th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1427,25 +1427,25 @@ type GameSchedule = {
                             key={`${team.team}-${index}`}
                             className="border-b border-gray-100 hover:bg-orange-50 transition-colors"
                           >
-                            <td className="py-3 px-2 text-slate-600 font-medium">{team.rank}</td>
-                            <td className="py-3 px-2 text-slate-800 font-medium">{team.team}</td>
-                            <td className="py-3 px-2 text-center text-slate-600">{team.wins}</td>
-                            <td className="py-3 px-2 text-center text-slate-600">{team.losses}</td>
-                            <td className="py-3 px-2 text-center text-slate-600">{(team.winPct * 100).toFixed(1)}%</td>
-                            <td className="py-3 px-2 text-center text-slate-600">{team.pointsFor}</td>
-                            <td className="py-3 px-2 text-center text-slate-600">{team.pointsAgainst}</td>
-                            <td className="py-3 px-2 text-center font-medium text-slate-700">
+                            <td className="py-2 px-1 md:py-3 md:px-2 text-slate-600 font-medium">{team.rank}</td>
+                            <td className="py-2 px-1 md:py-3 md:px-2 text-slate-800 font-medium">{team.team}</td>
+                            <td className="py-2 px-1 md:py-3 md:px-2 text-center text-slate-600">{team.wins}</td>
+                            <td className="py-2 px-1 md:py-3 md:px-2 text-center text-slate-600">{team.losses}</td>
+                            <td className="py-2 px-1 md:py-3 md:px-2 text-center text-slate-600">{(team.winPct * 100).toFixed(1)}%</td>
+                            <td className="py-2 px-1 md:py-3 md:px-2 text-center text-slate-600">{team.pointsFor}</td>
+                            <td className="py-2 px-1 md:py-3 md:px-2 text-center text-slate-600">{team.pointsAgainst}</td>
+                            <td className="py-2 px-1 md:py-3 md:px-2 text-center font-medium text-slate-700">
                               {team.pointsDiff > 0 ? `+${team.pointsDiff}` : team.pointsDiff}
                             </td>
-                            <td className="py-3 px-2 text-center">
+                            <td className="py-2 px-1 md:py-3 md:px-2 text-center">
                               {team.movement === 'up' && (
-                                <span className="text-green-600 font-bold">▲</span>
+                                <span className="text-green-600 font-bold text-xs md:text-sm">▲</span>
                               )}
                               {team.movement === 'down' && (
-                                <span className="text-red-600 font-bold">▼</span>
+                                <span className="text-red-600 font-bold text-xs md:text-sm">▼</span>
                               )}
                               {team.movement === 'same' && (
-                                <span className="text-gray-400">▬</span>
+                                <span className="text-gray-400 text-xs md:text-sm">▬</span>
                               )}
                             </td>
                           </tr>
