@@ -1770,30 +1770,30 @@ type GameSchedule = {
                     </table>
                   </div>
                 ) : teamStatsData.length > 0 ? (
-                  <div className="overflow-x-auto -mx-4 md:mx-0">
-                    <table className="w-full text-xs md:text-sm min-w-[640px]">
+                  <div className="overflow-x-auto -mx-4 md:mx-0 border border-orange-200 rounded-lg">
+                    <table className="w-full text-xs md:text-sm">
                       <thead>
-                        <tr className="border-b border-gray-200">
-                          <th className="text-left py-2 md:py-3 px-2 font-semibold text-slate-700 sticky left-0 bg-white z-10">Team</th>
-                          <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700">GP</th>
+                        <tr className="border-b border-gray-200 bg-orange-50">
+                          <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 sticky left-0 bg-orange-50 z-10 min-w-[140px] md:min-w-[180px]">Team</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[45px]">GP</th>
                           {teamStatsView === 'averages' ? (
                             <>
-                              <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700">PPG</th>
-                              <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700">RPG</th>
-                              <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700">APG</th>
-                              <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700 hidden md:table-cell">FG%</th>
-                              <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700 hidden md:table-cell">3P%</th>
-                              <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700 hidden md:table-cell">2P%</th>
-                              <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700 hidden md:table-cell">FT%</th>
+                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">PPG</th>
+                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">RPG</th>
+                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">APG</th>
+                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">FG%</th>
+                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">3P%</th>
+                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">2P%</th>
+                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">FT%</th>
                             </>
                           ) : (
                             <>
-                              <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700">PTS</th>
-                              <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700">REB</th>
-                              <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700">AST</th>
-                              <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700 hidden md:table-cell">FGM</th>
-                              <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700 hidden md:table-cell">3PM</th>
-                              <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700 hidden md:table-cell">FTM</th>
+                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">PTS</th>
+                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">REB</th>
+                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">AST</th>
+                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">FGM</th>
+                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">3PM</th>
+                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">FTM</th>
                             </>
                           )}
                         </tr>
@@ -1806,57 +1806,57 @@ type GameSchedule = {
                             onClick={() => navigate(`/team/${encodeURIComponent(team.teamName)}`)}
                             data-testid={`row-team-${team.teamName}`}
                           >
-                            <td className="py-2 md:py-3 px-2 sticky left-0 bg-white hover:bg-orange-50 z-10">
+                            <td className="py-2 md:py-3 px-2 md:px-3 sticky left-0 bg-white hover:bg-orange-50 z-10">
                               <div className="flex items-center gap-2">
                                 <TeamLogo teamName={team.teamName} leagueId={league?.league_id || ""} size="sm" />
-                                <span className="font-medium text-slate-800 text-xs md:text-sm min-w-[120px]">{team.teamName}</span>
+                                <span className="font-medium text-slate-800 text-xs md:text-sm truncate">{team.teamName}</span>
                               </div>
                             </td>
-                            <td className="text-center py-2 md:py-3 px-2 text-slate-600" data-testid={`text-gp-${team.teamName}`}>
+                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 font-medium" data-testid={`text-gp-${team.teamName}`}>
                               {team.gamesPlayed}
                             </td>
                             {teamStatsView === 'averages' ? (
                               <>
-                                <td className="text-center py-2 md:py-3 px-2 font-medium text-orange-600" data-testid={`text-ppg-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-orange-600" data-testid={`text-ppg-${team.teamName}`}>
                                   {team.ppg}
                                 </td>
-                                <td className="text-center py-2 md:py-3 px-2 text-slate-600" data-testid={`text-rpg-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 md:px-3 font-medium text-slate-700" data-testid={`text-rpg-${team.teamName}`}>
                                   {team.rpg}
                                 </td>
-                                <td className="text-center py-2 md:py-3 px-2 text-slate-600" data-testid={`text-apg-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 md:px-3 font-medium text-slate-700" data-testid={`text-apg-${team.teamName}`}>
                                   {team.apg}
                                 </td>
-                                <td className="text-center py-2 md:py-3 px-2 text-slate-600 hidden md:table-cell" data-testid={`text-fg%-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 hidden md:table-cell" data-testid={`text-fg%-${team.teamName}`}>
                                   {team.fgPercentage}%
                                 </td>
-                                <td className="text-center py-2 md:py-3 px-2 text-slate-600 hidden md:table-cell" data-testid={`text-3p%-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 hidden md:table-cell" data-testid={`text-3p%-${team.teamName}`}>
                                   {team.threePtPercentage}%
                                 </td>
-                                <td className="text-center py-2 md:py-3 px-2 text-slate-600 hidden md:table-cell" data-testid={`text-2p%-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 hidden md:table-cell" data-testid={`text-2p%-${team.teamName}`}>
                                   {team.twoPtPercentage}%
                                 </td>
-                                <td className="text-center py-2 md:py-3 px-2 text-slate-600 hidden md:table-cell" data-testid={`text-ft%-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 hidden md:table-cell" data-testid={`text-ft%-${team.teamName}`}>
                                   {team.ftPercentage}%
                                 </td>
                               </>
                             ) : (
                               <>
-                                <td className="text-center py-2 md:py-3 px-2 font-medium text-orange-600" data-testid={`text-total-pts-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-orange-600" data-testid={`text-total-pts-${team.teamName}`}>
                                   {team.totalPoints}
                                 </td>
-                                <td className="text-center py-2 md:py-3 px-2 text-slate-600" data-testid={`text-total-reb-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 md:px-3 font-medium text-slate-700" data-testid={`text-total-reb-${team.teamName}`}>
                                   {team.totalRebounds}
                                 </td>
-                                <td className="text-center py-2 md:py-3 px-2 text-slate-600" data-testid={`text-total-ast-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 md:px-3 font-medium text-slate-700" data-testid={`text-total-ast-${team.teamName}`}>
                                   {team.totalAssists}
                                 </td>
-                                <td className="text-center py-2 md:py-3 px-2 text-slate-600 hidden md:table-cell" data-testid={`text-total-fgm-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 hidden md:table-cell" data-testid={`text-total-fgm-${team.teamName}`}>
                                   {team.totalFGM}
                                 </td>
-                                <td className="text-center py-2 md:py-3 px-2 text-slate-600 hidden md:table-cell" data-testid={`text-total-3pm-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 hidden md:table-cell" data-testid={`text-total-3pm-${team.teamName}`}>
                                   {team.total3PM}
                                 </td>
-                                <td className="text-center py-2 md:py-3 px-2 text-slate-600 hidden md:table-cell" data-testid={`text-total-ftm-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 hidden md:table-cell" data-testid={`text-total-ftm-${team.teamName}`}>
                                   {team.totalFTM}
                                 </td>
                               </>
@@ -1865,6 +1865,11 @@ type GameSchedule = {
                         ))}
                       </tbody>
                     </table>
+                    
+                    {/* Scroll hint for mobile */}
+                    <div className="md:hidden bg-orange-50 text-orange-700 text-center py-2 text-xs border-t border-orange-200">
+                      ← Swipe to see all stats →
+                    </div>
                   </div>
                 ) : (
                   <div className="text-center py-8 text-gray-500">
