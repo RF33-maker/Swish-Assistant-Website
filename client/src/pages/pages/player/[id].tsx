@@ -103,7 +103,7 @@ export default function PlayerStatsPage() {
           console.log('🔍 Fallback: Looking up by old record ID...');
           const { data: playerRecord, error: playerError } = await supabase
             .from('player_stats')
-            .select('player_id, name, team, position, number')
+            .select('player_id, full_name, firstname, familyname, team, position, number')
             .eq('id', playerId)
             .single();
 
@@ -120,7 +120,7 @@ export default function PlayerStatsPage() {
 
           actualPlayerId = playerRecord.player_id;
           playerInfo = {
-            name: playerRecord.name,
+            name: playerRecord.full_name || `${playerRecord.firstname || ''} ${playerRecord.familyname || ''}`.trim() || 'Unknown Player',
             team: playerRecord.team,
             position: playerRecord.position,
             number: playerRecord.number
@@ -226,10 +226,13 @@ export default function PlayerStatsPage() {
         // Calculate season averages if we have stats
         if (stats && stats.length > 0) {
           console.log('📈 Step 5: Calculating averages for', stats.length, 'games');
-          setPlayerInfo({
-            name: stats[0].name || stats[0].player_name || 'Unknown Player',
-            team: stats[0].team || stats[0].team_name || 'Unknown Team'
-          });
+          // Only set playerInfo if it wasn't already set from players table or fallback
+          if (!playerInfo) {
+            setPlayerInfo({
+              name: stats[0].full_name || `${stats[0].firstname || ''} ${stats[0].familyname || ''}`.trim() || 'Unknown Player',
+              team: stats[0].team || stats[0].team_name || 'Unknown Team'
+            });
+          }
 
           const totals = stats.reduce((acc, game) => ({
             points: acc.points + (game.points || 0),
