@@ -412,7 +412,11 @@ export default function TeamProfile() {
                   </svg>
                   Star Player
                 </h2>
-                <div className="bg-white rounded-lg p-3 md:p-4">
+                <div 
+                  className="bg-white rounded-lg p-3 md:p-4 cursor-pointer hover:shadow-md transition-shadow"
+                  onClick={() => team.topPlayer.player_id && navigate(`/player/${team.topPlayer.player_id}`)}
+                  data-testid={`player-card-${team.topPlayer.player_id}`}
+                >
                   <div className="flex flex-col md:flex-row items-center md:items-start gap-3 md:gap-4">
                     <div className="w-12 h-12 md:w-16 md:h-16 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold text-lg md:text-xl">
                       {team.topPlayer.name.charAt(0)}
@@ -469,7 +473,9 @@ export default function TeamProfile() {
                     {team.roster.map((player: PlayerStat, index: number) => (
                       <tr 
                         key={player.name} 
-                        className="border-b border-gray-100 hover:bg-orange-50 transition-colors"
+                        onClick={() => player.player_id && navigate(`/player/${player.player_id}`)}
+                        data-testid={`player-card-${player.player_id}`}
+                        className="border-b border-gray-100 hover:bg-orange-50 transition-colors cursor-pointer"
                       >
                         <td className="sticky left-0 bg-inherit py-2 md:py-3 px-2 z-10">
                           <div className="flex items-center gap-2">
