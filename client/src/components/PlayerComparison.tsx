@@ -40,17 +40,13 @@ export function PlayerComparison({ leagueId, allPlayers }: PlayerComparisonProps
   }, []);
 
   const fetchPlayerStats = async (playerId: string) => {
-    console.log("📊 Fetching stats for playerId:", playerId, "leagueId:", leagueId);
     const { data: stats, error } = await supabase
       .from("player_stats")
       .select("*")
       .eq("player_id", playerId)
       .eq("league_id", leagueId);
 
-    console.log("📊 Stats result:", { stats, error, count: stats?.length });
-
     if (error || !stats || stats.length === 0) {
-      console.log("❌ No stats found or error:", error);
       return null;
     }
 
@@ -143,9 +139,7 @@ export function PlayerComparison({ leagueId, allPlayers }: PlayerComparisonProps
   };
 
   useEffect(() => {
-    console.log("🔄 Player IDs changed:", { player1Id, player2Id });
     if (player1Id && player2Id) {
-      console.log("✅ Both players selected, comparing...");
       handleCompare();
     }
   }, [player1Id, player2Id]);
@@ -162,16 +156,12 @@ export function PlayerComparison({ leagueId, allPlayers }: PlayerComparisonProps
   ).slice(0, 10);
 
   const selectPlayer1 = (player: any) => {
-    console.log("🔵 Player 1 selected:", player);
-    console.log("🔵 Player 1 playerKey:", player.playerKey);
     setPlayer1Id(player.playerKey);
     setSearch1(`${player.name} - ${player.team}`);
     setShowDropdown1(false);
   };
 
   const selectPlayer2 = (player: any) => {
-    console.log("🔴 Player 2 selected:", player);
-    console.log("🔴 Player 2 playerKey:", player.playerKey);
     setPlayer2Id(player.playerKey);
     setSearch2(`${player.name} - ${player.team}`);
     setShowDropdown2(false);

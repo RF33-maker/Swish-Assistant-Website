@@ -22,6 +22,7 @@ import {
   CompactLoadingSkeleton
 } from "@/components/skeletons/LoadingSkeleton";
 import { PlayerComparison } from "@/components/PlayerComparison";
+import { TeamComparison } from "@/components/TeamComparison";
 
 type GameSchedule = {
   game_id: string;
@@ -68,6 +69,7 @@ type GameSchedule = {
   const [isEditingInstagram, setIsEditingInstagram] = useState(false);
   const [updatingInstagram, setUpdatingInstagram] = useState(false);
   const [activeSection, setActiveSection] = useState('overview'); // 'overview', 'stats', 'teams', 'schedule'
+  const [comparisonMode, setComparisonMode] = useState<'player' | 'team'>('player'); // Toggle between player and team comparison
   const [allPlayerAverages, setAllPlayerAverages] = useState<any[]>([]);
   const [filteredPlayerAverages, setFilteredPlayerAverages] = useState<any[]>([]);
   const [statsSearch, setStatsSearch] = useState("");
@@ -1332,9 +1334,12 @@ type GameSchedule = {
                   if (allPlayerAverages.length === 0) {
                     fetchAllPlayerAverages();
                   }
+                  if (teamStatsData.length === 0) {
+                    fetchTeamStats();
+                  }
                 }}
               >
-                Compare Players
+                Compare
               </a>
               <a 
                 href="#" 
@@ -2071,12 +2076,50 @@ type GameSchedule = {
               </div>
             )}
 
-            {/* Player Comparison Section */}
+            {/* Comparison Section */}
             {activeSection === 'comparison' && (
-              <PlayerComparison 
-                leagueId={league?.league_id || ""} 
-                allPlayers={allPlayerAverages}
-              />
+              <div className="space-y-6">
+                {/* Toggle between Player and Team Comparison */}
+                <div className="bg-white rounded-xl shadow p-4">
+                  <div className="flex items-center justify-center gap-2">
+                    <button
+                      onClick={() => setComparisonMode('player')}
+                      className={`px-6 py-2 rounded-lg font-semibold transition-all ${
+                        comparisonMode === 'player'
+                          ? 'bg-orange-500 text-white shadow-md'
+                          : 'bg-gray-100 text-slate-600 hover:bg-gray-200'
+                      }`}
+                      data-testid="button-player-comparison"
+                    >
+                      Player Comparison
+                    </button>
+                    <button
+                      onClick={() => setComparisonMode('team')}
+                      className={`px-6 py-2 rounded-lg font-semibold transition-all ${
+                        comparisonMode === 'team'
+                          ? 'bg-orange-500 text-white shadow-md'
+                          : 'bg-gray-100 text-slate-600 hover:bg-gray-200'
+                      }`}
+                      data-testid="button-team-comparison"
+                    >
+                      Team Comparison
+                    </button>
+                  </div>
+                </div>
+
+                {/* Render appropriate comparison component */}
+                {comparisonMode === 'player' ? (
+                  <PlayerComparison 
+                    leagueId={league?.league_id || ""} 
+                    allPlayers={allPlayerAverages}
+                  />
+                ) : (
+                  <TeamComparison 
+                    leagueId={league?.league_id || ""} 
+                    allTeams={teamStatsData}
+                  />
+                )}
+              </div>
             )}
 
             {/* Overview Section - Default view */}
