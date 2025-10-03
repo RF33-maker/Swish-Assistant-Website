@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { Search } from "lucide-react";
+import { TeamLogo } from "@/components/TeamLogo";
 
 interface TeamComparisonProps {
   leagueId: string;
@@ -233,13 +234,16 @@ export function TeamComparison({ leagueId, allTeams }: TeamComparisonProps) {
         </div>
       ) : team1Stats && team2Stats ? (
         <div className="max-w-5xl mx-auto">
-          {/* Team Headers with Logo Placeholders */}
+          {/* Team Headers with Team Logos */}
           <div className="flex items-center justify-between mb-8">
             {/* Team 1 */}
             <div className="flex flex-col items-center space-y-3 w-1/3">
-              <div className="w-32 h-32 rounded-full bg-gradient-to-br from-orange-100 to-orange-200 border-4 border-orange-300 flex items-center justify-center">
-                <div className="text-4xl font-bold text-orange-600">{team1Stats.name.charAt(0)}</div>
-              </div>
+              <TeamLogo 
+                teamName={team1Stats.name}
+                leagueId={leagueId}
+                size={128}
+                className="border-4 border-orange-300 shadow-lg"
+              />
               <div className="text-center">
                 <h3 className="text-lg font-bold text-slate-800">{team1Stats.name}</h3>
                 <p className="text-xs text-slate-500 mt-1">{team1Stats.games} games</p>
@@ -253,9 +257,12 @@ export function TeamComparison({ leagueId, allTeams }: TeamComparisonProps) {
 
             {/* Team 2 */}
             <div className="flex flex-col items-center space-y-3 w-1/3">
-              <div className="w-32 h-32 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 border-4 border-slate-300 flex items-center justify-center">
-                <div className="text-4xl font-bold text-slate-600">{team2Stats.name.charAt(0)}</div>
-              </div>
+              <TeamLogo 
+                teamName={team2Stats.name}
+                leagueId={leagueId}
+                size={128}
+                className="border-4 border-slate-300 shadow-lg"
+              />
               <div className="text-center">
                 <h3 className="text-lg font-bold text-slate-800">{team2Stats.name}</h3>
                 <p className="text-xs text-slate-500 mt-1">{team2Stats.games} games</p>
