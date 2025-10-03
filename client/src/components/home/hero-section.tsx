@@ -5,7 +5,7 @@ export default function HeroSection() {
   return (
     <section
       id="Chatbot"
-      className="relative min-h-screen flex flex-col items-center justify-center px-4 py-20 bg-gradient-to-br from-white via-orange-50 to-orange-100 overflow-hidden"
+      className="relative min-h-screen flex flex-col items-center justify-center px-4 md:px-8 py-12 md:py-20 bg-gradient-to-br from-white via-orange-50 to-orange-100 overflow-hidden"
     >
       {/* ✅ Offset background logo */}
       <div className="absolute top-1/4 right-[-200px] z-0 pointer-events-none">
@@ -17,7 +17,7 @@ export default function HeroSection() {
       </div>
 
       {/* ✅ Title */}
-      <h1 className="text-4xl sm:text-5xl font-bold text-orange-600 text-center mb-8 relative z-10">
+      <h1 className="text-3xl md:text-5xl font-bold text-orange-600 text-center mb-6 md:mb-8 relative z-10">
         Welcome to Swish Assistant
       </h1>
 

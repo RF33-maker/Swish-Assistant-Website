@@ -31,25 +31,25 @@ export default function CustomizationSection() {
   };
 
   return (
-    <section className="py-12 px-4 sm:px-6 lg:px-8 bg-neutral-50">
+    <section className="py-8 md:py-12 px-4 md:px-6 lg:px-8 bg-neutral-50">
       <div className="max-w-7xl mx-auto">
-        <h2 className="text-2xl font-semibold text-neutral-900 mb-2">Customization</h2>
-        <p className="text-neutral-600 mb-8">Personalize your workspace with brand elements</p>
+        <h2 className="text-xl md:text-2xl font-semibold text-neutral-900 mb-1 md:mb-2">Customization</h2>
+        <p className="text-sm md:text-base text-neutral-600 mb-6 md:mb-8">Personalize your workspace with brand elements</p>
         
         <div className="bg-white rounded-xl shadow-md overflow-hidden">
-          <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="p-4 md:p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
               {/* Logo upload section */}
               <div>
-                <h3 className="text-lg font-medium text-neutral-800 mb-4">Team Logo</h3>
+                <h3 className="text-base md:text-lg font-medium text-neutral-800 mb-3 md:mb-4">Team Logo</h3>
                 <div className="flex items-start">
-                  <div className="mr-4 w-16 h-16 bg-neutral-100 rounded-md flex items-center justify-center border border-neutral-200 overflow-hidden">
+                  <div className="mr-3 md:mr-4 w-14 h-14 md:w-16 md:h-16 bg-neutral-100 rounded-md flex items-center justify-center border border-neutral-200 overflow-hidden">
                     {logoPreview ? (
                       <img src={logoPreview} alt="Preview" className="h-full w-full object-contain" />
                     ) : (
                       <svg 
                         xmlns="http://www.w3.org/2000/svg" 
-                        className="h-8 w-8 text-neutral-400"
+                        className="h-7 w-7 md:h-8 md:w-8 text-neutral-400"
                         viewBox="0 0 24 24" 
                         fill="none" 
                         stroke="currentColor" 
@@ -64,7 +64,7 @@ export default function CustomizationSection() {
                     )}
                   </div>
                   <div className="flex-1">
-                    <Label htmlFor="logo-upload" className="block w-full px-4 py-2 text-sm text-center border border-neutral-300 rounded-md cursor-pointer bg-white hover:bg-neutral-50">
+                    <Label htmlFor="logo-upload" className="block w-full px-3 md:px-4 py-2 text-xs md:text-sm text-center border border-neutral-300 rounded-md cursor-pointer bg-white hover:bg-neutral-50">
                       Upload logo
                       <Input 
                         id="logo-upload" 
@@ -81,8 +81,8 @@ export default function CustomizationSection() {
               
               {/* Color customization section */}
               <div>
-                <h3 className="text-lg font-medium text-neutral-800 mb-4">Brand Colors</h3>
-                <div className="space-y-4">
+                <h3 className="text-base md:text-lg font-medium text-neutral-800 mb-3 md:mb-4">Brand Colors</h3>
+                <div className="space-y-3 md:space-y-4">
                   <div>
                     <Label htmlFor="primary-color" className="block text-sm font-medium text-neutral-700 mb-1">
                       Primary Color
@@ -141,7 +141,7 @@ export default function CustomizationSection() {
                   </div>
                   
                   <Button 
-                    className="mt-2 w-full" 
+                    className="mt-2 w-full md:w-auto" 
                     onClick={applyBrandColors}
                   >
                     Apply Brand Colors
