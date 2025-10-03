@@ -641,8 +641,9 @@ type GameSchedule = {
       });
 
       // Calculate averages and percentages
-      const averagesList = Array.from(playerMap.values()).map(player => ({
+      const averagesList = Array.from(playerMap.entries()).map(([playerKey, player]) => ({
         ...player,
+        playerKey,
         avgPoints: (player.totalPoints / player.games).toFixed(1),
         avgRebounds: (player.totalRebounds / player.games).toFixed(1),
         avgAssists: (player.totalAssists / player.games).toFixed(1),
