@@ -439,13 +439,13 @@ export default function PlayerStatsPage() {
     <div className="min-h-screen bg-white">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
-        <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4 mb-8">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-col md:flex-row items-start md:items-center gap-3 md:gap-4 mb-6 md:mb-8">
+          <div className="w-full md:w-auto">
             <Button 
               variant="outline" 
               size="sm"
               onClick={() => setLocation('/')}
-              className="group flex items-center gap-2 border-orange-200 hover:bg-white hover:border-orange-300 transition-all duration-300 hover:shadow-md"
+              className="group flex items-center gap-2 border-orange-200 hover:bg-white hover:border-orange-300 transition-all duration-300 hover:shadow-md w-full md:w-auto"
             >
               <ArrowLeft className="h-4 w-4 group-hover:hidden transition-all duration-300" />
               <div className="hidden group-hover:block transition-all duration-300">
@@ -456,7 +456,7 @@ export default function PlayerStatsPage() {
           </div>
           
           {/* Search Bar in Header */}
-          <div className="flex-1 max-w-md lg:max-w-lg relative">
+          <div className="flex-1 w-full md:max-w-md lg:max-w-lg relative">
             <form
               onSubmit={handleSearchSubmit}
               className="flex items-center shadow-md rounded-full border border-orange-100 overflow-hidden bg-white"
@@ -466,11 +466,11 @@ export default function PlayerStatsPage() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search players or leagues..."
-                className="flex-1 px-4 py-2 text-sm text-orange-800 focus:outline-none bg-white"
+                className="flex-1 px-3 md:px-4 py-2 text-sm text-orange-800 focus:outline-none bg-white"
               />
               <button
                 type="submit"
-                className="bg-orange-400 text-white font-semibold px-4 py-2 hover:bg-orange-500 transition text-sm"
+                className="bg-orange-400 text-white font-semibold px-3 md:px-4 py-2 hover:bg-orange-500 transition text-sm"
               >
                 Search
               </button>
@@ -516,17 +516,17 @@ export default function PlayerStatsPage() {
 
         {/* Player Info Section */}
         {playerInfo && (
-          <div className="mb-8">
+          <div className="mb-6 md:mb-8">
             <Card className="border-orange-200 shadow-md animate-slide-in-up bg-white">
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-4">
+              <CardContent className="p-4 md:pt-6">
+                <div className="flex flex-col md:flex-row items-center md:items-start gap-4">
                   {/* Profile Picture Section */}
                   <div className="relative group">
-                    <div className="h-20 w-20 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center animate-float hover:animate-shake cursor-pointer shadow-md">
-                      <User className="h-10 w-10 text-white" />
+                    <div className="h-16 w-16 md:h-20 md:w-20 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center animate-float hover:animate-shake cursor-pointer shadow-md">
+                      <User className="h-8 w-8 md:h-10 md:w-10 text-white" />
                       {/* Camera overlay for profile pic upload */}
                       <div className="absolute inset-0 rounded-full bg-white bg-opacity-20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-                        <Camera className="h-6 w-6 text-orange-700" />
+                        <Camera className="h-5 w-5 md:h-6 md:w-6 text-orange-700" />
                       </div>
                     </div>
                     <div className="absolute -bottom-1 -right-1 bg-orange-400 rounded-full p-1.5 shadow-md animate-pulse">
@@ -535,18 +535,18 @@ export default function PlayerStatsPage() {
                   </div>
                   
                   {/* Player Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start gap-3 mb-2">
+                  <div className="flex-1 min-w-0 text-center md:text-left w-full">
+                    <div className="flex flex-col md:flex-row items-center md:items-start gap-2 md:gap-3 mb-2">
                       <div className="flex-1 min-w-0">
-                        <h1 className="text-3xl font-bold text-orange-800 hover:text-orange-700 transition-colors duration-300 break-words">{playerInfo.name}</h1>
+                        <h1 className="text-2xl md:text-3xl font-bold text-orange-800 hover:text-orange-700 transition-colors duration-300 break-words">{playerInfo.name}</h1>
                       </div>
-                      <TrendingUp className="h-6 w-6 text-orange-600 animate-bounce flex-shrink-0 mt-1" />
+                      <TrendingUp className="h-5 w-5 md:h-6 md:w-6 text-orange-600 animate-bounce flex-shrink-0" />
                     </div>
-                    <p className="text-orange-700 flex items-center gap-2 hover:text-orange-600 transition-colors duration-300 text-lg mb-3">
-                      <Trophy className="h-5 w-5 hover:animate-bounce flex-shrink-0" />
+                    <p className="text-orange-700 flex items-center justify-center md:justify-start gap-2 hover:text-orange-600 transition-colors duration-300 text-base md:text-lg mb-3">
+                      <Trophy className="h-4 w-4 md:h-5 md:w-5 hover:animate-bounce flex-shrink-0" />
                       <span className="break-words">{playerInfo.team}</span>
                     </p>
-                    <div className="flex flex-wrap items-center gap-4 text-sm text-orange-700 mb-3">
+                    <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 md:gap-4 text-xs md:text-sm text-orange-700 mb-3">
                       <span className="flex items-center gap-1 whitespace-nowrap">
                         <div className="h-2 w-2 bg-green-400 rounded-full animate-pulse"></div>
                         Active Player
@@ -555,9 +555,9 @@ export default function PlayerStatsPage() {
                     </div>
                     
                     {/* AI Analysis */}
-                    <div className="bg-orange-50 rounded-lg p-4 border border-orange-100">
+                    <div className="bg-orange-50 rounded-lg p-3 md:p-4 border border-orange-100">
                       <div className="flex items-start gap-2">
-                        <div className="flex items-center gap-1 text-orange-700 text-sm font-medium mb-2">
+                        <div className="flex items-center gap-1 text-orange-700 text-xs md:text-sm font-medium mb-2">
                           {analysisLoading ? (
                             <Brain className="h-4 w-4 animate-pulse text-orange-600" />
                           ) : (
@@ -641,15 +641,15 @@ export default function PlayerStatsPage() {
                 Season Averages ({seasonAverages.games_played} games)
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-6">
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
+            <CardContent className="p-4 md:pt-6">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 md:gap-6">
                 {/* Points */}
                 <div className="text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
                   <div className="relative">
-                    <div className="text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
+                    <div className="text-2xl md:text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
                       {seasonAverages.avg_points.toFixed(1)}
                     </div>
-                    <div className="text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">PPG</div>
+                    <div className="text-xs md:text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">PPG</div>
                     <div className="w-full bg-orange-50 h-2 rounded-full mt-3 overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
@@ -662,10 +662,10 @@ export default function PlayerStatsPage() {
                 {/* Rebounds */}
                 <div className="text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
                   <div className="relative">
-                    <div className="text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-bounce">
+                    <div className="text-2xl md:text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-bounce">
                       {seasonAverages.avg_rebounds.toFixed(1)}
                     </div>
-                    <div className="text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">RPG</div>
+                    <div className="text-xs md:text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">RPG</div>
                     <div className="w-full bg-orange-50 h-2 rounded-full mt-3 overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
@@ -678,10 +678,10 @@ export default function PlayerStatsPage() {
                 {/* Assists */}
                 <div className="text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
                   <div className="relative">
-                    <div className="text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
+                    <div className="text-2xl md:text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
                       {seasonAverages.avg_assists.toFixed(1)}
                     </div>
-                    <div className="text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">APG</div>
+                    <div className="text-xs md:text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">APG</div>
                     <div className="w-full bg-orange-50 h-2 rounded-full mt-3 overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
@@ -694,10 +694,10 @@ export default function PlayerStatsPage() {
                 {/* Field Goal % */}
                 <div className="text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
                   <div className="relative">
-                    <div className="text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
+                    <div className="text-2xl md:text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
                       {formatPercentage(seasonAverages.fg_percentage)}
                     </div>
-                    <div className="text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">FG%</div>
+                    <div className="text-xs md:text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">FG%</div>
                     <div className="w-full bg-orange-50 h-2 rounded-full mt-3 overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
@@ -710,10 +710,10 @@ export default function PlayerStatsPage() {
                 {/* 3-Point % */}
                 <div className="text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
                   <div className="relative">
-                    <div className="text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
+                    <div className="text-2xl md:text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
                       {formatPercentage(seasonAverages.three_point_percentage)}
                     </div>
-                    <div className="text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">3P%</div>
+                    <div className="text-xs md:text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">3P%</div>
                     <div className="w-full bg-orange-50 h-2 rounded-full mt-3 overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
@@ -726,10 +726,10 @@ export default function PlayerStatsPage() {
                 {/* Free Throw % */}
                 <div className="text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
                   <div className="relative">
-                    <div className="text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
+                    <div className="text-2xl md:text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
                       {formatPercentage(seasonAverages.ft_percentage)}
                     </div>
-                    <div className="text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">FT%</div>
+                    <div className="text-xs md:text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">FT%</div>
                     <div className="w-full bg-orange-50 h-2 rounded-full mt-3 overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
@@ -746,35 +746,35 @@ export default function PlayerStatsPage() {
         {/* Game Log */}
         <Card className="border-orange-200 shadow-md bg-white">
           <CardHeader className="bg-white border-b border-orange-200">
-            <CardTitle className="flex items-center gap-2 text-orange-800">
-              <Calendar className="h-5 w-5" />
+            <CardTitle className="flex items-center gap-2 text-orange-800 text-base md:text-lg">
+              <Calendar className="h-4 w-4 md:h-5 md:w-5" />
               Game Log
             </CardTitle>
-            <CardDescription className="text-orange-700">
+            <CardDescription className="text-orange-700 text-xs md:text-sm">
               Recent game performances
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
             {playerStats.length === 0 ? (
-              <div className="p-8 text-center text-orange-600">
+              <div className="p-6 md:p-8 text-center text-orange-600 text-sm md:text-base">
                 No game statistics found for this player.
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto -mx-4 md:mx-0">
                 <table className="w-full">
                   <thead className="bg-orange-50 border-b border-orange-200">
                     <tr className="text-left">
-                      <th className="px-4 py-3 text-orange-900 font-semibold">Date</th>
-                      <th className="px-4 py-3 text-orange-900 font-semibold">Opponent</th>
-                      <th className="px-4 py-3 text-orange-900 font-semibold">MIN</th>
-                      <th className="px-4 py-3 text-orange-900 font-semibold">PTS</th>
-                      <th className="px-4 py-3 text-orange-900 font-semibold">REB</th>
-                      <th className="px-4 py-3 text-orange-900 font-semibold">AST</th>
-                      <th className="px-4 py-3 text-orange-900 font-semibold">STL</th>
-                      <th className="px-4 py-3 text-orange-900 font-semibold">BLK</th>
-                      <th className="px-4 py-3 text-orange-900 font-semibold">FG</th>
-                      <th className="px-4 py-3 text-orange-900 font-semibold">3P</th>
-                      <th className="px-4 py-3 text-orange-900 font-semibold">FT</th>
+                      <th className="sticky left-0 bg-orange-50 px-3 md:px-4 py-2 md:py-3 text-orange-900 font-semibold text-xs md:text-sm z-10">Date</th>
+                      <th className="px-3 md:px-4 py-2 md:py-3 text-orange-900 font-semibold text-xs md:text-sm">Opponent</th>
+                      <th className="hidden md:table-cell px-4 py-3 text-orange-900 font-semibold text-sm">MIN</th>
+                      <th className="px-3 md:px-4 py-2 md:py-3 text-orange-900 font-semibold text-xs md:text-sm">PTS</th>
+                      <th className="px-3 md:px-4 py-2 md:py-3 text-orange-900 font-semibold text-xs md:text-sm">REB</th>
+                      <th className="px-3 md:px-4 py-2 md:py-3 text-orange-900 font-semibold text-xs md:text-sm">AST</th>
+                      <th className="hidden md:table-cell px-4 py-3 text-orange-900 font-semibold text-sm">STL</th>
+                      <th className="hidden md:table-cell px-4 py-3 text-orange-900 font-semibold text-sm">BLK</th>
+                      <th className="hidden md:table-cell px-4 py-3 text-orange-900 font-semibold text-sm">FG</th>
+                      <th className="hidden md:table-cell px-4 py-3 text-orange-900 font-semibold text-sm">3P</th>
+                      <th className="hidden md:table-cell px-4 py-3 text-orange-900 font-semibold text-sm">FT</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -785,25 +785,25 @@ export default function PlayerStatsPage() {
                           index % 2 === 0 ? 'bg-white' : 'bg-orange-25'
                         }`}
                       >
-                        <td className="px-4 py-3 text-orange-800">{formatDate(game.game_date)}</td>
-                        <td className="px-4 py-3">
-                          <Badge variant="outline" className="border-orange-300 text-orange-700">
+                        <td className="sticky left-0 bg-inherit px-3 md:px-4 py-2 md:py-3 text-orange-800 text-xs md:text-sm z-10">{formatDate(game.game_date)}</td>
+                        <td className="px-3 md:px-4 py-2 md:py-3">
+                          <Badge variant="outline" className="border-orange-300 text-orange-700 text-xs md:text-sm whitespace-nowrap">
                             vs {game.opponent}
                           </Badge>
                         </td>
-                        <td className="px-4 py-3 text-orange-800">{game.minutes_played || 0}</td>
-                        <td className="px-4 py-3 font-semibold text-orange-900 group-hover:text-orange-700 group-hover:scale-110 transition-all duration-200">{game.points || 0}</td>
-                        <td className="px-4 py-3 text-orange-800">{game.rebounds_total || 0}</td>
-                        <td className="px-4 py-3 text-orange-800">{game.assists || 0}</td>
-                        <td className="px-4 py-3 text-orange-800">{game.steals || 0}</td>
-                        <td className="px-4 py-3 text-orange-800">{game.blocks || 0}</td>
-                        <td className="px-4 py-3 text-orange-800">
+                        <td className="hidden md:table-cell px-4 py-3 text-orange-800 text-sm">{game.minutes_played || 0}</td>
+                        <td className="px-3 md:px-4 py-2 md:py-3 font-semibold text-orange-900 group-hover:text-orange-700 group-hover:scale-110 transition-all duration-200 text-xs md:text-sm">{game.points || 0}</td>
+                        <td className="px-3 md:px-4 py-2 md:py-3 text-orange-800 text-xs md:text-sm">{game.rebounds_total || 0}</td>
+                        <td className="px-3 md:px-4 py-2 md:py-3 text-orange-800 text-xs md:text-sm">{game.assists || 0}</td>
+                        <td className="hidden md:table-cell px-4 py-3 text-orange-800 text-sm">{game.steals || 0}</td>
+                        <td className="hidden md:table-cell px-4 py-3 text-orange-800 text-sm">{game.blocks || 0}</td>
+                        <td className="hidden md:table-cell px-4 py-3 text-orange-800 text-sm">
                           {game.field_goals_made || 0}/{game.field_goals_attempted || 0}
                         </td>
-                        <td className="px-4 py-3 text-orange-800">
+                        <td className="hidden md:table-cell px-4 py-3 text-orange-800 text-sm">
                           {game.three_pt_made || 0}/{game.three_pt_attempted || 0}
                         </td>
-                        <td className="px-4 py-3 text-orange-800">
+                        <td className="hidden md:table-cell px-4 py-3 text-orange-800 text-sm">
                           {game.free_throws_made || 0}/{game.free_throws_attempted || 0}
                         </td>
                       </tr>
