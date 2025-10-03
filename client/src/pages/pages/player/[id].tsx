@@ -131,7 +131,7 @@ export default function PlayerStatsPage() {
         console.log('🔍 Step 2: Getting all stats for player_id:', actualPlayerId);
         const { data: stats, error: statsError } = await supabase
           .from('player_stats')
-          .select('*')
+          .select('id, player_id, league_id, user_id, game_key, game_date, team, team_name, name, full_name, firstname, familyname, number, position, starter, captain, home_team, away_team, is_home_player, opponent, spoints, sminutes, sfieldgoalsmade, sfieldgoalsattempted, sfieldgoalspercentage, sthreepointersmade, sthreepointersattempted, sthreepointerspercentage, stwopointersmade, stwopointersattempted, stwopointerspercentage, sfreethrowsmade, sfreethrowsattempted, sfreethrowspercentage, sreboundstotal, sreboundsoffensive, sreboundsdefensive, sassists, ssteals, sblocks, sblocksreceived, sturnovers, sfoulspersonal, sfoulstechnical, eff_1, eff_2, eff_3, eff_4, eff_5, eff_6, eff_7, points, rebounds_total, assists, is_public, created_at')
           .eq('player_id', actualPlayerId)
           .order('game_date', { ascending: false });
 
@@ -832,7 +832,7 @@ export default function PlayerStatsPage() {
                         <td className="sticky left-0 bg-inherit px-2 md:px-4 py-2 md:py-3 text-orange-800 text-[10px] md:text-sm z-10">{formatDate(game.game_date)}</td>
                         <td className="px-2 md:px-4 py-2 md:py-3">
                           <Badge variant="outline" className="border-orange-300 text-orange-700 text-[10px] md:text-sm whitespace-nowrap">
-                            vs {game.is_home_player ? game.away_team : game.home_team}
+                            {game.opponent ? `vs ${game.opponent}` : (game.is_home_player ? `vs ${game.away_team}` : `vs ${game.home_team}`)}
                           </Badge>
                         </td>
                         <td className="hidden md:table-cell px-4 py-3 text-orange-800 text-sm text-center">{game.sminutes || '0'}</td>
