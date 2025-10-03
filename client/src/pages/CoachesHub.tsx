@@ -122,23 +122,23 @@ export default function CoachesHub() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
+        <div className="max-w-full md:max-w-7xl mx-auto px-4 md:px-6 py-4 md:py-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-orange-100 rounded-lg">
                 <img 
                   src={SwishLogo} 
                   alt="Swish Assistant" 
-                  className="w-6 h-6 object-contain"
+                  className="h-6 md:h-8 w-auto object-contain"
                 />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-slate-800">Coaches Hub</h1>
-                <p className="text-sm text-slate-500">Advanced analytics and team insights</p>
+                <h1 className="text-xl md:text-2xl font-bold text-slate-800">Coaches Hub</h1>
+                <p className="text-xs md:text-sm text-slate-500">Advanced analytics and team insights</p>
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <Link href="/dashboard" className="text-slate-600 hover:text-orange-600 transition">
+              <Link href="/dashboard" className="text-sm md:text-base text-slate-600 hover:text-orange-600 transition">
                 ← Back to Dashboard
               </Link>
             </div>
@@ -146,9 +146,9 @@ export default function CoachesHub() {
         </div>
       </div>
 
-      <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div className="max-w-full mx-auto px-4 md:px-6 py-4 md:py-6">
         {/* Welcome Section */}
-        <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl border border-orange-100 p-8 mb-8 relative overflow-hidden">
+        <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl border border-orange-100 p-4 md:p-8 mb-4 md:mb-8 relative overflow-hidden">
           {/* Background Logo */}
           <div className="absolute top-4 right-4 w-48 h-48 opacity-15 pointer-events-none">
             <img 
@@ -170,8 +170,8 @@ export default function CoachesHub() {
               to elevate your team's game to the next level.
             </p>
 
-            <div className="grid md:grid-cols-3 gap-6 mb-8">
-              <div className="bg-white rounded-lg p-6 shadow-sm border border-orange-100 hover:shadow-md transition-shadow">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mb-6 md:mb-8">
+              <div className="bg-white rounded-lg p-4 md:p-6 shadow-sm border border-orange-100 hover:shadow-md transition-shadow">
                 <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-4">
                   <BarChart3 className="w-6 h-6 text-blue-600" />
                 </div>
@@ -181,7 +181,7 @@ export default function CoachesHub() {
                 </p>
               </div>
 
-              <div className="bg-white rounded-lg p-6 shadow-sm border border-orange-100 hover:shadow-md transition-shadow">
+              <div className="bg-white rounded-lg p-4 md:p-6 shadow-sm border border-orange-100 hover:shadow-md transition-shadow">
                 <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-4">
                   <TrendingUp className="w-6 h-6 text-green-600" />
                 </div>
@@ -191,7 +191,7 @@ export default function CoachesHub() {
                 </p>
               </div>
 
-              <div className="bg-white rounded-lg p-6 shadow-sm border border-orange-100 hover:shadow-md transition-shadow">
+              <div className="bg-white rounded-lg p-4 md:p-6 shadow-sm border border-orange-100 hover:shadow-md transition-shadow">
                 <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-4">
                   <FileText className="w-6 h-6 text-purple-600" />
                 </div>
@@ -235,11 +235,11 @@ export default function CoachesHub() {
             </Link>
           </div>
         ) : (
-          <div className="space-y-8">
+          <div className="space-y-4 md:space-y-8">
             {/* League Selection - Always Show */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-slate-800">Select League</h3>
+                <h3 className="text-base md:text-lg font-semibold text-slate-800">Select League</h3>
                 <div className="text-sm text-slate-500">
                   {leagues.length} available
                 </div>
@@ -317,7 +317,7 @@ export default function CoachesHub() {
                     <button
                       key={league.league_id}
                       onClick={() => setSelectedLeague(league)}
-                      className="px-3 py-1 text-xs text-gray-700 bg-gray-100 hover:bg-orange-100 hover:text-orange-800 rounded-full transition-colors border border-gray-200"
+                      className="px-3 md:px-4 py-1 text-xs md:text-sm text-gray-700 bg-gray-100 hover:bg-orange-100 hover:text-orange-800 rounded-full transition-colors border border-gray-200"
                     >
                       {league.name}
                     </button>
@@ -328,20 +328,20 @@ export default function CoachesHub() {
 
             {/* Analytics Dashboard - Horizontal Layout Above Main Content */}
             {selectedLeague && playerStats.length > 0 && (
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div className="flex items-center gap-3 mb-6">
-                  <BarChart3 className="w-6 h-6 text-orange-600" />
-                  <h2 className="text-xl font-bold text-slate-800">League Analytics Overview</h2>
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-6">
+                <div className="flex items-center gap-3 mb-4 md:mb-6">
+                  <BarChart3 className="w-5 md:w-6 h-5 md:h-6 text-orange-600" />
+                  <h2 className="text-lg md:text-xl font-bold text-slate-800">League Analytics Overview</h2>
                 </div>
 
                 {/* Analytics Metrics Grid - Full Width */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-4 md:mb-6">
+                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-3 md:p-4 rounded-lg border border-blue-200">
                     <div className="flex items-center gap-2 mb-2">
                       <Users className="w-4 h-4 text-blue-600" />
-                      <span className="text-sm font-medium text-blue-800">Teams</span>
+                      <span className="text-xs md:text-sm font-medium text-blue-800">Teams</span>
                     </div>
-                    <div className="text-2xl font-bold text-blue-900">
+                    <div className="text-xl md:text-2xl font-bold text-blue-900">
                       {(() => {
                         const teams = Array.from(new Set(playerStats.map(stat => stat.team))).filter(Boolean);
                         return teams.length;
@@ -349,12 +349,12 @@ export default function CoachesHub() {
                     </div>
                   </div>
                   
-                  <div className="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-lg border border-green-200">
+                  <div className="bg-gradient-to-br from-green-50 to-green-100 p-3 md:p-4 rounded-lg border border-green-200">
                     <div className="flex items-center gap-2 mb-2">
                       <User className="w-4 h-4 text-green-600" />
-                      <span className="text-sm font-medium text-green-800">Players</span>
+                      <span className="text-xs md:text-sm font-medium text-green-800">Players</span>
                     </div>
-                    <div className="text-2xl font-bold text-green-900">
+                    <div className="text-xl md:text-2xl font-bold text-green-900">
                       {(() => {
                         // Count unique players
                         const uniquePlayers = new Set();
@@ -374,12 +374,12 @@ export default function CoachesHub() {
                     </div>
                   </div>
                   
-                  <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-lg border border-purple-200">
+                  <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-3 md:p-4 rounded-lg border border-purple-200">
                     <div className="flex items-center gap-2 mb-2">
                       <Calendar className="w-4 h-4 text-purple-600" />
-                      <span className="text-sm font-medium text-purple-800">Games</span>
+                      <span className="text-xs md:text-sm font-medium text-purple-800">Games</span>
                     </div>
-                    <div className="text-2xl font-bold text-purple-900">
+                    <div className="text-xl md:text-2xl font-bold text-purple-900">
                       {(() => {
                         // Count unique game_ids (more accurate than dates)
                         const uniqueGameIds = new Set();
@@ -398,12 +398,12 @@ export default function CoachesHub() {
                     </div>
                   </div>
                   
-                  <div className="bg-gradient-to-br from-orange-50 to-orange-100 p-4 rounded-lg border border-orange-200">
+                  <div className="bg-gradient-to-br from-orange-50 to-orange-100 p-3 md:p-4 rounded-lg border border-orange-200">
                     <div className="flex items-center gap-2 mb-2">
                       <Award className="w-4 h-4 text-orange-600" />
-                      <span className="text-sm font-medium text-orange-800">Top Team</span>
+                      <span className="text-xs md:text-sm font-medium text-orange-800">Top Team</span>
                     </div>
-                    <div className="text-lg font-bold text-orange-900">
+                    <div className="text-base md:text-lg font-bold text-orange-900">
                       {(() => {
                         // Calculate team totals by game_id (same method as TeamPerformanceTrends)
                         const teamGameTotals = playerStats.reduce((acc: Record<string, any>, stat) => {
@@ -440,8 +440,8 @@ export default function CoachesHub() {
                 </div>
 
                 {/* Team Stats Summary - Horizontal Layout */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-gray-50 p-4 rounded-lg border">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                  <div className="bg-gray-50 p-3 md:p-4 rounded-lg border">
                     <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
                       <Award className="w-4 h-4 text-yellow-600" />
                       Top Scoring Teams
@@ -493,8 +493,8 @@ export default function CoachesHub() {
                     </div>
                   </div>
 
-                  <div className="bg-gray-50 p-4 rounded-lg border">
-                    <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                  <div className="bg-gray-50 p-3 md:p-4 rounded-lg border">
+                    <h4 className="text-sm md:text-base font-semibold text-gray-900 mb-3 flex items-center gap-2">
                       <Target className="w-4 h-4 text-green-600" />
                       Team Leaders
                     </h4>
@@ -576,9 +576,9 @@ export default function CoachesHub() {
             )}
 
             {/* Main Content - Team Performance Trends and League Assistant */}
-            <div className="flex gap-6 min-h-[800px]">
+            <div className="flex flex-col md:flex-row gap-4 md:gap-6 min-h-[600px] md:min-h-[800px]">
               {/* Left Section - Team Performance Trends */}
-              <div className="flex-1">
+              <div className="flex-1 w-full">
                 {selectedLeague && playerStats.length > 0 ? (
                   <TeamPerformanceTrends leagueId={selectedLeague.league_id} playerStats={playerStats} />
                 ) : selectedLeague ? (
@@ -601,15 +601,15 @@ export default function CoachesHub() {
               </div>
 
               {/* Right Section - League Assistant */}
-              <div className="w-96 flex-shrink-0">
+              <div className="w-full md:w-96 flex-shrink-0">
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 h-full">
-                  <div className="p-4 border-b border-gray-200">
+                  <div className="p-3 md:p-4 border-b border-gray-200">
                     <div className="flex items-center gap-2">
                       <MessageCircle className="w-5 h-5 text-orange-600" />
-                      <h3 className="font-semibold text-slate-800">League Assistant</h3>
+                      <h3 className="text-base md:text-lg font-semibold text-slate-800">League Assistant</h3>
                     </div>
                   </div>
-                  <div className="p-4 h-full overflow-auto">
+                  <div className="p-3 md:p-4 h-full overflow-auto">
                     {selectedLeague && (
                       <LeagueChatbot
                         leagueId={selectedLeague.league_id}
@@ -643,10 +643,10 @@ export default function CoachesHub() {
 
             {/* Scouting Reports Section - Enhanced Mobile-Friendly Editor */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-              <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <div className="flex flex-col md:flex-row md:items-center justify-between p-4 md:p-6 border-b border-gray-200 gap-2 md:gap-0">
                 <div className="flex items-center gap-3">
-                  <FileText className="w-6 h-6 text-orange-600" />
-                  <h2 className="text-xl font-bold text-slate-800">Scouting Reports</h2>
+                  <FileText className="w-5 md:w-6 h-5 md:h-6 text-orange-600" />
+                  <h2 className="text-lg md:text-xl font-bold text-slate-800">Scouting Reports</h2>
                   <span className="px-2 py-1 bg-gradient-to-r from-orange-500 to-yellow-500 text-white text-xs rounded-full font-medium">
                     ENHANCED
                   </span>
@@ -677,13 +677,13 @@ export default function CoachesHub() {
 
 
             {/* Team Profiles Section */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center gap-3 mb-6">
-                <Users className="w-6 h-6 text-orange-600" />
-                <h2 className="text-xl font-bold text-slate-800">Team Profiles</h2>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 md:p-6">
+              <div className="flex items-center gap-3 mb-4 md:mb-6">
+                <Users className="w-5 md:w-6 h-5 md:h-6 text-orange-600" />
+                <h2 className="text-lg md:text-xl font-bold text-slate-800">Team Profiles</h2>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                 {/* Quick Actions */}
                 <div className="space-y-3">
                   <h3 className="font-semibold text-slate-800 mb-3">Quick Actions</h3>
