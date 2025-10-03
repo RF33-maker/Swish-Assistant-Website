@@ -294,66 +294,243 @@ export function PlayerComparison({ leagueId, allPlayers }: PlayerComparisonProps
           <p className="text-sm text-slate-600 mt-2">Loading comparison...</p>
         </div>
       ) : player1Stats && player2Stats ? (
-        <div>
-          {/* Player Headers */}
-          <div className="grid grid-cols-3 gap-4 mb-6">
-            <div className="text-center">
-              <h3 className="text-lg font-bold text-slate-800">{player1Stats.name}</h3>
-              <p className="text-sm text-slate-600">{player1Stats.team}</p>
-              <p className="text-xs text-slate-500 mt-1">{player1Stats.games} games</p>
+        <div className="max-w-5xl mx-auto">
+          {/* Player Headers with Image Placeholders */}
+          <div className="flex items-center justify-between mb-8">
+            {/* Player 1 */}
+            <div className="flex flex-col items-center space-y-3 w-1/3">
+              <div className="w-32 h-32 rounded-full bg-gradient-to-br from-orange-100 to-orange-200 border-4 border-orange-300 flex items-center justify-center">
+                <div className="text-4xl font-bold text-orange-600">{player1Stats.name.charAt(0)}</div>
+              </div>
+              <div className="text-center">
+                <h3 className="text-lg font-bold text-slate-800">{player1Stats.name}</h3>
+                <p className="text-sm text-slate-600">{player1Stats.team}</p>
+                <p className="text-xs text-slate-500 mt-1">{player1Stats.games} games</p>
+              </div>
             </div>
-            <div className="flex items-center justify-center">
-              <div className="text-2xl font-bold text-orange-500">VS</div>
+
+            {/* VS Divider */}
+            <div className="flex items-center justify-center w-1/3">
+              <div className="text-3xl font-black text-orange-500 tracking-wider">VS</div>
             </div>
-            <div className="text-center">
-              <h3 className="text-lg font-bold text-slate-800">{player2Stats.name}</h3>
-              <p className="text-sm text-slate-600">{player2Stats.team}</p>
-              <p className="text-xs text-slate-500 mt-1">{player2Stats.games} games</p>
+
+            {/* Player 2 */}
+            <div className="flex flex-col items-center space-y-3 w-1/3">
+              <div className="w-32 h-32 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 border-4 border-slate-300 flex items-center justify-center">
+                <div className="text-4xl font-bold text-slate-600">{player2Stats.name.charAt(0)}</div>
+              </div>
+              <div className="text-center">
+                <h3 className="text-lg font-bold text-slate-800">{player2Stats.name}</h3>
+                <p className="text-sm text-slate-600">{player2Stats.team}</p>
+                <p className="text-xs text-slate-500 mt-1">{player2Stats.games} games</p>
+              </div>
             </div>
           </div>
 
-          {/* Stats Comparison Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <tbody>
-                <ComparisonRow label="PPG" value1={player1Stats.ppg} value2={player2Stats.ppg} />
-                <ComparisonRow label="RPG" value1={player1Stats.rpg} value2={player2Stats.rpg} />
-                <ComparisonRow label="APG" value1={player1Stats.apg} value2={player2Stats.apg} />
-                <ComparisonRow label="SPG" value1={player1Stats.spg} value2={player2Stats.spg} />
-                <ComparisonRow label="BPG" value1={player1Stats.bpg} value2={player2Stats.bpg} />
-                <ComparisonRow label="TPG" value1={player1Stats.tpg} value2={player2Stats.tpg} lowerIsBetter />
-                <ComparisonRow label="MPG" value1={player1Stats.mpg} value2={player2Stats.mpg} />
-                <ComparisonRow label="FG%" value1={`${player1Stats.fgPercentage}%`} value2={`${player2Stats.fgPercentage}%`} />
-                <ComparisonRow label="3P%" value1={`${player1Stats.threePercentage}%`} value2={`${player2Stats.threePercentage}%`} />
-                <ComparisonRow label="FT%" value1={`${player1Stats.ftPercentage}%`} value2={`${player2Stats.ftPercentage}%`} />
-              </tbody>
-            </table>
+          {/* Stats Comparison - Head to Head Style */}
+          <div className="space-y-4">
+            {/* Points Per Game */}
+            {(() => {
+              const p1Better = parseFloat(player1Stats.ppg) > parseFloat(player2Stats.ppg);
+              const p2Better = parseFloat(player2Stats.ppg) > parseFloat(player1Stats.ppg);
+              return (
+                <div className="flex items-center justify-between gap-4">
+                  <div className={`flex-1 flex justify-end ${p1Better ? 'opacity-100' : 'opacity-60'}`}>
+                    <div className={`px-6 py-3 rounded-full ${p1Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-2xl min-w-[100px] text-center`}>
+                      {player1Stats.ppg}
+                    </div>
+                  </div>
+                  <div className="text-center min-w-[200px]">
+                    <div className="font-bold text-slate-800 text-lg">Points Per Game</div>
+                    <div className="text-xs text-slate-500">PPG</div>
+                  </div>
+                  <div className={`flex-1 flex justify-start ${p2Better ? 'opacity-100' : 'opacity-60'}`}>
+                    <div className={`px-6 py-3 rounded-full ${p2Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-2xl min-w-[100px] text-center`}>
+                      {player2Stats.ppg}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Rebounds Per Game */}
+            {(() => {
+              const p1Better = parseFloat(player1Stats.rpg) > parseFloat(player2Stats.rpg);
+              const p2Better = parseFloat(player2Stats.rpg) > parseFloat(player1Stats.rpg);
+              return (
+                <div className="flex items-center justify-between gap-4">
+                  <div className={`flex-1 flex justify-end ${p1Better ? 'opacity-100' : 'opacity-60'}`}>
+                    <div className={`px-6 py-3 rounded-full ${p1Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-2xl min-w-[100px] text-center`}>
+                      {player1Stats.rpg}
+                    </div>
+                  </div>
+                  <div className="text-center min-w-[200px]">
+                    <div className="font-bold text-slate-800 text-lg">Rebounds Per Game</div>
+                    <div className="text-xs text-slate-500">RPG</div>
+                  </div>
+                  <div className={`flex-1 flex justify-start ${p2Better ? 'opacity-100' : 'opacity-60'}`}>
+                    <div className={`px-6 py-3 rounded-full ${p2Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-2xl min-w-[100px] text-center`}>
+                      {player2Stats.rpg}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Assists Per Game */}
+            {(() => {
+              const p1Better = parseFloat(player1Stats.apg) > parseFloat(player2Stats.apg);
+              const p2Better = parseFloat(player2Stats.apg) > parseFloat(player1Stats.apg);
+              return (
+                <div className="flex items-center justify-between gap-4">
+                  <div className={`flex-1 flex justify-end ${p1Better ? 'opacity-100' : 'opacity-60'}`}>
+                    <div className={`px-6 py-3 rounded-full ${p1Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-2xl min-w-[100px] text-center`}>
+                      {player1Stats.apg}
+                    </div>
+                  </div>
+                  <div className="text-center min-w-[200px]">
+                    <div className="font-bold text-slate-800 text-lg">Assists Per Game</div>
+                    <div className="text-xs text-slate-500">APG</div>
+                  </div>
+                  <div className={`flex-1 flex justify-start ${p2Better ? 'opacity-100' : 'opacity-60'}`}>
+                    <div className={`px-6 py-3 rounded-full ${p2Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-2xl min-w-[100px] text-center`}>
+                      {player2Stats.apg}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Field Goal Percentage */}
+            {(() => {
+              const p1Better = parseFloat(player1Stats.fgPercentage) > parseFloat(player2Stats.fgPercentage);
+              const p2Better = parseFloat(player2Stats.fgPercentage) > parseFloat(player1Stats.fgPercentage);
+              return (
+                <div className="flex items-center justify-between gap-4">
+                  <div className={`flex-1 flex justify-end ${p1Better ? 'opacity-100' : 'opacity-60'}`}>
+                    <div className={`px-6 py-3 rounded-full ${p1Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-2xl min-w-[100px] text-center`}>
+                      {player1Stats.fgPercentage}%
+                    </div>
+                  </div>
+                  <div className="text-center min-w-[200px]">
+                    <div className="font-bold text-slate-800 text-lg">Field Goal %</div>
+                    <div className="text-xs text-slate-500">FG%</div>
+                  </div>
+                  <div className={`flex-1 flex justify-start ${p2Better ? 'opacity-100' : 'opacity-60'}`}>
+                    <div className={`px-6 py-3 rounded-full ${p2Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-2xl min-w-[100px] text-center`}>
+                      {player2Stats.fgPercentage}%
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Three Point Percentage */}
+            {(() => {
+              const p1Better = parseFloat(player1Stats.threePercentage) > parseFloat(player2Stats.threePercentage);
+              const p2Better = parseFloat(player2Stats.threePercentage) > parseFloat(player1Stats.threePercentage);
+              return (
+                <div className="flex items-center justify-between gap-4">
+                  <div className={`flex-1 flex justify-end ${p1Better ? 'opacity-100' : 'opacity-60'}`}>
+                    <div className={`px-6 py-3 rounded-full ${p1Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-2xl min-w-[100px] text-center`}>
+                      {player1Stats.threePercentage}%
+                    </div>
+                  </div>
+                  <div className="text-center min-w-[200px]">
+                    <div className="font-bold text-slate-800 text-lg">Three Point %</div>
+                    <div className="text-xs text-slate-500">3P%</div>
+                  </div>
+                  <div className={`flex-1 flex justify-start ${p2Better ? 'opacity-100' : 'opacity-60'}`}>
+                    <div className={`px-6 py-3 rounded-full ${p2Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-2xl min-w-[100px] text-center`}>
+                      {player2Stats.threePercentage}%
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Free Throw Percentage */}
+            {(() => {
+              const p1Better = parseFloat(player1Stats.ftPercentage) > parseFloat(player2Stats.ftPercentage);
+              const p2Better = parseFloat(player2Stats.ftPercentage) > parseFloat(player1Stats.ftPercentage);
+              return (
+                <div className="flex items-center justify-between gap-4">
+                  <div className={`flex-1 flex justify-end ${p1Better ? 'opacity-100' : 'opacity-60'}`}>
+                    <div className={`px-6 py-3 rounded-full ${p1Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-2xl min-w-[100px] text-center`}>
+                      {player1Stats.ftPercentage}%
+                    </div>
+                  </div>
+                  <div className="text-center min-w-[200px]">
+                    <div className="font-bold text-slate-800 text-lg">Free Throw %</div>
+                    <div className="text-xs text-slate-500">FT%</div>
+                  </div>
+                  <div className={`flex-1 flex justify-start ${p2Better ? 'opacity-100' : 'opacity-60'}`}>
+                    <div className={`px-6 py-3 rounded-full ${p2Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-2xl min-w-[100px] text-center`}>
+                      {player2Stats.ftPercentage}%
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Blocks Per Game */}
+            {(() => {
+              const p1Better = parseFloat(player1Stats.bpg) > parseFloat(player2Stats.bpg);
+              const p2Better = parseFloat(player2Stats.bpg) > parseFloat(player1Stats.bpg);
+              return (
+                <div className="flex items-center justify-between gap-4">
+                  <div className={`flex-1 flex justify-end ${p1Better ? 'opacity-100' : 'opacity-60'}`}>
+                    <div className={`px-6 py-3 rounded-full ${p1Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-2xl min-w-[100px] text-center`}>
+                      {player1Stats.bpg}
+                    </div>
+                  </div>
+                  <div className="text-center min-w-[200px]">
+                    <div className="font-bold text-slate-800 text-lg">Blocks Per Game</div>
+                    <div className="text-xs text-slate-500">BPG</div>
+                  </div>
+                  <div className={`flex-1 flex justify-start ${p2Better ? 'opacity-100' : 'opacity-60'}`}>
+                    <div className={`px-6 py-3 rounded-full ${p2Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-2xl min-w-[100px] text-center`}>
+                      {player2Stats.bpg}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Steals Per Game */}
+            {(() => {
+              const p1Better = parseFloat(player1Stats.spg) > parseFloat(player2Stats.spg);
+              const p2Better = parseFloat(player2Stats.spg) > parseFloat(player1Stats.spg);
+              return (
+                <div className="flex items-center justify-between gap-4">
+                  <div className={`flex-1 flex justify-end ${p1Better ? 'opacity-100' : 'opacity-60'}`}>
+                    <div className={`px-6 py-3 rounded-full ${p1Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-2xl min-w-[100px] text-center`}>
+                      {player1Stats.spg}
+                    </div>
+                  </div>
+                  <div className="text-center min-w-[200px]">
+                    <div className="font-bold text-slate-800 text-lg">Steals Per Game</div>
+                    <div className="text-xs text-slate-500">SPG</div>
+                  </div>
+                  <div className={`flex-1 flex justify-start ${p2Better ? 'opacity-100' : 'opacity-60'}`}>
+                    <div className={`px-6 py-3 rounded-full ${p2Better ? 'bg-orange-500 text-white' : 'bg-slate-200 text-slate-700'} font-bold text-2xl min-w-[100px] text-center`}>
+                      {player2Stats.spg}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Legend */}
-          <div className="mt-6 pt-4 border-t border-gray-200">
-            <div className="text-xs text-slate-500 space-y-1">
-              <div className="font-semibold text-slate-600 mb-2">Legend:</div>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                <span>PPG = Points Per Game</span>
-                <span>RPG = Rebounds Per Game</span>
-                <span>APG = Assists Per Game</span>
-                <span>SPG = Steals Per Game</span>
-                <span>BPG = Blocks Per Game</span>
-                <span>TPG = Turnovers Per Game</span>
-                <span>MPG = Minutes Per Game</span>
-                <span>FG% = Field Goal %</span>
-                <span>3P% = Three Point %</span>
-                <span>FT% = Free Throw %</span>
-              </div>
-              <div className="mt-2 flex items-center gap-4 text-xs">
-                <span className="flex items-center gap-1">
-                  <span className="text-green-600 font-semibold">Green</span> = Better stat
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="text-slate-600">Gray</span> = Worse stat
-                </span>
-              </div>
+          <div className="mt-8 pt-6 border-t border-gray-200">
+            <div className="text-xs text-slate-500 text-center">
+              <span className="inline-flex items-center gap-2 px-3 py-1 bg-orange-100 text-orange-600 rounded-full font-semibold">
+                Orange = Better stat
+              </span>
+              <span className="ml-3 inline-flex items-center gap-2 px-3 py-1 bg-slate-100 text-slate-600 rounded-full">
+                Gray = Lower stat
+              </span>
             </div>
           </div>
         </div>
