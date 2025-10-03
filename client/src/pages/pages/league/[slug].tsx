@@ -599,7 +599,7 @@ type GameSchedule = {
           playerMap.set(playerKey, {
             name: playerName,
             team: stat.team,
-            id: stat.id,
+            id: playerKey,
             games: 0,
             totalPoints: 0,
             totalRebounds: 0,
