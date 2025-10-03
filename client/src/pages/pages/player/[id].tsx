@@ -642,15 +642,15 @@ export default function PlayerStatsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-4 md:pt-6">
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 md:gap-6">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-8 gap-3 md:gap-4 lg:gap-6">
                 {/* Points */}
                 <div className="text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
                   <div className="relative">
-                    <div className="text-2xl md:text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
+                    <div className="text-xl md:text-3xl lg:text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
                       {seasonAverages.avg_points.toFixed(1)}
                     </div>
                     <div className="text-xs md:text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">PPG</div>
-                    <div className="w-full bg-orange-50 h-2 rounded-full mt-3 overflow-hidden">
+                    <div className="w-full bg-orange-50 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
                         style={{ width: `${Math.min((seasonAverages.avg_points / 30) * 100, 100)}%` }}
@@ -662,11 +662,11 @@ export default function PlayerStatsPage() {
                 {/* Rebounds */}
                 <div className="text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
                   <div className="relative">
-                    <div className="text-2xl md:text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-bounce">
+                    <div className="text-xl md:text-3xl lg:text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-bounce">
                       {seasonAverages.avg_rebounds.toFixed(1)}
                     </div>
                     <div className="text-xs md:text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">RPG</div>
-                    <div className="w-full bg-orange-50 h-2 rounded-full mt-3 overflow-hidden">
+                    <div className="w-full bg-orange-50 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
                         style={{ width: `${Math.min((seasonAverages.avg_rebounds / 15) * 100, 100)}%` }}
@@ -678,11 +678,11 @@ export default function PlayerStatsPage() {
                 {/* Assists */}
                 <div className="text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
                   <div className="relative">
-                    <div className="text-2xl md:text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
+                    <div className="text-xl md:text-3xl lg:text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
                       {seasonAverages.avg_assists.toFixed(1)}
                     </div>
                     <div className="text-xs md:text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">APG</div>
-                    <div className="w-full bg-orange-50 h-2 rounded-full mt-3 overflow-hidden">
+                    <div className="w-full bg-orange-50 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
                         style={{ width: `${Math.min((seasonAverages.avg_assists / 12) * 100, 100)}%` }}
@@ -691,14 +691,46 @@ export default function PlayerStatsPage() {
                   </div>
                 </div>
 
+                {/* Steals */}
+                <div className="text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
+                  <div className="relative">
+                    <div className="text-xl md:text-3xl lg:text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
+                      {seasonAverages.avg_steals.toFixed(1)}
+                    </div>
+                    <div className="text-xs md:text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">SPG</div>
+                    <div className="w-full bg-orange-50 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
+                        style={{ width: `${Math.min((seasonAverages.avg_steals / 5) * 100, 100)}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Blocks */}
+                <div className="text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
+                  <div className="relative">
+                    <div className="text-xl md:text-3xl lg:text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
+                      {seasonAverages.avg_blocks.toFixed(1)}
+                    </div>
+                    <div className="text-xs md:text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">BPG</div>
+                    <div className="w-full bg-orange-50 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
+                        style={{ width: `${Math.min((seasonAverages.avg_blocks / 5) * 100, 100)}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Field Goal % */}
                 <div className="text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
                   <div className="relative">
-                    <div className="text-2xl md:text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
+                    <div className="text-xl md:text-3xl lg:text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
                       {formatPercentage(seasonAverages.fg_percentage)}
                     </div>
                     <div className="text-xs md:text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">FG%</div>
-                    <div className="w-full bg-orange-50 h-2 rounded-full mt-3 overflow-hidden">
+                    <div className="w-full bg-orange-50 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
                         style={{ width: `${seasonAverages.fg_percentage}%` }}
@@ -710,11 +742,11 @@ export default function PlayerStatsPage() {
                 {/* 3-Point % */}
                 <div className="text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
                   <div className="relative">
-                    <div className="text-2xl md:text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
+                    <div className="text-xl md:text-3xl lg:text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
                       {formatPercentage(seasonAverages.three_point_percentage)}
                     </div>
                     <div className="text-xs md:text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">3P%</div>
-                    <div className="w-full bg-orange-50 h-2 rounded-full mt-3 overflow-hidden">
+                    <div className="w-full bg-orange-50 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
                         style={{ width: `${seasonAverages.three_point_percentage}%` }}
@@ -726,11 +758,11 @@ export default function PlayerStatsPage() {
                 {/* Free Throw % */}
                 <div className="text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
                   <div className="relative">
-                    <div className="text-2xl md:text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
+                    <div className="text-xl md:text-3xl lg:text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
                       {formatPercentage(seasonAverages.ft_percentage)}
                     </div>
                     <div className="text-xs md:text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">FT%</div>
-                    <div className="w-full bg-orange-50 h-2 rounded-full mt-3 overflow-hidden">
+                    <div className="w-full bg-orange-50 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
                         style={{ width: `${seasonAverages.ft_percentage}%` }}
