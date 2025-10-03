@@ -103,7 +103,7 @@ export default function PlayerStatsPage() {
           console.log('🔍 Fallback: Looking up by old record ID...');
           const { data: playerRecord, error: playerError } = await supabase
             .from('player_stats')
-            .select('player_id, full_name, firstname, familyname, team, position, number')
+            .select('player_id, full_name, name, team, position, number')
             .eq('id', playerId)
             .single();
 
@@ -120,7 +120,7 @@ export default function PlayerStatsPage() {
 
           actualPlayerId = playerRecord.player_id;
           playerInfo = {
-            name: playerRecord.full_name || `${playerRecord.firstname || ''} ${playerRecord.familyname || ''}`.trim() || 'Unknown Player',
+            name: playerRecord.full_name || playerRecord.name || 'Unknown Player',
             team: playerRecord.team,
             position: playerRecord.position,
             number: playerRecord.number
