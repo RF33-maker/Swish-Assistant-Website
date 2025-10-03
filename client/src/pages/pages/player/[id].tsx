@@ -131,7 +131,7 @@ export default function PlayerStatsPage() {
         console.log('🔍 Step 2: Getting all stats for player_id:', actualPlayerId);
         const { data: stats, error: statsError } = await supabase
           .from('player_stats')
-          .select('*')
+          .select('*, players:player_id(full_name, name, team, position, number)')
           .eq('player_id', actualPlayerId)
           .order('created_at', { ascending: false });
 
@@ -152,6 +152,18 @@ export default function PlayerStatsPage() {
 
         console.log('✅ Step 3: Setting player stats and info...');
         setPlayerStats(stats || []);
+        
+        // If we have stats with joined players data, use that for player info
+        if (stats && stats.length > 0 && stats[0].players) {
+          console.log('📋 Using joined players data:', stats[0].players);
+          playerInfo = {
+            name: stats[0].players.full_name || stats[0].players.name || stats[0].full_name || stats[0].name || `${stats[0].firstname || ''} ${stats[0].familyname || ''}`.trim() || 'Unknown Player',
+            team: stats[0].players.team || stats[0].team_name || stats[0].team || 'Unknown Team',
+            position: stats[0].players.position || stats[0].position,
+            number: stats[0].players.number || stats[0].number
+          };
+        }
+        
         setPlayerInfo(playerInfo);
 
         // Step 4: Get unique leagues for this player
@@ -233,11 +245,24 @@ export default function PlayerStatsPage() {
         // Calculate season averages if we have stats
         if (stats && stats.length > 0) {
           console.log('📈 Step 5: Calculating averages for', stats.length, 'games');
-          // Only set playerInfo if it wasn't already set from players table or fallback
-          if (!playerInfo) {
+          // This section is now redundant since we set playerInfo above with joined data
+          // but keep as extra fallback safety
+          if (!playerInfo || !playerInfo.name || playerInfo.name === 'Unknown Player') {
+            const fallbackName = stats[0].players?.full_name || 
+                                stats[0].players?.name || 
+                                stats[0].full_name || 
+                                stats[0].name || 
+                                `${stats[0].firstname || ''} ${stats[0].familyname || ''}`.trim() || 
+                                'Unknown Player';
+            const fallbackTeam = stats[0].players?.team || 
+                                stats[0].team_name || 
+                                stats[0].team || 
+                                'Unknown Team';
             setPlayerInfo({
-              name: stats[0].full_name || stats[0].name || 'Unknown Player',
-              team: stats[0].team || stats[0].team_name || 'Unknown Team'
+              name: fallbackName,
+              team: fallbackTeam,
+              position: stats[0].players?.position || stats[0].position,
+              number: stats[0].players?.number || stats[0].number
             });
           }
 
