@@ -12,6 +12,7 @@ interface League {
 }
 
 interface PlayerStat {
+  player_id?: string;
   name: string;
   position: string;
   avgPoints: number;
@@ -109,12 +110,12 @@ export default function TeamProfile() {
 
         // Process team data
         if (allPlayerStats && allPlayerStats.length > 0) {
-          // Calculate team totals and averages using game_id to properly determine opponents
-          const gamesByGameId = allPlayerStats.reduce((acc: Record<string, any>, player: any) => {
-            if (!acc[player.game_id]) {
-              acc[player.game_id] = {
-                game_id: player.game_id,
-                game_date: player.game_date,
+          // Calculate team totals and averages using game_key to properly determine opponents
+          const gamesByGameKey = allPlayerStats.reduce((acc: Record<string, any>, player: any) => {
+            if (!acc[player.game_key]) {
+              acc[player.game_key] = {
+                game_key: player.game_key,
+                created_at: player.created_at,
                 home_team: player.home_team,
                 away_team: player.away_team,
                 teams: new Set(),
@@ -124,24 +125,24 @@ export default function TeamProfile() {
             }
             
             // Track teams and scores in this game
-            acc[player.game_id].teams.add(player.team);
-            if (!acc[player.game_id].teamScores[player.team]) {
-              acc[player.game_id].teamScores[player.team] = 0;
+            acc[player.game_key].teams.add(player.team);
+            if (!acc[player.game_key].teamScores[player.team]) {
+              acc[player.game_key].teamScores[player.team] = 0;
             }
-            acc[player.game_id].teamScores[player.team] += player.points || 0;
+            acc[player.game_key].teamScores[player.team] += player.spoints || 0;
             
             return acc;
           }, {});
 
           // Convert to games with proper opponent data
-          const games = Object.values(gamesByGameId).map((gameData: any) => {
+          const games = Object.values(gamesByGameKey).map((gameData: any) => {
             const teams = Array.from(gameData.teams) as string[];
             const opponent = teams.find(team => team !== decodedTeamName) || 'Unknown';
             const ourScore = gameData.teamScores[decodedTeamName] || 0;
             
             return {
               totalPoints: ourScore,
-              date: gameData.game_date,
+              date: gameData.created_at,
               opponent: opponent
             };
           });
@@ -151,21 +152,22 @@ export default function TeamProfile() {
           const roster: PlayerStat[] = allPlayerStats.reduce((acc: PlayerStat[], player: any) => {
             const existing = acc.find(p => p.name === player.name);
             if (existing) {
-              existing.totalPoints += player.points || 0;
-              existing.totalRebounds += player.rebounds_total || 0;
-              existing.totalAssists += player.assists || 0;
-              existing.totalSteals += player.steals || 0;
-              existing.totalBlocks += player.blocks || 0;
+              existing.totalPoints += player.spoints || 0;
+              existing.totalRebounds += player.sreboundstotal || 0;
+              existing.totalAssists += player.sassists || 0;
+              existing.totalSteals += player.ssteals || 0;
+              existing.totalBlocks += player.sblocks || 0;
               existing.gamesPlayed += 1;
             } else {
               acc.push({
+                player_id: player.player_id,
                 name: player.name,
                 position: player.position || 'Player',
-                totalPoints: player.points || 0,
-                totalRebounds: player.rebounds_total || 0,
-                totalAssists: player.assists || 0,
-                totalSteals: player.steals || 0,
-                totalBlocks: player.blocks || 0,
+                totalPoints: player.spoints || 0,
+                totalRebounds: player.sreboundstotal || 0,
+                totalAssists: player.sassists || 0,
+                totalSteals: player.ssteals || 0,
+                totalBlocks: player.sblocks || 0,
                 gamesPlayed: 1,
                 avgPoints: 0,
                 avgRebounds: 0,
@@ -199,7 +201,7 @@ export default function TeamProfile() {
             const { data: leagueData } = await supabase
               .from("leagues")
               .select("*")
-              .eq("league_id", leagueId)
+              .eq("id", leagueId)
               .single();
             league = leagueData as League;
           }
