@@ -800,21 +800,21 @@ export default function PlayerStatsPage() {
                 No game statistics found for this player.
               </div>
             ) : (
-              <div className="overflow-x-auto -mx-4 md:mx-0">
+              <div className="overflow-x-auto -mx-4 md:mx-0 border-t border-orange-200">
                 <table className="w-full">
                   <thead className="bg-orange-50 border-b border-orange-200">
                     <tr className="text-left">
-                      <th className="sticky left-0 bg-orange-50 px-3 md:px-4 py-2 md:py-3 text-orange-900 font-semibold text-xs md:text-sm z-10">Date</th>
-                      <th className="px-3 md:px-4 py-2 md:py-3 text-orange-900 font-semibold text-xs md:text-sm">Opponent</th>
+                      <th className="sticky left-0 bg-orange-50 px-2 md:px-4 py-2 md:py-3 text-orange-900 font-semibold text-xs md:text-sm z-10 min-w-[70px] md:min-w-[90px]">Date</th>
+                      <th className="px-2 md:px-4 py-2 md:py-3 text-orange-900 font-semibold text-xs md:text-sm min-w-[80px] md:min-w-[100px]">OPP</th>
                       <th className="hidden md:table-cell px-4 py-3 text-orange-900 font-semibold text-sm">MIN</th>
-                      <th className="px-3 md:px-4 py-2 md:py-3 text-orange-900 font-semibold text-xs md:text-sm">PTS</th>
-                      <th className="px-3 md:px-4 py-2 md:py-3 text-orange-900 font-semibold text-xs md:text-sm">REB</th>
-                      <th className="px-3 md:px-4 py-2 md:py-3 text-orange-900 font-semibold text-xs md:text-sm">AST</th>
-                      <th className="hidden md:table-cell px-4 py-3 text-orange-900 font-semibold text-sm">STL</th>
-                      <th className="hidden md:table-cell px-4 py-3 text-orange-900 font-semibold text-sm">BLK</th>
-                      <th className="hidden md:table-cell px-4 py-3 text-orange-900 font-semibold text-sm">FG</th>
-                      <th className="hidden md:table-cell px-4 py-3 text-orange-900 font-semibold text-sm">3P</th>
-                      <th className="hidden md:table-cell px-4 py-3 text-orange-900 font-semibold text-sm">FT</th>
+                      <th className="px-2 md:px-4 py-2 md:py-3 text-orange-900 font-semibold text-xs md:text-sm text-center min-w-[45px]">PTS</th>
+                      <th className="px-2 md:px-4 py-2 md:py-3 text-orange-900 font-semibold text-xs md:text-sm text-center min-w-[45px]">REB</th>
+                      <th className="px-2 md:px-4 py-2 md:py-3 text-orange-900 font-semibold text-xs md:text-sm text-center min-w-[45px]">AST</th>
+                      <th className="hidden md:table-cell px-4 py-3 text-orange-900 font-semibold text-sm text-center">STL</th>
+                      <th className="hidden md:table-cell px-4 py-3 text-orange-900 font-semibold text-sm text-center">BLK</th>
+                      <th className="hidden md:table-cell px-4 py-3 text-orange-900 font-semibold text-sm text-center">FG</th>
+                      <th className="hidden md:table-cell px-4 py-3 text-orange-900 font-semibold text-sm text-center">3P</th>
+                      <th className="hidden md:table-cell px-4 py-3 text-orange-900 font-semibold text-sm text-center">FT</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -824,32 +824,38 @@ export default function PlayerStatsPage() {
                         className={`border-b border-orange-100 hover:bg-orange-50 hover:scale-[1.02] transform transition-all duration-200 cursor-pointer group ${
                           index % 2 === 0 ? 'bg-white' : 'bg-orange-25'
                         }`}
+                        data-testid={`game-row-${game.id}`}
                       >
-                        <td className="sticky left-0 bg-inherit px-3 md:px-4 py-2 md:py-3 text-orange-800 text-xs md:text-sm z-10">{formatDate(game.game_date)}</td>
-                        <td className="px-3 md:px-4 py-2 md:py-3">
-                          <Badge variant="outline" className="border-orange-300 text-orange-700 text-xs md:text-sm whitespace-nowrap">
-                            vs {game.opponent}
+                        <td className="sticky left-0 bg-inherit px-2 md:px-4 py-2 md:py-3 text-orange-800 text-[10px] md:text-sm z-10">{formatDate(game.game_date)}</td>
+                        <td className="px-2 md:px-4 py-2 md:py-3">
+                          <Badge variant="outline" className="border-orange-300 text-orange-700 text-[10px] md:text-sm whitespace-nowrap">
+                            {game.opponent || 'TBD'}
                           </Badge>
                         </td>
-                        <td className="hidden md:table-cell px-4 py-3 text-orange-800 text-sm">{game.minutes_played || 0}</td>
-                        <td className="px-3 md:px-4 py-2 md:py-3 font-semibold text-orange-900 group-hover:text-orange-700 group-hover:scale-110 transition-all duration-200 text-xs md:text-sm">{game.points || 0}</td>
-                        <td className="px-3 md:px-4 py-2 md:py-3 text-orange-800 text-xs md:text-sm">{game.rebounds_total || 0}</td>
-                        <td className="px-3 md:px-4 py-2 md:py-3 text-orange-800 text-xs md:text-sm">{game.assists || 0}</td>
-                        <td className="hidden md:table-cell px-4 py-3 text-orange-800 text-sm">{game.steals || 0}</td>
-                        <td className="hidden md:table-cell px-4 py-3 text-orange-800 text-sm">{game.blocks || 0}</td>
-                        <td className="hidden md:table-cell px-4 py-3 text-orange-800 text-sm">
+                        <td className="hidden md:table-cell px-4 py-3 text-orange-800 text-sm text-center">{game.minutes_played || 0}</td>
+                        <td className="px-2 md:px-4 py-2 md:py-3 font-semibold text-orange-900 group-hover:text-orange-700 transition-all duration-200 text-xs md:text-sm text-center">{game.points || 0}</td>
+                        <td className="px-2 md:px-4 py-2 md:py-3 text-orange-800 text-xs md:text-sm text-center font-medium">{game.rebounds_total || 0}</td>
+                        <td className="px-2 md:px-4 py-2 md:py-3 text-orange-800 text-xs md:text-sm text-center font-medium">{game.assists || 0}</td>
+                        <td className="hidden md:table-cell px-4 py-3 text-orange-800 text-sm text-center">{game.steals || 0}</td>
+                        <td className="hidden md:table-cell px-4 py-3 text-orange-800 text-sm text-center">{game.blocks || 0}</td>
+                        <td className="hidden md:table-cell px-4 py-3 text-orange-800 text-sm text-center">
                           {game.field_goals_made || 0}/{game.field_goals_attempted || 0}
                         </td>
-                        <td className="hidden md:table-cell px-4 py-3 text-orange-800 text-sm">
+                        <td className="hidden md:table-cell px-4 py-3 text-orange-800 text-sm text-center">
                           {game.three_pt_made || 0}/{game.three_pt_attempted || 0}
                         </td>
-                        <td className="hidden md:table-cell px-4 py-3 text-orange-800 text-sm">
+                        <td className="hidden md:table-cell px-4 py-3 text-orange-800 text-sm text-center">
                           {game.free_throws_made || 0}/{game.free_throws_attempted || 0}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+                
+                {/* Scroll hint for mobile */}
+                <div className="md:hidden bg-orange-50 text-orange-700 text-center py-2 text-xs border-t border-orange-200">
+                  ← Swipe to see all stats →
+                </div>
               </div>
             )}
           </CardContent>
