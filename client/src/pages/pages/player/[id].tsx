@@ -8,6 +8,7 @@ import { ArrowLeft, Calendar, Trophy, User, TrendingUp, Camera, Brain, Sparkles 
 import { useToast } from "@/hooks/use-toast";
 import { generatePlayerAnalysis, type PlayerAnalysisData } from "@/lib/ai-analysis";
 import SwishLogoImg from "@/assets/Swish Assistant Logo.png";
+import { TeamLogo } from "@/components/TeamLogo";
 
 interface PlayerStat {
   id: string;
@@ -56,7 +57,7 @@ export default function PlayerStatsPage() {
   console.log('🎯 ROUTE DEBUG - Player ID:', playerId);
   const [playerStats, setPlayerStats] = useState<PlayerStat[]>([]);
   const [seasonAverages, setSeasonAverages] = useState<SeasonAverages | null>(null);
-  const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string; position?: string; number?: number } | null>(null);
+  const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string; position?: string; number?: number; leagueId?: string } | null>(null);
   const [playerLeagues, setPlayerLeagues] = useState<{ id: string; name: string; slug: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -160,7 +161,8 @@ export default function PlayerStatsPage() {
             name: stats[0].players.full_name || stats[0].full_name || stats[0].name || `${stats[0].firstname || ''} ${stats[0].familyname || ''}`.trim() || 'Unknown Player',
             team: stats[0].team_name || stats[0].team || 'Unknown Team',
             position: stats[0].position,
-            number: stats[0].number
+            number: stats[0].number,
+            leagueId: stats[0].league_id
           };
         }
         
@@ -260,7 +262,8 @@ export default function PlayerStatsPage() {
               name: fallbackName,
               team: fallbackTeam,
               position: stats[0].position,
-              number: stats[0].number
+              number: stats[0].number,
+              leagueId: stats[0].league_id
             });
           }
 
@@ -554,24 +557,14 @@ export default function PlayerStatsPage() {
               <CardContent className="p-4 md:p-6">
                 <div className="flex items-center gap-4">
                   {/* Team Logo */}
-                  <div className="flex-shrink-0">
-                    {playerInfo.team ? (
-                      <img 
-                        src={`https://pzctanccfsklkovvaegg.supabase.co/storage/v1/object/public/team-logos/${playerInfo.team.toLowerCase().replace(/\s+/g, '-')}.png`}
-                        alt={`${playerInfo.team} logo`}
-                        className="h-16 w-16 md:h-20 md:w-20 object-contain rounded-lg"
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement;
-                          target.style.display = 'none';
-                          const fallback = target.nextElementSibling as HTMLDivElement;
-                          if (fallback) fallback.style.display = 'flex';
-                        }}
-                      />
-                    ) : null}
-                    <div className="h-16 w-16 md:h-20 md:w-20 rounded-lg bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center" style={{ display: 'none' }}>
-                      <Trophy className="h-8 w-8 md:h-10 md:w-10 text-white" />
-                    </div>
-                  </div>
+                  {playerInfo.team && playerInfo.leagueId && (
+                    <TeamLogo 
+                      teamName={playerInfo.team} 
+                      leagueId={playerInfo.leagueId}
+                      size="xl"
+                      className="flex-shrink-0"
+                    />
+                  )}
                   
                   {/* Player Info */}
                   <div className="flex-1 min-w-0">
