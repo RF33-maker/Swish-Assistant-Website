@@ -185,12 +185,17 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
   // Create duplicated games array for infinite scroll
   const duplicatedGames = [...games, ...games];
 
+  // Calculate fixed track width: (card width + gap) * number of cards
+  const cardWidth = 320; // matches the inline style on each card
+  const gap = 16; // gap-4 = 1rem = 16px
+  const trackWidth = duplicatedGames.length * (cardWidth + gap);
+
   return (
     <div className="w-full overflow-hidden">
       <div 
         className="flex gap-4 px-4 py-2"
         style={{
-          width: 'fit-content',
+          width: `${trackWidth}px`,
           animation: `scroll ${animationDuration}s linear infinite`,
           animationPlayState: isPaused ? 'paused' : 'running'
         }}

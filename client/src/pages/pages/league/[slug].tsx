@@ -1253,14 +1253,10 @@ type GameSchedule = {
         {/* Horizontal Game Results Ticker */}
         {league?.league_id && (
           <section className="bg-gray-900 text-white py-4 overflow-hidden">
-            <div className="relative">
-              <div className="flex animate-scroll whitespace-nowrap">
-                <GameResultsCarousel 
-                  leagueId={league.league_id} 
-                  onGameClick={handleGameClick}
-                />
-              </div>
-            </div>
+            <GameResultsCarousel 
+              leagueId={league.league_id} 
+              onGameClick={handleGameClick}
+            />
           </section>
         )}
 
