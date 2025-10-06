@@ -13,6 +13,35 @@ import LeaguePage from "@/assets/League-page.png"
 import ChatbotExample from "@/assets/Chatbotexample.png"
 import { Button } from "@/components/ui/button"
 
+function LeagueLogosCarousel() {
+  const logos = [Ballpark, CMBC, NBLBE, BCB, SLB]
+  
+  return (
+    <section className="w-full bg-orange-500 py-10 text-white overflow-hidden">
+      <h2 className="text-center text-sm uppercase mb-6">
+        Already hosting these leagues and more!
+      </h2>
+
+      <div className="relative w-full">
+        <div className="flex gap-6 md:gap-12 animate-infinite-scroll">
+          {[...logos, ...logos].map((img, i) => (
+            <div 
+              key={i} 
+              className="flex-shrink-0 flex items-center justify-center h-20 md:h-24 w-28 md:w-36"
+            >
+              <img
+                src={img}
+                alt={`League Logo ${(i % logos.length) + 1}`}
+                className="h-14 md:h-20 w-auto object-contain rounded-xl shadow-md hover:shadow-lg transition duration-300 hover:scale-110"
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 export default function LandingPage() {
   const [query, setQuery] = useState("")
   const [suggestions, setSuggestions] = useState<any[]>([])
@@ -248,25 +277,7 @@ export default function LandingPage() {
 
       {/*used by teams and leagues across the UK*/}
 
-      <section className="w-full bg-orange-500 py-10 text-white">
-        <h2 className="text-center text-sm uppercase mb-6">
-          Already hosting these leagues and more!
-        </h2>
-
-        <div className="w-full flex justify-center">
-          <div className="flex gap-12 overflow-x-auto px-4 max-w-6xl">
-            {[Ballpark, CMBC, NBLBE, BCB, SLB].map((img, i) => (
-              <div key={i} className="flex items-center justify-center h-24">
-                <img
-                  src={img}
-                  alt={`Logo ${i}`}
-                  className="h-20 w-auto object-contain rounded-xl shadow-md hover:shadow-lg transition duration-300 hover:scale-110"
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      <LeagueLogosCarousel />
 
        {/*What is Swish Assistant?*/}
 

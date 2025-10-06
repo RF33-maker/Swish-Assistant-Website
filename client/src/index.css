@@ -26,6 +26,20 @@
   animation: scroll 30s linear infinite;
 }
 
+/* Infinite Scroll for League Logos */
+@keyframes infinite-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-infinite-scroll {
+  animation: infinite-scroll 20s linear infinite;
+}
+
 /* Custom animations for micro-interactions */
 @keyframes float {
   0%, 100% { transform: translateY(0px); }
