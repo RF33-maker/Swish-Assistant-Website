@@ -1504,11 +1504,11 @@ type GameSchedule = {
                     )}
                   </div>
                 )}
-                  </>
-                )}
+                </>
+              )}
                 
-                {/* Bracket View */}
-                {viewMode === 'bracket' && league?.league_id && (
+              {/* Bracket View */}
+              {viewMode === 'bracket' && league?.league_id && (
                   <TournamentBracket 
                     leagueId={league.league_id} 
                     onGameClick={handleGameClick}
