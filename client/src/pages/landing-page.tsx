@@ -287,8 +287,8 @@ export default function LandingPage() {
           {/* Left: Visual */}
           <div className="w-full flex justify-center">
             <img
-              src={UL}
-              alt="Upload Example"
+              src={LeaguePage}
+              alt="League Page Example"
               className="rounded-xl shadow-lg w-full max-w-md"
             />
           </div>
@@ -296,16 +296,15 @@ export default function LandingPage() {
           {/* Right: Text Content */}
           <div>
             <h3 className="text-2xl font-bold text-slate-900 mb-4">
-              Upload Your Game Files Instantly
+              Find your league and discover all the stats
             </h3>
             <p className="text-gray-600 mb-4">
-              Drag and drop your FIBA LiveStats PDFs and let Swish Assistant handle
-              the rest — extracting stats, linking players, and saving you hours.
+              Find the information you need quickly in just a few clicks. Access comprehensive stats and insights with even greater detail than ever before.
             </p>
             <ul className="text-left text-gray-600 list-disc list-inside space-y-2">
-              <li>Auto-parses your PDFs into clean stat lines</li>
-              <li>Assigns data to your selected league</li>
-              <li>Triggers visual summaries and AI responses</li>
+              <li>Browse all hosted leagues in one place</li>
+              <li>Quick and easy access to top performances and player stats</li>
+              <li>Discover detailed insights and compare players across teams</li>
             </ul>
           </div>
         </div>
@@ -346,8 +345,8 @@ export default function LandingPage() {
           {/* Left: Visual */}
           <div className="w-full flex justify-center">
             <img
-              src={LeaguePage}
-              alt="League Page Example"
+              src={UL}
+              alt="Upload Example"
               className="rounded-xl shadow-lg w-full max-w-md"
             />
           </div>
@@ -355,15 +354,16 @@ export default function LandingPage() {
           {/* Right: Text Content */}
           <div>
             <h3 className="text-2xl font-bold text-slate-900 mb-4">
-              Find your league and discover all the stats
+              Upload Your Game Files Instantly
             </h3>
             <p className="text-gray-600 mb-4">
-              Find the information you need quickly in just a few clicks. Access comprehensive stats and insights with even greater detail than ever before.
+              Drag and drop your FIBA LiveStats PDFs and let Swish Assistant handle
+              the rest — extracting stats, linking players, and saving you hours.
             </p>
             <ul className="text-left text-gray-600 list-disc list-inside space-y-2">
-              <li>Browse all hosted leagues in one place</li>
-              <li>Quick and easy access to top performances and player stats</li>
-              <li>Discover detailed insights and compare players across teams</li>
+              <li>Auto-parses your PDFs into clean stat lines</li>
+              <li>Assigns data to your selected league</li>
+              <li>Triggers visual summaries and AI responses</li>
             </ul>
           </div>
         </div>
