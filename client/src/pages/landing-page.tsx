@@ -251,9 +251,13 @@ export default function LandingPage() {
                 <button
                   key={i}
                   onClick={() => handleSelect({ type: 'league', slug: league.slug })}
-                  className="bg-orange-100 hover:bg-orange-200 text-sm text-orange-800 px-5 py-3 rounded-lg text-left transition"
+                  className="bg-gradient-to-r from-orange-100 to-amber-50 hover:scale-105 hover:shadow-md text-sm text-orange-800 px-5 py-3 rounded-xl text-left transition-all duration-300 flex items-center justify-between gap-3"
                 >
-                  🔥 Trending: {league.name}
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">🔥</span>
+                    <span className="font-medium">Trending: {league.name}</span>
+                  </div>
+                  <span className="text-xs text-orange-600 bg-orange-200/50 px-2 py-0.5 rounded-full whitespace-nowrap">Updated today</span>
                 </button>
               ))
             : [
@@ -264,9 +268,13 @@ export default function LandingPage() {
                 <button
                   key={i}
                   onClick={() => handleSelect({ type: 'league', slug: league.slug })}
-                  className="bg-orange-100 hover:bg-orange-200 text-sm text-orange-800 px-5 py-3 rounded-lg text-left transition"
+                  className="bg-gradient-to-r from-orange-100 to-amber-50 hover:scale-105 hover:shadow-md text-sm text-orange-800 px-5 py-3 rounded-xl text-left transition-all duration-300 flex items-center justify-between gap-3"
                 >
-                  🔥 Trending: {league.name}
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">🔥</span>
+                    <span className="font-medium">Trending: {league.name}</span>
+                  </div>
+                  <span className="text-xs text-orange-600 bg-orange-200/50 px-2 py-0.5 rounded-full whitespace-nowrap">Updated today</span>
                 </button>
               ))}
         </div>
