@@ -3,7 +3,7 @@ import { useParams, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
-import { Trophy, TrendingUp, Users, Target, Shield, Zap } from "lucide-react";
+import { Trophy, TrendingUp, Users, Target, Shield, Zap, ArrowLeft } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface LeaderboardStats {
@@ -346,6 +346,16 @@ export default function LeagueLeadersPage() {
       <Header />
 
       <main className="flex-grow p-4 md:p-6 max-w-7xl mx-auto space-y-6 md:space-y-8">
+        {/* Back Button */}
+        <button
+          onClick={() => navigate(`/league/${slug}`)}
+          className="flex items-center gap-2 text-orange-600 hover:text-orange-700 font-medium transition-colors"
+          data-testid="button-back-to-league"
+        >
+          <ArrowLeft className="h-5 w-5" />
+          <span>Back to League</span>
+        </button>
+
         {/* Header Section */}
         <div className="text-center space-y-3 md:space-y-4">
           <div className="flex flex-col md:flex-row items-center justify-center gap-2 md:gap-3">
