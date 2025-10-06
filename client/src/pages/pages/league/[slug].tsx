@@ -393,26 +393,25 @@ export default function LeaguePage() {
       return sortOrder === "asc" ? aValue - bValue : bValue - aValue;
     });
 
-    const getTopList = (key: string) => {
-      const grouped = playerStats.reduce((acc, curr) => {
-        // Create player name from firstname and familyname fields
-        const playerName = `${curr.firstname || ''} ${curr.familyname || ''}`.trim() || curr.name || 'Unknown Player';
-        const playerKey = playerName;
-        if (!acc[playerKey]) {
-          acc[playerKey] = { ...curr, name: playerName, games: 1 };
-        } else {
-          acc[playerKey][key] += curr[key];
-          acc[playerKey].games += 1;
-        }
-        return acc;
-      }, {});
-
-      const players = Object.values(grouped).map((p: any) => ({
-        ...p,
-        avg: (p[key] / p.games).toFixed(1),
-      }));
-
-      return players.sort((a, b) => b.avg - a.avg).slice(0, 5);
+    const getTopList = (statKey: string) => {
+      // Map stat keys to the average field names in allPlayerAverages
+      const statToAvgField: Record<string, string> = {
+        'spoints': 'avgPoints',
+        'sreboundstotal': 'avgRebounds',
+        'sassists': 'avgAssists'
+      };
+      
+      const avgField = statToAvgField[statKey];
+      if (!avgField || !allPlayerAverages.length) return [];
+      
+      // Sort by the average field and take top 5
+      return [...allPlayerAverages]
+        .sort((a, b) => parseFloat(b[avgField]) - parseFloat(a[avgField]))
+        .slice(0, 5)
+        .map(player => ({
+          ...player,
+          avg: player[avgField]
+        }));
     };
 
     const topScorers = getTopList("spoints");
