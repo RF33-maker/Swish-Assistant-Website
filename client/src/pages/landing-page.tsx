@@ -12,6 +12,7 @@ import Chatbot from "@/assets/Chatbotimage.png"
 import LeaguePage from "@/assets/League-page.png"
 import ChatbotExample from "@/assets/Chatbotexample.png"
 import { Button } from "@/components/ui/button"
+import { Search } from "lucide-react"
 
 function LeagueLogosCarousel() {
   const logos = [Ballpark, CMBC, NBLBE, BCB, SLB]
@@ -189,17 +190,18 @@ export default function LandingPage() {
 
           {/* Search Bar with Suggestions */}
           <div className="w-full max-w-2xl relative">
-          <div className="search-bar-animated-border">
+          <div className="search-bar-animated-border transition-all duration-300 focus-within:scale-105 focus-within:shadow-[0_0_10px_rgba(255,102,0,0.4)]">
             <form
               onSubmit={handleSubmit}
               className="flex items-center shadow-lg rounded-full overflow-hidden bg-white"
             >
+              <Search className="ml-5 h-5 w-5 text-slate-400" />
               <input
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search for players or leagues..."
-                className="flex-1 px-6 py-4 text-base text-slate-900 focus:outline-none bg-transparent"
+                placeholder="Find players, teams, or leagues…"
+                className="flex-1 px-4 py-4 text-base text-slate-900 focus:outline-none bg-transparent"
               />
             </form>
           </div>
