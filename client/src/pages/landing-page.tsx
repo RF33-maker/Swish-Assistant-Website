@@ -182,9 +182,9 @@ export default function LandingPage() {
           className="mx-auto w-48 h-48 md:w-56 md:h-56 lg:w-64 lg:h-64 drop-shadow-lg mb-8 md:mb-12 lg:mb-16"
         />
         <main className="flex flex-col items-center justify-center px-6 text-center">
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-slate-900 max-w-2xl leading-tight mb-12 md:mb-16 lg:mb-20">
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-semibold text-slate-900 max-w-2xl leading-relaxed tracking-tight mb-12 md:mb-16 lg:mb-20">
             Our sport, your leagues, your stats <br />
-            <span className="text-orange-500">Search below.</span>
+            <span className="text-orange-500 font-bold drop-shadow-sm">Search below.</span>
           </h1>
 
           {/* Search Bar with Suggestions */}
