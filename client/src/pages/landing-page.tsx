@@ -306,15 +306,15 @@ export default function LandingPage() {
           {/* Left: Text Content */}
           <div>
             <h3 className="text-2xl font-bold text-slate-900 mb-4">
-              Ask the Swish Agent about your league
+              AI-Powered Chatbot (In Development)
             </h3>
             <p className="text-gray-600 mb-4">
-              Use the Swish Agent to ask questions like “Who leads the league in assists?” or “Show me John Smith's last 5 games.”
+              We're building an AI-powered chatbot to make it super quick and easy to find what you need. Ask questions and get instant answers about players, teams, and stats.
             </p>
             <ul className="text-left text-gray-600 list-disc list-inside space-y-2">
-              <li>Chatbot understands players, teams & stats</li>
-              <li>Pulls data live from your uploaded games</li>
-              <li>Gives you quick, coach-friendly answers</li>
+              <li>Find information in seconds, not minutes</li>
+              <li>Natural language queries about any league data</li>
+              <li>Coming soon to streamline your workflow</li>
             </ul>
           </div>
 
