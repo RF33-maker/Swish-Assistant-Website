@@ -163,7 +163,7 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-white text-slate-900 flex flex-col">
       {/* Header */}
-      <header className="flex justify-between items-center px-6 py-4">
+      <header className="flex justify-between items-center px-6 py-4 bg-gradient-to-b from-[#fffaf5] to-transparent">
         <div className="flex items-center gap-2">
           <img src={SwishLogo} alt="Swish Logo" className="h-8" />
           <span className="font-bold text-xl text-orange-600"></span>
@@ -176,18 +176,19 @@ export default function LandingPage() {
         </nav>
       </header>
 
-      {/* Hero */}
-      <img src={SwishLogo} alt="Swish Logo"
-        className="mx-auto w-64 h-64 -mb -14"
-      />
-      <main className="flex flex-col items-center justify-center px-6 pt-6 pb-36 text-center">
-        <h1 className="text-4xl sm:text-5xl font-extrabold text-slate-900 max-w-2xl leading-tight">
-          Our sport, your leagues, your stats <br />
-          <span className="text-orange-500">Search below.</span>
-        </h1>
+      {/* Hero Section with Gradient Background */}
+      <div className="bg-gradient-to-b from-[#fffaf5] to-white pt-8 md:pt-12 lg:pt-16 pb-24 md:pb-32 lg:pb-40">
+        <img src={SwishLogo} alt="Swish Logo"
+          className="mx-auto w-48 h-48 md:w-56 md:h-56 lg:w-64 lg:h-64 drop-shadow-lg mb-8 md:mb-12 lg:mb-16"
+        />
+        <main className="flex flex-col items-center justify-center px-6 text-center">
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-slate-900 max-w-2xl leading-tight mb-12 md:mb-16 lg:mb-20">
+            Our sport, your leagues, your stats <br />
+            <span className="text-orange-500">Search below.</span>
+          </h1>
 
-        {/* Search Bar with Suggestions */}
-        <div className="mt-10 w-full max-w-2xl relative">
+          {/* Search Bar with Suggestions */}
+          <div className="w-full max-w-2xl relative">
           <div className="search-bar-animated-border">
             <form
               onSubmit={handleSubmit}
@@ -267,9 +268,8 @@ export default function LandingPage() {
                 </button>
               ))}
         </div>
-
-
-      </main>
+        </main>
+      </div>
 
       {/*used by teams and leagues across the UK*/}
 
