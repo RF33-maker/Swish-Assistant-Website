@@ -699,9 +699,12 @@ type GameSchedule = {
         rawTeamStats.forEach(stat => {
           if (!stat.name) return; // Skip records without team name
 
-          if (!teamMap.has(stat.name)) {
-            teamMap.set(stat.name, {
-              teamName: stat.name,
+          // Normalize team name to handle variations (trim spaces)
+          const normalizedName = stat.name.trim();
+
+          if (!teamMap.has(normalizedName)) {
+            teamMap.set(normalizedName, {
+              teamName: normalizedName,
               gamesPlayed: 0,
               totalPoints: 0,
               totalFGM: 0,
@@ -721,7 +724,7 @@ type GameSchedule = {
             });
           }
 
-          const team = teamMap.get(stat.name)!;
+          const team = teamMap.get(normalizedName)!;
           team.gamesPlayed += 1;
           team.totalPoints += stat.tot_spoints || 0;
           team.totalFGM += stat.tot_sfieldgoalsmade || 0;
@@ -797,34 +800,38 @@ type GameSchedule = {
             if (gameTeams.length === 2) { // Valid game with 2 teams
               const [team1, team2] = gameTeams;
               
+              // Normalize team names to handle variations (trim spaces, handle case)
+              const team1Name = (team1.name || '').trim();
+              const team2Name = (team2.name || '').trim();
+              
               // Use tot_spoints as team score
               const team1Score = team1.tot_spoints || 0;
               const team2Score = team2.tot_spoints || 0;
               
               // Initialize teams if not exists
-              if (!teamStatsMap[team1.name]) {
-                teamStatsMap[team1.name] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0 };
+              if (!teamStatsMap[team1Name]) {
+                teamStatsMap[team1Name] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0 };
               }
-              if (!teamStatsMap[team2.name]) {
-                teamStatsMap[team2.name] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0 };
+              if (!teamStatsMap[team2Name]) {
+                teamStatsMap[team2Name] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0 };
               }
               
               // Record scores
-              teamStatsMap[team1.name].pointsFor += team1Score;
-              teamStatsMap[team1.name].pointsAgainst += team2Score;
-              teamStatsMap[team1.name].games += 1;
+              teamStatsMap[team1Name].pointsFor += team1Score;
+              teamStatsMap[team1Name].pointsAgainst += team2Score;
+              teamStatsMap[team1Name].games += 1;
               
-              teamStatsMap[team2.name].pointsFor += team2Score;
-              teamStatsMap[team2.name].pointsAgainst += team1Score;
-              teamStatsMap[team2.name].games += 1;
+              teamStatsMap[team2Name].pointsFor += team2Score;
+              teamStatsMap[team2Name].pointsAgainst += team1Score;
+              teamStatsMap[team2Name].games += 1;
               
               // Determine winner
               if (team1Score > team2Score) {
-                teamStatsMap[team1.name].wins += 1;
-                teamStatsMap[team2.name].losses += 1;
+                teamStatsMap[team1Name].wins += 1;
+                teamStatsMap[team2Name].losses += 1;
               } else if (team2Score > team1Score) {
-                teamStatsMap[team2.name].wins += 1;
-                teamStatsMap[team1.name].losses += 1;
+                teamStatsMap[team2Name].wins += 1;
+                teamStatsMap[team1Name].losses += 1;
               }
               // If tied, no wins/losses added
             }
@@ -990,21 +997,23 @@ type GameSchedule = {
           scheduleData.forEach((game: any) => {
             if (game.hometeam && game.pool) {
               const poolName = extractPoolName(game.pool);
-              // Store with original name
-              teamPoolMap[game.hometeam] = poolName;
+              // Store with normalized (trimmed) name
+              const normalizedHome = game.hometeam.trim();
+              teamPoolMap[normalizedHome] = poolName;
               // Also store without " I" suffix for matching
-              const withoutI = game.hometeam.replace(/ I$/, '');
-              if (withoutI !== game.hometeam) {
+              const withoutI = normalizedHome.replace(/ I$/, '');
+              if (withoutI !== normalizedHome) {
                 teamPoolMap[withoutI] = poolName;
               }
             }
             if (game.awayteam && game.pool) {
               const poolName = extractPoolName(game.pool);
-              // Store with original name
-              teamPoolMap[game.awayteam] = poolName;
+              // Store with normalized (trimmed) name
+              const normalizedAway = game.awayteam.trim();
+              teamPoolMap[normalizedAway] = poolName;
               // Also store without " I" suffix for matching
-              const withoutI = game.awayteam.replace(/ I$/, '');
-              if (withoutI !== game.awayteam) {
+              const withoutI = normalizedAway.replace(/ I$/, '');
+              if (withoutI !== normalizedAway) {
                 teamPoolMap[withoutI] = poolName;
               }
             }
@@ -1028,39 +1037,44 @@ type GameSchedule = {
         gameMap.forEach((gameTeams) => {
           if (gameTeams.length === 2) {
             const [team1, team2] = gameTeams;
+            
+            // Normalize team names to handle variations (trim spaces)
+            const team1Name = (team1.name || '').trim();
+            const team2Name = (team2.name || '').trim();
+            
             const team1Score = team1.tot_spoints || 0;
             const team2Score = team2.tot_spoints || 0;
             
             // Initialize teams
-            if (!teamStatsMap[team1.name]) {
-              teamStatsMap[team1.name] = { 
+            if (!teamStatsMap[team1Name]) {
+              teamStatsMap[team1Name] = { 
                 wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0,
-                pool: teamPoolMap[team1.name]
+                pool: teamPoolMap[team1Name] || teamPoolMap[team1.name]
               };
             }
-            if (!teamStatsMap[team2.name]) {
-              teamStatsMap[team2.name] = { 
+            if (!teamStatsMap[team2Name]) {
+              teamStatsMap[team2Name] = { 
                 wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0,
-                pool: teamPoolMap[team2.name]
+                pool: teamPoolMap[team2Name] || teamPoolMap[team2.name]
               };
             }
             
             // Record scores
-            teamStatsMap[team1.name].pointsFor += team1Score;
-            teamStatsMap[team1.name].pointsAgainst += team2Score;
-            teamStatsMap[team1.name].games += 1;
+            teamStatsMap[team1Name].pointsFor += team1Score;
+            teamStatsMap[team1Name].pointsAgainst += team2Score;
+            teamStatsMap[team1Name].games += 1;
             
-            teamStatsMap[team2.name].pointsFor += team2Score;
-            teamStatsMap[team2.name].pointsAgainst += team1Score;
-            teamStatsMap[team2.name].games += 1;
+            teamStatsMap[team2Name].pointsFor += team2Score;
+            teamStatsMap[team2Name].pointsAgainst += team1Score;
+            teamStatsMap[team2Name].games += 1;
             
             // Determine winner
             if (team1Score > team2Score) {
-              teamStatsMap[team1.name].wins += 1;
-              teamStatsMap[team2.name].losses += 1;
+              teamStatsMap[team1Name].wins += 1;
+              teamStatsMap[team2Name].losses += 1;
             } else if (team2Score > team1Score) {
-              teamStatsMap[team2.name].wins += 1;
-              teamStatsMap[team1.name].losses += 1;
+              teamStatsMap[team2Name].wins += 1;
+              teamStatsMap[team1Name].losses += 1;
             }
           }
         });
