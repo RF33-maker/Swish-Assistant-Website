@@ -344,15 +344,15 @@ export default function LandingPage() {
           {/* Right: Text Content */}
           <div>
             <h3 className="text-2xl font-bold text-slate-900 mb-4">
-              Create a league and showcase your stats
+              Find your league and discover all the stats
             </h3>
             <p className="text-gray-600 mb-4">
-              Create a public league where you can showcase your stats and compare with other players and teams. Don't waste all that data you captured and give it a place to thrive.
+              Find the information you need quickly in just a few clicks. Access comprehensive stats and insights with even greater detail than ever before.
             </p>
             <ul className="text-left text-gray-600 list-disc list-inside space-y-2">
-              <li>Personalize the league to be branded in your own way</li>
-              <li>Quick and easy for players and coaches to see top performances</li>
-              <li>Allow users to engage, interact and see how they compare to the rest</li>
+              <li>Browse all hosted leagues in one place</li>
+              <li>Quick and easy access to top performances and player stats</li>
+              <li>Discover detailed insights and compare players across teams</li>
             </ul>
           </div>
         </div>
