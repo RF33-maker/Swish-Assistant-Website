@@ -1373,31 +1373,33 @@ type GameSchedule = {
                 <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-4 md:mb-6">
                   <h2 className="text-base md:text-lg font-semibold text-slate-800">League Standings</h2>
                   
-                  {/* View Toggle */}
-                  <div className="inline-flex rounded-lg border border-gray-300 bg-gray-100 p-1">
-                    <button
-                      onClick={() => setViewMode('standings')}
-                      className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                        viewMode === 'standings'
-                          ? 'bg-white text-orange-600 shadow-sm'
-                          : 'text-gray-600 hover:text-gray-800'
-                      }`}
-                      data-testid="button-standings-view"
-                    >
-                      Standings
-                    </button>
-                    <button
-                      onClick={() => setViewMode('bracket')}
-                      className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                        viewMode === 'bracket'
-                          ? 'bg-white text-orange-600 shadow-sm'
-                          : 'text-gray-600 hover:text-gray-800'
-                      }`}
-                      data-testid="button-bracket-view"
-                    >
-                      Bracket
-                    </button>
-                  </div>
+                  {/* View Toggle - Only show for BCB Trophy */}
+                  {slug === 'british-championship-basketball' && (
+                    <div className="inline-flex rounded-lg border border-gray-300 bg-gray-100 p-1">
+                      <button
+                        onClick={() => setViewMode('standings')}
+                        className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                          viewMode === 'standings'
+                            ? 'bg-white text-orange-600 shadow-sm'
+                            : 'text-gray-600 hover:text-gray-800'
+                        }`}
+                        data-testid="button-standings-view"
+                      >
+                        Standings
+                      </button>
+                      <button
+                        onClick={() => setViewMode('bracket')}
+                        className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                          viewMode === 'bracket'
+                            ? 'bg-white text-orange-600 shadow-sm'
+                            : 'text-gray-600 hover:text-gray-800'
+                        }`}
+                        data-testid="button-bracket-view"
+                      >
+                        Bracket
+                      </button>
+                    </div>
+                  )}
                 </div>
                 
                 {viewMode === 'standings' && (
@@ -1507,13 +1509,13 @@ type GameSchedule = {
                 </>
               )}
                 
-              {/* Bracket View */}
-              {viewMode === 'bracket' && league?.league_id && (
-                  <TournamentBracket 
-                    leagueId={league.league_id} 
-                    onGameClick={handleGameClick}
-                  />
-                )}
+              {/* Bracket View - Only for BCB Trophy */}
+              {viewMode === 'bracket' && slug === 'british-championship-basketball' && league?.league_id && (
+                <TournamentBracket 
+                  leagueId={league.league_id} 
+                  onGameClick={handleGameClick}
+                />
+              )}
               </div>
             )}
             

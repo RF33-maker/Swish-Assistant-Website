@@ -63,8 +63,15 @@ export function TournamentBracket({ leagueId, onGameClick }: TournamentBracketPr
         }
       });
 
+      // Filter games from October 4th, 2025 onwards (knockout stage)
+      const knockoutStartDate = new Date('2025-10-04T00:00:00Z');
+      const knockoutGames = (scheduleData || []).filter(game => {
+        const gameDate = new Date(game.matchtime);
+        return gameDate >= knockoutStartDate;
+      });
+
       // Process games with scores
-      const games: Game[] = (scheduleData || []).map(game => {
+      const games: Game[] = knockoutGames.map(game => {
         // Find scores by matching team names
         let homeScore: number | undefined;
         let awayScore: number | undefined;
