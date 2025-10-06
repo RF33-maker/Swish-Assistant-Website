@@ -163,17 +163,34 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-white text-slate-900 flex flex-col">
+      {/* Gradient Top Border */}
+      <div className="h-[1px] bg-gradient-to-r from-orange-400 to-amber-400"></div>
+      
       {/* Header */}
       <header className="flex justify-between items-center px-6 py-4 bg-gradient-to-b from-[#fffaf5] to-transparent">
         <div className="flex items-center gap-2">
           <img src={SwishLogo} alt="Swish Logo" className="h-8" />
           <span className="font-bold text-xl text-orange-600"></span>
         </div>
-        <nav className="flex gap-6 text-sm text-slate-600 font-medium">
-          <a href="#features" className="hover:text-orange-600 transition-colors">Features</a>
-          <a href="#pricing" className="hover:text-orange-600 transition-colors">Pricing</a>
-          <a href="/auth">Get Started</a>
-          <a href="/auth">Login</a>
+        <nav className="flex items-center gap-6 text-sm font-medium">
+          <a href="#features" className="text-slate-600 hover:text-orange-600 transition-colors relative group">
+            Features
+            <span className="absolute bottom-0 left-0 w-0 h-[2px] bg-orange-500 transition-all duration-300 group-hover:w-full"></span>
+          </a>
+          <a href="#pricing" className="text-slate-600 hover:text-orange-600 transition-colors relative group">
+            Pricing
+            <span className="absolute bottom-0 left-0 w-0 h-[2px] bg-orange-500 transition-all duration-300 group-hover:w-full"></span>
+          </a>
+          <a 
+            href="/auth" 
+            className="bg-gradient-to-r from-orange-500 to-amber-500 text-white px-5 py-2 rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-300 drop-shadow-md"
+          >
+            Get Started
+          </a>
+          <a href="/auth" className="text-slate-600 hover:text-orange-600 transition-colors relative group">
+            Login
+            <span className="absolute bottom-0 left-0 w-0 h-[2px] bg-orange-500 transition-all duration-300 group-hover:w-full"></span>
+          </a>
         </nav>
       </header>
 
