@@ -188,24 +188,20 @@ export default function LandingPage() {
 
         {/* Search Bar with Suggestions */}
         <div className="mt-10 w-full max-w-2xl relative">
-          <form
-            onSubmit={handleSubmit}
-            className="flex items-center shadow-lg rounded-full border border-gray-200 overflow-hidden"
-          >
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search for players or leagues..."
-              className="flex-1 px-5 py-4 text-base text-white focus:outline-none"
-            />
-            <button
-              type="submit"
-              className="bg-orange-500 text-white font-semibold px-6 py-4 hover:bg-orange-600 transition"
+          <div className="search-bar-animated-border">
+            <form
+              onSubmit={handleSubmit}
+              className="flex items-center shadow-lg rounded-full overflow-hidden bg-white"
             >
-              Ask
-            </button>
-          </form>
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search for players or leagues..."
+                className="flex-1 px-6 py-4 text-base text-slate-900 focus:outline-none bg-transparent"
+              />
+            </form>
+          </div>
 
           {suggestions.length > 0 && (
             <ul className="absolute z-50 w-full bg-white border border-orange-200 mt-1 rounded-md shadow-lg max-h-60 overflow-y-auto">
