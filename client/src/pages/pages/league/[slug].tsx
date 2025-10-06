@@ -2309,6 +2309,17 @@ type GameSchedule = {
               )}
             </div>
 
+            {/* Tournament Bracket - Only for BCB Trophy */}
+            {slug === 'british-championship-basketball' && league?.league_id && (
+              <div className="bg-white rounded-xl shadow p-4 md:p-6">
+                <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-4 md:mb-6">Tournament Bracket</h2>
+                <TournamentBracket 
+                  leagueId={league.league_id} 
+                  onGameClick={handleGameClick}
+                />
+              </div>
+            )}
+
             <div className="bg-white rounded-xl shadow p-4 md:p-6">
               <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-3 md:mb-4">Player Stat Explorer</h2>
 
