@@ -25,7 +25,37 @@ import { PlayerComparison } from "@/components/PlayerComparison";
 import { TeamComparison } from "@/components/TeamComparison";
 import { TournamentBracket } from "@/components/TournamentBracket";
 
-    const { slug } = useParams();
+type GameSchedule = {
+  game_id: string;
+  game_date: string;
+  team1: string;
+  team2: string;
+  kickoff_time?: string;
+  venue?: string;
+  team1_score?: number;
+  team2_score?: number;
+  status?: string;
+  numeric_id?: string;
+};
+
+// Team name normalization - maps team name variations to canonical names
+const normalizeTeamName = (name: string): string => {
+  if (!name) return '';
+  
+  const trimmed = name.trim();
+  
+  // Mapping of team name variations to canonical names
+  const teamNameMap: Record<string, string> = {
+    'Essex Rebels (M)': 'Essex Rebels',
+    'MK Breakers': 'Milton Keynes Breakers',
+  };
+  
+  // Return mapped name if it exists, otherwise return trimmed name
+  return teamNameMap[trimmed] || trimmed;
+};
+
+export default function LeaguePage() {
+  const { slug } = useParams();
     const [search, setSearch] = useState("");
     const [location, navigate] = useLocation();
     const [league, setLeague] = useState(null);
@@ -684,8 +714,8 @@ import { TournamentBracket } from "@/components/TournamentBracket";
         rawTeamStats.forEach(stat => {
           if (!stat.name) return; // Skip records without team name
 
-          // Normalize team name to handle variations (trim spaces)
-          const normalizedName = stat.name.trim();
+          // Normalize team name to handle variations
+          const normalizedName = normalizeTeamName(stat.name);
 
           if (!teamMap.has(normalizedName)) {
             teamMap.set(normalizedName, {
@@ -785,9 +815,9 @@ import { TournamentBracket } from "@/components/TournamentBracket";
             if (gameTeams.length === 2) { // Valid game with 2 teams
               const [team1, team2] = gameTeams;
               
-              // Normalize team names to handle variations (trim spaces, handle case)
-              const team1Name = (team1.name || '').trim();
-              const team2Name = (team2.name || '').trim();
+              // Normalize team names to handle variations
+              const team1Name = normalizeTeamName(team1.name || '');
+              const team2Name = normalizeTeamName(team2.name || '');
               
               // Use tot_spoints as team score
               const team1Score = team1.tot_spoints || 0;
@@ -972,35 +1002,18 @@ import { TournamentBracket } from "@/components/TournamentBracket";
           return match ? match[1] : poolValue;
         };
         
-        // Normalize team names by trying both with and without " I" suffix
-        const normalizeTeamName = (name: string): string => {
-          return name.trim();
-        };
-        
         const teamPoolMap: Record<string, string> = {};
         if (scheduleData && !scheduleError) {
           scheduleData.forEach((game: any) => {
             if (game.hometeam && game.pool) {
               const poolName = extractPoolName(game.pool);
-              // Store with normalized (trimmed) name
-              const normalizedHome = game.hometeam.trim();
+              const normalizedHome = normalizeTeamName(game.hometeam);
               teamPoolMap[normalizedHome] = poolName;
-              // Also store without " I" suffix for matching
-              const withoutI = normalizedHome.replace(/ I$/, '');
-              if (withoutI !== normalizedHome) {
-                teamPoolMap[withoutI] = poolName;
-              }
             }
             if (game.awayteam && game.pool) {
               const poolName = extractPoolName(game.pool);
-              // Store with normalized (trimmed) name
-              const normalizedAway = game.awayteam.trim();
+              const normalizedAway = normalizeTeamName(game.awayteam);
               teamPoolMap[normalizedAway] = poolName;
-              // Also store without " I" suffix for matching
-              const withoutI = normalizedAway.replace(/ I$/, '');
-              if (withoutI !== normalizedAway) {
-                teamPoolMap[withoutI] = poolName;
-              }
             }
           });
         }
@@ -1023,9 +1036,9 @@ import { TournamentBracket } from "@/components/TournamentBracket";
           if (gameTeams.length === 2) {
             const [team1, team2] = gameTeams;
             
-            // Normalize team names to handle variations (trim spaces)
-            const team1Name = (team1.name || '').trim();
-            const team2Name = (team2.name || '').trim();
+            // Normalize team names to handle variations
+            const team1Name = normalizeTeamName(team1.name || '');
+            const team2Name = normalizeTeamName(team2.name || '');
             
             const team1Score = team1.tot_spoints || 0;
             const team2Score = team2.tot_spoints || 0;
