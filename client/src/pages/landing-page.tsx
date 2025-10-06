@@ -364,15 +364,15 @@ export default function LandingPage() {
           {/* Left: Text Content */}
           <div>
             <h3 className="text-2xl font-bold text-slate-900 mb-4">
-              Create scouting reports in minutes
+              Coaches Hub
             </h3>
             <p className="text-gray-600 mb-4">
-              Once the data has been uploaded you can ask the chatbot anything, player scoring, player summeries based off last few games. Then instantly save it to a document for your players and satff to read before and after games.
+              A dedicated space for coaches to access detailed insights to help prep for your next game. See team trends, discover top players, and build your scouting reports with ease.
             </p>
             <ul className="text-left text-gray-600 list-disc list-inside space-y-2">
-              <li>Chatbot understands players, teams & stats</li>
-              <li>Pulls data live from your uploaded games</li>
-              <li>Gives you quick, coach-friendly answers</li>
+              <li>Detailed insights on team performance and trends</li>
+              <li>Quickly identify top players and key matchups</li>
+              <li>Build comprehensive scouting reports effortlessly</li>
             </ul>
           </div>
 
