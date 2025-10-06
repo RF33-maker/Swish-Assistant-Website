@@ -25,21 +25,6 @@ import { PlayerComparison } from "@/components/PlayerComparison";
 import { TeamComparison } from "@/components/TeamComparison";
 import { TournamentBracket } from "@/components/TournamentBracket";
 
-type GameSchedule = {
-  game_id: string;
-  game_date: string;
-  team1: string;
-  team2: string;
-  kickoff_time?: string;
-  venue?: string;
-  team1_score?: number;
-  team2_score?: number;
-  status?: string;
-  numeric_id?: string;
-};
-
-
-  export default function LeaguePage() {
     const { slug } = useParams();
     const [search, setSearch] = useState("");
     const [location, navigate] = useLocation();
