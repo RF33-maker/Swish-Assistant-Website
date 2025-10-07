@@ -268,7 +268,8 @@ export default function LandingPage() {
                 <button
                   key={i}
                   onClick={() => handleSelect({ type: 'league', slug: league.slug })}
-                  className="bg-gradient-to-r from-orange-100 to-amber-50 hover:scale-105 hover:shadow-md text-sm text-orange-800 px-5 py-3 rounded-xl text-left transition-all duration-300 flex items-center justify-between gap-3"
+                  className="bg-gradient-to-r from-orange-100 to-amber-50 hover:scale-105 hover:shadow-md text-sm text-orange-800 px-5 py-3 rounded-xl text-left transition-all duration-300 flex items-center justify-between gap-3 animate-slide-in-left"
+                  style={{ animationDelay: `${0.8 + i * 0.075}s`, opacity: 0, animationFillMode: 'forwards' }}
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-base">🔥</span>
@@ -285,7 +286,8 @@ export default function LandingPage() {
                 <button
                   key={i}
                   onClick={() => handleSelect({ type: 'league', slug: league.slug })}
-                  className="bg-gradient-to-r from-orange-100 to-amber-50 hover:scale-105 hover:shadow-md text-sm text-orange-800 px-5 py-3 rounded-xl text-left transition-all duration-300 flex items-center justify-between gap-3"
+                  className="bg-gradient-to-r from-orange-100 to-amber-50 hover:scale-105 hover:shadow-md text-sm text-orange-800 px-5 py-3 rounded-xl text-left transition-all duration-300 flex items-center justify-between gap-3 animate-slide-in-left"
+                  style={{ animationDelay: `${0.8 + i * 0.075}s`, opacity: 0, animationFillMode: 'forwards' }}
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-base">🔥</span>
