@@ -742,7 +742,8 @@ export default function LandingPage() {
                 Product in Beta
               </h3>
               <p className="text-gray-600 mb-6">
-                Pricing coming soon! We're currently in beta testing with select partners.
+                Your stats, always free.
+                We’re developing advanced tools that take your experience to the next level — from AI-powered insights to effortless scouting automation. Premium features launching soon!
               </p>
               <p className="text-sm text-gray-500 mb-6">
                 Please contact us if you have any questions or would like early access.
