@@ -68,11 +68,7 @@ export default function LeaguePage() {
     const [gameSummaries, setGameSummaries] = useState<any[]>([]);
     const [playerStats, setPlayerStats] = useState<any[]>([]);
     const [aiSummary, setAiSummary] = useState<string | null>(null);
-    const [playerSearch, setPlayerSearch] = useState("");
-    const [expandedPlayer, setExpandedPlayer] = useState<number | null>(null);
     const [prompt, setPrompt] = useState("");
-    const [sortField, setSortField] = useState("points");
-    const [sortOrder, setSortOrder] = useState("desc");
     const [sortBy, setSortBy] = useState("points");
     const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
     const [isGameModalOpen, setIsGameModalOpen] = useState(false);
@@ -386,12 +382,6 @@ export default function LeaguePage() {
       "Top Rebounders": "sreboundstotal",
       "Top Playmakers": "sassists",
     };
-
-    const sortedStats = [...playerStats].sort((a, b) => {
-      const aValue = a[sortField] ?? 0;
-      const bValue = b[sortField] ?? 0;
-      return sortOrder === "asc" ? aValue - bValue : bValue - aValue;
-    });
 
     const getTopList = (statKey: string) => {
       // Map stat keys to the average field names in allPlayerAverages
@@ -2329,120 +2319,6 @@ export default function LeaguePage() {
                   <p className="text-xs mt-1">Standings will appear once games are played</p>
                 </div>
               )}
-            </div>
-
-            <div className="bg-white rounded-xl shadow p-4 md:p-6">
-              <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-3 md:mb-4">Player Stat Explorer</h2>
-
-              <input
-                type="text"
-                placeholder="Search players..."
-                className="w-full px-3 py-2 text-xs md:text-sm border border-gray-300 rounded mb-3 md:mb-4"
-                value={playerSearch}
-                onChange={(e) => setPlayerSearch(e.target.value)}
-              />
-
-              {playerStats.length > 0 ? (
-                <div>
-                  {/* Sorting Controls */}
-                  <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 mb-3 items-start sm:items-center">
-                    <label className="text-xs md:text-sm text-slate-700 font-medium flex items-center gap-2">
-                      Sort by:
-                      <select
-                        className="border border-orange-300 text-orange-600 bg-orange-50 px-2 py-1 rounded shadow-sm hover:bg-orange-100 focus:outline-none focus:ring-2 focus:ring-orange-300 text-xs md:text-sm"
-                        value={sortField}
-                        onChange={(e) => setSortField(e.target.value)}
-                      >
-                        <option value="points">Points</option>
-                        <option value="rebounds_total">Rebounds</option>
-                        <option value="assists">Assists</option>
-                      </select>
-                    </label>
-
-                    <button
-                      className="flex items-center gap-1 text-xs md:text-sm text-slate-600 hover:text-orange-600 transition"
-                      onClick={() =>
-                        setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"))
-                      }
-                    >
-                      {sortOrder === "asc" ? (
-                        <span>
-                          ⬆️ <span className="underline">Ascending</span>
-                        </span>
-                      ) : (
-                        <span>
-                          ⬇️ <span className="underline">Descending</span>
-                        </span>
-                      )}
-                    </button>
-                  </div>
-
-
-                  {/* Stats Table */}
-                  <div className="overflow-x-auto -mx-4 md:mx-0">
-                    <table className="mt-4 w-full text-xs md:text-sm text-left text-slate-700 min-w-[400px]">
-                      <thead>
-                        <tr>
-                          <th className="px-2 py-1 md:py-2 sticky left-0 bg-white z-10">Name</th>
-                          <th className="px-2 py-1 md:py-2">PTS</th>
-                          <th className="px-2 py-1 md:py-2">REB</th>
-                          <th className="px-2 py-1 md:py-2">AST</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {[...playerStats]
-                          .filter((p) =>
-                            p.name && p.name.toLowerCase().includes(playerSearch.toLowerCase())
-                          )
-                          .sort((a, b) => {
-                            const aVal = a[sortField] ?? 0;
-                            const bVal = b[sortField] ?? 0;
-                            return sortOrder === "asc" ? aVal - bVal : bVal - aVal;
-                        })
-                        .map((p, i) => {
-                          const uniqueKey = `player-${p.id || p.name}-${p.game_date || 'no-date'}-${i}`;
-                          return (
-                            <React.Fragment key={uniqueKey}>
-                              <tr
-                                className="border-t cursor-pointer hover:bg-orange-50"
-                                onClick={() =>
-                                  setExpandedPlayer(expandedPlayer === i ? null : i)
-                                }
-                              >
-                                <td className="px-2 py-1 md:py-2 sticky left-0 bg-white z-10 min-w-[120px]">{p.name}</td>
-                                <td className="px-2 py-1 md:py-2">{p.points}</td>
-                                <td className="px-2 py-1 md:py-2">{p.rebounds_total}</td>
-                                <td className="px-2 py-1 md:py-2">{p.assists}</td>
-                              </tr>
-
-                              {expandedPlayer === i && (
-                                <tr>
-                                  <td colSpan={4}>
-                                    <GameSummaryRow
-                                      player={{ name: p.name }}
-                                      game={{
-                                        id: p.id,
-                                        game_date: p.game_date,
-                                        team: p.team,
-                                        opponent: p.opponent,
-                                        league_id: league.id,
-                                      }}
-                                    />
-
-                                  </td>
-                                </tr>
-                              )}
-                            </React.Fragment>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-xs md:text-sm text-slate-600 mt-2">No player data available.</p>
-              )}
-
             </div>
               </>
             )}
