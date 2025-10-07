@@ -367,7 +367,7 @@ export default function LandingPage() {
 
        {/*What is Swish Assistant?*/}
 
-      <section className="py-20 bg-gradient-to-br from-white to-orange-50">
+      <section className="py-20 bg-gradient-to-b from-orange-50 to-[#fffaf5]">
         <div className="max-w-6xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 items-center gap-12">
 
           {/* Left: Visual */}
@@ -407,7 +407,7 @@ export default function LandingPage() {
       </section>
 
       {/* Unified AI Features Section */}
-      <section className="bg-gradient-to-b from-orange-50 to-[#fffaf5] rounded-t-[3rem] relative overflow-hidden shadow-[inset_0_-20px_40px_-20px_rgba(251,146,60,0.1)]">
+      <section className="bg-gradient-to-b from-[#fffaf5] to-[#fffaf5] relative overflow-hidden shadow-[inset_0_-20px_40px_-20px_rgba(251,146,60,0.1)]">
         
         {/* AI-Powered Chatbot */}
         <div className="py-20">
