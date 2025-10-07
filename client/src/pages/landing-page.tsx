@@ -12,7 +12,7 @@ import Chatbot from "@/assets/Chatbotimage.png"
 import LeaguePage from "@/assets/League-page.png"
 import ChatbotExample from "@/assets/Chatbotexample.png"
 import { Button } from "@/components/ui/button"
-import { Search, ChevronDown, BarChart3, Zap } from "lucide-react"
+import { Search, ChevronDown, BarChart3, Zap, Clock, MessageSquare, Sparkles } from "lucide-react"
 
 function LeagueLogosCarousel() {
   const logos = [Ballpark, CMBC, NBLBE, BCB, SLB]
@@ -377,21 +377,36 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="py-16 bg-white">
-        <div className="max-w-6xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 items-center gap-12">
+      <section className="py-20 bg-orange-50 rounded-t-[3rem]">
+        <div className="max-w-6xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 items-center gap-12 md:gap-16">
 
           {/* Left: Text Content */}
           <div>
-            <h3 className="text-2xl font-bold text-slate-900 mb-4">
-              AI-Powered Chatbot (In Development)
-            </h3>
-            <p className="text-gray-600 mb-4">
+            <div className="flex items-center gap-3 mb-3">
+              <h3 className="text-2xl font-bold text-slate-900">
+                AI-Powered Chatbot
+              </h3>
+              <span className="bg-orange-500 text-white text-xs font-semibold px-3 py-1 rounded-full">
+                Coming Soon
+              </span>
+            </div>
+            <div className="w-16 h-1 bg-orange-500 rounded-full mb-6"></div>
+            <p className="text-slate-700 leading-relaxed mb-6">
               We're building an AI-powered chatbot to make it super quick and easy to find what you need. Ask questions and get instant answers about players, teams, and stats.
             </p>
-            <ul className="text-left text-gray-600 list-disc list-inside space-y-2">
-              <li>Find information in seconds, not minutes</li>
-              <li>Natural language queries about any league data</li>
-              <li>Coming soon to streamline your workflow</li>
+            <ul className="text-left text-slate-700 space-y-3">
+              <li className="flex items-start gap-3 animate-fade-in-up" style={{ animationDelay: '0.1s', opacity: 0, animationFillMode: 'forwards' }}>
+                <Clock className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
+                <span>Find information in seconds, not minutes</span>
+              </li>
+              <li className="flex items-start gap-3 animate-fade-in-up" style={{ animationDelay: '0.2s', opacity: 0, animationFillMode: 'forwards' }}>
+                <MessageSquare className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
+                <span>Natural language queries about any league data</span>
+              </li>
+              <li className="flex items-start gap-3 animate-fade-in-up" style={{ animationDelay: '0.3s', opacity: 0, animationFillMode: 'forwards' }}>
+                <Sparkles className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
+                <span>Coming soon to streamline your workflow</span>
+              </li>
             </ul>
           </div>
 
@@ -400,7 +415,8 @@ export default function LandingPage() {
             <img
               src={Chatbot}
               alt="Chatbot Example"
-              className="rounded-xl shadow-lg w-full max-w-md"
+              className="rounded-xl w-full max-w-lg transition-all duration-300 hover:scale-105"
+              style={{ filter: 'drop-shadow(0 0 40px rgba(251, 146, 60, 0.3))' }}
             />
           </div>
         </div>
