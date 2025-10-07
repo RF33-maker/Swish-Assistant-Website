@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useLocation } from "wouter"
 import { supabase } from "@/lib/supabase"
 import SwishLogo from "@/assets/Swish Assistant Logo.png"
@@ -48,6 +48,8 @@ export default function LandingPage() {
   const [suggestions, setSuggestions] = useState<any[]>([])
   const [, setLocation] = useLocation()
   const [trendingLeagues, setTrendingLeagues] = useState<any[]>([]);
+  const chatbotHeadingRef = useRef<HTMLHeadingElement>(null);
+  const coachesHeadingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
     const fetchSuggestions = async () => {
@@ -159,6 +161,33 @@ export default function LandingPage() {
     };
 
     fetchTrending();
+  }, []);
+
+  // IntersectionObserver for animated underlines
+  useEffect(() => {
+    const options = {
+      threshold: 0.5,
+      rootMargin: '0px'
+    };
+
+    const callback = (entries: IntersectionObserverEntry[]) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('in-view');
+        }
+      });
+    };
+
+    const observer = new IntersectionObserver(callback, options);
+
+    if (chatbotHeadingRef.current) {
+      observer.observe(chatbotHeadingRef.current);
+    }
+    if (coachesHeadingRef.current) {
+      observer.observe(coachesHeadingRef.current);
+    }
+
+    return () => observer.disconnect();
   }, []);
 
   return (
@@ -377,20 +406,19 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="py-20 bg-orange-50 rounded-t-[3rem]">
-        <div className="max-w-6xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 items-center gap-12 md:gap-16">
+      <section className="py-20 bg-gradient-to-b from-orange-50 to-[#fffaf5] rounded-t-[3rem]">
+        <div className="max-w-6xl mx-auto px-8 md:px-16 grid grid-cols-1 md:grid-cols-2 items-center gap-12 md:gap-16">
 
           {/* Left: Text Content */}
           <div>
-            <div className="flex items-center gap-3 mb-3">
-              <h3 className="text-2xl font-bold text-slate-900">
+            <div className="flex items-center gap-3 mb-6">
+              <h3 ref={chatbotHeadingRef} className="text-2xl font-bold text-slate-900 underline-animate">
                 AI-Powered Chatbot
               </h3>
-              <span className="bg-orange-500 text-white text-xs font-semibold px-3 py-1 rounded-full">
+              <span className="bg-orange-500 text-white text-xs font-semibold px-3 py-1 rounded-full hover:scale-110 hover:shadow-[0_0_10px_rgba(255,102,0,0.4)] transition-all duration-300 ease-out">
                 Coming Soon
               </span>
             </div>
-            <div className="w-16 h-1 bg-orange-500 rounded-full mb-6"></div>
             <p className="text-slate-700 leading-relaxed mb-6">
               We're building an AI-powered chatbot to make it super quick and easy to find what you need. Ask questions and get instant answers about players, teams, and stats.
             </p>
@@ -422,7 +450,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="py-20 bg-white relative overflow-hidden">
+      <section className="py-20 bg-gradient-to-b from-[#fffaf5] to-[#fffaf5] relative overflow-hidden shadow-[inset_0_-20px_40px_-20px_rgba(251,146,60,0.1)]">
         {/* Basketball Court Texture Pattern */}
         <div 
           className="absolute inset-0 opacity-[0.03]"
@@ -444,14 +472,18 @@ export default function LandingPage() {
           }}
         />
         
-        <div className="max-w-6xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 items-center gap-12 relative z-10">
+        <div className="max-w-6xl mx-auto px-8 md:px-16 grid grid-cols-1 md:grid-cols-2 items-center gap-12 relative z-10">
 
           {/* Left: Text Content */}
           <div>
-            <h3 className="text-2xl font-bold text-slate-900 mb-2">
-              Coaches Hub
-            </h3>
-            <div className="w-20 h-1 bg-orange-500 mb-3"></div>
+            <div className="flex items-center gap-3 mb-6">
+              <h3 ref={coachesHeadingRef} className="text-2xl font-bold text-slate-900 underline-animate">
+                Coaches Hub
+              </h3>
+              <span className="bg-orange-500 text-white text-xs font-semibold px-3 py-1 rounded-full hover:scale-110 hover:shadow-[0_0_10px_rgba(255,102,0,0.4)] transition-all duration-300 ease-out">
+                Coming Soon
+              </span>
+            </div>
             <p className="text-orange-600 font-medium text-sm mb-4">
               Scouting simplified with AI insights.
             </p>
