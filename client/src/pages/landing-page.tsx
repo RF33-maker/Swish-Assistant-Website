@@ -197,17 +197,17 @@ export default function LandingPage() {
       {/* Hero Section with Gradient Background */}
       <div className="bg-gradient-to-b from-[#fffaf5] to-white pt-8 md:pt-12 lg:pt-16 pb-24 md:pb-32 lg:pb-40">
         <img src={SwishLogo} alt="Swish Logo"
-          className="mx-auto w-48 h-48 md:w-56 md:h-56 lg:w-64 lg:h-64 drop-shadow-lg mb-8 md:mb-12 lg:mb-16"
+          className="mx-auto w-48 h-48 md:w-56 md:h-56 lg:w-64 lg:h-64 drop-shadow-lg mb-8 md:mb-12 lg:mb-16 animate-fade-in-up"
         />
         <main className="flex flex-col items-center justify-center px-6 text-center">
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-semibold text-slate-900 max-w-2xl leading-relaxed tracking-tight mb-12 md:mb-16 lg:mb-20">
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-semibold text-slate-900 max-w-2xl leading-relaxed tracking-tight mb-12 md:mb-16 lg:mb-20 animate-fade-in-up" style={{ animationDelay: '0.2s', opacity: 0, animationFillMode: 'forwards' }}>
             Our sport, your leagues, your stats <br />
             <span className="text-orange-500 font-bold drop-shadow-sm">Search below.</span>
           </h1>
 
           {/* Search Bar with Suggestions */}
           <div className="w-full max-w-2xl relative">
-          <div className="search-bar-animated-border transition-all duration-300 focus-within:scale-105 focus-within:shadow-[0_0_10px_rgba(255,102,0,0.4)]">
+          <div className="search-bar-animated-border transition-all duration-300 focus-within:scale-105 focus-within:shadow-[0_0_10px_rgba(255,102,0,0.4)] animate-gentle-pulse" style={{ animationDelay: '0.6s' }}>
             <form
               onSubmit={handleSubmit}
               className="flex items-center shadow-lg rounded-full overflow-hidden bg-white"
