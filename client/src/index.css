@@ -148,6 +148,28 @@
   animation: slideInLeft 0.6s ease-out forwards;
 }
 
+/* Animated Underline for Section Headings */
+.underline-animate {
+  position: relative;
+  display: inline-block;
+}
+
+.underline-animate::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -6px;
+  height: 3px;
+  background: linear-gradient(to right, #ff7b00, #ffa733);
+  width: 0%;
+  transition: width 0.4s ease;
+}
+
+.underline-animate:hover::after,
+.underline-animate.in-view::after {
+  width: 60%;
+}
+
 :root {
       --background: 0 0% 100%;
 --foreground: 20 14.3% 4.1%;
