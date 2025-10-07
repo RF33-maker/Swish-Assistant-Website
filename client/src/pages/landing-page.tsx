@@ -422,37 +422,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="py-16 bg-white">
-        <div className="max-w-6xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 items-center gap-12">
-
-          {/* Left: Visual */}
-          <div className="w-full flex justify-center">
-            <img
-              src={UL}
-              alt="Upload Example"
-              className="rounded-xl shadow-lg w-full max-w-md"
-            />
-          </div>
-
-          {/* Right: Text Content */}
-          <div>
-            <h3 className="text-2xl font-bold text-slate-900 mb-4">
-              Upload Your Game Files Instantly
-            </h3>
-            <p className="text-gray-600 mb-4">
-              Drag and drop your FIBA LiveStats PDFs and let Swish Assistant handle
-              the rest — extracting stats, linking players, and saving you hours.
-            </p>
-            <ul className="text-left text-gray-600 list-disc list-inside space-y-2">
-              <li>Auto-parses your PDFs into clean stat lines</li>
-              <li>Assigns data to your selected league</li>
-              <li>Triggers visual summaries and AI responses</li>
-            </ul>
-          </div>
-        </div>
-      </section>
-
-      <section className="py-16 bg-white">
+      <section className="py-20 bg-white">
         <div className="max-w-6xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 items-center gap-12">
 
           {/* Left: Text Content */}
