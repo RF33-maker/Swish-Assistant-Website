@@ -12,7 +12,7 @@ import Chatbot from "@/assets/Chatbotimage.png"
 import LeaguePage from "@/assets/League-page.png"
 import ChatbotExample from "@/assets/Chatbotexample.png"
 import { Button } from "@/components/ui/button"
-import { Search } from "lucide-react"
+import { Search, ChevronDown } from "lucide-react"
 
 function LeagueLogosCarousel() {
   const logos = [Ballpark, CMBC, NBLBE, BCB, SLB]
@@ -296,6 +296,34 @@ export default function LandingPage() {
                   <span className="text-xs text-orange-600 bg-orange-200/50 px-2 py-0.5 rounded-full whitespace-nowrap">Updated today</span>
                 </button>
               ))}
+        </div>
+
+        {/* Tagline */}
+        <p className="mt-12 text-slate-600 text-base md:text-lg font-medium max-w-2xl mx-auto animate-fade-in-up" style={{ animationDelay: '1.1s', opacity: 0, animationFillMode: 'forwards' }}>
+          Explore stats, track performance, and discover the next MVP.
+        </p>
+
+        {/* Mini League Logos Carousel */}
+        <div className="mt-8 w-full max-w-4xl mx-auto overflow-hidden animate-fade-in-up" style={{ animationDelay: '1.3s', opacity: 0, animationFillMode: 'forwards' }}>
+          <div className="flex gap-6 animate-infinite-scroll">
+            {[...([Ballpark, CMBC, NBLBE, BCB, SLB]), ...([Ballpark, CMBC, NBLBE, BCB, SLB])].map((img, i) => (
+              <div 
+                key={i} 
+                className="flex-shrink-0 flex items-center justify-center h-12 w-20"
+              >
+                <img
+                  src={img}
+                  alt={`League ${i + 1}`}
+                  className="h-10 w-auto object-contain opacity-60 hover:opacity-100 transition-opacity duration-300"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Scroll Indicator */}
+        <div className="mt-16 flex justify-center animate-fade-in-up" style={{ animationDelay: '1.5s', opacity: 0, animationFillMode: 'forwards' }}>
+          <ChevronDown className="h-8 w-8 text-orange-500 animate-bounce" />
         </div>
         </main>
       </div>
