@@ -524,20 +524,14 @@ export default function LandingPage() {
       </section>
 
       {/* Newsletter Signup Section */}
-      <section className="py-20 bg-gradient-to-b from-orange-50 to-white relative overflow-hidden flex items-center">
-        {/* Basketball Hoop Watermark */}
-        <div className="absolute inset-0 flex items-center justify-center opacity-[0.03]">
-          <svg 
-            viewBox="0 0 200 200" 
-            className="w-[500px] h-[500px]"
-          >
-            <circle cx="100" cy="100" r="40" fill="none" stroke="currentColor" strokeWidth="4" className="text-orange-500"/>
-            <circle cx="100" cy="100" r="30" fill="none" stroke="currentColor" strokeWidth="2" className="text-orange-500"/>
-            <rect x="80" y="140" width="40" height="3" fill="currentColor" className="text-orange-500"/>
-            <line x1="85" y1="143" x2="85" y2="160" stroke="currentColor" strokeWidth="2" className="text-orange-500"/>
-            <line x1="100" y1="143" x2="100" y2="160" stroke="currentColor" strokeWidth="2" className="text-orange-500"/>
-            <line x1="115" y1="143" x2="115" y2="160" stroke="currentColor" strokeWidth="2" className="text-orange-500"/>
-          </svg>
+      <section className="py-20 bg-gradient-to-br from-orange-50 to-orange-100 relative overflow-hidden flex items-center">
+        {/* Background Logo */}
+        <div className="absolute inset-0 flex items-center justify-center opacity-5">
+          <img 
+            src={SwishLogo} 
+            alt="Swish Logo Background" 
+            className="w-96 h-96 object-contain transform rotate-12"
+          />
         </div>
 
         <div className="max-w-4xl mx-auto px-6 text-center relative z-10">
