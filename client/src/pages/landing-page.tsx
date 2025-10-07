@@ -12,7 +12,7 @@ import Chatbot from "@/assets/Chatbotimage.png"
 import LeaguePage from "@/assets/League-page.png"
 import ChatbotExample from "@/assets/Chatbotexample.png"
 import { Button } from "@/components/ui/button"
-import { Search, ChevronDown, BarChart3, Zap, Clock, MessageSquare, Sparkles } from "lucide-react"
+import { Search, ChevronDown, BarChart3, Zap, Clock, MessageSquare, Sparkles, TrendingUp, Trophy, FileText } from "lucide-react"
 
 function LeagueLogosCarousel() {
   const logos = [Ballpark, CMBC, NBLBE, BCB, SLB]
@@ -422,21 +422,55 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="py-20 bg-white">
-        <div className="max-w-6xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 items-center gap-12">
+      <section className="py-20 bg-white relative overflow-hidden">
+        {/* Basketball Court Texture Pattern */}
+        <div 
+          className="absolute inset-0 opacity-[0.03]"
+          style={{
+            backgroundImage: `repeating-linear-gradient(
+              0deg,
+              transparent,
+              transparent 50px,
+              #fb923c 50px,
+              #fb923c 51px
+            ),
+            repeating-linear-gradient(
+              90deg,
+              transparent,
+              transparent 50px,
+              #fb923c 50px,
+              #fb923c 51px
+            )`
+          }}
+        />
+        
+        <div className="max-w-6xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 items-center gap-12 relative z-10">
 
           {/* Left: Text Content */}
           <div>
-            <h3 className="text-2xl font-bold text-slate-900 mb-4">
+            <h3 className="text-2xl font-bold text-slate-900 mb-2">
               Coaches Hub
             </h3>
-            <p className="text-gray-600 mb-4">
+            <div className="w-20 h-1 bg-orange-500 mb-3"></div>
+            <p className="text-orange-600 font-medium text-sm mb-4">
+              Scouting simplified with AI insights.
+            </p>
+            <p className="text-gray-600 mb-6">
               A dedicated space for coaches to access detailed insights to help prep for your next game. See team trends, discover top players, and build your scouting reports with ease.
             </p>
-            <ul className="text-left text-gray-600 list-disc list-inside space-y-2">
-              <li>Detailed insights on team performance and trends</li>
-              <li>Quickly identify top players and key matchups</li>
-              <li>Build comprehensive scouting reports effortlessly</li>
+            <ul className="text-left text-gray-600 space-y-3">
+              <li className="flex items-start gap-3">
+                <TrendingUp className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
+                <span><strong className="text-slate-900">Detailed insights</strong> on team performance and trends</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <Trophy className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
+                <span>Quickly identify <strong className="text-slate-900">top players</strong> and key matchups</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <FileText className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
+                <span><strong className="text-slate-900">Build comprehensive</strong> scouting reports effortlessly</span>
+              </li>
             </ul>
           </div>
 
@@ -444,8 +478,8 @@ export default function LandingPage() {
           <div className="w-full flex justify-center">
             <img
               src={ChatbotExample}
-              alt="Chatbot Example"
-              className="rounded-xl shadow-lg w-full max-w-md"
+              alt="Coaches Hub Example"
+              className="rounded-xl w-full max-w-md shadow-[0_10px_40px_-10px_rgba(0,0,0,0.3)]"
             />
           </div>
         </div>
