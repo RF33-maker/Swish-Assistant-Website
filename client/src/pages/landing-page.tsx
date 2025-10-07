@@ -12,7 +12,7 @@ import Chatbot from "@/assets/Chatbotimage.png"
 import LeaguePage from "@/assets/League-page.png"
 import ChatbotExample from "@/assets/Chatbotexample.png"
 import { Button } from "@/components/ui/button"
-import { Search, ChevronDown } from "lucide-react"
+import { Search, ChevronDown, BarChart3, Zap } from "lucide-react"
 
 function LeagueLogosCarousel() {
   const logos = [Ballpark, CMBC, NBLBE, BCB, SLB]
@@ -338,7 +338,7 @@ export default function LandingPage() {
 
        {/*What is Swish Assistant?*/}
 
-      <section className="py-20 bg-white">
+      <section className="py-20 bg-gradient-to-br from-white to-orange-50">
         <div className="max-w-6xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 items-center gap-12">
 
           {/* Left: Visual */}
@@ -346,22 +346,32 @@ export default function LandingPage() {
             <img
               src={LeaguePage}
               alt="League Page Example"
-              className="rounded-xl shadow-lg w-full max-w-md"
+              className="rounded-xl shadow-xl w-full max-w-md transition-all duration-300 hover:scale-105 hover:-translate-y-2"
             />
           </div>
 
           {/* Right: Text Content */}
           <div>
-            <h3 className="text-2xl font-bold text-slate-900 mb-4">
+            <h3 className="text-2xl font-bold text-slate-900 mb-3">
               Find your league and discover all the stats
             </h3>
-            <p className="text-gray-600 mb-4">
+            <div className="w-16 h-1 bg-orange-500 rounded-full mb-6"></div>
+            <p className="text-slate-700 leading-relaxed mb-6">
               Find the information you need quickly in just a few clicks. Access comprehensive stats and insights with even greater detail than ever before.
             </p>
-            <ul className="text-left text-gray-600 list-disc list-inside space-y-2">
-              <li>Browse all hosted leagues in one place</li>
-              <li>Quick and easy access to top performances and player stats</li>
-              <li>Discover detailed insights and compare players across teams</li>
+            <ul className="text-left text-slate-700 space-y-3">
+              <li className="flex items-start gap-3">
+                <BarChart3 className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
+                <span>Browse all hosted leagues in one place</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <Zap className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
+                <span>Quick and easy access to top performances and player stats</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <Search className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
+                <span>Discover detailed insights and compare players across teams</span>
+              </li>
             </ul>
           </div>
         </div>
