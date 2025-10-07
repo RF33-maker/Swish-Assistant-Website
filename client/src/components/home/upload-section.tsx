@@ -77,13 +77,13 @@ export default function UploadSection() {
   });
 
   return (
-    <section className="p-6 bg-gray-50 border-t border-b text-center">
-      <h2 className="text-xl font-semibold mb-2">Upload FIBA PDF</h2>
-      <p className="text-gray-600 mb-6">Upload below to get the chatbot going ⚡</p>
+    <section className="p-4 md:p-6 bg-gray-50 border-t border-b text-center">
+      <h2 className="text-lg md:text-xl font-semibold mb-2">Upload FIBA PDF</h2>
+      <p className="text-sm md:text-base text-gray-600 mb-4 md:mb-6">Upload below to get the chatbot going ⚡</p>
 
       <div
         {...getRootProps()}
-        className={`border-2 border-dashed rounded-xl p-8 transition-all cursor-pointer duration-200 ${
+        className={`border-2 border-dashed rounded-xl p-6 md:p-8 transition-all cursor-pointer duration-200 ${
           isDragActive
             ? "border-orange-400 bg-orange-100"
             : "border-gray-300 bg-white hover:bg-orange-50"
@@ -91,18 +91,18 @@ export default function UploadSection() {
       >
         <input {...getInputProps()} />
         {isDragActive ? (
-          <p className="text-orange-500 font-medium">Drop the PDF here...</p>
+          <p className="text-sm md:text-base text-orange-500 font-medium">Drop the PDF here...</p>
         ) : (
-          <p className="text-gray-500">
+          <p className="text-sm md:text-base text-gray-500">
             Drag & drop a PDF here, or <span className="text-swish-dark underline">click to browse</span>
           </p>
         )}
       </div>
 
-      {uploading && <p className="mt-4 text-sm text-gray-600">Uploading...</p>}
-      {message && <p className="mt-2 text-sm text-gray-700">{message}</p>}
+      {uploading && <p className="mt-3 md:mt-4 text-xs md:text-sm text-gray-600">Uploading...</p>}
+      {message && <p className="mt-2 text-xs md:text-sm text-gray-700">{message}</p>}
       {uploadedFile && (
-        <div className="mt-4 text-sm text-green-700 font-medium">
+        <div className="mt-3 md:mt-4 text-xs md:text-sm text-green-700 font-medium">
           Uploaded: {uploadedFile} ✅
         </div>
       )}

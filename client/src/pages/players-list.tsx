@@ -58,7 +58,7 @@ export default function PlayersListPage() {
           return;
         }
 
-        // Group stats by player and calculate averages
+        // Group stats by player_id instead of name to avoid mismatches (K Walker vs Kai Walker)
         const playerMap = new Map<string, {
           name: string;
           team_name: string;
@@ -67,12 +67,12 @@ export default function PlayersListPage() {
         }>();
 
         allStats.forEach((stat) => {
-          // Use name field or fallback to player_name
+          // Use player_id for grouping to properly identify players, fallback to record id if no player_id
+          const playerId = stat.player_id || stat.id;
           const playerName = stat.name || stat.player_name || 'Unknown Player';
-          const playerId = stat.id;
           
-          if (!playerMap.has(playerName)) {
-            playerMap.set(playerName, {
+          if (!playerMap.has(playerId)) {
+            playerMap.set(playerId, {
               name: playerName,
               team_name: stat.team_name || stat.team || 'Unknown Team',
               player_id: playerId,
@@ -80,7 +80,7 @@ export default function PlayersListPage() {
             });
           }
           
-          playerMap.get(playerName)!.stats.push(stat);
+          playerMap.get(playerId)!.stats.push(stat);
         });
 
         // Calculate averages for each player

@@ -22,7 +22,10 @@ export default function SocialLinksEditor({ leagueId }: { leagueId: string }) {
   const handleSave = async () => {
     const { error } = await supabase
       .from("leagues")
-      .update({ instagram_url, youtube_url })
+      .update({ 
+        instagram_embed_url: instagram, 
+        youtube_embed_url: youtube 
+      })
       .eq("id", leagueId);
 
     if (error) console.error(error.message);

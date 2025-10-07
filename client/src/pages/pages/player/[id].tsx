@@ -8,6 +8,7 @@ import { ArrowLeft, Calendar, Trophy, User, TrendingUp, Camera, Brain, Sparkles 
 import { useToast } from "@/hooks/use-toast";
 import { generatePlayerAnalysis, type PlayerAnalysisData } from "@/lib/ai-analysis";
 import SwishLogoImg from "@/assets/Swish Assistant Logo.png";
+import { TeamLogo } from "@/components/TeamLogo";
 
 interface PlayerStat {
   id: string;
@@ -56,7 +57,7 @@ export default function PlayerStatsPage() {
   console.log('🎯 ROUTE DEBUG - Player ID:', playerId);
   const [playerStats, setPlayerStats] = useState<PlayerStat[]>([]);
   const [seasonAverages, setSeasonAverages] = useState<SeasonAverages | null>(null);
-  const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string } | null>(null);
+  const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string; position?: string; number?: number; leagueId?: string } | null>(null);
   const [playerLeagues, setPlayerLeagues] = useState<{ id: string; name: string; slug: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -75,35 +76,65 @@ export default function PlayerStatsPage() {
     const fetchPlayerData = async () => {
       setLoading(true);
       try {
-        console.log('🔍 Step 1: Fetching player record by ID...');
+        console.log('🔍 Step 1: Fetching player record by player_id...');
         
-        // First get the player's name from the specific record ID
-        const { data: playerRecord, error: playerError } = await supabase
-          .from('player_stats')
-          .select('name, team')
+        // First check if playerId is a player_id or old record id
+        let actualPlayerId = playerId;
+        let playerInfo = null;
+
+        // Try to get player info from players table using playerId as player_id
+        const { data: playerFromPlayersTable, error: playersError } = await supabase
+          .from('players')
+          .select('*')
           .eq('id', playerId)
           .single();
 
-        console.log('📋 Step 1 Result - Player record:', playerRecord);
-        console.log('📋 Step 1 Error:', playerError);
+        if (playerFromPlayersTable && !playersError) {
+          // Found in players table - use this info
+          playerInfo = {
+            name: playerFromPlayersTable.name,
+            team: playerFromPlayersTable.team,
+            position: playerFromPlayersTable.position,
+            number: playerFromPlayersTable.number
+          };
+          actualPlayerId = playerId;
+          console.log('📋 Found player in players table:', playerInfo);
+        } else {
+          // Fallback: treat playerId as old record ID and get player_id from player_stats
+          console.log('🔍 Fallback: Looking up by old record ID...');
+          const { data: playerRecord, error: playerError } = await supabase
+            .from('player_stats')
+            .select('player_id, full_name, name, team, position, number')
+            .eq('id', playerId)
+            .single();
 
-        if (playerError || !playerRecord) {
-          console.error('❌ Could not find player with ID:', playerId, 'Error:', playerError);
-          toast({
-            title: "Player Not Found",
-            description: "Could not find player with the specified ID",
-            variant: "destructive",
-          });
-          setLoading(false);
-          return;
+          if (playerError || !playerRecord || !playerRecord.player_id) {
+            console.error('❌ Could not find player with ID:', playerId, 'Error:', playerError);
+            toast({
+              title: "Player Not Found",
+              description: "Could not find player with the specified ID",
+              variant: "destructive",
+            });
+            setLoading(false);
+            return;
+          }
+
+          actualPlayerId = playerRecord.player_id;
+          playerInfo = {
+            name: playerRecord.full_name || playerRecord.name || 'Unknown Player',
+            team: playerRecord.team,
+            position: playerRecord.position,
+            number: playerRecord.number
+          };
+          console.log('📋 Found player via record lookup:', playerInfo);
         }
 
-        console.log('🔍 Step 2: Getting all stats for player:', playerRecord.name);
+        console.log('🔍 Step 2: Getting all stats for player_id:', actualPlayerId);
         const { data: stats, error: statsError } = await supabase
           .from('player_stats')
-          .select('*')
-          .eq('name', playerRecord.name)
-          .order('game_date', { ascending: false });
+          .select('*, players:player_id(full_name)')
+          .eq('player_id', actualPlayerId)
+          .order('created_at', { ascending: false });
 
         console.log('📊 Step 2 Result - Found', stats?.length || 0, 'stat records');
         console.log('📊 Stats data sample:', stats?.[0]);
@@ -120,8 +151,22 @@ export default function PlayerStatsPage() {
           return;
         }
 
-        console.log('✅ Step 3: Setting player stats...');
+        console.log('✅ Step 3: Setting player stats and info...');
         setPlayerStats(stats || []);
+        
+        // If we have stats with joined players data, use that for player info
+        if (stats && stats.length > 0 && stats[0].players) {
+          console.log('📋 Using joined players data:', stats[0].players);
+          playerInfo = {
+            name: stats[0].players.full_name || stats[0].full_name || stats[0].name || `${stats[0].firstname || ''} ${stats[0].familyname || ''}`.trim() || 'Unknown Player',
+            team: stats[0].team_name || stats[0].team || 'Unknown Team',
+            position: stats[0].position,
+            number: stats[0].number,
+            leagueId: stats[0].league_id
+          };
+        }
+        
+        setPlayerInfo(playerInfo);
 
         // Step 4: Get unique leagues for this player
         if (stats && stats.length > 0) {
@@ -145,12 +190,19 @@ export default function PlayerStatsPage() {
               const userId = stats[0].user_id;
               console.log('🏆 Player user_id:', userId);
               
-              // Query leagues table using user_id to find the actual leagues
-              const { data: leaguesData, error: leaguesError } = await supabase
-                .from('leagues')
-                .select('name, slug, user_id')
-                .eq('user_id', userId)
-                .eq('is_public', true);
+              // Only query leagues if user_id is not null
+              let leaguesData = null;
+              let leaguesError = null;
+              
+              if (userId) {
+                const result = await supabase
+                  .from('leagues')
+                  .select('name, slug, user_id')
+                  .eq('user_id', userId)
+                  .eq('is_public', true);
+                leaguesData = result.data;
+                leaguesError = result.error;
+              }
               
               console.log('🏆 League query result:', { leaguesData, leaguesError });
               
@@ -195,23 +247,38 @@ export default function PlayerStatsPage() {
         // Calculate season averages if we have stats
         if (stats && stats.length > 0) {
           console.log('📈 Step 5: Calculating averages for', stats.length, 'games');
-          setPlayerInfo({
-            name: stats[0].name || stats[0].player_name || 'Unknown Player',
-            team: stats[0].team || stats[0].team_name || 'Unknown Team'
-          });
+          // This section is now redundant since we set playerInfo above with joined data
+          // but keep as extra fallback safety
+          if (!playerInfo || !playerInfo.name || playerInfo.name === 'Unknown Player') {
+            const fallbackName = stats[0].players?.full_name || 
+                                stats[0].full_name || 
+                                stats[0].name || 
+                                `${stats[0].firstname || ''} ${stats[0].familyname || ''}`.trim() || 
+                                'Unknown Player';
+            const fallbackTeam = stats[0].team_name || 
+                                stats[0].team || 
+                                'Unknown Team';
+            setPlayerInfo({
+              name: fallbackName,
+              team: fallbackTeam,
+              position: stats[0].position,
+              number: stats[0].number,
+              leagueId: stats[0].league_id
+            });
+          }
 
           const totals = stats.reduce((acc, game) => ({
-            points: acc.points + (game.points || 0),
-            rebounds: acc.rebounds + (game.rebounds_total || game.rebounds || 0),
-            assists: acc.assists + (game.assists || 0),
-            steals: acc.steals + (game.steals || 0),
-            blocks: acc.blocks + (game.blocks || 0),
-            field_goals_made: acc.field_goals_made + (game.field_goals_made || 0),
-            field_goals_attempted: acc.field_goals_attempted + (game.field_goals_attempted || 0),
-            three_pointers_made: acc.three_pointers_made + (game.three_pt_made || game.three_pointers_made || 0),
-            three_pointers_attempted: acc.three_pointers_attempted + (game.three_pt_attempted || game.three_pointers_attempted || 0),
-            free_throws_made: acc.free_throws_made + (game.free_throws_made || 0),
-            free_throws_attempted: acc.free_throws_attempted + (game.free_throws_attempted || 0),
+            points: acc.points + (game.spoints || game.points || 0),
+            rebounds: acc.rebounds + (game.sreboundstotal || game.rebounds_total || 0),
+            assists: acc.assists + (game.sassists || game.assists || 0),
+            steals: acc.steals + (game.ssteals || 0),
+            blocks: acc.blocks + (game.sblocks || 0),
+            field_goals_made: acc.field_goals_made + (game.sfieldgoalsmade || 0),
+            field_goals_attempted: acc.field_goals_attempted + (game.sfieldgoalsattempted || 0),
+            three_pointers_made: acc.three_pointers_made + (game.sthreepointersmade || 0),
+            three_pointers_attempted: acc.three_pointers_attempted + (game.sthreepointersattempted || 0),
+            free_throws_made: acc.free_throws_made + (game.sfreethrowsmade || 0),
+            free_throws_attempted: acc.free_throws_attempted + (game.sfreethrowsattempted || 0),
           }), {
             points: 0, rebounds: 0, assists: 0, steals: 0, blocks: 0,
             field_goals_made: 0, field_goals_attempted: 0,
@@ -235,11 +302,11 @@ export default function PlayerStatsPage() {
           setSeasonAverages(averages);
 
           // Generate AI analysis
-          if (playerRecord && averages) {
+          if (playerInfo && averages) {
             setAnalysisLoading(true);
             try {
               const analysisData: PlayerAnalysisData = {
-                name: playerRecord.name,
+                name: playerInfo.name,
                 games_played: averages.games_played,
                 avg_points: averages.avg_points,
                 avg_rebounds: averages.avg_rebounds,
@@ -408,13 +475,13 @@ export default function PlayerStatsPage() {
     <div className="min-h-screen bg-white">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
-        <div className="flex flex-col lg:flex-row items-start lg:items-center gap-4 mb-8">
-          <div className="flex items-center gap-4">
+        <div className="flex flex-col md:flex-row items-start md:items-center gap-3 md:gap-4 mb-6 md:mb-8">
+          <div className="w-full md:w-auto">
             <Button 
               variant="outline" 
               size="sm"
               onClick={() => setLocation('/')}
-              className="group flex items-center gap-2 border-orange-200 hover:bg-white hover:border-orange-300 transition-all duration-300 hover:shadow-md"
+              className="group flex items-center gap-2 border-orange-200 hover:bg-white hover:border-orange-300 transition-all duration-300 hover:shadow-md w-full md:w-auto"
             >
               <ArrowLeft className="h-4 w-4 group-hover:hidden transition-all duration-300" />
               <div className="hidden group-hover:block transition-all duration-300">
@@ -425,7 +492,7 @@ export default function PlayerStatsPage() {
           </div>
           
           {/* Search Bar in Header */}
-          <div className="flex-1 max-w-md lg:max-w-lg relative">
+          <div className="flex-1 w-full md:max-w-md lg:max-w-lg relative">
             <form
               onSubmit={handleSearchSubmit}
               className="flex items-center shadow-md rounded-full border border-orange-100 overflow-hidden bg-white"
@@ -435,11 +502,11 @@ export default function PlayerStatsPage() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search players or leagues..."
-                className="flex-1 px-4 py-2 text-sm text-orange-800 focus:outline-none bg-white"
+                className="flex-1 px-3 md:px-4 py-2 text-sm text-orange-800 focus:outline-none bg-white"
               />
               <button
                 type="submit"
-                className="bg-orange-400 text-white font-semibold px-4 py-2 hover:bg-orange-500 transition text-sm"
+                className="bg-orange-400 text-white font-semibold px-3 md:px-4 py-2 hover:bg-orange-500 transition text-sm"
               >
                 Search
               </button>
@@ -485,71 +552,75 @@ export default function PlayerStatsPage() {
 
         {/* Player Info Section */}
         {playerInfo && (
-          <div className="mb-8">
+          <div className="mb-6 md:mb-8">
             <Card className="border-orange-200 shadow-md animate-slide-in-up bg-white">
-              <CardContent className="pt-6">
+              <CardContent className="p-4 md:p-6">
                 <div className="flex items-center gap-4">
-                  {/* Profile Picture Section */}
-                  <div className="relative group">
-                    <div className="h-20 w-20 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center animate-float hover:animate-shake cursor-pointer shadow-md">
-                      <User className="h-10 w-10 text-white" />
-                      {/* Camera overlay for profile pic upload */}
-                      <div className="absolute inset-0 rounded-full bg-white bg-opacity-20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-                        <Camera className="h-6 w-6 text-orange-700" />
-                      </div>
-                    </div>
-                    <div className="absolute -bottom-1 -right-1 bg-orange-400 rounded-full p-1.5 shadow-md animate-pulse">
-                      <TrendingUp className="h-3 w-3 text-white" />
-                    </div>
-                  </div>
+                  {/* Team Logo */}
+                  {playerInfo.team && playerInfo.leagueId && (
+                    <TeamLogo 
+                      teamName={playerInfo.team} 
+                      leagueId={playerInfo.leagueId}
+                      size="xl"
+                      className="flex-shrink-0"
+                    />
+                  )}
                   
                   {/* Player Info */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-start gap-3 mb-2">
-                      <div className="flex-1 min-w-0">
-                        <h1 className="text-3xl font-bold text-orange-800 hover:text-orange-700 transition-colors duration-300 break-words">{playerInfo.name}</h1>
-                      </div>
-                      <TrendingUp className="h-6 w-6 text-orange-600 animate-bounce flex-shrink-0 mt-1" />
-                    </div>
-                    <p className="text-orange-700 flex items-center gap-2 hover:text-orange-600 transition-colors duration-300 text-lg mb-3">
-                      <Trophy className="h-5 w-5 hover:animate-bounce flex-shrink-0" />
+                    <h1 className="text-xl md:text-2xl font-bold text-orange-900 mb-1 break-words" data-testid="text-player-name">{playerInfo.name}</h1>
+                    <p className="text-orange-700 flex items-center gap-2 text-sm md:text-base mb-2" data-testid="text-player-team">
+                      <Trophy className="h-4 w-4 flex-shrink-0" />
                       <span className="break-words">{playerInfo.team}</span>
                     </p>
-                    <div className="flex flex-wrap items-center gap-4 text-sm text-orange-700 mb-3">
+                    <div className="flex flex-wrap items-center gap-3 text-xs md:text-sm text-orange-600">
                       <span className="flex items-center gap-1 whitespace-nowrap">
-                        <div className="h-2 w-2 bg-green-400 rounded-full animate-pulse"></div>
+                        <div className="h-2 w-2 bg-green-400 rounded-full"></div>
                         Active Player
                       </span>
-                      <span className="text-orange-600 font-semibold whitespace-nowrap">Performance Trending ↗</span>
-                    </div>
-                    
-                    {/* AI Analysis */}
-                    <div className="bg-orange-50 rounded-lg p-4 border border-orange-100">
-                      <div className="flex items-start gap-2">
-                        <div className="flex items-center gap-1 text-orange-700 text-sm font-medium mb-2">
-                          {analysisLoading ? (
-                            <Brain className="h-4 w-4 animate-pulse text-orange-600" />
-                          ) : (
-                            <Sparkles className="h-4 w-4 text-orange-600" />
-                          )}
-                          AI Player Analysis
-                        </div>
-                      </div>
-                      <p className="text-sm text-orange-800 leading-relaxed">
-                        {analysisLoading ? (
-                          <span className="flex items-center gap-2 text-orange-700">
-                            <span className="animate-pulse">Analyzing playing style...</span>
-                          </span>
-                        ) : (
-                          aiAnalysis || "Analysis will appear after stats are loaded."
-                        )}
-                      </p>
+                      {playerInfo.position && (
+                        <span className="whitespace-nowrap">• {playerInfo.position}</span>
+                      )}
+                      {playerInfo.number && (
+                        <span className="whitespace-nowrap">• #{playerInfo.number}</span>
+                      )}
                     </div>
                   </div>
                 </div>
               </CardContent>
             </Card>
           </div>
+        )}
+
+        {/* Player Bio - AI Generated */}
+        {(aiAnalysis || analysisLoading) && (
+          <Card className="mb-6 md:mb-8 border-orange-200 shadow-md animate-slide-in-up bg-gradient-to-br from-white to-orange-50">
+            <CardHeader className="bg-white text-orange-900 rounded-t-lg border-b border-orange-200">
+              <CardTitle className="flex items-center gap-2">
+                {analysisLoading ? (
+                  <Brain className="h-5 w-5 animate-pulse text-orange-600" />
+                ) : (
+                  <Sparkles className="h-5 w-5 text-orange-600 animate-float" />
+                )}
+                Player Bio
+              </CardTitle>
+              <CardDescription className="text-orange-700">
+                AI-powered analysis of playing style and strengths
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-4 md:p-6">
+              {analysisLoading ? (
+                <div className="flex items-center gap-3 text-orange-700">
+                  <Brain className="h-5 w-5 animate-pulse" />
+                  <span className="animate-pulse">Generating player bio...</span>
+                </div>
+              ) : (
+                <p className="text-sm md:text-base text-orange-800 leading-relaxed">
+                  {aiAnalysis || "Player bio will be generated based on performance statistics."}
+                </p>
+              )}
+            </CardContent>
+          </Card>
         )}
 
         {/* Player Leagues */}
@@ -610,16 +681,16 @@ export default function PlayerStatsPage() {
                 Season Averages ({seasonAverages.games_played} games)
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-6">
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
+            <CardContent className="p-4 md:pt-6">
+              <div className="grid [grid-template-columns:repeat(auto-fit,minmax(120px,1fr))] justify-center gap-3 sm:gap-4 lg:gap-6">
                 {/* Points */}
-                <div className="text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
-                  <div className="relative">
-                    <div className="text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
+                <div className="mx-auto max-w-[140px] w-full text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
+                  <div className="relative p-2 sm:p-3">
+                    <div className="text-lg font-semibold md:text-3xl lg:text-4xl md:font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
                       {seasonAverages.avg_points.toFixed(1)}
                     </div>
-                    <div className="text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">PPG</div>
-                    <div className="w-full bg-orange-50 h-2 rounded-full mt-3 overflow-hidden">
+                    <div className="text-xs md:text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">PPG</div>
+                    <div className="max-w-[120px] mx-auto bg-orange-50 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
                         style={{ width: `${Math.min((seasonAverages.avg_points / 30) * 100, 100)}%` }}
@@ -629,13 +700,13 @@ export default function PlayerStatsPage() {
                 </div>
 
                 {/* Rebounds */}
-                <div className="text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
-                  <div className="relative">
-                    <div className="text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-bounce">
+                <div className="mx-auto max-w-[140px] w-full text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
+                  <div className="relative p-2 sm:p-3">
+                    <div className="text-lg font-semibold md:text-3xl lg:text-4xl md:font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-bounce">
                       {seasonAverages.avg_rebounds.toFixed(1)}
                     </div>
-                    <div className="text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">RPG</div>
-                    <div className="w-full bg-orange-50 h-2 rounded-full mt-3 overflow-hidden">
+                    <div className="text-xs md:text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">RPG</div>
+                    <div className="max-w-[120px] mx-auto bg-orange-50 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
                         style={{ width: `${Math.min((seasonAverages.avg_rebounds / 15) * 100, 100)}%` }}
@@ -645,13 +716,13 @@ export default function PlayerStatsPage() {
                 </div>
 
                 {/* Assists */}
-                <div className="text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
-                  <div className="relative">
-                    <div className="text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
+                <div className="mx-auto max-w-[140px] w-full text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
+                  <div className="relative p-2 sm:p-3">
+                    <div className="text-lg font-semibold md:text-3xl lg:text-4xl md:font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
                       {seasonAverages.avg_assists.toFixed(1)}
                     </div>
-                    <div className="text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">APG</div>
-                    <div className="w-full bg-orange-50 h-2 rounded-full mt-3 overflow-hidden">
+                    <div className="text-xs md:text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">APG</div>
+                    <div className="max-w-[120px] mx-auto bg-orange-50 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
                         style={{ width: `${Math.min((seasonAverages.avg_assists / 12) * 100, 100)}%` }}
@@ -660,14 +731,46 @@ export default function PlayerStatsPage() {
                   </div>
                 </div>
 
+                {/* Steals */}
+                <div className="mx-auto max-w-[140px] w-full text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
+                  <div className="relative p-2 sm:p-3">
+                    <div className="text-lg font-semibold md:text-3xl lg:text-4xl md:font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
+                      {seasonAverages.avg_steals.toFixed(1)}
+                    </div>
+                    <div className="text-xs md:text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">SPG</div>
+                    <div className="max-w-[120px] mx-auto bg-orange-50 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
+                        style={{ width: `${Math.min((seasonAverages.avg_steals / 5) * 100, 100)}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Blocks */}
+                <div className="mx-auto max-w-[140px] w-full text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
+                  <div className="relative p-2 sm:p-3">
+                    <div className="text-lg font-semibold md:text-3xl lg:text-4xl md:font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
+                      {seasonAverages.avg_blocks.toFixed(1)}
+                    </div>
+                    <div className="text-xs md:text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">BPG</div>
+                    <div className="max-w-[120px] mx-auto bg-orange-50 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
+                        style={{ width: `${Math.min((seasonAverages.avg_blocks / 5) * 100, 100)}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+
                 {/* Field Goal % */}
-                <div className="text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
-                  <div className="relative">
-                    <div className="text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
+                <div className="mx-auto max-w-[140px] w-full text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
+                  <div className="relative p-2 sm:p-3">
+                    <div className="text-lg font-semibold md:text-3xl lg:text-4xl md:font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
                       {formatPercentage(seasonAverages.fg_percentage)}
                     </div>
-                    <div className="text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">FG%</div>
-                    <div className="w-full bg-orange-50 h-2 rounded-full mt-3 overflow-hidden">
+                    <div className="text-xs md:text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">FG%</div>
+                    <div className="max-w-[120px] mx-auto bg-orange-50 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
                         style={{ width: `${seasonAverages.fg_percentage}%` }}
@@ -677,13 +780,13 @@ export default function PlayerStatsPage() {
                 </div>
 
                 {/* 3-Point % */}
-                <div className="text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
-                  <div className="relative">
-                    <div className="text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
+                <div className="mx-auto max-w-[140px] w-full text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
+                  <div className="relative p-2 sm:p-3">
+                    <div className="text-lg font-semibold md:text-3xl lg:text-4xl md:font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
                       {formatPercentage(seasonAverages.three_point_percentage)}
                     </div>
-                    <div className="text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">3P%</div>
-                    <div className="w-full bg-orange-50 h-2 rounded-full mt-3 overflow-hidden">
+                    <div className="text-xs md:text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">3P%</div>
+                    <div className="max-w-[120px] mx-auto bg-orange-50 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
                         style={{ width: `${seasonAverages.three_point_percentage}%` }}
@@ -693,13 +796,13 @@ export default function PlayerStatsPage() {
                 </div>
 
                 {/* Free Throw % */}
-                <div className="text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
-                  <div className="relative">
-                    <div className="text-4xl font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
+                <div className="mx-auto max-w-[140px] w-full text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
+                  <div className="relative p-2 sm:p-3">
+                    <div className="text-lg font-semibold md:text-3xl lg:text-4xl md:font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
                       {formatPercentage(seasonAverages.ft_percentage)}
                     </div>
-                    <div className="text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">FT%</div>
-                    <div className="w-full bg-orange-50 h-2 rounded-full mt-3 overflow-hidden">
+                    <div className="text-xs md:text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">FT%</div>
+                    <div className="max-w-[120px] mx-auto bg-orange-50 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
                         style={{ width: `${seasonAverages.ft_percentage}%` }}
@@ -715,35 +818,35 @@ export default function PlayerStatsPage() {
         {/* Game Log */}
         <Card className="border-orange-200 shadow-md bg-white">
           <CardHeader className="bg-white border-b border-orange-200">
-            <CardTitle className="flex items-center gap-2 text-orange-800">
-              <Calendar className="h-5 w-5" />
+            <CardTitle className="flex items-center gap-2 text-orange-800 text-base md:text-lg">
+              <Calendar className="h-4 w-4 md:h-5 md:w-5" />
               Game Log
             </CardTitle>
-            <CardDescription className="text-orange-700">
+            <CardDescription className="text-orange-700 text-xs md:text-sm">
               Recent game performances
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
             {playerStats.length === 0 ? (
-              <div className="p-8 text-center text-orange-600">
+              <div className="p-6 md:p-8 text-center text-orange-600 text-sm md:text-base">
                 No game statistics found for this player.
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto -mx-4 md:mx-0 border-t border-orange-200">
                 <table className="w-full">
                   <thead className="bg-orange-50 border-b border-orange-200">
                     <tr className="text-left">
-                      <th className="px-4 py-3 text-orange-900 font-semibold">Date</th>
-                      <th className="px-4 py-3 text-orange-900 font-semibold">Opponent</th>
-                      <th className="px-4 py-3 text-orange-900 font-semibold">MIN</th>
-                      <th className="px-4 py-3 text-orange-900 font-semibold">PTS</th>
-                      <th className="px-4 py-3 text-orange-900 font-semibold">REB</th>
-                      <th className="px-4 py-3 text-orange-900 font-semibold">AST</th>
-                      <th className="px-4 py-3 text-orange-900 font-semibold">STL</th>
-                      <th className="px-4 py-3 text-orange-900 font-semibold">BLK</th>
-                      <th className="px-4 py-3 text-orange-900 font-semibold">FG</th>
-                      <th className="px-4 py-3 text-orange-900 font-semibold">3P</th>
-                      <th className="px-4 py-3 text-orange-900 font-semibold">FT</th>
+                      <th className="sticky left-0 bg-orange-50 px-2 md:px-4 py-2 md:py-3 text-orange-900 font-semibold text-xs md:text-sm z-10 min-w-[70px] md:min-w-[90px]">Date</th>
+                      <th className="px-2 md:px-4 py-2 md:py-3 text-orange-900 font-semibold text-xs md:text-sm min-w-[80px] md:min-w-[100px]">OPP</th>
+                      <th className="hidden md:table-cell px-4 py-3 text-orange-900 font-semibold text-sm">MIN</th>
+                      <th className="px-2 md:px-4 py-2 md:py-3 text-orange-900 font-semibold text-xs md:text-sm text-center min-w-[45px]">PTS</th>
+                      <th className="px-2 md:px-4 py-2 md:py-3 text-orange-900 font-semibold text-xs md:text-sm text-center min-w-[45px]">REB</th>
+                      <th className="px-2 md:px-4 py-2 md:py-3 text-orange-900 font-semibold text-xs md:text-sm text-center min-w-[45px]">AST</th>
+                      <th className="hidden md:table-cell px-4 py-3 text-orange-900 font-semibold text-sm text-center">STL</th>
+                      <th className="hidden md:table-cell px-4 py-3 text-orange-900 font-semibold text-sm text-center">BLK</th>
+                      <th className="hidden md:table-cell px-4 py-3 text-orange-900 font-semibold text-sm text-center">FG</th>
+                      <th className="hidden md:table-cell px-4 py-3 text-orange-900 font-semibold text-sm text-center">3P</th>
+                      <th className="hidden md:table-cell px-4 py-3 text-orange-900 font-semibold text-sm text-center">FT</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -753,32 +856,38 @@ export default function PlayerStatsPage() {
                         className={`border-b border-orange-100 hover:bg-orange-50 hover:scale-[1.02] transform transition-all duration-200 cursor-pointer group ${
                           index % 2 === 0 ? 'bg-white' : 'bg-orange-25'
                         }`}
+                        data-testid={`game-row-${game.id}`}
                       >
-                        <td className="px-4 py-3 text-orange-800">{formatDate(game.game_date)}</td>
-                        <td className="px-4 py-3">
-                          <Badge variant="outline" className="border-orange-300 text-orange-700">
-                            vs {game.opponent}
+                        <td className="sticky left-0 bg-inherit px-2 md:px-4 py-2 md:py-3 text-orange-800 text-[10px] md:text-sm z-10">{formatDate(game.game_date)}</td>
+                        <td className="px-2 md:px-4 py-2 md:py-3">
+                          <Badge variant="outline" className="border-orange-300 text-orange-700 text-[10px] md:text-sm whitespace-nowrap">
+                            {game.opponent ? `vs ${game.opponent}` : (game.is_home_player ? `vs ${game.away_team}` : `vs ${game.home_team}`)}
                           </Badge>
                         </td>
-                        <td className="px-4 py-3 text-orange-800">{game.minutes_played || 0}</td>
-                        <td className="px-4 py-3 font-semibold text-orange-900 group-hover:text-orange-700 group-hover:scale-110 transition-all duration-200">{game.points || 0}</td>
-                        <td className="px-4 py-3 text-orange-800">{game.rebounds_total || 0}</td>
-                        <td className="px-4 py-3 text-orange-800">{game.assists || 0}</td>
-                        <td className="px-4 py-3 text-orange-800">{game.steals || 0}</td>
-                        <td className="px-4 py-3 text-orange-800">{game.blocks || 0}</td>
-                        <td className="px-4 py-3 text-orange-800">
-                          {game.field_goals_made || 0}/{game.field_goals_attempted || 0}
+                        <td className="hidden md:table-cell px-4 py-3 text-orange-800 text-sm text-center">{game.sminutes || '0'}</td>
+                        <td className="px-2 md:px-4 py-2 md:py-3 font-semibold text-orange-900 group-hover:text-orange-700 transition-all duration-200 text-xs md:text-sm text-center">{game.spoints || game.points || 0}</td>
+                        <td className="px-2 md:px-4 py-2 md:py-3 text-orange-800 text-xs md:text-sm text-center font-medium">{game.sreboundstotal || game.rebounds_total || 0}</td>
+                        <td className="px-2 md:px-4 py-2 md:py-3 text-orange-800 text-xs md:text-sm text-center font-medium">{game.sassists || game.assists || 0}</td>
+                        <td className="hidden md:table-cell px-4 py-3 text-orange-800 text-sm text-center">{game.ssteals || 0}</td>
+                        <td className="hidden md:table-cell px-4 py-3 text-orange-800 text-sm text-center">{game.sblocks || 0}</td>
+                        <td className="hidden md:table-cell px-4 py-3 text-orange-800 text-sm text-center">
+                          {game.sfieldgoalsmade || 0}/{game.sfieldgoalsattempted || 0}
                         </td>
-                        <td className="px-4 py-3 text-orange-800">
-                          {game.three_pt_made || 0}/{game.three_pt_attempted || 0}
+                        <td className="hidden md:table-cell px-4 py-3 text-orange-800 text-sm text-center">
+                          {game.sthreepointersmade || 0}/{game.sthreepointersattempted || 0}
                         </td>
-                        <td className="px-4 py-3 text-orange-800">
-                          {game.free_throws_made || 0}/{game.free_throws_attempted || 0}
+                        <td className="hidden md:table-cell px-4 py-3 text-orange-800 text-sm text-center">
+                          {game.sfreethrowsmade || 0}/{game.sfreethrowsattempted || 0}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+                
+                {/* Scroll hint for mobile */}
+                <div className="md:hidden bg-orange-50 text-orange-700 text-center py-2 text-xs border-t border-orange-200">
+                  ← Swipe to see all stats →
+                </div>
               </div>
             )}
           </CardContent>

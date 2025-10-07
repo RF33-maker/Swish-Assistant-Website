@@ -1,0 +1,165 @@
+Absolutely — here’s a **mobile-friendly addendum** you can paste under your Agent brief. It tells the Agent exactly how the premium editor should adapt on phones/tablets (without losing the A4 feel).
+
+---
+
+# Mobile-First Requirements (Add to Build Brief)
+
+## Responsive Layout (breakpoints)
+
+* **sm (<640px)** = phone
+
+  * **Single column.** Show only the A4 canvas.
+  * A **top app bar** (title + back) and a **bottom action bar** (Add Block, AI, Export).
+  * **Assistant opens as a bottom sheet** (90% height) with “Insert into report” button.
+  * Templates/Blocks open as **full-screen sheets**.
+* **md (640–1024px)** = small tablets
+
+  * **2-pane:** Left = Blocks/Templates (collapsible), Right = Canvas.
+  * **Inspector/Assistant** appears as a right **drawer** that slides over the canvas when opened.
+* **lg (≥1024px)** = desktop
+
+  * **3-pane** (Blocks | Canvas | Inspector/Assistant), as in the screenshot.
+
+Tailwind: `sm`, `md`, `lg` breakpoints; prefer `grid-cols-1 md:grid-cols-[280px_1fr] lg:grid-cols-[280px_minmax(740px,1fr)_320px]`.
+
+---
+
+## Mobile A4 Canvas Behavior
+
+* Keep true **A4 aspect (1:1.414)**, but **scale to width** on mobile with pinch-to-zoom.
+* Center the page with a subtle shadow; allow **horizontal panning** if zoomed.
+* For multi-page docs, use **infinite vertical scroll** with **soft page-break guides** between pages.
+
+**CSS (example):**
+
+```css
+.a4-page {
+  aspect-ratio: 1 / 1.414;   /* A4 ratio */
+  width: min(100%, 820px);   /* desktop width */
+  background: #fff; box-shadow: 0 6px 24px rgba(0,0,0,.08);
+  margin-inline: auto; border-radius: 12px;
+}
+@media (max-width: 640px) {
+  .a4-viewport { overflow: hidden; touch-action: pan-y; }
+  .a4-zoom { transform-origin: top center; } /* scale via JS */
+}
+.page-break { break-after: page; height: 24px; background:
+  linear-gradient(to right, transparent 0, rgba(0,0,0,.06) 50%, transparent 100%); }
+```
+
+**JS scaling hint:**
+
+* Use `ResizeObserver` on container; set `scale = containerWidth / 820` (your A4 design width) and apply to `.a4-zoom`.
+
+---
+
+## Mobile Editing UX
+
+* **Floating Bubble Menu** above selection (Bold, Italic, H2, Bullet, Callout).
+* **Slash menu** appears as a **bottom sheet** (`/player card`, `/four factors`, etc.).
+* **Drag handles** become **“Move Up/Down” actions** in a block’s kebab menu on phones (dragging large blocks on touch is clumsy).
+* **Tap targets** ≥ 44×44 px; minimum 12–16 px text.
+* **Keyboard safe areas** (iOS): use `env(safe-area-inset-bottom)`; keep input bars above the keyboard.
+
+Bottom action bar (phones):
+
+* Left: **Add Block** (opens Blocks sheet)
+* Middle: **AI** (opens Assistant sheet)
+* Right: **Export** (opens Export sheet)
+* Show **Saved/Saving…** as tiny status under the title in the top app bar.
+
+---
+
+## Assistant (mobile)
+
+* Default to **visible** via a **bottom sheet** with:
+
+  * Prompt field + quick chips (e.g., “Summarize opponent defense”).
+  * Response preview with **Insert as:** AI Summary / Stat Table / Tendencies.
+  * Insert at **cursor** or **replace selected block**.
+* Keep the sheet stateful so users can **edit the prompt and retry** without leaving the doc.
+
+---
+
+## Templates (mobile)
+
+* **Full-screen gallery** grid; big, tappable cards with thumbnails.
+* Template **Preview** opens as a swipeable page viewer.
+* “Use Template” → close sheet → prefill canvas → scroll to first editable block.
+
+---
+
+## Inspector / Block Settings (mobile)
+
+* Opens as a **right drawer** (tablet) or **bottom sheet** (phone).
+* Dynamic fields per block (e.g., Four Factors: data source, precision, **Freeze values** toggle; Player Card: player search).
+* Include a sticky **Apply** button.
+
+---
+
+## Performance & Reliability
+
+* Debounced **autosave** (600–800ms) + offline queue; use IndexedDB or localStorage fallback for edits made offline.
+* **Skeleton loaders** for tables/charts; keep chart redraws under 300ms.
+* Avoid heavy shadows/filters on low-end phones; prefer `will-change: transform` with 150–200ms transitions.
+
+---
+
+## Export on Mobile
+
+* Export dialog in a sheet: Theme (Classic/Modern/Dark), Include cover page, Page numbers, Watermark.
+* Server still renders **true A4 PDF** via Playwright; on mobile, auto-open the file viewer/download.
+
+---
+
+## QA / Acceptance (mobile)
+
+* [ ] iPhone 13/14/15 and Pixel 6/7 pass: no horizontal scroll at 100% zoom, crisp text at 1.25–1.5× zoom.
+* [ ] Bottom bars don’t get covered by the keyboard or home indicator.
+* [ ] Insert from Assistant places content at cursor reliably.
+* [ ] Block movement usable without drag (Move Up/Down works).
+* [ ] Multi-page documents scroll smoothly; page-break guides visible.
+* [ ] PDF export matches A4 layout used on desktop.
+
+---
+
+## Small code helpers (Agent can implement)
+
+**Tailwind layout skeleton**
+
+```tsx
+<div className="grid min-h-screen gap-3
+  grid-cols-1 md:grid-cols-[280px_1fr] lg:grid-cols-[280px_minmax(740px,1fr)_320px]">
+  {/* Left: Blocks/Templates (hidden on phone) */}
+  <aside className="hidden md:block p-3">…</aside>
+
+  {/* Center: Canvas */}
+  <main className="p-3">
+    <div className="a4-viewport">
+      <div id="a4Zoom" className="a4-zoom">
+        <article className="a4-page">{/* TipTap EditorContent here */}</article>
+      </div>
+    </div>
+  </main>
+
+  {/* Right: Inspector/Assistant (drawer on md, panel on lg) */}
+  <aside className="hidden lg:block p-3">…</aside>
+
+  {/* Phone: bottom action bar */}
+  <div className="fixed bottom-0 left-0 right-0 sm:hidden
+                  bg-white/95 backdrop-blur border-t p-2 flex justify-between">
+    <button>+ Block</button><button>AI</button><button>Export</button>
+  </div>
+</div>
+```
+
+**Prevent bounce & keep toolbar above keyboard (iOS)**
+
+```css
+html, body { height: 100%; overscroll-behavior-y: none; }
+.bottom-bar { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+```
+
+---
+
+Drop this under your current brief. It gives the Agent clear, testable instructions to deliver a **great mobile experience** without compromising the A4 report builder vibe.

@@ -26,6 +26,39 @@
   animation: scroll 30s linear infinite;
 }
 
+/* Infinite Scroll for League Logos */
+@keyframes infinite-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-infinite-scroll {
+  animation: infinite-scroll 20s linear infinite;
+}
+
+/* Moving Orange Border Animation for Search Bar */
+.search-bar-animated-border {
+  position: relative;
+  border-radius: 9999px;
+  padding: 2px;
+  background: linear-gradient(90deg, #f97316, #fb923c, #fdba74, #fbbf24, #fb923c, #f97316);
+  background-size: 300% 100%;
+  animation: gradient-slide 4s linear infinite;
+}
+
+@keyframes gradient-slide {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 300% 50%;
+  }
+}
+
 /* Custom animations for micro-interactions */
 @keyframes float {
   0%, 100% { transform: translateY(0px); }
@@ -54,6 +87,38 @@
   }
 }
 
+/* Page Load Animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes gentlePulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 .animate-float {
   animation: float 3s ease-in-out infinite;
 }
@@ -68,6 +133,41 @@
 
 .animate-slide-in-up {
   animation: slideInUp 0.6s ease-out forwards;
+}
+
+/* Subtle page load animations */
+.animate-fade-in-up {
+  animation: fadeInUp 0.8s ease-out forwards;
+}
+
+.animate-gentle-pulse {
+  animation: gentlePulse 1s ease-in-out;
+}
+
+.animate-slide-in-left {
+  animation: slideInLeft 0.6s ease-out forwards;
+}
+
+/* Animated Underline for Section Headings */
+.underline-animate {
+  position: relative;
+  display: inline-block;
+}
+
+.underline-animate::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -6px;
+  height: 3px;
+  background: linear-gradient(to right, #ff7b00, #ffa733);
+  width: 0%;
+  transition: width 0.4s ease;
+}
+
+.underline-animate:hover::after,
+.underline-animate.in-view::after {
+  width: 60%;
 }
 
 :root {
@@ -125,4 +225,55 @@
     @apply antialiased bg-background text-foreground;
   }
 
+}
+
+/* Mobile A4 Editor Styles */
+.a4-page {
+  aspect-ratio: 1 / 1.414;
+  width: min(100%, 820px);
+  background: #fff;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
+  margin-inline: auto;
+  border-radius: 12px;
+}
+
+@media (max-width: 640px) {
+  .a4-viewport {
+    overflow: hidden;
+    touch-action: pan-y;
+  }
+  
+  .a4-zoom {
+    transform-origin: top center;
+  }
+}
+
+.bottom-bar {
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+
+.ProseMirror {
+  outline: none;
+  padding: 1rem;
+  min-height: 600px;
+}
+
+.ProseMirror h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 1.5rem 0 1rem 0;
+  color: #1e293b;
+}
+
+.ProseMirror h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 1.25rem 0 0.75rem 0;
+  color: #334155;
+}
+
+.ProseMirror p {
+  margin: 0.75rem 0;
+  line-height: 1.7;
+  color: #374151;
 }

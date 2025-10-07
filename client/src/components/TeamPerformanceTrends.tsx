@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TrendingUp, TrendingDown, Minus, BarChart3, Activity } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 interface GamePerformance {
   date: string;
@@ -17,6 +18,7 @@ interface TeamTrend {
   trend: 'up' | 'down' | 'stable';
   trendPercent: number;
   recentForm: number[]; // Last 5 games points
+  logoUrl?: string;
 }
 
 interface TeamPerformanceTrendsProps {
@@ -29,13 +31,15 @@ export default function TeamPerformanceTrends({ playerStats, leagueId }: TeamPer
   const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
   const [animationPhase, setAnimationPhase] = useState(0);
   const [isVisible, setIsVisible] = useState(false);
+  const [teamLogos, setTeamLogos] = useState<Record<string, string>>({});
 
   useEffect(() => {
     calculateTeamTrends();
+    loadTeamLogos();
     // Start animation sequence
     const timer = setTimeout(() => setIsVisible(true), 100);
     return () => clearTimeout(timer);
-  }, [playerStats]);
+  }, [playerStats, leagueId]);
 
   useEffect(() => {
     if (isVisible && teamTrends.length > 0) {
@@ -130,6 +134,44 @@ export default function TeamPerformanceTrends({ playerStats, leagueId }: TeamPer
     setTeamTrends(trends);
   };
 
+  const loadTeamLogos = async () => {
+    if (!leagueId || !playerStats || playerStats.length === 0) {
+      return;
+    }
+
+    const uniqueTeams = Array.from(new Set(playerStats.map(stat => stat.team).filter(Boolean)));
+    const logoMap: Record<string, string> = {};
+
+    // Try multiple file extensions for each team
+    const extensions = ['png', 'jpg', 'jpeg', 'webp'];
+
+    for (const teamName of uniqueTeams) {
+      let foundLogo = false;
+      
+      for (const ext of extensions) {
+        try {
+          const fileName = `${leagueId}_${teamName.replace(/\s+/g, '_')}.${ext}`;
+          
+          const { data } = supabase.storage
+            .from('team-logos')
+            .getPublicUrl(fileName);
+            
+          // Check if file exists by trying to fetch it
+          const response = await fetch(data.publicUrl, { method: 'HEAD' });
+          if (response.ok) {
+            logoMap[teamName] = data.publicUrl;
+            foundLogo = true;
+            break;
+          }
+        } catch (error) {
+          // Continue to next extension
+        }
+      }
+    }
+
+    setTeamLogos(logoMap);
+  };
+
   const getTrendIcon = (trend: 'up' | 'down' | 'stable') => {
     switch (trend) {
       case 'up': return <TrendingUp className="w-4 h-4 text-green-500" />;
@@ -198,7 +240,7 @@ export default function TeamPerformanceTrends({ playerStats, leagueId }: TeamPer
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-1 xl:grid-cols-2">
         {teamTrends.map((teamTrend, index) => (
           <AnimatePresence key={teamTrend.team}>
             <motion.div
@@ -213,7 +255,7 @@ export default function TeamPerformanceTrends({ playerStats, leagueId }: TeamPer
                 ease: "easeOut",
                 delay: index * 0.1
               }}
-              className={`border rounded-lg p-4 cursor-pointer transition-all duration-300 hover:shadow-md ${
+              className={`border rounded-lg p-4 cursor-pointer transition-all duration-300 hover:shadow-md relative overflow-hidden ${
                 selectedTeam === teamTrend.team 
                   ? 'border-orange-300 bg-orange-50 shadow-md' 
                   : 'border-gray-200 hover:border-orange-200 hover:bg-orange-25'
@@ -222,7 +264,17 @@ export default function TeamPerformanceTrends({ playerStats, leagueId }: TeamPer
                 selectedTeam === teamTrend.team ? null : teamTrend.team
               )}
             >
-              <div className="flex items-start justify-between mb-3">
+              {/* Team Logo Background */}
+              {teamLogos[teamTrend.team] && (
+                <div className="absolute top-2 right-2 w-24 h-24 opacity-20 pointer-events-none z-0">
+                  <img 
+                    src={teamLogos[teamTrend.team]} 
+                    alt={`${teamTrend.team} logo`}
+                    className="w-full h-full object-contain filter grayscale hover:grayscale-0 transition-all duration-500"
+                  />
+                </div>
+              )}
+              <div className="flex items-start justify-between mb-3 relative z-10">
                 <div>
                   <h4 className="font-medium text-slate-800 mb-1">{teamTrend.team}</h4>
                   <div className="flex items-center gap-2">
@@ -240,7 +292,7 @@ export default function TeamPerformanceTrends({ playerStats, leagueId }: TeamPer
                 </div>
               </div>
 
-              <div className="mb-3">
+              <div className="mb-3 relative z-10">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs text-slate-500">Recent Form</span>
                   <span className="text-xs text-slate-400">{teamTrend.games.length} games</span>

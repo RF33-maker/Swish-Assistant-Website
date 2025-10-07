@@ -2,10 +2,9 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, Mail, Phone, Calendar } from "lucide-react";
+import { ArrowLeft, Mail, Calendar } from "lucide-react";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
 
 export default function ContactSalesPage() {
@@ -13,9 +12,7 @@ export default function ContactSalesPage() {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
-    organization: "",
-    message: "",
-    numberOfTeams: ""
+    message: ""
   });
   const [submitted, setSubmitted] = useState(false);
 
@@ -23,7 +20,6 @@ export default function ContactSalesPage() {
     e.preventDefault();
     
     try {
-      // Here you would send the form data to your backend
       const response = await fetch('/api/contact-sales', {
         method: 'POST',
         headers: {
@@ -43,24 +39,25 @@ export default function ContactSalesPage() {
   if (submitted) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-50 to-white flex items-center justify-center py-12">
-        <Card className="bg-white shadow-xl border-2 border-green-200 max-w-md">
-          <CardContent className="p-8 text-center">
-            <div className="text-green-500 text-6xl mb-4">✓</div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Thank You!</h2>
-            <p className="text-gray-600 mb-6">
-              We've received your inquiry and will contact you within 24 hours to discuss your league's needs.
-            </p>
-            <Button onClick={() => setLocation('/')} className="bg-orange-500 hover:bg-orange-600">
-              Return Home
-            </Button>
-          </CardContent>
-        </Card>
+        <div className="bg-white shadow-2xl rounded-2xl border-2 border-green-200 max-w-md p-8 text-center">
+          <div className="text-green-500 text-6xl mb-4">✓</div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Thank You!</h2>
+          <p className="text-gray-600 mb-6">
+            We've received your message and will get back to you within 24 hours.
+          </p>
+          <Button 
+            onClick={() => setLocation('/')} 
+            className="bg-gradient-to-r from-orange-500 to-amber-400 hover:from-orange-600 hover:to-amber-500 text-white font-semibold shadow-md hover:shadow-lg transition-all"
+          >
+            Return Home
+          </Button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-white py-12">
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-white py-16">
       <div className="max-w-2xl mx-auto px-6">
         
         {/* Header */}
@@ -75,112 +72,98 @@ export default function ContactSalesPage() {
             className="text-gray-600 hover:text-gray-800 mb-4"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Plans
+            Back to Home
           </Button>
         </div>
 
-        <Card className="bg-white shadow-xl border-2 border-orange-200">
-          <CardHeader className="text-center bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-t-lg">
-            <CardTitle className="text-2xl">Contact Our Sales Team</CardTitle>
-            <CardDescription className="text-orange-100">
-              Let's discuss how Swish Assistant can transform your entire league
-            </CardDescription>
-          </CardHeader>
+        <div className="bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow border border-orange-100">
+          <div className="text-center bg-gradient-to-r from-orange-500 to-amber-400 text-white rounded-t-xl py-6 px-8">
+            <h1 className="text-2xl font-bold mb-2">Contact Our Support Team</h1>
+            <p className="text-orange-50">
+              Let's see how Swish Assistant can help you
+            </p>
+          </div>
           
-          <CardContent className="p-8">
+          <div className="p-8">
             
             {/* Contact Options */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-              <div className="text-center p-4 bg-gray-50 rounded-lg">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+              <div className="text-center p-4 bg-slate-50 rounded-xl border border-orange-100">
                 <Mail className="h-8 w-8 text-orange-500 mx-auto mb-2" />
                 <p className="font-semibold text-gray-900">Email</p>
-                <p className="text-sm text-gray-600">sales@swishassistant.com</p>
+                <a href="mailto:automatedathleteswa@gmail.com" className="text-sm text-orange-600 hover:text-orange-700 break-all">
+                  automatedathleteswa@gmail.com
+                </a>
               </div>
-              <div className="text-center p-4 bg-gray-50 rounded-lg">
-                <Phone className="h-8 w-8 text-orange-500 mx-auto mb-2" />
-                <p className="font-semibold text-gray-900">Phone</p>
-                <p className="text-sm text-gray-600">+44 20 1234 5678</p>
-              </div>
-              <div className="text-center p-4 bg-gray-50 rounded-lg">
+              <div className="text-center p-4 bg-slate-50 rounded-xl border border-orange-100">
                 <Calendar className="h-8 w-8 text-orange-500 mx-auto mb-2" />
                 <p className="font-semibold text-gray-900">Demo</p>
-                <p className="text-sm text-gray-600">Book a live demo</p>
+                <a href="#demo" className="text-sm text-orange-600 hover:text-orange-700">
+                  Book a Live Demo
+                </a>
               </div>
             </div>
 
             {/* Contact Form */}
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Full Name *
-                  </label>
-                  <Input
-                    required
-                    value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    placeholder="Your name"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email Address *
-                  </label>
-                  <Input
-                    type="email"
-                    required
-                    value={formData.email}
-                    onChange={(e) => setFormData({...formData, email: e.target.value})}
-                    placeholder="your@email.com"
-                  />
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Organization *
-                  </label>
-                  <Input
-                    required
-                    value={formData.organization}
-                    onChange={(e) => setFormData({...formData, organization: e.target.value})}
-                    placeholder="League or organization name"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Number of Teams
-                  </label>
-                  <Input
-                    value={formData.numberOfTeams}
-                    onChange={(e) => setFormData({...formData, numberOfTeams: e.target.value})}
-                    placeholder="How many teams?"
-                  />
-                </div>
+            <form onSubmit={handleSubmit} className="space-y-6 max-w-lg mx-auto">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Full Name *
+                </label>
+                <Input
+                  required
+                  value={formData.name}
+                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  placeholder="Your name"
+                  className="rounded-xl bg-slate-50 border-orange-200 focus:ring-2 focus:ring-orange-500 text-slate-900"
+                />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Message
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Email Address *
+                </label>
+                <Input
+                  type="email"
+                  required
+                  value={formData.email}
+                  onChange={(e) => setFormData({...formData, email: e.target.value})}
+                  placeholder="your@email.com"
+                  className="rounded-xl bg-slate-50 border-orange-200 focus:ring-2 focus:ring-orange-500 text-slate-900"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Message *
                 </label>
                 <Textarea
+                  required
                   value={formData.message}
                   onChange={(e) => setFormData({...formData, message: e.target.value})}
-                  placeholder="Tell us about your league's needs..."
-                  rows={4}
+                  placeholder="Tell us how we can help you..."
+                  rows={5}
+                  className="rounded-xl bg-slate-50 border-orange-200 focus:ring-2 focus:ring-orange-500 text-slate-900"
                 />
               </div>
 
               <Button 
                 type="submit"
-                className="w-full bg-orange-500 hover:bg-orange-600 text-white py-4 text-lg font-semibold"
+                className="w-full bg-gradient-to-r from-orange-500 to-amber-400 hover:from-orange-600 hover:to-amber-500 text-white py-3 text-lg font-semibold rounded-xl shadow-md hover:shadow-lg transition-all"
               >
                 Send Message
               </Button>
+
+              <p className="text-sm text-gray-500 mt-3 text-center">
+                By submitting this form, you consent to being contacted by Swish Assistant regarding your inquiry. Your information will be handled in accordance with our{' '}
+                <a href="/privacy" className="text-orange-600 hover:text-orange-700 underline">
+                  Privacy Policy
+                </a>
+                .
+              </p>
             </form>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     </div>
   );

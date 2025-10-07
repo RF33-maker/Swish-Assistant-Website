@@ -3,7 +3,7 @@ import { useParams, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
-import { Trophy, TrendingUp, Users, Target, Shield, Zap } from "lucide-react";
+import { Trophy, TrendingUp, Users, Target, Shield, Zap, ArrowLeft } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface LeaderboardStats {
@@ -61,10 +61,10 @@ export default function LeagueLeadersPage() {
           return;
         }
 
-        // Fetch all player stats for the league
+        // Fetch all player stats for the league with full names from players table
         const { data: allPlayerStats, error: statsError } = await supabase
           .from("player_stats")
-          .select("*")
+          .select("*, players:player_id(full_name)")
           .eq("league_id", leagueData.league_id);
 
         if (statsError) {
@@ -97,11 +97,18 @@ export default function LeagueLeadersPage() {
         allPlayerStats.forEach(stat => {
           // Use the correct team field from the data structure
           const teamName = stat.team || stat.team_name || 'Unknown Team';
-          const playerKey = `${stat.name}_${teamName}`; // Use name + team as key
+          // Use full_name from players table, fallback to existing name, then combine firstname/familyname
+          const playerName = stat.full_name || 
+                            stat.players?.full_name || 
+                            stat.name || 
+                            `${stat.firstname || ''} ${stat.familyname || ''}`.trim() || 
+                            'Unknown Player';
+          // Use player_id for grouping to avoid name mismatches, fallback to record id
+          const playerKey = stat.player_id || stat.id;
           if (!playerStatsMap.has(playerKey)) {
             playerStatsMap.set(playerKey, {
               player_id: stat.player_id || stat.id, // Use player_id if available, otherwise use id
-              name: stat.name,
+              name: playerName,
               team_name: teamName,
               total_points: 0,
               total_rebounds: 0,
@@ -119,17 +126,17 @@ export default function LeagueLeadersPage() {
           }
 
           const playerData = playerStatsMap.get(playerKey);
-          playerData.total_points += stat.points || 0;
-          playerData.total_rebounds += stat.rebounds_total || 0;
-          playerData.total_assists += stat.assists || 0;
-          playerData.total_steals += stat.steals || 0;
-          playerData.total_blocks += stat.blocks || 0;
-          playerData.total_field_goals_made += stat.field_goals_made || 0;
-          playerData.total_field_goals_attempted += stat.field_goals_attempted || 0;
-          playerData.total_three_points_made += stat.three_points_made || 0;
-          playerData.total_three_points_attempted += stat.three_points_attempted || 0;
-          playerData.total_free_throws_made += stat.free_throws_made || 0;
-          playerData.total_free_throws_attempted += stat.free_throws_attempted || 0;
+          playerData.total_points += stat.spoints || 0;
+          playerData.total_rebounds += stat.sreboundstotal || 0;
+          playerData.total_assists += stat.sassists || 0;
+          playerData.total_steals += stat.ssteals || 0;
+          playerData.total_blocks += stat.sblocks || 0;
+          playerData.total_field_goals_made += stat.sfieldgoalsmade || 0;
+          playerData.total_field_goals_attempted += stat.sfieldgoalsattempted || 0;
+          playerData.total_three_points_made += stat.sthreepointersmade || 0;
+          playerData.total_three_points_attempted += stat.sthreepointersattempted || 0;
+          playerData.total_free_throws_made += stat.sfreethrowsmade || 0;
+          playerData.total_free_throws_attempted += stat.sfreethrowsattempted || 0;
           playerData.games_played += 1;
         });
 
@@ -261,23 +268,23 @@ export default function LeagueLeadersPage() {
     iconColor: string;
   }) => (
     <Card className="bg-white border-orange-200 shadow-[0_4px_20px_rgba(255,115,0,0.1)] hover:shadow-[0_8px_30px_rgba(255,115,0,0.15)] transition-all duration-300">
-      <CardHeader className="pb-3">
-        <CardTitle className="flex items-center gap-2 text-lg font-semibold text-orange-800">
-          <Icon className={`h-5 w-5 ${iconColor}`} />
+      <CardHeader className="pb-2 md:pb-3 p-4 md:p-6">
+        <CardTitle className="flex items-center gap-2 text-base md:text-lg font-semibold text-orange-800">
+          <Icon className={`h-5 w-5 md:h-6 md:w-6 ${iconColor}`} />
           {title}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-2">
+      <CardContent className="space-y-2 p-4 md:p-6 pt-0">
         {players.length > 0 ? (
           players.map((player, index) => (
             <div 
               key={`${player.player_id}-${index}`} 
-              className="flex items-center justify-between p-2 rounded-lg bg-orange-50 hover:bg-orange-100 transition-colors duration-200 cursor-pointer"
+              className="flex items-center justify-between py-2 md:py-3 px-2 md:px-3 rounded-lg bg-orange-50 hover:bg-orange-100 transition-colors duration-200 cursor-pointer"
               onClick={() => player.player_id && navigate(`/player/${player.player_id}`)}
             >
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 md:gap-3">
                 <div className={`
-                  w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white
+                  w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center text-xs md:text-sm font-bold text-white
                   ${index === 0 ? 'bg-gradient-to-br from-yellow-400 to-yellow-600' : 
                     index === 1 ? 'bg-gradient-to-br from-gray-400 to-gray-600' :
                     index === 2 ? 'bg-gradient-to-br from-orange-400 to-orange-600' :
@@ -286,12 +293,12 @@ export default function LeagueLeadersPage() {
                   {index + 1}
                 </div>
                 <div>
-                  <p className="font-medium text-orange-900">{player.name}</p>
-                  <p className="text-sm text-orange-700">{player.team_name || 'Unknown Team'}</p>
+                  <p className="text-sm md:text-base font-medium text-orange-900">{player.name}</p>
+                  <p className="text-xs md:text-sm text-orange-700">{player.team_name || 'Unknown Team'}</p>
                 </div>
               </div>
               <div className="text-right">
-                <p className="font-bold text-orange-800">{player.display_value}</p>
+                <p className="text-sm md:text-base font-bold text-orange-800">{player.display_value}</p>
                 <p className="text-xs text-orange-600">{player.games_played} games</p>
               </div>
             </div>
@@ -338,22 +345,32 @@ export default function LeagueLeadersPage() {
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Header />
 
-      <main className="flex-grow p-6 max-w-7xl mx-auto space-y-8">
+      <main className="flex-grow p-4 md:p-6 max-w-7xl mx-auto space-y-6 md:space-y-8">
+        {/* Back Button */}
+        <button
+          onClick={() => navigate(`/league/${slug}`)}
+          className="flex items-center gap-2 text-orange-600 hover:text-orange-700 font-medium transition-colors"
+          data-testid="button-back-to-league"
+        >
+          <ArrowLeft className="h-5 w-5" />
+          <span>Back to League</span>
+        </button>
+
         {/* Header Section */}
-        <div className="text-center space-y-4">
-          <div className="flex items-center justify-center gap-3">
-            <Trophy className="h-8 w-8 text-orange-500" />
-            <h1 className="text-4xl font-bold text-orange-600">League Leaders</h1>
+        <div className="text-center space-y-3 md:space-y-4">
+          <div className="flex flex-col md:flex-row items-center justify-center gap-2 md:gap-3">
+            <Trophy className="h-6 w-6 md:h-8 md:w-8 text-orange-500" />
+            <h1 className="text-2xl md:text-4xl font-bold text-orange-600">League Leaders</h1>
           </div>
-          <h2 className="text-2xl font-semibold text-orange-800">{league?.name}</h2>
+          <h2 className="text-xl md:text-2xl font-semibold text-orange-800">{league?.name}</h2>
           {league?.description && (
-            <p className="text-orange-700 max-w-2xl mx-auto">{league.description}</p>
+            <p className="text-sm md:text-base text-orange-700 max-w-2xl mx-auto">{league.description}</p>
           )}
         </div>
 
         {/* Leaderboards Grid */}
         {leaderboardStats && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
             {/* Scoring */}
             <StatLeaderboard
               title="Scoring Leaders"
@@ -429,8 +446,8 @@ export default function LeagueLeadersPage() {
         )}
 
         {/* Note about minimum requirements */}
-        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 text-center">
-          <p className="text-sm text-orange-700">
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 md:p-4 text-center">
+          <p className="text-xs md:text-sm text-orange-700">
             * Shooting percentages require minimum attempts: Field Goals (2+), Three Pointers (1+), Free Throws (1+)
           </p>
         </div>

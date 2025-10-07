@@ -21,14 +21,21 @@ interface LeagueChatbotProps {
   onResponseReceived?: (response: string) => void;
 }
 
-export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived }: LeagueChatbotProps) {
+interface LeagueChatbotProps {
+  leagueId: string;
+  leagueName: string;
+  onResponseReceived?: (response: string) => void;
+  isPanelMode?: boolean; // New prop to indicate it's in a side panel
+}
+
+export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived, isPanelMode = false }: LeagueChatbotProps) {
   const { user, isLoading: authLoading } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(isPanelMode);
   const [isOverlayMode, setIsOverlayMode] = useState(false);
-  const [isActivelyUsed, setIsActivelyUsed] = useState(false);
+  const [isActivelyUsed, setIsActivelyUsed] = useState(isPanelMode);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [, setLocation] = useLocation(); // Hook for routing
 
@@ -83,7 +90,7 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
 
   const handleSendMessage = async (messageText?: string) => {
     const message = messageText || inputMessage;
-    if (!message.trim() || !user || isLoading) return;
+    if (!message.trim() || !user || isLoading || !leagueId) return;
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -205,6 +212,11 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
         players: playersData.length, 
         games: gamesData.length 
       });
+      
+      // Debug: Log available player names
+      if (playersData.length > 0) {
+        console.log('Available players:', playersData.map(p => p.name).join(', '));
+      }
 
       // Enhanced Pattern-based intelligent responses
 
@@ -215,20 +227,39 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
           const playerName = playerNameMatch[1].trim();
           console.log('Looking for player:', playerName);
 
-          const player = playersData.find(p => 
-            p.name.toLowerCase().includes(playerName) ||
-            playerName.includes(p.name.toLowerCase().split(' ')[0]) ||
-            p.name.toLowerCase().split(' ')[0] === playerName.split(' ')[0]
-          );
+          const player = playersData.find(p => {
+            const playerNameLower = playerName.toLowerCase();
+            const pNameLower = p.name.toLowerCase();
+            
+            // Direct match
+            if (pNameLower.includes(playerNameLower) || playerNameLower.includes(pNameLower)) {
+              return true;
+            }
+            
+            // Split and check individual words
+            const searchWords = playerNameLower.split(' ');
+            const playerWords = pNameLower.split(' ');
+            
+            // Check if any search word matches any player word
+            return searchWords.some((searchWord: string) => 
+              playerWords.some((playerWord: string) => 
+                playerWord.includes(searchWord) || searchWord.includes(playerWord)
+              )
+            );
+          });
 
           if (player) {
             return {
               content: `${player.name} plays for ${player.team}.`,
-              suggestions: [`How is ${player.name} doing?`, `Who are ${player.team}'s top players?`],
+              suggestions: [`How is ${player.name} performing?`, `Who are ${player.team}'s top players?`],
               navigationButtons: [{ label: `${player.name}'s Profile`, id: player.id, type: 'player' }]
             };
           } else {
-            return `I couldn't find a player named "${playerName}" in ${leagueName}. Try asking about one of these players:\n\n${playersData.slice(0, 5).map(p => `• ${p.name} (${p.team})`).join('\n') || 'No player data available'}`;
+            const availablePlayers = playersData.slice(0, 5).map(p => `• ${p.name} (${p.team})`).join('\n');
+            return {
+              content: `I couldn't find a player named "${playerName}" in ${leagueName}. Here are some available players:\n\n${availablePlayers || 'No player data available'}`,
+              suggestions: playersData.slice(0, 3).map(p => `How is ${p.name} performing?`)
+            };
           }
         }
       }
@@ -240,17 +271,38 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
           const searchName = nameMatch[1].trim();
           console.log('Searching for player performance:', searchName);
 
-          const player = playersData.find(p => 
-            p.name.toLowerCase().includes(searchName) ||
-            searchName.includes(p.name.toLowerCase().split(' ')[0]) ||
-            p.name.toLowerCase().split(' ')[0] === searchName.split(' ')[0]
-          );
+          const player = playersData.find(p => {
+            const searchNameLower = searchName.toLowerCase();
+            const pNameLower = p.name.toLowerCase();
+            
+            // Direct match
+            if (pNameLower.includes(searchNameLower) || searchNameLower.includes(pNameLower)) {
+              return true;
+            }
+            
+            // Split and check individual words
+            const searchWords = searchNameLower.split(' ');
+            const playerWords = pNameLower.split(' ');
+            
+            // Check if any search word matches any player word
+            return searchWords.some((searchWord: string) => 
+              playerWords.some((playerWord: string) => 
+                playerWord.includes(searchWord) || searchWord.includes(playerWord)
+              )
+            );
+          });
 
           if (player) {
             return {
               content: `${player.name} is having a solid season with ${player.team}!\n\nSeason totals: ${player.points} pts, ${player.rebounds_total} reb, ${player.assists} ast, ${player.steals} stl, ${player.blocks} blk\n\n${player.points >= 30 ? '🔥 Strong scorer who can put up big numbers!' : player.rebounds_total >= 15 ? '💪 Solid presence in the paint with good rebounding!' : player.assists >= 10 ? '🎯 Great court vision and playmaking ability!' : '⚡ Well-rounded contributor on both ends!'}`,
               suggestions: [`Who is ${player.name}'s team?`, `Who does ${player.team} play next?`],
               navigationButtons: [{ label: `${player.name}'s Profile`, id: player.id, type: 'player' }]
+            };
+          } else {
+            const availablePlayers = playersData.slice(0, 5).map(p => `• ${p.name} (${p.team})`).join('\n');
+            return {
+              content: `I couldn't find a player named "${searchName}" in ${leagueName}. Here are some available players:\n\n${availablePlayers || 'No player data available'}`,
+              suggestions: playersData.slice(0, 3).map(p => `How is ${p.name} performing?`)
             };
           }
         }
@@ -322,8 +374,8 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
           ).join('\n');
 
           return {
-            content: `Most Efficient Players in ${leagueName}:\n(Based on total statistical production)\n\n${efficiencyList}\n\n${topPlayer.name} leads with ${topPlayer.efficiency} total production.\n\n💡 Want more details? Try asking:\n• "How is ${topPlayer.name} doing?"\n• "Who leads in rebounds?"`,
-            suggestions: [`How is ${topPlayer.name} doing?`, `Who leads in rebounds?`],
+            content: `Most Efficient Players in ${leagueName}:\n(Based on total statistical production)\n\n${efficiencyList}\n\n${topPlayer.name} leads with ${topPlayer.efficiency} total production.\n\n💡 Want more details? Try asking:\n• "How is ${topPlayer.name} performing?"\n• "Who leads in rebounds?"`,
+            suggestions: [`How is ${topPlayer.name} performing?`, `Who leads in rebounds?`],
             navigationButtons: [{ label: `${topPlayer.name}'s Profile`, id: topPlayer.id, type: 'player' }]
           };
         }
@@ -334,8 +386,8 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
         const topRebounder = playersData.length > 0 ? playersData.find(p => p.rebounds_total === Math.max(...playersData.map(player => player.rebounds_total))) : null;
         if (topRebounder) {
           return {
-            content: `Rebounding Leaders in ${leagueName}:\n\n${playersData.sort((a, b) => b.rebounds_total - a.rebounds_total).slice(0, 5).map((p, i) => `${i + 1}. ${p.name} (${p.team}) - ${p.rebounds_total} rebounds`).join('\n')}\n\n💡 Want player details? Try asking:\n• "How is ${topRebounder.name} doing?"\n• "Who are the most efficient players?"`,
-            suggestions: [`How is ${topRebounder.name} doing?`, `Who are the most efficient players?`],
+            content: `Rebounding Leaders in ${leagueName}:\n\n${playersData.sort((a, b) => b.rebounds_total - a.rebounds_total).slice(0, 5).map((p, i) => `${i + 1}. ${p.name} (${p.team}) - ${p.rebounds_total} rebounds`).join('\n')}\n\n💡 Want player details? Try asking:\n• "How is ${topRebounder.name} performing?"\n• "Who are the most efficient players?"`,
+            suggestions: [`How is ${topRebounder.name} performing?`, `Who are the most efficient players?`],
             navigationButtons: [{ label: `${topRebounder.name}'s Profile`, id: topRebounder.id, type: 'player' }]
           };
         }
@@ -345,8 +397,8 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
         const topScorer = playersData.length > 0 ? playersData[0] : null;
         if (topScorer) {
           return {
-            content: `Scoring Leaders in ${leagueName}:\n\n${playersData.slice(0, 5).map((p, i) => `${i + 1}. ${p.name} (${p.team}) - ${p.points} points`).join('\n')}\n\n💡 Want more details? Try asking:\n• "How is ${topScorer.name} doing?"\n• "Who is the best team?"`,
-            suggestions: [`How is ${topScorer.name} doing?`, `Who is the best team?`],
+            content: `Scoring Leaders in ${leagueName}:\n\n${playersData.slice(0, 5).map((p, i) => `${i + 1}. ${p.name} (${p.team}) - ${p.points} points`).join('\n')}\n\n💡 Want more details? Try asking:\n• "How is ${topScorer.name} performing?"\n• "Who is the best team?"`,
+            suggestions: [`How is ${topScorer.name} performing?`, `Who is the best team?`],
             navigationButtons: [{ label: `${topScorer.name}'s Profile`, id: topScorer.id, type: 'player' }]
           };
         }
@@ -357,8 +409,8 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
         const topPlayer = playersData[0];
 
         return {
-          content: `Here's what's happening in ${leagueName}:\n\n🏀 League Leaders:\n• Top Scorer: ${topPlayer.name} (${topPlayer.team}) - ${topPlayer.points} points\n• Games Played: ${gamesData.length || 'Several'} recent games\n• Teams Competing: ${new Set(playersData.map(p => p.team)).size} active teams\n\n💡 Try asking me:\n• "How is [Player Name] doing?"\n• "Who is the best team?"\n• "Who are the most efficient players?"`,
-          suggestions: [`How is ${topPlayer.name} doing?`, `Who is the best team?`, `Who are the most efficient players?`],
+          content: `Here's what's happening in ${leagueName}:\n\n🏀 League Leaders:\n• Top Scorer: ${topPlayer.name} (${topPlayer.team}) - ${topPlayer.points} points\n• Games Played: ${gamesData.length || 'Several'} recent games\n• Teams Competing: ${new Set(playersData.map(p => p.team)).size} active teams\n\n💡 Try asking me:\n• "How is [Player Name] performing?"\n• "Who is the best team?"\n• "Who are the most efficient players?"`,
+          suggestions: [`How is ${topPlayer.name} performing?`, `Who is the best team?`, `Who are the most efficient players?`],
           navigationButtons: [{ label: `${topPlayer.name}'s Profile`, id: topPlayer.id, type: 'player' }]
         };
       }
@@ -407,6 +459,21 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
     );
   }
 
+  if (!leagueId) {
+    return (
+      <div className="bg-white rounded-xl shadow-sm border border-orange-200 p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <MessageCircle className="w-5 h-5 text-orange-500" />
+          <h3 className="font-semibold text-slate-800">League Assistant</h3>
+          <span className="px-2 py-1 bg-gradient-to-r from-orange-500 to-yellow-500 text-white text-xs rounded-full font-medium">
+            PREMIUM
+          </span>
+        </div>
+        <div className="text-center text-slate-500">Please select a league to use the assistant.</div>
+      </div>
+    );
+  }
+
   if (!user) {
     return (
       <div className="bg-white rounded-xl shadow-sm border border-orange-200 p-4">
@@ -447,24 +514,180 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
     );
   }
 
+  // In panel mode, always show expanded and don't allow overlay
+  if (isPanelMode) {
+    return (
+      <div className="bg-white rounded-xl border border-orange-200 overflow-hidden h-full flex flex-col shadow-lg">
+        {/* Header - Always visible in panel mode */}
+        <div className="bg-gradient-to-r from-orange-100 to-yellow-100 p-4 border-b border-orange-200">
+          <div className="flex items-center gap-3">
+            <MessageCircle className="w-5 h-5 text-orange-600" />
+            <h3 className="text-lg font-semibold text-slate-800">League Assistant</h3>
+            <span className="px-3 py-1 bg-gradient-to-r from-orange-500 to-yellow-500 text-white text-sm rounded-full font-medium">
+              ACTIVE
+            </span>
+          </div>
+        </div>
+
+        {/* Chat Content - Flexible height */}
+        <div className="flex-1 flex flex-col p-4 min-h-0">
+          {messages.length === 0 ? (
+            <div className="space-y-4 flex-1">
+              <p className="text-base text-slate-600 mb-4">
+                Ask me about {leagueName} stats!
+              </p>
+              <div className="space-y-3">
+                {suggestedQuestions.slice(0, 3).map((question, index) => (
+                  <div key={index} className="flex gap-2 items-start p-3 bg-orange-50 rounded-lg border border-orange-200">
+                    <div className="flex-1 text-sm text-slate-700">
+                      {question}
+                    </div>
+                    <Button
+                      onClick={() => handleSendMessage(question)}
+                      disabled={isLoading}
+                      size="sm"
+                      className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 flex-shrink-0"
+                    >
+                      <Send className="w-3 h-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="flex-1 space-y-4 overflow-y-auto mb-4 min-h-0">
+              {messages.map((message) => (
+                <div
+                  key={message.id}
+                  className={`flex gap-2 ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  {message.type === 'bot' && (
+                    <Bot className="w-5 h-5 text-orange-500 mt-1 flex-shrink-0" />
+                  )}
+                  <div className="flex flex-col max-w-[85%]">
+                    <div
+                      className={`p-3 rounded-lg text-sm leading-relaxed ${
+                        message.type === 'user'
+                          ? 'bg-orange-500 text-white'
+                          : 'bg-white text-slate-800 shadow-sm border border-slate-200'
+                      }`}
+                    >
+                      <div className="whitespace-pre-line">{message.content}</div>
+                    </div>
+                    
+                    {/* Suggestion buttons - compact for panel */}
+                    {message.type === 'bot' && message.suggestions && message.suggestions.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {message.suggestions.slice(0, 2).map((suggestion, index) => (
+                          <button
+                            key={index}
+                            onClick={() => handleSendMessage(suggestion)}
+                            className="px-2 py-1 text-xs bg-orange-50 hover:bg-orange-100 text-orange-700 rounded transition-colors border border-orange-200"
+                            disabled={isLoading}
+                          >
+                            {suggestion}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Navigation buttons - Player profile links */}
+                    {message.type === 'bot' && message.navigationButtons && message.navigationButtons.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {message.navigationButtons.map((button, index) => (
+                          <button
+                            key={index}
+                            onClick={() => {
+                              if (button.type === 'player') {
+                                setLocation(`/player/${button.id}`);
+                              } else if (button.type === 'team') {
+                                setLocation(`/team/${button.id}`);
+                              }
+                            }}
+                            className="px-2 py-1 text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 rounded transition-colors border border-blue-200 flex items-center gap-1"
+                          >
+                            <User className="w-3 h-3" />
+                            {button.label}
+                            <ExternalLink className="w-2 h-2" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {message.type === 'user' && (
+                    <User className="w-5 h-5 text-slate-400 mt-1 flex-shrink-0" />
+                  )}
+                </div>
+              ))}
+              {isLoading && (
+                <div className="flex gap-2 justify-start">
+                  <Bot className="w-5 h-5 text-orange-500 mt-1 flex-shrink-0" />
+                  <div className="bg-white text-slate-800 p-3 rounded-lg text-sm shadow-sm border border-slate-200">
+                    <div className="flex items-center gap-1">
+                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div>
+                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+          )}
+
+          {/* Input Area - Always at bottom */}
+          <div className="flex gap-2 pt-2 border-t border-gray-200">
+            <Input
+              value={inputMessage}
+              onChange={(e) => setInputMessage(e.target.value)}
+              placeholder="Ask about stats, games, players..."
+              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
+              className="text-sm py-2 px-3 border-2 border-orange-300 ring-2 ring-orange-100"
+              disabled={isLoading}
+            />
+            <Button
+              onClick={() => handleSendMessage()}
+              disabled={!inputMessage.trim() || isLoading}
+              size="sm"
+              className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-2"
+            >
+              <Send className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
-      {/* Overlay backdrop */}
+      {/* Overlay backdrop - render to document body */}
       {isOverlayMode && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-40"
+          className="fixed inset-0 bg-black bg-opacity-50 z-[9998]"
           onClick={() => setIsOverlayMode(false)}
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}
         />
       )}
 
       {/* Main chatbot container */}
       <div className={`bg-white rounded-xl border border-orange-200 overflow-hidden transition-all duration-500 ease-in-out ${
         isOverlayMode 
-          ? 'fixed top-4 left-4 right-4 bottom-4 z-50 max-w-5xl mx-auto shadow-2xl' 
+          ? 'fixed z-[9999] shadow-2xl' 
           : isActivelyUsed || isExpanded
             ? 'relative shadow-lg transform scale-[1.02]'
             : 'relative shadow-sm'
-      }`}>
+      }`}
+      style={isOverlayMode ? {
+        position: 'fixed',
+        top: '1rem',
+        left: '1rem',
+        right: '1rem',
+        bottom: '1rem',
+        maxWidth: '80rem',
+        margin: '0 auto',
+        zIndex: 9999
+      } : {}}>
         <div 
           className={`flex items-center justify-between p-5 cursor-pointer transition-all duration-300 ${
             isActivelyUsed || isExpanded
@@ -472,7 +695,7 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
               : 'bg-gradient-to-r from-orange-50 to-yellow-50'
           }`}
           onClick={() => {
-            if (!isOverlayMode) {
+            if (!isOverlayMode && !isPanelMode) {
               setIsExpanded(!isExpanded);
             }
           }}
@@ -491,17 +714,19 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
           <div className="flex items-center gap-2">
             {(isExpanded || isOverlayMode) && (
               <>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsOverlayMode(!isOverlayMode);
-                  }}
-                  className="text-sm text-slate-800 hover:bg-orange-100"
-                >
-                  {isOverlayMode ? 'Minimize' : 'Expand'}
-                </Button>
+                {!isPanelMode && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsOverlayMode(!isOverlayMode);
+                    }}
+                    className="text-sm text-slate-800 hover:bg-orange-100"
+                  >
+                    {isOverlayMode ? 'Minimize' : 'Expand'}
+                  </Button>
+                )}
                 {!isOverlayMode && (
                   <Button 
                     variant="ghost" 
@@ -528,69 +753,32 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
           isOverlayMode ? 'h-full flex flex-col' : 'animate-in slide-in-from-top-2'
         }`}>
           {messages.length === 0 ? (
-            <div className="space-y-4">
+            <div className="space-y-4 mb-6">
               <p className="text-base text-slate-600 mb-4">
                 Ask me about {leagueName} stats! Here are some suggestions:
               </p>
 
               <div className="space-y-3">
                 {suggestedQuestions.map((question, index) => (
-                  <button
-                    key={index}
-                    onClick={async () => {
-                      if (!user || isLoading) return;
-
-                      const userMessage: Message = {
-                        id: Date.now().toString(),
-                        type: 'user',
-                        content: question,
-                        timestamp: new Date()
-                      };
-
-                      setMessages(prev => [...prev, userMessage]);
-                      setIsLoading(true);
-
-                      try {
-                        const response = await queryLeagueData(question, leagueId);
-
-                        const botMessage: Message = {
-                          id: (Date.now() + 1).toString(),
-                          type: 'bot',
-                          content: typeof response === 'string' ? response : response.content,
-                          timestamp: new Date(),
-                          suggestions: typeof response === 'string' ? undefined : response.suggestions,
-                          navigationButtons: typeof response === 'string' ? undefined : response.navigationButtons
-                        };
-
-                        setMessages(prev => [...prev, botMessage]);
-
-                        // Trigger response received callback for scouting reports
-                        if (onResponseReceived) {
-                          onResponseReceived(typeof response === 'string' ? response : response.content);
-                        }
-                      } catch (error) {
-                        const errorMessage: Message = {
-                          id: (Date.now() + 1).toString(),
-                          type: 'bot',
-                          content: "I'm sorry, I encountered an error while processing your request. Please try again.",
-                          timestamp: new Date()
-                        };
-                        setMessages(prev => [...prev, errorMessage]);
-                      }
-
-                      setIsLoading(false);
-                    }}
-                    className="w-full text-left p-4 text-base bg-orange-50 hover:bg-orange-100 rounded-lg text-slate-700 transition-colors border border-orange-200 hover:border-orange-300"
-                    disabled={isLoading}
-                  >
-                    {question}
-                  </button>
+                  <div key={index} className="flex gap-2 items-center p-4 bg-orange-50 rounded-lg border border-orange-200">
+                    <div className="flex-1 text-base text-slate-700">
+                      {question}
+                    </div>
+                    <Button
+                      onClick={() => handleSendMessage(question)}
+                      disabled={isLoading}
+                      size="sm"
+                      className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 flex-shrink-0"
+                    >
+                      <Send className="w-4 h-4" />
+                    </Button>
+                  </div>
                 ))}
               </div>
             </div>
           ) : (
-            <div className={`space-y-8 overflow-y-auto mb-8 p-6 bg-slate-50 rounded-lg ${
-              isOverlayMode ? 'flex-1 max-h-none' : 'max-h-[600px]'
+            <div className={`space-y-8 overflow-y-auto mb-6 p-6 bg-slate-50 rounded-lg ${
+              isOverlayMode ? 'flex-1 max-h-none' : 'max-h-[400px]'
             }`}>
               {messages.map((message) => (
                 <div
@@ -620,20 +808,20 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
                       <div className="mt-3 space-y-2">
                         {/* Navigation Buttons */}
                         {message.navigationButtons && message.navigationButtons.length > 0 && (
-                          <div className="flex flex-wrap gap-2">
+                          <div className="flex flex-wrap gap-2 mt-3">
                             {message.navigationButtons.map((button, index) => (
                               <Button
                                 key={index}
                                 onClick={() => {
                                   if (button.type === 'player') {
-                                    setLocation(`/player/${button.id}`); // Navigate to player profile
+                                    setLocation(`/player/${button.id}`);
                                   } else if (button.type === 'team') {
-                                    setLocation(`/team/${button.id}`); // Navigate to team profile
+                                    setLocation(`/team/${button.id}`);
                                   }
                                 }}
                                 variant="outline"
                                 size="sm"
-                                className="bg-orange-100 hover:bg-orange-200 text-orange-700 border border-orange-200 hover:border-orange-300"
+                                className="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 hover:border-blue-300"
                               >
                                 <ExternalLink className="w-3 h-3 mr-1" />
                                 {button.label}
@@ -644,54 +832,37 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
 
                         {/* Suggestion Buttons */}
                         {message.suggestions && message.suggestions.length > 0 && (
-                          <div className="flex flex-wrap gap-2">
+                          <div className="flex flex-wrap gap-2 mt-3">
                             {message.suggestions.map((suggestion, index) => (
                               <button
                                 key={index}
-                                onClick={async () => {
-                                  if (!user || isLoading) return;
-
-                                  const userMessage: Message = {
-                                    id: Date.now().toString(),
-                                    type: 'user',
-                                    content: suggestion,
-                                    timestamp: new Date()
-                                  };
-
-                                  setMessages(prev => [...prev, userMessage]);
-                                  setIsLoading(true);
-
-                                  try {
-                                    const response = await queryLeagueData(suggestion, leagueId);
-
-                                    const botMessage: Message = {
-                                      id: (Date.now() + 1).toString(),
-                                      type: 'bot',
-                                      content: typeof response === 'string' ? response : response.content,
-                                      timestamp: new Date(),
-                                      suggestions: typeof response === 'string' ? undefined : response.suggestions,
-                                      navigationButtons: typeof response === 'string' ? undefined : response.navigationButtons
-                                    };
-
-                                    setMessages(prev => [...prev, botMessage]);
-                                  } catch (error) {
-                                    const errorMessage: Message = {
-                                      id: (Date.now() + 1).toString(),
-                                      type: 'bot',
-                                      content: "I'm sorry, I encountered an error while processing your request. Please try again.",
-                                      timestamp: new Date()
-                                    };
-                                    setMessages(prev => [...prev, errorMessage]);
-                                  }
-
-                                  setIsLoading(false);
-                                }}
-                                className="px-3 py-1 text-sm bg-orange-100 hover:bg-orange-200 text-orange-700 rounded-md transition-colors border border-orange-200 hover:border-orange-300"
+                                onClick={() => handleSendMessage(suggestion)}
+                                className="px-3 py-2 text-sm bg-orange-50 hover:bg-orange-100 text-orange-700 rounded-lg transition-colors border border-orange-200 hover:border-orange-300 font-medium"
                                 disabled={isLoading}
                               >
                                 {suggestion}
                               </button>
                             ))}
+                          </div>
+                        )}
+
+                        {/* Always show follow-up suggestions for bot messages */}
+                        {message.type === 'bot' && (!message.suggestions || message.suggestions.length === 0) && (
+                          <div className="flex flex-wrap gap-2 mt-3">
+                            <button
+                              onClick={() => handleSendMessage("Tell me more")}
+                              className="px-3 py-2 text-sm bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-lg transition-colors border border-gray-200 hover:border-gray-300"
+                              disabled={isLoading}
+                            >
+                              Tell me more
+                            </button>
+                            <button
+                              onClick={() => handleSendMessage("Show me stats")}
+                              className="px-3 py-2 text-sm bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-lg transition-colors border border-gray-200 hover:border-gray-300"
+                              disabled={isLoading}
+                            >
+                              Show me stats
+                            </button>
                           </div>
                         )}
                       </div>
@@ -718,20 +889,21 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
             </div>
           )}
 
-          <div className={`flex gap-3 mt-4 ${isOverlayMode ? 'flex-shrink-0' : ''}`}>
+          {/* Input Area - Always visible when expanded */}
+          <div className={`flex gap-3 pt-4 border-t border-gray-200 ${isOverlayMode ? 'flex-shrink-0' : ''}`}>
             <Input
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               placeholder="Ask about stats, games, players..."
-              onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
+              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
               onFocus={() => {
                 setIsActivelyUsed(true);
                 setIsExpanded(true);
               }}
-              className={`text-base py-4 px-4 transition-all duration-300 ${
+              className={`text-base py-4 px-4 transition-all duration-300 border-2 ${
                 isOverlayMode ? 'text-lg py-5' : ''
               } ${
-                isActivelyUsed || isExpanded ? 'border-orange-300 ring-2 ring-orange-100' : ''
+                isActivelyUsed || isExpanded ? 'border-orange-300 ring-2 ring-orange-100' : 'border-gray-300'
               }`}
               disabled={isLoading}
             />
@@ -739,7 +911,7 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
               onClick={() => handleSendMessage()}
               disabled={!inputMessage.trim() || isLoading}
               size="default"
-              className={`bg-orange-500 hover:bg-orange-600 text-white px-6 ${isOverlayMode ? 'px-8 py-5' : ''}`}
+              className={`bg-orange-500 hover:bg-orange-600 text-white px-6 py-4 ${isOverlayMode ? 'px-8 py-5' : ''}`}
             >
               <Send className={`w-4 h-4 ${isOverlayMode ? 'w-5 h-5' : ''}`} />
             </Button>

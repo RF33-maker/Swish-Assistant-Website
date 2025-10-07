@@ -1,0 +1,291 @@
+Here’s a clean prompt you can paste to the Replit Agent to set up the structure (so we can plug in more templates later).
+
+---
+
+**Prompt for Replit Agent**
+
+Goal: Add a scalable “scouting report template” system to the Coaches Hub so chatbot responses (JSON) render into a designed report and can be saved to Supabase. Focus on structure; include one basic template to prove the flow.
+
+### 1) Install deps
+
+* Add `zod` and `html2canvas` to the frontend:
+  `npm i zod html2canvas`
+
+### 2) Create shared types & parser
+
+Create `src/types/reportSchema.ts`:
+
+```ts
+import { z } from "zod";
+
+export const ScoutingReportSchema = z.object({
+  meta: z.object({
+    player: z.string(),
+    team: z.string(),
+    opponent: z.string().optional().nullable(),
+    gameDate: z.string().optional().nullable(),
+    position: z.string().optional().nullable(),
+    age: z.number().optional().nullable(),
+    height: z.string().optional().nullable(),
+    weight: z.string().optional().nullable(),
+    photoUrl: z.string().optional().nullable(),
+  }),
+  stats: z.object({
+    ppg: z.number().nullable().optional(),
+    rpg: z.number().nullable().optional(),
+    apg: z.number().nullable().optional(),
+    spg: z.number().nullable().optional(),
+    bpg: z.number().nullable().optional(),
+    fgPct: z.number().nullable().optional(), // 0–100
+    tpPct: z.number().nullable().optional(),
+    ftPct: z.number().nullable().optional(),
+  }),
+  strengths: z.array(z.string()).default([]),
+  weaknesses: z.array(z.string()).default([]),
+});
+
+export type ScoutingReport = z.infer<typeof ScoutingReportSchema>;
+```
+
+Create `src/utils/parseReport.ts`:
+
+````ts
+import { ScoutingReportSchema, ScoutingReport } from "@/types/reportSchema";
+
+export function safelyParseReport(maybeJson: string): ScoutingReport | null {
+  try {
+    const cleaned = maybeJson.trim()
+      .replace(/^```(?:json)?/i, "")
+      .replace(/```$/, "");
+    const obj = JSON.parse(cleaned);
+    const parsed = ScoutingReportSchema.safeParse(obj);
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+````
+
+### 3) Template registry + one starter template
+
+Create `src/components/scout-templates/CleanProTemplate.tsx`:
+
+```tsx
+import { ScoutingReport } from "@/types/reportSchema";
+
+export default function CleanProTemplate({ data }: { data: ScoutingReport }) {
+  const { meta, stats, strengths, weaknesses } = data;
+  const Stat = ({ label, value }: {label: string; value: number | string | null | undefined}) => (
+    <div className="text-center">
+      <div className="text-[11px] text-slate-500">{label}</div>
+      <div className="text-lg font-semibold">{value ?? "—"}</div>
+    </div>
+  );
+
+  return (
+    <div id="report-canvas" className="w-[900px] bg-white rounded-xl shadow-lg overflow-hidden border">
+      <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between">
+        <div>
+          <div className="text-xs uppercase opacity-75">Report</div>
+          <div className="text-xl font-bold">Basketball Scouting</div>
+        </div>
+        <div className="text-xs text-right opacity-80">
+          <div>{meta.team}{meta.opponent ? ` vs ${meta.opponent}` : ""}</div>
+          {meta.gameDate && <div>{meta.gameDate}</div>}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-[96px_1fr_auto] gap-4 p-6">
+        <div className="h-24 w-24 rounded-full bg-slate-100 overflow-hidden">
+          {meta.photoUrl ? <img src={meta.photoUrl} className="h-full w-full object-cover" /> : null}
+        </div>
+
+        <div>
+          <div className="text-2xl font-bold">{meta.player}</div>
+          <div className="text-sm text-slate-600">
+            {meta.team} • {meta.position ?? "—"}
+          </div>
+          <div className="text-xs text-slate-500 mt-1">
+            {meta.age ? `Age ${meta.age}` : ""} {meta.height ? ` • ${meta.height}` : ""} {meta.weight ? ` • ${meta.weight}` : ""}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-7 gap-4 items-end">
+          <Stat label="PPG" value={stats.ppg} />
+          <Stat label="RPG" value={stats.rpg} />
+          <Stat label="APG" value={stats.apg} />
+          <Stat label="SPG" value={stats.spg} />
+          <Stat label="BPG" value={stats.bpg} />
+          <Stat label="FG%" value={stats.fgPct != null ? `${stats.fgPct}%` : null} />
+          <Stat label="3P%" value={stats.tpPct != null ? `${stats.tpPct}%` : null} />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-6 px-6 pb-6">
+        <div className="border rounded-lg p-4">
+          <div className="font-semibold mb-2">Strengths</div>
+          {strengths?.length ? (
+            <ul className="text-sm space-y-1">{strengths.map((s, i) => <li key={i}>• {s}</li>)}</ul>
+          ) : <div className="text-sm text-slate-500">No data.</div>}
+        </div>
+        <div className="border rounded-lg p-4">
+          <div className="font-semibold mb-2">Weaknesses</div>
+          {weaknesses?.length ? (
+            <ul className="text-sm space-y-1">{weaknesses.map((w, i) => <li key={i}>• {w}</li>)}</ul>
+          ) : <div className="text-sm text-slate-500">No data.</div>}
+        </div>
+      </div>
+
+      <div className="bg-slate-50 text-[11px] text-slate-500 px-6 py-3 flex items-center justify-between border-t">
+        <div>Swish Assistant • Professional Scouting</div>
+        <div>share • print • export</div>
+      </div>
+    </div>
+  );
+}
+```
+
+Create `src/components/scout-templates/index.ts`:
+
+```ts
+import { ScoutingReport } from "@/types/reportSchema";
+import CleanProTemplate from "./CleanProTemplate";
+
+export type ReportTemplate = {
+  id: string;
+  name: string;
+  render: (data: ScoutingReport) => JSX.Element;
+};
+
+export const templates: ReportTemplate[] = [
+  { id: "clean-pro", name: "Clean Pro", render: (d) => <CleanProTemplate data={d} /> },
+];
+```
+
+Create `src/components/scout-templates/ReportPreview.tsx`:
+
+```tsx
+import { useRef } from "react";
+import { templates } from ".";
+import { ScoutingReport } from "@/types/reportSchema";
+import html2canvas from "html2canvas";
+
+export default function ReportPreview({
+  data, templateId, onExported,
+}: { data: ScoutingReport; templateId: string; onExported?: (blob: Blob) => void; }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const tpl = templates.find(t => t.id === templateId) ?? templates[0];
+
+  async function exportPng() {
+    if (!containerRef.current) return;
+    const canvas = await html2canvas(containerRef.current, { scale: 2, useCORS: true });
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${data.meta.player.replace(/\s+/g, "_")}_scouting.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+      onExported?.(blob);
+    });
+  }
+
+  return (
+    <div className="bg-white rounded-xl border overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b">
+        <div className="text-sm">Template: <strong>{tpl.name}</strong></div>
+        <button onClick={exportPng} className="text-sm px-3 py-1.5 rounded-md bg-orange-600 text-white hover:bg-orange-700">
+          Export PNG
+        </button>
+      </div>
+      <div ref={containerRef} className="p-4 flex justify-center">
+        {tpl.render(data)}
+      </div>
+    </div>
+  );
+}
+```
+
+### 4) Wire into `CoachesHub.tsx`
+
+* Import and add state:
+
+```ts
+import { safelyParseReport } from "@/utils/parseReport";
+import { ScoutingReport } from "@/types/reportSchema";
+import ReportPreview from "@/components/scout-templates/ReportPreview";
+import { templates } from "@/components/scout-templates";
+
+const [reportData, setReportData] = useState<ScoutingReport | null>(null);
+const [selectedTemplateId, setSelectedTemplateId] = useState<string>("clean-pro");
+const [parseError, setParseError] = useState<string | null>(null);
+```
+
+* In the `LeagueChatbot` component usage, hook the response:
+
+```tsx
+<LeagueChatbot
+  leagueId={selectedLeague.league_id}
+  leagueName={selectedLeague.name}
+  onResponseReceived={(response: string) => {
+    setChatbotResponse(response);
+    const parsed = safelyParseReport(response);
+    if (parsed) { setReportData(parsed); setParseError(null); }
+    else { setReportData(null); setParseError("Could not parse a valid report JSON."); }
+  }}
+  isPanelMode={true}
+/>
+```
+
+* Below your `UnifiedScoutingEditor`, add a Template Picker + Preview:
+
+```tsx
+<div className="p-6 border-t border-gray-200">
+  <div className="flex items-center justify-between mb-4">
+    <div className="flex items-center gap-3">
+      <span className="text-sm text-slate-600">Choose Template</span>
+      <select
+        className="text-sm border rounded-md px-2 py-1"
+        value={selectedTemplateId}
+        onChange={(e) => setSelectedTemplateId(e.target.value)}
+      >
+        {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+      </select>
+    </div>
+    {parseError && <div className="text-xs text-red-600">{parseError}</div>}
+  </div>
+
+  {reportData
+    ? <ReportPreview data={reportData} templateId={selectedTemplateId} />
+    : <div className="text-sm text-slate-500 border rounded-md p-4">
+        Ask the chatbot for a scouting report (JSON) to populate the template.
+      </div>}
+</div>
+```
+
+### 5) Supabase table to persist reports (structure only)
+
+Create a new table:
+
+```sql
+create table if not exists scouting_reports (
+  id uuid primary key default gen_random_uuid(),
+  league_id uuid references leagues(league_id) on delete cascade,
+  player_name text not null,
+  template_id text not null,     -- e.g. "clean-pro"
+  data jsonb not null,           -- ScoutingReport payload
+  created_by uuid references auth.users(id),
+  created_at timestamptz default now()
+);
+```
+
+(We’ll add insert/fetch later; this prompt is only the structure.)
+
+### 6) Chatbot contract (instruction change only)
+
+Update the backend system prompt so the model **returns only JSON** matching `ScoutingReportSchema` (no markdown). Unknown numeric fields → `null`.
+
+---
+
+Deliverables: the new files, the imports + state + UI block in `CoachesHub.tsx`, and the Supabase table created. After this, I’ll add more templates and Supabase save/load in the next step.

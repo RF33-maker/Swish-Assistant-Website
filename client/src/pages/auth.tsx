@@ -112,12 +112,11 @@ export default function AuthPage() {
     <div className="min-h-screen flex flex-col md:flex-row">
       {/* Left Column - Auth Forms */}
       <div className="w-full md:w-1/2 bg-gradient-to-br from-orange-100 via-white to-white p-4 md:p-8 flex items-center justify-center text-gray-800">
-          <Card className="w-full max-w-md shadow-none border border-gray-200 bg-white">
-          <CardHeader className="text-center">
-            <div className="flex flex-col items-center gap-2 mb-4">
-              <img src={SwishAssistantLogo} alt="Swish Assistant Logo" className="h-16" />
-              <h1 className="text-xl font-bold text-swish-dark
-">Swish Assistant</h1>
+          <Card className="w-full max-w-full md:max-w-md shadow-none border border-gray-200 bg-white">
+          <CardHeader className="text-center p-4 md:p-6">
+            <div className="flex flex-col items-center gap-2 mb-3 md:mb-4">
+              <img src={SwishAssistantLogo} alt="Swish Assistant Logo" className="h-12 md:h-16" />
+              <h1 className="text-lg md:text-xl font-bold text-swish-dark">Swish Assistant</h1>
               <p className="text-sm text-muted-foreground text-center">
                 Access your team’s AI-powered game insights — faster, smarter, and on your terms
               </p>

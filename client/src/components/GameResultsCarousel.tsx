@@ -20,16 +20,67 @@ interface GameResultsCarouselProps {
 export default function GameResultsCarousel({ leagueId, onGameClick }: GameResultsCarouselProps) {
   const [games, setGames] = useState<GameResult[]>([]);
   const [loading, setLoading] = useState(true);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [startX, setStartX] = useState(0);
-  const [scrollLeft, setScrollLeft] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
 
   useEffect(() => {
     const fetchGameResults = async () => {
       setLoading(true);
       
       try {
+        // First try to get game results from team_stats table
+        const { data: teamStatsData, error: teamStatsError } = await supabase
+          .from("team_stats")
+          .select("*")
+          .eq("league_id", leagueId)
+          .order("created_at", { ascending: false });
+
+        if (teamStatsData && teamStatsData.length > 0 && !teamStatsError) {
+          // Group team stats by numeric_id to create game results
+          const gameMap = new Map<string, any[]>();
+          
+          teamStatsData.forEach(stat => {
+            const numericId = stat.numeric_id;
+            if (numericId && stat.name) { // Only process records with team names and numeric_id
+              if (!gameMap.has(numericId)) {
+                gameMap.set(numericId, []);
+              }
+              gameMap.get(numericId)!.push(stat);
+            }
+          });
+
+          // Convert to game results
+          const gamesFromTeamStats: GameResult[] = [];
+          
+          gameMap.forEach((gameTeams, numericId) => {
+            if (gameTeams.length === 2) { // Valid game with 2 teams
+              const [team1, team2] = gameTeams;
+              const team1Score = team1.tot_spoints || 0;
+              const team2Score = team2.tot_spoints || 0;
+              
+              gamesFromTeamStats.push({
+                game_id: numericId,
+                game_date: team1.created_at || new Date().toISOString(),
+                home_team: team1.name,
+                away_team: team2.name,
+                home_score: team1Score,
+                away_score: team2Score,
+                status: "FINAL"
+              });
+            }
+          });
+
+          // Sort by date and take recent 10
+          const sortedGames = gamesFromTeamStats
+            .sort((a, b) => new Date(b.game_date).getTime() - new Date(a.game_date).getTime())
+            .slice(0, 10);
+
+          setGames(sortedGames);
+          return;
+        }
+
+        // Fallback to player_stats approach
+        console.log("🎮 Using fallback: processing game results from player_stats");
+        
         // Get all player stats grouped by game
         const { data: playerStats, error } = await supabase
           .from("player_stats")
@@ -63,7 +114,7 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
           // Calculate team scores (sum of all player points per team)
           const teamScores = game.players.reduce((acc: any, player: any) => {
             if (!acc[player.team]) acc[player.team] = 0;
-            acc[player.team] += player.points || 0;
+            acc[player.team] += player.spoints || 0; // Use spoints for consistency
             return acc;
           }, {});
 
@@ -94,61 +145,15 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
     }
   }, [leagueId]);
 
-  // Mouse wheel scroll handler
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
-    if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollLeft += e.deltaY;
-    }
-  };
-
-  // Touch/mouse drag handlers
-  const handleMouseDown = (e: React.MouseEvent) => {
-    setIsDragging(true);
-    setStartX(e.pageX - (scrollContainerRef.current?.offsetLeft || 0));
-    setScrollLeft(scrollContainerRef.current?.scrollLeft || 0);
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging || !scrollContainerRef.current) return;
-    e.preventDefault();
-    const x = e.pageX - (scrollContainerRef.current.offsetLeft || 0);
-    const walk = (x - startX) * 2; // Scroll speed multiplier
-    scrollContainerRef.current.scrollLeft = scrollLeft - walk;
-  };
-
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
-
-  const handleMouseLeave = () => {
-    setIsDragging(false);
-  };
-
-  // Touch handlers for mobile
-  const handleTouchStart = (e: React.TouchEvent) => {
-    setIsDragging(true);
-    setStartX(e.touches[0].pageX - (scrollContainerRef.current?.offsetLeft || 0));
-    setScrollLeft(scrollContainerRef.current?.scrollLeft || 0);
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!isDragging || !scrollContainerRef.current) return;
-    const x = e.touches[0].pageX - (scrollContainerRef.current.offsetLeft || 0);
-    const walk = (x - startX) * 2;
-    scrollContainerRef.current.scrollLeft = scrollLeft - walk;
-  };
-
-  const handleTouchEnd = () => {
-    setIsDragging(false);
-  };
+  // Calculate animation duration based on number of games
+  const animationDuration = games.length > 0 ? games.length * 8 : 40; // 8 seconds per game
 
   if (loading) {
     return (
       <div className="overflow-x-auto scrollbar-hide">
-        <div className="flex gap-4 animate-pulse">
+        <div className="flex gap-3 md:gap-4 animate-pulse">
           {[1,2,3,4,5].map(i => (
-            <div key={i} className="bg-gray-800 rounded-lg h-16 w-64 flex-shrink-0"></div>
+            <div key={i} className="bg-gray-800 rounded-lg h-16 w-64 md:w-80 flex-shrink-0"></div>
           ))}
         </div>
       </div>
@@ -177,35 +182,40 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
     return teamName.substring(0, 3).toUpperCase();
   };
 
+  // Create duplicated games array for infinite scroll
+  const duplicatedGames = [...games, ...games];
+
+  // Calculate fixed track width based on screen size
+  const mobileCardWidth = 280;
+  const desktopCardWidth = 320;
+  const mobileGap = 12; // gap-3
+  const desktopGap = 16; // gap-4
+  
+  // Use desktop values for animation calculation
+  const trackWidth = duplicatedGames.length * (desktopCardWidth + desktopGap);
+
   return (
-    <div 
-      ref={scrollContainerRef}
-      className={`w-full overflow-x-auto scrollbar-hide select-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
-      onWheel={handleWheel}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseLeave}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-      style={{ 
-        scrollbarWidth: 'none', 
-        msOverflowStyle: 'none',
-        WebkitOverflowScrolling: 'touch'
-      }}
-    >
-      <div className="flex gap-4 px-4 py-2" style={{ minWidth: 'max-content' }}>
-        {games.map((game, index) => (
+    <div className="w-full overflow-hidden">
+      <div 
+        className="flex gap-3 md:gap-4 px-3 md:px-4 py-2"
+        style={{
+          width: `${trackWidth}px`,
+          animation: `scroll ${animationDuration}s linear infinite`,
+          animationPlayState: isPaused ? 'paused' : 'running'
+        }}
+        onMouseEnter={() => setIsPaused(true)}
+        onMouseLeave={() => setIsPaused(false)}
+      >
+        {duplicatedGames.map((game, index) => (
           <div
-            key={game.game_id}
-            className="bg-gray-800 rounded-lg px-6 py-4 flex-shrink-0 cursor-pointer hover:bg-gray-700 transition-colors border border-gray-700"
-            style={{ width: '320px', minWidth: '320px', maxWidth: '320px' }}
-            onClick={() => !isDragging && onGameClick(game.game_id)}
-            onMouseDown={(e) => e.preventDefault()} // Prevent text selection
+            key={`carousel-game-${index}`}
+            className="bg-gray-800 rounded-lg p-3 md:p-4 flex-shrink-0 cursor-pointer hover:bg-gray-700 transition-colors border border-gray-700 min-w-[280px] md:min-w-[320px]"
+            style={{ width: '280px' }}
+            onClick={() => onGameClick(game.game_id)}
+            onMouseDown={(e) => e.preventDefault()}
           >
           {/* Header with date and status */}
-          <div className="flex justify-between items-center mb-3">
+          <div className="flex justify-between items-center mb-2 md:mb-3">
             <div className="text-xs font-medium text-gray-300 bg-gray-700 px-2 py-1 rounded">
               {game.status}
             </div>
@@ -220,11 +230,11 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <TeamLogo teamName={game.away_team} leagueId={leagueId} size="sm" />
-                <div className="text-white font-bold text-lg">
+                <div className="text-white font-bold text-sm md:text-base">
                   {getTeamAbbr(game.away_team)}
                 </div>
               </div>
-              <div className="text-3xl font-bold text-white">
+              <div className="text-xl md:text-2xl font-bold text-white">
                 {game.away_score}
               </div>
             </div>
@@ -233,11 +243,11 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <TeamLogo teamName={game.home_team} leagueId={leagueId} size="sm" />
-                <div className="text-white font-bold text-lg">
+                <div className="text-white font-bold text-sm md:text-base">
                   {getTeamAbbr(game.home_team)}
                 </div>
               </div>
-              <div className="text-3xl font-bold text-white">
+              <div className="text-xl md:text-2xl font-bold text-white">
                 {game.home_score}
               </div>
             </div>
