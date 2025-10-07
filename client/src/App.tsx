@@ -28,6 +28,7 @@ import ProfilePage from "./pages/profile-page";
 import TestConnections from "./components/test-connections";
 import PaymentPage from "@/pages/payment";
 import ContactSalesPage from "@/pages/contact-sales";
+import PrivacyPolicyPage from "@/pages/privacy";
 
 function Router() {
   return (
@@ -45,6 +46,8 @@ function Router() {
       <Route path="/teams" component={TeamsList} />
       <Route path="/team/:teamName" component={TeamProfile} />
       <Route path="/reset-password" component={ResetPassword} />
+      <Route path="/privacy" component={PrivacyPolicyPage} />
+      <Route path="/contact-sales" component={ContactSalesPage} />
 
       {/* Protected routes */}
       <ProtectedRoute path="/dashboard" component={PostLoginDashboard} />
@@ -58,7 +61,6 @@ function Router() {
       <ProtectedRoute path="/profile" component={ProfilePage} />
       <ProtectedRoute path="/settings" component={SettingsPage} />
       <ProtectedRoute path="/payment" component={PaymentPage} />
-      <ProtectedRoute path="/contact-sales" component={ContactSalesPage} />
 
 
       {/* Fallback */}
