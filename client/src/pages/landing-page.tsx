@@ -524,14 +524,20 @@ export default function LandingPage() {
       </section>
 
       {/* Newsletter Signup Section */}
-      <section className="py-16 bg-gradient-to-br from-orange-50 to-orange-100 relative overflow-hidden">
-        {/* Background Logo */}
-        <div className="absolute inset-0 flex items-center justify-center opacity-5">
-          <img 
-            src={SwishLogo} 
-            alt="Swish Logo Background" 
-            className="w-96 h-96 object-contain transform rotate-12"
-          />
+      <section className="py-20 bg-gradient-to-b from-orange-50 to-white relative overflow-hidden flex items-center">
+        {/* Basketball Hoop Watermark */}
+        <div className="absolute inset-0 flex items-center justify-center opacity-[0.03]">
+          <svg 
+            viewBox="0 0 200 200" 
+            className="w-[500px] h-[500px]"
+          >
+            <circle cx="100" cy="100" r="40" fill="none" stroke="currentColor" strokeWidth="4" className="text-orange-500"/>
+            <circle cx="100" cy="100" r="30" fill="none" stroke="currentColor" strokeWidth="2" className="text-orange-500"/>
+            <rect x="80" y="140" width="40" height="3" fill="currentColor" className="text-orange-500"/>
+            <line x1="85" y1="143" x2="85" y2="160" stroke="currentColor" strokeWidth="2" className="text-orange-500"/>
+            <line x1="100" y1="143" x2="100" y2="160" stroke="currentColor" strokeWidth="2" className="text-orange-500"/>
+            <line x1="115" y1="143" x2="115" y2="160" stroke="currentColor" strokeWidth="2" className="text-orange-500"/>
+          </svg>
         </div>
 
         <div className="max-w-4xl mx-auto px-6 text-center relative z-10">
@@ -543,23 +549,23 @@ export default function LandingPage() {
             Be the first to know about new league management features and AI improvements.
           </p>
 
-          <form className="flex flex-col sm:flex-row gap-4 max-w-lg mx-auto">
+          <form className="flex flex-col sm:flex-row gap-4 max-w-lg mx-auto mb-3">
             <input
               type="email"
               placeholder="Enter your email address"
-              className="flex-1 px-4 py-3 rounded-lg border border-orange-200 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent bg-white/80 backdrop-blur-sm"
+              className="flex-1 px-5 py-3.5 rounded-xl border border-orange-200 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent bg-white shadow-sm transition-all duration-200"
               required
             />
             <button
               type="submit"
-              className="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-6 py-3 rounded-lg transition-colors duration-200 shadow-lg"
+              className="bg-orange-500 hover:bg-orange-600 text-white font-semibold px-8 py-3.5 rounded-xl transition-all duration-200 shadow-md hover:shadow-lg hover:scale-105"
             >
               Subscribe
             </button>
           </form>
 
-          <p className="text-sm text-gray-500 mt-4">
-            No spam, unsubscribe at any time. We respect your privacy.
+          <p className="text-xs text-gray-400 italic">
+            No spam, just updates. Unsubscribe anytime.
           </p>
         </div>
       </section>
