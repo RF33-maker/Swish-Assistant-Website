@@ -303,21 +303,29 @@ export default function LandingPage() {
           Explore stats, track performance, and discover the next MVP.
         </p>
 
-        {/* Mini League Logos Carousel */}
-        <div className="mt-8 w-full max-w-4xl mx-auto overflow-hidden animate-fade-in-up" style={{ animationDelay: '1.3s', opacity: 0, animationFillMode: 'forwards' }}>
-          <div className="flex gap-6 animate-infinite-scroll">
-            {[...([Ballpark, CMBC, NBLBE, BCB, SLB]), ...([Ballpark, CMBC, NBLBE, BCB, SLB])].map((img, i) => (
-              <div 
-                key={i} 
-                className="flex-shrink-0 flex items-center justify-center h-12 w-20"
-              >
-                <img
-                  src={img}
-                  alt={`League ${i + 1}`}
-                  className="h-10 w-auto object-contain opacity-60 hover:opacity-100 transition-opacity duration-300"
-                />
-              </div>
-            ))}
+        {/* League Logos Section */}
+        <div className="mt-16 w-full max-w-5xl mx-auto">
+          {/* Heading */}
+          <h2 className="text-center text-xs md:text-sm uppercase text-orange-600 font-semibold tracking-wide mb-8 animate-fade-in-up" style={{ animationDelay: '1.2s', opacity: 0, animationFillMode: 'forwards' }}>
+            Already hosting these leagues and more!
+          </h2>
+          
+          {/* Logos Carousel */}
+          <div className="overflow-hidden animate-fade-in-up" style={{ animationDelay: '1.3s', opacity: 0, animationFillMode: 'forwards' }}>
+            <div className="flex gap-6 md:gap-8 animate-infinite-scroll">
+              {[...([Ballpark, CMBC, NBLBE, BCB, SLB]), ...([Ballpark, CMBC, NBLBE, BCB, SLB])].map((img, i) => (
+                <div 
+                  key={i} 
+                  className="flex-shrink-0 flex items-center justify-center bg-white rounded-lg shadow-sm hover:shadow-md p-4 transition-all duration-300 hover:scale-110"
+                >
+                  <img
+                    src={img}
+                    alt={`League ${i + 1}`}
+                    className="h-12 md:h-16 w-auto object-contain"
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -328,13 +336,9 @@ export default function LandingPage() {
         </main>
       </div>
 
-      {/*used by teams and leagues across the UK*/}
-
-      <LeagueLogosCarousel />
-
        {/*What is Swish Assistant?*/}
 
-      <section className="py-16 bg-white">
+      <section className="py-20 bg-white">
         <div className="max-w-6xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 items-center gap-12">
 
           {/* Left: Visual */}
