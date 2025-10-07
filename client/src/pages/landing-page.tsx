@@ -406,54 +406,57 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="py-20 bg-gradient-to-b from-orange-50 to-[#fffaf5] rounded-t-[3rem]">
-        <div className="max-w-6xl mx-auto px-8 md:px-16 grid grid-cols-1 md:grid-cols-2 items-center gap-12 md:gap-16">
+      {/* Unified AI Features Section */}
+      <section className="bg-gradient-to-b from-orange-50 to-[#fffaf5] rounded-t-[3rem] relative overflow-hidden shadow-[inset_0_-20px_40px_-20px_rgba(251,146,60,0.1)]">
+        
+        {/* AI-Powered Chatbot */}
+        <div className="py-20">
+          <div className="max-w-6xl mx-auto px-8 md:px-16 grid grid-cols-1 md:grid-cols-2 items-center gap-12 md:gap-16">
 
-          {/* Left: Text Content */}
-          <div>
-            <div className="flex items-center gap-3 mb-6">
-              <h3 ref={chatbotHeadingRef} className="text-2xl font-bold text-slate-900 underline-animate">
-                AI-Powered Chatbot
-              </h3>
-              <span className="bg-orange-500 text-white text-xs font-semibold px-3 py-1 rounded-full hover:scale-110 hover:shadow-[0_0_10px_rgba(255,102,0,0.4)] transition-all duration-300 ease-out">
-                Coming Soon
-              </span>
+            {/* Left: Text Content */}
+            <div>
+              <div className="flex items-center gap-3 mb-6">
+                <h3 ref={chatbotHeadingRef} className="text-2xl font-bold text-slate-900 underline-animate">
+                  AI-Powered Chatbot
+                </h3>
+                <span className="bg-orange-500 text-white text-xs font-semibold px-3 py-1 rounded-full hover:scale-110 hover:shadow-[0_0_10px_rgba(255,102,0,0.4)] transition-all duration-300 ease-out">
+                  Coming Soon
+                </span>
+              </div>
+              <p className="text-slate-700 leading-relaxed mb-6">
+                We're building an AI-powered chatbot to make it super quick and easy to find what you need. Ask questions and get instant answers about players, teams, and stats.
+              </p>
+              <ul className="text-left text-slate-700 space-y-3">
+                <li className="flex items-start gap-3 animate-fade-in-up" style={{ animationDelay: '0.1s', opacity: 0, animationFillMode: 'forwards' }}>
+                  <Clock className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
+                  <span>Find information in seconds, not minutes</span>
+                </li>
+                <li className="flex items-start gap-3 animate-fade-in-up" style={{ animationDelay: '0.2s', opacity: 0, animationFillMode: 'forwards' }}>
+                  <MessageSquare className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
+                  <span>Natural language queries about any league data</span>
+                </li>
+                <li className="flex items-start gap-3 animate-fade-in-up" style={{ animationDelay: '0.3s', opacity: 0, animationFillMode: 'forwards' }}>
+                  <Sparkles className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
+                  <span>Coming soon to streamline your workflow</span>
+                </li>
+              </ul>
             </div>
-            <p className="text-slate-700 leading-relaxed mb-6">
-              We're building an AI-powered chatbot to make it super quick and easy to find what you need. Ask questions and get instant answers about players, teams, and stats.
-            </p>
-            <ul className="text-left text-slate-700 space-y-3">
-              <li className="flex items-start gap-3 animate-fade-in-up" style={{ animationDelay: '0.1s', opacity: 0, animationFillMode: 'forwards' }}>
-                <Clock className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
-                <span>Find information in seconds, not minutes</span>
-              </li>
-              <li className="flex items-start gap-3 animate-fade-in-up" style={{ animationDelay: '0.2s', opacity: 0, animationFillMode: 'forwards' }}>
-                <MessageSquare className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
-                <span>Natural language queries about any league data</span>
-              </li>
-              <li className="flex items-start gap-3 animate-fade-in-up" style={{ animationDelay: '0.3s', opacity: 0, animationFillMode: 'forwards' }}>
-                <Sparkles className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
-                <span>Coming soon to streamline your workflow</span>
-              </li>
-            </ul>
-          </div>
 
-          {/* Right: Visual */}
-          <div className="w-full flex justify-center">
-            <img
-              src={Chatbot}
-              alt="Chatbot Example"
-              className="rounded-xl w-full max-w-lg transition-all duration-300 hover:scale-105"
-              style={{ filter: 'drop-shadow(0 0 40px rgba(251, 146, 60, 0.3))' }}
-            />
+            {/* Right: Visual */}
+            <div className="w-full flex justify-center">
+              <img
+                src={Chatbot}
+                alt="Chatbot Example"
+                className="rounded-xl w-full max-w-lg transition-all duration-300 hover:scale-105"
+                style={{ filter: 'drop-shadow(0 0 40px rgba(251, 146, 60, 0.3))' }}
+              />
+            </div>
           </div>
         </div>
-      </section>
 
-      <section className="py-20 bg-gradient-to-b from-[#fffaf5] to-[#fffaf5] relative overflow-hidden shadow-[inset_0_-20px_40px_-20px_rgba(251,146,60,0.1)]">
         {/* Basketball Court Texture Pattern */}
         <div 
-          className="absolute inset-0 opacity-[0.03]"
+          className="absolute bottom-0 inset-x-0 h-1/2 opacity-[0.03] pointer-events-none"
           style={{
             backgroundImage: `repeating-linear-gradient(
               0deg,
@@ -472,47 +475,50 @@ export default function LandingPage() {
           }}
         />
         
-        <div className="max-w-6xl mx-auto px-8 md:px-16 grid grid-cols-1 md:grid-cols-2 items-center gap-12 relative z-10">
+        {/* Coaches Hub */}
+        <div className="py-20 relative z-10">
+          <div className="max-w-6xl mx-auto px-8 md:px-16 grid grid-cols-1 md:grid-cols-2 items-center gap-12">
 
-          {/* Left: Text Content */}
-          <div>
-            <div className="flex items-center gap-3 mb-6">
-              <h3 ref={coachesHeadingRef} className="text-2xl font-bold text-slate-900 underline-animate">
-                Coaches Hub
-              </h3>
-              <span className="bg-orange-500 text-white text-xs font-semibold px-3 py-1 rounded-full hover:scale-110 hover:shadow-[0_0_10px_rgba(255,102,0,0.4)] transition-all duration-300 ease-out">
-                Coming Soon
-              </span>
+            {/* Left: Text Content */}
+            <div>
+              <div className="flex items-center gap-3 mb-6">
+                <h3 ref={coachesHeadingRef} className="text-2xl font-bold text-slate-900 underline-animate">
+                  Coaches Hub
+                </h3>
+                <span className="bg-orange-500 text-white text-xs font-semibold px-3 py-1 rounded-full hover:scale-110 hover:shadow-[0_0_10px_rgba(255,102,0,0.4)] transition-all duration-300 ease-out">
+                  Coming Soon
+                </span>
+              </div>
+              <p className="text-orange-600 font-medium text-sm mb-4">
+                Scouting simplified with AI insights.
+              </p>
+              <p className="text-gray-600 mb-6">
+                A dedicated space for coaches to access detailed insights to help prep for your next game. See team trends, discover top players, and build your scouting reports with ease.
+              </p>
+              <ul className="text-left text-gray-600 space-y-3">
+                <li className="flex items-start gap-3">
+                  <TrendingUp className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
+                  <span><strong className="text-slate-900">Detailed insights</strong> on team performance and trends</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <Trophy className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
+                  <span>Quickly identify <strong className="text-slate-900">top players</strong> and key matchups</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <FileText className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
+                  <span><strong className="text-slate-900">Build comprehensive</strong> scouting reports effortlessly</span>
+                </li>
+              </ul>
             </div>
-            <p className="text-orange-600 font-medium text-sm mb-4">
-              Scouting simplified with AI insights.
-            </p>
-            <p className="text-gray-600 mb-6">
-              A dedicated space for coaches to access detailed insights to help prep for your next game. See team trends, discover top players, and build your scouting reports with ease.
-            </p>
-            <ul className="text-left text-gray-600 space-y-3">
-              <li className="flex items-start gap-3">
-                <TrendingUp className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
-                <span><strong className="text-slate-900">Detailed insights</strong> on team performance and trends</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <Trophy className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
-                <span>Quickly identify <strong className="text-slate-900">top players</strong> and key matchups</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <FileText className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
-                <span><strong className="text-slate-900">Build comprehensive</strong> scouting reports effortlessly</span>
-              </li>
-            </ul>
-          </div>
 
-          {/* Right: Visual */}
-          <div className="w-full flex justify-center">
-            <img
-              src={ChatbotExample}
-              alt="Coaches Hub Example"
-              className="rounded-xl w-full max-w-md shadow-[0_10px_40px_-10px_rgba(0,0,0,0.3)]"
-            />
+            {/* Right: Visual */}
+            <div className="w-full flex justify-center">
+              <img
+                src={ChatbotExample}
+                alt="Coaches Hub Example"
+                className="rounded-xl w-full max-w-md shadow-[0_10px_40px_-10px_rgba(0,0,0,0.3)]"
+              />
+            </div>
           </div>
         </div>
       </section>
