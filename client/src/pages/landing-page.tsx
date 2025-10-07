@@ -564,55 +564,8 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Features Section - anchor target */}
-      <section id="features" className="py-16 bg-white">
-        <div className="max-w-6xl mx-auto px-6 text-center">
-          <h2 className="text-3xl font-bold text-slate-900 mb-4">
-            Everything you need to manage your basketball league
-          </h2>
-          <p className="text-gray-600 mb-12 max-w-2xl mx-auto">
-            From uploading game stats to creating detailed scouting reports, 
-            Swish Assistant has all the tools you need in one place.
-          </p>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl">📊</span>
-              </div>
-              <h3 className="text-lg font-semibold text-slate-900 mb-2">Auto Stats Processing</h3>
-              <p className="text-gray-600 text-sm">Upload FIBA LiveStats PDFs and get instant stat extraction</p>
-            </div>
-
-            <div className="text-center">
-              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl">🤖</span>
-              </div>
-              <h3 className="text-lg font-semibold text-slate-900 mb-2">AI Assistant</h3>
-              <p className="text-gray-600 text-sm">Ask questions and get instant insights about your league</p>
-            </div>
-
-            <div className="text-center">
-              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl">📈</span>
-              </div>
-              <h3 className="text-lg font-semibold text-slate-900 mb-2">Visual Analytics</h3>
-              <p className="text-gray-600 text-sm">Beautiful charts and performance tracking for teams and players</p>
-            </div>
-
-            <div className="text-center">
-              <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl">🏆</span>
-              </div>
-              <h3 className="text-lg font-semibold text-slate-900 mb-2">Public Leagues</h3>
-              <p className="text-gray-600 text-sm">Showcase your league stats and let players engage with the data</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* Pricing Section */}
-      <section id="pricing" className="py-16 bg-gradient-to-br from-slate-50 to-orange-50 relative">
+      <section id="pricing" className="py-20 bg-gradient-to-br from-slate-50 to-orange-50 relative">
         <div className="max-w-6xl mx-auto px-6 relative">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-slate-900 mb-4">
