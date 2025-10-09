@@ -2291,9 +2291,9 @@ export default function LeaguePage() {
                         >
                           <td className="py-2 md:py-3 px-2 font-medium text-slate-600 sticky left-0 bg-inherit z-10">{index + 1}</td>
                           <td className="py-2 md:py-3 px-2 font-medium text-slate-800 sticky left-6 md:static bg-inherit z-10">
-                            <div className="flex items-center gap-1 md:gap-2 max-w-[100px] md:max-w-none">
+                            <div className="flex items-center gap-1 md:gap-2 whitespace-nowrap">
                               <TeamLogo teamName={team.team} leagueId={league?.league_id} size="sm" />
-                              <span className="truncate">{team.team}</span>
+                              <span>{team.team}</span>
                             </div>
                           </td>
                           <td className="py-2 md:py-3 px-2 text-center font-medium text-slate-700">{team.record}</td>
