@@ -157,13 +157,13 @@ export function PlayerComparison({ leagueId, allPlayers }: PlayerComparisonProps
 
   const selectPlayer1 = (player: any) => {
     setPlayer1Id(player.playerKey);
-    setSearch1(`${player.name} - ${player.team}`);
+    setSearch1(player.name);
     setShowDropdown1(false);
   };
 
   const selectPlayer2 = (player: any) => {
     setPlayer2Id(player.playerKey);
-    setSearch2(`${player.name} - ${player.team}`);
+    setSearch2(player.name);
     setShowDropdown2(false);
   };
 
