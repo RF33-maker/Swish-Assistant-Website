@@ -602,13 +602,13 @@ export default function LandingPage() {
                     </li>
                   </ul>
 
-                  <Button 
+                  {/* <Button 
                     size="lg" 
                     variant="outline"
                     className="w-full border-orange-200 text-orange-700 hover:bg-orange-50"
                   >
                     Get Started Free
-                  </Button>
+                  </Button> */}
                 </div>
               </div>
 
@@ -794,10 +794,11 @@ export default function LandingPage() {
             <div>
               <h4 className="font-semibold text-lg mb-4 text-white">Quick Links</h4>
               <ul className="space-y-2">
-                <li><a href="/auth" className="text-gray-300 hover:text-white transition-colors">Get Started</a></li>
-                <li><a href="/auth" className="text-gray-300 hover:text-white transition-colors">Login</a></li>
+                {/* <li><a href="/auth" className="text-gray-300 hover:text-white transition-colors">Get Started</a></li>
+                <li><a href="/auth" className="text-gray-300 hover:text-white transition-colors">Login</a></li> */}
                 <li><a href="#features" className="text-gray-300 hover:text-white transition-colors">Features</a></li>
                 <li><a href="#pricing" className="text-gray-300 hover:text-white transition-colors">Pricing</a></li>
+                <li><a href="#subscribe" className="text-gray-300 hover:text-white transition-colors">Subscribe</a></li>
               </ul>
             </div>
 
