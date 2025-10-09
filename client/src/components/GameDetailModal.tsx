@@ -8,24 +8,24 @@ interface PlayerGameStats {
   familyname: string;
   team: string;
   number?: number;
-  minutes_played?: string;
+  sminutes?: string;
   spoints: number;
-  field_goals_made?: number;
-  field_goals_attempted?: number;
-  field_goal_percent?: number;
-  three_pt_made?: number;
-  three_pt_attempted?: number;
-  three_pt_percent?: number;
-  free_throws_made?: number;
-  free_throws_attempted?: number;
-  free_throw_percent?: number;
+  sfieldgoalsmade?: number;
+  sfieldgoalsattempted?: number;
+  sfieldgoalspercentage?: number;
+  sthreepointersmade?: number;
+  sthreepointersattempted?: number;
+  sthreepointerspercentage?: number;
+  sfreethrowsmade?: number;
+  sfreethrowsattempted?: number;
+  sfreethrowspercentage?: number;
   sreboundstotal: number;
   rebounds_o?: number;
   rebounds_d?: number;
   sassists: number;
-  steals?: number;
-  blocks?: number;
-  turnovers?: number;
+  ssteals?: number;
+  sblocks?: number;
+  sturnovers?: number;
   personal_fouls?: number;
   plus_minus?: number;
 }
@@ -45,6 +45,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
     teams: string[];
     teamScores: Record<string, number>;
   } | null>(null);
+  const [teamStatsFromDb, setTeamStatsFromDb] = useState<any[]>([]);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
@@ -54,6 +55,8 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
       if (!gameId || !isOpen) return;
       
       setLoading(true);
+      // Reset team stats to avoid stale data
+      setTeamStatsFromDb([]);
       
       try {
         console.log("🎮 Fetching game details for gameId:", gameId);
@@ -70,6 +73,9 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
         let gameDate = new Date().toISOString();
         
         if (teamStatsData && teamStatsData.length > 0) {
+          // Store team stats data for use in team totals
+          setTeamStatsFromDb(teamStatsData);
+          
           // Get teams and scores from team_stats
           teamStatsData.forEach(teamStat => {
             if (teamStat.name) {
@@ -266,16 +272,24 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
 
   const teamStats = gameInfo?.teams.map(team => {
     const teamPlayers = gameStats.filter(stat => stat.team === team);
+    const dbTeamStats = teamStatsFromDb.find(ts => ts.name === team);
+    
+    // Fallback: calculate from player stats if team stats not available
+    const calcFgMade = teamPlayers.reduce((sum, p) => sum + (p.sfieldgoalsmade || 0), 0);
+    const calcFgAttempted = teamPlayers.reduce((sum, p) => sum + (p.sfieldgoalsattempted || 0), 0);
+    const calcThreeMade = teamPlayers.reduce((sum, p) => sum + (p.sthreepointersmade || 0), 0);
+    const calcThreeAttempted = teamPlayers.reduce((sum, p) => sum + (p.sthreepointersattempted || 0), 0);
+    
     return {
       name: team,
       score: gameInfo.teamScores[team],
       players: teamPlayers,
-      totalFgMade: teamPlayers.reduce((sum, p) => sum + (p.field_goals_made || 0), 0),
-      totalFgAttempted: teamPlayers.reduce((sum, p) => sum + (p.field_goals_attempted || 0), 0),
-      totalThreeMade: teamPlayers.reduce((sum, p) => sum + (p.three_pt_made || 0), 0),
-      totalThreeAttempted: teamPlayers.reduce((sum, p) => sum + (p.three_pt_attempted || 0), 0),
-      totalRebounds: teamPlayers.reduce((sum, p) => sum + (p.sreboundstotal || 0), 0),
-      totalAssists: teamPlayers.reduce((sum, p) => sum + (p.sassists || 0), 0),
+      totalFgMade: dbTeamStats?.tot_sfieldgoalsmade ?? calcFgMade,
+      totalFgAttempted: dbTeamStats?.tot_sfieldgoalsattempted ?? calcFgAttempted,
+      totalThreeMade: dbTeamStats?.tot_sthreepointersmade ?? calcThreeMade,
+      totalThreeAttempted: dbTeamStats?.tot_sthreepointersattempted ?? calcThreeAttempted,
+      totalRebounds: dbTeamStats?.tot_sreboundstotal ?? teamPlayers.reduce((sum, p) => sum + (p.sreboundstotal || 0), 0),
+      totalAssists: dbTeamStats?.tot_sassists ?? teamPlayers.reduce((sum, p) => sum + (p.sassists || 0), 0),
     };
   });
 
