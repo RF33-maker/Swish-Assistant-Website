@@ -202,15 +202,19 @@ export default function LandingPage() {
           <span className="font-bold text-xl text-orange-600"></span>
         </div>
         <nav className="flex items-center gap-6 text-sm font-medium">
-          <a href="/auth" className="text-slate-600 hover:text-orange-600 transition-colors relative group">
+          {/* <a href="/auth" className="text-slate-600 hover:text-orange-600 transition-colors relative group">
             Login
             <span className="absolute bottom-0 left-0 w-0 h-[2px] bg-orange-500 transition-all duration-300 group-hover:w-full"></span>
-          </a>
+          </a> */}
           <a 
-            href="/auth" 
+            href="#subscribe" 
             className="bg-gradient-to-r from-orange-500 to-amber-500 text-white px-5 py-2 rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-300 drop-shadow-md"
+            onClick={(e) => {
+              e.preventDefault();
+              document.getElementById('subscribe')?.scrollIntoView({ behavior: 'smooth' });
+            }}
           >
-            Get Started
+            Subscribe
           </a>
         </nav>
       </header>
@@ -516,7 +520,7 @@ export default function LandingPage() {
       </section>
 
       {/* Newsletter Signup Section */}
-      <section className="py-20 bg-gradient-to-br from-orange-50 to-orange-100 relative overflow-hidden flex items-center">
+      <section id="subscribe" className="py-20 bg-gradient-to-br from-orange-50 to-orange-100 relative overflow-hidden flex items-center">
         {/* Background Logo */}
         <div className="absolute inset-0 flex items-center justify-center opacity-5">
           <img 
