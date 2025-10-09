@@ -217,17 +217,26 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
   const team2Top3 = team2Roster?.slice(0, 3) || [];
   const team2FullRoster = team2Roster?.slice(3) || [];
 
+  // Debug logging
+  if (isOpen) {
+    console.log('🎮 Game Preview Modal opened for:', game.team1, 'vs', game.team2);
+    console.log('📊 Team1 roster data:', team1Roster);
+    console.log('📊 Team2 roster data:', team2Roster);
+    console.log('🏀 Team1 game results:', team1GameResults);
+    console.log('🏀 Team2 game results:', team2GameResults);
+  }
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader className="flex flex-row items-center justify-between border-b pb-4">
-          <DialogTitle className="text-xl md:text-2xl font-bold">Game Preview</DialogTitle>
+        <DialogHeader className="flex flex-row items-center justify-between border-b border-orange-200 pb-4">
+          <DialogTitle className="text-xl md:text-2xl font-bold text-slate-800">Game Preview</DialogTitle>
           <button
             onClick={onClose}
-            className="rounded-full p-1 hover:bg-gray-100 transition-colors"
+            className="rounded-full p-1 hover:bg-orange-100 transition-colors"
             data-testid="close-preview-modal"
           >
-            <X className="h-5 w-5" />
+            <X className="h-5 w-5 text-slate-600" />
           </button>
         </DialogHeader>
 
@@ -331,18 +340,18 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
               </h4>
               {team1Top3.length > 0 ? (
                 <div className="space-y-1 mb-4">
-                  <div className="grid grid-cols-4 gap-2 text-xs font-semibold text-slate-600 pb-2 px-2">
+                  <div className="grid grid-cols-4 gap-2 text-xs font-semibold text-orange-700 pb-2 px-2">
                     <div>Player</div>
                     <div className="text-center">PPG</div>
                     <div className="text-center">RPG</div>
                     <div className="text-center">APG</div>
                   </div>
                   {team1Top3.map((player, idx) => (
-                    <div key={idx} className="grid grid-cols-4 gap-2 p-2 bg-orange-50 rounded text-sm">
+                    <div key={idx} className="grid grid-cols-4 gap-2 p-2 bg-orange-50 rounded border border-orange-200 text-sm">
                       <div className="font-medium text-slate-800 truncate">{player.name}</div>
-                      <div className="text-center text-slate-700">{player.ppg}</div>
-                      <div className="text-center text-slate-700">{player.rpg}</div>
-                      <div className="text-center text-slate-700">{player.apg}</div>
+                      <div className="text-center text-orange-600 font-semibold">{player.ppg}</div>
+                      <div className="text-center text-orange-600 font-semibold">{player.rpg}</div>
+                      <div className="text-center text-orange-600 font-semibold">{player.apg}</div>
                     </div>
                   ))}
                 </div>
@@ -350,11 +359,11 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
                 <p className="text-sm text-slate-500 italic mb-4">No stats available</p>
               )}
               
-              <h5 className="text-sm font-semibold text-slate-700 mb-2">Full Roster</h5>
+              <h5 className="text-sm font-semibold text-orange-700 mb-2">Full Roster</h5>
               {team1FullRoster.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
                   {team1FullRoster.map((player, idx) => (
-                    <div key={idx} className="px-3 py-1 bg-gray-100 rounded-full text-sm text-slate-700">
+                    <div key={idx} className="px-3 py-1 bg-orange-50 border border-orange-200 rounded-full text-sm text-slate-700">
                       {player.name}
                     </div>
                   ))}
@@ -371,18 +380,18 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
               </h4>
               {team2Top3.length > 0 ? (
                 <div className="space-y-1 mb-4">
-                  <div className="grid grid-cols-4 gap-2 text-xs font-semibold text-slate-600 pb-2 px-2">
+                  <div className="grid grid-cols-4 gap-2 text-xs font-semibold text-orange-700 pb-2 px-2">
                     <div>Player</div>
                     <div className="text-center">PPG</div>
                     <div className="text-center">RPG</div>
                     <div className="text-center">APG</div>
                   </div>
                   {team2Top3.map((player, idx) => (
-                    <div key={idx} className="grid grid-cols-4 gap-2 p-2 bg-orange-50 rounded text-sm">
+                    <div key={idx} className="grid grid-cols-4 gap-2 p-2 bg-orange-50 rounded border border-orange-200 text-sm">
                       <div className="font-medium text-slate-800 truncate">{player.name}</div>
-                      <div className="text-center text-slate-700">{player.ppg}</div>
-                      <div className="text-center text-slate-700">{player.rpg}</div>
-                      <div className="text-center text-slate-700">{player.apg}</div>
+                      <div className="text-center text-orange-600 font-semibold">{player.ppg}</div>
+                      <div className="text-center text-orange-600 font-semibold">{player.rpg}</div>
+                      <div className="text-center text-orange-600 font-semibold">{player.apg}</div>
                     </div>
                   ))}
                 </div>
@@ -390,11 +399,11 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
                 <p className="text-sm text-slate-500 italic mb-4">No stats available</p>
               )}
               
-              <h5 className="text-sm font-semibold text-slate-700 mb-2">Full Roster</h5>
+              <h5 className="text-sm font-semibold text-orange-700 mb-2">Full Roster</h5>
               {team2FullRoster.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
                   {team2FullRoster.map((player, idx) => (
-                    <div key={idx} className="px-3 py-1 bg-gray-100 rounded-full text-sm text-slate-700">
+                    <div key={idx} className="px-3 py-1 bg-orange-50 border border-orange-200 rounded-full text-sm text-slate-700">
                       {player.name}
                     </div>
                   ))}
