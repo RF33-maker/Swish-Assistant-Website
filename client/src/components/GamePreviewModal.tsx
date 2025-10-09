@@ -130,11 +130,32 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
   const { data: team1Roster } = useQuery({
     queryKey: ['roster', leagueId, game.team1],
     queryFn: async () => {
-      const { data, error } = await supabase
+      console.log('🔍 Fetching roster for team1:', game.team1, 'league:', leagueId);
+      
+      // Try exact match first
+      let { data, error } = await supabase
         .from('player_stats')
-        .select('firstname, familyname, spoints, sreboundstotal, sassists')
+        .select('firstname, familyname, spoints, sreboundstotal, sassists, team')
         .eq('league_id', leagueId)
         .eq('team', game.team1);
+      
+      console.log('📊 Team1 exact match result:', { error, count: data?.length });
+      
+      // If no exact match, try partial match (remove suffix like "Senior Men I")
+      if (!data || data.length === 0) {
+        const baseTeamName = game.team1.split(' Senior ')[0].split(' Men')[0];
+        console.log('🔍 Trying partial match with:', baseTeamName);
+        
+        const { data: partialData, error: partialError } = await supabase
+          .from('player_stats')
+          .select('firstname, familyname, spoints, sreboundstotal, sassists, team')
+          .eq('league_id', leagueId)
+          .ilike('team', `%${baseTeamName}%`);
+        
+        console.log('📊 Team1 partial match result:', { error: partialError, count: partialData?.length });
+        data = partialData;
+        error = partialError;
+      }
       
       if (error) throw error;
       
@@ -173,11 +194,32 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
   const { data: team2Roster } = useQuery({
     queryKey: ['roster', leagueId, game.team2],
     queryFn: async () => {
-      const { data, error } = await supabase
+      console.log('🔍 Fetching roster for team2:', game.team2, 'league:', leagueId);
+      
+      // Try exact match first
+      let { data, error } = await supabase
         .from('player_stats')
-        .select('firstname, familyname, spoints, sreboundstotal, sassists')
+        .select('firstname, familyname, spoints, sreboundstotal, sassists, team')
         .eq('league_id', leagueId)
         .eq('team', game.team2);
+      
+      console.log('📊 Team2 exact match result:', { error, count: data?.length });
+      
+      // If no exact match, try partial match (remove suffix like "Senior Men I")
+      if (!data || data.length === 0) {
+        const baseTeamName = game.team2.split(' Senior ')[0].split(' Men')[0];
+        console.log('🔍 Trying partial match with:', baseTeamName);
+        
+        const { data: partialData, error: partialError } = await supabase
+          .from('player_stats')
+          .select('firstname, familyname, spoints, sreboundstotal, sassists, team')
+          .eq('league_id', leagueId)
+          .ilike('team', `%${baseTeamName}%`);
+        
+        console.log('📊 Team2 partial match result:', { error: partialError, count: partialData?.length });
+        data = partialData;
+        error = partialError;
+      }
       
       if (error) throw error;
       
