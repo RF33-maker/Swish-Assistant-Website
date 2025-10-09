@@ -1459,18 +1459,18 @@ export default function LeaguePage() {
                   </div>
                 ) : (
                   <div className="overflow-x-auto -mx-4 md:mx-0">
-                    <table className="w-full text-xs md:text-sm min-w-[640px]">
+                    <table className="w-full text-sm min-w-[600px]">
                       <thead>
-                        <tr className="border-b border-gray-200">
-                          <th className="text-left py-2 px-2 md:py-3 font-semibold text-slate-700 sticky left-0 bg-white z-10">Rank</th>
-                          <th className="text-left py-2 px-2 md:py-3 font-semibold text-slate-700 sticky left-8 md:static bg-white z-10">Team</th>
-                          <th className="text-center py-2 px-2 md:py-3 font-semibold text-slate-700">W</th>
-                          <th className="text-center py-2 px-2 md:py-3 font-semibold text-slate-700">L</th>
-                          <th className="text-center py-2 px-2 md:py-3 font-semibold text-slate-700">Win%</th>
-                          <th className="text-center py-2 px-2 md:py-3 font-semibold text-slate-700">PF</th>
-                          <th className="text-center py-2 px-2 md:py-3 font-semibold text-slate-700 hidden md:table-cell">PA</th>
-                          <th className="text-center py-2 px-2 md:py-3 font-semibold text-slate-700 hidden md:table-cell">Diff</th>
-                          <th className="text-center py-2 px-2 md:py-3 font-semibold text-slate-700"></th>
+                        <tr className="border-b-2 border-gray-200">
+                          <th className="text-left py-3 px-3 font-semibold text-slate-700 w-12 sticky left-0 bg-white z-10">#</th>
+                          <th className="text-left py-3 px-3 font-semibold text-slate-700 max-w-[180px] sticky left-12 md:static bg-white z-10">Team</th>
+                          <th className="text-center py-3 px-3 font-semibold text-slate-700 w-16">W</th>
+                          <th className="text-center py-3 px-3 font-semibold text-slate-700 w-16">L</th>
+                          <th className="text-center py-3 px-3 font-semibold text-slate-700 w-20">Win%</th>
+                          <th className="text-right py-3 px-3 font-semibold text-slate-700 w-20">PF</th>
+                          <th className="text-right py-3 px-3 font-semibold text-slate-700 w-20">PA</th>
+                          <th className="text-right py-3 px-3 font-semibold text-slate-700 w-20">Diff</th>
+                          <th className="text-center py-3 px-3 font-semibold text-slate-700 w-12"></th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1481,25 +1481,30 @@ export default function LeaguePage() {
                             key={`${team.team}-${index}`}
                             className="border-b border-gray-100 hover:bg-orange-50 transition-colors"
                           >
-                            <td className="py-2 px-2 md:py-3 text-slate-600 font-medium sticky left-0 bg-white z-10">{team.rank}</td>
-                            <td className="py-2 px-2 md:py-3 text-slate-800 font-medium sticky left-8 md:static bg-white z-10 min-w-[150px]">{team.team}</td>
-                            <td className="py-2 px-2 md:py-3 text-center text-slate-600">{team.wins}</td>
-                            <td className="py-2 px-2 md:py-3 text-center text-slate-600">{team.losses}</td>
-                            <td className="py-2 px-2 md:py-3 text-center text-slate-600">{(team.winPct * 100).toFixed(1)}%</td>
-                            <td className="py-2 px-2 md:py-3 text-center text-slate-600">{team.pointsFor}</td>
-                            <td className="py-2 px-2 md:py-3 text-center text-slate-600 hidden md:table-cell">{team.pointsAgainst}</td>
-                            <td className="py-2 px-2 md:py-3 text-center font-medium text-slate-700 hidden md:table-cell">
+                            <td className="py-3 px-3 font-medium text-slate-600 sticky left-0 bg-inherit z-10">{team.rank}</td>
+                            <td className="py-3 px-3 font-medium text-slate-800 max-w-[180px] sticky left-12 md:static bg-inherit z-10">
+                              <div className="flex items-center gap-2">
+                                <TeamLogo teamName={team.team} leagueId={league?.league_id} size="sm" />
+                                <span className="truncate">{team.team}</span>
+                              </div>
+                            </td>
+                            <td className="py-3 px-3 text-center font-semibold text-slate-700">{team.wins}</td>
+                            <td className="py-3 px-3 text-center font-semibold text-slate-700">{team.losses}</td>
+                            <td className="py-3 px-3 text-center font-medium text-slate-600">{(team.winPct * 100).toFixed(1)}%</td>
+                            <td className="py-3 px-3 text-right font-medium text-slate-700">{team.pointsFor}</td>
+                            <td className="py-3 px-3 text-right font-medium text-slate-700">{team.pointsAgainst}</td>
+                            <td className={`py-3 px-3 text-right font-semibold ${team.pointsDiff > 0 ? 'text-green-600' : team.pointsDiff < 0 ? 'text-red-600' : 'text-slate-600'}`}>
                               {team.pointsDiff > 0 ? `+${team.pointsDiff}` : team.pointsDiff}
                             </td>
-                            <td className="py-2 px-2 md:py-3 text-center">
+                            <td className="py-3 px-3 text-center">
                               {team.movement === 'up' && (
-                                <span className="text-green-600 font-bold text-xs md:text-sm">▲</span>
+                                <span className="text-green-600 font-bold text-sm">▲</span>
                               )}
                               {team.movement === 'down' && (
-                                <span className="text-red-600 font-bold text-xs md:text-sm">▼</span>
+                                <span className="text-red-600 font-bold text-sm">▼</span>
                               )}
                               {team.movement === 'same' && (
-                                <span className="text-gray-400 text-xs md:text-sm">▬</span>
+                                <span className="text-gray-400 text-sm">▬</span>
                               )}
                             </td>
                           </tr>
@@ -2298,16 +2303,17 @@ export default function LeaguePage() {
                 </div>
               ) : standings.length > 0 ? (
                 <div className="overflow-x-auto -mx-4 md:mx-0">
-                  <table className="w-full text-xs md:text-sm min-w-[500px]">
+                  <table className="w-full text-sm min-w-[600px]">
                     <thead>
-                      <tr className="border-b border-gray-200">
-                        <th className="text-left py-2 md:py-3 px-2 font-semibold text-slate-700 sticky left-0 bg-white z-10">#</th>
-                        <th className="text-left py-2 md:py-3 px-2 font-semibold text-slate-700 sticky left-6 md:static bg-white z-10">Team</th>
-                        <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700">Record</th>
-                        <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700">Win%</th>
-                        <th className="text-right py-2 md:py-3 px-2 font-semibold text-slate-700">PF</th>
-                        <th className="text-right py-2 md:py-3 px-2 font-semibold text-slate-700 hidden md:table-cell">PA</th>
-                        <th className="text-right py-2 md:py-3 px-2 font-semibold text-slate-700 hidden md:table-cell">Diff</th>
+                      <tr className="border-b-2 border-gray-200">
+                        <th className="text-left py-3 px-3 font-semibold text-slate-700 w-12 sticky left-0 bg-white z-10">#</th>
+                        <th className="text-left py-3 px-3 font-semibold text-slate-700 max-w-[180px] sticky left-12 md:static bg-white z-10">Team</th>
+                        <th className="text-center py-3 px-3 font-semibold text-slate-700 w-20">W</th>
+                        <th className="text-center py-3 px-3 font-semibold text-slate-700 w-20">L</th>
+                        <th className="text-center py-3 px-3 font-semibold text-slate-700 w-20">Win%</th>
+                        <th className="text-right py-3 px-3 font-semibold text-slate-700 w-20">PF</th>
+                        <th className="text-right py-3 px-3 font-semibold text-slate-700 w-20">PA</th>
+                        <th className="text-right py-3 px-3 font-semibold text-slate-700 w-20">Diff</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2318,29 +2324,31 @@ export default function LeaguePage() {
                             index < 3 ? 'bg-green-50' : index >= standings.length - 2 ? 'bg-red-50' : ''
                           }`}
                         >
-                          <td className="py-2 md:py-3 px-2 font-medium text-slate-600 sticky left-0 bg-inherit z-10">{index + 1}</td>
-                          <td className="py-2 md:py-3 px-2 font-medium text-slate-800 sticky left-6 md:static bg-inherit z-10">
-                            <div className="flex items-center gap-1 md:gap-2 whitespace-nowrap">
+                          <td className="py-3 px-3 font-medium text-slate-600 sticky left-0 bg-inherit z-10">{index + 1}</td>
+                          <td className="py-3 px-3 font-medium text-slate-800 max-w-[180px] sticky left-12 md:static bg-inherit z-10">
+                            <div className="flex items-center gap-2">
                               <TeamLogo teamName={team.team} leagueId={league?.league_id} size="sm" />
-                              <span>{team.team}</span>
+                              <span className="truncate">{team.team}</span>
                             </div>
                           </td>
-                          <td className="py-2 md:py-3 px-2 text-center font-medium text-slate-700">{team.record}</td>
-                          <td className="py-2 md:py-3 px-2 text-center text-slate-600">{(team.winPct * 100).toFixed(1)}%</td>
-                          <td className="py-2 md:py-3 px-2 text-right text-slate-600">{team.pointsFor}</td>
-                          <td className="py-2 md:py-3 px-2 text-right text-slate-600 hidden md:table-cell">{team.pointsAgainst}</td>
-                          <td className={`py-2 md:py-3 px-2 text-right font-medium hidden md:table-cell ${team.pointsDiff > 0 ? 'text-green-600' : team.pointsDiff < 0 ? 'text-red-600' : 'text-slate-600'}`}>{team.pointsDiff > 0 ? '+' : ''}{team.pointsDiff}</td>
+                          <td className="py-3 px-3 text-center font-semibold text-slate-700">{team.wins}</td>
+                          <td className="py-3 px-3 text-center font-semibold text-slate-700">{team.losses}</td>
+                          <td className="py-3 px-3 text-center font-medium text-slate-600">{(team.winPct * 100).toFixed(1)}%</td>
+                          <td className="py-3 px-3 text-right font-medium text-slate-700">{team.pointsFor}</td>
+                          <td className="py-3 px-3 text-right font-medium text-slate-700">{team.pointsAgainst}</td>
+                          <td className={`py-3 px-3 text-right font-semibold ${team.pointsDiff > 0 ? 'text-green-600' : team.pointsDiff < 0 ? 'text-red-600' : 'text-slate-600'}`}>{team.pointsDiff > 0 ? '+' : ''}{team.pointsDiff}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                  <div className="mt-3 md:mt-4 text-xs text-slate-500">
-                    <div className="flex gap-3 md:gap-4 flex-wrap text-xs">
-                      <span>Record = Wins-Losses</span>
-                      <span>Win% = Win Percentage</span>
-                      <span>PF = Points For</span>
-                      <span className="hidden md:inline">PA = Points Against</span>
-                      <span className="hidden md:inline">Diff = Point Differential</span>
+                  <div className="mt-4 pt-3 border-t border-gray-100 text-xs text-slate-500">
+                    <div className="flex gap-4 flex-wrap">
+                      <span><span className="font-semibold">W</span> = Wins</span>
+                      <span><span className="font-semibold">L</span> = Losses</span>
+                      <span><span className="font-semibold">Win%</span> = Win Percentage</span>
+                      <span><span className="font-semibold">PF</span> = Points For</span>
+                      <span><span className="font-semibold">PA</span> = Points Against</span>
+                      <span><span className="font-semibold">Diff</span> = Point Differential</span>
                     </div>
                   </div>
                 </div>
