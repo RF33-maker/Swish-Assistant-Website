@@ -6,7 +6,7 @@ import { TeamLogo } from "@/components/TeamLogo";
 import React from "react";
 
 interface League {
-  league_id: string;
+  id: string;
   name: string;
   slug: string;
 }
