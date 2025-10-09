@@ -802,7 +802,7 @@ export default function LandingPage() {
               <h4 className="font-semibold text-lg mb-4 text-white">Legal</h4>
               <ul className="space-y-2">
                 <li><a href="/privacy" className="text-gray-300 hover:text-white transition-colors">Privacy Policy</a></li>
-                <li><a href="#terms" className="text-gray-300 hover:text-white transition-colors">Terms of Service</a></li>
+                <li><a href="/terms" className="text-gray-300 hover:text-white transition-colors">Terms of Service</a></li>
                 <li><a href="#cookies" className="text-gray-300 hover:text-white transition-colors">Cookie Policy</a></li>
                 <li><a href="#support" className="text-gray-300 hover:text-white transition-colors">Support</a></li>
               </ul>
