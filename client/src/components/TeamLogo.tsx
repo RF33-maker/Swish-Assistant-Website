@@ -35,36 +35,32 @@ export function TeamLogo({ teamName, leagueId, size = "md", className = "" }: Te
         setIsLoading(true);
         setHasError(false);
         
-        // Query team_logos table for this team's logo
-        const { data, error } = await supabase
-          .from('team_logos')
-          .select('logo_url')
-          .eq('league_id', leagueId)
-          .eq('team_name', teamName)
-          .maybeSingle();
+        // Try common file extensions for team logos
+        const extensions = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
+        let foundLogo = false;
         
-        console.log('🖼️ TeamLogo fetch:', { leagueId, teamName, data, error });
-        
-        if (error) {
-          console.error('Error fetching team logo from database:', error);
-          setLogoUrl(null);
-        } else if (data?.logo_url) {
-          // Remove the /team-logos/ prefix from the path if present
-          const logoPath = data.logo_url.startsWith('/team-logos/') 
-            ? data.logo_url.slice('/team-logos/'.length)
-            : data.logo_url;
+        for (const ext of extensions) {
+          const fileName = `${leagueId}_${teamName.replace(/\s+/g, '_')}.${ext}`;
           
-          console.log('🖼️ Logo path:', { original: data.logo_url, processed: logoPath });
-          
-          // Convert the logo path to a public URL
-          const { data: urlData } = supabase.storage
+          // Get public URL from Supabase storage
+          const { data } = supabase.storage
             .from('team-logos')
-            .getPublicUrl(logoPath);
+            .getPublicUrl(fileName);
           
-          console.log('🖼️ Public URL:', urlData.publicUrl);
-          setLogoUrl(urlData.publicUrl);
-        } else {
-          console.log('🖼️ No logo found for team');
+          try {
+            // Check if the file exists by attempting to fetch it
+            const response = await fetch(data.publicUrl, { method: 'HEAD' });
+            if (response.ok) {
+              setLogoUrl(data.publicUrl);
+              foundLogo = true;
+              break;
+            }
+          } catch (error) {
+            // Continue to next extension
+          }
+        }
+        
+        if (!foundLogo) {
           setLogoUrl(null);
         }
       } catch (error) {
