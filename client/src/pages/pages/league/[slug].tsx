@@ -80,6 +80,9 @@ export default function LeaguePage() {
   const [instagramUrl, setInstagramUrl] = useState("");
   const [isEditingInstagram, setIsEditingInstagram] = useState(false);
   const [updatingInstagram, setUpdatingInstagram] = useState(false);
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [isEditingYoutube, setIsEditingYoutube] = useState(false);
+  const [updatingYoutube, setUpdatingYoutube] = useState(false);
   const [activeSection, setActiveSection] = useState('overview'); // 'overview', 'stats', 'teams', 'schedule'
   const [comparisonMode, setComparisonMode] = useState<'player' | 'team'>('player'); // Toggle between player and team comparison
   const [allPlayerAverages, setAllPlayerAverages] = useState<any[]>([]);
@@ -180,6 +183,7 @@ export default function LeaguePage() {
           const ownerStatus = user?.id === data.user_id || user?.id === data.created_by;
           setIsOwner(ownerStatus);
           setInstagramUrl(data.instagram_embed_url || "");
+          setYoutubeUrl(data.youtube_embed_url || "");
           console.log("Is owner?", ownerStatus, "User ID:", user?.id, "League owner ID:", data.user_id);
         }
         
@@ -546,6 +550,36 @@ export default function LeaguePage() {
       }
     };
 
+    // Handle YouTube URL update
+    const handleYoutubeUpdate = async () => {
+      if (!isOwner || !league) return;
+      
+      setUpdatingYoutube(true);
+      try {
+        const { data, error } = await supabase
+          .from('leagues')
+          .update({ youtube_embed_url: youtubeUrl })
+          .eq('league_id', league.league_id)
+          .select()
+          .single();
+
+        if (error) {
+          console.error('YouTube update error:', error);
+          alert('Failed to update YouTube URL');
+          return;
+        }
+
+        setLeague({ ...league, youtube_embed_url: youtubeUrl });
+        setIsEditingYoutube(false);
+        alert('YouTube URL updated successfully!');
+      } catch (error) {
+        console.error('YouTube update error:', error);
+        alert(`Failed to update YouTube URL: ${error.message}`);
+      } finally {
+        setUpdatingYoutube(false);
+      }
+    };
+
     // Convert Instagram profile URL to embed URL for latest posts
     const getInstagramEmbedUrl = (url: string) => {
       if (!url) return null;
@@ -576,6 +610,50 @@ export default function LeaguePage() {
       }
       
       console.log('No match found for URL:', url);
+      return null;
+    };
+
+    // Convert YouTube URL to embed format
+    const getYoutubeEmbedUrl = (url: string) => {
+      if (!url) return null;
+      
+      console.log('Processing YouTube URL:', url);
+      
+      // If it's already an embed URL, return as is
+      if (url.includes('/embed/')) {
+        console.log('Already an embed URL:', url);
+        return url;
+      }
+      
+      // Handle different YouTube URL formats
+      // 1. Standard watch URL: youtube.com/watch?v=VIDEO_ID
+      const watchMatch = url.match(/youtube\.com\/watch\?v=([^&]+)/);
+      if (watchMatch) {
+        const videoId = watchMatch[1];
+        const embedUrl = `https://www.youtube.com/embed/${videoId}`;
+        console.log('Generated embed URL from watch:', embedUrl);
+        return embedUrl;
+      }
+      
+      // 2. Short URL: youtu.be/VIDEO_ID
+      const shortMatch = url.match(/youtu\.be\/([^?]+)/);
+      if (shortMatch) {
+        const videoId = shortMatch[1];
+        const embedUrl = `https://www.youtube.com/embed/${videoId}`;
+        console.log('Generated embed URL from short:', embedUrl);
+        return embedUrl;
+      }
+      
+      // 3. Mobile URL: youtube.com/shorts/VIDEO_ID
+      const shortsMatch = url.match(/youtube\.com\/shorts\/([^?]+)/);
+      if (shortsMatch) {
+        const videoId = shortsMatch[1];
+        const embedUrl = `https://www.youtube.com/embed/${videoId}`;
+        console.log('Generated embed URL from shorts:', embedUrl);
+        return embedUrl;
+      }
+      
+      console.log('Could not process YouTube URL');
       return null;
     };
 
@@ -2487,16 +2565,81 @@ export default function LeaguePage() {
 
             {/* YouTube Embed */}
             <div className="bg-white rounded-xl shadow p-4">
-              <h3 className="text-sm font-semibold text-slate-700 mb-2">Latest Highlights</h3>
-              <iframe
-                width="100%"
-                height="250"
-                src="https://www.youtube.com/embed/VIDEO_ID"
-                title="YouTube video player"
-                frameBorder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              ></iframe>
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="text-sm font-semibold text-slate-700">Latest Highlights</h3>
+                {isOwner && (
+                  <button
+                    onClick={() => setIsEditingYoutube(!isEditingYoutube)}
+                    className="text-xs text-orange-500 hover:text-orange-600 font-medium"
+                  >
+                    {isEditingYoutube ? 'Cancel' : 'Edit'}
+                  </button>
+                )}
+              </div>
+
+              {isEditingYoutube && isOwner ? (
+                <div className="space-y-3">
+                  <input
+                    type="text"
+                    placeholder="Enter YouTube video URL (e.g., https://www.youtube.com/watch?v=xyz or https://youtu.be/xyz)"
+                    value={youtubeUrl}
+                    onChange={(e) => setYoutubeUrl(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md"
+                  />
+                  <p className="text-xs text-gray-500">
+                    💡 Paste any YouTube video URL (watch, short link, or shorts)
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleYoutubeUpdate}
+                      disabled={updatingYoutube}
+                      className={`px-3 py-1 text-xs font-medium rounded ${
+                        updatingYoutube 
+                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                          : 'bg-orange-500 text-white hover:bg-orange-600'
+                      }`}
+                    >
+                      {updatingYoutube ? 'Updating...' : 'Save'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsEditingYoutube(false);
+                        setYoutubeUrl(league?.youtube_embed_url || "");
+                      }}
+                      className="px-3 py-1 text-xs font-medium bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  {league?.youtube_embed_url && getYoutubeEmbedUrl(league.youtube_embed_url) ? (
+                    <iframe
+                      src={getYoutubeEmbedUrl(league.youtube_embed_url)}
+                      width="100%"
+                      height="250"
+                      className="rounded-md border"
+                      title="YouTube video player"
+                      frameBorder="0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    ></iframe>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      <p className="text-sm">No YouTube video added yet</p>
+                      {isOwner && (
+                        <button
+                          onClick={() => setIsEditingYoutube(true)}
+                          className="mt-2 text-xs text-orange-500 hover:text-orange-600 underline"
+                        >
+                          Add YouTube Video
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Comment Section Placeholder */}
