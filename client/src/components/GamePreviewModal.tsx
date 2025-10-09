@@ -25,64 +25,101 @@ interface GameResult {
 }
 
 export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: GamePreviewModalProps) {
-  // Fetch game results for team1 (last 5 games with W/L)
-  const { data: team1GameResults } = useQuery({
-    queryKey: ['game-results', leagueId, game.team1],
+  // First, fetch team IDs from teams table
+  const { data: team1Data } = useQuery({
+    queryKey: ['team-lookup', leagueId, game.team1],
     queryFn: async () => {
-      const { data: teamGames, error } = await supabase
-        .from('team_stats')
-        .select('numeric_id, tot_spoints, name')
+      console.log('🔍 Looking up team1 ID for:', game.team1);
+      
+      // Try exact match first
+      let { data, error } = await supabase
+        .from('teams')
+        .select('team_id, name')
         .eq('league_id', leagueId)
         .eq('name', game.team1)
-        .order('numeric_id', { ascending: false });
+        .single();
       
-      if (error) throw error;
-      if (!teamGames) return [];
-
-      const results: GameResult[] = [];
-      const processedGames = new Set<string>();
-
-      for (const teamGame of teamGames) {
-        if (!teamGame.numeric_id || processedGames.has(teamGame.numeric_id)) continue;
+      // If no exact match, try partial match
+      if (error || !data) {
+        const baseTeamName = game.team1.split(' Senior ')[0].split(' Men')[0];
+        console.log('🔍 Trying partial match for team1:', baseTeamName);
         
-        const { data: opponentData, error: oppError } = await supabase
-          .from('team_stats')
-          .select('tot_spoints, name')
+        const { data: partialData, error: partialError } = await supabase
+          .from('teams')
+          .select('team_id, name')
           .eq('league_id', leagueId)
-          .eq('numeric_id', teamGame.numeric_id)
-          .neq('name', game.team1)
+          .ilike('name', `%${baseTeamName}%`)
+          .limit(1)
           .single();
-
-        if (!oppError && opponentData) {
-          results.push({
-            numericId: teamGame.numeric_id,
-            won: (teamGame.tot_spoints || 0) > (opponentData.tot_spoints || 0),
-            teamScore: teamGame.tot_spoints || 0,
-            opponentScore: opponentData.tot_spoints || 0
-          });
-          processedGames.add(teamGame.numeric_id);
-        }
-
-        if (results.length >= 5) break;
+        
+        data = partialData;
+        error = partialError;
       }
-
-      return results;
+      
+      console.log('✅ Team1 lookup result:', data);
+      return data;
     },
     enabled: isOpen
   });
 
-  // Fetch game results for team2 (last 5 games with W/L)
-  const { data: team2GameResults } = useQuery({
-    queryKey: ['game-results', leagueId, game.team2],
+  const { data: team2Data } = useQuery({
+    queryKey: ['team-lookup', leagueId, game.team2],
     queryFn: async () => {
-      const { data: teamGames, error } = await supabase
-        .from('team_stats')
-        .select('numeric_id, tot_spoints, name')
+      console.log('🔍 Looking up team2 ID for:', game.team2);
+      
+      // Try exact match first
+      let { data, error } = await supabase
+        .from('teams')
+        .select('team_id, name')
         .eq('league_id', leagueId)
         .eq('name', game.team2)
+        .single();
+      
+      // If no exact match, try partial match
+      if (error || !data) {
+        const baseTeamName = game.team2.split(' Senior ')[0].split(' Men')[0];
+        console.log('🔍 Trying partial match for team2:', baseTeamName);
+        
+        const { data: partialData, error: partialError } = await supabase
+          .from('teams')
+          .select('team_id, name')
+          .eq('league_id', leagueId)
+          .ilike('name', `%${baseTeamName}%`)
+          .limit(1)
+          .single();
+        
+        data = partialData;
+        error = partialError;
+      }
+      
+      console.log('✅ Team2 lookup result:', data);
+      return data;
+    },
+    enabled: isOpen
+  });
+
+  const team1Id = team1Data?.team_id;
+  const team2Id = team2Data?.team_id;
+
+  // Fetch game results for team1 (last 5 games with W/L) using team_id
+  const { data: team1GameResults } = useQuery({
+    queryKey: ['game-results', leagueId, team1Id],
+    queryFn: async () => {
+      if (!team1Id) return [];
+      
+      console.log('🏀 Fetching game results for team1_id:', team1Id);
+      
+      const { data: teamGames, error } = await supabase
+        .from('team_stats')
+        .select('numeric_id, tot_spoints, team_id')
+        .eq('league_id', leagueId)
+        .eq('team_id', team1Id)
         .order('numeric_id', { ascending: false });
       
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Error fetching team1 games:', error);
+        throw error;
+      }
       if (!teamGames) return [];
 
       const results: GameResult[] = [];
@@ -93,10 +130,10 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
         
         const { data: opponentData, error: oppError } = await supabase
           .from('team_stats')
-          .select('tot_spoints, name')
+          .select('tot_spoints, team_id')
           .eq('league_id', leagueId)
           .eq('numeric_id', teamGame.numeric_id)
-          .neq('name', game.team2)
+          .neq('team_id', team1Id)
           .single();
 
         if (!oppError && opponentData) {
@@ -112,9 +149,64 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
         if (results.length >= 5) break;
       }
 
+      console.log('✅ Team1 game results:', results);
       return results;
     },
-    enabled: isOpen
+    enabled: isOpen && !!team1Id
+  });
+
+  // Fetch game results for team2 (last 5 games with W/L) using team_id
+  const { data: team2GameResults } = useQuery({
+    queryKey: ['game-results', leagueId, team2Id],
+    queryFn: async () => {
+      if (!team2Id) return [];
+      
+      console.log('🏀 Fetching game results for team2_id:', team2Id);
+      
+      const { data: teamGames, error } = await supabase
+        .from('team_stats')
+        .select('numeric_id, tot_spoints, team_id')
+        .eq('league_id', leagueId)
+        .eq('team_id', team2Id)
+        .order('numeric_id', { ascending: false });
+      
+      if (error) {
+        console.error('❌ Error fetching team2 games:', error);
+        throw error;
+      }
+      if (!teamGames) return [];
+
+      const results: GameResult[] = [];
+      const processedGames = new Set<string>();
+
+      for (const teamGame of teamGames) {
+        if (!teamGame.numeric_id || processedGames.has(teamGame.numeric_id)) continue;
+        
+        const { data: opponentData, error: oppError } = await supabase
+          .from('team_stats')
+          .select('tot_spoints, team_id')
+          .eq('league_id', leagueId)
+          .eq('numeric_id', teamGame.numeric_id)
+          .neq('team_id', team2Id)
+          .single();
+
+        if (!oppError && opponentData) {
+          results.push({
+            numericId: teamGame.numeric_id,
+            won: (teamGame.tot_spoints || 0) > (opponentData.tot_spoints || 0),
+            teamScore: teamGame.tot_spoints || 0,
+            opponentScore: opponentData.tot_spoints || 0
+          });
+          processedGames.add(teamGame.numeric_id);
+        }
+
+        if (results.length >= 5) break;
+      }
+
+      console.log('✅ Team2 game results:', results);
+      return results;
+    },
+    enabled: isOpen && !!team2Id
   });
 
   // Calculate team records
@@ -126,38 +218,24 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
     ? `${team2GameResults.filter(g => g.won).length}-${team2GameResults.filter(g => !g.won).length}`
     : '0-0';
 
-  // Fetch roster for team1
+  // Fetch roster for team1 using team_id
   const { data: team1Roster } = useQuery({
-    queryKey: ['roster', leagueId, game.team1],
+    queryKey: ['roster', leagueId, team1Id],
     queryFn: async () => {
-      console.log('🔍 Fetching roster for team1:', game.team1, 'league:', leagueId);
+      if (!team1Id) return [];
       
-      // Try exact match first
-      let { data, error } = await supabase
+      console.log('📊 Fetching roster for team1_id:', team1Id);
+      
+      const { data, error } = await supabase
         .from('player_stats')
-        .select('firstname, familyname, spoints, sreboundstotal, sassists, team')
+        .select('firstname, familyname, spoints, sreboundstotal, sassists')
         .eq('league_id', leagueId)
-        .eq('team', game.team1);
+        .eq('team_id', team1Id);
       
-      console.log('📊 Team1 exact match result:', { error, count: data?.length });
-      
-      // If no exact match, try partial match (remove suffix like "Senior Men I")
-      if (!data || data.length === 0) {
-        const baseTeamName = game.team1.split(' Senior ')[0].split(' Men')[0];
-        console.log('🔍 Trying partial match with:', baseTeamName);
-        
-        const { data: partialData, error: partialError } = await supabase
-          .from('player_stats')
-          .select('firstname, familyname, spoints, sreboundstotal, sassists, team')
-          .eq('league_id', leagueId)
-          .ilike('team', `%${baseTeamName}%`);
-        
-        console.log('📊 Team1 partial match result:', { error: partialError, count: partialData?.length });
-        data = partialData;
-        error = partialError;
+      if (error) {
+        console.error('❌ Error fetching team1 roster:', error);
+        throw error;
       }
-      
-      if (error) throw error;
       
       const playerMap = new Map();
       data?.forEach(stat => {
@@ -178,7 +256,7 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
         player.assists += stat.sassists || 0;
       });
 
-      return Array.from(playerMap.values())
+      const roster = Array.from(playerMap.values())
         .map(p => ({
           ...p,
           ppg: p.games > 0 ? (p.points / p.games).toFixed(1) : '0.0',
@@ -186,42 +264,31 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
           apg: p.games > 0 ? (p.assists / p.games).toFixed(1) : '0.0'
         }))
         .sort((a, b) => parseFloat(b.ppg) - parseFloat(a.ppg));
+      
+      console.log('✅ Team1 roster:', roster.length, 'players');
+      return roster;
     },
-    enabled: isOpen
+    enabled: isOpen && !!team1Id
   });
 
-  // Fetch roster for team2
+  // Fetch roster for team2 using team_id
   const { data: team2Roster } = useQuery({
-    queryKey: ['roster', leagueId, game.team2],
+    queryKey: ['roster', leagueId, team2Id],
     queryFn: async () => {
-      console.log('🔍 Fetching roster for team2:', game.team2, 'league:', leagueId);
+      if (!team2Id) return [];
       
-      // Try exact match first
-      let { data, error } = await supabase
+      console.log('📊 Fetching roster for team2_id:', team2Id);
+      
+      const { data, error } = await supabase
         .from('player_stats')
-        .select('firstname, familyname, spoints, sreboundstotal, sassists, team')
+        .select('firstname, familyname, spoints, sreboundstotal, sassists')
         .eq('league_id', leagueId)
-        .eq('team', game.team2);
+        .eq('team_id', team2Id);
       
-      console.log('📊 Team2 exact match result:', { error, count: data?.length });
-      
-      // If no exact match, try partial match (remove suffix like "Senior Men I")
-      if (!data || data.length === 0) {
-        const baseTeamName = game.team2.split(' Senior ')[0].split(' Men')[0];
-        console.log('🔍 Trying partial match with:', baseTeamName);
-        
-        const { data: partialData, error: partialError } = await supabase
-          .from('player_stats')
-          .select('firstname, familyname, spoints, sreboundstotal, sassists, team')
-          .eq('league_id', leagueId)
-          .ilike('team', `%${baseTeamName}%`);
-        
-        console.log('📊 Team2 partial match result:', { error: partialError, count: partialData?.length });
-        data = partialData;
-        error = partialError;
+      if (error) {
+        console.error('❌ Error fetching team2 roster:', error);
+        throw error;
       }
-      
-      if (error) throw error;
       
       const playerMap = new Map();
       data?.forEach(stat => {
@@ -242,7 +309,7 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
         player.assists += stat.sassists || 0;
       });
 
-      return Array.from(playerMap.values())
+      const roster = Array.from(playerMap.values())
         .map(p => ({
           ...p,
           ppg: p.games > 0 ? (p.points / p.games).toFixed(1) : '0.0',
@@ -250,8 +317,11 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
           apg: p.games > 0 ? (p.assists / p.games).toFixed(1) : '0.0'
         }))
         .sort((a, b) => parseFloat(b.ppg) - parseFloat(a.ppg));
+      
+      console.log('✅ Team2 roster:', roster.length, 'players');
+      return roster;
     },
-    enabled: isOpen
+    enabled: isOpen && !!team2Id
   });
 
   const team1Top3 = team1Roster?.slice(0, 3) || [];
@@ -262,10 +332,11 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
   // Debug logging
   if (isOpen) {
     console.log('🎮 Game Preview Modal opened for:', game.team1, 'vs', game.team2);
-    console.log('📊 Team1 roster data:', team1Roster);
-    console.log('📊 Team2 roster data:', team2Roster);
-    console.log('🏀 Team1 game results:', team1GameResults);
-    console.log('🏀 Team2 game results:', team2GameResults);
+    console.log('🔑 Team IDs:', { team1Id, team2Id });
+    console.log('📊 Team1 roster data:', team1Roster?.length, 'players');
+    console.log('📊 Team2 roster data:', team2Roster?.length, 'players');
+    console.log('🏀 Team1 game results:', team1GameResults?.length, 'games');
+    console.log('🏀 Team2 game results:', team2GameResults?.length, 'games');
   }
 
   return (
