@@ -6,7 +6,7 @@ import { TeamLogo } from "@/components/TeamLogo";
 import React from "react";
 
 interface League {
-  id: string;
+  league_id: string;
   name: string;
   slug: string;
 }
@@ -410,7 +410,7 @@ export default function TeamProfile() {
             {/* Team Logo Placeholder */}
             <TeamLogo 
               teamName={team.name} 
-              leagueId={team.league?.id || ''} 
+              leagueId={team.league?.league_id || ''} 
               size="xl" 
               className="border-2 border-white/30" 
             />
