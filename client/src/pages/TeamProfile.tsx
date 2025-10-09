@@ -410,7 +410,7 @@ export default function TeamProfile() {
             {/* Team Logo Placeholder */}
             <TeamLogo 
               teamName={team.name} 
-              leagueId={team.league?.league_id || ''} 
+              leagueId={team.league?.id || ''} 
               size="xl" 
               className="border-2 border-white/30" 
             />
