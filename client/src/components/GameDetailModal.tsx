@@ -496,7 +496,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                   <table className="w-full text-xs md:text-sm min-w-[800px]">
                     <thead className="bg-gray-50 border-b border-gray-200">
                       <tr>
-                        <th className="text-left py-1.5 md:p-3 font-medium text-slate-700 sticky left-0 bg-gray-50 z-10 w-48 md:w-52 pl-2 pr-1">Player</th>
+                        <th className="text-left py-1.5 md:p-3 font-medium text-slate-700 sticky left-4 md:left-0 bg-gray-50 z-10 w-48 md:w-52 pl-2 pr-1">Player</th>
                         <th className="text-center py-1.5 md:p-3 font-medium text-slate-700 pl-1 pr-1.5">MIN</th>
                         <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700">PTS</th>
                         <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700">FG</th>
@@ -513,7 +513,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                     <tbody>
                       {selectedTeamPlayers.map((player, index) => (
                         <tr key={player.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-orange-50 transition-colors`}>
-                          <td className="py-1.5 md:p-3 sticky left-0 bg-inherit z-10 w-48 md:w-52 pl-2 pr-1">
+                          <td className="py-1.5 md:p-3 sticky left-4 md:left-0 bg-inherit z-10 w-48 md:w-52 pl-2 pr-1">
                             <div className="max-w-none whitespace-normal">
                               <div className="font-medium text-slate-800">{player.firstname} {player.familyname}</div>
                               {player.number && (
@@ -587,7 +587,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                     {selectedTeamStats && (
                       <tfoot className="bg-orange-50 border-t-2 border-orange-200">
                         <tr className="font-semibold text-slate-800">
-                          <td className="py-1.5 md:p-3 sticky left-0 bg-orange-50 z-10 w-48 md:w-52 pl-2 pr-1">TEAM TOTALS</td>
+                          <td className="py-1.5 md:p-3 sticky left-4 md:left-0 bg-orange-50 z-10 w-48 md:w-52 pl-2 pr-1">TEAM TOTALS</td>
                           <td className="py-1.5 md:p-3 text-center pl-1 pr-1.5">-</td>
                           <td className="px-1.5 py-1.5 md:p-3 text-center text-orange-600">{selectedTeamStats.score}</td>
                           <td className="px-1.5 py-1.5 md:p-3 text-center">
