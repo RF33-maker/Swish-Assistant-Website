@@ -30,6 +30,7 @@ import PaymentPage from "@/pages/payment";
 import ContactSalesPage from "@/pages/contact-sales";
 import PrivacyPolicyPage from "@/pages/privacy";
 import TermsOfServicePage from "@/pages/terms";
+import CookiePolicyPage from "@/pages/cookies";
 
 function Router() {
   return (
@@ -49,6 +50,7 @@ function Router() {
       <Route path="/reset-password" component={ResetPassword} />
       <Route path="/privacy" component={PrivacyPolicyPage} />
       <Route path="/terms" component={TermsOfServicePage} />
+      <Route path="/cookies" component={CookiePolicyPage} />
       <Route path="/contact-sales" component={ContactSalesPage} />
 
       {/* Protected routes */}
