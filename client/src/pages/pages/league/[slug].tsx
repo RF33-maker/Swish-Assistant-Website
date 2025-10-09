@@ -364,12 +364,18 @@ export default function LeaguePage() {
           };
 
           fetchTopStats();
-          fetchAllPlayerAverages();
         }
       };
 
       fetchUserAndLeague();
     }, [slug]);
+
+    // Fetch player averages when league is available
+    useEffect(() => {
+      if (league?.league_id) {
+        fetchAllPlayerAverages();
+      }
+    }, [league?.league_id]);
 
     const handleSearch = () => {
       if (search.trim()) {
