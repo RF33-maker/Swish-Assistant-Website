@@ -99,6 +99,7 @@ export default function LeaguePage() {
   const [previousRankings, setPreviousRankings] = useState<Record<string, number>>({});
   const [hasPools, setHasPools] = useState(false); // Track if league has pools
   const [viewMode, setViewMode] = useState<'standings' | 'bracket'>('standings'); // Toggle between standings and bracket
+  const [scheduleView, setScheduleView] = useState<'upcoming' | 'results'>('upcoming'); // Toggle for schedule view
 
     
 
@@ -1993,7 +1994,34 @@ export default function LeaguePage() {
             {/* Schedule Section */}
             {activeSection === 'schedule' && (
               <div className="bg-white rounded-xl shadow p-4 md:p-6">
-                <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-4 md:mb-6">Game Schedule</h2>
+                <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-3 md:mb-4">Game Schedule</h2>
+                
+                {/* Tabs for Upcoming / Results */}
+                <div className="flex gap-2 mb-4 border-b border-gray-200">
+                  <button
+                    onClick={() => setScheduleView('upcoming')}
+                    className={`px-3 md:px-4 py-2 text-xs md:text-sm font-semibold transition-all ${
+                      scheduleView === 'upcoming'
+                        ? 'text-orange-500 border-b-2 border-orange-500 -mb-[2px]'
+                        : 'text-slate-600 hover:text-orange-500'
+                    }`}
+                    data-testid="button-upcoming-games"
+                  >
+                    Upcoming Games
+                  </button>
+                  <button
+                    onClick={() => setScheduleView('results')}
+                    className={`px-3 md:px-4 py-2 text-xs md:text-sm font-semibold transition-all ${
+                      scheduleView === 'results'
+                        ? 'text-orange-500 border-b-2 border-orange-500 -mb-[2px]'
+                        : 'text-slate-600 hover:text-orange-500'
+                    }`}
+                    data-testid="button-results"
+                  >
+                    Results
+                  </button>
+                </div>
+
                 {schedule.length > 0 ? (
                   <>
                     {(() => {
@@ -2005,77 +2033,62 @@ export default function LeaguePage() {
                         .filter(game => new Date(game.game_date) < now)
                         .sort((a, b) => new Date(b.game_date).getTime() - new Date(a.game_date).getTime());
 
+                      const gamesToShow = scheduleView === 'upcoming' ? upcomingGames : pastGames;
+
                       return (
                         <>
-                          {/* Upcoming Games */}
-                          {upcomingGames.length > 0 && (
-                            <div className="mb-6 md:mb-8">
-                              <h3 className="text-sm md:text-md font-semibold text-slate-700 mb-3 md:mb-4 pb-2 border-b border-orange-200">
-                                Upcoming Games
-                              </h3>
-                              <div className="divide-y divide-gray-200">
-                                {upcomingGames.map((game, index) => (
+                          {gamesToShow.length > 0 ? (
+                            <div className="divide-y divide-gray-200">
+                              {scheduleView === 'upcoming' ? (
+                                /* Upcoming Games View */
+                                gamesToShow.map((game, index) => (
                                   <div 
                                     key={`upcoming-${game.game_id}-${index}`} 
-                                    className="p-3 md:p-4 hover:bg-gray-50 transition-colors cursor-pointer"
+                                    className="py-2 md:py-3 hover:bg-gray-50 transition-colors cursor-pointer"
                                     onClick={() => {
                                       setSelectedPreviewGame(game);
                                       setIsPreviewModalOpen(true);
                                     }}
                                     data-testid={`upcoming-game-${index}`}
                                   >
-                                    <div className="flex flex-col md:flex-row md:items-center gap-3 md:justify-between">
-                                      <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-6 flex-1">
-                                        <div className="text-xs md:text-sm text-slate-600 md:min-w-[120px]">
-                                          <div>
-                                            {new Date(game.game_date).toLocaleDateString('en-US', { 
-                                              weekday: 'short',
-                                              month: 'short', 
-                                              day: 'numeric',
-                                              year: 'numeric'
-                                            })}
-                                          </div>
-                                          {game.kickoff_time && (
-                                            <div className="text-xs text-slate-500 mt-1">
-                                              {game.kickoff_time}
-                                            </div>
-                                          )}
+                                    {/* Mobile-optimized compact layout */}
+                                    <div className="flex flex-col gap-2">
+                                      {/* Date and Time Row */}
+                                      <div className="flex items-center justify-between">
+                                        <div className="text-[11px] md:text-xs text-slate-600 font-medium">
+                                          {new Date(game.game_date).toLocaleDateString('en-US', { 
+                                            month: 'short', 
+                                            day: 'numeric'
+                                          })}
+                                          {game.kickoff_time && ` • ${game.kickoff_time}`}
                                         </div>
-                                        <div className="flex items-center gap-2 md:gap-4 flex-1">
-                                          <div className="flex items-center gap-1 md:gap-2 flex-1 md:min-w-[200px]">
-                                            <TeamLogo teamName={game.team1} leagueId={league?.league_id || ""} size="sm" />
-                                            <span className="font-medium text-slate-800 text-xs md:text-sm truncate">{game.team1}</span>
+                                        {game.venue && (
+                                          <div className="text-[10px] md:text-xs text-slate-400 truncate max-w-[100px] md:max-w-none">
+                                            {game.venue}
                                           </div>
-                                          <span className="text-slate-500 text-xs md:text-sm">vs</span>
-                                          <div className="flex items-center gap-1 md:gap-2 flex-1 md:min-w-[200px]">
-                                            <TeamLogo teamName={game.team2} leagueId={league?.league_id || ""} size="sm" />
-                                            <span className="font-medium text-slate-800 text-xs md:text-sm truncate">{game.team2}</span>
-                                          </div>
+                                        )}
+                                      </div>
+                                      {/* Teams Row */}
+                                      <div className="flex items-center gap-2 md:gap-3">
+                                        <div className="flex items-center gap-1 md:gap-1.5 flex-1 min-w-0">
+                                          <TeamLogo teamName={game.team1} leagueId={league?.league_id || ""} size="sm" />
+                                          <span className="font-medium text-slate-800 text-[11px] md:text-sm truncate">{game.team1}</span>
+                                        </div>
+                                        <span className="text-slate-400 text-[11px] md:text-xs flex-shrink-0">vs</span>
+                                        <div className="flex items-center gap-1 md:gap-1.5 flex-1 justify-end min-w-0">
+                                          <span className="font-medium text-slate-800 text-[11px] md:text-sm truncate">{game.team2}</span>
+                                          <TeamLogo teamName={game.team2} leagueId={league?.league_id || ""} size="sm" />
                                         </div>
                                       </div>
-                                      {game.venue && (
-                                        <div className="text-xs text-slate-400 truncate md:max-w-[150px]">
-                                          {game.venue}
-                                        </div>
-                                      )}
                                     </div>
                                   </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Past Games (Results) */}
-                          {pastGames.length > 0 && (
-                            <div>
-                              <h3 className="text-sm md:text-md font-semibold text-slate-700 mb-3 md:mb-4 pb-2 border-b border-orange-200">
-                                Results
-                              </h3>
-                              <div className="divide-y divide-gray-200">
-                                {pastGames.map((game, index) => (
+                                ))
+                              ) : (
+                                /* Results View */
+                                gamesToShow.map((game, index) => (
                                   <div 
                                     key={`past-${game.game_id}-${index}`} 
-                                    className={`p-3 md:p-4 transition-colors ${game.numeric_id ? 'cursor-pointer hover:bg-orange-50' : 'cursor-default'}`}
+                                    className={`py-2 md:py-3 transition-colors ${game.numeric_id ? 'cursor-pointer hover:bg-orange-50' : 'cursor-default'}`}
                                     onClick={() => {
                                       if (game.numeric_id) {
                                         handleGameClick(game.numeric_id);
@@ -2083,56 +2096,66 @@ export default function LeaguePage() {
                                     }}
                                     data-testid={`past-game-${index}`}
                                   >
-                                    <div className="flex flex-col gap-3">
+                                    {/* Mobile-optimized compact layout */}
+                                    <div className="flex flex-col gap-2">
+                                      {/* Date and Status Row */}
                                       <div className="flex items-center justify-between">
-                                        <div className="text-xs md:text-sm text-slate-600">
-                                          <div>
-                                            {new Date(game.game_date).toLocaleDateString('en-US', { 
-                                              weekday: 'short',
-                                              month: 'short', 
-                                              day: 'numeric',
-                                              year: 'numeric'
-                                            })}
-                                          </div>
+                                        <div className="text-[11px] md:text-xs text-slate-600 font-medium">
+                                          {new Date(game.game_date).toLocaleDateString('en-US', { 
+                                            month: 'short', 
+                                            day: 'numeric'
+                                          })}
                                           {game.status && (
-                                            <div className="text-xs text-green-600 mt-1 font-medium">
+                                            <span className="ml-2 text-[10px] md:text-xs text-green-600 font-semibold">
                                               {game.status}
-                                            </div>
+                                            </span>
                                           )}
                                         </div>
                                         {game.venue && (
-                                          <div className="text-xs text-slate-400 truncate max-w-[120px] md:max-w-none">
+                                          <div className="text-[10px] md:text-xs text-slate-400 truncate max-w-[100px] md:max-w-none">
                                             {game.venue}
                                           </div>
                                         )}
                                       </div>
-                                      <div className="flex items-center justify-between gap-2">
-                                        <div className="flex items-center gap-1 md:gap-2 flex-1 min-w-0">
+                                      {/* Teams and Score Row */}
+                                      <div className="flex items-center gap-2 md:gap-3">
+                                        <div className="flex items-center gap-1 md:gap-1.5 flex-1 min-w-0">
                                           <TeamLogo teamName={game.team1} leagueId={league?.league_id || ""} size="sm" />
-                                          <span className="font-medium text-slate-800 text-xs md:text-sm truncate">{game.team1}</span>
+                                          <span className="font-medium text-slate-800 text-[11px] md:text-sm truncate">{game.team1}</span>
                                         </div>
                                         {game.team1_score !== undefined && game.team2_score !== undefined ? (
-                                          <div className="flex items-center gap-2 md:gap-3 px-2 md:px-4 flex-shrink-0">
-                                            <span className={`text-lg md:text-xl font-bold ${game.team1_score > game.team2_score ? 'text-green-600' : 'text-slate-600'}`}>
+                                          <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0">
+                                            <span className={`text-base md:text-lg font-bold ${game.team1_score > game.team2_score ? 'text-green-600' : 'text-slate-600'}`}>
                                               {game.team1_score}
                                             </span>
-                                            <span className="text-slate-400 text-sm">-</span>
-                                            <span className={`text-lg md:text-xl font-bold ${game.team2_score > game.team1_score ? 'text-green-600' : 'text-slate-600'}`}>
+                                            <span className="text-slate-400 text-[11px] md:text-sm">-</span>
+                                            <span className={`text-base md:text-lg font-bold ${game.team2_score > game.team1_score ? 'text-green-600' : 'text-slate-600'}`}>
                                               {game.team2_score}
                                             </span>
                                           </div>
                                         ) : (
-                                          <span className="text-slate-500 text-xs md:text-sm px-2 md:px-4 flex-shrink-0">vs</span>
+                                          <span className="text-slate-400 text-[11px] md:text-xs flex-shrink-0">vs</span>
                                         )}
-                                        <div className="flex items-center gap-1 md:gap-2 flex-1 justify-end min-w-0">
-                                          <span className="font-medium text-slate-800 text-xs md:text-sm truncate">{game.team2}</span>
+                                        <div className="flex items-center gap-1 md:gap-1.5 flex-1 justify-end min-w-0">
+                                          <span className="font-medium text-slate-800 text-[11px] md:text-sm truncate">{game.team2}</span>
                                           <TeamLogo teamName={game.team2} leagueId={league?.league_id || ""} size="sm" />
                                         </div>
                                       </div>
                                     </div>
                                   </div>
-                                ))}
-                              </div>
+                                ))
+                              )}
+                            </div>
+                          ) : (
+                            <div className="text-center py-8 text-gray-500">
+                              <p className="text-xs md:text-sm">
+                                {scheduleView === 'upcoming' ? 'No upcoming games' : 'No results available'}
+                              </p>
+                              <p className="text-[10px] md:text-xs mt-1">
+                                {scheduleView === 'upcoming' 
+                                  ? 'Check back later for scheduled games' 
+                                  : 'Games will appear here after they are played'}
+                              </p>
                             </div>
                           )}
                         </>
@@ -2141,8 +2164,8 @@ export default function LeaguePage() {
                   </>
                 ) : (
                   <div className="text-center py-8 text-gray-500">
-                    <p className="text-sm">No games scheduled</p>
-                    <p className="text-xs mt-1">Games will appear when scheduled</p>
+                    <p className="text-xs md:text-sm">No games scheduled</p>
+                    <p className="text-[10px] md:text-xs mt-1">Games will appear when scheduled</p>
                   </div>
                 )}
               </div>
