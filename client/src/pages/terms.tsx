@@ -20,6 +20,7 @@ export default function TermsOfServicePage() {
             variant="ghost" 
             onClick={() => setLocation('/')}
             className="text-gray-600 hover:text-gray-800 mb-4"
+            data-testid="button-back-to-home"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Home
@@ -94,7 +95,7 @@ export default function TermsOfServicePage() {
               For any questions about these terms, please email:
             </p>
             <p className="text-gray-700 leading-relaxed">
-              📧 <a href="mailto:automatedathleteswa@gmail.com" className="text-orange-600 hover:text-orange-700 underline">automatedathleteswa@gmail.com</a>
+              📧 <a href="mailto:automatedathleteswa@gmail.com" className="text-orange-600 hover:text-orange-700 underline" data-testid="link-contact-email">automatedathleteswa@gmail.com</a>
             </p>
           </div>
         </div>

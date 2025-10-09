@@ -29,6 +29,7 @@ import TestConnections from "./components/test-connections";
 import PaymentPage from "@/pages/payment";
 import ContactSalesPage from "@/pages/contact-sales";
 import PrivacyPolicyPage from "@/pages/privacy";
+import TermsOfServicePage from "@/pages/terms";
 
 function Router() {
   return (
@@ -47,6 +48,7 @@ function Router() {
       <Route path="/team/:teamName" component={TeamProfile} />
       <Route path="/reset-password" component={ResetPassword} />
       <Route path="/privacy" component={PrivacyPolicyPage} />
+      <Route path="/terms" component={TermsOfServicePage} />
       <Route path="/contact-sales" component={ContactSalesPage} />
 
       {/* Protected routes */}
