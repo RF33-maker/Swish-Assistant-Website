@@ -510,7 +510,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                     <tbody>
                       {selectedTeamPlayers.map((player, index) => (
                         <tr key={player.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-orange-50 transition-colors`}>
-                          <td className="py-1.5 md:p-3 sticky left-4 md:left-0 bg-inherit z-10 w-48 md:w-52 pl-2 pr-1">
+                          <td className="py-1.5 md:p-3 sticky left-4 md:left-0 bg-inherit z-10 w-32 md:w-40 pl-2 pr-1">
                             <div className="max-w-none whitespace-normal">
                               <div className="font-medium text-slate-800">{player.firstname} {player.familyname}</div>
                               {player.number && (
