@@ -308,7 +308,7 @@ export default function LandingPage() {
               ))
             : [
                 { name: "British Championship Basketball Trophy", slug: "british-championship-basketball" },
-                { name: "British Championship Basketball", slug: "british-championship-basketball" },
+                { name: "British Championship Basketball", slug: "british-championship-basketball-20252026" },
                 { name: "NBL Divison One 25/26", slug: "national-basketball-league-d1-mens-20252026" },
                 { name: "WNBL Divison One 25/26", slug: "national-basketball-league-d1-womens-20252026" },
               ].map((league, i) => (
