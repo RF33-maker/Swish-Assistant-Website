@@ -402,41 +402,80 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
 
               {/* Selected Team Summary */}
               {selectedTeamStats && (
-                <div className="bg-orange-50 rounded-lg p-3 md:p-4 border border-orange-200">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-base md:text-xl font-bold text-slate-800 truncate pr-2">{selectedTeamStats.name}</h3>
-                    <div className="text-2xl md:text-3xl font-bold text-orange-600">{selectedTeamStats.score}</div>
+                <div className="bg-orange-50 rounded-lg border border-orange-200 overflow-hidden">
+                  {/* Team Header - Sticky on mobile */}
+                  <div className="flex items-center gap-3 md:gap-4 p-3 md:p-4 border-b border-orange-200">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-base md:text-xl font-bold text-slate-800 truncate">{selectedTeamStats.name}</h3>
+                    </div>
+                    <div className="text-2xl md:text-3xl font-bold text-orange-600 shrink-0">{selectedTeamStats.score}</div>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 text-xs md:text-sm">
-                    <div>
-                      <div className="text-slate-800 font-medium">Field Goals</div>
-                      <div className="font-semibold text-slate-900">
-                        {selectedTeamStats.totalFgMade}/{selectedTeamStats.totalFgAttempted} 
-                        {selectedTeamStats.totalFgAttempted > 0 && (
-                          <span className="text-slate-700 ml-1">
-                            ({((selectedTeamStats.totalFgMade / selectedTeamStats.totalFgAttempted) * 100).toFixed(1)}%)
-                          </span>
-                        )}
+                  
+                  {/* Stats Container - Scrollable on mobile, grid on desktop */}
+                  <div className="overflow-x-auto">
+                    <div className="flex md:grid md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4 p-3 md:p-4 min-w-max md:min-w-0">
+                      {/* Field Goals */}
+                      <div className="min-w-[140px] md:min-w-0">
+                        <div className="text-slate-800 font-medium text-xs md:text-sm">Field Goals</div>
+                        <div className="font-semibold text-slate-900 text-sm md:text-base">
+                          {selectedTeamStats.totalFgMade}/{selectedTeamStats.totalFgAttempted} 
+                          {selectedTeamStats.totalFgAttempted > 0 && (
+                            <span className="text-slate-700 ml-1 text-xs">
+                              ({((selectedTeamStats.totalFgMade / selectedTeamStats.totalFgAttempted) * 100).toFixed(1)}%)
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    <div>
-                      <div className="text-slate-800 font-medium">3-Pointers</div>
-                      <div className="font-semibold text-slate-900">
-                        {selectedTeamStats.totalThreeMade}/{selectedTeamStats.totalThreeAttempted}
-                        {selectedTeamStats.totalThreeAttempted > 0 && (
-                          <span className="text-slate-700 ml-1">
-                            ({((selectedTeamStats.totalThreeMade / selectedTeamStats.totalThreeAttempted) * 100).toFixed(1)}%)
-                          </span>
-                        )}
+                      
+                      {/* 3-Pointers */}
+                      <div className="min-w-[140px] md:min-w-0">
+                        <div className="text-slate-800 font-medium text-xs md:text-sm">3-Pointers</div>
+                        <div className="font-semibold text-slate-900 text-sm md:text-base">
+                          {selectedTeamStats.totalThreeMade}/{selectedTeamStats.totalThreeAttempted}
+                          {selectedTeamStats.totalThreeAttempted > 0 && (
+                            <span className="text-slate-700 ml-1 text-xs">
+                              ({((selectedTeamStats.totalThreeMade / selectedTeamStats.totalThreeAttempted) * 100).toFixed(1)}%)
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    <div>
-                      <div className="text-slate-800 font-medium">Total Rebounds</div>
-                      <div className="font-semibold text-slate-900">{selectedTeamStats.totalRebounds}</div>
-                    </div>
-                    <div>
-                      <div className="text-slate-800 font-medium">Total Assists</div>
-                      <div className="font-semibold text-slate-900">{selectedTeamStats.totalAssists}</div>
+                      
+                      {/* Free Throws */}
+                      <div className="min-w-[140px] md:min-w-0">
+                        <div className="text-slate-800 font-medium text-xs md:text-sm">Free Throws</div>
+                        <div className="font-semibold text-slate-900 text-sm md:text-base">
+                          {selectedTeamStats.totalFtMade}/{selectedTeamStats.totalFtAttempted}
+                          {selectedTeamStats.totalFtAttempted > 0 && (
+                            <span className="text-slate-700 ml-1 text-xs">
+                              ({((selectedTeamStats.totalFtMade / selectedTeamStats.totalFtAttempted) * 100).toFixed(1)}%)
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Total Rebounds */}
+                      <div className="min-w-[100px] md:min-w-0">
+                        <div className="text-slate-800 font-medium text-xs md:text-sm">Rebounds</div>
+                        <div className="font-semibold text-slate-900 text-sm md:text-base">{selectedTeamStats.totalRebounds}</div>
+                      </div>
+                      
+                      {/* Total Assists */}
+                      <div className="min-w-[100px] md:min-w-0">
+                        <div className="text-slate-800 font-medium text-xs md:text-sm">Assists</div>
+                        <div className="font-semibold text-slate-900 text-sm md:text-base">{selectedTeamStats.totalAssists}</div>
+                      </div>
+                      
+                      {/* Steals */}
+                      <div className="min-w-[100px] md:min-w-0">
+                        <div className="text-slate-800 font-medium text-xs md:text-sm">Steals</div>
+                        <div className="font-semibold text-slate-900 text-sm md:text-base">{selectedTeamStats.totalSteals}</div>
+                      </div>
+                      
+                      {/* Blocks */}
+                      <div className="min-w-[100px] md:min-w-0">
+                        <div className="text-slate-800 font-medium text-xs md:text-sm">Blocks</div>
+                        <div className="font-semibold text-slate-900 text-sm md:text-base">{selectedTeamStats.totalBlocks}</div>
+                      </div>
                     </div>
                   </div>
                 </div>
