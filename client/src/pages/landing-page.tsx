@@ -236,10 +236,10 @@ export default function LandingPage() {
 
           {/* Search Bar with Suggestions */}
           <div className="w-full max-w-2xl relative">
-          <div className="search-bar-animated-border transition-all duration-300 focus-within:scale-105 focus-within:shadow-[0_0_10px_rgba(255,102,0,0.4)] animate-gentle-pulse" style={{ animationDelay: '0.6s' }}>
+          <div className="search-bar-animated-border transition-all duration-300 focus-within:scale-[1.02] animate-fade-in-up" style={{ animationDelay: '0.6s' }}>
             <form
               onSubmit={handleSubmit}
-              className="flex items-center shadow-lg rounded-full overflow-hidden bg-white"
+              className="flex items-center shadow-lg rounded-full overflow-hidden bg-white relative z-10"
             >
               <Search className="ml-5 h-5 w-5 text-slate-400" />
               <input
