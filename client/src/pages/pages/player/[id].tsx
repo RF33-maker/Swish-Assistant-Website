@@ -852,20 +852,28 @@ export default function PlayerStatsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {playerStats.map((game, index) => (
-                      <tr 
-                        key={game.id} 
-                        className={`border-b border-orange-100 hover:bg-orange-50 hover:scale-[1.02] transform transition-all duration-200 cursor-pointer group ${
-                          index % 2 === 0 ? 'bg-white' : 'bg-orange-25'
-                        }`}
-                        data-testid={`game-row-${game.id}`}
-                      >
-                        <td className="sticky left-0 bg-inherit px-2 md:px-4 py-2 md:py-3 text-orange-800 text-[10px] md:text-sm z-10">{formatDate(game.game_date)}</td>
-                        <td className="px-2 md:px-4 py-2 md:py-3">
-                          <Badge variant="outline" className="border-orange-300 text-orange-700 text-[10px] md:text-sm whitespace-nowrap">
-                            {game.opponent ? `vs ${game.opponent}` : (game.is_home_player ? `vs ${game.away_team}` : `vs ${game.home_team}`)}
-                          </Badge>
-                        </td>
+                    {playerStats.map((game, index) => {
+                      const opponentName = game.opponent || 
+                        (game.is_home_player === true && game.away_team) ||
+                        (game.is_home_player === false && game.home_team) ||
+                        '--';
+                      
+                      return (
+                        <tr 
+                          key={game.id} 
+                          className={`border-b border-orange-100 hover:bg-orange-50 hover:scale-[1.02] transform transition-all duration-200 cursor-pointer group ${
+                            index % 2 === 0 ? 'bg-white' : 'bg-orange-25'
+                          }`}
+                          data-testid={`game-row-${game.id}`}
+                        >
+                          <td className="sticky left-0 bg-inherit px-2 md:px-4 py-2 md:py-3 text-orange-800 text-[10px] md:text-sm z-10">
+                            {formatDate(game.game_date || game.created_at)}
+                          </td>
+                          <td className="px-2 md:px-4 py-2 md:py-3">
+                            <Badge variant="outline" className="border-orange-300 text-orange-700 text-[10px] md:text-sm whitespace-nowrap">
+                              vs {opponentName}
+                            </Badge>
+                          </td>
                         <td className="hidden md:table-cell px-4 py-3 text-orange-800 text-sm text-center">{game.sminutes || '0'}</td>
                         <td className="px-2 md:px-4 py-2 md:py-3 font-semibold text-orange-900 group-hover:text-orange-700 transition-all duration-200 text-xs md:text-sm text-center">{game.spoints || game.points || 0}</td>
                         <td className="px-2 md:px-4 py-2 md:py-3 text-orange-800 text-xs md:text-sm text-center font-medium">{game.sreboundstotal || game.rebounds_total || 0}</td>
