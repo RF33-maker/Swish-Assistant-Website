@@ -613,13 +613,9 @@ export default function PlayerStatsPage() {
                 <Brain className="h-5 w-5 animate-pulse" />
                 <span className="animate-pulse">Generating player bio...</span>
               </div>
-            ) : aiAnalysis ? (
-              <p className="text-sm md:text-base text-orange-800 leading-relaxed">
-                {aiAnalysis}
-              </p>
             ) : (
               <div className="text-sm md:text-base text-orange-600 leading-relaxed italic">
-                Player bio AI generation is coming soon. Check back later for detailed analysis of playing style and strengths.
+                Coming soon
               </div>
             )}
           </CardContent>
