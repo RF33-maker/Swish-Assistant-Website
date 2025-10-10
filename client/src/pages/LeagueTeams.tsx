@@ -265,7 +265,7 @@ export default function LeagueTeams() {
         <div className="relative w-full max-w-md mx-6">
           <input
             type="text"
-            placeholder="Search leagues or players..."
+            placeholder="Find your league"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSearch()}
