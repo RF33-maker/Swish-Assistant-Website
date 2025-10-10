@@ -279,6 +279,10 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
     const calcFgAttempted = teamPlayers.reduce((sum, p) => sum + (p.sfieldgoalsattempted || 0), 0);
     const calcThreeMade = teamPlayers.reduce((sum, p) => sum + (p.sthreepointersmade || 0), 0);
     const calcThreeAttempted = teamPlayers.reduce((sum, p) => sum + (p.sthreepointersattempted || 0), 0);
+    const calcFtMade = teamPlayers.reduce((sum, p) => sum + (p.sfreethrowsmade || 0), 0);
+    const calcFtAttempted = teamPlayers.reduce((sum, p) => sum + (p.sfreethrowsattempted || 0), 0);
+    const calcSteals = teamPlayers.reduce((sum, p) => sum + (p.ssteals || 0), 0);
+    const calcBlocks = teamPlayers.reduce((sum, p) => sum + (p.sblocks || 0), 0);
     
     return {
       name: team,
@@ -288,8 +292,12 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
       totalFgAttempted: dbTeamStats?.tot_sfieldgoalsattempted ?? calcFgAttempted,
       totalThreeMade: dbTeamStats?.tot_sthreepointersmade ?? calcThreeMade,
       totalThreeAttempted: dbTeamStats?.tot_sthreepointersattempted ?? calcThreeAttempted,
+      totalFtMade: dbTeamStats?.tot_sfreethrowsmade ?? calcFtMade,
+      totalFtAttempted: dbTeamStats?.tot_sfreethrowsattempted ?? calcFtAttempted,
       totalRebounds: dbTeamStats?.tot_sreboundstotal ?? teamPlayers.reduce((sum, p) => sum + (p.sreboundstotal || 0), 0),
       totalAssists: dbTeamStats?.tot_sassists ?? teamPlayers.reduce((sum, p) => sum + (p.sassists || 0), 0),
+      totalSteals: dbTeamStats?.tot_ssteals ?? calcSteals,
+      totalBlocks: dbTeamStats?.tot_sblocks ?? calcBlocks,
     };
   });
 
