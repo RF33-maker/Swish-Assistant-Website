@@ -262,7 +262,7 @@ export default function TeamProfile() {
             const { data: leagueData } = await supabase
               .from("leagues")
               .select("*")
-              .eq("id", allStats[0].league_id)
+              .eq("league_id", allStats[0].league_id)
               .single();
             league = leagueData as League;
           }
