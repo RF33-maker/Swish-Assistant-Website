@@ -27,7 +27,7 @@ interface PlayerGameStats {
   sblocks?: number;
   sturnovers?: number;
   personal_fouls?: number;
-  plus_minus?: number;
+  splusminuspoints?: number;
 }
 
 interface GameDetailModalProps {
@@ -523,9 +523,9 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                           <td className="px-1.5 py-1.5 md:p-3 text-center font-medium text-slate-800">{player.sblocks || 0}</td>
                           <td className="px-1.5 py-1.5 md:p-3 text-center font-medium text-red-600">{player.sturnovers || 0}</td>
                           <td className="px-1.5 py-1.5 md:p-3 text-center">
-                            {player.plus_minus !== undefined ? (
-                              <span className={`font-medium ${player.plus_minus >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                {player.plus_minus >= 0 ? '+' : ''}{player.plus_minus}
+                            {player.splusminuspoints !== undefined && player.splusminuspoints !== null ? (
+                              <span className={`font-medium ${player.splusminuspoints >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                {player.splusminuspoints >= 0 ? '+' : ''}{player.splusminuspoints}
                               </span>
                             ) : <span className="text-slate-400">-</span>}
                           </td>
