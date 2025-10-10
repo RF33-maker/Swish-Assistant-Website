@@ -593,35 +593,37 @@ export default function PlayerStatsPage() {
         )}
 
         {/* Player Bio - AI Generated */}
-        {(aiAnalysis || analysisLoading) && (
-          <Card className="mb-6 md:mb-8 border-orange-200 shadow-md animate-slide-in-up bg-gradient-to-br from-white to-orange-50">
-            <CardHeader className="bg-white text-orange-900 rounded-t-lg border-b border-orange-200">
-              <CardTitle className="flex items-center gap-2">
-                {analysisLoading ? (
-                  <Brain className="h-5 w-5 animate-pulse text-orange-600" />
-                ) : (
-                  <Sparkles className="h-5 w-5 text-orange-600 animate-float" />
-                )}
-                Player Bio
-              </CardTitle>
-              <CardDescription className="text-orange-700">
-                AI-powered analysis of playing style and strengths
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-4 md:p-6">
+        <Card className="mb-6 md:mb-8 border-orange-200 shadow-md animate-slide-in-up bg-gradient-to-br from-white to-orange-50">
+          <CardHeader className="bg-white text-orange-900 rounded-t-lg border-b border-orange-200">
+            <CardTitle className="flex items-center gap-2">
               {analysisLoading ? (
-                <div className="flex items-center gap-3 text-orange-700">
-                  <Brain className="h-5 w-5 animate-pulse" />
-                  <span className="animate-pulse">Generating player bio...</span>
-                </div>
+                <Brain className="h-5 w-5 animate-pulse text-orange-600" />
               ) : (
-                <p className="text-sm md:text-base text-orange-800 leading-relaxed">
-                  {aiAnalysis || "Player bio will be generated based on performance statistics."}
-                </p>
+                <Sparkles className="h-5 w-5 text-orange-600 animate-float" />
               )}
-            </CardContent>
-          </Card>
-        )}
+              Player Bio
+            </CardTitle>
+            <CardDescription className="text-orange-700">
+              {aiAnalysis ? "AI-powered analysis of playing style and strengths" : "AI generation coming soon"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-4 md:p-6">
+            {analysisLoading ? (
+              <div className="flex items-center gap-3 text-orange-700">
+                <Brain className="h-5 w-5 animate-pulse" />
+                <span className="animate-pulse">Generating player bio...</span>
+              </div>
+            ) : aiAnalysis ? (
+              <p className="text-sm md:text-base text-orange-800 leading-relaxed">
+                {aiAnalysis}
+              </p>
+            ) : (
+              <div className="text-sm md:text-base text-orange-600 leading-relaxed italic">
+                Player bio AI generation is coming soon. Check back later for detailed analysis of playing style and strengths.
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Player Leagues */}
         {playerLeagues.length > 0 && (
