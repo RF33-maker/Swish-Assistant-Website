@@ -138,6 +138,25 @@ export function TournamentBracket({ leagueId, onGameClick }: TournamentBracketPr
     const sf = sorted.slice(4, 6).map(createBracketGame);
     const final = sorted.length > 6 ? [createBracketGame(sorted[6])] : [];
 
+    // Manual override for BCB Trophy semi-finals
+    if (leagueId === 'b0460ea9-3462-4630-a941-5b8ced23abc6') {
+      const manualSemiFinals: BracketGame[] = [
+        {
+          team1: 'Birmingham Rockets',
+          team2: 'Milton Keynes Breakers',
+          gameKey: '',
+          date: '2025-10-11T00:00:00Z'
+        },
+        {
+          team1: 'Falkirk Fury',
+          team2: 'Yorkshire Dragons',
+          gameKey: '',
+          date: '2025-10-11T00:00:00Z'
+        }
+      ];
+      return { qf, sf: manualSemiFinals, final };
+    }
+
     return { qf, sf, final };
   };
 
