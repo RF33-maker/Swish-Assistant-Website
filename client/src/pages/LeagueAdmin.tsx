@@ -151,8 +151,38 @@ export default function LeagueAdmin() {
       }
       
       if (!result.data || result.data.length === 0) {
-        console.log("No team data found");
-        setTeams([]);
+        console.log("No team data in team_stats, trying game_schedule...");
+        
+        // Fallback to game_schedule table
+        const scheduleResult = await supabase
+          .from('game_schedule')
+          .select('hometeam, awayteam')
+          .eq('league_id', league.league_id);
+        
+        console.log("Schedule query result:", scheduleResult);
+        
+        if (scheduleResult.error) {
+          console.error("Error in schedule query:", scheduleResult.error);
+          setTeams([]);
+          return;
+        }
+        
+        if (!scheduleResult.data || scheduleResult.data.length === 0) {
+          console.log("No schedule data found either");
+          setTeams([]);
+          return;
+        }
+        
+        // Extract unique team names from home and away teams
+        const teamNames = new Set<string>();
+        scheduleResult.data.forEach((game: any) => {
+          if (game.hometeam) teamNames.add(game.hometeam);
+          if (game.awayteam) teamNames.add(game.awayteam);
+        });
+        
+        const uniqueTeams = Array.from(teamNames).sort();
+        console.log("Unique teams extracted from schedule:", uniqueTeams);
+        setTeams(uniqueTeams);
         return;
       }
       
