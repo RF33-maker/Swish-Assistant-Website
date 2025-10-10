@@ -493,7 +493,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                   <table className="w-full text-xs md:text-sm min-w-[800px]">
                     <thead className="bg-gray-50 border-b border-gray-200">
                       <tr>
-                        <th className="text-left py-1.5 md:p-3 font-medium text-slate-700 sticky left-4 md:left-0 bg-gray-50 z-10 w-16 md:w-24 pl-2 pr-1">Player</th>
+                        <th className="text-left py-1.5 md:p-3 font-medium text-slate-700 sticky left-4 md:left-0 bg-gray-50 z-10 w-8 md:w-16 pl-2 pr-1">Player</th>
                         <th className="text-center py-1.5 md:p-3 font-medium text-slate-700 pl-1 pr-1.5">MIN</th>
                         <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700">PTS</th>
                         <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700">FG</th>
