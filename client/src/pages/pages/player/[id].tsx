@@ -890,7 +890,8 @@ export default function PlayerStatsPage() {
                           {game.sfreethrowsmade || 0}/{game.sfreethrowsattempted || 0}
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
                 
