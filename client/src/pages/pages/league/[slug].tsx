@@ -619,18 +619,41 @@ export default function LeaguePage() {
       
       console.log('Processing YouTube URL:', url);
       
-      // If it's already an embed URL, return as is
+      // If it's already an embed URL, ensure parameters are added
       if (url.includes('/embed/')) {
         console.log('Already an embed URL:', url);
-        return url;
+        
+        // Check which parameters are missing
+        const hasRel = url.includes('rel=0');
+        const hasModestBranding = url.includes('modestbranding=1');
+        
+        // If both parameters exist, return as-is
+        if (hasRel && hasModestBranding) {
+          return url;
+        }
+        
+        // Build missing parameters string
+        const missingParams = [];
+        if (!hasRel) missingParams.push('rel=0');
+        if (!hasModestBranding) missingParams.push('modestbranding=1');
+        
+        // Normalize URL by removing trailing separators
+        let cleanUrl = url.replace(/[?&]+$/, '');
+        
+        // Determine separator: use & if query string exists, otherwise ?
+        const separator = cleanUrl.includes('?') ? '&' : '?';
+        return cleanUrl + separator + missingParams.join('&');
       }
+      
+      // Parameters to minimize off-topic suggestions
+      const embedParams = 'rel=0&modestbranding=1';
       
       // Handle different YouTube URL formats
       // 1. Standard watch URL: youtube.com/watch?v=VIDEO_ID
       const watchMatch = url.match(/youtube\.com\/watch\?v=([^&]+)/);
       if (watchMatch) {
         const videoId = watchMatch[1];
-        const embedUrl = `https://www.youtube.com/embed/${videoId}`;
+        const embedUrl = `https://www.youtube.com/embed/${videoId}?${embedParams}`;
         console.log('Generated embed URL from watch:', embedUrl);
         return embedUrl;
       }
@@ -639,7 +662,7 @@ export default function LeaguePage() {
       const shortMatch = url.match(/youtu\.be\/([^?]+)/);
       if (shortMatch) {
         const videoId = shortMatch[1];
-        const embedUrl = `https://www.youtube.com/embed/${videoId}`;
+        const embedUrl = `https://www.youtube.com/embed/${videoId}?${embedParams}`;
         console.log('Generated embed URL from short:', embedUrl);
         return embedUrl;
       }
@@ -648,7 +671,7 @@ export default function LeaguePage() {
       const shortsMatch = url.match(/youtube\.com\/shorts\/([^?]+)/);
       if (shortsMatch) {
         const videoId = shortsMatch[1];
-        const embedUrl = `https://www.youtube.com/embed/${videoId}`;
+        const embedUrl = `https://www.youtube.com/embed/${videoId}?${embedParams}`;
         console.log('Generated embed URL from shorts:', embedUrl);
         return embedUrl;
       }
