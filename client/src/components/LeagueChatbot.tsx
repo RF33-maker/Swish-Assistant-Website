@@ -76,10 +76,6 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
     scrollToBottom();
   }, [messages]);
 
-  const handleLogin = () => {
-    window.location.href = '/api/login';
-  };
-
   const suggestedQuestions = [
     "How is Marcos Perez Tosca doing?",
     "Who does Rhys Farrell play for?",
@@ -481,13 +477,13 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
           <MessageCircle className="w-5 h-5 text-orange-500" />
           <h3 className="font-semibold text-slate-800">League Assistant</h3>
           <span className="px-2 py-1 bg-gradient-to-r from-orange-500 to-yellow-500 text-white text-xs rounded-full font-medium">
-            PREMIUM
+            COMING SOON
           </span>
         </div>
 
         <div className="text-center py-6">
-          <Lock className="w-12 h-12 text-orange-400 mx-auto mb-3" />
-          <h4 className="font-medium text-slate-800 mb-2">Premium Feature</h4>
+          <MessageCircle className="w-12 h-12 text-orange-400 mx-auto mb-3" />
+          <h4 className="font-medium text-slate-800 mb-2">Coming Soon</h4>
           <p className="text-sm text-slate-600 mb-4">
             Get instant insights about {leagueName} - player stats, game results, and more!
           </p>
@@ -495,7 +491,7 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
           <div className="bg-orange-50 rounded-lg p-3 mb-4">
             <div className="flex items-center gap-2 text-sm text-orange-700 mb-2">
               <BarChart3 className="w-4 h-4" />
-              <span className="font-medium">Ask about:</span>
+              <span className="font-medium">What you'll be able to ask:</span>
             </div>
             <ul className="text-xs text-orange-600 space-y-1">
               <li>• Top scorers and rebounders</li>
@@ -505,10 +501,9 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
             </ul>
           </div>
 
-          <Button onClick={handleLogin} className="w-full bg-gradient-to-r from-orange-500 to-yellow-500 hover:from-orange-600 hover:to-yellow-600 text-white">
-            <User className="w-4 h-4 mr-2" />
-            Login to Access
-          </Button>
+          <div className="text-xs text-slate-500 italic">
+            This feature is currently in development and will be available soon!
+          </div>
         </div>
       </div>
     );

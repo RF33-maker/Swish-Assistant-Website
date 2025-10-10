@@ -124,179 +124,94 @@ export default function AuthPage() {
 
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue="login" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 mb-6 bg-gray-100 text-gray-600 rounded-md">
-                <TabsTrigger value="login" className="data-[state=active]:bg-[#FFC285] data-[state=active]:text-white">
-                  Login
-                </TabsTrigger>
-                <TabsTrigger value="register" className="data-[state=active]:bg-[#FFC285] data-[state=active]:text-white">
-                  Register
-                </TabsTrigger>
-              </TabsList>
+            {/* Login Form Only - Registration hidden for public users */}
+            <Form {...loginForm}>
+              <form onSubmit={loginForm.handleSubmit(onLoginSubmit)} className="space-y-4">
+                <FormField
+                  control={loginForm.control}
+                  name="username"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="email"
+                          placeholder="coach@email.com"
+                          className="bg-white border border-gray-300 text-gray-800 placeholder-gray-400 focus:ring-orange-300 focus:border-orange-400"
+                          data-testid="input-email"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={loginForm.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <div className="flex items-center gap-2">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <FormLabel className="cursor-help">Password</FormLabel>
+                          </TooltipTrigger>
+                          <TooltipContent side="right">
+                            Make it strong, Coach.
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
 
-              
-              <TabsContent value="login">
-                <Form {...loginForm}>
-                  <form onSubmit={loginForm.handleSubmit(onLoginSubmit)} className="space-y-4">
-                    <FormField
-                      control={loginForm.control}
-                      name="username"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Email</FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              type="email"
-                              placeholder="coach@email.com"
-                              className="bg-white border border-gray-300 text-gray-800 placeholder-gray-400 focus:ring-orange-300 focus:border-orange-400"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={loginForm.control}
-                      name="password"
-                      render={({ field }) => (
-                        <FormItem>
-                          <div className="flex items-center gap-2">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <FormLabel className="cursor-help">Password</FormLabel>
-                              </TooltipTrigger>
-                              <TooltipContent side="right">
-                                Make it strong, Coach.
-                              </TooltipContent>
-                            </Tooltip>
-                          </div>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          type="password"
+                          placeholder="••••••••"
+                          className="bg-white border border-gray-300 text-gray-800 placeholder-gray-400 focus:ring-orange-300 focus:border-orange-400"
+                          data-testid="input-password"
+                        />
+                      </FormControl>
 
-                          <FormControl>
-                            <Input
-                              {...field}
-                              type="password"
-                              placeholder="••••••••"
-                              className="bg-white border border-gray-300 text-gray-800 placeholder-gray-400 focus:ring-orange-300 focus:border-orange-400"
-                            />
-                          </FormControl>
+                      <FormMessage />
+                    </FormItem>
 
-                          <FormMessage />
-                        </FormItem>
+                  )}
+                />
 
-                      )}
-                    />
+                <div className="flex items-center justify-between">
+                  <FormField
+                    control={loginForm.control}
+                    name="rememberMe"
+                    render={({ field }) => (
+                      <div className="flex items-center space-x-2">
+                        <Checkbox 
+                          id="rememberMe" 
+                          checked={field.value} 
+                          onCheckedChange={field.onChange}
+                        />
+                        <label
+                          htmlFor="rememberMe"
+                          className="text-sm text-gray-600"
+                        >
+                          Remember me
+                        </label>
+                      </div>
+                    )}
+                  />
+                  <a href="#" className="text-sm text-gray-500 hover:text-gray-700">
+                    Need help subbing in?
+                  </a>
+                </div>
+                <Button
+                  type="submit"
+                  className="w-full bg-[#FFC285] hover:bg-[#ffb76c] text-white font-medium"
+                  data-testid="button-signin"
+                >
+                  Sign in
+                </Button>
 
-                    <div className="flex items-center justify-between">
-                      <FormField
-                        control={loginForm.control}
-                        name="rememberMe"
-                        render={({ field }) => (
-                          <div className="flex items-center space-x-2">
-                            <Checkbox 
-                              id="rememberMe" 
-                              checked={field.value} 
-                              onCheckedChange={field.onChange}
-                            />
-                            <label
-                              htmlFor="rememberMe"
-                              className="text-sm text-gray-600"
-                            >
-                              Remember me
-                            </label>
-                          </div>
-                        )}
-                      />
-                      <a href="#" className="text-sm text-gray-500 hover:text-gray-700">
-                        Need help subbing in?
-                      </a>
-                    </div>
-                    <Button
-                      type="submit"
-                      className="w-full bg-[#FFC285] hover:bg-[#ffb76c] text-white font-medium"
-                    >
-                      Sign in
-                    </Button>
-
-                  </form>
-                </Form>
-              </TabsContent>
-              
-              <TabsContent value="register">
-                <Form {...registerForm}>
-                  <form onSubmit={registerForm.handleSubmit(onRegisterSubmit)} className="space-y-4">
-                    <FormField
-                      control={registerForm.control}
-                      name="username"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Email</FormLabel>
-                          <FormControl>
-                            <Input placeholder="your@email.com" {...field} type="email" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={registerForm.control}
-                      name="password"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Password</FormLabel>
-                          <FormControl>
-                            <Input placeholder="••••••••" {...field} type="password" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={registerForm.control}
-                      name="confirmPassword"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Confirm Password</FormLabel>
-                          <FormControl>
-                            <Input placeholder="••••••••" {...field} type="password" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={registerForm.control}
-                      name="terms"
-                      render={({ field }) => (
-                        <div className="flex items-start space-x-2 mt-4">
-                          <Checkbox 
-                            id="terms" 
-                            checked={field.value} 
-                            onCheckedChange={field.onChange}
-                            className="mt-1"
-                          />
-                          <div className="grid gap-1.5 leading-none">
-                            <label
-                              htmlFor="terms"
-                              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                            >
-                              I agree to the terms of service and privacy policy
-                            </label>
-                          </div>
-                        </div>
-                      )}
-                    />
-                    <Button
-                      type="submit"
-                      className="w-full bg-[#FFC285] hover:bg-[#ffb76c] text-white font-medium"
-                    >
-                      Sign in
-                    </Button>
-
-                  </form>
-                </Form>
-              </TabsContent>
-            </Tabs>
+              </form>
+            </Form>
 
             <div className="relative mt-6">
               <div className="absolute inset-0 flex items-center">

@@ -17,56 +17,226 @@ interface GamePreviewModalProps {
   leagueId: number;
 }
 
+interface GameResult {
+  numericId: string;
+  won: boolean;
+  teamScore: number;
+  opponentScore: number;
+}
+
 export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: GamePreviewModalProps) {
-  // Fetch last 5 games for team1
-  const { data: team1RecentGames } = useQuery({
-    queryKey: ['recent-games', leagueId, game.team1],
+  // First, fetch team IDs from teams table
+  const { data: team1Data } = useQuery({
+    queryKey: ['team-lookup', leagueId, game.team1],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('team_stats')
-        .select('*')
+      console.log('🔍 Looking up team1 ID for:', game.team1);
+      
+      // Try exact match first
+      let { data, error } = await supabase
+        .from('teams')
+        .select('team_id, name')
         .eq('league_id', leagueId)
         .eq('name', game.team1)
-        .order('numeric_id', { ascending: false })
-        .limit(5);
+        .single();
       
-      if (error) throw error;
-      return data || [];
+      // If no exact match, try partial match
+      if (error || !data) {
+        const baseTeamName = game.team1.split(' Senior ')[0].split(' Men')[0];
+        console.log('🔍 Trying partial match for team1:', baseTeamName);
+        
+        const { data: partialData, error: partialError } = await supabase
+          .from('teams')
+          .select('team_id, name')
+          .eq('league_id', leagueId)
+          .ilike('name', `%${baseTeamName}%`)
+          .limit(1)
+          .single();
+        
+        data = partialData;
+        error = partialError;
+      }
+      
+      console.log('✅ Team1 lookup result:', data);
+      return data;
     },
     enabled: isOpen
   });
 
-  // Fetch last 5 games for team2
-  const { data: team2RecentGames } = useQuery({
-    queryKey: ['recent-games', leagueId, game.team2],
+  const { data: team2Data } = useQuery({
+    queryKey: ['team-lookup', leagueId, game.team2],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('team_stats')
-        .select('*')
+      console.log('🔍 Looking up team2 ID for:', game.team2);
+      
+      // Try exact match first
+      let { data, error } = await supabase
+        .from('teams')
+        .select('team_id, name')
         .eq('league_id', leagueId)
         .eq('name', game.team2)
-        .order('numeric_id', { ascending: false })
-        .limit(5);
+        .single();
       
-      if (error) throw error;
-      return data || [];
+      // If no exact match, try partial match
+      if (error || !data) {
+        const baseTeamName = game.team2.split(' Senior ')[0].split(' Men')[0];
+        console.log('🔍 Trying partial match for team2:', baseTeamName);
+        
+        const { data: partialData, error: partialError } = await supabase
+          .from('teams')
+          .select('team_id, name')
+          .eq('league_id', leagueId)
+          .ilike('name', `%${baseTeamName}%`)
+          .limit(1)
+          .single();
+        
+        data = partialData;
+        error = partialError;
+      }
+      
+      console.log('✅ Team2 lookup result:', data);
+      return data;
     },
     enabled: isOpen
   });
 
-  // Fetch roster for team1
+  const team1Id = team1Data?.team_id;
+  const team2Id = team2Data?.team_id;
+
+  // Fetch game results for team1 (last 5 games with W/L) using team_id
+  const { data: team1GameResults } = useQuery({
+    queryKey: ['game-results', leagueId, team1Id],
+    queryFn: async () => {
+      if (!team1Id) return [];
+      
+      console.log('🏀 Fetching game results for team1_id:', team1Id);
+      
+      const { data: teamGames, error } = await supabase
+        .from('team_stats')
+        .select('numeric_id, tot_spoints, team_id')
+        .eq('league_id', leagueId)
+        .eq('team_id', team1Id)
+        .order('numeric_id', { ascending: false });
+      
+      if (error) {
+        console.error('❌ Error fetching team1 games:', error);
+        throw error;
+      }
+      if (!teamGames) return [];
+
+      const results: GameResult[] = [];
+      const processedGames = new Set<string>();
+
+      for (const teamGame of teamGames) {
+        if (!teamGame.numeric_id || processedGames.has(teamGame.numeric_id)) continue;
+        
+        const { data: opponentData, error: oppError } = await supabase
+          .from('team_stats')
+          .select('tot_spoints, team_id')
+          .eq('league_id', leagueId)
+          .eq('numeric_id', teamGame.numeric_id)
+          .neq('team_id', team1Id)
+          .single();
+
+        if (!oppError && opponentData) {
+          results.push({
+            numericId: teamGame.numeric_id,
+            won: (teamGame.tot_spoints || 0) > (opponentData.tot_spoints || 0),
+            teamScore: teamGame.tot_spoints || 0,
+            opponentScore: opponentData.tot_spoints || 0
+          });
+          processedGames.add(teamGame.numeric_id);
+        }
+
+        if (results.length >= 5) break;
+      }
+
+      console.log('✅ Team1 game results:', results);
+      return results;
+    },
+    enabled: isOpen && !!team1Id
+  });
+
+  // Fetch game results for team2 (last 5 games with W/L) using team_id
+  const { data: team2GameResults } = useQuery({
+    queryKey: ['game-results', leagueId, team2Id],
+    queryFn: async () => {
+      if (!team2Id) return [];
+      
+      console.log('🏀 Fetching game results for team2_id:', team2Id);
+      
+      const { data: teamGames, error } = await supabase
+        .from('team_stats')
+        .select('numeric_id, tot_spoints, team_id')
+        .eq('league_id', leagueId)
+        .eq('team_id', team2Id)
+        .order('numeric_id', { ascending: false });
+      
+      if (error) {
+        console.error('❌ Error fetching team2 games:', error);
+        throw error;
+      }
+      if (!teamGames) return [];
+
+      const results: GameResult[] = [];
+      const processedGames = new Set<string>();
+
+      for (const teamGame of teamGames) {
+        if (!teamGame.numeric_id || processedGames.has(teamGame.numeric_id)) continue;
+        
+        const { data: opponentData, error: oppError } = await supabase
+          .from('team_stats')
+          .select('tot_spoints, team_id')
+          .eq('league_id', leagueId)
+          .eq('numeric_id', teamGame.numeric_id)
+          .neq('team_id', team2Id)
+          .single();
+
+        if (!oppError && opponentData) {
+          results.push({
+            numericId: teamGame.numeric_id,
+            won: (teamGame.tot_spoints || 0) > (opponentData.tot_spoints || 0),
+            teamScore: teamGame.tot_spoints || 0,
+            opponentScore: opponentData.tot_spoints || 0
+          });
+          processedGames.add(teamGame.numeric_id);
+        }
+
+        if (results.length >= 5) break;
+      }
+
+      console.log('✅ Team2 game results:', results);
+      return results;
+    },
+    enabled: isOpen && !!team2Id
+  });
+
+  // Calculate team records
+  const team1Record = team1GameResults 
+    ? `${team1GameResults.filter(g => g.won).length}-${team1GameResults.filter(g => !g.won).length}`
+    : '0-0';
+  
+  const team2Record = team2GameResults 
+    ? `${team2GameResults.filter(g => g.won).length}-${team2GameResults.filter(g => !g.won).length}`
+    : '0-0';
+
+  // Fetch roster for team1 using team_id
   const { data: team1Roster } = useQuery({
-    queryKey: ['roster', leagueId, game.team1],
+    queryKey: ['roster', leagueId, team1Id],
     queryFn: async () => {
+      if (!team1Id) return [];
+      
+      console.log('📊 Fetching roster for team1_id:', team1Id);
+      
       const { data, error } = await supabase
         .from('player_stats')
-        .select('firstname, familyname, spoints, stwoptfieldgoalsmade, sthreeptfieldgoalsmade, sfreethrowsmade, sreboundstotal, sassists')
+        .select('firstname, familyname, spoints, sreboundstotal, sassists')
         .eq('league_id', leagueId)
-        .eq('team', game.team1);
+        .eq('team_id', team1Id);
       
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Error fetching team1 roster:', error);
+        throw error;
+      }
       
-      // Aggregate stats by player
       const playerMap = new Map();
       data?.forEach(stat => {
         const name = `${stat.firstname || ''} ${stat.familyname || ''}`.trim();
@@ -86,32 +256,40 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
         player.assists += stat.sassists || 0;
       });
 
-      return Array.from(playerMap.values())
+      const roster = Array.from(playerMap.values())
         .map(p => ({
           ...p,
           ppg: p.games > 0 ? (p.points / p.games).toFixed(1) : '0.0',
           rpg: p.games > 0 ? (p.rebounds / p.games).toFixed(1) : '0.0',
           apg: p.games > 0 ? (p.assists / p.games).toFixed(1) : '0.0'
         }))
-        .sort((a, b) => parseFloat(b.ppg) - parseFloat(a.ppg))
-        .slice(0, 10);
+        .sort((a, b) => parseFloat(b.ppg) - parseFloat(a.ppg));
+      
+      console.log('✅ Team1 roster:', roster.length, 'players');
+      return roster;
     },
-    enabled: isOpen
+    enabled: isOpen && !!team1Id
   });
 
-  // Fetch roster for team2
+  // Fetch roster for team2 using team_id
   const { data: team2Roster } = useQuery({
-    queryKey: ['roster', leagueId, game.team2],
+    queryKey: ['roster', leagueId, team2Id],
     queryFn: async () => {
+      if (!team2Id) return [];
+      
+      console.log('📊 Fetching roster for team2_id:', team2Id);
+      
       const { data, error } = await supabase
         .from('player_stats')
-        .select('firstname, familyname, spoints, stwoptfieldgoalsmade, sthreeptfieldgoalsmade, sfreethrowsmade, sreboundstotal, sassists')
+        .select('firstname, familyname, spoints, sreboundstotal, sassists')
         .eq('league_id', leagueId)
-        .eq('team', game.team2);
+        .eq('team_id', team2Id);
       
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Error fetching team2 roster:', error);
+        throw error;
+      }
       
-      // Aggregate stats by player
       const playerMap = new Map();
       data?.forEach(stat => {
         const name = `${stat.firstname || ''} ${stat.familyname || ''}`.trim();
@@ -131,82 +309,109 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
         player.assists += stat.sassists || 0;
       });
 
-      return Array.from(playerMap.values())
+      const roster = Array.from(playerMap.values())
         .map(p => ({
           ...p,
           ppg: p.games > 0 ? (p.points / p.games).toFixed(1) : '0.0',
           rpg: p.games > 0 ? (p.rebounds / p.games).toFixed(1) : '0.0',
           apg: p.games > 0 ? (p.assists / p.games).toFixed(1) : '0.0'
         }))
-        .sort((a, b) => parseFloat(b.ppg) - parseFloat(a.ppg))
-        .slice(0, 10);
+        .sort((a, b) => parseFloat(b.ppg) - parseFloat(a.ppg));
+      
+      console.log('✅ Team2 roster:', roster.length, 'players');
+      return roster;
     },
-    enabled: isOpen
+    enabled: isOpen && !!team2Id
   });
+
+  const team1Top3 = team1Roster?.slice(0, 3) || [];
+  const team1FullRoster = team1Roster?.slice(3) || [];
+  const team2Top3 = team2Roster?.slice(0, 3) || [];
+  const team2FullRoster = team2Roster?.slice(3) || [];
+
+  // Debug logging
+  if (isOpen) {
+    console.log('🎮 Game Preview Modal opened for:', game.team1, 'vs', game.team2);
+    console.log('🔑 Team IDs:', { team1Id, team2Id });
+    console.log('📊 Team1 roster data:', team1Roster?.length, 'players');
+    console.log('📊 Team2 roster data:', team2Roster?.length, 'players');
+    console.log('🏀 Team1 game results:', team1GameResults?.length, 'games');
+    console.log('🏀 Team2 game results:', team2GameResults?.length, 'games');
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader className="flex flex-row items-center justify-between border-b pb-4">
-          <DialogTitle className="text-2xl font-bold">Game Preview</DialogTitle>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader className="flex flex-row items-center justify-between border-b border-orange-200 pb-4">
+          <DialogTitle className="text-xl md:text-2xl font-bold text-slate-800">Game Preview</DialogTitle>
           <button
             onClick={onClose}
-            className="rounded-full p-1 hover:bg-gray-100 transition-colors"
+            className="rounded-full p-1 hover:bg-orange-100 transition-colors"
             data-testid="close-preview-modal"
           >
-            <X className="h-5 w-5" />
+            <X className="h-5 w-5 text-slate-600" />
           </button>
         </DialogHeader>
 
         <div className="space-y-6">
           {/* Matchup Header */}
-          <div className="bg-gradient-to-r from-orange-50 to-orange-100 rounded-lg p-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4 flex-1">
+          <div className="bg-gradient-to-r from-orange-50 to-orange-100 rounded-lg p-4 md:p-6">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+              {/* Team 1 */}
+              <div className="flex flex-col items-center gap-2 flex-1">
                 <TeamLogo teamName={game.team1} leagueId={String(leagueId)} size="lg" />
                 <div className="text-center">
-                  <h3 className="text-xl font-bold text-slate-800">{game.team1}</h3>
+                  <h3 className="text-lg md:text-xl font-bold text-slate-800">{game.team1}</h3>
+                  <p className="text-sm text-slate-600">{team1Record}</p>
                 </div>
               </div>
               
-              <div className="text-center px-8">
-                <div className="text-3xl font-bold text-orange-600">VS</div>
-                <div className="text-sm text-slate-600 mt-2">
+              {/* VS and Date/Time */}
+              <div className="text-center px-4 md:px-8">
+                <div className="text-2xl md:text-3xl font-bold text-orange-600">VS</div>
+                <div className="text-xs md:text-sm text-slate-600 mt-2">
                   {new Date(game.game_date).toLocaleDateString('en-US', {
-                    weekday: 'long',
+                    weekday: 'short',
                     month: 'short',
                     day: 'numeric'
                   })}
                 </div>
                 {game.kickoff_time && (
-                  <div className="text-sm text-slate-600">{game.kickoff_time}</div>
+                  <div className="text-xs md:text-sm text-slate-600">{game.kickoff_time}</div>
                 )}
                 {game.venue && (
                   <div className="text-xs text-slate-500 mt-1">{game.venue}</div>
                 )}
               </div>
 
-              <div className="flex items-center gap-4 flex-1 justify-end">
-                <div className="text-center">
-                  <h3 className="text-xl font-bold text-slate-800">{game.team2}</h3>
-                </div>
+              {/* Team 2 */}
+              <div className="flex flex-col items-center gap-2 flex-1">
                 <TeamLogo teamName={game.team2} leagueId={String(leagueId)} size="lg" />
+                <div className="text-center">
+                  <h3 className="text-lg md:text-xl font-bold text-slate-800">{game.team2}</h3>
+                  <p className="text-sm text-slate-600">{team2Record}</p>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Recent Form */}
-          <div className="grid grid-cols-2 gap-6">
+          {/* Recent Form - Last 5 Games */}
+          <div className="space-y-4">
             <div>
-              <h4 className="text-lg font-semibold text-slate-800 mb-3 pb-2 border-b border-orange-200">
+              <h4 className="text-base md:text-lg font-semibold text-slate-800 mb-3">
                 {game.team1} - Last 5 Games
               </h4>
-              {team1RecentGames && team1RecentGames.length > 0 ? (
-                <div className="space-y-2">
-                  {team1RecentGames.map((gameData, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200">
-                      <span className="text-sm font-medium text-slate-700">Game {team1RecentGames.length - idx}</span>
-                      <span className="text-lg font-bold text-orange-600">{gameData.tot_spoints || 0} pts</span>
+              {team1GameResults && team1GameResults.length > 0 ? (
+                <div className="flex gap-2 flex-wrap">
+                  {team1GameResults.map((result, idx) => (
+                    <div 
+                      key={idx} 
+                      className={`px-4 py-2 rounded-lg font-bold text-white ${
+                        result.won ? 'bg-green-500' : 'bg-red-500'
+                      }`}
+                      data-testid={`team1-game-${idx}`}
+                    >
+                      {result.won ? 'W' : 'L'}
                     </div>
                   ))}
                 </div>
@@ -216,15 +421,20 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
             </div>
 
             <div>
-              <h4 className="text-lg font-semibold text-slate-800 mb-3 pb-2 border-b border-orange-200">
+              <h4 className="text-base md:text-lg font-semibold text-slate-800 mb-3">
                 {game.team2} - Last 5 Games
               </h4>
-              {team2RecentGames && team2RecentGames.length > 0 ? (
-                <div className="space-y-2">
-                  {team2RecentGames.map((gameData, idx) => (
-                    <div key={idx} className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200">
-                      <span className="text-sm font-medium text-slate-700">Game {team2RecentGames.length - idx}</span>
-                      <span className="text-lg font-bold text-orange-600">{gameData.tot_spoints || 0} pts</span>
+              {team2GameResults && team2GameResults.length > 0 ? (
+                <div className="flex gap-2 flex-wrap">
+                  {team2GameResults.map((result, idx) => (
+                    <div 
+                      key={idx} 
+                      className={`px-4 py-2 rounded-lg font-bold text-white ${
+                        result.won ? 'bg-green-500' : 'bg-red-500'
+                      }`}
+                      data-testid={`team2-game-${idx}`}
+                    >
+                      {result.won ? 'W' : 'L'}
                     </div>
                   ))}
                 </div>
@@ -234,57 +444,85 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
             </div>
           </div>
 
-          {/* Rosters */}
-          <div className="grid grid-cols-2 gap-6">
+          {/* Top 3 Players and Full Roster */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Team 1 */}
             <div>
-              <h4 className="text-lg font-semibold text-slate-800 mb-3 pb-2 border-b border-orange-200">
-                {game.team1} - Top Players
+              <h4 className="text-base md:text-lg font-semibold text-slate-800 mb-3 pb-2 border-b border-orange-200">
+                {game.team1} - Top 3 Players
               </h4>
-              {team1Roster && team1Roster.length > 0 ? (
-                <div className="space-y-1">
-                  <div className="grid grid-cols-4 gap-2 text-xs font-semibold text-slate-600 pb-2 px-2">
+              {team1Top3.length > 0 ? (
+                <div className="space-y-1 mb-4">
+                  <div className="grid grid-cols-4 gap-2 text-xs font-semibold text-orange-700 pb-2 px-2">
                     <div>Player</div>
                     <div className="text-center">PPG</div>
                     <div className="text-center">RPG</div>
                     <div className="text-center">APG</div>
                   </div>
-                  {team1Roster.map((player, idx) => (
-                    <div key={idx} className="grid grid-cols-4 gap-2 p-2 hover:bg-orange-50 rounded text-sm">
+                  {team1Top3.map((player, idx) => (
+                    <div key={idx} className="grid grid-cols-4 gap-2 p-2 bg-orange-50 rounded border border-orange-200 text-sm">
                       <div className="font-medium text-slate-800 truncate">{player.name}</div>
-                      <div className="text-center text-slate-700">{player.ppg}</div>
-                      <div className="text-center text-slate-700">{player.rpg}</div>
-                      <div className="text-center text-slate-700">{player.apg}</div>
+                      <div className="text-center text-orange-600 font-semibold">{player.ppg}</div>
+                      <div className="text-center text-orange-600 font-semibold">{player.rpg}</div>
+                      <div className="text-center text-orange-600 font-semibold">{player.apg}</div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-slate-500 italic">No roster available</p>
+                <p className="text-sm text-slate-500 italic mb-4">No stats available</p>
+              )}
+              
+              <h5 className="text-sm font-semibold text-orange-700 mb-2">Full Roster</h5>
+              {team1FullRoster.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {team1FullRoster.map((player, idx) => (
+                    <div key={idx} className="px-3 py-1 bg-orange-50 border border-orange-200 rounded-full text-sm text-slate-700">
+                      {player.name}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400 italic">No additional players</p>
               )}
             </div>
 
+            {/* Team 2 */}
             <div>
-              <h4 className="text-lg font-semibold text-slate-800 mb-3 pb-2 border-b border-orange-200">
-                {game.team2} - Top Players
+              <h4 className="text-base md:text-lg font-semibold text-slate-800 mb-3 pb-2 border-b border-orange-200">
+                {game.team2} - Top 3 Players
               </h4>
-              {team2Roster && team2Roster.length > 0 ? (
-                <div className="space-y-1">
-                  <div className="grid grid-cols-4 gap-2 text-xs font-semibold text-slate-600 pb-2 px-2">
+              {team2Top3.length > 0 ? (
+                <div className="space-y-1 mb-4">
+                  <div className="grid grid-cols-4 gap-2 text-xs font-semibold text-orange-700 pb-2 px-2">
                     <div>Player</div>
                     <div className="text-center">PPG</div>
                     <div className="text-center">RPG</div>
                     <div className="text-center">APG</div>
                   </div>
-                  {team2Roster.map((player, idx) => (
-                    <div key={idx} className="grid grid-cols-4 gap-2 p-2 hover:bg-orange-50 rounded text-sm">
+                  {team2Top3.map((player, idx) => (
+                    <div key={idx} className="grid grid-cols-4 gap-2 p-2 bg-orange-50 rounded border border-orange-200 text-sm">
                       <div className="font-medium text-slate-800 truncate">{player.name}</div>
-                      <div className="text-center text-slate-700">{player.ppg}</div>
-                      <div className="text-center text-slate-700">{player.rpg}</div>
-                      <div className="text-center text-slate-700">{player.apg}</div>
+                      <div className="text-center text-orange-600 font-semibold">{player.ppg}</div>
+                      <div className="text-center text-orange-600 font-semibold">{player.rpg}</div>
+                      <div className="text-center text-orange-600 font-semibold">{player.apg}</div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-slate-500 italic">No roster available</p>
+                <p className="text-sm text-slate-500 italic mb-4">No stats available</p>
+              )}
+              
+              <h5 className="text-sm font-semibold text-orange-700 mb-2">Full Roster</h5>
+              {team2FullRoster.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {team2FullRoster.map((player, idx) => (
+                    <div key={idx} className="px-3 py-1 bg-orange-50 border border-orange-200 rounded-full text-sm text-slate-700">
+                      {player.name}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400 italic">No additional players</p>
               )}
             </div>
           </div>

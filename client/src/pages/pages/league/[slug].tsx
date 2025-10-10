@@ -80,6 +80,9 @@ export default function LeaguePage() {
   const [instagramUrl, setInstagramUrl] = useState("");
   const [isEditingInstagram, setIsEditingInstagram] = useState(false);
   const [updatingInstagram, setUpdatingInstagram] = useState(false);
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [isEditingYoutube, setIsEditingYoutube] = useState(false);
+  const [updatingYoutube, setUpdatingYoutube] = useState(false);
   const [activeSection, setActiveSection] = useState('overview'); // 'overview', 'stats', 'teams', 'schedule'
   const [comparisonMode, setComparisonMode] = useState<'player' | 'team'>('player'); // Toggle between player and team comparison
   const [allPlayerAverages, setAllPlayerAverages] = useState<any[]>([]);
@@ -99,6 +102,7 @@ export default function LeaguePage() {
   const [previousRankings, setPreviousRankings] = useState<Record<string, number>>({});
   const [hasPools, setHasPools] = useState(false); // Track if league has pools
   const [viewMode, setViewMode] = useState<'standings' | 'bracket'>('standings'); // Toggle between standings and bracket
+  const [scheduleView, setScheduleView] = useState<'upcoming' | 'results'>('upcoming'); // Toggle for schedule view
 
     
 
@@ -179,6 +183,7 @@ export default function LeaguePage() {
           const ownerStatus = user?.id === data.user_id || user?.id === data.created_by;
           setIsOwner(ownerStatus);
           setInstagramUrl(data.instagram_embed_url || "");
+          setYoutubeUrl(data.youtube_embed_url || "");
           console.log("Is owner?", ownerStatus, "User ID:", user?.id, "League owner ID:", data.user_id);
         }
         
@@ -364,12 +369,18 @@ export default function LeaguePage() {
           };
 
           fetchTopStats();
-          fetchAllPlayerAverages();
         }
       };
 
       fetchUserAndLeague();
     }, [slug]);
+
+    // Fetch player averages when league is available
+    useEffect(() => {
+      if (league?.league_id) {
+        fetchAllPlayerAverages();
+      }
+    }, [league?.league_id]);
 
     const handleSearch = () => {
       if (search.trim()) {
@@ -539,6 +550,36 @@ export default function LeaguePage() {
       }
     };
 
+    // Handle YouTube URL update
+    const handleYoutubeUpdate = async () => {
+      if (!isOwner || !league) return;
+      
+      setUpdatingYoutube(true);
+      try {
+        const { data, error } = await supabase
+          .from('leagues')
+          .update({ youtube_embed_url: youtubeUrl })
+          .eq('league_id', league.league_id)
+          .select()
+          .single();
+
+        if (error) {
+          console.error('YouTube update error:', error);
+          alert('Failed to update YouTube URL');
+          return;
+        }
+
+        setLeague({ ...league, youtube_embed_url: youtubeUrl });
+        setIsEditingYoutube(false);
+        alert('YouTube URL updated successfully!');
+      } catch (error) {
+        console.error('YouTube update error:', error);
+        alert(`Failed to update YouTube URL: ${error.message}`);
+      } finally {
+        setUpdatingYoutube(false);
+      }
+    };
+
     // Convert Instagram profile URL to embed URL for latest posts
     const getInstagramEmbedUrl = (url: string) => {
       if (!url) return null;
@@ -569,6 +610,82 @@ export default function LeaguePage() {
       }
       
       console.log('No match found for URL:', url);
+      return null;
+    };
+
+    // Convert YouTube URL to embed format
+    const getYoutubeEmbedUrl = (url: string) => {
+      if (!url) return null;
+      
+      console.log('Processing YouTube URL:', url);
+      
+      // If it's already an embed URL, ensure parameters are added
+      if (url.includes('/embed/')) {
+        console.log('Already an embed URL:', url);
+        
+        // Check which parameters are missing
+        const hasRel = url.includes('rel=0');
+        const hasModestBranding = url.includes('modestbranding=1');
+        
+        // If both parameters exist, return as-is
+        if (hasRel && hasModestBranding) {
+          return url;
+        }
+        
+        // Build missing parameters string
+        const missingParams = [];
+        if (!hasRel) missingParams.push('rel=0');
+        if (!hasModestBranding) missingParams.push('modestbranding=1');
+        
+        // Normalize URL by removing trailing separators
+        let cleanUrl = url.replace(/[?&]+$/, '');
+        
+        // Determine separator: use & if query string exists, otherwise ?
+        const separator = cleanUrl.includes('?') ? '&' : '?';
+        return cleanUrl + separator + missingParams.join('&');
+      }
+      
+      // Parameters to minimize off-topic suggestions
+      const embedParams = 'rel=0&modestbranding=1';
+      
+      // Handle different YouTube URL formats
+      // 1. Playlist URL: youtube.com/playlist?list=PLAYLIST_ID
+      const playlistMatch = url.match(/[?&]list=([^&]+)/);
+      if (playlistMatch) {
+        const playlistId = playlistMatch[1];
+        const embedUrl = `https://www.youtube.com/embed/videoseries?list=${playlistId}&${embedParams}`;
+        console.log('Generated embed URL from playlist:', embedUrl);
+        return embedUrl;
+      }
+      
+      // 2. Standard watch URL: youtube.com/watch?v=VIDEO_ID
+      const watchMatch = url.match(/youtube\.com\/watch\?v=([^&]+)/);
+      if (watchMatch) {
+        const videoId = watchMatch[1];
+        const embedUrl = `https://www.youtube.com/embed/${videoId}?${embedParams}`;
+        console.log('Generated embed URL from watch:', embedUrl);
+        return embedUrl;
+      }
+      
+      // 3. Short URL: youtu.be/VIDEO_ID
+      const shortMatch = url.match(/youtu\.be\/([^?]+)/);
+      if (shortMatch) {
+        const videoId = shortMatch[1];
+        const embedUrl = `https://www.youtube.com/embed/${videoId}?${embedParams}`;
+        console.log('Generated embed URL from short:', embedUrl);
+        return embedUrl;
+      }
+      
+      // 4. Mobile URL: youtube.com/shorts/VIDEO_ID
+      const shortsMatch = url.match(/youtube\.com\/shorts\/([^?]+)/);
+      if (shortsMatch) {
+        const videoId = shortsMatch[1];
+        const embedUrl = `https://www.youtube.com/embed/${videoId}?${embedParams}`;
+        console.log('Generated embed URL from shorts:', embedUrl);
+        return embedUrl;
+      }
+      
+      console.log('Could not process YouTube URL');
       return null;
     };
 
@@ -1452,18 +1569,18 @@ export default function LeaguePage() {
                   </div>
                 ) : (
                   <div className="overflow-x-auto -mx-4 md:mx-0">
-                    <table className="w-full text-xs md:text-sm min-w-[640px]">
+                    <table className="w-full text-sm min-w-[600px]">
                       <thead>
-                        <tr className="border-b border-gray-200">
-                          <th className="text-left py-2 px-2 md:py-3 font-semibold text-slate-700 sticky left-0 bg-white z-10">Rank</th>
-                          <th className="text-left py-2 px-2 md:py-3 font-semibold text-slate-700 sticky left-8 md:static bg-white z-10">Team</th>
-                          <th className="text-center py-2 px-2 md:py-3 font-semibold text-slate-700">W</th>
-                          <th className="text-center py-2 px-2 md:py-3 font-semibold text-slate-700">L</th>
-                          <th className="text-center py-2 px-2 md:py-3 font-semibold text-slate-700">Win%</th>
-                          <th className="text-center py-2 px-2 md:py-3 font-semibold text-slate-700">PF</th>
-                          <th className="text-center py-2 px-2 md:py-3 font-semibold text-slate-700 hidden md:table-cell">PA</th>
-                          <th className="text-center py-2 px-2 md:py-3 font-semibold text-slate-700 hidden md:table-cell">Diff</th>
-                          <th className="text-center py-2 px-2 md:py-3 font-semibold text-slate-700"></th>
+                        <tr className="border-b-2 border-gray-200">
+                          <th className="text-left py-3 px-3 font-semibold text-slate-700 w-12 sticky left-0 bg-white z-10">#</th>
+                          <th className="text-left py-3 px-3 font-semibold text-slate-700 max-w-[180px] sticky left-12 md:static bg-white z-10">Team</th>
+                          <th className="text-center py-3 px-3 font-semibold text-slate-700 w-16">W</th>
+                          <th className="text-center py-3 px-3 font-semibold text-slate-700 w-16">L</th>
+                          <th className="text-center py-3 px-3 font-semibold text-slate-700 w-20">Win%</th>
+                          <th className="text-right py-3 px-3 font-semibold text-slate-700 w-20">PF</th>
+                          <th className="text-right py-3 px-3 font-semibold text-slate-700 w-20">PA</th>
+                          <th className="text-right py-3 px-3 font-semibold text-slate-700 w-20">Diff</th>
+                          <th className="text-center py-3 px-3 font-semibold text-slate-700 w-12"></th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1474,25 +1591,30 @@ export default function LeaguePage() {
                             key={`${team.team}-${index}`}
                             className="border-b border-gray-100 hover:bg-orange-50 transition-colors"
                           >
-                            <td className="py-2 px-2 md:py-3 text-slate-600 font-medium sticky left-0 bg-white z-10">{team.rank}</td>
-                            <td className="py-2 px-2 md:py-3 text-slate-800 font-medium sticky left-8 md:static bg-white z-10 min-w-[150px]">{team.team}</td>
-                            <td className="py-2 px-2 md:py-3 text-center text-slate-600">{team.wins}</td>
-                            <td className="py-2 px-2 md:py-3 text-center text-slate-600">{team.losses}</td>
-                            <td className="py-2 px-2 md:py-3 text-center text-slate-600">{(team.winPct * 100).toFixed(1)}%</td>
-                            <td className="py-2 px-2 md:py-3 text-center text-slate-600">{team.pointsFor}</td>
-                            <td className="py-2 px-2 md:py-3 text-center text-slate-600 hidden md:table-cell">{team.pointsAgainst}</td>
-                            <td className="py-2 px-2 md:py-3 text-center font-medium text-slate-700 hidden md:table-cell">
+                            <td className="py-3 px-3 font-medium text-slate-600 sticky left-0 bg-inherit z-10">{team.rank}</td>
+                            <td className="py-3 px-3 font-medium text-slate-800 max-w-[180px] sticky left-12 md:static bg-inherit z-10">
+                              <div className="flex items-center gap-2">
+                                <TeamLogo teamName={team.team} leagueId={league?.league_id} size="sm" />
+                                <span className="truncate">{team.team}</span>
+                              </div>
+                            </td>
+                            <td className="py-3 px-3 text-center font-semibold text-slate-700">{team.wins}</td>
+                            <td className="py-3 px-3 text-center font-semibold text-slate-700">{team.losses}</td>
+                            <td className="py-3 px-3 text-center font-medium text-slate-600">{(team.winPct * 100).toFixed(1)}%</td>
+                            <td className="py-3 px-3 text-right font-medium text-slate-700">{team.pointsFor}</td>
+                            <td className="py-3 px-3 text-right font-medium text-slate-700">{team.pointsAgainst}</td>
+                            <td className={`py-3 px-3 text-right font-semibold ${team.pointsDiff > 0 ? 'text-green-600' : team.pointsDiff < 0 ? 'text-red-600' : 'text-slate-600'}`}>
                               {team.pointsDiff > 0 ? `+${team.pointsDiff}` : team.pointsDiff}
                             </td>
-                            <td className="py-2 px-2 md:py-3 text-center">
+                            <td className="py-3 px-3 text-center">
                               {team.movement === 'up' && (
-                                <span className="text-green-600 font-bold text-xs md:text-sm">▲</span>
+                                <span className="text-green-600 font-bold text-sm">▲</span>
                               )}
                               {team.movement === 'down' && (
-                                <span className="text-red-600 font-bold text-xs md:text-sm">▼</span>
+                                <span className="text-red-600 font-bold text-sm">▼</span>
                               )}
                               {team.movement === 'same' && (
-                                <span className="text-gray-400 text-xs md:text-sm">▬</span>
+                                <span className="text-gray-400 text-sm">▬</span>
                               )}
                             </td>
                           </tr>
@@ -1987,7 +2109,34 @@ export default function LeaguePage() {
             {/* Schedule Section */}
             {activeSection === 'schedule' && (
               <div className="bg-white rounded-xl shadow p-4 md:p-6">
-                <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-4 md:mb-6">Game Schedule</h2>
+                <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-3 md:mb-4">Game Schedule</h2>
+                
+                {/* Tabs for Upcoming / Results */}
+                <div className="flex gap-2 mb-4 border-b border-gray-200">
+                  <button
+                    onClick={() => setScheduleView('upcoming')}
+                    className={`px-3 md:px-4 py-2 text-xs md:text-sm font-semibold transition-all ${
+                      scheduleView === 'upcoming'
+                        ? 'text-orange-500 border-b-2 border-orange-500 -mb-[2px]'
+                        : 'text-slate-600 hover:text-orange-500'
+                    }`}
+                    data-testid="button-upcoming-games"
+                  >
+                    Upcoming Games
+                  </button>
+                  <button
+                    onClick={() => setScheduleView('results')}
+                    className={`px-3 md:px-4 py-2 text-xs md:text-sm font-semibold transition-all ${
+                      scheduleView === 'results'
+                        ? 'text-orange-500 border-b-2 border-orange-500 -mb-[2px]'
+                        : 'text-slate-600 hover:text-orange-500'
+                    }`}
+                    data-testid="button-results"
+                  >
+                    Results
+                  </button>
+                </div>
+
                 {schedule.length > 0 ? (
                   <>
                     {(() => {
@@ -1999,77 +2148,62 @@ export default function LeaguePage() {
                         .filter(game => new Date(game.game_date) < now)
                         .sort((a, b) => new Date(b.game_date).getTime() - new Date(a.game_date).getTime());
 
+                      const gamesToShow = scheduleView === 'upcoming' ? upcomingGames : pastGames;
+
                       return (
                         <>
-                          {/* Upcoming Games */}
-                          {upcomingGames.length > 0 && (
-                            <div className="mb-6 md:mb-8">
-                              <h3 className="text-sm md:text-md font-semibold text-slate-700 mb-3 md:mb-4 pb-2 border-b border-orange-200">
-                                Upcoming Games
-                              </h3>
-                              <div className="divide-y divide-gray-200">
-                                {upcomingGames.map((game, index) => (
+                          {gamesToShow.length > 0 ? (
+                            <div className="divide-y divide-gray-200">
+                              {scheduleView === 'upcoming' ? (
+                                /* Upcoming Games View */
+                                gamesToShow.map((game, index) => (
                                   <div 
                                     key={`upcoming-${game.game_id}-${index}`} 
-                                    className="p-3 md:p-4 hover:bg-gray-50 transition-colors cursor-pointer"
+                                    className="py-2 md:py-3 hover:bg-gray-50 transition-colors cursor-pointer"
                                     onClick={() => {
                                       setSelectedPreviewGame(game);
                                       setIsPreviewModalOpen(true);
                                     }}
                                     data-testid={`upcoming-game-${index}`}
                                   >
-                                    <div className="flex flex-col md:flex-row md:items-center gap-3 md:justify-between">
-                                      <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-6 flex-1">
-                                        <div className="text-xs md:text-sm text-slate-600 md:min-w-[120px]">
-                                          <div>
-                                            {new Date(game.game_date).toLocaleDateString('en-US', { 
-                                              weekday: 'short',
-                                              month: 'short', 
-                                              day: 'numeric',
-                                              year: 'numeric'
-                                            })}
-                                          </div>
-                                          {game.kickoff_time && (
-                                            <div className="text-xs text-slate-500 mt-1">
-                                              {game.kickoff_time}
-                                            </div>
-                                          )}
+                                    {/* Mobile-optimized compact layout */}
+                                    <div className="flex flex-col gap-2">
+                                      {/* Date and Time Row */}
+                                      <div className="flex items-center justify-between">
+                                        <div className="text-[11px] md:text-xs text-slate-600 font-medium">
+                                          {new Date(game.game_date).toLocaleDateString('en-US', { 
+                                            month: 'short', 
+                                            day: 'numeric'
+                                          })}
+                                          {game.kickoff_time && ` • ${game.kickoff_time}`}
                                         </div>
-                                        <div className="flex items-center gap-2 md:gap-4 flex-1">
-                                          <div className="flex items-center gap-1 md:gap-2 flex-1 md:min-w-[200px]">
-                                            <TeamLogo teamName={game.team1} leagueId={league?.league_id || ""} size="sm" />
-                                            <span className="font-medium text-slate-800 text-xs md:text-sm truncate">{game.team1}</span>
+                                        {game.venue && (
+                                          <div className="text-[10px] md:text-xs text-slate-400 truncate max-w-[100px] md:max-w-none">
+                                            {game.venue}
                                           </div>
-                                          <span className="text-slate-500 text-xs md:text-sm">vs</span>
-                                          <div className="flex items-center gap-1 md:gap-2 flex-1 md:min-w-[200px]">
-                                            <TeamLogo teamName={game.team2} leagueId={league?.league_id || ""} size="sm" />
-                                            <span className="font-medium text-slate-800 text-xs md:text-sm truncate">{game.team2}</span>
-                                          </div>
+                                        )}
+                                      </div>
+                                      {/* Teams Row */}
+                                      <div className="flex items-center gap-2 md:gap-3">
+                                        <div className="flex items-center gap-1 md:gap-1.5 flex-1 min-w-0">
+                                          <TeamLogo teamName={game.team1} leagueId={league?.league_id || ""} size="sm" />
+                                          <span className="font-medium text-slate-800 text-[11px] md:text-sm truncate">{game.team1}</span>
+                                        </div>
+                                        <span className="text-slate-400 text-[11px] md:text-xs flex-shrink-0">vs</span>
+                                        <div className="flex items-center gap-1 md:gap-1.5 flex-1 justify-end min-w-0">
+                                          <span className="font-medium text-slate-800 text-[11px] md:text-sm truncate">{game.team2}</span>
+                                          <TeamLogo teamName={game.team2} leagueId={league?.league_id || ""} size="sm" />
                                         </div>
                                       </div>
-                                      {game.venue && (
-                                        <div className="text-xs text-slate-400 truncate md:max-w-[150px]">
-                                          {game.venue}
-                                        </div>
-                                      )}
                                     </div>
                                   </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Past Games (Results) */}
-                          {pastGames.length > 0 && (
-                            <div>
-                              <h3 className="text-sm md:text-md font-semibold text-slate-700 mb-3 md:mb-4 pb-2 border-b border-orange-200">
-                                Results
-                              </h3>
-                              <div className="divide-y divide-gray-200">
-                                {pastGames.map((game, index) => (
+                                ))
+                              ) : (
+                                /* Results View */
+                                gamesToShow.map((game, index) => (
                                   <div 
                                     key={`past-${game.game_id}-${index}`} 
-                                    className={`p-3 md:p-4 transition-colors ${game.numeric_id ? 'cursor-pointer hover:bg-orange-50' : 'cursor-default'}`}
+                                    className={`py-2 md:py-3 transition-colors ${game.numeric_id ? 'cursor-pointer hover:bg-orange-50' : 'cursor-default'}`}
                                     onClick={() => {
                                       if (game.numeric_id) {
                                         handleGameClick(game.numeric_id);
@@ -2077,56 +2211,66 @@ export default function LeaguePage() {
                                     }}
                                     data-testid={`past-game-${index}`}
                                   >
-                                    <div className="flex flex-col gap-3">
+                                    {/* Mobile-optimized compact layout */}
+                                    <div className="flex flex-col gap-2">
+                                      {/* Date and Status Row */}
                                       <div className="flex items-center justify-between">
-                                        <div className="text-xs md:text-sm text-slate-600">
-                                          <div>
-                                            {new Date(game.game_date).toLocaleDateString('en-US', { 
-                                              weekday: 'short',
-                                              month: 'short', 
-                                              day: 'numeric',
-                                              year: 'numeric'
-                                            })}
-                                          </div>
+                                        <div className="text-[11px] md:text-xs text-slate-600 font-medium">
+                                          {new Date(game.game_date).toLocaleDateString('en-US', { 
+                                            month: 'short', 
+                                            day: 'numeric'
+                                          })}
                                           {game.status && (
-                                            <div className="text-xs text-green-600 mt-1 font-medium">
+                                            <span className="ml-2 text-[10px] md:text-xs text-green-600 font-semibold">
                                               {game.status}
-                                            </div>
+                                            </span>
                                           )}
                                         </div>
                                         {game.venue && (
-                                          <div className="text-xs text-slate-400 truncate max-w-[120px] md:max-w-none">
+                                          <div className="text-[10px] md:text-xs text-slate-400 truncate max-w-[100px] md:max-w-none">
                                             {game.venue}
                                           </div>
                                         )}
                                       </div>
-                                      <div className="flex items-center justify-between gap-2">
-                                        <div className="flex items-center gap-1 md:gap-2 flex-1 min-w-0">
+                                      {/* Teams and Score Row */}
+                                      <div className="flex items-center gap-2 md:gap-3">
+                                        <div className="flex items-center gap-1 md:gap-1.5 flex-1 min-w-0">
                                           <TeamLogo teamName={game.team1} leagueId={league?.league_id || ""} size="sm" />
-                                          <span className="font-medium text-slate-800 text-xs md:text-sm truncate">{game.team1}</span>
+                                          <span className="font-medium text-slate-800 text-[11px] md:text-sm truncate">{game.team1}</span>
                                         </div>
                                         {game.team1_score !== undefined && game.team2_score !== undefined ? (
-                                          <div className="flex items-center gap-2 md:gap-3 px-2 md:px-4 flex-shrink-0">
-                                            <span className={`text-lg md:text-xl font-bold ${game.team1_score > game.team2_score ? 'text-green-600' : 'text-slate-600'}`}>
+                                          <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0">
+                                            <span className={`text-base md:text-lg font-bold ${game.team1_score > game.team2_score ? 'text-green-600' : 'text-slate-600'}`}>
                                               {game.team1_score}
                                             </span>
-                                            <span className="text-slate-400 text-sm">-</span>
-                                            <span className={`text-lg md:text-xl font-bold ${game.team2_score > game.team1_score ? 'text-green-600' : 'text-slate-600'}`}>
+                                            <span className="text-slate-400 text-[11px] md:text-sm">-</span>
+                                            <span className={`text-base md:text-lg font-bold ${game.team2_score > game.team1_score ? 'text-green-600' : 'text-slate-600'}`}>
                                               {game.team2_score}
                                             </span>
                                           </div>
                                         ) : (
-                                          <span className="text-slate-500 text-xs md:text-sm px-2 md:px-4 flex-shrink-0">vs</span>
+                                          <span className="text-slate-400 text-[11px] md:text-xs flex-shrink-0">vs</span>
                                         )}
-                                        <div className="flex items-center gap-1 md:gap-2 flex-1 justify-end min-w-0">
-                                          <span className="font-medium text-slate-800 text-xs md:text-sm truncate">{game.team2}</span>
+                                        <div className="flex items-center gap-1 md:gap-1.5 flex-1 justify-end min-w-0">
+                                          <span className="font-medium text-slate-800 text-[11px] md:text-sm truncate">{game.team2}</span>
                                           <TeamLogo teamName={game.team2} leagueId={league?.league_id || ""} size="sm" />
                                         </div>
                                       </div>
                                     </div>
                                   </div>
-                                ))}
-                              </div>
+                                ))
+                              )}
+                            </div>
+                          ) : (
+                            <div className="text-center py-8 text-gray-500">
+                              <p className="text-xs md:text-sm">
+                                {scheduleView === 'upcoming' ? 'No upcoming games' : 'No results available'}
+                              </p>
+                              <p className="text-[10px] md:text-xs mt-1">
+                                {scheduleView === 'upcoming' 
+                                  ? 'Check back later for scheduled games' 
+                                  : 'Games will appear here after they are played'}
+                              </p>
                             </div>
                           )}
                         </>
@@ -2135,8 +2279,8 @@ export default function LeaguePage() {
                   </>
                 ) : (
                   <div className="text-center py-8 text-gray-500">
-                    <p className="text-sm">No games scheduled</p>
-                    <p className="text-xs mt-1">Games will appear when scheduled</p>
+                    <p className="text-xs md:text-sm">No games scheduled</p>
+                    <p className="text-[10px] md:text-xs mt-1">Games will appear when scheduled</p>
                   </div>
                 )}
               </div>
@@ -2269,16 +2413,17 @@ export default function LeaguePage() {
                 </div>
               ) : standings.length > 0 ? (
                 <div className="overflow-x-auto -mx-4 md:mx-0">
-                  <table className="w-full text-xs md:text-sm min-w-[500px]">
+                  <table className="w-full text-sm min-w-[600px]">
                     <thead>
-                      <tr className="border-b border-gray-200">
-                        <th className="text-left py-2 md:py-3 px-2 font-semibold text-slate-700 sticky left-0 bg-white z-10">#</th>
-                        <th className="text-left py-2 md:py-3 px-2 font-semibold text-slate-700 sticky left-6 md:static bg-white z-10">Team</th>
-                        <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700">Record</th>
-                        <th className="text-center py-2 md:py-3 px-2 font-semibold text-slate-700">Win%</th>
-                        <th className="text-right py-2 md:py-3 px-2 font-semibold text-slate-700">PF</th>
-                        <th className="text-right py-2 md:py-3 px-2 font-semibold text-slate-700 hidden md:table-cell">PA</th>
-                        <th className="text-right py-2 md:py-3 px-2 font-semibold text-slate-700 hidden md:table-cell">Diff</th>
+                      <tr className="border-b-2 border-gray-200">
+                        <th className="text-left py-3 px-3 font-semibold text-slate-700 w-12 sticky left-0 bg-white z-10">#</th>
+                        <th className="text-left py-3 px-3 font-semibold text-slate-700 max-w-[180px] sticky left-12 md:static bg-white z-10">Team</th>
+                        <th className="text-center py-3 px-3 font-semibold text-slate-700 w-20">W</th>
+                        <th className="text-center py-3 px-3 font-semibold text-slate-700 w-20">L</th>
+                        <th className="text-center py-3 px-3 font-semibold text-slate-700 w-20">Win%</th>
+                        <th className="text-right py-3 px-3 font-semibold text-slate-700 w-20">PF</th>
+                        <th className="text-right py-3 px-3 font-semibold text-slate-700 w-20">PA</th>
+                        <th className="text-right py-3 px-3 font-semibold text-slate-700 w-20">Diff</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2289,29 +2434,31 @@ export default function LeaguePage() {
                             index < 3 ? 'bg-green-50' : index >= standings.length - 2 ? 'bg-red-50' : ''
                           }`}
                         >
-                          <td className="py-2 md:py-3 px-2 font-medium text-slate-600 sticky left-0 bg-inherit z-10">{index + 1}</td>
-                          <td className="py-2 md:py-3 px-2 font-medium text-slate-800 sticky left-6 md:static bg-inherit z-10">
-                            <div className="flex items-center gap-1 md:gap-2 min-w-[120px]">
+                          <td className="py-3 px-3 font-medium text-slate-600 sticky left-0 bg-inherit z-10">{index + 1}</td>
+                          <td className="py-3 px-3 font-medium text-slate-800 max-w-[180px] sticky left-12 md:static bg-inherit z-10">
+                            <div className="flex items-center gap-2">
                               <TeamLogo teamName={team.team} leagueId={league?.league_id} size="sm" />
                               <span className="truncate">{team.team}</span>
                             </div>
                           </td>
-                          <td className="py-2 md:py-3 px-2 text-center font-medium text-slate-700">{team.record}</td>
-                          <td className="py-2 md:py-3 px-2 text-center text-slate-600">{(team.winPct * 100).toFixed(1)}%</td>
-                          <td className="py-2 md:py-3 px-2 text-right text-slate-600">{team.pointsFor}</td>
-                          <td className="py-2 md:py-3 px-2 text-right text-slate-600 hidden md:table-cell">{team.pointsAgainst}</td>
-                          <td className={`py-2 md:py-3 px-2 text-right font-medium hidden md:table-cell ${team.pointsDiff > 0 ? 'text-green-600' : team.pointsDiff < 0 ? 'text-red-600' : 'text-slate-600'}`}>{team.pointsDiff > 0 ? '+' : ''}{team.pointsDiff}</td>
+                          <td className="py-3 px-3 text-center font-semibold text-slate-700">{team.wins}</td>
+                          <td className="py-3 px-3 text-center font-semibold text-slate-700">{team.losses}</td>
+                          <td className="py-3 px-3 text-center font-medium text-slate-600">{(team.winPct * 100).toFixed(1)}%</td>
+                          <td className="py-3 px-3 text-right font-medium text-slate-700">{team.pointsFor}</td>
+                          <td className="py-3 px-3 text-right font-medium text-slate-700">{team.pointsAgainst}</td>
+                          <td className={`py-3 px-3 text-right font-semibold ${team.pointsDiff > 0 ? 'text-green-600' : team.pointsDiff < 0 ? 'text-red-600' : 'text-slate-600'}`}>{team.pointsDiff > 0 ? '+' : ''}{team.pointsDiff}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                  <div className="mt-3 md:mt-4 text-xs text-slate-500">
-                    <div className="flex gap-3 md:gap-4 flex-wrap text-xs">
-                      <span>Record = Wins-Losses</span>
-                      <span>Win% = Win Percentage</span>
-                      <span>PF = Points For</span>
-                      <span className="hidden md:inline">PA = Points Against</span>
-                      <span className="hidden md:inline">Diff = Point Differential</span>
+                  <div className="mt-4 pt-3 border-t border-gray-100 text-xs text-slate-500">
+                    <div className="flex gap-4 flex-wrap">
+                      <span><span className="font-semibold">W</span> = Wins</span>
+                      <span><span className="font-semibold">L</span> = Losses</span>
+                      <span><span className="font-semibold">Win%</span> = Win Percentage</span>
+                      <span><span className="font-semibold">PF</span> = Points For</span>
+                      <span><span className="font-semibold">PA</span> = Points Against</span>
+                      <span><span className="font-semibold">Diff</span> = Point Differential</span>
                     </div>
                   </div>
                 </div>
@@ -2450,16 +2597,81 @@ export default function LeaguePage() {
 
             {/* YouTube Embed */}
             <div className="bg-white rounded-xl shadow p-4">
-              <h3 className="text-sm font-semibold text-slate-700 mb-2">Latest Highlights</h3>
-              <iframe
-                width="100%"
-                height="250"
-                src="https://www.youtube.com/embed/VIDEO_ID"
-                title="YouTube video player"
-                frameBorder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              ></iframe>
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="text-sm font-semibold text-slate-700">Latest Highlights</h3>
+                {isOwner && (
+                  <button
+                    onClick={() => setIsEditingYoutube(!isEditingYoutube)}
+                    className="text-xs text-orange-500 hover:text-orange-600 font-medium"
+                  >
+                    {isEditingYoutube ? 'Cancel' : 'Edit'}
+                  </button>
+                )}
+              </div>
+
+              {isEditingYoutube && isOwner ? (
+                <div className="space-y-3">
+                  <input
+                    type="text"
+                    placeholder="Enter YouTube video URL (e.g., https://www.youtube.com/watch?v=xyz or https://youtu.be/xyz)"
+                    value={youtubeUrl}
+                    onChange={(e) => setYoutubeUrl(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md"
+                  />
+                  <p className="text-xs text-gray-500">
+                    💡 Paste any YouTube video URL (watch, short link, or shorts)
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleYoutubeUpdate}
+                      disabled={updatingYoutube}
+                      className={`px-3 py-1 text-xs font-medium rounded ${
+                        updatingYoutube 
+                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                          : 'bg-orange-500 text-white hover:bg-orange-600'
+                      }`}
+                    >
+                      {updatingYoutube ? 'Updating...' : 'Save'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsEditingYoutube(false);
+                        setYoutubeUrl(league?.youtube_embed_url || "");
+                      }}
+                      className="px-3 py-1 text-xs font-medium bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  {league?.youtube_embed_url && getYoutubeEmbedUrl(league.youtube_embed_url) ? (
+                    <iframe
+                      src={getYoutubeEmbedUrl(league.youtube_embed_url)}
+                      width="100%"
+                      height="250"
+                      className="rounded-md border"
+                      title="YouTube video player"
+                      frameBorder="0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    ></iframe>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      <p className="text-sm">No YouTube video added yet</p>
+                      {isOwner && (
+                        <button
+                          onClick={() => setIsEditingYoutube(true)}
+                          className="mt-2 text-xs text-orange-500 hover:text-orange-600 underline"
+                        >
+                          Add YouTube Video
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Comment Section Placeholder */}

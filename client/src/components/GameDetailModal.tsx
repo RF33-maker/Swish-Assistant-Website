@@ -8,26 +8,26 @@ interface PlayerGameStats {
   familyname: string;
   team: string;
   number?: number;
-  minutes_played?: string;
+  sminutes?: string;
   spoints: number;
-  field_goals_made?: number;
-  field_goals_attempted?: number;
-  field_goal_percent?: number;
-  three_pt_made?: number;
-  three_pt_attempted?: number;
-  three_pt_percent?: number;
-  free_throws_made?: number;
-  free_throws_attempted?: number;
-  free_throw_percent?: number;
+  sfieldgoalsmade?: number;
+  sfieldgoalsattempted?: number;
+  sfieldgoalspercentage?: number;
+  sthreepointersmade?: number;
+  sthreepointersattempted?: number;
+  sthreepointerspercentage?: number;
+  sfreethrowsmade?: number;
+  sfreethrowsattempted?: number;
+  sfreethrowspercentage?: number;
   sreboundstotal: number;
   rebounds_o?: number;
   rebounds_d?: number;
   sassists: number;
-  steals?: number;
-  blocks?: number;
-  turnovers?: number;
+  ssteals?: number;
+  sblocks?: number;
+  sturnovers?: number;
   personal_fouls?: number;
-  plus_minus?: number;
+  splusminuspoints?: number;
 }
 
 interface GameDetailModalProps {
@@ -45,6 +45,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
     teams: string[];
     teamScores: Record<string, number>;
   } | null>(null);
+  const [teamStatsFromDb, setTeamStatsFromDb] = useState<any[]>([]);
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
@@ -54,6 +55,8 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
       if (!gameId || !isOpen) return;
       
       setLoading(true);
+      // Reset team stats to avoid stale data
+      setTeamStatsFromDb([]);
       
       try {
         console.log("🎮 Fetching game details for gameId:", gameId);
@@ -70,6 +73,9 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
         let gameDate = new Date().toISOString();
         
         if (teamStatsData && teamStatsData.length > 0) {
+          // Store team stats data for use in team totals
+          setTeamStatsFromDb(teamStatsData);
+          
           // Get teams and scores from team_stats
           teamStatsData.forEach(teamStat => {
             if (teamStat.name) {
@@ -266,16 +272,32 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
 
   const teamStats = gameInfo?.teams.map(team => {
     const teamPlayers = gameStats.filter(stat => stat.team === team);
+    const dbTeamStats = teamStatsFromDb.find(ts => ts.name === team);
+    
+    // Fallback: calculate from player stats if team stats not available
+    const calcFgMade = teamPlayers.reduce((sum, p) => sum + (p.sfieldgoalsmade || 0), 0);
+    const calcFgAttempted = teamPlayers.reduce((sum, p) => sum + (p.sfieldgoalsattempted || 0), 0);
+    const calcThreeMade = teamPlayers.reduce((sum, p) => sum + (p.sthreepointersmade || 0), 0);
+    const calcThreeAttempted = teamPlayers.reduce((sum, p) => sum + (p.sthreepointersattempted || 0), 0);
+    const calcFtMade = teamPlayers.reduce((sum, p) => sum + (p.sfreethrowsmade || 0), 0);
+    const calcFtAttempted = teamPlayers.reduce((sum, p) => sum + (p.sfreethrowsattempted || 0), 0);
+    const calcSteals = teamPlayers.reduce((sum, p) => sum + (p.ssteals || 0), 0);
+    const calcBlocks = teamPlayers.reduce((sum, p) => sum + (p.sblocks || 0), 0);
+    
     return {
       name: team,
       score: gameInfo.teamScores[team],
       players: teamPlayers,
-      totalFgMade: teamPlayers.reduce((sum, p) => sum + (p.field_goals_made || 0), 0),
-      totalFgAttempted: teamPlayers.reduce((sum, p) => sum + (p.field_goals_attempted || 0), 0),
-      totalThreeMade: teamPlayers.reduce((sum, p) => sum + (p.three_pt_made || 0), 0),
-      totalThreeAttempted: teamPlayers.reduce((sum, p) => sum + (p.three_pt_attempted || 0), 0),
-      totalRebounds: teamPlayers.reduce((sum, p) => sum + (p.sreboundstotal || 0), 0),
-      totalAssists: teamPlayers.reduce((sum, p) => sum + (p.sassists || 0), 0),
+      totalFgMade: dbTeamStats?.tot_sfieldgoalsmade ?? calcFgMade,
+      totalFgAttempted: dbTeamStats?.tot_sfieldgoalsattempted ?? calcFgAttempted,
+      totalThreeMade: dbTeamStats?.tot_sthreepointersmade ?? calcThreeMade,
+      totalThreeAttempted: dbTeamStats?.tot_sthreepointersattempted ?? calcThreeAttempted,
+      totalFtMade: dbTeamStats?.tot_sfreethrowsmade ?? calcFtMade,
+      totalFtAttempted: dbTeamStats?.tot_sfreethrowsattempted ?? calcFtAttempted,
+      totalRebounds: dbTeamStats?.tot_sreboundstotal ?? teamPlayers.reduce((sum, p) => sum + (p.sreboundstotal || 0), 0),
+      totalAssists: dbTeamStats?.tot_sassists ?? teamPlayers.reduce((sum, p) => sum + (p.sassists || 0), 0),
+      totalSteals: dbTeamStats?.tot_ssteals ?? calcSteals,
+      totalBlocks: dbTeamStats?.tot_sblocks ?? calcBlocks,
     };
   });
 
@@ -342,85 +364,21 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
               )}
 
               {/* AI Game Summary Section */}
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg p-4 md:p-6">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-                  <div className="flex items-center gap-2 md:gap-3">
-                    <div className="relative">
-                      <Bot className="w-5 h-5 md:w-6 md:h-6 text-blue-600" />
-                      {summaryLoading && (
-                        <div className="absolute -inset-1 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full animate-spin">
-                          <div className="w-7 h-7 md:w-8 md:h-8 bg-blue-50 rounded-full"></div>
-                        </div>
-                      )}
-                    </div>
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Bot className="w-4 h-4 text-blue-600" />
                     <div>
-                      <h3 className="text-base md:text-lg font-semibold text-blue-800">AI Game Analysis</h3>
-                      <p className="text-xs md:text-sm text-blue-600">Powered by advanced game intelligence</p>
+                      <h3 className="text-sm font-semibold text-blue-800">AI Game Analysis</h3>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="px-2 py-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs rounded-full font-medium">
-                      PREMIUM
-                    </div>
-                    <Sparkles className="w-3 h-3 md:w-4 md:h-4 text-purple-500" />
+                  <div className="px-2 py-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs rounded-full font-medium">
+                    COMING SOON
                   </div>
                 </div>
-
-                {!showSummary ? (
-                  <div className="text-center">
-                    <button
-                      onClick={fetchAISummary}
-                      disabled={summaryLoading}
-                      className={`relative px-4 md:px-6 py-2 md:py-3 rounded-lg text-sm md:text-base font-medium text-white transition-all duration-300 ${
-                        summaryLoading
-                          ? 'bg-gradient-to-r from-blue-500 to-purple-500 animate-pulse cursor-not-allowed'
-                          : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 hover:scale-105 active:scale-95'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        {summaryLoading ? (
-                          <>
-                            <Zap className="w-3 h-3 md:w-4 md:h-4 animate-bounce" />
-                            <span className="animate-pulse">AI Analyzing Game...</span>
-                            <div className="flex gap-1">
-                              <div className="w-1 h-1 bg-white rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                              <div className="w-1 h-1 bg-white rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                              <div className="w-1 h-1 bg-white rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                            </div>
-                          </>
-                        ) : (
-                          <>
-                            <Bot className="w-3 h-3 md:w-4 md:h-4" />
-                            <span>Generate AI Game Summary</span>
-                            <Sparkles className="w-3 h-3 md:w-4 md:h-4" />
-                          </>
-                        )}
-                      </div>
-                    </button>
-                    <p className="text-xs md:text-sm text-blue-600 mt-2 px-2">
-                      Get detailed insights on key plays, player performances, and game-changing moments
-                    </p>
-                  </div>
-                ) : (
-                  <div className="bg-white rounded-lg border border-blue-200 p-3 md:p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Sparkles className="w-4 h-4 md:w-5 md:h-5 text-purple-500" />
-                      <span className="text-xs md:text-sm font-medium text-blue-800">AI Analysis Complete</span>
-                    </div>
-                    <div className="text-slate-700 text-xs md:text-sm leading-relaxed whitespace-pre-wrap">
-                      {aiSummary}
-                    </div>
-                    <button
-                      onClick={() => {
-                        setShowSummary(false);
-                        setAiSummary(null);
-                      }}
-                      className="mt-3 text-xs text-blue-600 hover:text-blue-800 transition-colors"
-                    >
-                      Generate New Analysis
-                    </button>
-                  </div>
-                )}
+                <p className="text-xs text-blue-600 mt-2">
+                  Get detailed AI-powered insights on key plays, player performances, and game-changing moments
+                </p>
               </div>
 
               {/* Team Filter Buttons */}
@@ -444,41 +402,80 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
 
               {/* Selected Team Summary */}
               {selectedTeamStats && (
-                <div className="bg-orange-50 rounded-lg p-3 md:p-4 border border-orange-200">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-base md:text-xl font-bold text-slate-800 truncate pr-2">{selectedTeamStats.name}</h3>
-                    <div className="text-2xl md:text-3xl font-bold text-orange-600">{selectedTeamStats.score}</div>
+                <div className="bg-orange-50 rounded-lg border border-orange-200 overflow-hidden">
+                  {/* Team Header - Sticky on mobile */}
+                  <div className="flex items-center gap-3 md:gap-4 p-3 md:p-4 border-b border-orange-200">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-base md:text-xl font-bold text-slate-800 truncate">{selectedTeamStats.name}</h3>
+                    </div>
+                    <div className="text-2xl md:text-3xl font-bold text-orange-600 shrink-0">{selectedTeamStats.score}</div>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 text-xs md:text-sm">
-                    <div>
-                      <div className="text-slate-800 font-medium">Field Goals</div>
-                      <div className="font-semibold text-slate-900">
-                        {selectedTeamStats.totalFgMade}/{selectedTeamStats.totalFgAttempted} 
-                        {selectedTeamStats.totalFgAttempted > 0 && (
-                          <span className="text-slate-700 ml-1">
-                            ({((selectedTeamStats.totalFgMade / selectedTeamStats.totalFgAttempted) * 100).toFixed(1)}%)
-                          </span>
-                        )}
+                  
+                  {/* Stats Container - Scrollable on mobile, grid on desktop */}
+                  <div className="overflow-x-auto">
+                    <div className="flex md:grid md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4 p-3 md:p-4 min-w-max md:min-w-0">
+                      {/* Field Goals */}
+                      <div className="min-w-[140px] md:min-w-0">
+                        <div className="text-slate-800 font-medium text-xs md:text-sm">Field Goals</div>
+                        <div className="font-semibold text-slate-900 text-sm md:text-base">
+                          {selectedTeamStats.totalFgMade}/{selectedTeamStats.totalFgAttempted} 
+                          {selectedTeamStats.totalFgAttempted > 0 && (
+                            <span className="text-slate-700 ml-1 text-xs">
+                              ({((selectedTeamStats.totalFgMade / selectedTeamStats.totalFgAttempted) * 100).toFixed(1)}%)
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    <div>
-                      <div className="text-slate-800 font-medium">3-Pointers</div>
-                      <div className="font-semibold text-slate-900">
-                        {selectedTeamStats.totalThreeMade}/{selectedTeamStats.totalThreeAttempted}
-                        {selectedTeamStats.totalThreeAttempted > 0 && (
-                          <span className="text-slate-700 ml-1">
-                            ({((selectedTeamStats.totalThreeMade / selectedTeamStats.totalThreeAttempted) * 100).toFixed(1)}%)
-                          </span>
-                        )}
+                      
+                      {/* 3-Pointers */}
+                      <div className="min-w-[140px] md:min-w-0">
+                        <div className="text-slate-800 font-medium text-xs md:text-sm">3-Pointers</div>
+                        <div className="font-semibold text-slate-900 text-sm md:text-base">
+                          {selectedTeamStats.totalThreeMade}/{selectedTeamStats.totalThreeAttempted}
+                          {selectedTeamStats.totalThreeAttempted > 0 && (
+                            <span className="text-slate-700 ml-1 text-xs">
+                              ({((selectedTeamStats.totalThreeMade / selectedTeamStats.totalThreeAttempted) * 100).toFixed(1)}%)
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    <div>
-                      <div className="text-slate-800 font-medium">Total Rebounds</div>
-                      <div className="font-semibold text-slate-900">{selectedTeamStats.totalRebounds}</div>
-                    </div>
-                    <div>
-                      <div className="text-slate-800 font-medium">Total Assists</div>
-                      <div className="font-semibold text-slate-900">{selectedTeamStats.totalAssists}</div>
+                      
+                      {/* Free Throws */}
+                      <div className="min-w-[140px] md:min-w-0">
+                        <div className="text-slate-800 font-medium text-xs md:text-sm">Free Throws</div>
+                        <div className="font-semibold text-slate-900 text-sm md:text-base">
+                          {selectedTeamStats.totalFtMade}/{selectedTeamStats.totalFtAttempted}
+                          {selectedTeamStats.totalFtAttempted > 0 && (
+                            <span className="text-slate-700 ml-1 text-xs">
+                              ({((selectedTeamStats.totalFtMade / selectedTeamStats.totalFtAttempted) * 100).toFixed(1)}%)
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Total Rebounds */}
+                      <div className="min-w-[100px] md:min-w-0">
+                        <div className="text-slate-800 font-medium text-xs md:text-sm">Rebounds</div>
+                        <div className="font-semibold text-slate-900 text-sm md:text-base">{selectedTeamStats.totalRebounds}</div>
+                      </div>
+                      
+                      {/* Total Assists */}
+                      <div className="min-w-[100px] md:min-w-0">
+                        <div className="text-slate-800 font-medium text-xs md:text-sm">Assists</div>
+                        <div className="font-semibold text-slate-900 text-sm md:text-base">{selectedTeamStats.totalAssists}</div>
+                      </div>
+                      
+                      {/* Steals */}
+                      <div className="min-w-[100px] md:min-w-0">
+                        <div className="text-slate-800 font-medium text-xs md:text-sm">Steals</div>
+                        <div className="font-semibold text-slate-900 text-sm md:text-base">{selectedTeamStats.totalSteals}</div>
+                      </div>
+                      
+                      {/* Blocks */}
+                      <div className="min-w-[100px] md:min-w-0">
+                        <div className="text-slate-800 font-medium text-xs md:text-sm">Blocks</div>
+                        <div className="font-semibold text-slate-900 text-sm md:text-base">{selectedTeamStats.totalBlocks}</div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -493,44 +490,44 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                   </h3>
                 </div>
                 <div className="overflow-x-auto -mx-4 md:mx-0">
-                  <table className="w-full text-xs md:text-sm">
+                  <table className="w-full text-xs md:text-sm min-w-[800px]">
                     <thead className="bg-gray-50 border-b border-gray-200">
                       <tr>
-                        <th className="text-left p-2 md:p-3 font-medium text-slate-700 sticky left-0 bg-gray-50 z-10">Player</th>
-                        <th className="text-center p-2 md:p-3 font-medium text-slate-700 hidden md:table-cell">MIN</th>
-                        <th className="text-center p-2 md:p-3 font-medium text-slate-700">PTS</th>
-                        <th className="text-center p-2 md:p-3 font-medium text-slate-700 hidden sm:table-cell">FG</th>
-                        <th className="text-center p-2 md:p-3 font-medium text-slate-700 hidden lg:table-cell">3P</th>
-                        <th className="text-center p-2 md:p-3 font-medium text-slate-700 hidden lg:table-cell">FT</th>
-                        <th className="text-center p-2 md:p-3 font-medium text-slate-700">REB</th>
-                        <th className="text-center p-2 md:p-3 font-medium text-slate-700">AST</th>
-                        <th className="text-center p-2 md:p-3 font-medium text-slate-700 hidden md:table-cell">STL</th>
-                        <th className="text-center p-2 md:p-3 font-medium text-slate-700 hidden md:table-cell">BLK</th>
-                        <th className="text-center p-2 md:p-3 font-medium text-slate-700 hidden lg:table-cell">TO</th>
-                        <th className="text-center p-2 md:p-3 font-medium text-slate-700 hidden lg:table-cell">+/-</th>
+                        <th className="text-left py-1.5 md:p-3 font-medium text-slate-700 sticky left-4 md:left-0 bg-gray-50 z-10 w-8 md:w-16 pl-2 pr-1">Player</th>
+                        <th className="text-center py-1.5 md:p-3 font-medium text-slate-700 pl-1 pr-1.5">MIN</th>
+                        <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700">PTS</th>
+                        <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700">FG</th>
+                        <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700">3P</th>
+                        <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700">FT</th>
+                        <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700">REB</th>
+                        <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700">AST</th>
+                        <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700">STL</th>
+                        <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700">BLK</th>
+                        <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700">TO</th>
+                        <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700">+/-</th>
                       </tr>
                     </thead>
                     <tbody>
                       {selectedTeamPlayers.map((player, index) => (
                         <tr key={player.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-orange-50 transition-colors`}>
-                          <td className="p-2 md:p-3 sticky left-0 bg-inherit z-10">
-                            <div>
+                          <td className="py-1.5 md:p-3 sticky left-4 md:left-0 bg-inherit z-10 w-28 md:w-32 pl-2 pr-1">
+                            <div className="max-w-none whitespace-normal">
                               <div className="font-medium text-slate-800">{player.firstname} {player.familyname}</div>
                               {player.number && (
                                 <div className="text-xs text-slate-500">#{player.number}</div>
                               )}
                             </div>
                           </td>
-                          <td className="p-2 md:p-3 text-center text-slate-800 hidden md:table-cell">
-                            {player.sminutes && (
+                          <td className="py-1.5 md:p-3 text-center text-slate-800 pl-1 pr-1.5">
+                            {player.sminutes ? (
                               <div className="flex items-center justify-center gap-1">
                                 <Clock className="w-3 h-3 text-slate-400" />
                                 <span className="text-slate-800">{player.sminutes}</span>
                               </div>
-                            )}
+                            ) : <span className="text-slate-400">-</span>}
                           </td>
-                          <td className="p-2 md:p-3 text-center font-semibold text-orange-600">{player.spoints}</td>
-                          <td className="p-2 md:p-3 text-center text-slate-800 hidden sm:table-cell">
+                          <td className="px-1.5 py-1.5 md:p-3 text-center font-semibold text-orange-600">{player.spoints}</td>
+                          <td className="px-1.5 py-1.5 md:p-3 text-center text-slate-800">
                             {player.sfieldgoalsmade !== undefined && player.sfieldgoalsattempted !== undefined ? (
                               <div>
                                 <div className="font-medium">{player.sfieldgoalsmade}/{player.sfieldgoalsattempted}</div>
@@ -540,7 +537,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                               </div>
                             ) : <span className="text-slate-400">-</span>}
                           </td>
-                          <td className="p-2 md:p-3 text-center text-slate-800 hidden lg:table-cell">
+                          <td className="px-1.5 py-1.5 md:p-3 text-center text-slate-800">
                             {player.sthreepointersmade !== undefined && player.sthreepointersattempted !== undefined ? (
                               <div>
                                 <div className="font-medium">{player.sthreepointersmade}/{player.sthreepointersattempted}</div>
@@ -550,7 +547,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                               </div>
                             ) : <span className="text-slate-400">-</span>}
                           </td>
-                          <td className="p-2 md:p-3 text-center text-slate-800 hidden lg:table-cell">
+                          <td className="px-1.5 py-1.5 md:p-3 text-center text-slate-800">
                             {player.sfreethrowsmade !== undefined && player.sfreethrowsattempted !== undefined ? (
                               <div>
                                 <div className="font-medium">{player.sfreethrowsmade}/{player.sfreethrowsattempted}</div>
@@ -560,7 +557,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                               </div>
                             ) : <span className="text-slate-400">-</span>}
                           </td>
-                          <td className="p-2 md:p-3 text-center text-slate-800">
+                          <td className="px-1.5 py-1.5 md:p-3 text-center text-slate-800">
                             <div className="font-medium">{player.sreboundstotal}</div>
                             {(player.rebounds_o || player.rebounds_d) && (
                               <div className="text-xs text-slate-500">
@@ -568,16 +565,16 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                               </div>
                             )}
                           </td>
-                          <td className="p-2 md:p-3 text-center font-medium text-slate-800">{player.sassists}</td>
-                          <td className="p-2 md:p-3 text-center font-medium text-slate-800 hidden md:table-cell">{player.ssteals || 0}</td>
-                          <td className="p-2 md:p-3 text-center font-medium text-slate-800 hidden md:table-cell">{player.sblocks || 0}</td>
-                          <td className="p-2 md:p-3 text-center font-medium text-red-600 hidden lg:table-cell">{player.sturnovers || 0}</td>
-                          <td className="p-2 md:p-3 text-center hidden lg:table-cell">
-                            {player.plus_minus !== undefined && (
-                              <span className={`font-medium ${player.plus_minus >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                {player.plus_minus >= 0 ? '+' : ''}{player.plus_minus}
+                          <td className="px-1.5 py-1.5 md:p-3 text-center font-medium text-slate-800">{player.sassists}</td>
+                          <td className="px-1.5 py-1.5 md:p-3 text-center font-medium text-slate-800">{player.ssteals || 0}</td>
+                          <td className="px-1.5 py-1.5 md:p-3 text-center font-medium text-slate-800">{player.sblocks || 0}</td>
+                          <td className="px-1.5 py-1.5 md:p-3 text-center font-medium text-red-600">{player.sturnovers || 0}</td>
+                          <td className="px-1.5 py-1.5 md:p-3 text-center">
+                            {player.splusminuspoints !== undefined && player.splusminuspoints !== null ? (
+                              <span className={`font-medium ${player.splusminuspoints >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                {player.splusminuspoints >= 0 ? '+' : ''}{player.splusminuspoints}
                               </span>
-                            )}
+                            ) : <span className="text-slate-400">-</span>}
                           </td>
                         </tr>
                       ))}
@@ -587,10 +584,10 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                     {selectedTeamStats && (
                       <tfoot className="bg-orange-50 border-t-2 border-orange-200">
                         <tr className="font-semibold text-slate-800">
-                          <td className="p-3">TEAM TOTALS</td>
-                          <td className="p-3 text-center">-</td>
-                          <td className="p-3 text-center text-orange-600">{selectedTeamStats.score}</td>
-                          <td className="p-3 text-center">
+                          <td className="py-1.5 md:p-3 sticky left-4 md:left-0 bg-orange-50 z-10 w-48 md:w-52 pl-2 pr-1">TEAM TOTALS</td>
+                          <td className="py-1.5 md:p-3 text-center pl-1 pr-1.5">-</td>
+                          <td className="px-1.5 py-1.5 md:p-3 text-center text-orange-600">{selectedTeamStats.score}</td>
+                          <td className="px-1.5 py-1.5 md:p-3 text-center">
                             {selectedTeamStats.totalFgMade}/{selectedTeamStats.totalFgAttempted}
                             {selectedTeamStats.totalFgAttempted > 0 && (
                               <div className="text-xs text-slate-500">
@@ -598,7 +595,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                               </div>
                             )}
                           </td>
-                          <td className="p-3 text-center">
+                          <td className="px-1.5 py-1.5 md:p-3 text-center">
                             {selectedTeamStats.totalThreeMade}/{selectedTeamStats.totalThreeAttempted}
                             {selectedTeamStats.totalThreeAttempted > 0 && (
                               <div className="text-xs text-slate-500">
@@ -606,13 +603,13 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                               </div>
                             )}
                           </td>
-                          <td className="p-3 text-center">-</td>
-                          <td className="p-3 text-center">{selectedTeamStats.totalRebounds}</td>
-                          <td className="p-3 text-center">{selectedTeamStats.totalAssists}</td>
-                          <td className="p-3 text-center">-</td>
-                          <td className="p-3 text-center">-</td>
-                          <td className="p-3 text-center">-</td>
-                          <td className="p-3 text-center">-</td>
+                          <td className="px-1.5 py-1.5 md:p-3 text-center">-</td>
+                          <td className="px-1.5 py-1.5 md:p-3 text-center">{selectedTeamStats.totalRebounds}</td>
+                          <td className="px-1.5 py-1.5 md:p-3 text-center">{selectedTeamStats.totalAssists}</td>
+                          <td className="px-1.5 py-1.5 md:p-3 text-center">-</td>
+                          <td className="px-1.5 py-1.5 md:p-3 text-center">-</td>
+                          <td className="px-1.5 py-1.5 md:p-3 text-center">-</td>
+                          <td className="px-1.5 py-1.5 md:p-3 text-center">-</td>
                         </tr>
                       </tfoot>
                     )}

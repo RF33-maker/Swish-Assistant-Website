@@ -152,17 +152,96 @@ export default function PlayerStatsPage() {
         }
 
         console.log('✅ Step 3: Setting player stats and info...');
-        setPlayerStats(stats || []);
+        
+        // Step 3.5: Fetch opponent data from team_stats
+        let statsWithOpponents = stats || [];
+        if (stats && stats.length > 0) {
+          console.log('🎯 Step 3.5: Fetching opponent data from team_stats...');
+          
+          // Get unique game_ids from player stats
+          const gameIds = Array.from(new Set(
+            stats
+              .map(stat => stat.game_id)
+              .filter(Boolean)
+          ));
+          
+          console.log('🎮 Found', gameIds.length, 'unique game IDs:', gameIds);
+          
+          if (gameIds.length > 0) {
+            // Fetch all team stats for these games
+            const { data: teamStatsData, error: teamStatsError } = await supabase
+              .from('team_stats')
+              .select('game_id, team_name')
+              .in('game_id', gameIds);
+            
+            if (!teamStatsError && teamStatsData) {
+              console.log('🏀 Team stats fetched:', teamStatsData.length, 'records');
+              
+              // Create a map of game_id to list of teams
+              const gameTeamsMap = new Map<string, string[]>();
+              teamStatsData.forEach(ts => {
+                if (ts.game_id && ts.team_name) {
+                  if (!gameTeamsMap.has(ts.game_id)) {
+                    gameTeamsMap.set(ts.game_id, []);
+                  }
+                  gameTeamsMap.get(ts.game_id)!.push(ts.team_name);
+                }
+              });
+              
+              console.log('🗺️ Game teams map:', Object.fromEntries(gameTeamsMap));
+              
+              // Merge opponent data into stats
+              statsWithOpponents = stats.map(stat => {
+                let derivedOpponent = undefined;
+                
+                if (stat.game_id) {
+                  const teamsInGame = gameTeamsMap.get(stat.game_id) || [];
+                  
+                  if (teamsInGame.length === 2) {
+                    const playerTeamRaw = stat.team_name || stat.team || '';
+                    const playerTeamNorm = playerTeamRaw.trim().toLowerCase();
+                    
+                    // Only proceed if we can confidently identify the player's team
+                    const playerTeamInGame = teamsInGame.find(team => 
+                      team.trim().toLowerCase() === playerTeamNorm
+                    );
+                    
+                    if (playerTeamInGame) {
+                      // Found player's team - the other team is the opponent
+                      derivedOpponent = teamsInGame.find(team => team !== playerTeamInGame);
+                    }
+                    // If player's team not found, leave derivedOpponent as undefined
+                    // This allows fallback to existing opponent/home/away fields
+                  }
+                }
+                
+                return {
+                  ...stat,
+                  opponent: derivedOpponent || stat.opponent || 
+                    (stat.is_home_player === true && stat.away_team) ||
+                    (stat.is_home_player === false && stat.home_team) ||
+                    undefined
+                };
+              });
+              
+              console.log('✅ Opponent data merged. Sample:', statsWithOpponents[0]);
+            } else {
+              console.log('⚠️ Could not fetch team stats:', teamStatsError);
+            }
+          }
+        }
+        
+        setPlayerStats(statsWithOpponents);
         
         // If we have stats with joined players data, use that for player info
-        if (stats && stats.length > 0 && stats[0].players) {
-          console.log('📋 Using joined players data:', stats[0].players);
+        if (statsWithOpponents && statsWithOpponents.length > 0 && statsWithOpponents[0].players) {
+          console.log('📋 Using joined players data:', statsWithOpponents[0].players);
           playerInfo = {
-            name: stats[0].players.full_name || stats[0].full_name || stats[0].name || `${stats[0].firstname || ''} ${stats[0].familyname || ''}`.trim() || 'Unknown Player',
-            team: stats[0].team_name || stats[0].team || 'Unknown Team',
-            position: stats[0].position,
-            number: stats[0].number,
-            leagueId: stats[0].league_id
+            name: statsWithOpponents[0].players.full_name || statsWithOpponents[0].full_name || statsWithOpponents[0].name || `${statsWithOpponents[0].firstname || ''} ${statsWithOpponents[0].familyname || ''}`.trim() || 'Unknown Player',
+            team: statsWithOpponents[0].team_name || statsWithOpponents[0].team || 'Unknown Team',
+            position: statsWithOpponents[0].position,
+            number: statsWithOpponents[0].number,
+            leagueId: statsWithOpponents[0].league_id
           };
         }
         
@@ -593,35 +672,33 @@ export default function PlayerStatsPage() {
         )}
 
         {/* Player Bio - AI Generated */}
-        {(aiAnalysis || analysisLoading) && (
-          <Card className="mb-6 md:mb-8 border-orange-200 shadow-md animate-slide-in-up bg-gradient-to-br from-white to-orange-50">
-            <CardHeader className="bg-white text-orange-900 rounded-t-lg border-b border-orange-200">
-              <CardTitle className="flex items-center gap-2">
-                {analysisLoading ? (
-                  <Brain className="h-5 w-5 animate-pulse text-orange-600" />
-                ) : (
-                  <Sparkles className="h-5 w-5 text-orange-600 animate-float" />
-                )}
-                Player Bio
-              </CardTitle>
-              <CardDescription className="text-orange-700">
-                AI-powered analysis of playing style and strengths
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-4 md:p-6">
+        <Card className="mb-6 md:mb-8 border-orange-200 shadow-md animate-slide-in-up bg-gradient-to-br from-white to-orange-50">
+          <CardHeader className="bg-white text-orange-900 rounded-t-lg border-b border-orange-200">
+            <CardTitle className="flex items-center gap-2">
               {analysisLoading ? (
-                <div className="flex items-center gap-3 text-orange-700">
-                  <Brain className="h-5 w-5 animate-pulse" />
-                  <span className="animate-pulse">Generating player bio...</span>
-                </div>
+                <Brain className="h-5 w-5 animate-pulse text-orange-600" />
               ) : (
-                <p className="text-sm md:text-base text-orange-800 leading-relaxed">
-                  {aiAnalysis || "Player bio will be generated based on performance statistics."}
-                </p>
+                <Sparkles className="h-5 w-5 text-orange-600 animate-float" />
               )}
-            </CardContent>
-          </Card>
-        )}
+              Player Bio
+            </CardTitle>
+            <CardDescription className="text-orange-700">
+              {aiAnalysis ? "AI-powered analysis of playing style and strengths" : "AI generation coming soon"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-4 md:p-6">
+            {analysisLoading ? (
+              <div className="flex items-center gap-3 text-orange-700">
+                <Brain className="h-5 w-5 animate-pulse" />
+                <span className="animate-pulse">Generating player bio...</span>
+              </div>
+            ) : (
+              <div className="text-sm md:text-base text-orange-600 leading-relaxed italic">
+                Coming soon
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Player Leagues */}
         {playerLeagues.length > 0 && (
@@ -832,63 +909,116 @@ export default function PlayerStatsPage() {
                 No game statistics found for this player.
               </div>
             ) : (
-              <div className="overflow-x-auto -mx-4 md:mx-0 border-t border-orange-200">
-                <table className="w-full">
-                  <thead className="bg-orange-50 border-b border-orange-200">
-                    <tr className="text-left">
-                      <th className="sticky left-0 bg-orange-50 px-2 md:px-4 py-2 md:py-3 text-orange-900 font-semibold text-xs md:text-sm z-10 min-w-[70px] md:min-w-[90px]">Date</th>
-                      <th className="px-2 md:px-4 py-2 md:py-3 text-orange-900 font-semibold text-xs md:text-sm min-w-[80px] md:min-w-[100px]">OPP</th>
-                      <th className="hidden md:table-cell px-4 py-3 text-orange-900 font-semibold text-sm">MIN</th>
-                      <th className="px-2 md:px-4 py-2 md:py-3 text-orange-900 font-semibold text-xs md:text-sm text-center min-w-[45px]">PTS</th>
-                      <th className="px-2 md:px-4 py-2 md:py-3 text-orange-900 font-semibold text-xs md:text-sm text-center min-w-[45px]">REB</th>
-                      <th className="px-2 md:px-4 py-2 md:py-3 text-orange-900 font-semibold text-xs md:text-sm text-center min-w-[45px]">AST</th>
-                      <th className="hidden md:table-cell px-4 py-3 text-orange-900 font-semibold text-sm text-center">STL</th>
-                      <th className="hidden md:table-cell px-4 py-3 text-orange-900 font-semibold text-sm text-center">BLK</th>
-                      <th className="hidden md:table-cell px-4 py-3 text-orange-900 font-semibold text-sm text-center">FG</th>
-                      <th className="hidden md:table-cell px-4 py-3 text-orange-900 font-semibold text-sm text-center">3P</th>
-                      <th className="hidden md:table-cell px-4 py-3 text-orange-900 font-semibold text-sm text-center">FT</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {playerStats.map((game, index) => (
-                      <tr 
-                        key={game.id} 
-                        className={`border-b border-orange-100 hover:bg-orange-50 hover:scale-[1.02] transform transition-all duration-200 cursor-pointer group ${
+              <>
+                {/* Mobile Card View */}
+                <div className="md:hidden border-t border-orange-200">
+                  {playerStats.map((game, index) => {
+                    const opponentName = game.opponent || 
+                      (game.is_home_player === true && game.away_team) ||
+                      (game.is_home_player === false && game.home_team) ||
+                      'TBD';
+                    
+                    return (
+                      <div
+                        key={game.id}
+                        className={`p-4 border-b border-orange-100 hover:bg-orange-50 transition-colors ${
                           index % 2 === 0 ? 'bg-white' : 'bg-orange-25'
                         }`}
-                        data-testid={`game-row-${game.id}`}
+                        data-testid={`game-card-${game.id}`}
                       >
-                        <td className="sticky left-0 bg-inherit px-2 md:px-4 py-2 md:py-3 text-orange-800 text-[10px] md:text-sm z-10">{formatDate(game.game_date)}</td>
-                        <td className="px-2 md:px-4 py-2 md:py-3">
-                          <Badge variant="outline" className="border-orange-300 text-orange-700 text-[10px] md:text-sm whitespace-nowrap">
-                            {game.opponent ? `vs ${game.opponent}` : (game.is_home_player ? `vs ${game.away_team}` : `vs ${game.home_team}`)}
+                        {/* Date and Opponent */}
+                        <div className="flex justify-between items-center mb-3">
+                          <div className="text-xs text-orange-800 font-medium">
+                            {formatDate(game.game_date || game.created_at)}
+                          </div>
+                          <Badge variant="outline" className="border-orange-300 text-orange-700 text-xs">
+                            vs {opponentName}
                           </Badge>
-                        </td>
-                        <td className="hidden md:table-cell px-4 py-3 text-orange-800 text-sm text-center">{game.sminutes || '0'}</td>
-                        <td className="px-2 md:px-4 py-2 md:py-3 font-semibold text-orange-900 group-hover:text-orange-700 transition-all duration-200 text-xs md:text-sm text-center">{game.spoints || game.points || 0}</td>
-                        <td className="px-2 md:px-4 py-2 md:py-3 text-orange-800 text-xs md:text-sm text-center font-medium">{game.sreboundstotal || game.rebounds_total || 0}</td>
-                        <td className="px-2 md:px-4 py-2 md:py-3 text-orange-800 text-xs md:text-sm text-center font-medium">{game.sassists || game.assists || 0}</td>
-                        <td className="hidden md:table-cell px-4 py-3 text-orange-800 text-sm text-center">{game.ssteals || 0}</td>
-                        <td className="hidden md:table-cell px-4 py-3 text-orange-800 text-sm text-center">{game.sblocks || 0}</td>
-                        <td className="hidden md:table-cell px-4 py-3 text-orange-800 text-sm text-center">
-                          {game.sfieldgoalsmade || 0}/{game.sfieldgoalsattempted || 0}
-                        </td>
-                        <td className="hidden md:table-cell px-4 py-3 text-orange-800 text-sm text-center">
-                          {game.sthreepointersmade || 0}/{game.sthreepointersattempted || 0}
-                        </td>
-                        <td className="hidden md:table-cell px-4 py-3 text-orange-800 text-sm text-center">
-                          {game.sfreethrowsmade || 0}/{game.sfreethrowsattempted || 0}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                
-                {/* Scroll hint for mobile */}
-                <div className="md:hidden bg-orange-50 text-orange-700 text-center py-2 text-xs border-t border-orange-200">
-                  ← Swipe to see all stats →
+                        </div>
+                        
+                        {/* Stats Grid */}
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="text-center">
+                            <div className="text-xl font-bold text-orange-900">{game.spoints || game.points || 0}</div>
+                            <div className="text-xs text-orange-600">PTS</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-xl font-bold text-orange-900">{game.sreboundstotal || game.rebounds_total || 0}</div>
+                            <div className="text-xs text-orange-600">REB</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-xl font-bold text-orange-900">{game.sassists || game.assists || 0}</div>
+                            <div className="text-xs text-orange-600">AST</div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              </div>
+
+                {/* Desktop Table View */}
+                <div className="hidden md:block overflow-x-auto border-t border-orange-200">
+                  <table className="w-full">
+                    <thead className="bg-orange-50 border-b border-orange-200">
+                      <tr className="text-left">
+                        <th className="px-4 py-3 text-orange-900 font-semibold text-sm">Date</th>
+                        <th className="px-4 py-3 text-orange-900 font-semibold text-sm">OPP</th>
+                        <th className="hidden lg:table-cell px-4 py-3 text-orange-900 font-semibold text-sm">MIN</th>
+                        <th className="px-4 py-3 text-orange-900 font-semibold text-sm text-center">PTS</th>
+                        <th className="px-4 py-3 text-orange-900 font-semibold text-sm text-center">REB</th>
+                        <th className="px-4 py-3 text-orange-900 font-semibold text-sm text-center">AST</th>
+                        <th className="hidden lg:table-cell px-4 py-3 text-orange-900 font-semibold text-sm text-center">STL</th>
+                        <th className="hidden lg:table-cell px-4 py-3 text-orange-900 font-semibold text-sm text-center">BLK</th>
+                        <th className="hidden lg:table-cell px-4 py-3 text-orange-900 font-semibold text-sm text-center">FG</th>
+                        <th className="hidden lg:table-cell px-4 py-3 text-orange-900 font-semibold text-sm text-center">3P</th>
+                        <th className="hidden lg:table-cell px-4 py-3 text-orange-900 font-semibold text-sm text-center">FT</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {playerStats.map((game, index) => {
+                        const opponentName = game.opponent || 
+                          (game.is_home_player === true && game.away_team) ||
+                          (game.is_home_player === false && game.home_team) ||
+                          'TBD';
+                        
+                        return (
+                          <tr 
+                            key={game.id} 
+                            className={`border-b border-orange-100 hover:bg-orange-50 transition-colors cursor-pointer group ${
+                              index % 2 === 0 ? 'bg-white' : 'bg-orange-25'
+                            }`}
+                            data-testid={`game-row-${game.id}`}
+                          >
+                            <td className="px-4 py-3 text-orange-800 text-sm font-medium">
+                              {formatDate(game.game_date || game.created_at)}
+                            </td>
+                            <td className="px-4 py-3">
+                              <Badge variant="outline" className="border-orange-300 text-orange-700 text-sm">
+                                vs {opponentName}
+                              </Badge>
+                            </td>
+                            <td className="hidden lg:table-cell px-4 py-3 text-orange-800 text-sm text-center">{game.sminutes || '0'}</td>
+                            <td className="px-4 py-3 font-bold text-orange-900 group-hover:text-orange-700 transition-colors text-sm text-center">{game.spoints || game.points || 0}</td>
+                            <td className="px-4 py-3 text-orange-800 text-sm text-center font-medium">{game.sreboundstotal || game.rebounds_total || 0}</td>
+                            <td className="px-4 py-3 text-orange-800 text-sm text-center font-medium">{game.sassists || game.assists || 0}</td>
+                            <td className="hidden lg:table-cell px-4 py-3 text-orange-800 text-sm text-center">{game.ssteals || 0}</td>
+                            <td className="hidden lg:table-cell px-4 py-3 text-orange-800 text-sm text-center">{game.sblocks || 0}</td>
+                            <td className="hidden lg:table-cell px-4 py-3 text-orange-800 text-sm text-center">
+                              {game.sfieldgoalsmade || 0}/{game.sfieldgoalsattempted || 0}
+                            </td>
+                            <td className="hidden lg:table-cell px-4 py-3 text-orange-800 text-sm text-center">
+                              {game.sthreepointersmade || 0}/{game.sthreepointersattempted || 0}
+                            </td>
+                            <td className="hidden lg:table-cell px-4 py-3 text-orange-800 text-sm text-center">
+                              {game.sfreethrowsmade || 0}/{game.sfreethrowsattempted || 0}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>

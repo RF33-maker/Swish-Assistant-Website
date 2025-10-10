@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from "react"
 import { useLocation } from "wouter"
 import { supabase } from "@/lib/supabase"
 import SwishLogo from "@/assets/Swish Assistant Logo.png"
-import CMBC from "@/assets/cmbc.jpg"
 import Ballpark from "@/assets/ballparksports.jpg"
 import UL from "@/assets/uploadimage.png"
 import BCB from "@/assets/BCB Logo.jpg"
@@ -15,7 +14,7 @@ import { Button } from "@/components/ui/button"
 import { Search, ChevronDown, BarChart3, Zap, Clock, MessageSquare, Sparkles, TrendingUp, Trophy, FileText } from "lucide-react"
 
 function LeagueLogosCarousel() {
-  const logos = [Ballpark, CMBC, NBLBE, BCB, SLB]
+  const logos = [Ballpark, NBLBE, BCB, SLB]
   
   return (
     <section className="w-full bg-orange-500 py-10 text-white overflow-hidden">
@@ -202,23 +201,23 @@ export default function LandingPage() {
           <span className="font-bold text-xl text-orange-600"></span>
         </div>
         <nav className="flex items-center gap-6 text-sm font-medium">
-          <a href="#features" className="text-slate-600 hover:text-orange-600 transition-colors relative group">
-            Features
-            <span className="absolute bottom-0 left-0 w-0 h-[2px] bg-orange-500 transition-all duration-300 group-hover:w-full"></span>
-          </a>
-          <a href="#pricing" className="text-slate-600 hover:text-orange-600 transition-colors relative group">
-            Pricing
+          <a 
+            href="/auth" 
+            className="text-slate-600 hover:text-orange-600 transition-colors relative group"
+            data-testid="login-button"
+          >
+            Login
             <span className="absolute bottom-0 left-0 w-0 h-[2px] bg-orange-500 transition-all duration-300 group-hover:w-full"></span>
           </a>
           <a 
-            href="/auth" 
+            href="#subscribe" 
             className="bg-gradient-to-r from-orange-500 to-amber-500 text-white px-5 py-2 rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-300 drop-shadow-md"
+            onClick={(e) => {
+              e.preventDefault();
+              document.getElementById('subscribe')?.scrollIntoView({ behavior: 'smooth' });
+            }}
           >
-            Get Started
-          </a>
-          <a href="/auth" className="text-slate-600 hover:text-orange-600 transition-colors relative group">
-            Login
-            <span className="absolute bottom-0 left-0 w-0 h-[2px] bg-orange-500 transition-all duration-300 group-hover:w-full"></span>
+            Subscribe
           </a>
         </nav>
       </header>
@@ -236,10 +235,10 @@ export default function LandingPage() {
 
           {/* Search Bar with Suggestions */}
           <div className="w-full max-w-2xl relative">
-          <div className="search-bar-animated-border transition-all duration-300 focus-within:scale-105 focus-within:shadow-[0_0_10px_rgba(255,102,0,0.4)] animate-gentle-pulse" style={{ animationDelay: '0.6s' }}>
+          <div className="search-bar-animated-border transition-all duration-300 focus-within:scale-[1.02] animate-fade-in-up" style={{ animationDelay: '0.6s' }}>
             <form
               onSubmit={handleSubmit}
-              className="flex items-center shadow-lg rounded-full overflow-hidden bg-white"
+              className="flex items-center shadow-lg rounded-full overflow-hidden bg-white relative z-10"
             >
               <Search className="ml-5 h-5 w-5 text-slate-400" />
               <input
@@ -309,8 +308,9 @@ export default function LandingPage() {
               ))
             : [
                 { name: "British Championship Basketball Trophy", slug: "british-championship-basketball" },
-                { name: "British Championship Basketball", slug: "british-championship-basketball" },
-                { name: "Super League Basketball", slug: "nbl-d3-gck" },
+                { name: "British Championship Basketball", slug: "british-championship-basketball-20252026" },
+                { name: "NBL Divison One 25/26", slug: "national-basketball-league-d1-mens-20252026" },
+                { name: "WNBL Divison One 25/26", slug: "national-basketball-league-d1-womens-20252026" },
               ].map((league, i) => (
                 <button
                   key={i}
@@ -329,7 +329,7 @@ export default function LandingPage() {
 
         {/* Tagline */}
         <p className="mt-12 text-slate-600 text-base md:text-lg font-medium max-w-2xl mx-auto animate-fade-in-up" style={{ animationDelay: '1.1s', opacity: 0, animationFillMode: 'forwards' }}>
-          Explore stats, track performance, and discover the next MVP.
+          Explore stats, track performance, drive narrative and discover the next MVP.
         </p>
 
         {/* League Logos Section */}
@@ -342,7 +342,7 @@ export default function LandingPage() {
           {/* Logos Carousel */}
           <div className="overflow-hidden animate-fade-in-up" style={{ animationDelay: '1.3s', opacity: 0, animationFillMode: 'forwards' }}>
             <div className="flex gap-6 md:gap-8 animate-infinite-scroll">
-              {[...([Ballpark, CMBC, NBLBE, BCB, SLB]), ...([Ballpark, CMBC, NBLBE, BCB, SLB])].map((img, i) => (
+              {[...([Ballpark, NBLBE, BCB, SLB]), ...([Ballpark, NBLBE, BCB, SLB]), ...([Ballpark, NBLBE, BCB, SLB])].map((img, i) => (
                 <div 
                   key={i} 
                   className="flex-shrink-0 flex items-center justify-center bg-white rounded-lg shadow-sm hover:shadow-md p-4 transition-all duration-300 hover:scale-110"
@@ -524,7 +524,7 @@ export default function LandingPage() {
       </section>
 
       {/* Newsletter Signup Section */}
-      <section className="py-20 bg-gradient-to-br from-orange-50 to-orange-100 relative overflow-hidden flex items-center">
+      <section id="subscribe" className="py-20 bg-gradient-to-br from-orange-50 to-orange-100 relative overflow-hidden flex items-center">
         {/* Background Logo */}
         <div className="absolute inset-0 flex items-center justify-center opacity-5">
           <img 
@@ -565,7 +565,7 @@ export default function LandingPage() {
       </section>
 
       {/* Pricing Section */}
-      <section id="pricing" className="py-20 bg-gradient-to-br from-slate-50 to-orange-50 relative">
+      <section id="pricing" className="hidden py-20 bg-gradient-to-br from-slate-50 to-orange-50 relative">
         <div className="max-w-6xl mx-auto px-6 relative">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-slate-900 mb-4">
@@ -606,13 +606,13 @@ export default function LandingPage() {
                     </li>
                   </ul>
 
-                  <Button 
+                  {/* <Button 
                     size="lg" 
                     variant="outline"
                     className="w-full border-orange-200 text-orange-700 hover:bg-orange-50"
                   >
                     Get Started Free
-                  </Button>
+                  </Button> */}
                 </div>
               </div>
 
@@ -789,8 +789,9 @@ export default function LandingPage() {
                 </div>
               </div>
               <p className="text-gray-300 mb-4">
-                Revolutionizing basketball league management with AI-powered analytics, 
-                automated stat tracking, and intelligent insights for coaches and players.
+                Redefining how we see basketball stats.
+                
+                Our sport, your leagues, your players, your stats, all just a few clicks away.
               </p>
             </div>
 
@@ -798,10 +799,11 @@ export default function LandingPage() {
             <div>
               <h4 className="font-semibold text-lg mb-4 text-white">Quick Links</h4>
               <ul className="space-y-2">
-                <li><a href="/auth" className="text-gray-300 hover:text-white transition-colors">Get Started</a></li>
+                {/* <li><a href="/auth" className="text-gray-300 hover:text-white transition-colors">Get Started</a></li>
                 <li><a href="/auth" className="text-gray-300 hover:text-white transition-colors">Login</a></li>
                 <li><a href="#features" className="text-gray-300 hover:text-white transition-colors">Features</a></li>
-                <li><a href="#pricing" className="text-gray-300 hover:text-white transition-colors">Pricing</a></li>
+                <li><a href="#pricing" className="text-gray-300 hover:text-white transition-colors">Pricing</a></li> */}
+                <li><a href="#subscribe" className="text-gray-300 hover:text-white transition-colors">Subscribe</a></li>
               </ul>
             </div>
 
@@ -810,8 +812,8 @@ export default function LandingPage() {
               <h4 className="font-semibold text-lg mb-4 text-white">Legal</h4>
               <ul className="space-y-2">
                 <li><a href="/privacy" className="text-gray-300 hover:text-white transition-colors">Privacy Policy</a></li>
-                <li><a href="#terms" className="text-gray-300 hover:text-white transition-colors">Terms of Service</a></li>
-                <li><a href="#cookies" className="text-gray-300 hover:text-white transition-colors">Cookie Policy</a></li>
+                <li><a href="/terms" className="text-gray-300 hover:text-white transition-colors">Terms of Service</a></li>
+                <li><a href="/cookies" className="text-gray-300 hover:text-white transition-colors">Cookie Policy</a></li>
                 <li><a href="#support" className="text-gray-300 hover:text-white transition-colors">Support</a></li>
               </ul>
             </div>
