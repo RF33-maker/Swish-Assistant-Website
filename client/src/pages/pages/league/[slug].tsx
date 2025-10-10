@@ -649,7 +649,16 @@ export default function LeaguePage() {
       const embedParams = 'rel=0&modestbranding=1';
       
       // Handle different YouTube URL formats
-      // 1. Standard watch URL: youtube.com/watch?v=VIDEO_ID
+      // 1. Playlist URL: youtube.com/playlist?list=PLAYLIST_ID
+      const playlistMatch = url.match(/[?&]list=([^&]+)/);
+      if (playlistMatch) {
+        const playlistId = playlistMatch[1];
+        const embedUrl = `https://www.youtube.com/embed/videoseries?list=${playlistId}&${embedParams}`;
+        console.log('Generated embed URL from playlist:', embedUrl);
+        return embedUrl;
+      }
+      
+      // 2. Standard watch URL: youtube.com/watch?v=VIDEO_ID
       const watchMatch = url.match(/youtube\.com\/watch\?v=([^&]+)/);
       if (watchMatch) {
         const videoId = watchMatch[1];
@@ -658,7 +667,7 @@ export default function LeaguePage() {
         return embedUrl;
       }
       
-      // 2. Short URL: youtu.be/VIDEO_ID
+      // 3. Short URL: youtu.be/VIDEO_ID
       const shortMatch = url.match(/youtu\.be\/([^?]+)/);
       if (shortMatch) {
         const videoId = shortMatch[1];
@@ -667,7 +676,7 @@ export default function LeaguePage() {
         return embedUrl;
       }
       
-      // 3. Mobile URL: youtube.com/shorts/VIDEO_ID
+      // 4. Mobile URL: youtube.com/shorts/VIDEO_ID
       const shortsMatch = url.match(/youtube\.com\/shorts\/([^?]+)/);
       if (shortsMatch) {
         const videoId = shortsMatch[1];
