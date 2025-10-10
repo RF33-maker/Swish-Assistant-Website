@@ -558,7 +558,6 @@ export default function TeamProfile() {
                   <thead>
                     <tr className="border-b border-gray-200">
                       <th className="sticky left-0 bg-white text-left py-2 md:py-3 px-2 font-semibold text-slate-700 z-10">Player</th>
-                      <th className="text-left py-2 md:py-3 px-2 font-semibold text-slate-700">Position</th>
                       <th className="hidden md:table-cell text-center py-3 px-2 font-semibold text-slate-700">GP</th>
                       <th className="text-right py-2 md:py-3 px-2 font-semibold text-slate-700">PPG</th>
                       <th className="text-right py-2 md:py-3 px-2 font-semibold text-slate-700">RPG</th>
@@ -581,7 +580,6 @@ export default function TeamProfile() {
                             <span className="font-medium text-slate-800">{player.name}</span>
                           </div>
                         </td>
-                        <td className="py-2 md:py-3 px-2 text-slate-600">{player.position}</td>
                         <td className="hidden md:table-cell py-3 px-2 text-center text-slate-600">{player.gamesPlayed}</td>
                         <td className="py-2 md:py-3 px-2 text-right font-medium text-orange-600">{player.avgPoints}</td>
                         <td className="py-2 md:py-3 px-2 text-right text-slate-600">{player.avgRebounds}</td>
@@ -603,21 +601,19 @@ export default function TeamProfile() {
               </h2>
               <div className="space-y-2 md:space-y-3">
                 {team.recentGames.slice(0, 8).map((game: Game, index: number) => (
-                  <div key={index} className="flex flex-col md:flex-row justify-between md:items-center p-3 bg-gray-50 rounded-lg gap-2 md:gap-0">
-                    <div>
+                  <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                    <div className="flex-1">
                       <div className="font-medium text-slate-800 text-sm md:text-base">vs {game.opponent}</div>
-                      <div className="text-xs md:text-sm text-slate-500">{new Date(game.date).toLocaleDateString()}</div>
-                    </div>
-                    <div className="text-left md:text-right">
-                      <div className="flex items-center gap-2">
-                        <div className="text-base md:text-lg font-bold text-orange-600">{game.totalPoints}</div>
-                        {game.isWin !== undefined && (
-                          <span className={`text-xs px-2 py-1 rounded ${game.isWin ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                            {game.isWin ? 'W' : 'L'}
-                          </span>
-                        )}
+                      <div className="text-xs md:text-sm text-slate-500 mt-1">
+                        Final: <span className="font-semibold text-slate-700">{game.totalPoints} - {game.opponentScore}</span>
                       </div>
-                      <div className="text-xs text-slate-500">PTS</div>
+                    </div>
+                    <div>
+                      {game.isWin !== undefined && (
+                        <span className={`text-xs md:text-sm px-3 py-1 rounded font-semibold ${game.isWin ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                          {game.isWin ? 'W' : 'L'}
+                        </span>
+                      )}
                     </div>
                   </div>
                 ))}
