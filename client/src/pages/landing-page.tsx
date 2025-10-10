@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from "react"
 import { useLocation } from "wouter"
 import { supabase } from "@/lib/supabase"
 import SwishLogo from "@/assets/Swish Assistant Logo.png"
-import CMBC from "@/assets/cmbc.jpg"
 import Ballpark from "@/assets/ballparksports.jpg"
 import UL from "@/assets/uploadimage.png"
 import BCB from "@/assets/BCB Logo.jpg"
@@ -15,7 +14,7 @@ import { Button } from "@/components/ui/button"
 import { Search, ChevronDown, BarChart3, Zap, Clock, MessageSquare, Sparkles, TrendingUp, Trophy, FileText } from "lucide-react"
 
 function LeagueLogosCarousel() {
-  const logos = [Ballpark, CMBC, NBLBE, BCB, SLB]
+  const logos = [Ballpark, NBLBE, BCB, SLB]
   
   return (
     <section className="w-full bg-orange-500 py-10 text-white overflow-hidden">
@@ -310,7 +309,8 @@ export default function LandingPage() {
             : [
                 { name: "British Championship Basketball Trophy", slug: "british-championship-basketball" },
                 { name: "British Championship Basketball", slug: "british-championship-basketball" },
-                { name: "Super League Basketball", slug: "nbl-d3-gck" },
+                { name: "NBL Divison One 25/26", slug: "national-basketball-league-d1-mens-20252026" },
+                { name: "WNBL Divison One 25/26", slug: "national-basketball-league-d1-womens-20252026" },
               ].map((league, i) => (
                 <button
                   key={i}
@@ -329,7 +329,7 @@ export default function LandingPage() {
 
         {/* Tagline */}
         <p className="mt-12 text-slate-600 text-base md:text-lg font-medium max-w-2xl mx-auto animate-fade-in-up" style={{ animationDelay: '1.1s', opacity: 0, animationFillMode: 'forwards' }}>
-          Explore stats, track performance, and discover the next MVP.
+          Explore stats, track performance, drive narrative and discover the next MVP.
         </p>
 
         {/* League Logos Section */}
@@ -342,7 +342,7 @@ export default function LandingPage() {
           {/* Logos Carousel */}
           <div className="overflow-hidden animate-fade-in-up" style={{ animationDelay: '1.3s', opacity: 0, animationFillMode: 'forwards' }}>
             <div className="flex gap-6 md:gap-8 animate-infinite-scroll">
-              {[...([Ballpark, CMBC, NBLBE, BCB, SLB]), ...([Ballpark, CMBC, NBLBE, BCB, SLB])].map((img, i) => (
+              {[...([Ballpark, NBLBE, BCB, SLB]), ...([Ballpark, NBLBE, BCB, SLB]), ...([Ballpark, NBLBE, BCB, SLB])].map((img, i) => (
                 <div 
                   key={i} 
                   className="flex-shrink-0 flex items-center justify-center bg-white rounded-lg shadow-sm hover:shadow-md p-4 transition-all duration-300 hover:scale-110"
@@ -789,8 +789,9 @@ export default function LandingPage() {
                 </div>
               </div>
               <p className="text-gray-300 mb-4">
-                Revolutionizing basketball league management with AI-powered analytics, 
-                automated stat tracking, and intelligent insights for coaches and players.
+                Redefining how we see basketball stats.
+                
+                Our sport, your leagues, your players, your stats, all just a few clicks away.
               </p>
             </div>
 
@@ -799,9 +800,9 @@ export default function LandingPage() {
               <h4 className="font-semibold text-lg mb-4 text-white">Quick Links</h4>
               <ul className="space-y-2">
                 {/* <li><a href="/auth" className="text-gray-300 hover:text-white transition-colors">Get Started</a></li>
-                <li><a href="/auth" className="text-gray-300 hover:text-white transition-colors">Login</a></li> */}
+                <li><a href="/auth" className="text-gray-300 hover:text-white transition-colors">Login</a></li>
                 <li><a href="#features" className="text-gray-300 hover:text-white transition-colors">Features</a></li>
-                <li><a href="#pricing" className="text-gray-300 hover:text-white transition-colors">Pricing</a></li>
+                <li><a href="#pricing" className="text-gray-300 hover:text-white transition-colors">Pricing</a></li> */}
                 <li><a href="#subscribe" className="text-gray-300 hover:text-white transition-colors">Subscribe</a></li>
               </ul>
             </div>
