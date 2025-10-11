@@ -2036,26 +2036,27 @@ export default function LeaguePage() {
                     <table className="w-full text-xs md:text-sm">
                       <thead>
                         <tr className="border-b border-gray-200 bg-orange-50">
-                          <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 sticky left-0 bg-orange-50 z-10 min-w-[140px] md:min-w-[180px]">Team</th>
+                          <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 sticky left-0 bg-orange-50 z-10 w-16">Logo</th>
+                          <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[120px]">Team</th>
                           <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[45px]">GP</th>
                           {teamStatsView === 'averages' ? (
                             <>
                               <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">PPG</th>
                               <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">RPG</th>
                               <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">APG</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">FG%</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">3P%</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">2P%</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">FT%</th>
+                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">FG%</th>
+                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">3P%</th>
+                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">2P%</th>
+                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">FT%</th>
                             </>
                           ) : (
                             <>
                               <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">PTS</th>
                               <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">REB</th>
                               <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">AST</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">FGM</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">3PM</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">FTM</th>
+                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">FGM</th>
+                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">3PM</th>
+                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">FTM</th>
                             </>
                           )}
                         </tr>
@@ -2064,15 +2065,15 @@ export default function LeaguePage() {
                         {teamStatsData.map((team, index) => (
                           <tr 
                             key={`team-stats-${team.teamName}-${index}`}
-                            className="hover:bg-orange-50 transition-colors cursor-pointer"
+                            className="hover:bg-orange-50 transition-colors cursor-pointer group"
                             onClick={() => navigate(`/team/${encodeURIComponent(team.teamName)}`)}
                             data-testid={`row-team-${team.teamName}`}
                           >
-                            <td className="py-2 md:py-3 px-2 md:px-3 sticky left-0 bg-white hover:bg-orange-50 z-10">
-                              <div className="flex items-center gap-2">
-                                <TeamLogo teamName={team.teamName} leagueId={league?.league_id || ""} size="sm" />
-                                <span className="font-medium text-slate-800 text-xs md:text-sm truncate">{team.teamName}</span>
-                              </div>
+                            <td className="py-2 md:py-3 px-2 md:px-3 sticky left-0 bg-white group-hover:bg-orange-50 z-10 transition-colors">
+                              <TeamLogo teamName={team.teamName} leagueId={league?.league_id || ""} size="sm" />
+                            </td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 text-xs md:text-sm truncate">
+                              {team.teamName}
                             </td>
                             <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 font-medium" data-testid={`text-gp-${team.teamName}`}>
                               {team.gamesPlayed}
@@ -2088,16 +2089,16 @@ export default function LeaguePage() {
                                 <td className="text-center py-2 md:py-3 px-2 md:px-3 font-medium text-slate-700" data-testid={`text-apg-${team.teamName}`}>
                                   {team.apg}
                                 </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 hidden md:table-cell" data-testid={`text-fg%-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-fg%-${team.teamName}`}>
                                   {team.fgPercentage}%
                                 </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 hidden md:table-cell" data-testid={`text-3p%-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-3p%-${team.teamName}`}>
                                   {team.threePtPercentage}%
                                 </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 hidden md:table-cell" data-testid={`text-2p%-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-2p%-${team.teamName}`}>
                                   {team.twoPtPercentage}%
                                 </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 hidden md:table-cell" data-testid={`text-ft%-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-ft%-${team.teamName}`}>
                                   {team.ftPercentage}%
                                 </td>
                               </>
@@ -2112,13 +2113,13 @@ export default function LeaguePage() {
                                 <td className="text-center py-2 md:py-3 px-2 md:px-3 font-medium text-slate-700" data-testid={`text-total-ast-${team.teamName}`}>
                                   {team.totalAssists}
                                 </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 hidden md:table-cell" data-testid={`text-total-fgm-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-total-fgm-${team.teamName}`}>
                                   {team.totalFGM}
                                 </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 hidden md:table-cell" data-testid={`text-total-3pm-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-total-3pm-${team.teamName}`}>
                                   {team.total3PM}
                                 </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 hidden md:table-cell" data-testid={`text-total-ftm-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-total-ftm-${team.teamName}`}>
                                   {team.totalFTM}
                                 </td>
                               </>
