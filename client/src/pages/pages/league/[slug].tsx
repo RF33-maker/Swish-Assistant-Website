@@ -25,6 +25,7 @@ import {
 import { PlayerComparison } from "@/components/PlayerComparison";
 import { TeamComparison } from "@/components/TeamComparison";
 import { TournamentBracket } from "@/components/TournamentBracket";
+import { normalizeTeamName } from "@/lib/teamUtils";
 
 type GameSchedule = {
   game_id: string;
@@ -39,23 +40,20 @@ type GameSchedule = {
   numeric_id?: string;
 };
 
-// Team name normalization - maps team name variations to canonical names
-const normalizeTeamName = (name: string): string => {
+// Team name mapping for known variations that aren't covered by normalization
+const teamNameMap: Record<string, string> = {
+  'Essex Rebels (M)': 'Essex Rebels',
+  'MK Breakers': 'Milton Keynes Breakers',
+};
+
+// Apply both normalization and specific mappings
+const normalizeAndMapTeamName = (name: string): string => {
   if (!name) return '';
-  
   const trimmed = name.trim();
-  
-  // Mapping of team name variations to canonical names
-  const teamNameMap: Record<string, string> = {
-    'Essex Rebels (M)': 'Essex Rebels',
-    'MK Breakers': 'Milton Keynes Breakers',
-    // Handle Roman numeral mismatches for specific teams
-    'Worcester Wolves Senior Men I': 'Worcester Wolves Senior Men',
-    'Solent Kestrels Senior Men I': 'Solent Kestrels Senior Men',
-  };
-  
-  // Return mapped name if it exists, otherwise return trimmed name
-  return teamNameMap[trimmed] || trimmed;
+  // First check specific mappings
+  const mapped = teamNameMap[trimmed] || trimmed;
+  // Then apply general normalization (strips Senior Men, !, and Roman numeral I)
+  return normalizeTeamName(mapped);
 };
 
 export default function LeaguePage() {
@@ -921,7 +919,7 @@ export default function LeaguePage() {
         const teamStatsMap: { [team: string]: { wins: number, losses: number, pointsFor: number, pointsAgainst: number, games: number } } = {};
         
         allTeams.forEach(team => {
-          const normalizedName = normalizeTeamName(team.name);
+          const normalizedName = normalizeAndMapTeamName(team.name);
           teamStatsMap[normalizedName] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0 };
         });
 
@@ -950,8 +948,8 @@ export default function LeaguePage() {
             if (gameTeams.length === 2) {
               const [team1, team2] = gameTeams;
               
-              const team1Name = normalizeTeamName(team1.name || '');
-              const team2Name = normalizeTeamName(team2.name || '');
+              const team1Name = normalizeAndMapTeamName(team1.name || '');
+              const team2Name = normalizeAndMapTeamName(team2.name || '');
               
               const team1Score = team1.tot_spoints || 0;
               const team2Score = team2.tot_spoints || 0;
@@ -1134,12 +1132,12 @@ export default function LeaguePage() {
           scheduleData.forEach((game: any) => {
             if (game.hometeam && game.pool) {
               const poolName = extractPoolName(game.pool);
-              const normalizedHome = normalizeTeamName(game.hometeam);
+              const normalizedHome = normalizeAndMapTeamName(game.hometeam);
               teamPoolMap[normalizedHome] = poolName;
             }
             if (game.awayteam && game.pool) {
               const poolName = extractPoolName(game.pool);
-              const normalizedAway = normalizeTeamName(game.awayteam);
+              const normalizedAway = normalizeAndMapTeamName(game.awayteam);
               teamPoolMap[normalizedAway] = poolName;
             }
           });
@@ -1149,7 +1147,7 @@ export default function LeaguePage() {
         const teamStatsMap: Record<string, { wins: number, losses: number, pointsFor: number, pointsAgainst: number, games: number, pool?: string }> = {};
         
         allTeams.forEach(team => {
-          const normalizedName = normalizeTeamName(team.name);
+          const normalizedName = normalizeAndMapTeamName(team.name);
           teamStatsMap[normalizedName] = { 
             wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0,
             pool: teamPoolMap[normalizedName] || teamPoolMap[team.name]
@@ -1180,8 +1178,8 @@ export default function LeaguePage() {
             if (gameTeams.length === 2) {
               const [team1, team2] = gameTeams;
               
-              const team1Name = normalizeTeamName(team1.name || '');
-              const team2Name = normalizeTeamName(team2.name || '');
+              const team1Name = normalizeAndMapTeamName(team1.name || '');
+              const team2Name = normalizeAndMapTeamName(team2.name || '');
               
               const team1Score = team1.tot_spoints || 0;
               const team2Score = team2.tot_spoints || 0;
