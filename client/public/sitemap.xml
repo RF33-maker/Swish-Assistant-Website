@@ -28,27 +28,23 @@
 
   <!-- 🏀 Dynamic League Pages -->
   <url>
-    <loc>https://www.swishassistant.com/league/nbl-division-1</loc>
+    <loc>https://www.swishassistant.com/league/national-basketball-league-d1-mens-20252026</loc>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://www.swishassistant.com/league/wnbl-championship</loc>
+    <loc>https://www.swishassistant.com/league/national-basketball-league-d1-womens-20252026</loc>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://www.swishassistant.com/league/bcb-division-1</loc>
+    <loc>https://www.swishassistant.com/league/british-championship-basketball</loc>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://www.swishassistant.com/league/bcb-division-2</loc>
+    <loc>https://www.swishassistant.com/league/british-championship-basketball-20252026</loc>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://www.swishassistant.com/league/slb-division-1</loc>
-    <priority>0.9</priority>
-  </url>
-  <url>
-    <loc>https://www.swishassistant.com/league/slb-division-2</loc>
+    <loc>https://www.swishassistant.com/league/super-league-basketball-20252026</loc>
     <priority>0.9</priority>
   </url>
 </urlset>
