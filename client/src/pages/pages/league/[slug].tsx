@@ -1807,16 +1807,16 @@ export default function LeaguePage() {
                         <tr className="border-b border-gray-200 bg-orange-50">
                           <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 sticky left-0 bg-orange-50 z-10 min-w-[100px] md:min-w-[140px]">Player</th>
                           <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[45px]">GP</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">MIN</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">MIN</th>
                           <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">PTS</th>
                           <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">REB</th>
                           <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">AST</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">STL</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">BLK</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">TO</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">FG%</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">3P%</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">FT%</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">STL</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">BLK</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">TO</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">FG%</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">3P%</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">FT%</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1834,16 +1834,16 @@ export default function LeaguePage() {
                               </div>
                             </td>
                             <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 font-medium">{player.games}</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 hidden md:table-cell">{player.avgMinutes}</td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.avgMinutes}</td>
                             <td className="py-2 md:py-3 px-2 md:px-3 text-center font-semibold text-orange-600">{player.avgPoints}</td>
                             <td className="py-2 md:py-3 px-2 md:px-3 text-center font-medium text-slate-700">{player.avgRebounds}</td>
                             <td className="py-2 md:py-3 px-2 md:px-3 text-center font-medium text-slate-700">{player.avgAssists}</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 hidden md:table-cell">{player.avgSteals}</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 hidden md:table-cell">{player.avgBlocks}</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 hidden md:table-cell">{player.avgTurnovers}</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 hidden md:table-cell">{player.fgPercentage}%</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 hidden md:table-cell">{player.threePercentage}%</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 hidden md:table-cell">{player.ftPercentage}%</td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.avgSteals}</td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.avgBlocks}</td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.avgTurnovers}</td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.fgPercentage}%</td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.threePercentage}%</td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.ftPercentage}%</td>
                           </tr>
                         ))}
                       </tbody>
