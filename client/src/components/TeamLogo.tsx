@@ -36,6 +36,8 @@ export function TeamLogo({ teamName, leagueId, size = "md", className = "" }: Te
         setIsLoading(true);
         setHasError(false);
         
+        console.log(`[TeamLogo] Fetching logo for team: "${teamName}" in league: ${leagueId}`);
+        
         // Try common file extensions for team logos
         const extensions = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
         let foundLogo = false;
@@ -52,6 +54,8 @@ export function TeamLogo({ teamName, leagueId, size = "md", className = "" }: Te
           filenamesToTry.push(originalFileName);
         }
         
+        console.log(`[TeamLogo] Trying filenames:`, filenamesToTry);
+        
         for (const baseFileName of filenamesToTry) {
           for (const ext of extensions) {
             const fileName = `${leagueId}_${baseFileName}.${ext}`;
@@ -65,6 +69,7 @@ export function TeamLogo({ teamName, leagueId, size = "md", className = "" }: Te
               // Check if the file exists by attempting to fetch it
               const response = await fetch(data.publicUrl, { method: 'HEAD' });
               if (response.ok) {
+                console.log(`[TeamLogo] ✓ Found logo: ${fileName} → ${data.publicUrl}`);
                 setLogoUrl(data.publicUrl);
                 foundLogo = true;
                 break;
@@ -78,6 +83,7 @@ export function TeamLogo({ teamName, leagueId, size = "md", className = "" }: Te
         }
         
         if (!foundLogo) {
+          console.log(`[TeamLogo] ✗ No logo found for "${teamName}"`);
           setLogoUrl(null);
         }
       } catch (error) {
