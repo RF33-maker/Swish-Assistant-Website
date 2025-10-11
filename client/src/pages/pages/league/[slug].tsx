@@ -1659,8 +1659,8 @@ export default function LeaguePage() {
                     <table className="w-full text-sm min-w-[600px]">
                       <thead>
                         <tr className="border-b-2 border-gray-200">
-                          <th className="text-left py-3 px-3 font-semibold text-slate-700 w-12 sticky left-0 bg-white z-10">#</th>
-                          <th className="text-left py-3 px-3 font-semibold text-slate-700 max-w-[180px] sticky left-12 md:static bg-white z-10">Team</th>
+                          <th className="text-left py-3 px-3 font-semibold text-slate-700 w-16 sticky left-0 bg-white z-10">Logo</th>
+                          <th className="text-left py-3 px-3 font-semibold text-slate-700 min-w-[140px]">Team</th>
                           <th className="text-center py-3 px-3 font-semibold text-slate-700 w-16">W</th>
                           <th className="text-center py-3 px-3 font-semibold text-slate-700 w-16">L</th>
                           <th className="text-center py-3 px-3 font-semibold text-slate-700 w-20">Win%</th>
@@ -1678,16 +1678,18 @@ export default function LeaguePage() {
                             key={`${team.team}-${index}`}
                             className="border-b border-gray-100 hover:bg-orange-50 transition-colors"
                           >
-                            <td className="py-3 px-3 font-medium text-slate-600 sticky left-0 bg-inherit z-10">{team.rank}</td>
-                            <td className="py-3 px-3 font-medium text-slate-800 max-w-[180px] sticky left-12 md:static bg-inherit z-10">
+                            <td className="py-3 px-3 sticky left-0 bg-inherit z-10">
                               <div className="flex items-center gap-2">
+                                <span className="font-medium text-slate-600 text-xs">{team.rank}</span>
                                 <TeamLogo 
                                   teamName={team.originalName || team.team} 
                                   leagueId={league?.league_id} 
                                   size="sm" 
                                 />
-                                <span className="truncate">{team.team}</span>
                               </div>
+                            </td>
+                            <td className="py-3 px-3 font-medium text-slate-800">
+                              <span className="truncate">{team.team}</span>
                             </td>
                             <td className="py-3 px-3 text-center font-semibold text-slate-700">{team.wins}</td>
                             <td className="py-3 px-3 text-center font-semibold text-slate-700">{team.losses}</td>
