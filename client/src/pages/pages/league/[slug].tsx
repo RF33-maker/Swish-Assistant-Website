@@ -1695,7 +1695,12 @@ export default function LeaguePage() {
                             <td className="py-3 px-3 font-medium text-slate-600 sticky left-0 bg-inherit z-10">{team.rank}</td>
                             <td className="py-3 px-3 font-medium text-slate-800 max-w-[180px] sticky left-12 md:static bg-inherit z-10">
                               <div className="flex items-center gap-2">
-                                <TeamLogo teamName={team.originalName || team.team} leagueId={league?.league_id} size="sm" />
+                                <TeamLogo 
+                                  teamName={team.originalName || team.team} 
+                                  leagueId={league?.league_id} 
+                                  size="sm" 
+                                  logoUrl={team.logoUrl}
+                                />
                                 <span className="truncate">{team.team}</span>
                               </div>
                             </td>
