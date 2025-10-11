@@ -3,6 +3,7 @@ import { useLocation, useParams } from "wouter";
 import { supabase } from "@/lib/supabase";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import { TeamLogo } from "@/components/TeamLogo";
+import { normalizeTeamName } from "@/lib/teamUtils";
 import React from "react";
 
 interface League {
@@ -134,9 +135,12 @@ export default function LeagueTeams() {
         // Process all teams from the teams table
         const teamsWithData = await Promise.all(allTeams.map(async (team) => {
           const teamName = team.name;
+          const normalizedTeamName = normalizeTeamName(teamName);
+          
             // Get team stats (only if player stats exist)
+            // Normalize both team names for comparison
             const teamPlayers = allPlayerStats ? allPlayerStats.filter(stat => 
-              stat.team === teamName
+              normalizeTeamName(stat.team) === normalizedTeamName
             ) : [];
             
             // Calculate team totals and averages using game_id to properly determine opponents
