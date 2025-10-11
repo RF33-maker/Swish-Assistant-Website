@@ -518,8 +518,11 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
               </h4>
               {team1Top3.length > 0 ? (
                 <div className="relative mb-2 sm:mb-4">
-                  <div className="overflow-x-auto -mx-3 sm:mx-0 border border-orange-200 rounded-lg scroll-smooth" style={{WebkitOverflowScrolling: 'touch'}}>
-                    <table className="w-full text-xs">
+                  
+                    <div className="w-full overflow-x-auto rounded-lg border border-orange-200 scroll-smooth" style={{ WebkitOverflowScrolling: 'touch' }}>
+                  
+                    <table className="min-w-[650px] sm:min-w-full text-xs">
+
                       <thead>
                         <tr className="border-b border-gray-200 bg-orange-50">
                           <th className="text-left py-1.5 sm:py-2.5 md:py-3 px-1.5 sm:px-2.5 md:px-3 font-semibold text-slate-700 sticky left-0 bg-orange-50 z-10 min-w-[90px] sm:min-w-[120px] shadow-[2px_0_4px_rgba(0,0,0,0.05)]">Player</th>
@@ -589,8 +592,10 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
               </h4>
               {team2Top3.length > 0 ? (
                 <div className="relative mb-2 sm:mb-4">
-                  <div className="overflow-x-auto -mx-3 sm:mx-0 border border-orange-200 rounded-lg scroll-smooth" style={{WebkitOverflowScrolling: 'touch'}}>
-                    <table className="w-full text-xs">
+                  <div className="w-full overflow-x-auto rounded-lg border border-orange-200 scroll-smooth" style={{ WebkitOverflowScrolling: 'touch' }}>
+                  
+                    <table className="min-w-[480px] sm:min-w-full text-xs">
+
                       <thead>
                         <tr className="border-b border-gray-200 bg-orange-50">
                           <th className="text-left py-1.5 sm:py-2.5 md:py-3 px-1.5 sm:px-2.5 md:px-3 font-semibold text-slate-700 sticky left-0 bg-orange-50 z-10 min-w-[90px] sm:min-w-[120px] shadow-[2px_0_4px_rgba(0,0,0,0.05)]">Player</th>
