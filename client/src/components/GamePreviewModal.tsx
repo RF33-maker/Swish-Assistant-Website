@@ -396,25 +396,25 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
           <DialogContent
-            className="w-[95vw] sm:w-full max-w-[420px] sm:max-w-4xl 
-                       max-h-[85vh] overflow-y-auto 
-                       p-2 sm:p-6 bg-[#fffaf1] text-slate-800 
-                       rounded-xl sm:rounded-2xl shadow-lg border border-orange-100 
-                       mx-auto my-auto"
+            className="w-[95vw] sm:w-full max-w-[95vw] sm:max-w-4xl 
+                       max-h-[90vh] overflow-hidden flex flex-col
+                       p-0 bg-[#fffaf1] text-slate-800 
+                       rounded-xl sm:rounded-2xl shadow-lg border border-orange-100"
           >
 
-        <DialogHeader className="flex flex-row items-center justify-between border-b border-orange-200 pb-2 sm:pb-4 mb-3 sm:mb-4 px-1 sm:px-0">
+        <DialogHeader className="flex flex-row items-center justify-between border-b border-orange-200 pb-2 sm:pb-4 px-3 sm:px-6 pt-3 sm:pt-6 flex-shrink-0">
           <DialogTitle className="text-base sm:text-xl md:text-2xl font-bold text-slate-800">Game Preview</DialogTitle>
           <button
             onClick={onClose}
-            className="rounded-full p-2 hover:bg-orange-100 transition-colors -mr-1 sm:mr-0"
+            className="rounded-full p-2 hover:bg-orange-100 transition-colors"
             data-testid="close-preview-modal"
           >
             <X className="h-4 w-4 sm:h-5 sm:w-5 text-slate-600" />
           </button>
         </DialogHeader>
 
-        <div className="space-y-3 sm:space-y-6 px-1 sm:px-0">
+        <div className="flex-1 overflow-y-auto px-3 sm:px-6 pb-3 sm:pb-6">
+          <div className="space-y-3 sm:space-y-6 pt-3 sm:pt-4">
           {/* Matchup Header */}
           <div className="bg-gradient-to-r from-orange-50 to-orange-100 rounded-lg p-2 sm:p-4 md:p-6">
             <div className="flex flex-col md:flex-row items-center justify-between gap-2 sm:gap-4">
@@ -517,51 +517,48 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
                 {game.team1} - Top 3 Players
               </h4>
               {team1Top3.length > 0 ? (
-                <div className="relative mb-2 sm:mb-4">
-                  
-                    <div className="w-full overflow-x-auto rounded-lg border border-orange-200 scroll-smooth" style={{ WebkitOverflowScrolling: 'touch' }}>
-                  
-                    <table className="min-w-[650px] sm:min-w-full text-xs">
-
+                <div className="relative mb-2 sm:mb-4 -mx-3 sm:mx-0">
+                  <div className="w-full overflow-x-auto rounded-none sm:rounded-lg border-y sm:border border-orange-200 scroll-smooth" style={{ WebkitOverflowScrolling: 'touch' }}>
+                    <table className="w-full text-xs">
                       <thead>
                         <tr className="border-b border-gray-200 bg-orange-50">
-                          <th className="text-left py-1.5 sm:py-2.5 md:py-3 px-1.5 sm:px-2.5 md:px-3 font-semibold text-slate-700 sticky left-0 bg-orange-50 z-10 min-w-[90px] sm:min-w-[120px] shadow-[2px_0_4px_rgba(0,0,0,0.05)]">Player</th>
-                          <th className="text-center py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[35px] sm:min-w-[45px]">GP</th>
-                          <th className="text-center py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[38px] sm:min-w-[50px]">MIN</th>
-                          <th className="text-center py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[38px] sm:min-w-[50px]">PTS</th>
-                          <th className="text-center py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[38px] sm:min-w-[50px]">REB</th>
-                          <th className="text-center py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[38px] sm:min-w-[50px]">AST</th>
-                          <th className="text-center py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[38px] sm:min-w-[50px]">STL</th>
-                          <th className="text-center py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[38px] sm:min-w-[50px]">BLK</th>
-                          <th className="text-center py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[38px] sm:min-w-[50px]">TO</th>
-                          <th className="text-center py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[42px] sm:min-w-[55px]">FG%</th>
-                          <th className="text-center py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[42px] sm:min-w-[55px]">3P%</th>
-                          <th className="text-center py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[42px] sm:min-w-[55px]">FT%</th>
+                          <th className="text-left py-2 px-2 font-semibold text-slate-700 sticky left-0 bg-orange-50 z-10 w-[100px] shadow-[2px_0_4px_rgba(0,0,0,0.05)]">Player</th>
+                          <th className="text-center py-2 px-1.5 font-semibold text-slate-700 whitespace-nowrap">GP</th>
+                          <th className="text-center py-2 px-1.5 font-semibold text-slate-700 whitespace-nowrap">MIN</th>
+                          <th className="text-center py-2 px-1.5 font-semibold text-slate-700 whitespace-nowrap">PTS</th>
+                          <th className="text-center py-2 px-1.5 font-semibold text-slate-700 whitespace-nowrap">REB</th>
+                          <th className="text-center py-2 px-1.5 font-semibold text-slate-700 whitespace-nowrap">AST</th>
+                          <th className="text-center py-2 px-1.5 font-semibold text-slate-700 whitespace-nowrap">STL</th>
+                          <th className="text-center py-2 px-1.5 font-semibold text-slate-700 whitespace-nowrap">BLK</th>
+                          <th className="text-center py-2 px-1.5 font-semibold text-slate-700 whitespace-nowrap">TO</th>
+                          <th className="text-center py-2 px-1.5 font-semibold text-slate-700 whitespace-nowrap">FG%</th>
+                          <th className="text-center py-2 px-1.5 font-semibold text-slate-700 whitespace-nowrap">3P%</th>
+                          <th className="text-center py-2 px-1.5 font-semibold text-slate-700 whitespace-nowrap">FT%</th>
                         </tr>
                       </thead>
                       <tbody>
                         {team1Top3.map((player, idx) => (
                           <tr key={idx} className="border-b border-gray-100 hover:bg-orange-50 transition-colors">
-                            <td className="py-1.5 sm:py-2.5 md:py-3 px-1.5 sm:px-2.5 md:px-3 font-medium text-slate-800 sticky left-0 bg-white hover:bg-orange-50 z-10 shadow-[2px_0_4px_rgba(0,0,0,0.05)]">
+                            <td className="py-2 px-2 font-medium text-slate-800 sticky left-0 bg-white hover:bg-orange-50 z-10 shadow-[2px_0_4px_rgba(0,0,0,0.05)] truncate max-w-[100px]">
                               {player.name}
                             </td>
-                            <td className="py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 text-center text-slate-600 font-medium">{player.games}</td>
-                            <td className="py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 text-center text-slate-600">{player.mpg}</td>
-                            <td className="py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 text-center font-semibold text-orange-600">{player.ppg}</td>
-                            <td className="py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 text-center font-medium text-slate-700">{player.rpg}</td>
-                            <td className="py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 text-center font-medium text-slate-700">{player.apg}</td>
-                            <td className="py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 text-center text-slate-600">{player.spg}</td>
-                            <td className="py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 text-center text-slate-600">{player.bpg}</td>
-                            <td className="py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 text-center text-slate-600">{player.tpg}</td>
-                            <td className="py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 text-center text-slate-600">{player.fgPct}%</td>
-                            <td className="py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 text-center text-slate-600">{player.threePct}%</td>
-                            <td className="py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 text-center text-slate-600">{player.ftPct}%</td>
+                            <td className="py-2 px-1.5 text-center text-slate-600 font-medium">{player.games}</td>
+                            <td className="py-2 px-1.5 text-center text-slate-600">{player.mpg}</td>
+                            <td className="py-2 px-1.5 text-center font-semibold text-orange-600">{player.ppg}</td>
+                            <td className="py-2 px-1.5 text-center font-medium text-slate-700">{player.rpg}</td>
+                            <td className="py-2 px-1.5 text-center font-medium text-slate-700">{player.apg}</td>
+                            <td className="py-2 px-1.5 text-center text-slate-600">{player.spg}</td>
+                            <td className="py-2 px-1.5 text-center text-slate-600">{player.bpg}</td>
+                            <td className="py-2 px-1.5 text-center text-slate-600">{player.tpg}</td>
+                            <td className="py-2 px-1.5 text-center text-slate-600">{player.fgPct}%</td>
+                            <td className="py-2 px-1.5 text-center text-slate-600">{player.threePct}%</td>
+                            <td className="py-2 px-1.5 text-center text-slate-600">{player.ftPct}%</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
-                  <div className="sm:hidden bg-gradient-to-r from-orange-100 to-orange-50 text-orange-700 text-center py-1.5 text-xs font-medium border-t border-orange-200 rounded-b-lg flex items-center justify-center gap-1">
+                  <div className="sm:hidden bg-gradient-to-r from-orange-100 to-orange-50 text-orange-700 text-center py-1.5 text-xs font-medium border-t border-orange-200 flex items-center justify-center gap-1 -mx-3">
                     <span className="animate-pulse">👉</span>
                     <span>Swipe to see all stats</span>
                     <span className="animate-pulse">👈</span>
@@ -591,50 +588,48 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
                 {game.team2} - Top 3 Players
               </h4>
               {team2Top3.length > 0 ? (
-                <div className="relative mb-2 sm:mb-4">
-                  <div className="w-full overflow-x-auto rounded-lg border border-orange-200 scroll-smooth" style={{ WebkitOverflowScrolling: 'touch' }}>
-                  
-                    <table className="min-w-[480px] sm:min-w-full text-xs">
-
+                <div className="relative mb-2 sm:mb-4 -mx-3 sm:mx-0">
+                  <div className="w-full overflow-x-auto rounded-none sm:rounded-lg border-y sm:border border-orange-200 scroll-smooth" style={{ WebkitOverflowScrolling: 'touch' }}>
+                    <table className="w-full text-xs">
                       <thead>
                         <tr className="border-b border-gray-200 bg-orange-50">
-                          <th className="text-left py-1.5 sm:py-2.5 md:py-3 px-1.5 sm:px-2.5 md:px-3 font-semibold text-slate-700 sticky left-0 bg-orange-50 z-10 min-w-[90px] sm:min-w-[120px] shadow-[2px_0_4px_rgba(0,0,0,0.05)]">Player</th>
-                          <th className="text-center py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[35px] sm:min-w-[45px]">GP</th>
-                          <th className="text-center py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[38px] sm:min-w-[50px]">MIN</th>
-                          <th className="text-center py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[38px] sm:min-w-[50px]">PTS</th>
-                          <th className="text-center py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[38px] sm:min-w-[50px]">REB</th>
-                          <th className="text-center py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[38px] sm:min-w-[50px]">AST</th>
-                          <th className="text-center py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[38px] sm:min-w-[50px]">STL</th>
-                          <th className="text-center py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[38px] sm:min-w-[50px]">BLK</th>
-                          <th className="text-center py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[38px] sm:min-w-[50px]">TO</th>
-                          <th className="text-center py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[42px] sm:min-w-[55px]">FG%</th>
-                          <th className="text-center py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[42px] sm:min-w-[55px]">3P%</th>
-                          <th className="text-center py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[42px] sm:min-w-[55px]">FT%</th>
+                          <th className="text-left py-2 px-2 font-semibold text-slate-700 sticky left-0 bg-orange-50 z-10 w-[100px] shadow-[2px_0_4px_rgba(0,0,0,0.05)]">Player</th>
+                          <th className="text-center py-2 px-1.5 font-semibold text-slate-700 whitespace-nowrap">GP</th>
+                          <th className="text-center py-2 px-1.5 font-semibold text-slate-700 whitespace-nowrap">MIN</th>
+                          <th className="text-center py-2 px-1.5 font-semibold text-slate-700 whitespace-nowrap">PTS</th>
+                          <th className="text-center py-2 px-1.5 font-semibold text-slate-700 whitespace-nowrap">REB</th>
+                          <th className="text-center py-2 px-1.5 font-semibold text-slate-700 whitespace-nowrap">AST</th>
+                          <th className="text-center py-2 px-1.5 font-semibold text-slate-700 whitespace-nowrap">STL</th>
+                          <th className="text-center py-2 px-1.5 font-semibold text-slate-700 whitespace-nowrap">BLK</th>
+                          <th className="text-center py-2 px-1.5 font-semibold text-slate-700 whitespace-nowrap">TO</th>
+                          <th className="text-center py-2 px-1.5 font-semibold text-slate-700 whitespace-nowrap">FG%</th>
+                          <th className="text-center py-2 px-1.5 font-semibold text-slate-700 whitespace-nowrap">3P%</th>
+                          <th className="text-center py-2 px-1.5 font-semibold text-slate-700 whitespace-nowrap">FT%</th>
                         </tr>
                       </thead>
                       <tbody>
                         {team2Top3.map((player, idx) => (
                           <tr key={idx} className="border-b border-gray-100 hover:bg-orange-50 transition-colors">
-                            <td className="py-1.5 sm:py-2.5 md:py-3 px-1.5 sm:px-2.5 md:px-3 font-medium text-slate-800 sticky left-0 bg-white hover:bg-orange-50 z-10 shadow-[2px_0_4px_rgba(0,0,0,0.05)]">
+                            <td className="py-2 px-2 font-medium text-slate-800 sticky left-0 bg-white hover:bg-orange-50 z-10 shadow-[2px_0_4px_rgba(0,0,0,0.05)] truncate max-w-[100px]">
                               {player.name}
                             </td>
-                            <td className="py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 text-center text-slate-600 font-medium">{player.games}</td>
-                            <td className="py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 text-center text-slate-600">{player.mpg}</td>
-                            <td className="py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 text-center font-semibold text-orange-600">{player.ppg}</td>
-                            <td className="py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 text-center font-medium text-slate-700">{player.rpg}</td>
-                            <td className="py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 text-center font-medium text-slate-700">{player.apg}</td>
-                            <td className="py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 text-center text-slate-600">{player.spg}</td>
-                            <td className="py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 text-center text-slate-600">{player.bpg}</td>
-                            <td className="py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 text-center text-slate-600">{player.tpg}</td>
-                            <td className="py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 text-center text-slate-600">{player.fgPct}%</td>
-                            <td className="py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 text-center text-slate-600">{player.threePct}%</td>
-                            <td className="py-1.5 sm:py-2.5 md:py-3 px-1 sm:px-2 md:px-3 text-center text-slate-600">{player.ftPct}%</td>
+                            <td className="py-2 px-1.5 text-center text-slate-600 font-medium">{player.games}</td>
+                            <td className="py-2 px-1.5 text-center text-slate-600">{player.mpg}</td>
+                            <td className="py-2 px-1.5 text-center font-semibold text-orange-600">{player.ppg}</td>
+                            <td className="py-2 px-1.5 text-center font-medium text-slate-700">{player.rpg}</td>
+                            <td className="py-2 px-1.5 text-center font-medium text-slate-700">{player.apg}</td>
+                            <td className="py-2 px-1.5 text-center text-slate-600">{player.spg}</td>
+                            <td className="py-2 px-1.5 text-center text-slate-600">{player.bpg}</td>
+                            <td className="py-2 px-1.5 text-center text-slate-600">{player.tpg}</td>
+                            <td className="py-2 px-1.5 text-center text-slate-600">{player.fgPct}%</td>
+                            <td className="py-2 px-1.5 text-center text-slate-600">{player.threePct}%</td>
+                            <td className="py-2 px-1.5 text-center text-slate-600">{player.ftPct}%</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
-                  <div className="sm:hidden bg-gradient-to-r from-orange-100 to-orange-50 text-orange-700 text-center py-1.5 text-xs font-medium border-t border-orange-200 rounded-b-lg flex items-center justify-center gap-1">
+                  <div className="sm:hidden bg-gradient-to-r from-orange-100 to-orange-50 text-orange-700 text-center py-1.5 text-xs font-medium border-t border-orange-200 flex items-center justify-center gap-1 -mx-3">
                     <span className="animate-pulse">👉</span>
                     <span>Swipe to see all stats</span>
                     <span className="animate-pulse">👈</span>
@@ -657,6 +652,7 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
                 <p className="text-xs text-slate-400 italic">No additional players</p>
               )}
             </div>
+          </div>
           </div>
         </div>
       </DialogContent>
