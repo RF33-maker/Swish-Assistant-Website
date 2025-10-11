@@ -905,12 +905,31 @@ export default function LeaguePage() {
     // Calculate team standings using team_stats table first, fallback to player_stats
     const calculateStandingsWithTeamStats = async (leagueId: string, playerStats: any[]) => {
       try {
-        // First try to get standings from team_stats table - let's check what columns exist
+        // First, fetch ALL teams from the teams table
+        const { data: allTeams, error: teamsError } = await supabase
+          .from("teams")
+          .select("team_id, name")
+          .eq("league_id", leagueId);
+
+        if (teamsError || !allTeams || allTeams.length === 0) {
+          console.error("Error fetching teams:", teamsError);
+          setStandings([]);
+          return;
+        }
+
+        // Initialize standings with all teams (0-0 record by default)
+        const teamStatsMap: { [team: string]: { wins: number, losses: number, pointsFor: number, pointsAgainst: number, games: number } } = {};
+        
+        allTeams.forEach(team => {
+          const normalizedName = normalizeTeamName(team.name);
+          teamStatsMap[normalizedName] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0 };
+        });
+
+        // Now fetch team_stats to enhance with actual game results
         const { data: teamStatsData, error: teamStatsError } = await supabase
           .from("team_stats")
           .select("*")
-          .eq("league_id", leagueId);  // Remove the order clause to avoid column issues
-          
+          .eq("league_id", leagueId);
 
         if (teamStatsData && teamStatsData.length > 0 && !teamStatsError) {
           // Group team stats by numeric_id to find games (teams that played each other)
@@ -918,7 +937,7 @@ export default function LeaguePage() {
           
           teamStatsData.forEach(stat => {
             const numericId = stat.numeric_id;
-            if (numericId && stat.name) { // Only process records with team names and numeric_id
+            if (numericId && stat.name) {
               if (!gameMap.has(numericId)) {
                 gameMap.set(numericId, []);
               }
@@ -926,80 +945,69 @@ export default function LeaguePage() {
             }
           });
 
-          // Calculate standings from games
-          const teamStatsMap: { [team: string]: { wins: number, losses: number, pointsFor: number, pointsAgainst: number, games: number } } = {};
-          
-          // Process each game (teams with same numeric_id played each other)
+          // Process each game and update stats for teams that have played
           gameMap.forEach((gameTeams, numericId) => {
-            if (gameTeams.length === 2) { // Valid game with 2 teams
+            if (gameTeams.length === 2) {
               const [team1, team2] = gameTeams;
               
-              // Normalize team names to handle variations
               const team1Name = normalizeTeamName(team1.name || '');
               const team2Name = normalizeTeamName(team2.name || '');
               
-              // Use tot_spoints as team score
               const team1Score = team1.tot_spoints || 0;
               const team2Score = team2.tot_spoints || 0;
               
-              // Initialize teams if not exists
-              if (!teamStatsMap[team1Name]) {
-                teamStatsMap[team1Name] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0 };
-              }
-              if (!teamStatsMap[team2Name]) {
-                teamStatsMap[team2Name] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0 };
+              // Only update if team exists in our map (from teams table)
+              if (teamStatsMap[team1Name]) {
+                teamStatsMap[team1Name].pointsFor += team1Score;
+                teamStatsMap[team1Name].pointsAgainst += team2Score;
+                teamStatsMap[team1Name].games += 1;
+                
+                if (team1Score > team2Score) {
+                  teamStatsMap[team1Name].wins += 1;
+                } else if (team1Score < team2Score) {
+                  teamStatsMap[team1Name].losses += 1;
+                }
               }
               
-              // Record scores
-              teamStatsMap[team1Name].pointsFor += team1Score;
-              teamStatsMap[team1Name].pointsAgainst += team2Score;
-              teamStatsMap[team1Name].games += 1;
-              
-              teamStatsMap[team2Name].pointsFor += team2Score;
-              teamStatsMap[team2Name].pointsAgainst += team1Score;
-              teamStatsMap[team2Name].games += 1;
-              
-              // Determine winner
-              if (team1Score > team2Score) {
-                teamStatsMap[team1Name].wins += 1;
-                teamStatsMap[team2Name].losses += 1;
-              } else if (team2Score > team1Score) {
-                teamStatsMap[team2Name].wins += 1;
-                teamStatsMap[team1Name].losses += 1;
+              if (teamStatsMap[team2Name]) {
+                teamStatsMap[team2Name].pointsFor += team2Score;
+                teamStatsMap[team2Name].pointsAgainst += team1Score;
+                teamStatsMap[team2Name].games += 1;
+                
+                if (team2Score > team1Score) {
+                  teamStatsMap[team2Name].wins += 1;
+                } else if (team2Score < team1Score) {
+                  teamStatsMap[team2Name].losses += 1;
+                }
               }
-              // If tied, no wins/losses added
             }
           });
-
-          // Convert to standings format
-          const standingsArray = Object.entries(teamStatsMap).map(([team, stats]) => ({
-            team,
-            wins: stats.wins,
-            losses: stats.losses,
-            winPct: stats.games > 0 ? Math.round((stats.wins / stats.games) * 1000) / 1000 : 0,
-            pointsFor: stats.pointsFor,
-            pointsAgainst: stats.pointsAgainst,
-            pointsDiff: stats.pointsFor - stats.pointsAgainst,
-            games: stats.games,
-            avgPoints: stats.games > 0 ? Math.round((stats.pointsFor / stats.games) * 10) / 10 : 0,
-            record: `${stats.wins}-${stats.losses}`
-          })).sort((a, b) => {
-            // Sort by win percentage first, then by point differential, then by average points
-            if (b.winPct !== a.winPct) return b.winPct - a.winPct;
-            if (b.pointsDiff !== a.pointsDiff) return b.pointsDiff - a.pointsDiff;
-            return b.avgPoints - a.avgPoints;
-          });
-
-          setStandings(standingsArray);
-          return;
         }
-      } catch (error) {
-        // Silently fall back to player_stats if team_stats data is incomplete
-      }
 
-      // Fallback: Since team_stats lacks team names and game data, show placeholder
-      // standings will need proper team_stats data structure to function
-      setStandings([]);
+        // Convert to standings format - includes all teams, even those with no games
+        const standingsArray = Object.entries(teamStatsMap).map(([team, stats]) => ({
+          team,
+          wins: stats.wins,
+          losses: stats.losses,
+          winPct: stats.games > 0 ? Math.round((stats.wins / stats.games) * 1000) / 1000 : 0,
+          pointsFor: stats.pointsFor,
+          pointsAgainst: stats.pointsAgainst,
+          pointsDiff: stats.pointsFor - stats.pointsAgainst,
+          games: stats.games,
+          avgPoints: stats.games > 0 ? Math.round((stats.pointsFor / stats.games) * 10) / 10 : 0,
+          record: `${stats.wins}-${stats.losses}`
+        })).sort((a, b) => {
+          // Sort by win percentage first, then by point differential, then by average points
+          if (b.winPct !== a.winPct) return b.winPct - a.winPct;
+          if (b.pointsDiff !== a.pointsDiff) return b.pointsDiff - a.pointsDiff;
+          return b.avgPoints - a.avgPoints;
+        });
+
+        setStandings(standingsArray);
+      } catch (error) {
+        console.error("Error calculating standings:", error);
+        setStandings([]);
+      }
     };
 
     // Calculate team standings from player stats using actual game results
@@ -1094,13 +1102,14 @@ export default function LeaguePage() {
       try {
         setIsLoadingStandings(true);
         
-        // Fetch team stats
-        const { data: teamStatsData, error: teamStatsError } = await supabase
-          .from("team_stats")
-          .select("*")
+        // First, fetch ALL teams from the teams table
+        const { data: allTeams, error: teamsError } = await supabase
+          .from("teams")
+          .select("team_id, name")
           .eq("league_id", leagueId);
 
-        if (teamStatsError || !teamStatsData || teamStatsData.length === 0) {
+        if (teamsError || !allTeams || allTeams.length === 0) {
+          console.error("Error fetching teams:", teamsError);
           setPoolAStandings([]);
           setPoolBStandings([]);
           setFullLeagueStandings([]);
@@ -1115,7 +1124,6 @@ export default function LeaguePage() {
           .eq("league_id", leagueId);
 
         // Build team-to-pool mapping from game_schedule
-        // Pool values are in format "0(Pool A)" or "0(Pool B)", extract the pool name
         const extractPoolName = (poolValue: string): string => {
           const match = poolValue.match(/\(([^)]+)\)/);
           return match ? match[1] : poolValue;
@@ -1136,65 +1144,75 @@ export default function LeaguePage() {
             }
           });
         }
-        // Group by game (numeric_id) and calculate standings
-        const gameMap = new Map<string, any[]>();
-        teamStatsData.forEach(stat => {
-          const numericId = stat.numeric_id;
-          if (numericId && stat.name) {
-            if (!gameMap.has(numericId)) {
-              gameMap.set(numericId, []);
-            }
-            gameMap.get(numericId)!.push(stat);
-          }
-        });
 
-        // Calculate standings
+        // Initialize standings with all teams (0-0 record by default)
         const teamStatsMap: Record<string, { wins: number, losses: number, pointsFor: number, pointsAgainst: number, games: number, pool?: string }> = {};
         
-        gameMap.forEach((gameTeams) => {
-          if (gameTeams.length === 2) {
-            const [team1, team2] = gameTeams;
-            
-            // Normalize team names to handle variations
-            const team1Name = normalizeTeamName(team1.name || '');
-            const team2Name = normalizeTeamName(team2.name || '');
-            
-            const team1Score = team1.tot_spoints || 0;
-            const team2Score = team2.tot_spoints || 0;
-            
-            // Initialize teams
-            if (!teamStatsMap[team1Name]) {
-              teamStatsMap[team1Name] = { 
-                wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0,
-                pool: teamPoolMap[team1Name] || teamPoolMap[team1.name]
-              };
-            }
-            if (!teamStatsMap[team2Name]) {
-              teamStatsMap[team2Name] = { 
-                wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0,
-                pool: teamPoolMap[team2Name] || teamPoolMap[team2.name]
-              };
-            }
-            
-            // Record scores
-            teamStatsMap[team1Name].pointsFor += team1Score;
-            teamStatsMap[team1Name].pointsAgainst += team2Score;
-            teamStatsMap[team1Name].games += 1;
-            
-            teamStatsMap[team2Name].pointsFor += team2Score;
-            teamStatsMap[team2Name].pointsAgainst += team1Score;
-            teamStatsMap[team2Name].games += 1;
-            
-            // Determine winner
-            if (team1Score > team2Score) {
-              teamStatsMap[team1Name].wins += 1;
-              teamStatsMap[team2Name].losses += 1;
-            } else if (team2Score > team1Score) {
-              teamStatsMap[team2Name].wins += 1;
-              teamStatsMap[team1Name].losses += 1;
-            }
-          }
+        allTeams.forEach(team => {
+          const normalizedName = normalizeTeamName(team.name);
+          teamStatsMap[normalizedName] = { 
+            wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0,
+            pool: teamPoolMap[normalizedName] || teamPoolMap[team.name]
+          };
         });
+
+        // Now fetch team_stats to enhance with actual game results
+        const { data: teamStatsData, error: teamStatsError } = await supabase
+          .from("team_stats")
+          .select("*")
+          .eq("league_id", leagueId);
+
+        if (teamStatsData && teamStatsData.length > 0 && !teamStatsError) {
+          // Group by game (numeric_id) and calculate standings
+          const gameMap = new Map<string, any[]>();
+          teamStatsData.forEach(stat => {
+            const numericId = stat.numeric_id;
+            if (numericId && stat.name) {
+              if (!gameMap.has(numericId)) {
+                gameMap.set(numericId, []);
+              }
+              gameMap.get(numericId)!.push(stat);
+            }
+          });
+
+          // Process each game and update stats for teams that have played
+          gameMap.forEach((gameTeams) => {
+            if (gameTeams.length === 2) {
+              const [team1, team2] = gameTeams;
+              
+              const team1Name = normalizeTeamName(team1.name || '');
+              const team2Name = normalizeTeamName(team2.name || '');
+              
+              const team1Score = team1.tot_spoints || 0;
+              const team2Score = team2.tot_spoints || 0;
+              
+              // Only update if team exists in our map (from teams table)
+              if (teamStatsMap[team1Name]) {
+                teamStatsMap[team1Name].pointsFor += team1Score;
+                teamStatsMap[team1Name].pointsAgainst += team2Score;
+                teamStatsMap[team1Name].games += 1;
+                
+                if (team1Score > team2Score) {
+                  teamStatsMap[team1Name].wins += 1;
+                } else if (team1Score < team2Score) {
+                  teamStatsMap[team1Name].losses += 1;
+                }
+              }
+              
+              if (teamStatsMap[team2Name]) {
+                teamStatsMap[team2Name].pointsFor += team2Score;
+                teamStatsMap[team2Name].pointsAgainst += team1Score;
+                teamStatsMap[team2Name].games += 1;
+                
+                if (team2Score > team1Score) {
+                  teamStatsMap[team2Name].wins += 1;
+                } else if (team2Score < team1Score) {
+                  teamStatsMap[team2Name].losses += 1;
+                }
+              }
+            }
+          });
+        }
 
         // Convert to standings format with movement tracking
         const formatStandings = (teams: any[], poolFilter?: string) => {

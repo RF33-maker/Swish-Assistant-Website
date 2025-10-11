@@ -103,6 +103,24 @@ export default function LeagueTeams() {
 
         setLeague(leagueData);
 
+        // Fetch all teams from the teams table
+        const { data: allTeams, error: teamsError } = await supabase
+          .from("teams")
+          .select("team_id, name")
+          .eq("league_id", leagueData.league_id);
+
+        if (teamsError) {
+          console.error("Error fetching teams:", teamsError);
+          return;
+        }
+
+        if (!allTeams || allTeams.length === 0) {
+          console.log("No teams found for this league");
+          setTeams([]);
+          setLoading(false);
+          return;
+        }
+
         // Fetch all player stats for this league
         const { data: allPlayerStats, error: statsError } = await supabase
           .from("player_stats")
@@ -111,18 +129,15 @@ export default function LeagueTeams() {
 
         if (statsError) {
           console.error("Error fetching player stats:", statsError);
-          return;
         }
 
-        if (allPlayerStats && allPlayerStats.length > 0) {
-          // Get unique teams from player stats
-          const uniqueTeams = Array.from(new Set(allPlayerStats.map(stat => stat.team).filter(Boolean)));
-          
-          const teamsWithData = await Promise.all(uniqueTeams.map(async (teamName) => {
-            // Get team stats
-            const teamPlayers = allPlayerStats.filter(stat => 
+        // Process all teams from the teams table
+        const teamsWithData = await Promise.all(allTeams.map(async (team) => {
+          const teamName = team.name;
+            // Get team stats (only if player stats exist)
+            const teamPlayers = allPlayerStats ? allPlayerStats.filter(stat => 
               stat.team === teamName
-            );
+            ) : [];
             
             // Calculate team totals and averages using game_id to properly determine opponents
             const gamesByGameId = teamPlayers.reduce((acc: Record<string, any>, player: any) => {
@@ -194,10 +209,22 @@ export default function LeagueTeams() {
               player.avgAssists = Math.round((player.totalAssists / player.gamesPlayed) * 10) / 10;
             });
             
-            // Find top player
-            const topPlayer = roster.reduce((prev, current) => 
-              (prev.avgPoints > current.avgPoints) ? prev : current, roster[0]
-            );
+            // Find top player (or provide default if no players)
+            const topPlayer = roster.length > 0 
+              ? roster.reduce((prev, current) => 
+                  (prev.avgPoints > current.avgPoints) ? prev : current
+                )
+              : {
+                  name: 'No players yet',
+                  position: '',
+                  avgPoints: 0,
+                  avgRebounds: 0,
+                  avgAssists: 0,
+                  totalPoints: 0,
+                  totalRebounds: 0,
+                  totalAssists: 0,
+                  gamesPlayed: 0
+                };
             
             return {
               name: teamName,
@@ -211,7 +238,6 @@ export default function LeagueTeams() {
           }));
           
           setTeams(teamsWithData);
-        }
       } catch (error) {
         console.error("Error fetching league and teams:", error);
       } finally {
