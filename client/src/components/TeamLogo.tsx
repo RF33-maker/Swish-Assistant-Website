@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { normalizeTeamNameForFile } from "@/lib/teamUtils";
 
 interface TeamLogoProps {
   teamName: string;
@@ -40,7 +41,8 @@ export function TeamLogo({ teamName, leagueId, size = "md", className = "" }: Te
         let foundLogo = false;
         
         for (const ext of extensions) {
-          const fileName = `${leagueId}_${teamName.replace(/\s+/g, '_')}.${ext}`;
+          const normalizedFileName = normalizeTeamNameForFile(teamName);
+          const fileName = `${leagueId}_${normalizedFileName}.${ext}`;
           
           // Get public URL from Supabase storage
           const { data } = supabase.storage
