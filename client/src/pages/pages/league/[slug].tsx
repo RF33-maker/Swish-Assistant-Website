@@ -48,6 +48,9 @@ const normalizeTeamName = (name: string): string => {
   const teamNameMap: Record<string, string> = {
     'Essex Rebels (M)': 'Essex Rebels',
     'MK Breakers': 'Milton Keynes Breakers',
+    // Handle Roman numeral mismatches for specific teams
+    'Worcester Wolves Senior Men I': 'Worcester Wolves Senior Men',
+    'Solent Kestrels Senior Men I': 'Solent Kestrels Senior Men',
   };
   
   // Return mapped name if it exists, otherwise return trimmed name
