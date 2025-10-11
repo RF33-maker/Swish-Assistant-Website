@@ -153,16 +153,17 @@ export default function LeagueTeams() {
                   away_team: player.away_team,
                   teams: new Set(),
                   teamScores: {},
-                  ourTeam: teamName
+                  ourTeam: normalizedTeamName
                 };
               }
               
-              // Track teams and scores in this game
-              acc[player.game_id].teams.add(player.team);
-              if (!acc[player.game_id].teamScores[player.team]) {
-                acc[player.game_id].teamScores[player.team] = 0;
+              // Track teams and scores in this game using normalized names
+              const playerNormalizedTeam = normalizeTeamName(player.team);
+              acc[player.game_id].teams.add(playerNormalizedTeam);
+              if (!acc[player.game_id].teamScores[playerNormalizedTeam]) {
+                acc[player.game_id].teamScores[playerNormalizedTeam] = 0;
               }
-              acc[player.game_id].teamScores[player.team] += player.points || 0;
+              acc[player.game_id].teamScores[playerNormalizedTeam] += player.points || 0;
               
               return acc;
             }, {});
@@ -170,8 +171,8 @@ export default function LeagueTeams() {
             // Convert to games with proper opponent data
             const games = Object.values(gamesByGameId).map((gameData: any) => {
               const teams = Array.from(gameData.teams) as string[];
-              const opponent = teams.find(team => team !== teamName) || 'Unknown';
-              const ourScore = gameData.teamScores[teamName] || 0;
+              const opponent = teams.find(team => team !== normalizedTeamName) || 'Unknown';
+              const ourScore = gameData.teamScores[normalizedTeamName] || 0;
               
               return {
                 totalPoints: ourScore,
