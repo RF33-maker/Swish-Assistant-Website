@@ -290,7 +290,7 @@ export default function LeaguePage() {
               .select("*")
               .eq("league_id", data.league_id);
 
-            // Create a map of game scores and numeric_ids from team_stats, using team names as key
+            // Create a map of game scores and numeric_ids from team_stats, using NORMALIZED team names as key
             const gameScoresMap = new Map<string, { team1: string, team2: string, team1_score: number, team2_score: number, numeric_id: string }>();
             if (teamStatsForScores && !teamStatsError) {
               const gameMap = new Map<string, any[]>();
@@ -308,9 +308,13 @@ export default function LeaguePage() {
               gameMap.forEach((gameTeams, numericId) => {
                 if (gameTeams.length === 2) {
                   const [team1, team2] = gameTeams;
-                  // Create keys based on team name combinations (both orders)
-                  const key1 = `${team1.name}-vs-${team2.name}`;
-                  const key2 = `${team2.name}-vs-${team1.name}`;
+                  // Normalize team names for matching
+                  const team1Normalized = normalizeAndMapTeamName(team1.name);
+                  const team2Normalized = normalizeAndMapTeamName(team2.name);
+                  
+                  // Create keys based on NORMALIZED team name combinations (both orders)
+                  const key1 = `${team1Normalized}-vs-${team2Normalized}`;
+                  const key2 = `${team2Normalized}-vs-${team1Normalized}`;
                   const scoreData = {
                     team1: team1.name,
                     team2: team2.name,
@@ -338,8 +342,10 @@ export default function LeaguePage() {
               
               const games: GameSchedule[] = scheduleData.map((game: any) => {
                 const gameKey = game.game_key || `${game.hometeam}-vs-${game.awayteam}`;
-                // Look up scores and numeric_id by team name combination
-                const teamKey = `${game.hometeam}-vs-${game.awayteam}`;
+                // NORMALIZE team names before looking up scores
+                const homeTeamNormalized = normalizeAndMapTeamName(game.hometeam);
+                const awayTeamNormalized = normalizeAndMapTeamName(game.awayteam);
+                const teamKey = `${homeTeamNormalized}-vs-${awayTeamNormalized}`;
                 const scoreData = gameScoresMap.get(teamKey);
                 
                 return {
