@@ -228,7 +228,7 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
       
       const { data, error } = await supabase
         .from('player_stats')
-        .select('firstname, familyname, spoints, sreboundstotal, sassists, sminutes, ssteals, sblocks, sturnovers, sfieldgoalsmade, sfieldgoalsattempted, sthreepoints, sthreepointsattempted, sfreethrows, sfreethrownumber')
+        .select('firstname, familyname, spoints, sreboundstotal, sassists, sminutes, ssteals, sblocks, sturnovers, sfieldgoalsmade, sfieldgoalsattempted, sthreepointersmade, sthreepointersattempted, sfreethrowsmade, sfreethrowsattempted')
         .eq('league_id', leagueId)
         .eq('team_id', team1Id);
       
@@ -270,10 +270,10 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
         player.turnovers += stat.sturnovers || 0;
         player.fgMade += stat.sfieldgoalsmade || 0;
         player.fgAttempted += stat.sfieldgoalsattempted || 0;
-        player.threeMade += stat.sthreepoints || 0;
-        player.threeAttempted += stat.sthreepointsattempted || 0;
-        player.ftMade += stat.sfreethrows || 0;
-        player.ftAttempted += stat.sfreethrownumber || 0;
+        player.threeMade += stat.sthreepointersmade || 0;
+        player.threeAttempted += stat.sthreepointersattempted || 0;
+        player.ftMade += stat.sfreethrowsmade || 0;
+        player.ftAttempted += stat.sfreethrowsattempted || 0;
       });
 
       const roster = Array.from(playerMap.values())
@@ -308,7 +308,7 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
       
       const { data, error } = await supabase
         .from('player_stats')
-        .select('firstname, familyname, spoints, sreboundstotal, sassists, sminutes, ssteals, sblocks, sturnovers, sfieldgoalsmade, sfieldgoalsattempted, sthreepoints, sthreepointsattempted, sfreethrows, sfreethrownumber')
+        .select('firstname, familyname, spoints, sreboundstotal, sassists, sminutes, ssteals, sblocks, sturnovers, sfieldgoalsmade, sfieldgoalsattempted, sthreepointersmade, sthreepointersattempted, sfreethrowsmade, sfreethrowsattempted')
         .eq('league_id', leagueId)
         .eq('team_id', team2Id);
       
@@ -350,10 +350,10 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
         player.turnovers += stat.sturnovers || 0;
         player.fgMade += stat.sfieldgoalsmade || 0;
         player.fgAttempted += stat.sfieldgoalsattempted || 0;
-        player.threeMade += stat.sthreepoints || 0;
-        player.threeAttempted += stat.sthreepointsattempted || 0;
-        player.ftMade += stat.sfreethrows || 0;
-        player.ftAttempted += stat.sfreethrownumber || 0;
+        player.threeMade += stat.sthreepointersmade || 0;
+        player.threeAttempted += stat.sthreepointersattempted || 0;
+        player.ftMade += stat.sfreethrowsmade || 0;
+        player.ftAttempted += stat.sfreethrowsattempted || 0;
       });
 
       const roster = Array.from(playerMap.values())
