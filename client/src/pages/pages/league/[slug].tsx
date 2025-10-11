@@ -3,6 +3,7 @@ import { useLocation, useParams } from "wouter";
 import { supabase } from "@/lib/supabase";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import LeagueDefaultImage from "@/assets/league-default.png";
+import { Helmet } from "react-helmet-async";
 import React from "react";
 import { GameSummaryRow } from "./GameSummaryRow";
 import GameResultsCarousel from "@/components/GameResultsCarousel";
@@ -59,6 +60,15 @@ const normalizeTeamName = (name: string): string => {
 
 export default function LeaguePage() {
   const { slug } = useParams();
+    // SEO formatting helper for title
+    const formatTitle = (text?: string) =>
+      text
+        ? text
+            .split("-")
+            .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(" ")
+        : "";
+
     const [search, setSearch] = useState("");
     const [location, navigate] = useLocation();
     const [league, setLeague] = useState(null);
@@ -1257,7 +1267,43 @@ export default function LeaguePage() {
       return <div className="p-6 text-slate-600">Loading league...</div>;
     }
 
-    return (
+  <>
+    <Helmet>
+      <title>{`${league?.name || formatTitle(slug)} | League Stats | Swish Assistant`}</title>
+      <meta
+        name="description"
+        content={`Explore ${league?.name || formatTitle(
+          slug
+        )} league stats, team standings, and player performance on Swish Assistant.`}
+      />
+      <meta
+        property="og:title"
+        content={`${league?.name || formatTitle(slug)} | League Stats | Swish Assistant`}
+      />
+      <meta
+        property="og:description"
+        content={`Explore ${league?.name || formatTitle(
+          slug
+        )} league stats, team standings, and player performance on Swish Assistant.`}
+      />
+      <meta property="og:type" content="website" />
+      <meta
+        property="og:url"
+        content={`https://www.swishassistant.com/league/${slug}`}
+      />
+      <meta
+        property="og:image"
+        content="https://www.swishassistant.com/og-image.png"
+      />
+    </Helmet>
+
+    <div className="min-h-screen bg-[#fffaf1]">
+      {/* rest of your code here */}
+    </div>
+    </>
+  
+ return (
+      
       <div className="min-h-screen bg-[#fffaf1]">
         <header className="bg-white shadow-sm sticky top-0 z-50 px-4 md:px-6 py-3 md:py-4">
           <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
@@ -2154,6 +2200,8 @@ export default function LeaguePage() {
                       const gamesToShow = scheduleView === 'upcoming' ? upcomingGames : pastGames;
 
                       return (
+  
+                        
                         <>
                           {gamesToShow.length > 0 ? (
                             <div className="divide-y divide-gray-200">
@@ -2705,6 +2753,6 @@ export default function LeaguePage() {
           />
         )}
       </div>
-    );
-  }
-
+     );
+    }
+  
