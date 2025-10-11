@@ -40,26 +40,41 @@ export function TeamLogo({ teamName, leagueId, size = "md", className = "" }: Te
         const extensions = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
         let foundLogo = false;
         
-        for (const ext of extensions) {
-          const normalizedFileName = normalizeTeamNameForFile(teamName);
-          const fileName = `${leagueId}_${normalizedFileName}.${ext}`;
-          
-          // Get public URL from Supabase storage
-          const { data } = supabase.storage
-            .from('team-logos')
-            .getPublicUrl(fileName);
-          
-          try {
-            // Check if the file exists by attempting to fetch it
-            const response = await fetch(data.publicUrl, { method: 'HEAD' });
-            if (response.ok) {
-              setLogoUrl(data.publicUrl);
-              foundLogo = true;
-              break;
+        // Try two filename strategies:
+        // 1. Normalized name (for new uploads and teams with variations like "Team I" -> "Team")
+        // 2. Original name with underscores (for existing uploads with full names)
+        const normalizedFileName = normalizeTeamNameForFile(teamName);
+        const originalFileName = teamName.replace(/\s+/g, '_');
+        const filenamesToTry = [normalizedFileName];
+        
+        // Only add original if different from normalized
+        if (originalFileName !== normalizedFileName) {
+          filenamesToTry.push(originalFileName);
+        }
+        
+        for (const baseFileName of filenamesToTry) {
+          for (const ext of extensions) {
+            const fileName = `${leagueId}_${baseFileName}.${ext}`;
+            
+            // Get public URL from Supabase storage
+            const { data } = supabase.storage
+              .from('team-logos')
+              .getPublicUrl(fileName);
+            
+            try {
+              // Check if the file exists by attempting to fetch it
+              const response = await fetch(data.publicUrl, { method: 'HEAD' });
+              if (response.ok) {
+                setLogoUrl(data.publicUrl);
+                foundLogo = true;
+                break;
+              }
+            } catch (error) {
+              // Continue to next extension
             }
-          } catch (error) {
-            // Continue to next extension
           }
+          
+          if (foundLogo) break;
         }
         
         if (!foundLogo) {
