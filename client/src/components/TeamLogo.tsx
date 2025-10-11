@@ -50,12 +50,21 @@ export function TeamLogo({ teamName, leagueId, size = "md", className = "", logo
         const extensions = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
         let foundLogo = false;
         
-        // Try two filename strategies:
+        // Try multiple filename strategies to handle various naming conventions:
         // 1. Normalized name (for new uploads and teams with variations like "Team I" -> "Team")
         // 2. Original name with underscores (for existing uploads with full names)
+        // 3. Normalized name + common suffixes (for existing files with "Senior Men" etc.)
         const normalizedFileName = normalizeTeamNameForFile(teamName);
         const originalFileName = teamName.replace(/\s+/g, '_');
-        const filenamesToTry = [normalizedFileName, originalFileName];
+        
+        const filenamesToTry = [
+          normalizedFileName,
+          originalFileName,
+          `${normalizedFileName}_Senior_Men`,
+          `${normalizedFileName}_Senior_Men_I`,
+          `${originalFileName}_Senior_Men`,
+          `${originalFileName}_Senior_Men_I`
+        ];
         
         // Remove duplicates while preserving order
         const uniqueFilenames = Array.from(new Set(filenamesToTry));
