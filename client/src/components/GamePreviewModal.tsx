@@ -397,7 +397,7 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
     <Dialog open={isOpen} onOpenChange={onClose}>
           <DialogContent
             className="w-[95vw] sm:w-full max-w-[420px] sm:max-w-4xl 
-                       max-h-[92vh] overflow-y-auto 
+                       max-h-[85vh] overflow-y-auto 
                        p-2 sm:p-6 bg-[#fffaf1] text-slate-800 
                        rounded-xl sm:rounded-2xl shadow-lg border border-orange-100 
                        mx-auto my-auto"
