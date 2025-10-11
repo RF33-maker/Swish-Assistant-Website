@@ -395,12 +395,12 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader className="flex flex-row items-center justify-between border-b border-orange-200 pb-4">
-          <DialogTitle className="text-xl md:text-2xl font-bold text-slate-800">Game Preview</DialogTitle>
+      <DialogContent className="max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+        <DialogHeader className="flex flex-row items-center justify-between border-b border-orange-200 pb-3 sm:pb-4 mb-4">
+          <DialogTitle className="text-lg sm:text-xl md:text-2xl font-bold text-slate-800">Game Preview</DialogTitle>
           <button
             onClick={onClose}
-            className="rounded-full p-1 hover:bg-orange-100 transition-colors"
+            className="rounded-full p-1.5 hover:bg-orange-100 transition-colors"
             data-testid="close-preview-modal"
           >
             <X className="h-5 w-5 text-slate-600" />
@@ -409,21 +409,21 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
 
         <div className="space-y-6">
           {/* Matchup Header */}
-          <div className="bg-gradient-to-r from-orange-50 to-orange-100 rounded-lg p-4 md:p-6">
-            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="bg-gradient-to-r from-orange-50 to-orange-100 rounded-lg p-3 sm:p-4 md:p-6">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-3 sm:gap-4">
               {/* Team 1 */}
-              <div className="flex flex-col items-center gap-2 flex-1">
+              <div className="flex flex-col items-center gap-1.5 sm:gap-2 flex-1 w-full md:w-auto">
                 <TeamLogo teamName={game.team1} leagueId={String(leagueId)} size="lg" />
                 <div className="text-center">
-                  <h3 className="text-lg md:text-xl font-bold text-slate-800">{game.team1}</h3>
-                  <p className="text-sm text-slate-600">{team1Record}</p>
+                  <h3 className="text-base sm:text-lg md:text-xl font-bold text-slate-800 line-clamp-2">{game.team1}</h3>
+                  <p className="text-sm text-slate-600 font-medium">{team1Record}</p>
                 </div>
               </div>
               
               {/* VS and Date/Time */}
-              <div className="text-center px-4 md:px-8">
-                <div className="text-2xl md:text-3xl font-bold text-orange-600">VS</div>
-                <div className="text-xs md:text-sm text-slate-600 mt-2">
+              <div className="text-center px-3 sm:px-4 md:px-8 py-2">
+                <div className="text-xl sm:text-2xl md:text-3xl font-bold text-orange-600">VS</div>
+                <div className="text-xs sm:text-sm text-slate-600 mt-1.5 sm:mt-2 whitespace-nowrap">
                   {new Date(game.game_date).toLocaleDateString('en-US', {
                     weekday: 'short',
                     month: 'short',
@@ -431,37 +431,39 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
                   })}
                 </div>
                 {game.kickoff_time && (
-                  <div className="text-xs md:text-sm text-slate-600">{game.kickoff_time}</div>
+                  <div className="text-xs sm:text-sm text-slate-600 font-medium">{game.kickoff_time}</div>
                 )}
                 {game.venue && (
-                  <div className="text-xs text-slate-500 mt-1">{game.venue}</div>
+                  <div className="text-xs text-slate-500 mt-1 line-clamp-1">{game.venue}</div>
                 )}
               </div>
 
               {/* Team 2 */}
-              <div className="flex flex-col items-center gap-2 flex-1">
+              <div className="flex flex-col items-center gap-1.5 sm:gap-2 flex-1 w-full md:w-auto">
                 <TeamLogo teamName={game.team2} leagueId={String(leagueId)} size="lg" />
                 <div className="text-center">
-                  <h3 className="text-lg md:text-xl font-bold text-slate-800">{game.team2}</h3>
-                  <p className="text-sm text-slate-600">{team2Record}</p>
+                  <h3 className="text-base sm:text-lg md:text-xl font-bold text-slate-800 line-clamp-2">{game.team2}</h3>
+                  <p className="text-sm text-slate-600 font-medium">{team2Record}</p>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Recent Form - Last 5 Games */}
-          <div className="space-y-4">
+          <div className="space-y-3 sm:space-y-4">
             <div>
-              <h4 className="text-base md:text-lg font-semibold text-slate-800 mb-3">
+              <h4 className="text-sm sm:text-base md:text-lg font-semibold text-slate-800 mb-2 sm:mb-3">
                 {game.team1} - Last 5 Games
               </h4>
               {team1GameResults && team1GameResults.length > 0 ? (
-                <div className="flex gap-2 flex-wrap">
+                <div className="flex gap-1.5 sm:gap-2 flex-wrap">
                   {team1GameResults.map((result, idx) => (
                     <div 
                       key={idx} 
-                      className={`px-4 py-2 rounded-lg font-bold text-white ${
-                        result.won ? 'bg-green-500' : 'bg-red-500'
+                      className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg font-bold text-xs sm:text-sm ${
+                        result.won 
+                          ? 'bg-green-500 text-white' 
+                          : 'bg-red-500 text-white'
                       }`}
                       data-testid={`team1-game-${idx}`}
                     >
@@ -470,21 +472,23 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-slate-500 italic">No recent games available</p>
+                <p className="text-xs sm:text-sm text-slate-500 italic">No recent games available</p>
               )}
             </div>
 
             <div>
-              <h4 className="text-base md:text-lg font-semibold text-slate-800 mb-3">
+              <h4 className="text-sm sm:text-base md:text-lg font-semibold text-slate-800 mb-2 sm:mb-3">
                 {game.team2} - Last 5 Games
               </h4>
               {team2GameResults && team2GameResults.length > 0 ? (
-                <div className="flex gap-2 flex-wrap">
+                <div className="flex gap-1.5 sm:gap-2 flex-wrap">
                   {team2GameResults.map((result, idx) => (
                     <div 
                       key={idx} 
-                      className={`px-4 py-2 rounded-lg font-bold text-white ${
-                        result.won ? 'bg-green-500' : 'bg-red-500'
+                      className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg font-bold text-xs sm:text-sm ${
+                        result.won 
+                          ? 'bg-green-500 text-white' 
+                          : 'bg-red-500 text-white'
                       }`}
                       data-testid={`team2-game-${idx}`}
                     >
@@ -493,71 +497,75 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-slate-500 italic">No recent games available</p>
+                <p className="text-xs sm:text-sm text-slate-500 italic">No recent games available</p>
               )}
             </div>
           </div>
 
           {/* Top 3 Players - Full Stats Table */}
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             {/* Team 1 Top 3 */}
             <div>
-              <h4 className="text-base md:text-lg font-semibold text-slate-800 mb-3 pb-2 border-b border-orange-200">
+              <h4 className="text-sm sm:text-base md:text-lg font-semibold text-slate-800 mb-2 sm:mb-3 pb-2 border-b border-orange-200">
                 {game.team1} - Top 3 Players
               </h4>
               {team1Top3.length > 0 ? (
-                <div className="overflow-x-auto -mx-4 md:mx-0 border border-orange-200 rounded-lg mb-4">
-                  <table className="w-full text-xs md:text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-200 bg-orange-50">
-                        <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 sticky left-0 bg-orange-50 z-10 min-w-[120px]">Player</th>
-                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[45px]">GP</th>
-                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">MIN</th>
-                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">PTS</th>
-                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">REB</th>
-                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">AST</th>
-                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">STL</th>
-                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">BLK</th>
-                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">TO</th>
-                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">FG%</th>
-                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">3P%</th>
-                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">FT%</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {team1Top3.map((player, idx) => (
-                        <tr key={idx} className="border-b border-gray-100 hover:bg-orange-50 transition-colors">
-                          <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 sticky left-0 bg-white hover:bg-orange-50 z-10">
-                            {player.name}
-                          </td>
-                          <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 font-medium">{player.games}</td>
-                          <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.mpg}</td>
-                          <td className="py-2 md:py-3 px-2 md:px-3 text-center font-semibold text-orange-600">{player.ppg}</td>
-                          <td className="py-2 md:py-3 px-2 md:px-3 text-center font-medium text-slate-700">{player.rpg}</td>
-                          <td className="py-2 md:py-3 px-2 md:px-3 text-center font-medium text-slate-700">{player.apg}</td>
-                          <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.spg}</td>
-                          <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.bpg}</td>
-                          <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.tpg}</td>
-                          <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.fgPct}%</td>
-                          <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.threePct}%</td>
-                          <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.ftPct}%</td>
+                <div className="relative mb-3 sm:mb-4">
+                  <div className="overflow-x-auto -mx-4 sm:mx-0 border border-orange-200 rounded-lg scrollbar-thin scrollbar-thumb-orange-300 scrollbar-track-orange-50">
+                    <table className="w-full text-xs md:text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200 bg-orange-50">
+                          <th className="text-left py-2 sm:py-2.5 md:py-3 px-2 sm:px-2.5 md:px-3 font-semibold text-slate-700 sticky left-0 bg-orange-50 z-10 min-w-[100px] sm:min-w-[120px] shadow-[2px_0_4px_rgba(0,0,0,0.05)]">Player</th>
+                          <th className="text-center py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[38px] sm:min-w-[45px]">GP</th>
+                          <th className="text-center py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[42px] sm:min-w-[50px]">MIN</th>
+                          <th className="text-center py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[42px] sm:min-w-[50px]">PTS</th>
+                          <th className="text-center py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[42px] sm:min-w-[50px]">REB</th>
+                          <th className="text-center py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[42px] sm:min-w-[50px]">AST</th>
+                          <th className="text-center py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[42px] sm:min-w-[50px]">STL</th>
+                          <th className="text-center py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[42px] sm:min-w-[50px]">BLK</th>
+                          <th className="text-center py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[42px] sm:min-w-[50px]">TO</th>
+                          <th className="text-center py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[48px] sm:min-w-[55px]">FG%</th>
+                          <th className="text-center py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[48px] sm:min-w-[55px]">3P%</th>
+                          <th className="text-center py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[48px] sm:min-w-[55px]">FT%</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  <div className="md:hidden bg-orange-50 text-orange-700 text-center py-2 text-xs border-t border-orange-200">
-                    ← Swipe to see all stats →
+                      </thead>
+                      <tbody>
+                        {team1Top3.map((player, idx) => (
+                          <tr key={idx} className="border-b border-gray-100 hover:bg-orange-50 transition-colors">
+                            <td className="py-2 sm:py-2.5 md:py-3 px-2 sm:px-2.5 md:px-3 font-medium text-slate-800 sticky left-0 bg-white hover:bg-orange-50 z-10 shadow-[2px_0_4px_rgba(0,0,0,0.05)]">
+                              {player.name}
+                            </td>
+                            <td className="py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 text-center text-slate-600 font-medium">{player.games}</td>
+                            <td className="py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 text-center text-slate-600">{player.mpg}</td>
+                            <td className="py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 text-center font-semibold text-orange-600">{player.ppg}</td>
+                            <td className="py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 text-center font-medium text-slate-700">{player.rpg}</td>
+                            <td className="py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 text-center font-medium text-slate-700">{player.apg}</td>
+                            <td className="py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 text-center text-slate-600">{player.spg}</td>
+                            <td className="py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 text-center text-slate-600">{player.bpg}</td>
+                            <td className="py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 text-center text-slate-600">{player.tpg}</td>
+                            <td className="py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 text-center text-slate-600">{player.fgPct}%</td>
+                            <td className="py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 text-center text-slate-600">{player.threePct}%</td>
+                            <td className="py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 text-center text-slate-600">{player.ftPct}%</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="sm:hidden bg-gradient-to-r from-orange-100 to-orange-50 text-orange-700 text-center py-2 text-xs font-medium border-t border-orange-200 rounded-b-lg flex items-center justify-center gap-1.5">
+                    <span className="animate-pulse">👉</span>
+                    <span>Swipe to see all stats</span>
+                    <span className="animate-pulse">👈</span>
                   </div>
                 </div>
               ) : (
-                <p className="text-sm text-slate-500 italic mb-4">No stats available</p>
+                <p className="text-xs sm:text-sm text-slate-500 italic mb-3 sm:mb-4">No stats available</p>
               )}
               
-              <h5 className="text-sm font-semibold text-orange-700 mb-2">Full Roster</h5>
+              <h5 className="text-xs sm:text-sm font-semibold text-orange-700 mb-1.5 sm:mb-2">Full Roster</h5>
               {team1FullRoster.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-1.5 sm:gap-2">
                   {team1FullRoster.map((player, idx) => (
-                    <div key={idx} className="px-3 py-1 bg-orange-50 border border-orange-200 rounded-full text-sm text-slate-700">
+                    <div key={idx} className="px-2.5 sm:px-3 py-1 bg-orange-50 border border-orange-200 rounded-full text-xs sm:text-sm text-slate-700">
                       {player.name}
                     </div>
                   ))}
@@ -569,62 +577,66 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
 
             {/* Team 2 Top 3 */}
             <div>
-              <h4 className="text-base md:text-lg font-semibold text-slate-800 mb-3 pb-2 border-b border-orange-200">
+              <h4 className="text-sm sm:text-base md:text-lg font-semibold text-slate-800 mb-2 sm:mb-3 pb-2 border-b border-orange-200">
                 {game.team2} - Top 3 Players
               </h4>
               {team2Top3.length > 0 ? (
-                <div className="overflow-x-auto -mx-4 md:mx-0 border border-orange-200 rounded-lg mb-4">
-                  <table className="w-full text-xs md:text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-200 bg-orange-50">
-                        <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 sticky left-0 bg-orange-50 z-10 min-w-[120px]">Player</th>
-                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[45px]">GP</th>
-                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">MIN</th>
-                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">PTS</th>
-                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">REB</th>
-                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">AST</th>
-                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">STL</th>
-                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">BLK</th>
-                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">TO</th>
-                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">FG%</th>
-                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">3P%</th>
-                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">FT%</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {team2Top3.map((player, idx) => (
-                        <tr key={idx} className="border-b border-gray-100 hover:bg-orange-50 transition-colors">
-                          <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 sticky left-0 bg-white hover:bg-orange-50 z-10">
-                            {player.name}
-                          </td>
-                          <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 font-medium">{player.games}</td>
-                          <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.mpg}</td>
-                          <td className="py-2 md:py-3 px-2 md:px-3 text-center font-semibold text-orange-600">{player.ppg}</td>
-                          <td className="py-2 md:py-3 px-2 md:px-3 text-center font-medium text-slate-700">{player.rpg}</td>
-                          <td className="py-2 md:py-3 px-2 md:px-3 text-center font-medium text-slate-700">{player.apg}</td>
-                          <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.spg}</td>
-                          <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.bpg}</td>
-                          <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.tpg}</td>
-                          <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.fgPct}%</td>
-                          <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.threePct}%</td>
-                          <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.ftPct}%</td>
+                <div className="relative mb-3 sm:mb-4">
+                  <div className="overflow-x-auto -mx-4 sm:mx-0 border border-orange-200 rounded-lg scrollbar-thin scrollbar-thumb-orange-300 scrollbar-track-orange-50">
+                    <table className="w-full text-xs md:text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200 bg-orange-50">
+                          <th className="text-left py-2 sm:py-2.5 md:py-3 px-2 sm:px-2.5 md:px-3 font-semibold text-slate-700 sticky left-0 bg-orange-50 z-10 min-w-[100px] sm:min-w-[120px] shadow-[2px_0_4px_rgba(0,0,0,0.05)]">Player</th>
+                          <th className="text-center py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[38px] sm:min-w-[45px]">GP</th>
+                          <th className="text-center py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[42px] sm:min-w-[50px]">MIN</th>
+                          <th className="text-center py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[42px] sm:min-w-[50px]">PTS</th>
+                          <th className="text-center py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[42px] sm:min-w-[50px]">REB</th>
+                          <th className="text-center py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[42px] sm:min-w-[50px]">AST</th>
+                          <th className="text-center py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[42px] sm:min-w-[50px]">STL</th>
+                          <th className="text-center py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[42px] sm:min-w-[50px]">BLK</th>
+                          <th className="text-center py-2 sm:py-2.5 md:px-3 px-1.5 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[42px] sm:min-w-[50px]">TO</th>
+                          <th className="text-center py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[48px] sm:min-w-[55px]">FG%</th>
+                          <th className="text-center py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[48px] sm:min-w-[55px]">3P%</th>
+                          <th className="text-center py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 font-semibold text-slate-700 min-w-[48px] sm:min-w-[55px]">FT%</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  <div className="md:hidden bg-orange-50 text-orange-700 text-center py-2 text-xs border-t border-orange-200">
-                    ← Swipe to see all stats →
+                      </thead>
+                      <tbody>
+                        {team2Top3.map((player, idx) => (
+                          <tr key={idx} className="border-b border-gray-100 hover:bg-orange-50 transition-colors">
+                            <td className="py-2 sm:py-2.5 md:py-3 px-2 sm:px-2.5 md:px-3 font-medium text-slate-800 sticky left-0 bg-white hover:bg-orange-50 z-10 shadow-[2px_0_4px_rgba(0,0,0,0.05)]">
+                              {player.name}
+                            </td>
+                            <td className="py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 text-center text-slate-600 font-medium">{player.games}</td>
+                            <td className="py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 text-center text-slate-600">{player.mpg}</td>
+                            <td className="py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 text-center font-semibold text-orange-600">{player.ppg}</td>
+                            <td className="py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 text-center font-medium text-slate-700">{player.rpg}</td>
+                            <td className="py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 text-center font-medium text-slate-700">{player.apg}</td>
+                            <td className="py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 text-center text-slate-600">{player.spg}</td>
+                            <td className="py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 text-center text-slate-600">{player.bpg}</td>
+                            <td className="py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 text-center text-slate-600">{player.tpg}</td>
+                            <td className="py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 text-center text-slate-600">{player.fgPct}%</td>
+                            <td className="py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 text-center text-slate-600">{player.threePct}%</td>
+                            <td className="py-2 sm:py-2.5 md:py-3 px-1.5 sm:px-2 md:px-3 text-center text-slate-600">{player.ftPct}%</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="sm:hidden bg-gradient-to-r from-orange-100 to-orange-50 text-orange-700 text-center py-2 text-xs font-medium border-t border-orange-200 rounded-b-lg flex items-center justify-center gap-1.5">
+                    <span className="animate-pulse">👉</span>
+                    <span>Swipe to see all stats</span>
+                    <span className="animate-pulse">👈</span>
                   </div>
                 </div>
               ) : (
-                <p className="text-sm text-slate-500 italic mb-4">No stats available</p>
+                <p className="text-xs sm:text-sm text-slate-500 italic mb-3 sm:mb-4">No stats available</p>
               )}
               
-              <h5 className="text-sm font-semibold text-orange-700 mb-2">Full Roster</h5>
+              <h5 className="text-xs sm:text-sm font-semibold text-orange-700 mb-1.5 sm:mb-2">Full Roster</h5>
               {team2FullRoster.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-1.5 sm:gap-2">
                   {team2FullRoster.map((player, idx) => (
-                    <div key={idx} className="px-3 py-1 bg-orange-50 border border-orange-200 rounded-full text-sm text-slate-700">
+                    <div key={idx} className="px-2.5 sm:px-3 py-1 bg-orange-50 border border-orange-200 rounded-full text-xs sm:text-sm text-slate-700">
                       {player.name}
                     </div>
                   ))}
