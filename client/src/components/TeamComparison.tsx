@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { Search } from "lucide-react";
 import { TeamLogo } from "@/components/TeamLogo";
+import { normalizeTeamName } from "@/lib/teamUtils";
 
 interface TeamComparisonProps {
   leagueId: string;
@@ -38,17 +39,27 @@ export function TeamComparison({ leagueId, allTeams }: TeamComparisonProps) {
   }, []);
 
   const fetchTeamStats = async (teamName: string) => {
+    // Fetch all team stats for the league to handle name variations
     const { data: stats, error } = await supabase
       .from("team_stats")
       .select("*")
-      .eq("name", teamName)
       .eq("league_id", leagueId);
 
-    if (error || !stats || stats.length === 0) {
+    if (error || !stats) {
       return null;
     }
 
-    const games = stats.length;
+    // Filter by normalized team name to handle variations like "Team I", "Team Senior Men I", etc.
+    const normalizedSearchName = normalizeTeamName(teamName);
+    const filteredStats = stats.filter(stat => 
+      normalizeTeamName(stat.name) === normalizedSearchName
+    );
+
+    if (filteredStats.length === 0) {
+      return null;
+    }
+
+    const games = filteredStats.length;
     let totalPoints = 0;
     let totalFGM = 0;
     let totalFGA = 0;
@@ -62,7 +73,7 @@ export function TeamComparison({ leagueId, allTeams }: TeamComparisonProps) {
     let totalBlocks = 0;
     let totalTurnovers = 0;
 
-    stats.forEach((stat: any) => {
+    filteredStats.forEach((stat: any) => {
       totalPoints += stat.tot_spoints || 0;
       totalFGM += stat.tot_sfieldgoalsmade || 0;
       totalFGA += stat.tot_sfieldgoalsattempted || 0;

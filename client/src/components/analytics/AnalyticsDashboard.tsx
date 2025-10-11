@@ -115,7 +115,7 @@ export function AnalyticsDashboard({ selectedLeague, playerStats, onLeagueSelect
           <div className="relative">
             <input
               type="text"
-              placeholder="Search your leagues..."
+              placeholder="Find your league"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full border border-gray-300 rounded-md px-4 py-2 pl-10 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"

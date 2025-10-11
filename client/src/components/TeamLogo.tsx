@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { normalizeTeamNameForFile } from "@/lib/teamUtils";
 
 interface TeamLogoProps {
   teamName: string;
   leagueId: string;
   size?: "sm" | "md" | "lg" | "xl" | number;
   className?: string;
+  logoUrl?: string;  // Optional logo URL from teams table
 }
 
 const sizeClasses = {
@@ -24,43 +26,79 @@ const sizeClasses = {
  * @param props.size - Size variant (sm, md, lg, xl)
  * @param props.className - Additional CSS classes
  */
-export function TeamLogo({ teamName, leagueId, size = "md", className = "" }: TeamLogoProps) {
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+export function TeamLogo({ teamName, leagueId, size = "md", className = "", logoUrl: providedLogoUrl }: TeamLogoProps) {
+  const [logoUrl, setLogoUrl] = useState<string | null>(providedLogoUrl || null);
+  const [isLoading, setIsLoading] = useState(!providedLogoUrl);
   const [hasError, setHasError] = useState(false);
 
   useEffect(() => {
+    // If logo URL is provided, use it directly and skip fetching
+    if (providedLogoUrl) {
+      setLogoUrl(providedLogoUrl);
+      setIsLoading(false);
+      return;
+    }
+
     const fetchTeamLogo = async () => {
       try {
         setIsLoading(true);
         setHasError(false);
         
+        console.log(`[TeamLogo] Fetching logo for team: "${teamName}" in league: ${leagueId}`);
+        
         // Try common file extensions for team logos
         const extensions = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
         let foundLogo = false;
         
-        for (const ext of extensions) {
-          const fileName = `${leagueId}_${teamName.replace(/\s+/g, '_')}.${ext}`;
-          
-          // Get public URL from Supabase storage
-          const { data } = supabase.storage
-            .from('team-logos')
-            .getPublicUrl(fileName);
-          
-          try {
-            // Check if the file exists by attempting to fetch it
-            const response = await fetch(data.publicUrl, { method: 'HEAD' });
-            if (response.ok) {
-              setLogoUrl(data.publicUrl);
-              foundLogo = true;
-              break;
+        // Try multiple filename strategies to handle various naming conventions:
+        // 1. Normalized name (for new uploads and teams with variations like "Team I" -> "Team")
+        // 2. Original name with underscores (for existing uploads with full names)
+        // 3. Normalized name + common suffixes (for existing files with "Senior Men" etc.)
+        const normalizedFileName = normalizeTeamNameForFile(teamName);
+        const originalFileName = teamName.replace(/\s+/g, '_');
+        
+        const filenamesToTry = [
+          normalizedFileName,
+          originalFileName,
+          `${normalizedFileName}_Senior_Men`,
+          `${normalizedFileName}_Senior_Men_I`,
+          `${originalFileName}_Senior_Men`,
+          `${originalFileName}_Senior_Men_I`
+        ];
+        
+        // Remove duplicates while preserving order
+        const uniqueFilenames = Array.from(new Set(filenamesToTry));
+        
+        console.log(`[TeamLogo] Trying filenames:`, uniqueFilenames);
+        
+        for (const baseFileName of uniqueFilenames) {
+          for (const ext of extensions) {
+            const fileName = `${leagueId}_${baseFileName}.${ext}`;
+            
+            // Get public URL from Supabase storage
+            const { data } = supabase.storage
+              .from('team-logos')
+              .getPublicUrl(fileName);
+            
+            try {
+              // Check if the file exists by attempting to fetch it
+              const response = await fetch(data.publicUrl, { method: 'HEAD' });
+              if (response.ok) {
+                console.log(`[TeamLogo] ✓ Found logo: ${fileName} → ${data.publicUrl}`);
+                setLogoUrl(data.publicUrl);
+                foundLogo = true;
+                break;
+              }
+            } catch (error) {
+              // Continue to next extension
             }
-          } catch (error) {
-            // Continue to next extension
           }
+          
+          if (foundLogo) break;
         }
         
         if (!foundLogo) {
+          console.log(`[TeamLogo] ✗ No logo found for "${teamName}"`);
           setLogoUrl(null);
         }
       } catch (error) {

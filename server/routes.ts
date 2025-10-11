@@ -38,7 +38,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const logoPath = objectStorageService.normalizeTeamLogoPath(logoUrl);
 
       // Insert or update team logo in database
-      const { data, error } = await supabase
+      const { data: logoData, error: logoError } = await supabase
         .from("team_logos")
         .upsert({
           league_id: leagueId,
@@ -52,15 +52,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .select()
         .single();
 
-      if (error) {
-        console.error("Database error:", error);
+      if (logoError) {
+        console.error("Database error:", logoError);
         return res.status(500).json({ error: "Failed to save team logo" });
+      }
+
+      // Update the teams table with the logo_id
+      const { error: teamError } = await supabase
+        .from("teams")
+        .upsert({
+          league_id: leagueId,
+          name: teamName,
+          logo_id: logoData.id,
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'league_id,name',
+        });
+
+      if (teamError) {
+        console.error("Error updating team with logo_id:", teamError);
+        // Don't fail the request, logo is still saved
       }
 
       res.json({
         success: true,
         logoPath,
-        teamLogo: data,
+        teamLogo: logoData,
       });
     } catch (error) {
       console.error("Error saving team logo:", error);

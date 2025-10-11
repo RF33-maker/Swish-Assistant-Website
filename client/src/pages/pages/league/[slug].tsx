@@ -3,6 +3,7 @@ import { useLocation, useParams } from "wouter";
 import { supabase } from "@/lib/supabase";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import LeagueDefaultImage from "@/assets/league-default.png";
+import { Helmet } from "react-helmet-async";
 import React from "react";
 import { GameSummaryRow } from "./GameSummaryRow";
 import GameResultsCarousel from "@/components/GameResultsCarousel";
@@ -24,6 +25,7 @@ import {
 import { PlayerComparison } from "@/components/PlayerComparison";
 import { TeamComparison } from "@/components/TeamComparison";
 import { TournamentBracket } from "@/components/TournamentBracket";
+import { normalizeTeamName } from "@/lib/teamUtils";
 
 type GameSchedule = {
   game_id: string;
@@ -38,24 +40,33 @@ type GameSchedule = {
   numeric_id?: string;
 };
 
-// Team name normalization - maps team name variations to canonical names
-const normalizeTeamName = (name: string): string => {
+// Team name mapping for known variations that aren't covered by normalization
+const teamNameMap: Record<string, string> = {
+  'Essex Rebels (M)': 'Essex Rebels',
+  'MK Breakers': 'Milton Keynes Breakers',
+};
+
+// Apply both normalization and specific mappings
+const normalizeAndMapTeamName = (name: string): string => {
   if (!name) return '';
-  
   const trimmed = name.trim();
-  
-  // Mapping of team name variations to canonical names
-  const teamNameMap: Record<string, string> = {
-    'Essex Rebels (M)': 'Essex Rebels',
-    'MK Breakers': 'Milton Keynes Breakers',
-  };
-  
-  // Return mapped name if it exists, otherwise return trimmed name
-  return teamNameMap[trimmed] || trimmed;
+  // First check specific mappings
+  const mapped = teamNameMap[trimmed] || trimmed;
+  // Then apply general normalization (strips Senior Men, !, and Roman numeral I)
+  return normalizeTeamName(mapped);
 };
 
 export default function LeaguePage() {
   const { slug } = useParams();
+    // SEO formatting helper for title
+    const formatTitle = (text?: string) =>
+      text
+        ? text
+            .split("-")
+            .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(" ")
+        : "";
+
     const [search, setSearch] = useState("");
     const [location, navigate] = useLocation();
     const [league, setLeague] = useState(null);
@@ -279,7 +290,7 @@ export default function LeaguePage() {
               .select("*")
               .eq("league_id", data.league_id);
 
-            // Create a map of game scores and numeric_ids from team_stats, using team names as key
+            // Create a map of game scores and numeric_ids from team_stats, using NORMALIZED team names as key
             const gameScoresMap = new Map<string, { team1: string, team2: string, team1_score: number, team2_score: number, numeric_id: string }>();
             if (teamStatsForScores && !teamStatsError) {
               const gameMap = new Map<string, any[]>();
@@ -297,9 +308,13 @@ export default function LeaguePage() {
               gameMap.forEach((gameTeams, numericId) => {
                 if (gameTeams.length === 2) {
                   const [team1, team2] = gameTeams;
-                  // Create keys based on team name combinations (both orders)
-                  const key1 = `${team1.name}-vs-${team2.name}`;
-                  const key2 = `${team2.name}-vs-${team1.name}`;
+                  // Normalize team names for matching
+                  const team1Normalized = normalizeAndMapTeamName(team1.name);
+                  const team2Normalized = normalizeAndMapTeamName(team2.name);
+                  
+                  // Create keys based on NORMALIZED team name combinations (both orders)
+                  const key1 = `${team1Normalized}-vs-${team2Normalized}`;
+                  const key2 = `${team2Normalized}-vs-${team1Normalized}`;
                   const scoreData = {
                     team1: team1.name,
                     team2: team2.name,
@@ -327,8 +342,10 @@ export default function LeaguePage() {
               
               const games: GameSchedule[] = scheduleData.map((game: any) => {
                 const gameKey = game.game_key || `${game.hometeam}-vs-${game.awayteam}`;
-                // Look up scores and numeric_id by team name combination
-                const teamKey = `${game.hometeam}-vs-${game.awayteam}`;
+                // NORMALIZE team names before looking up scores
+                const homeTeamNormalized = normalizeAndMapTeamName(game.hometeam);
+                const awayTeamNormalized = normalizeAndMapTeamName(game.awayteam);
+                const teamKey = `${homeTeamNormalized}-vs-${awayTeamNormalized}`;
                 const scoreData = gameScoresMap.get(teamKey);
                 
                 return {
@@ -892,12 +909,31 @@ export default function LeaguePage() {
     // Calculate team standings using team_stats table first, fallback to player_stats
     const calculateStandingsWithTeamStats = async (leagueId: string, playerStats: any[]) => {
       try {
-        // First try to get standings from team_stats table - let's check what columns exist
+        // First, fetch ALL teams from the teams table
+        const { data: allTeams, error: teamsError } = await supabase
+          .from("teams")
+          .select("team_id, name")
+          .eq("league_id", leagueId);
+
+        if (teamsError || !allTeams || allTeams.length === 0) {
+          console.error("Error fetching teams:", teamsError);
+          setStandings([]);
+          return;
+        }
+
+        // Initialize standings with all teams (0-0 record by default)
+        const teamStatsMap: { [team: string]: { wins: number, losses: number, pointsFor: number, pointsAgainst: number, games: number } } = {};
+        
+        allTeams.forEach(team => {
+          const normalizedName = normalizeAndMapTeamName(team.name);
+          teamStatsMap[normalizedName] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0 };
+        });
+
+        // Now fetch team_stats to enhance with actual game results
         const { data: teamStatsData, error: teamStatsError } = await supabase
           .from("team_stats")
           .select("*")
-          .eq("league_id", leagueId);  // Remove the order clause to avoid column issues
-          
+          .eq("league_id", leagueId);
 
         if (teamStatsData && teamStatsData.length > 0 && !teamStatsError) {
           // Group team stats by numeric_id to find games (teams that played each other)
@@ -905,7 +941,7 @@ export default function LeaguePage() {
           
           teamStatsData.forEach(stat => {
             const numericId = stat.numeric_id;
-            if (numericId && stat.name) { // Only process records with team names and numeric_id
+            if (numericId && stat.name) {
               if (!gameMap.has(numericId)) {
                 gameMap.set(numericId, []);
               }
@@ -913,80 +949,69 @@ export default function LeaguePage() {
             }
           });
 
-          // Calculate standings from games
-          const teamStatsMap: { [team: string]: { wins: number, losses: number, pointsFor: number, pointsAgainst: number, games: number } } = {};
-          
-          // Process each game (teams with same numeric_id played each other)
+          // Process each game and update stats for teams that have played
           gameMap.forEach((gameTeams, numericId) => {
-            if (gameTeams.length === 2) { // Valid game with 2 teams
+            if (gameTeams.length === 2) {
               const [team1, team2] = gameTeams;
               
-              // Normalize team names to handle variations
-              const team1Name = normalizeTeamName(team1.name || '');
-              const team2Name = normalizeTeamName(team2.name || '');
+              const team1Name = normalizeAndMapTeamName(team1.name || '');
+              const team2Name = normalizeAndMapTeamName(team2.name || '');
               
-              // Use tot_spoints as team score
               const team1Score = team1.tot_spoints || 0;
               const team2Score = team2.tot_spoints || 0;
               
-              // Initialize teams if not exists
-              if (!teamStatsMap[team1Name]) {
-                teamStatsMap[team1Name] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0 };
-              }
-              if (!teamStatsMap[team2Name]) {
-                teamStatsMap[team2Name] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0 };
+              // Only update if team exists in our map (from teams table)
+              if (teamStatsMap[team1Name]) {
+                teamStatsMap[team1Name].pointsFor += team1Score;
+                teamStatsMap[team1Name].pointsAgainst += team2Score;
+                teamStatsMap[team1Name].games += 1;
+                
+                if (team1Score > team2Score) {
+                  teamStatsMap[team1Name].wins += 1;
+                } else if (team1Score < team2Score) {
+                  teamStatsMap[team1Name].losses += 1;
+                }
               }
               
-              // Record scores
-              teamStatsMap[team1Name].pointsFor += team1Score;
-              teamStatsMap[team1Name].pointsAgainst += team2Score;
-              teamStatsMap[team1Name].games += 1;
-              
-              teamStatsMap[team2Name].pointsFor += team2Score;
-              teamStatsMap[team2Name].pointsAgainst += team1Score;
-              teamStatsMap[team2Name].games += 1;
-              
-              // Determine winner
-              if (team1Score > team2Score) {
-                teamStatsMap[team1Name].wins += 1;
-                teamStatsMap[team2Name].losses += 1;
-              } else if (team2Score > team1Score) {
-                teamStatsMap[team2Name].wins += 1;
-                teamStatsMap[team1Name].losses += 1;
+              if (teamStatsMap[team2Name]) {
+                teamStatsMap[team2Name].pointsFor += team2Score;
+                teamStatsMap[team2Name].pointsAgainst += team1Score;
+                teamStatsMap[team2Name].games += 1;
+                
+                if (team2Score > team1Score) {
+                  teamStatsMap[team2Name].wins += 1;
+                } else if (team2Score < team1Score) {
+                  teamStatsMap[team2Name].losses += 1;
+                }
               }
-              // If tied, no wins/losses added
             }
           });
-
-          // Convert to standings format
-          const standingsArray = Object.entries(teamStatsMap).map(([team, stats]) => ({
-            team,
-            wins: stats.wins,
-            losses: stats.losses,
-            winPct: stats.games > 0 ? Math.round((stats.wins / stats.games) * 1000) / 1000 : 0,
-            pointsFor: stats.pointsFor,
-            pointsAgainst: stats.pointsAgainst,
-            pointsDiff: stats.pointsFor - stats.pointsAgainst,
-            games: stats.games,
-            avgPoints: stats.games > 0 ? Math.round((stats.pointsFor / stats.games) * 10) / 10 : 0,
-            record: `${stats.wins}-${stats.losses}`
-          })).sort((a, b) => {
-            // Sort by win percentage first, then by point differential, then by average points
-            if (b.winPct !== a.winPct) return b.winPct - a.winPct;
-            if (b.pointsDiff !== a.pointsDiff) return b.pointsDiff - a.pointsDiff;
-            return b.avgPoints - a.avgPoints;
-          });
-
-          setStandings(standingsArray);
-          return;
         }
-      } catch (error) {
-        // Silently fall back to player_stats if team_stats data is incomplete
-      }
 
-      // Fallback: Since team_stats lacks team names and game data, show placeholder
-      // standings will need proper team_stats data structure to function
-      setStandings([]);
+        // Convert to standings format - includes all teams, even those with no games
+        const standingsArray = Object.entries(teamStatsMap).map(([team, stats]) => ({
+          team,
+          wins: stats.wins,
+          losses: stats.losses,
+          winPct: stats.games > 0 ? Math.round((stats.wins / stats.games) * 1000) / 1000 : 0,
+          pointsFor: stats.pointsFor,
+          pointsAgainst: stats.pointsAgainst,
+          pointsDiff: stats.pointsFor - stats.pointsAgainst,
+          games: stats.games,
+          avgPoints: stats.games > 0 ? Math.round((stats.pointsFor / stats.games) * 10) / 10 : 0,
+          record: `${stats.wins}-${stats.losses}`
+        })).sort((a, b) => {
+          // Sort by win percentage first, then by point differential, then by average points
+          if (b.winPct !== a.winPct) return b.winPct - a.winPct;
+          if (b.pointsDiff !== a.pointsDiff) return b.pointsDiff - a.pointsDiff;
+          return b.avgPoints - a.avgPoints;
+        });
+
+        setStandings(standingsArray);
+      } catch (error) {
+        console.error("Error calculating standings:", error);
+        setStandings([]);
+      }
     };
 
     // Calculate team standings from player stats using actual game results
@@ -1081,13 +1106,14 @@ export default function LeaguePage() {
       try {
         setIsLoadingStandings(true);
         
-        // Fetch team stats
-        const { data: teamStatsData, error: teamStatsError } = await supabase
-          .from("team_stats")
-          .select("*")
+        // First, fetch ALL teams from the teams table
+        const { data: allTeams, error: teamsError } = await supabase
+          .from("teams")
+          .select("team_id, name")
           .eq("league_id", leagueId);
 
-        if (teamStatsError || !teamStatsData || teamStatsData.length === 0) {
+        if (teamsError || !allTeams || allTeams.length === 0) {
+          console.error("Error fetching teams:", teamsError);
           setPoolAStandings([]);
           setPoolBStandings([]);
           setFullLeagueStandings([]);
@@ -1102,7 +1128,6 @@ export default function LeaguePage() {
           .eq("league_id", leagueId);
 
         // Build team-to-pool mapping from game_schedule
-        // Pool values are in format "0(Pool A)" or "0(Pool B)", extract the pool name
         const extractPoolName = (poolValue: string): string => {
           const match = poolValue.match(/\(([^)]+)\)/);
           return match ? match[1] : poolValue;
@@ -1113,75 +1138,106 @@ export default function LeaguePage() {
           scheduleData.forEach((game: any) => {
             if (game.hometeam && game.pool) {
               const poolName = extractPoolName(game.pool);
-              const normalizedHome = normalizeTeamName(game.hometeam);
+              const normalizedHome = normalizeAndMapTeamName(game.hometeam);
               teamPoolMap[normalizedHome] = poolName;
             }
             if (game.awayteam && game.pool) {
               const poolName = extractPoolName(game.pool);
-              const normalizedAway = normalizeTeamName(game.awayteam);
+              const normalizedAway = normalizeAndMapTeamName(game.awayteam);
               teamPoolMap[normalizedAway] = poolName;
             }
           });
         }
-        // Group by game (numeric_id) and calculate standings
-        const gameMap = new Map<string, any[]>();
-        teamStatsData.forEach(stat => {
-          const numericId = stat.numeric_id;
-          if (numericId && stat.name) {
-            if (!gameMap.has(numericId)) {
-              gameMap.set(numericId, []);
-            }
-            gameMap.get(numericId)!.push(stat);
-          }
+
+        // Initialize standings with all teams (0-0 record by default)
+        const teamStatsMap: Record<string, { wins: number, losses: number, pointsFor: number, pointsAgainst: number, games: number, pool?: string, originalName: string }> = {};
+        
+        allTeams.forEach(team => {
+          const normalizedName = normalizeAndMapTeamName(team.name);
+          teamStatsMap[normalizedName] = { 
+            wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0,
+            pool: teamPoolMap[normalizedName] || teamPoolMap[team.name],
+            originalName: team.name  // Store original name for logo lookup
+          };
         });
 
-        // Calculate standings
-        const teamStatsMap: Record<string, { wins: number, losses: number, pointsFor: number, pointsAgainst: number, games: number, pool?: string }> = {};
-        
-        gameMap.forEach((gameTeams) => {
-          if (gameTeams.length === 2) {
-            const [team1, team2] = gameTeams;
-            
-            // Normalize team names to handle variations
-            const team1Name = normalizeTeamName(team1.name || '');
-            const team2Name = normalizeTeamName(team2.name || '');
-            
-            const team1Score = team1.tot_spoints || 0;
-            const team2Score = team2.tot_spoints || 0;
-            
-            // Initialize teams
-            if (!teamStatsMap[team1Name]) {
-              teamStatsMap[team1Name] = { 
-                wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0,
-                pool: teamPoolMap[team1Name] || teamPoolMap[team1.name]
-              };
+        // Now fetch team_stats to enhance with actual game results
+        const { data: teamStatsData, error: teamStatsError } = await supabase
+          .from("team_stats")
+          .select("*")
+          .eq("league_id", leagueId);
+
+        if (teamStatsData && teamStatsData.length > 0 && !teamStatsError) {
+          // First pass: ensure ALL teams from team_stats are in teamStatsMap with original names
+          const teamOriginalNames = new Map<string, string>();
+          teamStatsData.forEach(stat => {
+            if (stat.name) {
+              const normalized = normalizeAndMapTeamName(stat.name);
+              // Store the first occurrence of each team's original name
+              if (!teamOriginalNames.has(normalized)) {
+                teamOriginalNames.set(normalized, stat.name);
+              }
+              // If team not in map yet (not in teams table), add it
+              if (!teamStatsMap[normalized]) {
+                teamStatsMap[normalized] = {
+                  wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0,
+                  pool: teamPoolMap[normalized] || teamPoolMap[stat.name],
+                  originalName: stat.name
+                };
+              }
             }
-            if (!teamStatsMap[team2Name]) {
-              teamStatsMap[team2Name] = { 
-                wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0,
-                pool: teamPoolMap[team2Name] || teamPoolMap[team2.name]
-              };
+          });
+
+          // Group by game (numeric_id) and calculate standings
+          const gameMap = new Map<string, any[]>();
+          teamStatsData.forEach(stat => {
+            const numericId = stat.numeric_id;
+            if (numericId && stat.name) {
+              if (!gameMap.has(numericId)) {
+                gameMap.set(numericId, []);
+              }
+              gameMap.get(numericId)!.push(stat);
             }
-            
-            // Record scores
-            teamStatsMap[team1Name].pointsFor += team1Score;
-            teamStatsMap[team1Name].pointsAgainst += team2Score;
-            teamStatsMap[team1Name].games += 1;
-            
-            teamStatsMap[team2Name].pointsFor += team2Score;
-            teamStatsMap[team2Name].pointsAgainst += team1Score;
-            teamStatsMap[team2Name].games += 1;
-            
-            // Determine winner
-            if (team1Score > team2Score) {
-              teamStatsMap[team1Name].wins += 1;
-              teamStatsMap[team2Name].losses += 1;
-            } else if (team2Score > team1Score) {
-              teamStatsMap[team2Name].wins += 1;
-              teamStatsMap[team1Name].losses += 1;
+          });
+
+          // Process each game and update stats for teams that have played
+          gameMap.forEach((gameTeams) => {
+            if (gameTeams.length === 2) {
+              const [team1, team2] = gameTeams;
+              
+              const team1Name = normalizeAndMapTeamName(team1.name || '');
+              const team2Name = normalizeAndMapTeamName(team2.name || '');
+              
+              const team1Score = team1.tot_spoints || 0;
+              const team2Score = team2.tot_spoints || 0;
+              
+              // Only update if team exists in our map (from teams table)
+              if (teamStatsMap[team1Name]) {
+                teamStatsMap[team1Name].pointsFor += team1Score;
+                teamStatsMap[team1Name].pointsAgainst += team2Score;
+                teamStatsMap[team1Name].games += 1;
+                
+                if (team1Score > team2Score) {
+                  teamStatsMap[team1Name].wins += 1;
+                } else if (team1Score < team2Score) {
+                  teamStatsMap[team1Name].losses += 1;
+                }
+              }
+              
+              if (teamStatsMap[team2Name]) {
+                teamStatsMap[team2Name].pointsFor += team2Score;
+                teamStatsMap[team2Name].pointsAgainst += team1Score;
+                teamStatsMap[team2Name].games += 1;
+                
+                if (team2Score > team1Score) {
+                  teamStatsMap[team2Name].wins += 1;
+                } else if (team2Score < team1Score) {
+                  teamStatsMap[team2Name].losses += 1;
+                }
+              }
             }
-          }
-        });
+          });
+        }
 
         // Convert to standings format with movement tracking
         const formatStandings = (teams: any[], poolFilter?: string) => {
@@ -1211,6 +1267,7 @@ export default function LeaguePage() {
 
         const allTeamsArray = Object.entries(teamStatsMap).map(([team, stats]) => ({
           team,
+          originalName: stats.originalName,  // Include original name for logo lookup
           wins: stats.wins,
           losses: stats.losses,
           winPct: stats.games > 0 ? Math.round((stats.wins / stats.games) * 1000) / 1000 : 0,
@@ -1254,7 +1311,43 @@ export default function LeaguePage() {
       return <div className="p-6 text-slate-600">Loading league...</div>;
     }
 
-    return (
+  <>
+    <Helmet>
+      <title>{`${league?.name || formatTitle(slug)} | League Stats | Swish Assistant`}</title>
+      <meta
+        name="description"
+        content={`Explore ${league?.name || formatTitle(
+          slug
+        )} league stats, team standings, and player performance on Swish Assistant.`}
+      />
+      <meta
+        property="og:title"
+        content={`${league?.name || formatTitle(slug)} | League Stats | Swish Assistant`}
+      />
+      <meta
+        property="og:description"
+        content={`Explore ${league?.name || formatTitle(
+          slug
+        )} league stats, team standings, and player performance on Swish Assistant.`}
+      />
+      <meta property="og:type" content="website" />
+      <meta
+        property="og:url"
+        content={`https://www.swishassistant.com/league/${slug}`}
+      />
+      <meta
+        property="og:image"
+        content="https://www.swishassistant.com/og-image.png"
+      />
+    </Helmet>
+
+    <div className="min-h-screen bg-[#fffaf1]">
+      {/* rest of your code here */}
+    </div>
+    </>
+  
+ return (
+      
       <div className="min-h-screen bg-[#fffaf1]">
         <header className="bg-white shadow-sm sticky top-0 z-50 px-4 md:px-6 py-3 md:py-4">
           <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
@@ -1279,7 +1372,7 @@ export default function LeaguePage() {
             <div className="relative w-full md:max-w-md md:mx-6">
               <input
                 type="text"
-                placeholder="Search leagues or players..."
+                placeholder="Find your league"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSearch()}
@@ -1572,8 +1665,8 @@ export default function LeaguePage() {
                     <table className="w-full text-sm min-w-[600px]">
                       <thead>
                         <tr className="border-b-2 border-gray-200">
-                          <th className="text-left py-3 px-3 font-semibold text-slate-700 w-12 sticky left-0 bg-white z-10">#</th>
-                          <th className="text-left py-3 px-3 font-semibold text-slate-700 max-w-[180px] sticky left-12 md:static bg-white z-10">Team</th>
+                          <th className="text-left py-3 px-3 font-semibold text-slate-700 w-16 sticky left-0 bg-white z-10">Logo</th>
+                          <th className="text-left py-3 px-3 font-semibold text-slate-700 min-w-[140px]">Team</th>
                           <th className="text-center py-3 px-3 font-semibold text-slate-700 w-16">W</th>
                           <th className="text-center py-3 px-3 font-semibold text-slate-700 w-16">L</th>
                           <th className="text-center py-3 px-3 font-semibold text-slate-700 w-20">Win%</th>
@@ -1589,14 +1682,20 @@ export default function LeaguePage() {
                           fullLeagueStandings).map((team, index) => (
                           <tr 
                             key={`${team.team}-${index}`}
-                            className="border-b border-gray-100 hover:bg-orange-50 transition-colors"
+                            className="border-b border-gray-100 hover:bg-orange-50 transition-colors group"
                           >
-                            <td className="py-3 px-3 font-medium text-slate-600 sticky left-0 bg-inherit z-10">{team.rank}</td>
-                            <td className="py-3 px-3 font-medium text-slate-800 max-w-[180px] sticky left-12 md:static bg-inherit z-10">
+                            <td className="py-3 px-3 sticky left-0 bg-white group-hover:bg-orange-50 z-10 transition-colors">
                               <div className="flex items-center gap-2">
-                                <TeamLogo teamName={team.team} leagueId={league?.league_id} size="sm" />
-                                <span className="truncate">{team.team}</span>
+                                <span className="font-medium text-slate-600 text-xs">{team.rank}</span>
+                                <TeamLogo 
+                                  teamName={team.originalName || team.team} 
+                                  leagueId={league?.league_id} 
+                                  size="sm" 
+                                />
                               </div>
+                            </td>
+                            <td className="py-3 px-3 font-medium text-slate-800">
+                              <span className="truncate">{team.team}</span>
                             </td>
                             <td className="py-3 px-3 text-center font-semibold text-slate-700">{team.wins}</td>
                             <td className="py-3 px-3 text-center font-semibold text-slate-700">{team.losses}</td>
@@ -1714,16 +1813,16 @@ export default function LeaguePage() {
                         <tr className="border-b border-gray-200 bg-orange-50">
                           <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 sticky left-0 bg-orange-50 z-10 min-w-[100px] md:min-w-[140px]">Player</th>
                           <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[45px]">GP</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">MIN</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">MIN</th>
                           <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">PTS</th>
                           <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">REB</th>
                           <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">AST</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">STL</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">BLK</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">TO</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">FG%</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">3P%</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">FT%</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">STL</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">BLK</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">TO</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">FG%</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">3P%</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">FT%</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1741,16 +1840,16 @@ export default function LeaguePage() {
                               </div>
                             </td>
                             <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 font-medium">{player.games}</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 hidden md:table-cell">{player.avgMinutes}</td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.avgMinutes}</td>
                             <td className="py-2 md:py-3 px-2 md:px-3 text-center font-semibold text-orange-600">{player.avgPoints}</td>
                             <td className="py-2 md:py-3 px-2 md:px-3 text-center font-medium text-slate-700">{player.avgRebounds}</td>
                             <td className="py-2 md:py-3 px-2 md:px-3 text-center font-medium text-slate-700">{player.avgAssists}</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 hidden md:table-cell">{player.avgSteals}</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 hidden md:table-cell">{player.avgBlocks}</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 hidden md:table-cell">{player.avgTurnovers}</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 hidden md:table-cell">{player.fgPercentage}%</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 hidden md:table-cell">{player.threePercentage}%</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 hidden md:table-cell">{player.ftPercentage}%</td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.avgSteals}</td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.avgBlocks}</td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.avgTurnovers}</td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.fgPercentage}%</td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.threePercentage}%</td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.ftPercentage}%</td>
                           </tr>
                         ))}
                       </tbody>
@@ -1943,26 +2042,27 @@ export default function LeaguePage() {
                     <table className="w-full text-xs md:text-sm">
                       <thead>
                         <tr className="border-b border-gray-200 bg-orange-50">
-                          <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 sticky left-0 bg-orange-50 z-10 min-w-[140px] md:min-w-[180px]">Team</th>
+                          <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 sticky left-0 bg-orange-50 z-10 w-16">Logo</th>
+                          <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[120px]">Team</th>
                           <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[45px]">GP</th>
                           {teamStatsView === 'averages' ? (
                             <>
                               <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">PPG</th>
                               <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">RPG</th>
                               <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">APG</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">FG%</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">3P%</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">2P%</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">FT%</th>
+                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">FG%</th>
+                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">3P%</th>
+                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">2P%</th>
+                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">FT%</th>
                             </>
                           ) : (
                             <>
                               <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">PTS</th>
                               <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">REB</th>
                               <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">AST</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">FGM</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">3PM</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 hidden md:table-cell">FTM</th>
+                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">FGM</th>
+                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">3PM</th>
+                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">FTM</th>
                             </>
                           )}
                         </tr>
@@ -1971,15 +2071,15 @@ export default function LeaguePage() {
                         {teamStatsData.map((team, index) => (
                           <tr 
                             key={`team-stats-${team.teamName}-${index}`}
-                            className="hover:bg-orange-50 transition-colors cursor-pointer"
+                            className="hover:bg-orange-50 transition-colors cursor-pointer group"
                             onClick={() => navigate(`/team/${encodeURIComponent(team.teamName)}`)}
                             data-testid={`row-team-${team.teamName}`}
                           >
-                            <td className="py-2 md:py-3 px-2 md:px-3 sticky left-0 bg-white hover:bg-orange-50 z-10">
-                              <div className="flex items-center gap-2">
-                                <TeamLogo teamName={team.teamName} leagueId={league?.league_id || ""} size="sm" />
-                                <span className="font-medium text-slate-800 text-xs md:text-sm truncate">{team.teamName}</span>
-                              </div>
+                            <td className="py-2 md:py-3 px-2 md:px-3 sticky left-0 bg-white group-hover:bg-orange-50 z-10 transition-colors">
+                              <TeamLogo teamName={team.teamName} leagueId={league?.league_id || ""} size="sm" />
+                            </td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 text-xs md:text-sm truncate">
+                              {team.teamName}
                             </td>
                             <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 font-medium" data-testid={`text-gp-${team.teamName}`}>
                               {team.gamesPlayed}
@@ -1995,16 +2095,16 @@ export default function LeaguePage() {
                                 <td className="text-center py-2 md:py-3 px-2 md:px-3 font-medium text-slate-700" data-testid={`text-apg-${team.teamName}`}>
                                   {team.apg}
                                 </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 hidden md:table-cell" data-testid={`text-fg%-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-fg%-${team.teamName}`}>
                                   {team.fgPercentage}%
                                 </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 hidden md:table-cell" data-testid={`text-3p%-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-3p%-${team.teamName}`}>
                                   {team.threePtPercentage}%
                                 </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 hidden md:table-cell" data-testid={`text-2p%-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-2p%-${team.teamName}`}>
                                   {team.twoPtPercentage}%
                                 </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 hidden md:table-cell" data-testid={`text-ft%-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-ft%-${team.teamName}`}>
                                   {team.ftPercentage}%
                                 </td>
                               </>
@@ -2019,13 +2119,13 @@ export default function LeaguePage() {
                                 <td className="text-center py-2 md:py-3 px-2 md:px-3 font-medium text-slate-700" data-testid={`text-total-ast-${team.teamName}`}>
                                   {team.totalAssists}
                                 </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 hidden md:table-cell" data-testid={`text-total-fgm-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-total-fgm-${team.teamName}`}>
                                   {team.totalFGM}
                                 </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 hidden md:table-cell" data-testid={`text-total-3pm-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-total-3pm-${team.teamName}`}>
                                   {team.total3PM}
                                 </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 hidden md:table-cell" data-testid={`text-total-ftm-${team.teamName}`}>
+                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-total-ftm-${team.teamName}`}>
                                   {team.totalFTM}
                                 </td>
                               </>
@@ -2145,12 +2245,14 @@ export default function LeaguePage() {
                         .filter(game => new Date(game.game_date) >= now)
                         .sort((a, b) => new Date(a.game_date).getTime() - new Date(b.game_date).getTime());
                       const pastGames = schedule
-                        .filter(game => new Date(game.game_date) < now)
+                        .filter(game => new Date(game.game_date) < now && (game.team1_score != null || game.team2_score != null))
                         .sort((a, b) => new Date(b.game_date).getTime() - new Date(a.game_date).getTime());
 
                       const gamesToShow = scheduleView === 'upcoming' ? upcomingGames : pastGames;
 
                       return (
+  
+                        
                         <>
                           {gamesToShow.length > 0 ? (
                             <div className="divide-y divide-gray-200">
@@ -2702,6 +2804,6 @@ export default function LeaguePage() {
           />
         )}
       </div>
-    );
-  }
-
+     );
+    }
+  

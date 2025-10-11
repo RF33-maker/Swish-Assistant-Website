@@ -57,44 +57,115 @@ export default function TeamLogoManager() {
         setLeague(leagueData);
         setIsOwner(currentUser?.id === leagueData.user_id);
 
-        // Fetch teams from team_stats table which has proper team names
+        // Fetch teams from multiple sources to ensure we get ALL teams
+        const allTeamNames = new Set<string>();
+        
+        // 1. Get teams from teams table (source of truth)
+        const { data: teamsData, error: teamsError } = await supabase
+          .from("teams")
+          .select("name")
+          .eq("league_id", leagueData.league_id);
+
+        if (teamsData && !teamsError) {
+          teamsData.forEach(team => {
+            if (team.name) allTeamNames.add(team.name);
+          });
+        }
+
+        // 2. Get teams from team_stats (teams with live stats)
         const { data: teamStats, error: statsError } = await supabase
           .from("team_stats")
           .select("name")
           .eq("league_id", leagueData.league_id);
 
-        if (statsError) {
-          console.error("Error fetching team stats:", statsError);
-          return;
+        if (teamStats && !statsError) {
+          teamStats.forEach(stat => {
+            if (stat.name) allTeamNames.add(stat.name);
+          });
         }
 
-        if (teamStats && teamStats.length > 0) {
-          // Get unique teams from team stats
-          const uniqueTeams = Array.from(new Set(teamStats.map(stat => 
-            stat.name
-          ).filter(Boolean)));
-          
-          // Fetch existing team logos
-          const { data: logoData, error: logoError } = await supabase
-            .from("team_logos")
-            .select("*")
-            .eq("league_id", leagueData.league_id);
+        // 3. Get teams from game_schedule (all teams that played, even without live stats)
+        const { data: scheduleData, error: scheduleError } = await supabase
+          .from("game_schedule")
+          .select("hometeam, awayteam")
+          .eq("league_id", leagueData.league_id);
 
-          const logoMap: Record<string, string> = {};
-          if (!logoError && logoData) {
-            logoData.forEach((logo: any) => {
-              logoMap[logo.team_name] = logo.logo_url;
-            });
+        if (scheduleData && !scheduleError) {
+          scheduleData.forEach(game => {
+            if (game.hometeam) allTeamNames.add(game.hometeam);
+            if (game.awayteam) allTeamNames.add(game.awayteam);
+          });
+        }
+
+        console.log("Fetching teams for league:", leagueData.league_id);
+        console.log("Team query result:", { error: teamsError || statsError || scheduleError, data: Array.from(allTeamNames) });
+        
+        const uniqueTeams = Array.from(allTeamNames).sort();
+        console.log("Unique teams extracted:", uniqueTeams);
+        
+        // Fetch existing team logos from the team_logos table (authoritative source)
+        const { data: storedLogos, error: logoError } = await supabase
+          .from("team_logos")
+          .select("team_name, logo_url")
+          .eq("league_id", leagueData.league_id);
+
+        const logoMap: Record<string, string> = {};
+        
+        if (!logoError && storedLogos) {
+          storedLogos.forEach((logo: any) => {
+            logoMap[logo.team_name] = logo.logo_url;
+          });
+          console.log("Team logos from database:", logoMap);
+        }
+        
+        // For teams not in the database, check storage directly with all extensions
+        console.log("Checking storage for teams without database entries...");
+        const extensions = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
+        
+        for (const teamName of uniqueTeams) {
+          if (logoMap[teamName]) {
+            console.log(`${teamName} already has logo from database`);
+            continue; // Skip if already found in database
           }
-          setTeamLogos(logoMap);
-
-          const teamsWithLogos = uniqueTeams.map(teamName => ({
-            name: teamName,
-            hasLogo: !!logoMap[teamName]
-          }));
-
-          setTeams(teamsWithLogos);
+          
+          const baseFileName = teamName.replace(/\s+/g, '_');
+          let foundLogo = false;
+          
+          for (const ext of extensions) {
+            const fileName = `${leagueData.league_id}_${baseFileName}.${ext}`;
+            console.log(`Checking for logo: ${fileName}`);
+            
+            const { data } = supabase.storage
+              .from('team-logos')
+              .getPublicUrl(fileName);
+            
+            try {
+              const response = await fetch(data.publicUrl, { method: 'HEAD' });
+              if (response.ok) {
+                logoMap[teamName] = data.publicUrl;
+                console.log(`Found logo for ${teamName}: ${data.publicUrl}`);
+                foundLogo = true;
+                break;
+              }
+            } catch (error) {
+              // Continue to next extension
+            }
+          }
+          
+          if (!foundLogo) {
+            console.log(`No logo found for ${teamName}`);
+          }
         }
+        
+        console.log("Team logos loaded:", logoMap);
+        setTeamLogos(logoMap);
+
+        const teamsWithLogos = uniqueTeams.map(teamName => ({
+          name: teamName,
+          hasLogo: !!logoMap[teamName]
+        }));
+
+        setTeams(teamsWithLogos);
       } catch (error) {
         console.error("Error fetching league and teams:", error);
       } finally {

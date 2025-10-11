@@ -245,7 +245,7 @@ export default function LandingPage() {
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Find players, teams, or leagues…"
+                placeholder="Find your league"
                 className="flex-1 px-4 py-4 text-base text-slate-900 focus:outline-none bg-transparent"
               />
             </form>

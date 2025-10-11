@@ -580,7 +580,7 @@ export default function PlayerStatsPage() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search players or leagues..."
+                placeholder="Find your league"
                 className="flex-1 px-3 md:px-4 py-2 text-sm text-orange-800 focus:outline-none bg-white"
               />
               <button

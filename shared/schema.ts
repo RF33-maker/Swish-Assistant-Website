@@ -19,6 +19,16 @@ export const teamLogos = pgTable("team_logos", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Teams table for storing team information
+export const teams = pgTable("teams", {
+  team_id: uuid("team_id").primaryKey().defaultRandom(),
+  league_id: varchar("league_id", { length: 255 }).notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  logo_id: integer("logo_id").references(() => teamLogos.id),
+  created_at: timestamp("created_at").defaultNow(),
+  updated_at: timestamp("updated_at").defaultNow(),
+});
+
 // Players table for storing player information
 export const players = pgTable("players", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -137,6 +147,12 @@ export const insertTeamLogoSchema = createInsertSchema(teamLogos).pick({
   teamName: true,
   logoUrl: true,
   uploadedBy: true,
+});
+
+export const insertTeamSchema = createInsertSchema(teams).pick({
+  league_id: true,
+  name: true,
+  logo_id: true,
 });
 
 export const insertPlayersSchema = createInsertSchema(players).pick({
@@ -317,6 +333,8 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertTeamLogo = z.infer<typeof insertTeamLogoSchema>;
 export type TeamLogo = typeof teamLogos.$inferSelect;
+export type InsertTeam = z.infer<typeof insertTeamSchema>;
+export type Team = typeof teams.$inferSelect;
 export type InsertPlayerStats = z.infer<typeof insertPlayerStatsSchema>;
 export type PlayerStats = typeof playerStats.$inferSelect;
 export type InsertTeamStats = z.infer<typeof insertTeamStatsSchema>;
