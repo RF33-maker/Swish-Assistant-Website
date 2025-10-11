@@ -1144,13 +1144,14 @@ export default function LeaguePage() {
         }
 
         // Initialize standings with all teams (0-0 record by default)
-        const teamStatsMap: Record<string, { wins: number, losses: number, pointsFor: number, pointsAgainst: number, games: number, pool?: string }> = {};
+        const teamStatsMap: Record<string, { wins: number, losses: number, pointsFor: number, pointsAgainst: number, games: number, pool?: string, originalName: string }> = {};
         
         allTeams.forEach(team => {
           const normalizedName = normalizeAndMapTeamName(team.name);
           teamStatsMap[normalizedName] = { 
             wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0,
-            pool: teamPoolMap[normalizedName] || teamPoolMap[team.name]
+            pool: teamPoolMap[normalizedName] || teamPoolMap[team.name],
+            originalName: team.name  // Store original name for logo lookup
           };
         });
 
@@ -1240,6 +1241,7 @@ export default function LeaguePage() {
 
         const allTeamsArray = Object.entries(teamStatsMap).map(([team, stats]) => ({
           team,
+          originalName: stats.originalName,  // Include original name for logo lookup
           wins: stats.wins,
           losses: stats.losses,
           winPct: stats.games > 0 ? Math.round((stats.wins / stats.games) * 1000) / 1000 : 0,
@@ -1659,7 +1661,7 @@ export default function LeaguePage() {
                             <td className="py-3 px-3 font-medium text-slate-600 sticky left-0 bg-inherit z-10">{team.rank}</td>
                             <td className="py-3 px-3 font-medium text-slate-800 max-w-[180px] sticky left-12 md:static bg-inherit z-10">
                               <div className="flex items-center gap-2">
-                                <TeamLogo teamName={team.team} leagueId={league?.league_id} size="sm" />
+                                <TeamLogo teamName={team.originalName || team.team} leagueId={league?.league_id} size="sm" />
                                 <span className="truncate">{team.team}</span>
                               </div>
                             </td>
