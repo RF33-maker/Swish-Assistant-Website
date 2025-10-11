@@ -1685,7 +1685,6 @@ export default function LeaguePage() {
                                   teamName={team.originalName || team.team} 
                                   leagueId={league?.league_id} 
                                   size="sm" 
-                                  logoUrl={team.logoUrl}
                                 />
                                 <span className="truncate">{team.team}</span>
                               </div>
