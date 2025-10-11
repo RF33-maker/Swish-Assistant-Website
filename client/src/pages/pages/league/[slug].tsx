@@ -1100,18 +1100,10 @@ export default function LeaguePage() {
       try {
         setIsLoadingStandings(true);
         
-        // First, fetch ALL teams from the teams table with their logos
+        // First, fetch ALL teams from the teams table
         const { data: allTeams, error: teamsError } = await supabase
           .from("teams")
-          .select(`
-            team_id, 
-            name,
-            logo_id,
-            team_logos!teams_logo_id_fkey (
-              id,
-              logo_url
-            )
-          `)
+          .select("team_id, name")
           .eq("league_id", leagueId);
 
         if (teamsError || !allTeams || allTeams.length === 0) {
@@ -1152,19 +1144,14 @@ export default function LeaguePage() {
         }
 
         // Initialize standings with all teams (0-0 record by default)
-        const teamStatsMap: Record<string, { wins: number, losses: number, pointsFor: number, pointsAgainst: number, games: number, pool?: string, originalName: string, logoUrl?: string }> = {};
+        const teamStatsMap: Record<string, { wins: number, losses: number, pointsFor: number, pointsAgainst: number, games: number, pool?: string, originalName: string }> = {};
         
         allTeams.forEach(team => {
           const normalizedName = normalizeAndMapTeamName(team.name);
-          const logoUrl = team.team_logos?.logo_url 
-            ? `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/team-logos/${team.team_logos.logo_url}`
-            : undefined;
-          
           teamStatsMap[normalizedName] = { 
             wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0,
             pool: teamPoolMap[normalizedName] || teamPoolMap[team.name],
-            originalName: team.name,  // Store original name for logo lookup
-            logoUrl
+            originalName: team.name  // Store original name for logo lookup
           };
         });
 
@@ -1275,7 +1262,6 @@ export default function LeaguePage() {
         const allTeamsArray = Object.entries(teamStatsMap).map(([team, stats]) => ({
           team,
           originalName: stats.originalName,  // Include original name for logo lookup
-          logoUrl: stats.logoUrl,  // Include logo URL from teams table
           wins: stats.wins,
           losses: stats.losses,
           winPct: stats.games > 0 ? Math.round((stats.wins / stats.games) * 1000) / 1000 : 0,
