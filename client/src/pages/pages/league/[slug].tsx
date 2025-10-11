@@ -1162,6 +1162,26 @@ export default function LeaguePage() {
           .eq("league_id", leagueId);
 
         if (teamStatsData && teamStatsData.length > 0 && !teamStatsError) {
+          // First pass: ensure ALL teams from team_stats are in teamStatsMap with original names
+          const teamOriginalNames = new Map<string, string>();
+          teamStatsData.forEach(stat => {
+            if (stat.name) {
+              const normalized = normalizeAndMapTeamName(stat.name);
+              // Store the first occurrence of each team's original name
+              if (!teamOriginalNames.has(normalized)) {
+                teamOriginalNames.set(normalized, stat.name);
+              }
+              // If team not in map yet (not in teams table), add it
+              if (!teamStatsMap[normalized]) {
+                teamStatsMap[normalized] = {
+                  wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0,
+                  pool: teamPoolMap[normalized] || teamPoolMap[stat.name],
+                  originalName: stat.name
+                };
+              }
+            }
+          });
+
           // Group by game (numeric_id) and calculate standings
           const gameMap = new Map<string, any[]>();
           teamStatsData.forEach(stat => {
