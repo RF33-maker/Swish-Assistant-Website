@@ -228,7 +228,7 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
       
       const { data, error } = await supabase
         .from('player_stats')
-        .select('firstname, familyname, spoints, sreboundstotal, sassists')
+        .select('firstname, familyname, spoints, sreboundstotal, sassists, sminutes, ssteals, sblocks, sturnovers, sfieldgoalsmade, sfieldgoalsattempted, sthreepoints, sthreepointsattempted, sfreethrows, sfreethrownumber')
         .eq('league_id', leagueId)
         .eq('team_id', team1Id);
       
@@ -246,7 +246,17 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
             games: 0,
             points: 0,
             rebounds: 0,
-            assists: 0
+            assists: 0,
+            minutes: 0,
+            steals: 0,
+            blocks: 0,
+            turnovers: 0,
+            fgMade: 0,
+            fgAttempted: 0,
+            threeMade: 0,
+            threeAttempted: 0,
+            ftMade: 0,
+            ftAttempted: 0
           });
         }
         const player = playerMap.get(name);
@@ -254,6 +264,16 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
         player.points += stat.spoints || 0;
         player.rebounds += stat.sreboundstotal || 0;
         player.assists += stat.sassists || 0;
+        player.minutes += stat.sminutes || 0;
+        player.steals += stat.ssteals || 0;
+        player.blocks += stat.sblocks || 0;
+        player.turnovers += stat.sturnovers || 0;
+        player.fgMade += stat.sfieldgoalsmade || 0;
+        player.fgAttempted += stat.sfieldgoalsattempted || 0;
+        player.threeMade += stat.sthreepoints || 0;
+        player.threeAttempted += stat.sthreepointsattempted || 0;
+        player.ftMade += stat.sfreethrows || 0;
+        player.ftAttempted += stat.sfreethrownumber || 0;
       });
 
       const roster = Array.from(playerMap.values())
@@ -261,7 +281,14 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
           ...p,
           ppg: p.games > 0 ? (p.points / p.games).toFixed(1) : '0.0',
           rpg: p.games > 0 ? (p.rebounds / p.games).toFixed(1) : '0.0',
-          apg: p.games > 0 ? (p.assists / p.games).toFixed(1) : '0.0'
+          apg: p.games > 0 ? (p.assists / p.games).toFixed(1) : '0.0',
+          mpg: p.games > 0 ? (p.minutes / p.games).toFixed(1) : '0.0',
+          spg: p.games > 0 ? (p.steals / p.games).toFixed(1) : '0.0',
+          bpg: p.games > 0 ? (p.blocks / p.games).toFixed(1) : '0.0',
+          tpg: p.games > 0 ? (p.turnovers / p.games).toFixed(1) : '0.0',
+          fgPct: p.fgAttempted > 0 ? ((p.fgMade / p.fgAttempted) * 100).toFixed(1) : '0.0',
+          threePct: p.threeAttempted > 0 ? ((p.threeMade / p.threeAttempted) * 100).toFixed(1) : '0.0',
+          ftPct: p.ftAttempted > 0 ? ((p.ftMade / p.ftAttempted) * 100).toFixed(1) : '0.0'
         }))
         .sort((a, b) => parseFloat(b.ppg) - parseFloat(a.ppg));
       
@@ -281,7 +308,7 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
       
       const { data, error } = await supabase
         .from('player_stats')
-        .select('firstname, familyname, spoints, sreboundstotal, sassists')
+        .select('firstname, familyname, spoints, sreboundstotal, sassists, sminutes, ssteals, sblocks, sturnovers, sfieldgoalsmade, sfieldgoalsattempted, sthreepoints, sthreepointsattempted, sfreethrows, sfreethrownumber')
         .eq('league_id', leagueId)
         .eq('team_id', team2Id);
       
@@ -299,7 +326,17 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
             games: 0,
             points: 0,
             rebounds: 0,
-            assists: 0
+            assists: 0,
+            minutes: 0,
+            steals: 0,
+            blocks: 0,
+            turnovers: 0,
+            fgMade: 0,
+            fgAttempted: 0,
+            threeMade: 0,
+            threeAttempted: 0,
+            ftMade: 0,
+            ftAttempted: 0
           });
         }
         const player = playerMap.get(name);
@@ -307,6 +344,16 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
         player.points += stat.spoints || 0;
         player.rebounds += stat.sreboundstotal || 0;
         player.assists += stat.sassists || 0;
+        player.minutes += stat.sminutes || 0;
+        player.steals += stat.ssteals || 0;
+        player.blocks += stat.sblocks || 0;
+        player.turnovers += stat.sturnovers || 0;
+        player.fgMade += stat.sfieldgoalsmade || 0;
+        player.fgAttempted += stat.sfieldgoalsattempted || 0;
+        player.threeMade += stat.sthreepoints || 0;
+        player.threeAttempted += stat.sthreepointsattempted || 0;
+        player.ftMade += stat.sfreethrows || 0;
+        player.ftAttempted += stat.sfreethrownumber || 0;
       });
 
       const roster = Array.from(playerMap.values())
@@ -314,7 +361,14 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
           ...p,
           ppg: p.games > 0 ? (p.points / p.games).toFixed(1) : '0.0',
           rpg: p.games > 0 ? (p.rebounds / p.games).toFixed(1) : '0.0',
-          apg: p.games > 0 ? (p.assists / p.games).toFixed(1) : '0.0'
+          apg: p.games > 0 ? (p.assists / p.games).toFixed(1) : '0.0',
+          mpg: p.games > 0 ? (p.minutes / p.games).toFixed(1) : '0.0',
+          spg: p.games > 0 ? (p.steals / p.games).toFixed(1) : '0.0',
+          bpg: p.games > 0 ? (p.blocks / p.games).toFixed(1) : '0.0',
+          tpg: p.games > 0 ? (p.turnovers / p.games).toFixed(1) : '0.0',
+          fgPct: p.fgAttempted > 0 ? ((p.fgMade / p.fgAttempted) * 100).toFixed(1) : '0.0',
+          threePct: p.threeAttempted > 0 ? ((p.threeMade / p.threeAttempted) * 100).toFixed(1) : '0.0',
+          ftPct: p.ftAttempted > 0 ? ((p.ftMade / p.ftAttempted) * 100).toFixed(1) : '0.0'
         }))
         .sort((a, b) => parseFloat(b.ppg) - parseFloat(a.ppg));
       
@@ -444,29 +498,56 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
             </div>
           </div>
 
-          {/* Top 3 Players and Full Roster */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Team 1 */}
+          {/* Top 3 Players - Full Stats Table */}
+          <div className="space-y-6">
+            {/* Team 1 Top 3 */}
             <div>
               <h4 className="text-base md:text-lg font-semibold text-slate-800 mb-3 pb-2 border-b border-orange-200">
                 {game.team1} - Top 3 Players
               </h4>
               {team1Top3.length > 0 ? (
-                <div className="space-y-1 mb-4">
-                  <div className="grid grid-cols-4 gap-2 text-xs font-semibold text-orange-700 pb-2 px-2">
-                    <div>Player</div>
-                    <div className="text-center">PPG</div>
-                    <div className="text-center">RPG</div>
-                    <div className="text-center">APG</div>
+                <div className="overflow-x-auto -mx-4 md:mx-0 border border-orange-200 rounded-lg mb-4">
+                  <table className="w-full text-xs md:text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-200 bg-orange-50">
+                        <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 sticky left-0 bg-orange-50 z-10 min-w-[120px]">Player</th>
+                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[45px]">GP</th>
+                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">MIN</th>
+                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">PTS</th>
+                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">REB</th>
+                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">AST</th>
+                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">STL</th>
+                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">BLK</th>
+                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">TO</th>
+                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">FG%</th>
+                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">3P%</th>
+                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">FT%</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {team1Top3.map((player, idx) => (
+                        <tr key={idx} className="border-b border-gray-100 hover:bg-orange-50 transition-colors">
+                          <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 sticky left-0 bg-white hover:bg-orange-50 z-10">
+                            {player.name}
+                          </td>
+                          <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 font-medium">{player.games}</td>
+                          <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.mpg}</td>
+                          <td className="py-2 md:py-3 px-2 md:px-3 text-center font-semibold text-orange-600">{player.ppg}</td>
+                          <td className="py-2 md:py-3 px-2 md:px-3 text-center font-medium text-slate-700">{player.rpg}</td>
+                          <td className="py-2 md:py-3 px-2 md:px-3 text-center font-medium text-slate-700">{player.apg}</td>
+                          <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.spg}</td>
+                          <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.bpg}</td>
+                          <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.tpg}</td>
+                          <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.fgPct}%</td>
+                          <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.threePct}%</td>
+                          <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.ftPct}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="md:hidden bg-orange-50 text-orange-700 text-center py-2 text-xs border-t border-orange-200">
+                    ← Swipe to see all stats →
                   </div>
-                  {team1Top3.map((player, idx) => (
-                    <div key={idx} className="grid grid-cols-4 gap-2 p-2 bg-orange-50 rounded border border-orange-200 text-sm">
-                      <div className="font-medium text-slate-800 truncate">{player.name}</div>
-                      <div className="text-center text-orange-600 font-semibold">{player.ppg}</div>
-                      <div className="text-center text-orange-600 font-semibold">{player.rpg}</div>
-                      <div className="text-center text-orange-600 font-semibold">{player.apg}</div>
-                    </div>
-                  ))}
                 </div>
               ) : (
                 <p className="text-sm text-slate-500 italic mb-4">No stats available</p>
@@ -486,27 +567,54 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
               )}
             </div>
 
-            {/* Team 2 */}
+            {/* Team 2 Top 3 */}
             <div>
               <h4 className="text-base md:text-lg font-semibold text-slate-800 mb-3 pb-2 border-b border-orange-200">
                 {game.team2} - Top 3 Players
               </h4>
               {team2Top3.length > 0 ? (
-                <div className="space-y-1 mb-4">
-                  <div className="grid grid-cols-4 gap-2 text-xs font-semibold text-orange-700 pb-2 px-2">
-                    <div>Player</div>
-                    <div className="text-center">PPG</div>
-                    <div className="text-center">RPG</div>
-                    <div className="text-center">APG</div>
+                <div className="overflow-x-auto -mx-4 md:mx-0 border border-orange-200 rounded-lg mb-4">
+                  <table className="w-full text-xs md:text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-200 bg-orange-50">
+                        <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 sticky left-0 bg-orange-50 z-10 min-w-[120px]">Player</th>
+                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[45px]">GP</th>
+                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">MIN</th>
+                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">PTS</th>
+                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">REB</th>
+                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">AST</th>
+                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">STL</th>
+                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">BLK</th>
+                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">TO</th>
+                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">FG%</th>
+                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">3P%</th>
+                        <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">FT%</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {team2Top3.map((player, idx) => (
+                        <tr key={idx} className="border-b border-gray-100 hover:bg-orange-50 transition-colors">
+                          <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 sticky left-0 bg-white hover:bg-orange-50 z-10">
+                            {player.name}
+                          </td>
+                          <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 font-medium">{player.games}</td>
+                          <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.mpg}</td>
+                          <td className="py-2 md:py-3 px-2 md:px-3 text-center font-semibold text-orange-600">{player.ppg}</td>
+                          <td className="py-2 md:py-3 px-2 md:px-3 text-center font-medium text-slate-700">{player.rpg}</td>
+                          <td className="py-2 md:py-3 px-2 md:px-3 text-center font-medium text-slate-700">{player.apg}</td>
+                          <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.spg}</td>
+                          <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.bpg}</td>
+                          <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.tpg}</td>
+                          <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.fgPct}%</td>
+                          <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.threePct}%</td>
+                          <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.ftPct}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="md:hidden bg-orange-50 text-orange-700 text-center py-2 text-xs border-t border-orange-200">
+                    ← Swipe to see all stats →
                   </div>
-                  {team2Top3.map((player, idx) => (
-                    <div key={idx} className="grid grid-cols-4 gap-2 p-2 bg-orange-50 rounded border border-orange-200 text-sm">
-                      <div className="font-medium text-slate-800 truncate">{player.name}</div>
-                      <div className="text-center text-orange-600 font-semibold">{player.ppg}</div>
-                      <div className="text-center text-orange-600 font-semibold">{player.rpg}</div>
-                      <div className="text-center text-orange-600 font-semibold">{player.apg}</div>
-                    </div>
-                  ))}
                 </div>
               ) : (
                 <p className="text-sm text-slate-500 italic mb-4">No stats available</p>
