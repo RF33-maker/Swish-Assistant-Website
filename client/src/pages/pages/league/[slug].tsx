@@ -1676,9 +1676,9 @@ export default function LeaguePage() {
                           fullLeagueStandings).map((team, index) => (
                           <tr 
                             key={`${team.team}-${index}`}
-                            className="border-b border-gray-100 hover:bg-orange-50 transition-colors"
+                            className="border-b border-gray-100 hover:bg-orange-50 transition-colors group"
                           >
-                            <td className="py-3 px-3 sticky left-0 bg-inherit z-10">
+                            <td className="py-3 px-3 sticky left-0 bg-white group-hover:bg-orange-50 z-10 transition-colors">
                               <div className="flex items-center gap-2">
                                 <span className="font-medium text-slate-600 text-xs">{team.rank}</span>
                                 <TeamLogo 
