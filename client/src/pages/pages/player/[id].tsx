@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { generatePlayerAnalysis, type PlayerAnalysisData } from "@/lib/ai-analysis";
 import SwishLogoImg from "@/assets/Swish Assistant Logo.png";
 import { TeamLogo } from "@/components/TeamLogo";
+import { Helmet } from "react-helmet-async";
 
 interface PlayerStat {
   id: string;
@@ -980,8 +981,30 @@ export default function PlayerStatsPage() {
                           (game.is_home_player === true && game.away_team) ||
                           (game.is_home_player === false && game.home_team) ||
                           'TBD';
-                        
-                        return (
+
+
+                          return (
+                            <>
+                              <Helmet>
+                                <title>
+                                  {playerInfo?.name
+                                    ? `${playerInfo.name} | Player Stats | Swish Assistant`
+                                    : "Player Profile | Swish Assistant"}
+                                </title>
+                                <meta
+                                  name="description"
+                                  content={
+                                    playerInfo?.name
+                                      ? `View ${playerInfo.name}'s game stats, averages, and performances on Swish Assistant.`
+                                      : "Explore player stats and basketball performance data on Swish Assistant."
+                                  }
+                                />
+                                <link
+                                  rel="canonical"
+                                  href={`https://www.swishassistant.com/player/${playerId}`}
+                                />
+                              </Helmet>
+                          
                           <tr 
                             key={game.id} 
                             className={`border-b border-orange-100 hover:bg-orange-50 transition-colors cursor-pointer group ${
