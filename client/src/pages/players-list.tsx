@@ -12,6 +12,7 @@ interface Player {
   name: string;
   team_name: string;
   player_id: string;
+  player_slug?: string;
   games_played: number;
   avg_points: number;
   avg_rebounds: number;
@@ -33,10 +34,10 @@ export default function PlayersListPage() {
       try {
         console.log("Fetching all player stats to create player list...");
         
-        // Get all player stats to build player list
+        // Get all player stats to build player list, including slug from players table
         const { data: allStats, error } = await supabase
           .from('player_stats')
-          .select('*');
+          .select('*, players:player_id(slug)');
 
         console.log("All player stats:", allStats);
         console.log("Error:", error);
@@ -63,6 +64,7 @@ export default function PlayersListPage() {
           name: string;
           team_name: string;
           player_id: string;
+          player_slug?: string;
           stats: any[];
         }>();
 
@@ -70,12 +72,14 @@ export default function PlayersListPage() {
           // Use player_id for grouping to properly identify players, fallback to record id if no player_id
           const playerId = stat.player_id || stat.id;
           const playerName = stat.name || stat.player_name || 'Unknown Player';
+          const playerSlug = stat.players?.slug || null;
           
           if (!playerMap.has(playerId)) {
             playerMap.set(playerId, {
               name: playerName,
               team_name: stat.team_name || stat.team || 'Unknown Team',
               player_id: playerId,
+              player_slug: playerSlug,
               stats: []
             });
           }
@@ -98,6 +102,7 @@ export default function PlayersListPage() {
             name: player.name,
             team_name: player.team_name,
             player_id: player.player_id,
+            player_slug: player.player_slug,
             games_played: gamesPlayed,
             avg_points: gamesPlayed > 0 ? totals.points / gamesPlayed : 0,
             avg_rebounds: gamesPlayed > 0 ? totals.rebounds / gamesPlayed : 0,
@@ -136,8 +141,10 @@ export default function PlayersListPage() {
     }
   }, [searchTerm, players]);
 
-  const handlePlayerClick = (playerId: string) => {
-    setLocation(`/player/${playerId}`);
+  const handlePlayerClick = (player: Player) => {
+    // Use slug if available, fallback to player_id for backward compatibility
+    const identifier = player.player_slug || player.player_id;
+    setLocation(`/player/${identifier}`);
   };
 
   if (loading) {
@@ -193,7 +200,7 @@ export default function PlayersListPage() {
               <Card 
                 key={`${player.name}-${player.player_id}`}
                 className="bg-white border-orange-200 shadow-lg shadow-orange-500/20 hover:shadow-2xl hover:shadow-orange-500/40 transition-all duration-300 cursor-pointer transform hover:scale-105 hover:-translate-y-2 group animate-slide-in-up"
-                onClick={() => handlePlayerClick(player.player_id)}
+                onClick={() => handlePlayerClick(player)}
                 style={{ animationDelay: `${index * 100}ms` }}
               >
                 <CardHeader className="pb-3">
@@ -253,7 +260,7 @@ export default function PlayersListPage() {
                       className="bg-orange-600 hover:bg-orange-700 text-white transform transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handlePlayerClick(player.player_id);
+                        handlePlayerClick(player);
                       }}
                     >
                       <TrendingUp className="h-3 w-3 mr-1 group-hover:animate-bounce" />

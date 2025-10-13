@@ -13,6 +13,7 @@ interface League {
 
 interface PlayerStat {
   player_id?: string;
+  player_slug?: string;
   name: string;
   position: string;
   avgPoints: number;
@@ -108,10 +109,10 @@ export default function TeamProfile() {
       try {
         const decodedTeamName = decodeURIComponent(teamName);
         
-        // Step 1: Get all stats for this team from player_stats using team_name field
+        // Step 1: Get all stats for this team from player_stats using team_name field, include slug from players table
         const { data: allStats, error: statsError } = await supabase
           .from("player_stats")
-          .select("*")
+          .select("*, players:player_id(slug)")
           .eq("team_name", decodedTeamName);
 
         if (statsError) {
@@ -187,6 +188,7 @@ export default function TeamProfile() {
           // Step 3: Calculate player averages from stats
           const playerStatsMap = new Map<string, {
             player_id: string;
+            player_slug?: string;
             name: string;
             position: string;
             totalPoints: number;
@@ -200,10 +202,12 @@ export default function TeamProfile() {
           allStats.forEach((stat: any) => {
             const playerId = stat.player_id || stat.id;
             const playerName = stat.full_name || stat.name || 'Unknown Player';
+            const playerSlug = stat.players?.slug || null;
             
             if (!playerStatsMap.has(playerId)) {
               playerStatsMap.set(playerId, {
                 player_id: playerId,
+                player_slug: playerSlug,
                 name: playerName,
                 position: stat.position || 'Player',
                 totalPoints: 0,
@@ -234,6 +238,7 @@ export default function TeamProfile() {
             
             return {
               player_id: player.player_id,
+              player_slug: player.player_slug,
               name: player.name,
               position: player.position,
               avgPoints,
@@ -510,7 +515,10 @@ export default function TeamProfile() {
                 </h2>
                 <div 
                   className="bg-white rounded-lg p-3 md:p-4 cursor-pointer hover:shadow-md transition-shadow"
-                  onClick={() => team.topPlayer.player_id && navigate(`/player/${team.topPlayer.player_id}`)}
+                  onClick={() => {
+                    const identifier = team.topPlayer.player_slug || team.topPlayer.player_id;
+                    if (identifier) navigate(`/player/${identifier}`);
+                  }}
                   data-testid={`player-card-${team.topPlayer.player_id}`}
                 >
                   <div className="flex flex-col md:flex-row items-center md:items-start gap-3 md:gap-4">
@@ -568,7 +576,10 @@ export default function TeamProfile() {
                     {team.roster.map((player: PlayerStat, index: number) => (
                       <tr 
                         key={player.name} 
-                        onClick={() => player.player_id && navigate(`/player/${player.player_id}`)}
+                        onClick={() => {
+                          const identifier = player.player_slug || player.player_id;
+                          if (identifier) navigate(`/player/${identifier}`);
+                        }}
                         data-testid={`player-card-${player.player_id}`}
                         className="border-b border-gray-100 hover:bg-orange-50 transition-colors cursor-pointer"
                       >

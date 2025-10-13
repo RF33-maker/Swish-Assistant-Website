@@ -4,5 +4,13 @@ Disallow: /api/
 Disallow: /admin/
 Disallow: /dashboard/
 Disallow: /uploads/
+Disallow: /auth/
+Disallow: /reset-password
+Disallow: /profile
+Disallow: /settings
+Disallow: /payment
+
+# Crawl-delay: Prevent aggressive crawling (1 second between requests)
+Crawl-delay: 1
 
 Sitemap: https://www.swishassistant.com/sitemap.xml

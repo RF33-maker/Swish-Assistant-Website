@@ -189,7 +189,7 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
       const [playersDataResult, gamesDataResult] = await Promise.all([
         supabase
           .from('player_stats')
-          .select('id, name, points, rebounds_total, assists, steals, blocks, team')
+          .select('id, name, points, rebounds_total, assists, steals, blocks, team, player_id, players:player_id(slug)')
           .eq('league_id', leagueId)
           .order('points', { ascending: false })
           .limit(20),
@@ -245,10 +245,11 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
           });
 
           if (player) {
+            const playerIdentifier = (Array.isArray(player.players) ? player.players[0]?.slug : player.players?.slug) || player.player_id || player.id;
             return {
               content: `${player.name} plays for ${player.team}.`,
               suggestions: [`How is ${player.name} performing?`, `Who are ${player.team}'s top players?`],
-              navigationButtons: [{ label: `${player.name}'s Profile`, id: player.id, type: 'player' }]
+              navigationButtons: [{ label: `${player.name}'s Profile`, id: playerIdentifier, type: 'player' }]
             };
           } else {
             const availablePlayers = playersData.slice(0, 5).map(p => `• ${p.name} (${p.team})`).join('\n');
@@ -289,10 +290,11 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
           });
 
           if (player) {
+            const playerIdentifier = (Array.isArray(player.players) ? player.players[0]?.slug : player.players?.slug) || player.player_id || player.id;
             return {
               content: `${player.name} is having a solid season with ${player.team}!\n\nSeason totals: ${player.points} pts, ${player.rebounds_total} reb, ${player.assists} ast, ${player.steals} stl, ${player.blocks} blk\n\n${player.points >= 30 ? '🔥 Strong scorer who can put up big numbers!' : player.rebounds_total >= 15 ? '💪 Solid presence in the paint with good rebounding!' : player.assists >= 10 ? '🎯 Great court vision and playmaking ability!' : '⚡ Well-rounded contributor on both ends!'}`,
               suggestions: [`Who is ${player.name}'s team?`, `Who does ${player.team} play next?`],
-              navigationButtons: [{ label: `${player.name}'s Profile`, id: player.id, type: 'player' }]
+              navigationButtons: [{ label: `${player.name}'s Profile`, id: playerIdentifier, type: 'player' }]
             };
           } else {
             const availablePlayers = playersData.slice(0, 5).map(p => `• ${p.name} (${p.team})`).join('\n');
@@ -369,10 +371,11 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
             `${i + 1}. ${p.name} (${p.team}) - ${p.efficiency} total production`
           ).join('\n');
 
+          const topPlayerIdentifier = (Array.isArray(topPlayer.players) ? topPlayer.players[0]?.slug : topPlayer.players?.slug) || topPlayer.player_id || topPlayer.id;
           return {
             content: `Most Efficient Players in ${leagueName}:\n(Based on total statistical production)\n\n${efficiencyList}\n\n${topPlayer.name} leads with ${topPlayer.efficiency} total production.\n\n💡 Want more details? Try asking:\n• "How is ${topPlayer.name} performing?"\n• "Who leads in rebounds?"`,
             suggestions: [`How is ${topPlayer.name} performing?`, `Who leads in rebounds?`],
-            navigationButtons: [{ label: `${topPlayer.name}'s Profile`, id: topPlayer.id, type: 'player' }]
+            navigationButtons: [{ label: `${topPlayer.name}'s Profile`, id: topPlayerIdentifier, type: 'player' }]
           };
         }
       }
@@ -381,10 +384,11 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
       if (lowerQuestion.includes('rebound') || lowerQuestion.includes('board')) {
         const topRebounder = playersData.length > 0 ? playersData.find(p => p.rebounds_total === Math.max(...playersData.map(player => player.rebounds_total))) : null;
         if (topRebounder) {
+          const topRebounderIdentifier = topRebounder.players?.slug || topRebounder.player_id || topRebounder.id;
           return {
             content: `Rebounding Leaders in ${leagueName}:\n\n${playersData.sort((a, b) => b.rebounds_total - a.rebounds_total).slice(0, 5).map((p, i) => `${i + 1}. ${p.name} (${p.team}) - ${p.rebounds_total} rebounds`).join('\n')}\n\n💡 Want player details? Try asking:\n• "How is ${topRebounder.name} performing?"\n• "Who are the most efficient players?"`,
             suggestions: [`How is ${topRebounder.name} performing?`, `Who are the most efficient players?`],
-            navigationButtons: [{ label: `${topRebounder.name}'s Profile`, id: topRebounder.id, type: 'player' }]
+            navigationButtons: [{ label: `${topRebounder.name}'s Profile`, id: topRebounderIdentifier, type: 'player' }]
           };
         }
       }
@@ -392,10 +396,11 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
       if (lowerQuestion.includes('scorer') || lowerQuestion.includes('scoring') || lowerQuestion.includes('points') || lowerQuestion.includes('top')) {
         const topScorer = playersData.length > 0 ? playersData[0] : null;
         if (topScorer) {
+          const topScorerIdentifier = topScorer.players?.slug || topScorer.player_id || topScorer.id;
           return {
             content: `Scoring Leaders in ${leagueName}:\n\n${playersData.slice(0, 5).map((p, i) => `${i + 1}. ${p.name} (${p.team}) - ${p.points} points`).join('\n')}\n\n💡 Want more details? Try asking:\n• "How is ${topScorer.name} performing?"\n• "Who is the best team?"`,
             suggestions: [`How is ${topScorer.name} performing?`, `Who is the best team?`],
-            navigationButtons: [{ label: `${topScorer.name}'s Profile`, id: topScorer.id, type: 'player' }]
+            navigationButtons: [{ label: `${topScorer.name}'s Profile`, id: topScorerIdentifier, type: 'player' }]
           };
         }
       }
@@ -404,10 +409,11 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
       if (playersData.length > 0) {
         const topPlayer = playersData[0];
 
+        const topPlayerIdentifier = (Array.isArray(topPlayer.players) ? topPlayer.players[0]?.slug : topPlayer.players?.slug) || topPlayer.player_id || topPlayer.id;
         return {
           content: `Here's what's happening in ${leagueName}:\n\n🏀 League Leaders:\n• Top Scorer: ${topPlayer.name} (${topPlayer.team}) - ${topPlayer.points} points\n• Games Played: ${gamesData.length || 'Several'} recent games\n• Teams Competing: ${new Set(playersData.map(p => p.team)).size} active teams\n\n💡 Try asking me:\n• "How is [Player Name] performing?"\n• "Who is the best team?"\n• "Who are the most efficient players?"`,
           suggestions: [`How is ${topPlayer.name} performing?`, `Who is the best team?`, `Who are the most efficient players?`],
-          navigationButtons: [{ label: `${topPlayer.name}'s Profile`, id: topPlayer.id, type: 'player' }]
+          navigationButtons: [{ label: `${topPlayer.name}'s Profile`, id: topPlayerIdentifier, type: 'player' }]
         };
       }
 
@@ -429,7 +435,7 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
         if (players && players.length > 0) {
           return {
             content: `Here's some quick ${leagueName} data:\n\nTop Performers:\n${players.map((p, i) => `${i + 1}. ${p.name} (${p.team}) - ${p.points}pts, ${p.rebounds_total}reb, ${p.assists}ast`).join('\n')}\n\n(AI analysis temporarily unavailable - please try again)`,
-            navigationButtons: players.map(p => ({ label: `${p.name}'s Profile`, id: p.id, type: 'player' }))
+            navigationButtons: players.map(p => ({ label: `${p.name}'s Profile`, id: (Array.isArray((p as any).players) ? (p as any).players[0]?.slug : (p as any).players?.slug) || (p as any).player_id || p.id, type: 'player' }))
           };
         }
       } catch (fallbackError) {

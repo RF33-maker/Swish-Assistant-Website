@@ -35,6 +35,18 @@ The application is structured into a React frontend and integrates with external
     - **Game Results**: Redesigned game results section with horizontal scrolling ticker and detailed game view modals with team-filtered box scores.
     - **Statistical Leaderboards**: `/league-leaders/[slug]` displays top players across 9 statistical categories.
 
+## SEO Implementation
+- **Dynamic Sitemap**: Automated sitemap generation via `scripts/generate-sitemap.ts` that queries Supabase for all public leagues, teams, and players. Run `npx tsx scripts/generate-sitemap.ts` to regenerate. Sitemap is served as a static file at `/sitemap.xml` with proper XML structure including lastmod dates, changefreq, and priority values.
+  - ✅ **SEO-Friendly URLs**: Player pages now use human-readable slugs (e.g., `/player/john-doe`) instead of UUIDs for better search engine optimization
+  - 📊 Current stats: 858 URLs (4 leagues, 63 teams, 776 players with slugs)
+  - 🔄 Slug generation: Run `npx tsx scripts/generate-player-slugs.ts` to populate slugs for new players
+- **Robots.txt**: Configured to allow crawling while blocking sensitive routes (/auth, /admin, /api, etc.) and includes sitemap reference. Includes crawl-delay directive to prevent aggressive crawling.
+- **Meta Tags**: All pages include SEO meta tags, Open Graph tags for social sharing, and canonical links (implementation in progress).
+- **URL Structure**: 
+  - Leagues: `/league/[slug]` (e.g., `/league/british-championship-basketball-20252026`)
+  - Teams: `/team/[slug]` (e.g., `/team/reading-rockets`)
+  - Players: `/player/[slug]` (e.g., `/player/john-doe`) - includes backward compatibility for UUID-based URLs
+
 ## External Dependencies
 - **Supabase**: Used for database storage, user authentication, and object storage (e.g., `team-logos`, `league-banners`).
 - **Python Flask Backend (https://sab-backend.onrender.com)**: An external service that handles file processing, document parsing, and AI-powered chatbot functionality (e.g., player analysis using OpenAI API).
