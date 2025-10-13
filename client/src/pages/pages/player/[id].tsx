@@ -552,8 +552,29 @@ export default function PlayerStatsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white">
-      <div className="container mx-auto px-4 py-8">
+    <>
+      <Helmet>
+        <title>
+          {playerInfo?.name
+            ? `${playerInfo.name} | Player Stats | Swish Assistant`
+            : "Player Profile | Swish Assistant"}
+        </title>
+        <meta
+          name="description"
+          content={
+            playerInfo?.name
+              ? `View ${playerInfo.name}'s game stats, averages, and performances on Swish Assistant.`
+              : "Explore player stats and basketball performance data on Swish Assistant."
+          }
+        />
+        <link
+          rel="canonical"
+          href={`https://www.swishassistant.com/player/${playerId}`}
+        />
+      </Helmet>
+      
+      <div className="min-h-screen bg-white">
+        <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="flex flex-col md:flex-row items-start md:items-center gap-3 md:gap-4 mb-6 md:mb-8">
           <div className="w-full md:w-auto">
@@ -983,28 +1004,7 @@ export default function PlayerStatsPage() {
                           'TBD';
 
 
-                          return (
-                            <>
-                              <Helmet>
-                                <title>
-                                  {playerInfo?.name
-                                    ? `${playerInfo.name} | Player Stats | Swish Assistant`
-                                    : "Player Profile | Swish Assistant"}
-                                </title>
-                                <meta
-                                  name="description"
-                                  content={
-                                    playerInfo?.name
-                                      ? `View ${playerInfo.name}'s game stats, averages, and performances on Swish Assistant.`
-                                      : "Explore player stats and basketball performance data on Swish Assistant."
-                                  }
-                                />
-                                <link
-                                  rel="canonical"
-                                  href={`https://www.swishassistant.com/player/${playerId}`}
-                                />
-                              </Helmet>
-                          
+                        return (
                           <tr 
                             key={game.id} 
                             className={`border-b border-orange-100 hover:bg-orange-50 transition-colors cursor-pointer group ${
@@ -1045,7 +1045,8 @@ export default function PlayerStatsPage() {
             )}
           </CardContent>
         </Card>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
