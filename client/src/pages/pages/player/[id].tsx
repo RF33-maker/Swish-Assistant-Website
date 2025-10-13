@@ -47,15 +47,15 @@ interface SeasonAverages {
 }
 
 export default function PlayerStatsPage() {
-  const [match, params] = useRoute("/player/:id");
+  const [match, params] = useRoute("/player/:slug");
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   
-  const playerId = params?.id;
+  const playerSlugOrId = params?.slug;
   
   console.log('🎯 ROUTE DEBUG - Match:', match);
   console.log('🎯 ROUTE DEBUG - Params:', params);
-  console.log('🎯 ROUTE DEBUG - Player ID:', playerId);
+  console.log('🎯 ROUTE DEBUG - Player Slug/ID:', playerSlugOrId);
   const [playerStats, setPlayerStats] = useState<PlayerStat[]>([]);
   const [seasonAverages, setSeasonAverages] = useState<SeasonAverages | null>(null);
   const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string; position?: string; number?: number; leagueId?: string } | null>(null);
@@ -67,67 +67,79 @@ export default function PlayerStatsPage() {
   const [analysisLoading, setAnalysisLoading] = useState(false);
 
   useEffect(() => {
-    if (!playerId) {
-      console.log('No playerId provided');
+    if (!playerSlugOrId) {
+      console.log('No player slug/ID provided');
       return;
     }
 
-    console.log('🏀 PLAYER PAGE - Starting data fetch for playerId:', playerId);
+    console.log('🏀 PLAYER PAGE - Starting data fetch for:', playerSlugOrId);
 
     const fetchPlayerData = async () => {
       setLoading(true);
       try {
-        console.log('🔍 Step 1: Fetching player record by player_id...');
+        console.log('🔍 Step 1: Fetching player record...');
         
-        // First check if playerId is a player_id or old record id
-        let actualPlayerId = playerId;
+        let actualPlayerId = null;
         let playerInfo = null;
 
-        // Try to get player info from players table using playerId as player_id
-        const { data: playerFromPlayersTable, error: playersError } = await supabase
-          .from('players')
-          .select('*')
-          .eq('id', playerId)
-          .single();
+        // Check if it's a UUID (old ID format) or a slug
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(playerSlugOrId);
 
-        if (playerFromPlayersTable && !playersError) {
-          // Found in players table - use this info
-          playerInfo = {
-            name: playerFromPlayersTable.name,
-            team: playerFromPlayersTable.team,
-            position: playerFromPlayersTable.position,
-            number: playerFromPlayersTable.number
-          };
-          actualPlayerId = playerId;
-          console.log('📋 Found player in players table:', playerInfo);
-        } else {
-          // Fallback: treat playerId as old record ID and get player_id from player_stats
-          console.log('🔍 Fallback: Looking up by old record ID...');
-          const { data: playerRecord, error: playerError } = await supabase
-            .from('player_stats')
-            .select('player_id, full_name, name, team, position, number')
-            .eq('id', playerId)
+        if (isUUID) {
+          // Backward compatibility: lookup by UUID
+          console.log('📋 Looking up player by UUID...');
+          const { data: playerFromPlayersTable, error: playersError } = await supabase
+            .from('players')
+            .select('*')
+            .eq('id', playerSlugOrId)
             .single();
 
-          if (playerError || !playerRecord || !playerRecord.player_id) {
-            console.error('❌ Could not find player with ID:', playerId, 'Error:', playerError);
-            toast({
-              title: "Player Not Found",
-              description: "Could not find player with the specified ID",
-              variant: "destructive",
-            });
-            setLoading(false);
-            return;
+          if (playerFromPlayersTable && !playersError) {
+            playerInfo = {
+              name: playerFromPlayersTable.full_name,
+              team: playerFromPlayersTable.team,
+              position: playerFromPlayersTable.position,
+              number: playerFromPlayersTable.number
+            };
+            actualPlayerId = playerSlugOrId;
+            
+            // Redirect to slug-based URL if slug exists
+            if (playerFromPlayersTable.slug) {
+              console.log('🔄 Redirecting to slug-based URL:', playerFromPlayersTable.slug);
+              setLocation(`/player/${playerFromPlayersTable.slug}`);
+              return;
+            }
           }
+        } else {
+          // Primary method: lookup by slug
+          console.log('📋 Looking up player by slug:', playerSlugOrId);
+          const { data: playerFromPlayersTable, error: playersError } = await supabase
+            .from('players')
+            .select('*')
+            .eq('slug', playerSlugOrId)
+            .single();
 
-          actualPlayerId = playerRecord.player_id;
-          playerInfo = {
-            name: playerRecord.full_name || playerRecord.name || 'Unknown Player',
-            team: playerRecord.team,
-            position: playerRecord.position,
-            number: playerRecord.number
-          };
-          console.log('📋 Found player via record lookup:', playerInfo);
+          if (playerFromPlayersTable && !playersError) {
+            playerInfo = {
+              name: playerFromPlayersTable.full_name,
+              team: playerFromPlayersTable.team,
+              position: playerFromPlayersTable.position,
+              number: playerFromPlayersTable.number
+            };
+            actualPlayerId = playerFromPlayersTable.id;
+            console.log('📋 Found player by slug:', playerInfo);
+          }
+        }
+
+        if (!actualPlayerId || !playerInfo) {
+          console.error('❌ Could not find player:', playerSlugOrId);
+          toast({
+            title: "Player Not Found",
+            description: "Could not find player with the specified identifier",
+            variant: "destructive",
+          });
+          setLoading(false);
+          return;
         }
 
         console.log('🔍 Step 2: Getting all stats for player_id:', actualPlayerId);
@@ -427,7 +439,7 @@ export default function PlayerStatsPage() {
     };
 
     fetchPlayerData();
-  }, [playerId, toast]);
+  }, [playerSlugOrId, toast, setLocation]);
 
   // Search functionality
   useEffect(() => {

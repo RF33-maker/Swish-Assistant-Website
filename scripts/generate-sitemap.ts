@@ -73,10 +73,11 @@ async function generateSitemap() {
       teams = teamsData || [];
     }
 
-    // Fetch all distinct players
+    // Fetch all distinct players with slugs
     const { data: players, error: playersError } = await supabase
       .from("players")
-      .select("id, full_name");
+      .select("id, full_name, slug")
+      .not("slug", "is", null);
 
     if (playersError) {
       console.error("❌ Error fetching players:", playersError);
@@ -149,14 +150,16 @@ async function generateSitemap() {
       xml += '  </url>\n';
     });
 
-    // Add player pages
+    // Add player pages (using slugs for SEO-friendly URLs)
     players?.forEach(player => {
-      xml += '  <url>\n';
-      xml += `    <loc>https://www.swishassistant.com/player/${player.id}</loc>\n`;
-      xml += `    <lastmod>${today}</lastmod>\n`;
-      xml += '    <changefreq>weekly</changefreq>\n';
-      xml += '    <priority>0.5</priority>\n';
-      xml += '  </url>\n';
+      if (player.slug) {
+        xml += '  <url>\n';
+        xml += `    <loc>https://www.swishassistant.com/player/${player.slug}</loc>\n`;
+        xml += `    <lastmod>${today}</lastmod>\n`;
+        xml += '    <changefreq>weekly</changefreq>\n';
+        xml += '    <priority>0.5</priority>\n';
+        xml += '  </url>\n';
+      }
     });
 
     xml += '</urlset>';

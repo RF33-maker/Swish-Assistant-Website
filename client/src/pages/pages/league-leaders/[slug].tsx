@@ -61,10 +61,10 @@ export default function LeagueLeadersPage() {
           return;
         }
 
-        // Fetch all player stats for the league with full names from players table
+        // Fetch all player stats for the league with full names and slugs from players table
         const { data: allPlayerStats, error: statsError } = await supabase
           .from("player_stats")
-          .select("*, players:player_id(full_name)")
+          .select("*, players:player_id(full_name, slug)")
           .eq("league_id", leagueData.league_id);
 
         if (statsError) {
@@ -108,6 +108,7 @@ export default function LeagueLeadersPage() {
           if (!playerStatsMap.has(playerKey)) {
             playerStatsMap.set(playerKey, {
               player_id: stat.player_id || stat.id, // Use player_id if available, otherwise use id
+              player_slug: stat.players?.slug || null, // Get slug from joined players table
               name: playerName,
               team_name: teamName,
               total_points: 0,
@@ -280,7 +281,10 @@ export default function LeagueLeadersPage() {
             <div 
               key={`${player.player_id}-${index}`} 
               className="flex items-center justify-between py-2 md:py-3 px-2 md:px-3 rounded-lg bg-orange-50 hover:bg-orange-100 transition-colors duration-200 cursor-pointer"
-              onClick={() => player.player_id && navigate(`/player/${player.player_id}`)}
+              onClick={() => {
+                const identifier = player.player_slug || player.player_id;
+                if (identifier) navigate(`/player/${identifier}`);
+              }}
             >
               <div className="flex items-center gap-2 md:gap-3">
                 <div className={`

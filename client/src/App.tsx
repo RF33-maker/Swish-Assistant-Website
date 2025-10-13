@@ -46,7 +46,7 @@ function Router() {
       <Route path="/league/:slug/team-logos" component={TeamLogoManager} />
       <Route path="/league-leaders/:slug" component={LeagueLeadersPage} />
       <Route path="/players" component={PlayersListPage} />
-      <Route path="/player/:id" component={PlayerStatsPage} />
+      <Route path="/player/:slug" component={PlayerStatsPage} />
       <Route path="/teams" component={TeamsList} />
       <Route path="/team/:teamName" component={TeamProfile} />
       <Route path="/reset-password" component={ResetPassword} />

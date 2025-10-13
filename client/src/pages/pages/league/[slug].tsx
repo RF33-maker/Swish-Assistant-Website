@@ -711,10 +711,10 @@ export default function LeaguePage() {
 
       setIsLoadingStats(true);
       try {
-        // Fetch player stats directly from player_stats table (no separate players table)
+        // Fetch player stats and join with players table to get slug
         const { data: playerStats, error } = await supabase
           .from("player_stats")
-          .select("*")
+          .select("*, players:player_id(slug)")
           .eq("league_id", league.league_id);
 
         if (error) {
@@ -740,6 +740,7 @@ export default function LeaguePage() {
             name: playerName,
             team: stat.team,
             id: playerKey,
+            slug: stat.players?.slug || null,
             games: 0,
             totalPoints: 0,
             totalRebounds: 0,
@@ -1830,7 +1831,10 @@ export default function LeaguePage() {
                           <tr 
                             key={`${player.name}-${index}`}
                             className="border-b border-gray-100 hover:bg-orange-50 transition-colors cursor-pointer"
-                            onClick={() => navigate(`/player/${player.id}`)}
+                            onClick={() => {
+                              const identifier = player.slug || player.id;
+                              navigate(`/player/${identifier}`);
+                            }}
                             data-testid={`player-row-${player.id}`}
                           >
                             <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 sticky left-0 bg-white hover:bg-orange-50 z-10">
