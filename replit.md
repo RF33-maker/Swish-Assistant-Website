@@ -35,6 +35,11 @@ The application is structured into a React frontend and integrates with external
     - **Game Results**: Redesigned game results section with horizontal scrolling ticker and detailed game view modals with team-filtered box scores.
     - **Statistical Leaderboards**: `/league-leaders/[slug]` displays top players across 9 statistical categories.
 
+## SEO Implementation
+- **Dynamic Sitemap**: Automated sitemap generation via `scripts/generate-sitemap.ts` that queries Supabase for all public leagues, teams, and players. Run `npx tsx scripts/generate-sitemap.ts` to regenerate. Sitemap is served as a static file at `/sitemap.xml` with proper XML structure including lastmod dates, changefreq, and priority values.
+- **Robots.txt**: Configured to allow crawling while blocking sensitive routes (/auth, /admin, /api, etc.) and includes sitemap reference. Includes crawl-delay directive to prevent aggressive crawling.
+- **Meta Tags**: All pages include SEO meta tags, Open Graph tags for social sharing, and canonical links (implementation in progress).
+
 ## External Dependencies
 - **Supabase**: Used for database storage, user authentication, and object storage (e.g., `team-logos`, `league-banners`).
 - **Python Flask Backend (https://sab-backend.onrender.com)**: An external service that handles file processing, document parsing, and AI-powered chatbot functionality (e.g., player analysis using OpenAI API).
