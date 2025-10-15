@@ -1318,9 +1318,10 @@ export default function LeaguePage() {
       <title>{`${league?.name || formatTitle(slug)} | League Stats | Swish Assistant`}</title>
       <meta
         name="description"
-        content={`Explore ${league?.name || formatTitle(
-          slug
-        )} league stats, team standings, and player performance on Swish Assistant.`}
+        content={
+          league?.description ||
+          `Explore ${league?.name || formatTitle(slug)} league stats, team standings, and player performance on Swish Assistant.`
+        }
       />
       <meta
         property="og:title"
@@ -1328,9 +1329,10 @@ export default function LeaguePage() {
       />
       <meta
         property="og:description"
-        content={`Explore ${league?.name || formatTitle(
-          slug
-        )} league stats, team standings, and player performance on Swish Assistant.`}
+        content={
+          league?.description ||
+          `Explore ${league?.name || formatTitle(slug)} league stats, team standings, and player performance on Swish Assistant.`
+        }
       />
       <meta property="og:type" content="website" />
       <meta
@@ -1341,6 +1343,7 @@ export default function LeaguePage() {
         property="og:image"
         content="https://www.swishassistant.com/og-image.png"
       />
+      <link rel="canonical" href={`https://www.swishassistant.com/league/${slug}`} />
     </Helmet>
 
     <div className="min-h-screen bg-[#fffaf1]">
