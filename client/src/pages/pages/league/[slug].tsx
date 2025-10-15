@@ -14,6 +14,7 @@ import { TeamLogo } from "@/components/TeamLogo";
 import { TeamLogoUploader } from "@/components/TeamLogoUploader";
 import { ChevronRight } from "lucide-react";
 import { Link } from "wouter";
+import { EditableDescription } from "@/components/EditableDescription";
 import { 
   LoadingSkeleton, 
   PlayerRowSkeleton, 
@@ -1317,9 +1318,10 @@ export default function LeaguePage() {
       <title>{`${league?.name || formatTitle(slug)} | League Stats | Swish Assistant`}</title>
       <meta
         name="description"
-        content={`Explore ${league?.name || formatTitle(
-          slug
-        )} league stats, team standings, and player performance on Swish Assistant.`}
+        content={
+          league?.description ||
+          `Explore ${league?.name || formatTitle(slug)} league stats, team standings, and player performance on Swish Assistant.`
+        }
       />
       <meta
         property="og:title"
@@ -1327,9 +1329,10 @@ export default function LeaguePage() {
       />
       <meta
         property="og:description"
-        content={`Explore ${league?.name || formatTitle(
-          slug
-        )} league stats, team standings, and player performance on Swish Assistant.`}
+        content={
+          league?.description ||
+          `Explore ${league?.name || formatTitle(slug)} league stats, team standings, and player performance on Swish Assistant.`
+        }
       />
       <meta property="og:type" content="website" />
       <meta
@@ -1340,6 +1343,7 @@ export default function LeaguePage() {
         property="og:image"
         content="https://www.swishassistant.com/og-image.png"
       />
+      <link rel="canonical" href={`https://www.swishassistant.com/league/${slug}`} />
     </Helmet>
 
     <div className="min-h-screen bg-[#fffaf1]">
@@ -2441,6 +2445,30 @@ export default function LeaguePage() {
             {/* Overview Section - Default view */}
             {activeSection === 'overview' && (
               <>
+                {/* About This League */}
+                {(league?.description || isOwner) && (
+                  <div className="bg-white rounded-xl shadow p-4 md:p-6">
+                    <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-4">About This League</h2>
+                    <EditableDescription
+                      description={league?.description || null}
+                      onSave={async (newDescription) => {
+                        const { error } = await supabase
+                          .from('leagues')
+                          .update({ description: newDescription })
+                          .eq('league_id', league?.league_id);
+                        
+                        if (!error) {
+                          setLeague({ ...league, description: newDescription });
+                        } else {
+                          throw error;
+                        }
+                      }}
+                      placeholder="Add a description about this league to improve SEO and help visitors understand the league better..."
+                      canEdit={isOwner}
+                    />
+                  </div>
+                )}
+
                 {/* League Leaders */}
                 <div className="bg-white rounded-xl shadow p-4 md:p-6">
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-4 md:mb-6">

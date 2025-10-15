@@ -38,10 +38,18 @@ The application is structured into a React frontend and integrates with external
 ## SEO Implementation
 - **Dynamic Sitemap**: Automated sitemap generation via `scripts/generate-sitemap.ts` that queries Supabase for all public leagues, teams, and players. Run `npx tsx scripts/generate-sitemap.ts` to regenerate. Sitemap is served as a static file at `/sitemap.xml` with proper XML structure including lastmod dates, changefreq, and priority values.
   - ✅ **SEO-Friendly URLs**: Player pages now use human-readable slugs (e.g., `/player/john-doe`) instead of UUIDs for better search engine optimization
-  - 📊 Current stats: 858 URLs (4 leagues, 63 teams, 776 players with slugs)
+  - 📊 Current stats: 871 URLs (5 leagues including SLB Championship 2025-26, 72 teams, 776 players with slugs)
   - 🔄 Slug generation: Run `npx tsx scripts/generate-player-slugs.ts` to populate slugs for new players
 - **Robots.txt**: Configured to allow crawling while blocking sensitive routes (/auth, /admin, /api, etc.) and includes sitemap reference. Includes crawl-delay directive to prevent aggressive crawling.
-- **Meta Tags**: All pages include SEO meta tags, Open Graph tags for social sharing, and canonical links (implementation in progress).
+- **Meta Tags**: Comprehensive meta tag implementation across all pages:
+  - **League Pages**: Use custom editable `league.description` field for meta descriptions, with fallback to generic text. Includes Open Graph tags, canonical links, and Twitter cards.
+  - **Team Pages**: Use custom editable `team.description` field for meta descriptions. Full Open Graph, Twitter card, and canonical link support.
+  - **Player Pages**: Dynamic meta descriptions with player name, team, and season averages (e.g., "averaging 15.3 PPG"). Includes comprehensive social media tags.
+  - **Default (index.html)**: Mentions all supported leagues including NBL, WNBL, BCB, and SLB Championship.
+- **Editable SEO Descriptions**: League owners can add/edit custom descriptions for leagues and teams that appear in page content and are used for meta descriptions. Implemented via `EditableDescription` component with inline editing and auto-save functionality.
+  - League descriptions appear in "About This League" section above League Leaders and in meta tags
+  - Team descriptions appear in the team profile sidebar and in meta tags
+  - Requires `description` column (text, nullable) in both `leagues` and `teams` tables in Supabase
 - **URL Structure**: 
   - Leagues: `/league/[slug]` (e.g., `/league/british-championship-basketball-20252026`)
   - Teams: `/team/[slug]` (e.g., `/team/reading-rockets`)
