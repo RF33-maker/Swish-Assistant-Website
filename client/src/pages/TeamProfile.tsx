@@ -4,6 +4,8 @@ import { supabase } from "@/lib/supabase";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import { TeamLogo } from "@/components/TeamLogo";
 import React from "react";
+import { EditableDescription } from "@/components/EditableDescription";
+import { useAuth } from "@/hooks/use-auth";
 
 interface League {
   league_id: string;
@@ -71,6 +73,9 @@ export default function TeamProfile() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [teamDescription, setTeamDescription] = useState<string | null>(null);
+  const [isOwner, setIsOwner] = useState(false);
+  const { user } = useAuth();
 
   useEffect(() => {
     const fetchSuggestions = async () => {
@@ -270,6 +275,22 @@ export default function TeamProfile() {
               .eq("league_id", allStats[0].league_id)
               .single();
             league = leagueData as League;
+            
+            // Check if current user is the league owner
+            if (user && leagueData) {
+              setIsOwner(user.id === leagueData.user_id || user.id === leagueData.created_by);
+            }
+          }
+          
+          // Try to fetch team description from teams table if it exists
+          const { data: teamData } = await supabase
+            .from("teams")
+            .select("description")
+            .eq("name", decodedTeamName)
+            .single();
+          
+          if (teamData?.description) {
+            setTeamDescription(teamData.description);
           }
           
           // Step 5: Fetch upcoming games from game_schedule table
@@ -452,10 +473,28 @@ export default function TeamProfile() {
                 </svg>
                 Team Description
               </h2>
-              <p className="text-slate-600 leading-relaxed text-sm md:text-base">
-                {team.name} is a competitive basketball team known for their dedication, teamwork, and strong performance on the court. 
-                {team.league && ` Currently competing in ${team.league.name}.`}
-              </p>
+              <EditableDescription
+                description={teamDescription}
+                onSave={async (newDescription) => {
+                  // Check if teams table exists and has description column
+                  const { error } = await supabase
+                    .from('teams')
+                    .update({ description: newDescription })
+                    .eq('name', team?.name);
+                  
+                  if (!error) {
+                    setTeamDescription(newDescription);
+                  } else {
+                    // If teams table doesn't exist, show helpful message
+                    if (error.code === '42P01') {
+                      throw new Error('Please add a "teams" table with "name" and "description" columns in Supabase first.');
+                    }
+                    throw error;
+                  }
+                }}
+                placeholder={`${team.name} is a competitive basketball team${team.league ? ` competing in ${team.league.name}` : ''}. Add a description to improve SEO...`}
+                canEdit={isOwner}
+              />
             </div>
 
             {/* Team Stats Summary */}
