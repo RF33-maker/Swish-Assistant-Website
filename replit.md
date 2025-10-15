@@ -42,6 +42,10 @@ The application is structured into a React frontend and integrates with external
   - 🔄 Slug generation: Run `npx tsx scripts/generate-player-slugs.ts` to populate slugs for new players
 - **Robots.txt**: Configured to allow crawling while blocking sensitive routes (/auth, /admin, /api, etc.) and includes sitemap reference. Includes crawl-delay directive to prevent aggressive crawling.
 - **Meta Tags**: All pages include SEO meta tags, Open Graph tags for social sharing, and canonical links (implementation in progress).
+- **Editable SEO Descriptions**: League owners can add/edit custom descriptions for leagues and teams that appear in page content and can be used for meta descriptions. Implemented via `EditableDescription` component with inline editing and auto-save functionality.
+  - League descriptions appear in "About This League" section above League Leaders
+  - Team descriptions appear in the team profile sidebar
+  - Requires `description` column (text, nullable) in both `leagues` and `teams` tables in Supabase
 - **URL Structure**: 
   - Leagues: `/league/[slug]` (e.g., `/league/british-championship-basketball-20252026`)
   - Teams: `/team/[slug]` (e.g., `/team/reading-rockets`)
