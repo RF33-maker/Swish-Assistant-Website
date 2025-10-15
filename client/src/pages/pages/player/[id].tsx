@@ -575,13 +575,41 @@ export default function PlayerStatsPage() {
           name="description"
           content={
             playerInfo?.name
-              ? `View ${playerInfo.name}'s game stats, averages, and performances on Swish Assistant.`
+              ? `View ${playerInfo.name}${playerInfo.team ? ` (${playerInfo.team})` : ''}'s basketball stats, game-by-game performance${seasonAverages ? `, averaging ${seasonAverages.avg_points.toFixed(1)} PPG` : ''}, and AI-powered analysis on Swish Assistant.`
               : "Explore player stats and basketball performance data on Swish Assistant."
+          }
+        />
+        <meta
+          property="og:title"
+          content={playerInfo?.name ? `${playerInfo.name} | Player Stats | Swish Assistant` : "Player Profile | Swish Assistant"}
+        />
+        <meta
+          property="og:description"
+          content={
+            playerInfo?.name
+              ? `View ${playerInfo.name}${playerInfo.team ? ` (${playerInfo.team})` : ''}'s basketball stats${seasonAverages ? `, averaging ${seasonAverages.avg_points.toFixed(1)} PPG` : ''}.`
+              : "Explore player stats and basketball performance data on Swish Assistant."
+          }
+        />
+        <meta property="og:type" content="profile" />
+        <meta
+          property="og:url"
+          content={`https://www.swishassistant.com/player/${playerSlugOrId}`}
+        />
+        <meta property="og:image" content="https://www.swishassistant.com/og-image.png" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={playerInfo?.name ? `${playerInfo.name} | Player Stats | Swish Assistant` : "Player Profile | Swish Assistant"} />
+        <meta
+          name="twitter:description"
+          content={
+            playerInfo?.name
+              ? `${playerInfo.name}'s basketball stats${seasonAverages ? `: ${seasonAverages.avg_points.toFixed(1)} PPG, ${seasonAverages.avg_rebounds.toFixed(1)} RPG, ${seasonAverages.avg_assists.toFixed(1)} APG` : ''}`
+              : "Explore player stats on Swish Assistant."
           }
         />
         <link
           rel="canonical"
-          href={`https://www.swishassistant.com/player/${playerId}`}
+          href={`https://www.swishassistant.com/player/${playerSlugOrId}`}
         />
       </Helmet>
       
