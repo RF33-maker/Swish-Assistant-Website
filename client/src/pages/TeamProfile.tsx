@@ -115,22 +115,58 @@ export default function TeamProfile() {
       try {
         const decodedTeamName = decodeURIComponent(teamName);
         
-        // Step 1: Get all stats for this team from player_stats using team_name field, include slug from players table
-        const { data: allStats, error: statsError } = await supabase
-          .from("player_stats")
-          .select("*, players:player_id(slug)")
-          .eq("team_name", decodedTeamName);
+        // Fetch all data in parallel
+        const [
+          { data: allStats, error: statsError },
+          { data: teamData },
+          { data: upcomingGamesData, error: scheduleError }
+        ] = await Promise.all([
+          // Get all stats for this team
+          supabase
+            .from("player_stats")
+            .select("*, players:player_id(slug)")
+            .eq("team_name", decodedTeamName),
+          // Get team description
+          supabase
+            .from("teams")
+            .select("description")
+            .eq("name", decodedTeamName)
+            .single(),
+          // Get upcoming games
+          supabase
+            .from("game_schedule")
+            .select("*")
+            .or(`hometeam.eq.${decodedTeamName},awayteam.eq.${decodedTeamName}`)
+            .gte("matchtime", new Date().toISOString())
+            .order("matchtime", { ascending: true })
+            .limit(5)
+        ]);
 
         if (statsError) {
           console.error("Error fetching player stats:", statsError);
+          setLoading(false);
           return;
         }
 
         setPlayerStats(allStats || []);
+        
+        if (teamData?.description) {
+          setTeamDescription(teamData.description);
+        }
 
-        // Step 2: Calculate team stats and get unique player roster
+        if (!scheduleError && upcomingGamesData) {
+          const formattedUpcomingGames = upcomingGamesData.map((game: any) => ({
+            matchtime: game.matchtime,
+            hometeam: game.hometeam,
+            awayteam: game.awayteam,
+            isHome: game.hometeam === decodedTeamName,
+            opponent: game.hometeam === decodedTeamName ? game.awayteam : game.hometeam
+          }));
+          setUpcomingGames(formattedUpcomingGames);
+        }
+
         if (allStats && allStats.length > 0) {
-          // Group stats by game_key to get unique games
+          // Group stats by game_key
           const gamesByGameKey = allStats.reduce((acc: Record<string, any>, stat: any) => {
             if (!acc[stat.game_key]) {
               acc[stat.game_key] = {
@@ -145,31 +181,35 @@ export default function TeamProfile() {
             return acc;
           }, {});
 
-          // Get unique player IDs from stats to identify our roster
           const playerIds = Array.from(new Set(allStats.map((stat: any) => stat.player_id).filter(Boolean)));
+          const gameKeys = Object.keys(gamesByGameKey);
 
-          // Calculate team totals for each game and determine W-L record
+          // Fetch ALL game stats in ONE query instead of one per game
+          const { data: allGamesStats } = await supabase
+            .from("player_stats")
+            .select("spoints, player_id, game_key")
+            .in("game_key", gameKeys);
+
+          // Group opponent stats by game
+          const opponentStatsByGame = (allGamesStats || []).reduce((acc: Record<string, any[]>, stat: any) => {
+            if (!playerIds.includes(stat.player_id)) {
+              if (!acc[stat.game_key]) {
+                acc[stat.game_key] = [];
+              }
+              acc[stat.game_key].push(stat);
+            }
+            return acc;
+          }, {});
+
+          // Calculate games with W-L record
           let wins = 0;
           let losses = 0;
           
-          const games = await Promise.all(Object.values(gamesByGameKey).map(async (gameData: any) => {
-            // Sum all player points for this team in this game
+          const games = Object.values(gamesByGameKey).map((gameData: any) => {
             const ourScore = gameData.playerStats.reduce((sum: number, stat: any) => sum + (stat.spoints || 0), 0);
-            
-            // Determine opponent from home/away teams
             const opponent = gameData.home_team === decodedTeamName ? gameData.away_team : gameData.home_team;
             
-            // Fetch all stats for this game to calculate opponent score
-            const { data: allGameStats } = await supabase
-              .from("player_stats")
-              .select("spoints, player_id")
-              .eq("game_key", gameData.game_key);
-            
-            // Filter out our team's stats to get opponent stats
-            const opponentStats = allGameStats?.filter((stat: any) => 
-              !playerIds.includes(stat.player_id)
-            ) || [];
-            
+            const opponentStats = opponentStatsByGame[gameData.game_key] || [];
             const opponentScore = opponentStats.reduce((sum: number, stat: any) => sum + (stat.spoints || 0), 0);
             
             const isWin = ourScore > opponentScore;
@@ -187,11 +227,11 @@ export default function TeamProfile() {
               opponentScore: opponentScore,
               isWin: isWin
             };
-          }));
+          });
           
           const recentGames = games.slice(-10);
 
-          // Step 3: Calculate player averages from stats
+          // Calculate player averages
           const playerStatsMap = new Map<string, {
             player_id: string;
             player_slug?: string;
@@ -234,7 +274,6 @@ export default function TeamProfile() {
             playerData.gamesPlayed += 1;
           });
 
-          // Convert to roster array and calculate averages
           const rosterWithStats: PlayerStat[] = Array.from(playerStatsMap.values()).map((player) => {
             const avgPoints = player.gamesPlayed > 0 ? Math.round((player.totalPoints / player.gamesPlayed) * 10) / 10 : 0;
             const avgRebounds = player.gamesPlayed > 0 ? Math.round((player.totalRebounds / player.gamesPlayed) * 10) / 10 : 0;
@@ -261,13 +300,10 @@ export default function TeamProfile() {
             };
           });
           
-          // Sort roster by points
           rosterWithStats.sort((a: PlayerStat, b: PlayerStat) => b.avgPoints - a.avgPoints);
-          
-          // Find top player
           const topPlayer = rosterWithStats[0];
           
-          // Get league info from first stat record
+          // Get league info and check ownership in parallel with other operations
           let league: League | null = null;
           if (allStats[0]?.league_id) {
             const { data: leagueData } = await supabase
@@ -277,41 +313,9 @@ export default function TeamProfile() {
               .single();
             league = leagueData as League;
             
-            // Check if current user is the league owner
             if (user && leagueData) {
               setIsOwner(user.id === leagueData.user_id || user.id === leagueData.created_by);
             }
-          }
-          
-          // Try to fetch team description from teams table if it exists
-          const { data: teamData } = await supabase
-            .from("teams")
-            .select("description")
-            .eq("name", decodedTeamName)
-            .single();
-          
-          if (teamData?.description) {
-            setTeamDescription(teamData.description);
-          }
-          
-          // Step 5: Fetch upcoming games from game_schedule table
-          const { data: upcomingGamesData, error: scheduleError } = await supabase
-            .from("game_schedule")
-            .select("*")
-            .or(`hometeam.eq.${decodedTeamName},awayteam.eq.${decodedTeamName}`)
-            .gte("matchtime", new Date().toISOString())
-            .order("matchtime", { ascending: true })
-            .limit(5);
-
-          if (!scheduleError && upcomingGamesData) {
-            const formattedUpcomingGames = upcomingGamesData.map((game: any) => ({
-              matchtime: game.matchtime,
-              hometeam: game.hometeam,
-              awayteam: game.awayteam,
-              isHome: game.hometeam === decodedTeamName,
-              opponent: game.hometeam === decodedTeamName ? game.awayteam : game.hometeam
-            }));
-            setUpcomingGames(formattedUpcomingGames);
           }
 
           setTeam({
