@@ -166,81 +166,92 @@ export default function PlayerStatsPage() {
 
         console.log('✅ Step 3: Setting player stats and info...');
         
-        // Step 3.5: Fetch opponent data from team_stats
+        // Fetch opponent data and leagues in parallel
         let statsWithOpponents = stats || [];
         if (stats && stats.length > 0) {
-          console.log('🎯 Step 3.5: Fetching opponent data from team_stats...');
+          const gameIds = Array.from(new Set(stats.map(stat => stat.game_id).filter(Boolean)));
+          const userId = stats[0].user_id;
           
-          // Get unique game_ids from player stats
-          const gameIds = Array.from(new Set(
-            stats
-              .map(stat => stat.game_id)
-              .filter(Boolean)
-          ));
+          // Run team stats and leagues queries in parallel
+          const [teamStatsResult, leaguesResult] = await Promise.all([
+            gameIds.length > 0 
+              ? supabase.from('team_stats').select('game_id, team_name').in('game_id', gameIds)
+              : Promise.resolve({ data: null, error: null }),
+            userId
+              ? supabase.from('leagues').select('name, slug, user_id').eq('user_id', userId).eq('is_public', true)
+              : Promise.resolve({ data: null, error: null })
+          ]);
           
-          console.log('🎮 Found', gameIds.length, 'unique game IDs:', gameIds);
+          const { data: teamStatsData, error: teamStatsError } = teamStatsResult;
+          const { data: leaguesData, error: leaguesError } = leaguesResult;
           
-          if (gameIds.length > 0) {
-            // Fetch all team stats for these games
-            const { data: teamStatsData, error: teamStatsError } = await supabase
-              .from('team_stats')
-              .select('game_id, team_name')
-              .in('game_id', gameIds);
+          // Process opponent data
+          if (!teamStatsError && teamStatsData) {
+            console.log('🏀 Team stats fetched:', teamStatsData.length, 'records');
             
-            if (!teamStatsError && teamStatsData) {
-              console.log('🏀 Team stats fetched:', teamStatsData.length, 'records');
-              
-              // Create a map of game_id to list of teams
-              const gameTeamsMap = new Map<string, string[]>();
-              teamStatsData.forEach(ts => {
-                if (ts.game_id && ts.team_name) {
-                  if (!gameTeamsMap.has(ts.game_id)) {
-                    gameTeamsMap.set(ts.game_id, []);
-                  }
-                  gameTeamsMap.get(ts.game_id)!.push(ts.team_name);
+            const gameTeamsMap = new Map<string, string[]>();
+            teamStatsData.forEach(ts => {
+              if (ts.game_id && ts.team_name) {
+                if (!gameTeamsMap.has(ts.game_id)) {
+                  gameTeamsMap.set(ts.game_id, []);
                 }
-              });
+                gameTeamsMap.get(ts.game_id)!.push(ts.team_name);
+              }
+            });
+            
+            statsWithOpponents = stats.map(stat => {
+              let derivedOpponent = undefined;
               
-              console.log('🗺️ Game teams map:', Object.fromEntries(gameTeamsMap));
-              
-              // Merge opponent data into stats
-              statsWithOpponents = stats.map(stat => {
-                let derivedOpponent = undefined;
+              if (stat.game_id) {
+                const teamsInGame = gameTeamsMap.get(stat.game_id) || [];
                 
-                if (stat.game_id) {
-                  const teamsInGame = gameTeamsMap.get(stat.game_id) || [];
+                if (teamsInGame.length === 2) {
+                  const playerTeamRaw = stat.team_name || stat.team || '';
+                  const playerTeamNorm = playerTeamRaw.trim().toLowerCase();
                   
-                  if (teamsInGame.length === 2) {
-                    const playerTeamRaw = stat.team_name || stat.team || '';
-                    const playerTeamNorm = playerTeamRaw.trim().toLowerCase();
-                    
-                    // Only proceed if we can confidently identify the player's team
-                    const playerTeamInGame = teamsInGame.find(team => 
-                      team.trim().toLowerCase() === playerTeamNorm
-                    );
-                    
-                    if (playerTeamInGame) {
-                      // Found player's team - the other team is the opponent
-                      derivedOpponent = teamsInGame.find(team => team !== playerTeamInGame);
-                    }
-                    // If player's team not found, leave derivedOpponent as undefined
-                    // This allows fallback to existing opponent/home/away fields
+                  const playerTeamInGame = teamsInGame.find(team => 
+                    team.trim().toLowerCase() === playerTeamNorm
+                  );
+                  
+                  if (playerTeamInGame) {
+                    derivedOpponent = teamsInGame.find(team => team !== playerTeamInGame);
                   }
                 }
-                
-                return {
-                  ...stat,
-                  opponent: derivedOpponent || stat.opponent || 
-                    (stat.is_home_player === true && stat.away_team) ||
-                    (stat.is_home_player === false && stat.home_team) ||
-                    undefined
-                };
-              });
+              }
               
-              console.log('✅ Opponent data merged. Sample:', statsWithOpponents[0]);
-            } else {
-              console.log('⚠️ Could not fetch team stats:', teamStatsError);
+              return {
+                ...stat,
+                opponent: derivedOpponent || stat.opponent || 
+                  (stat.is_home_player === true && stat.away_team) ||
+                  (stat.is_home_player === false && stat.home_team) ||
+                  undefined
+              };
+            });
+          }
+          
+          // Process leagues data
+          if (leaguesData && leaguesData.length > 0) {
+            const playerTeam = stats[0].team;
+            
+            let actualLeague = leaguesData.find(league => 
+              league.name.toLowerCase().includes('uwe') && 
+              league.name.toLowerCase().includes('d1')
+            );
+            
+            if (!actualLeague) {
+              actualLeague = leaguesData[0];
             }
+            
+            const playerLeague = {
+              id: actualLeague.slug,
+              name: actualLeague.name,
+              slug: actualLeague.slug
+            };
+            
+            setPlayerLeagues([playerLeague]);
+            console.log('🏆 Found actual league for player:', playerLeague);
+          } else {
+            setPlayerLeagues([]);
           }
         }
         
@@ -259,82 +270,6 @@ export default function PlayerStatsPage() {
         }
         
         setPlayerInfo(playerInfo);
-
-        // Step 4: Get unique leagues for this player
-        if (stats && stats.length > 0) {
-          console.log('🏆 Step 4: Fetching player leagues...');
-          const uniqueLeagues = Array.from(
-            new Map(
-              stats
-                .filter(stat => stat.league_id)
-                .map(stat => [stat.league_id, { 
-                  id: stat.league_id, 
-                  name: 'League',
-                  slug: stat.league_id 
-                }])
-            ).values()
-          );
-          
-          // Get leagues this player has actually played in
-          if (stats && stats.length > 0) {
-            try {
-              // Get the user_id which represents the league connection
-              const userId = stats[0].user_id;
-              console.log('🏆 Player user_id:', userId);
-              
-              // Only query leagues if user_id is not null
-              let leaguesData = null;
-              let leaguesError = null;
-              
-              if (userId) {
-                const result = await supabase
-                  .from('leagues')
-                  .select('name, slug, user_id')
-                  .eq('user_id', userId)
-                  .eq('is_public', true);
-                leaguesData = result.data;
-                leaguesError = result.error;
-              }
-              
-              console.log('🏆 League query result:', { leaguesData, leaguesError });
-              
-              if (leaguesData && leaguesData.length > 0) {
-                // For James Claar, he should be in UWE Summer League D1 based on your feedback
-                // Let's find the specific league this player belongs to by matching the team
-                const playerTeam = stats[0].team; // "Bristol Hurricanes"
-                
-                // Look for a league that would contain Bristol Hurricanes
-                let actualLeague = leaguesData.find(league => 
-                  league.name.toLowerCase().includes('uwe') && 
-                  league.name.toLowerCase().includes('d1')
-                );
-                
-                // If no specific match, take the first available league
-                if (!actualLeague) {
-                  actualLeague = leaguesData[0];
-                }
-                
-                const playerLeague = {
-                  id: actualLeague.slug,
-                  name: actualLeague.name,
-                  slug: actualLeague.slug
-                };
-                
-                setPlayerLeagues([playerLeague]);
-                console.log('🏆 Found actual league for player:', playerLeague);
-              } else {
-                console.log('🏆 No leagues found for user_id:', userId);
-                setPlayerLeagues([]);
-              }
-              
-            } catch (error) {
-              console.error('🏆 Error fetching leagues:', error);
-              setPlayerLeagues([]);
-            }
-          } else {
-            setPlayerLeagues([]);
-          }
-        }
 
         // Calculate season averages if we have stats
         if (stats && stats.length > 0) {
