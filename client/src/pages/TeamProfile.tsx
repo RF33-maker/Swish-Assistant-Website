@@ -283,7 +283,32 @@ export default function TeamProfile() {
             playerData.gamesPlayed += 1;
           });
 
-          const rosterWithStats: PlayerStat[] = Array.from(playerStatsMap.values()).map((player) => {
+          // First pass: Group by player_id
+          const playersByIdArray = Array.from(playerStatsMap.values());
+          
+          // Second pass: Merge duplicates by name (handles data quality issues where same player has multiple IDs)
+          const mergedByName = new Map<string, typeof playersByIdArray[0]>();
+          
+          playersByIdArray.forEach((player) => {
+            const nameKey = player.name.toLowerCase().trim();
+            
+            if (!mergedByName.has(nameKey)) {
+              // First time seeing this name - add it
+              mergedByName.set(nameKey, { ...player });
+            } else {
+              // Duplicate name - merge the stats
+              const existing = mergedByName.get(nameKey)!;
+              existing.totalPoints += player.totalPoints;
+              existing.totalRebounds += player.totalRebounds;
+              existing.totalAssists += player.totalAssists;
+              existing.totalSteals += player.totalSteals;
+              existing.totalBlocks += player.totalBlocks;
+              existing.gamesPlayed += player.gamesPlayed;
+              // Keep the first player_id and slug we encountered
+            }
+          });
+          
+          const rosterWithStats: PlayerStat[] = Array.from(mergedByName.values()).map((player) => {
             const avgPoints = player.gamesPlayed > 0 ? Math.round((player.totalPoints / player.gamesPlayed) * 10) / 10 : 0;
             const avgRebounds = player.gamesPlayed > 0 ? Math.round((player.totalRebounds / player.gamesPlayed) * 10) / 10 : 0;
             const avgAssists = player.gamesPlayed > 0 ? Math.round((player.totalAssists / player.gamesPlayed) * 10) / 10 : 0;
