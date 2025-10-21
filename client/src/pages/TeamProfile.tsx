@@ -247,10 +247,18 @@ export default function TeamProfile() {
 
           allStats.forEach((stat: any) => {
             const playerId = stat.player_id || stat.id;
+            
+            // Skip stats without valid player_id
+            if (!playerId) {
+              console.warn('Skipping stat without player_id:', stat);
+              return;
+            }
+            
             const playerName = stat.full_name || stat.name || 'Unknown Player';
             const playerSlug = stat.players?.slug || null;
             
             if (!playerStatsMap.has(playerId)) {
+              // First time seeing this player - initialize with this stat's data
               playerStatsMap.set(playerId, {
                 player_id: playerId,
                 player_slug: playerSlug,
@@ -266,6 +274,7 @@ export default function TeamProfile() {
             }
             
             const playerData = playerStatsMap.get(playerId)!;
+            // Accumulate stats for this player across all games
             playerData.totalPoints += stat.spoints || 0;
             playerData.totalRebounds += stat.sreboundstotal || 0;
             playerData.totalAssists += stat.sassists || 0;
