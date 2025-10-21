@@ -670,7 +670,7 @@ export default function TeamProfile() {
                   <tbody>
                     {team.roster.map((player: PlayerStat, index: number) => (
                       <tr 
-                        key={player.name} 
+                        key={player.player_id || player.name} 
                         onClick={() => {
                           const identifier = player.player_slug || player.player_id;
                           if (identifier) navigate(`/player/${identifier}`);
