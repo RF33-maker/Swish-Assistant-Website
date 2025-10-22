@@ -787,12 +787,6 @@ export default function LeaguePage() {
       // First pass: Group by player_id
       const playersByIdArray = Array.from(playerMap.values());
       
-      // Debug: Check if Murray Henry/Hendry are in the data
-      const murrayPlayers = playersByIdArray.filter(p => p.name.toLowerCase().includes('henry') || p.name.toLowerCase().includes('hendry'));
-      if (murrayPlayers.length > 0) {
-        console.log(`👤 Found ${murrayPlayers.length} Murray/Henry/Hendry players:`, murrayPlayers.map(p => ({ name: p.name, id: p.id, games: p.games })));
-      }
-      
       // Helper function to check if two names are similar (fuzzy match)
       const areSimilarNames = (name1: string, name2: string): boolean => {
         const n1 = name1.toLowerCase().trim();
@@ -801,52 +795,15 @@ export default function LeaguePage() {
         // Exact match
         if (n1 === n2) return true;
         
-        // Split into first and last names
-        const parts1 = n1.split(/\s+/);
-        const parts2 = n2.split(/\s+/);
-        
-        // Must have same number of name parts
-        if (parts1.length !== parts2.length || parts1.length === 0) return false;
-        
-        const firstName1 = parts1[0];
-        const firstName2 = parts2[0];
-        const lastName1 = parts1.slice(1).join(' ');
-        const lastName2 = parts2.slice(1).join(' ');
-        
-        // Helper: check if two strings are very similar (max 1 char difference)
-        const isVerySimilar = (s1: string, s2: string): boolean => {
-          if (s1 === s2) return true;
-          if (Math.abs(s1.length - s2.length) > 1) return false;
-          let diffs = 0;
-          for (let i = 0; i < Math.min(s1.length, s2.length); i++) {
-            if (s1[i] !== s2[i]) diffs++;
-            if (diffs > 1) return false;
+        // Check if names differ by only 1-2 characters (handles "Murray Henry" vs "Murray Hendry")
+        const maxLength = Math.max(n1.length, n2.length);
+        if (Math.abs(n1.length - n2.length) <= 2 && maxLength > 5) {
+          // Simple edit distance check
+          let differences = 0;
+          for (let i = 0; i < Math.min(n1.length, n2.length); i++) {
+            if (n1[i] !== n2[i]) differences++;
+            if (differences > 2) return false;
           }
-          return true;
-        };
-        
-        // Helper: check if first names are similar enough for same last name
-        const areFirstNamesSimilar = (f1: string, f2: string): boolean => {
-          if (f1 === f2) return true;
-          // Must start with same letter
-          if (f1[0] !== f2[0]) return false;
-          // Must have similar length
-          if (Math.abs(f1.length - f2.length) > 2) return false;
-          // Check character overlap (e.g., "James" vs "Jason")
-          let matches = 0;
-          for (let i = 0; i < Math.min(f1.length, f2.length); i++) {
-            if (f1[i] === f2[i]) matches++;
-          }
-          return (matches / Math.max(f1.length, f2.length)) >= 0.4;
-        };
-        
-        // Case 1: Identical last names + similar first names (handles "James Soodeen" vs "Jason Soodeen")
-        if (lastName1 === lastName2 && lastName1.length > 0) {
-          return areFirstNamesSimilar(firstName1, firstName2);
-        }
-        
-        // Case 2: Very similar last names + identical or very similar first names (handles "Murray Henry" vs "Murray Hendry")
-        if (isVerySimilar(lastName1, lastName2) && isVerySimilar(firstName1, firstName2)) {
           return true;
         }
         
@@ -856,19 +813,12 @@ export default function LeaguePage() {
       // Second pass: Merge duplicates by name (handles data quality issues where same player has multiple IDs)
       const mergedByName = new Map<string, typeof playersByIdArray[0]>();
       
-      console.log(`🔄 Starting name-based deduplication for ${playersByIdArray.length} players`);
-      
       playersByIdArray.forEach((player) => {
         // Check if we already have a similar name
         let foundMatch = false;
         for (const [existingName, existingPlayer] of mergedByName.entries()) {
-          const isSimilar = areSimilarNames(player.name, existingName);
-          if (player.name.toLowerCase().includes('henry') || player.name.toLowerCase().includes('hendry')) {
-            console.log(`🔍 Comparing "${player.name}" vs "${existingName}": ${isSimilar}`);
-          }
-          if (isSimilar) {
+          if (areSimilarNames(player.name, existingName)) {
             // Merge with existing player
-            console.log(`✅ MERGING: "${player.name}" into "${existingName}"`);
             existingPlayer.games += player.games;
             existingPlayer.totalPoints += player.totalPoints;
             existingPlayer.totalRebounds += player.totalRebounds;
