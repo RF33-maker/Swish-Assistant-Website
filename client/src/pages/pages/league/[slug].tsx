@@ -839,8 +839,8 @@ export default function LeaguePage() {
         rawTeamStats.forEach(stat => {
           if (!stat.name) return; // Skip records without team name
 
-          // Normalize team name to handle variations
-          const normalizedName = normalizeTeamName(stat.name);
+          // Normalize team name to handle variations (including MK Breakers → Milton Keynes Breakers, Essex Rebels (M) → Essex Rebels)
+          const normalizedName = normalizeAndMapTeamName(stat.name);
 
           if (!teamMap.has(normalizedName)) {
             teamMap.set(normalizedName, {
@@ -1005,14 +1005,16 @@ export default function LeaguePage() {
         }));
 
         // Merge duplicate teams (handles data quality issues where same team appears multiple times)
+        // Apply normalization to catch variations like "Essex Rebels (M)" vs "Essex Rebels" or "MK Breakers" vs "Milton Keynes Breakers"
         const mergedStandings = new Map<string, typeof standingsArray[0]>();
         
         standingsArray.forEach(team => {
-          const teamKey = team.team.toLowerCase().trim();
+          // Re-normalize the team name to catch any variations
+          const teamKey = normalizeAndMapTeamName(team.team);
           
           if (!mergedStandings.has(teamKey)) {
-            // First time seeing this team - add it
-            mergedStandings.set(teamKey, { ...team });
+            // First time seeing this normalized team - add it with normalized name
+            mergedStandings.set(teamKey, { ...team, team: teamKey });
           } else {
             // Duplicate team - merge the stats
             const existing = mergedStandings.get(teamKey)!;
@@ -1310,14 +1312,16 @@ export default function LeaguePage() {
         }));
 
         // Merge duplicate teams (handles data quality issues where same team appears multiple times)
+        // Apply normalization to catch variations like "Essex Rebels (M)" vs "Essex Rebels" or "MK Breakers" vs "Milton Keynes Breakers"
         const mergedTeams = new Map<string, typeof allTeamsArray[0]>();
         
         allTeamsArray.forEach(team => {
-          const teamKey = team.team.toLowerCase().trim();
+          // Re-normalize the team name to catch any variations
+          const teamKey = normalizeAndMapTeamName(team.team);
           
           if (!mergedTeams.has(teamKey)) {
-            // First time seeing this team - add it
-            mergedTeams.set(teamKey, { ...team });
+            // First time seeing this normalized team - add it with normalized name
+            mergedTeams.set(teamKey, { ...team, team: teamKey });
           } else {
             // Duplicate team - merge the stats
             const existing = mergedTeams.get(teamKey)!;
@@ -1330,7 +1334,7 @@ export default function LeaguePage() {
             existing.winPct = existing.games > 0 ? Math.round((existing.wins / existing.games) * 1000) / 1000 : 0;
             existing.avgPoints = existing.games > 0 ? Math.round((existing.pointsFor / existing.games) * 10) / 10 : 0;
             existing.record = `${existing.wins}-${existing.losses}`;
-            // Keep the first team name, originalName, and pool we encountered
+            // Keep the first originalName and pool we encountered
           }
         });
 
