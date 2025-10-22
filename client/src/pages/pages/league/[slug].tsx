@@ -786,6 +786,13 @@ export default function LeaguePage() {
 
       // First pass: Group by player_id
       const playersByIdArray = Array.from(playerMap.values());
+      console.log(`📊 After grouping by player_id, we have ${playersByIdArray.length} unique players`);
+      
+      // Find Murray entries for debugging
+      const murrayPlayers = playersByIdArray.filter(p => p.name.toLowerCase().includes('murray'));
+      if (murrayPlayers.length > 0) {
+        console.log(`🔍 Found ${murrayPlayers.length} Murray players:`, murrayPlayers.map(p => `"${p.name}" (${p.games} games)`));
+      }
       
       // Helper function to check if two names are similar (fuzzy match)
       const areSimilarNames = (name1: string, name2: string): boolean => {
@@ -814,10 +821,13 @@ export default function LeaguePage() {
       const mergedByName = new Map<string, typeof playersByIdArray[0]>();
       
       playersByIdArray.forEach((player) => {
+        console.log(`🔍 Processing player: "${player.name}" (${player.games} games)`);
+        
         // Check if we already have a similar name
         let foundMatch = false;
         for (const [existingName, existingPlayer] of mergedByName.entries()) {
           if (areSimilarNames(player.name, existingName)) {
+            console.log(`✅ MERGING "${player.name}" into "${existingName}"`);
             // Merge with existing player
             existingPlayer.games += player.games;
             existingPlayer.totalPoints += player.totalPoints;
@@ -840,6 +850,7 @@ export default function LeaguePage() {
         }
         
         if (!foundMatch) {
+          console.log(`➕ Adding new player: "${player.name}"`);
           // First time seeing this name - add it
           mergedByName.set(player.name, { ...player });
         }
