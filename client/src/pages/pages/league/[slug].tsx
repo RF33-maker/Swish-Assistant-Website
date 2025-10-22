@@ -1002,14 +1002,41 @@ export default function LeaguePage() {
           games: stats.games,
           avgPoints: stats.games > 0 ? Math.round((stats.pointsFor / stats.games) * 10) / 10 : 0,
           record: `${stats.wins}-${stats.losses}`
-        })).sort((a, b) => {
+        }));
+
+        // Merge duplicate teams (handles data quality issues where same team appears multiple times)
+        const mergedStandings = new Map<string, typeof standingsArray[0]>();
+        
+        standingsArray.forEach(team => {
+          const teamKey = team.team.toLowerCase().trim();
+          
+          if (!mergedStandings.has(teamKey)) {
+            // First time seeing this team - add it
+            mergedStandings.set(teamKey, { ...team });
+          } else {
+            // Duplicate team - merge the stats
+            const existing = mergedStandings.get(teamKey)!;
+            existing.wins += team.wins;
+            existing.losses += team.losses;
+            existing.games += team.games;
+            existing.pointsFor += team.pointsFor;
+            existing.pointsAgainst += team.pointsAgainst;
+            existing.pointsDiff = existing.pointsFor - existing.pointsAgainst;
+            existing.winPct = existing.games > 0 ? Math.round((existing.wins / existing.games) * 1000) / 1000 : 0;
+            existing.avgPoints = existing.games > 0 ? Math.round((existing.pointsFor / existing.games) * 10) / 10 : 0;
+            existing.record = `${existing.wins}-${existing.losses}`;
+            // Keep the first team name we encountered
+          }
+        });
+
+        const finalStandings = Array.from(mergedStandings.values()).sort((a, b) => {
           // Sort by win percentage first, then by point differential, then by average points
           if (b.winPct !== a.winPct) return b.winPct - a.winPct;
           if (b.pointsDiff !== a.pointsDiff) return b.pointsDiff - a.pointsDiff;
           return b.avgPoints - a.avgPoints;
         });
 
-        setStandings(standingsArray);
+        setStandings(finalStandings);
       } catch (error) {
         console.error("Error calculating standings:", error);
         setStandings([]);
@@ -1282,10 +1309,37 @@ export default function LeaguePage() {
           pool: stats.pool
         }));
 
+        // Merge duplicate teams (handles data quality issues where same team appears multiple times)
+        const mergedTeams = new Map<string, typeof allTeamsArray[0]>();
+        
+        allTeamsArray.forEach(team => {
+          const teamKey = team.team.toLowerCase().trim();
+          
+          if (!mergedTeams.has(teamKey)) {
+            // First time seeing this team - add it
+            mergedTeams.set(teamKey, { ...team });
+          } else {
+            // Duplicate team - merge the stats
+            const existing = mergedTeams.get(teamKey)!;
+            existing.wins += team.wins;
+            existing.losses += team.losses;
+            existing.games += team.games;
+            existing.pointsFor += team.pointsFor;
+            existing.pointsAgainst += team.pointsAgainst;
+            existing.pointsDiff = existing.pointsFor - existing.pointsAgainst;
+            existing.winPct = existing.games > 0 ? Math.round((existing.wins / existing.games) * 1000) / 1000 : 0;
+            existing.avgPoints = existing.games > 0 ? Math.round((existing.pointsFor / existing.games) * 10) / 10 : 0;
+            existing.record = `${existing.wins}-${existing.losses}`;
+            // Keep the first team name, originalName, and pool we encountered
+          }
+        });
+
+        const mergedTeamsArray = Array.from(mergedTeams.values());
+
         // Set standings for each view
-        const fullStandings = formatStandings(allTeamsArray);
-        const poolAStandings = formatStandings(allTeamsArray, 'Pool A');
-        const poolBStandings = formatStandings(allTeamsArray, 'Pool B');
+        const fullStandings = formatStandings(mergedTeamsArray);
+        const poolAStandings = formatStandings(mergedTeamsArray, 'Pool A');
+        const poolBStandings = formatStandings(mergedTeamsArray, 'Pool B');
 
         setFullLeagueStandings(fullStandings);
         setPoolAStandings(poolAStandings);
