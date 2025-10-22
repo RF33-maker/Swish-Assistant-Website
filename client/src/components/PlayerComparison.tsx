@@ -40,53 +40,13 @@ export function PlayerComparison({ leagueId, allPlayers }: PlayerComparisonProps
   }, []);
 
   const fetchPlayerStats = async (playerId: string) => {
-    // First, get the player's name from the selected player
-    const selectedPlayer = allPlayers.find(p => p.playerKey === playerId);
-    if (!selectedPlayer) return null;
-    
-    const playerName = selectedPlayer.name.toLowerCase().trim();
-    
-    // Fetch ALL stats for this league to find similar names
-    const { data: allStats, error } = await supabase
+    const { data: stats, error } = await supabase
       .from("player_stats")
       .select("*")
+      .eq("player_id", playerId)
       .eq("league_id", leagueId);
 
-    if (error || !allStats || allStats.length === 0) {
-      return null;
-    }
-
-    // Helper function to check if two names are similar (fuzzy match)
-    const areSimilarNames = (name1: string, name2: string): boolean => {
-      const n1 = name1.toLowerCase().trim();
-      const n2 = name2.toLowerCase().trim();
-      
-      // Exact match
-      if (n1 === n2) return true;
-      
-      // Check if names differ by only 1-2 characters (handles "Murray Henry" vs "Murray Hendry")
-      const maxLength = Math.max(n1.length, n2.length);
-      if (Math.abs(n1.length - n2.length) <= 2 && maxLength > 5) {
-        // Simple edit distance check - count character differences plus length difference
-        let differences = Math.abs(n1.length - n2.length);
-        for (let i = 0; i < Math.min(n1.length, n2.length); i++) {
-          if (n1[i] !== n2[i]) differences++;
-          if (differences > 2) return false;
-        }
-        console.log(`🔍 Comparing "${n1}" vs "${n2}": ${differences} differences - ${differences <= 2 ? 'MATCH' : 'NO MATCH'}`);
-        return differences <= 2;
-      }
-      
-      return false;
-    };
-
-    // Filter stats for players with similar names
-    const stats = allStats.filter(stat => {
-      const statName = (stat.name || stat.full_name || `${stat.firstname || ''} ${stat.familyname || ''}`.trim()).toLowerCase().trim();
-      return areSimilarNames(playerName, statName);
-    });
-
-    if (stats.length === 0) {
+    if (error || !stats || stats.length === 0) {
       return null;
     }
 
@@ -130,7 +90,7 @@ export function PlayerComparison({ leagueId, allPlayers }: PlayerComparisonProps
     });
 
     return {
-      name: selectedPlayer.name, // Use the selected player's name for display
+      name: stats[0].name || stats[0].full_name || `${stats[0].firstname || ''} ${stats[0].familyname || ''}`.trim(),
       team: stats[0].team,
       games,
       ppg: (totalPoints / games).toFixed(1),
