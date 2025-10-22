@@ -67,13 +67,14 @@ export function PlayerComparison({ leagueId, allPlayers }: PlayerComparisonProps
       // Check if names differ by only 1-2 characters (handles "Murray Henry" vs "Murray Hendry")
       const maxLength = Math.max(n1.length, n2.length);
       if (Math.abs(n1.length - n2.length) <= 2 && maxLength > 5) {
-        // Simple edit distance check
-        let differences = 0;
+        // Simple edit distance check - count character differences plus length difference
+        let differences = Math.abs(n1.length - n2.length);
         for (let i = 0; i < Math.min(n1.length, n2.length); i++) {
           if (n1[i] !== n2[i]) differences++;
           if (differences > 2) return false;
         }
-        return true;
+        console.log(`🔍 Comparing "${n1}" vs "${n2}": ${differences} differences - ${differences <= 2 ? 'MATCH' : 'NO MATCH'}`);
+        return differences <= 2;
       }
       
       return false;
