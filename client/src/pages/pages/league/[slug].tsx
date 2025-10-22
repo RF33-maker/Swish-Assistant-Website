@@ -799,39 +799,57 @@ export default function LeaguePage() {
         const parts1 = n1.split(/\s+/);
         const parts2 = n2.split(/\s+/);
         
-        // Must have same number of name parts
-        if (parts1.length !== parts2.length) return false;
+        // Must have same number of name parts (e.g., both have first + last)
+        if (parts1.length !== parts2.length || parts1.length === 0) return false;
         
-        // For each part, check if they're similar enough
-        for (let i = 0; i < parts1.length; i++) {
-          const part1 = parts1[i];
-          const part2 = parts2[i];
-          
-          // Exact match is fine
-          if (part1 === part2) continue;
-          
-          // For first name (index 0), allow only 1 character difference and length diff of max 1
-          // This catches "Murray" typos but not "James" vs "Jason"
-          if (i === 0) {
-            if (Math.abs(part1.length - part2.length) > 1) return false;
+        // Check if last names match (all parts except first must be identical or very similar)
+        const lastNamesMatch = parts1.slice(1).every((part, idx) => {
+          const otherPart = parts2[idx + 1];
+          if (part === otherPart) return true;
+          // Allow small typos in last name (e.g., "Henry" vs "Hendry")
+          if (Math.abs(part.length - otherPart.length) <= 1) {
             let diffs = 0;
-            for (let j = 0; j < Math.min(part1.length, part2.length); j++) {
-              if (part1[j] !== part2[j]) diffs++;
+            for (let j = 0; j < Math.min(part.length, otherPart.length); j++) {
+              if (part[j] !== otherPart[j]) diffs++;
               if (diffs > 1) return false;
             }
-            if (diffs === 0 && part1.length !== part2.length) return false; // Different lengths but no char diffs = different names
-          } else {
-            // For last names, allow 1-2 character differences (handles "Henry" vs "Hendry")
-            if (Math.abs(part1.length - part2.length) > 2) return false;
-            let diffs = 0;
-            for (let j = 0; j < Math.min(part1.length, part2.length); j++) {
-              if (part1[j] !== part2[j]) diffs++;
-              if (diffs > 2) return false;
-            }
+            return true;
           }
-        }
+          return false;
+        });
         
-        return true;
+        if (!lastNamesMatch) return false;
+        
+        // Last names match - now check if first names are similar
+        const first1 = parts1[0];
+        const first2 = parts2[0];
+        
+        // If last names are identical, be more lenient with first name
+        const lastNamesIdentical = parts1.length > 1 && parts1.slice(1).every((part, idx) => part === parts2[idx + 1]);
+        
+        if (lastNamesIdentical) {
+          // Same last name - allow more variation in first name (e.g., "James" vs "Jason" Soodeen)
+          // Must start with same letter and have similar length
+          if (first1[0] !== first2[0]) return false;
+          if (Math.abs(first1.length - first2.length) > 2) return false;
+          
+          // Check similarity: at least 40% of characters match (catches "James" vs "Jason")
+          let matches = 0;
+          const maxLen = Math.max(first1.length, first2.length);
+          for (let i = 0; i < Math.min(first1.length, first2.length); i++) {
+            if (first1[i] === first2[i]) matches++;
+          }
+          return (matches / maxLen) >= 0.4;
+        } else {
+          // Last name has typo - be stricter with first name (max 1 char difference)
+          if (Math.abs(first1.length - first2.length) > 1) return false;
+          let diffs = 0;
+          for (let i = 0; i < Math.min(first1.length, first2.length); i++) {
+            if (first1[i] !== first2[i]) diffs++;
+            if (diffs > 1) return false;
+          }
+          return true;
+        }
       };
       
       // Second pass: Merge duplicates by name (handles data quality issues where same player has multiple IDs)
