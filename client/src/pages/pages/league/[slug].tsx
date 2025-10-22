@@ -784,10 +784,44 @@ export default function LeaguePage() {
         }
       });
 
-      // Calculate averages and percentages
-      const averagesList = Array.from(playerMap.entries()).map(([playerKey, player]) => ({
+      // First pass: Group by player_id
+      const playersByIdArray = Array.from(playerMap.values());
+      
+      // Second pass: Merge duplicates by name (handles data quality issues where same player has multiple IDs)
+      const mergedByName = new Map<string, typeof playersByIdArray[0]>();
+      
+      playersByIdArray.forEach((player) => {
+        const nameKey = player.name.toLowerCase().trim();
+        
+        if (!mergedByName.has(nameKey)) {
+          // First time seeing this name - add it
+          mergedByName.set(nameKey, { ...player });
+        } else {
+          // Duplicate name - merge the stats
+          const existing = mergedByName.get(nameKey)!;
+          existing.games += player.games;
+          existing.totalPoints += player.totalPoints;
+          existing.totalRebounds += player.totalRebounds;
+          existing.totalAssists += player.totalAssists;
+          existing.totalSteals += player.totalSteals;
+          existing.totalBlocks += player.totalBlocks;
+          existing.totalTurnovers += player.totalTurnovers;
+          existing.totalFGM += player.totalFGM;
+          existing.totalFGA += player.totalFGA;
+          existing.total3PM += player.total3PM;
+          existing.total3PA += player.total3PA;
+          existing.totalFTM += player.totalFTM;
+          existing.totalFTA += player.totalFTA;
+          existing.totalPersonalFouls += player.totalPersonalFouls;
+          existing.totalMinutes += player.totalMinutes;
+          // Keep the first player_id and slug we encountered
+        }
+      });
+
+      // Calculate averages and percentages from merged data
+      const averagesList = Array.from(mergedByName.values()).map((player) => ({
         ...player,
-        playerKey,
+        playerKey: player.id,
         avgPoints: (player.totalPoints / player.games).toFixed(1),
         avgRebounds: (player.totalRebounds / player.games).toFixed(1),
         avgAssists: (player.totalAssists / player.games).toFixed(1),
