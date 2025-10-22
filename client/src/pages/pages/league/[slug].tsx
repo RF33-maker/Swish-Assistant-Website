@@ -854,8 +854,13 @@ export default function LeaguePage() {
         // Check if we already have a similar name
         let foundMatch = false;
         for (const [existingName, existingPlayer] of mergedByName.entries()) {
-          if (areSimilarNames(player.name, existingName)) {
+          const isSimilar = areSimilarNames(player.name, existingName);
+          if (player.name.toLowerCase().includes('henry') || player.name.toLowerCase().includes('hendry')) {
+            console.log(`🔍 Comparing "${player.name}" vs "${existingName}": ${isSimilar}`);
+          }
+          if (isSimilar) {
             // Merge with existing player
+            console.log(`✅ MERGING: "${player.name}" into "${existingName}"`);
             existingPlayer.games += player.games;
             existingPlayer.totalPoints += player.totalPoints;
             existingPlayer.totalRebounds += player.totalRebounds;
