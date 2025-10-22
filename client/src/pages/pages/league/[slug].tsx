@@ -795,19 +795,43 @@ export default function LeaguePage() {
         // Exact match
         if (n1 === n2) return true;
         
-        // Check if names differ by only 1-2 characters (handles "Murray Henry" vs "Murray Hendry")
-        const maxLength = Math.max(n1.length, n2.length);
-        if (Math.abs(n1.length - n2.length) <= 2 && maxLength > 5) {
-          // Simple edit distance check
-          let differences = 0;
-          for (let i = 0; i < Math.min(n1.length, n2.length); i++) {
-            if (n1[i] !== n2[i]) differences++;
-            if (differences > 2) return false;
+        // Split into first and last names
+        const parts1 = n1.split(/\s+/);
+        const parts2 = n2.split(/\s+/);
+        
+        // Must have same number of name parts
+        if (parts1.length !== parts2.length) return false;
+        
+        // For each part, check if they're similar enough
+        for (let i = 0; i < parts1.length; i++) {
+          const part1 = parts1[i];
+          const part2 = parts2[i];
+          
+          // Exact match is fine
+          if (part1 === part2) continue;
+          
+          // For first name (index 0), allow only 1 character difference and length diff of max 1
+          // This catches "Murray" typos but not "James" vs "Jason"
+          if (i === 0) {
+            if (Math.abs(part1.length - part2.length) > 1) return false;
+            let diffs = 0;
+            for (let j = 0; j < Math.min(part1.length, part2.length); j++) {
+              if (part1[j] !== part2[j]) diffs++;
+              if (diffs > 1) return false;
+            }
+            if (diffs === 0 && part1.length !== part2.length) return false; // Different lengths but no char diffs = different names
+          } else {
+            // For last names, allow 1-2 character differences (handles "Henry" vs "Hendry")
+            if (Math.abs(part1.length - part2.length) > 2) return false;
+            let diffs = 0;
+            for (let j = 0; j < Math.min(part1.length, part2.length); j++) {
+              if (part1[j] !== part2[j]) diffs++;
+              if (diffs > 2) return false;
+            }
           }
-          return true;
         }
         
-        return false;
+        return true;
       };
       
       // Second pass: Merge duplicates by name (handles data quality issues where same player has multiple IDs)
