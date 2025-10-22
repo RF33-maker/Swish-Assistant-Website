@@ -787,6 +787,12 @@ export default function LeaguePage() {
       // First pass: Group by player_id
       const playersByIdArray = Array.from(playerMap.values());
       
+      // Debug: Check if Murray Henry/Hendry are in the data
+      const murrayPlayers = playersByIdArray.filter(p => p.name.toLowerCase().includes('henry') || p.name.toLowerCase().includes('hendry'));
+      if (murrayPlayers.length > 0) {
+        console.log(`👤 Found ${murrayPlayers.length} Murray/Henry/Hendry players:`, murrayPlayers.map(p => ({ name: p.name, id: p.id, games: p.games })));
+      }
+      
       // Helper function to check if two names are similar (fuzzy match)
       const areSimilarNames = (name1: string, name2: string): boolean => {
         const n1 = name1.toLowerCase().trim();
@@ -849,6 +855,8 @@ export default function LeaguePage() {
       
       // Second pass: Merge duplicates by name (handles data quality issues where same player has multiple IDs)
       const mergedByName = new Map<string, typeof playersByIdArray[0]>();
+      
+      console.log(`🔄 Starting name-based deduplication for ${playersByIdArray.length} players`);
       
       playersByIdArray.forEach((player) => {
         // Check if we already have a similar name
