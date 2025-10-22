@@ -787,34 +787,61 @@ export default function LeaguePage() {
       // First pass: Group by player_id
       const playersByIdArray = Array.from(playerMap.values());
       
+      // Helper function to check if two names are similar (fuzzy match)
+      const areSimilarNames = (name1: string, name2: string): boolean => {
+        const n1 = name1.toLowerCase().trim();
+        const n2 = name2.toLowerCase().trim();
+        
+        // Exact match
+        if (n1 === n2) return true;
+        
+        // Check if names differ by only 1-2 characters (handles "Murray Henry" vs "Murray Hendry")
+        const maxLength = Math.max(n1.length, n2.length);
+        if (Math.abs(n1.length - n2.length) <= 2 && maxLength > 5) {
+          // Simple edit distance check
+          let differences = 0;
+          for (let i = 0; i < Math.min(n1.length, n2.length); i++) {
+            if (n1[i] !== n2[i]) differences++;
+            if (differences > 2) return false;
+          }
+          return true;
+        }
+        
+        return false;
+      };
+      
       // Second pass: Merge duplicates by name (handles data quality issues where same player has multiple IDs)
       const mergedByName = new Map<string, typeof playersByIdArray[0]>();
       
       playersByIdArray.forEach((player) => {
-        const nameKey = player.name.toLowerCase().trim();
+        // Check if we already have a similar name
+        let foundMatch = false;
+        for (const [existingName, existingPlayer] of mergedByName.entries()) {
+          if (areSimilarNames(player.name, existingName)) {
+            // Merge with existing player
+            existingPlayer.games += player.games;
+            existingPlayer.totalPoints += player.totalPoints;
+            existingPlayer.totalRebounds += player.totalRebounds;
+            existingPlayer.totalAssists += player.totalAssists;
+            existingPlayer.totalSteals += player.totalSteals;
+            existingPlayer.totalBlocks += player.totalBlocks;
+            existingPlayer.totalTurnovers += player.totalTurnovers;
+            existingPlayer.totalFGM += player.totalFGM;
+            existingPlayer.totalFGA += player.totalFGA;
+            existingPlayer.total3PM += player.total3PM;
+            existingPlayer.total3PA += player.total3PA;
+            existingPlayer.totalFTM += player.totalFTM;
+            existingPlayer.totalFTA += player.totalFTA;
+            existingPlayer.totalPersonalFouls += player.totalPersonalFouls;
+            existingPlayer.totalMinutes += player.totalMinutes;
+            foundMatch = true;
+            break;
+          }
+        }
         
-        if (!mergedByName.has(nameKey)) {
+        if (!foundMatch) {
           // First time seeing this name - add it
-          mergedByName.set(nameKey, { ...player });
-        } else {
-          // Duplicate name - merge the stats
-          const existing = mergedByName.get(nameKey)!;
-          existing.games += player.games;
-          existing.totalPoints += player.totalPoints;
-          existing.totalRebounds += player.totalRebounds;
-          existing.totalAssists += player.totalAssists;
-          existing.totalSteals += player.totalSteals;
-          existing.totalBlocks += player.totalBlocks;
-          existing.totalTurnovers += player.totalTurnovers;
-          existing.totalFGM += player.totalFGM;
-          existing.totalFGA += player.totalFGA;
-          existing.total3PM += player.total3PM;
-          existing.total3PA += player.total3PA;
-          existing.totalFTM += player.totalFTM;
-          existing.totalFTA += player.totalFTA;
-          existing.totalPersonalFouls += player.totalPersonalFouls;
-          existing.totalMinutes += player.totalMinutes;
-          // Keep the first player_id and slug we encountered
+          mergedByName.set(player.name, { ...player });
         }
       });
 
