@@ -2602,12 +2602,39 @@ export default function LeaguePage() {
                 <div className="bg-white rounded-xl shadow p-4 md:p-6">
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-4 md:mb-6">
                 <h2 className="text-base md:text-lg font-semibold text-slate-800">League Leaders</h2>
-                <button
-                  onClick={() => navigate(`/league-leaders/${slug}`)}
-                  className="text-xs md:text-sm text-orange-500 hover:text-orange-600 font-medium hover:underline text-left sm:text-right"
-                >
-                  View All Leaders →
-                </button>
+                <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                  {/* Toggle between Averages and Totals */}
+                  <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1">
+                    <button
+                      onClick={() => setLeagueLeadersView('averages')}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                        leagueLeadersView === 'averages'
+                          ? 'bg-white text-orange-600 shadow-sm'
+                          : 'text-slate-600 hover:text-slate-800'
+                      }`}
+                      data-testid="button-league-leaders-averages"
+                    >
+                      Averages
+                    </button>
+                    <button
+                      onClick={() => setLeagueLeadersView('totals')}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                        leagueLeadersView === 'totals'
+                          ? 'bg-white text-orange-600 shadow-sm'
+                          : 'text-slate-600 hover:text-slate-800'
+                      }`}
+                      data-testid="button-league-leaders-totals"
+                    >
+                      Totals
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => navigate(`/league-leaders/${slug}`)}
+                    className="text-xs md:text-sm text-orange-500 hover:text-orange-600 font-medium hover:underline text-left sm:text-right"
+                  >
+                    View All Leaders →
+                  </button>
+                </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
                 {isLoadingLeaders ? (
@@ -2616,10 +2643,25 @@ export default function LeaguePage() {
                   ))
                 ) : (
                   ([
-                    { title: "Top Scorers", list: topScorers, label: "PPG", key: "avg" },
-                    { title: "Top Rebounders", list: topRebounders, label: "RPG", key: "avg" },
-                    { title: "Top Playmakers", list: topAssistsList, label: "APG", key: "avg" },
-                  ] as const).map(({ title, list, label, key }) => (
+                    { 
+                      title: "Top Scorers", 
+                      list: topScorers, 
+                      avgLabel: "PPG", 
+                      totalLabel: "PTS",
+                    },
+                    { 
+                      title: "Top Rebounders", 
+                      list: topRebounders, 
+                      avgLabel: "RPG", 
+                      totalLabel: "REB",
+                    },
+                    { 
+                      title: "Top Playmakers", 
+                      list: topAssistsList, 
+                      avgLabel: "APG", 
+                      totalLabel: "AST",
+                    },
+                  ] as const).map(({ title, list, avgLabel, totalLabel }) => (
                     <div key={title} className="bg-gray-50 rounded-lg p-3 md:p-4 shadow-inner">
                       <h3 className="text-xs md:text-sm font-semibold text-slate-700 mb-2 md:mb-3 text-center">{title}</h3>
                       <ul className="space-y-1 text-xs md:text-sm text-slate-800">
@@ -2628,7 +2670,7 @@ export default function LeaguePage() {
                             <li key={`${title}-${p.name}-${i}`} className="flex justify-between">
                               <span className="truncate mr-2">{p.name}</span>
                               <span className="font-medium text-orange-500 whitespace-nowrap">
-                                {p[key]} {label}
+                                {p.value} {leagueLeadersView === 'averages' ? avgLabel : totalLabel}
                               </span>
                             </li>
                           ))}
