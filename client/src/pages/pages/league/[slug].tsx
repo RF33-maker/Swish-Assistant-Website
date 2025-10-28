@@ -414,23 +414,32 @@ export default function LeaguePage() {
     };
 
     const getTopList = (statKey: string) => {
-      // Map stat keys to the average field names in allPlayerAverages
-      const statToAvgField: Record<string, string> = {
-        'spoints': 'avgPoints',
-        'sreboundstotal': 'avgRebounds',
-        'sassists': 'avgAssists'
+      // Map stat keys to both average and total field names
+      const statToFields: Record<string, { avgField: string; totalField: string }> = {
+        'spoints': { avgField: 'avgPoints', totalField: 'totalPoints' },
+        'sreboundstotal': { avgField: 'avgRebounds', totalField: 'totalRebounds' },
+        'sassists': { avgField: 'avgAssists', totalField: 'totalAssists' }
       };
       
-      const avgField = statToAvgField[statKey];
-      if (!avgField || !allPlayerAverages.length) return [];
+      const fields = statToFields[statKey];
+      if (!fields || !allPlayerAverages.length) return [];
       
-      // Sort by the average field and take top 5
+      // Choose field based on leagueLeadersView state
+      const fieldToUse = leagueLeadersView === 'averages' ? fields.avgField : fields.totalField;
+      
+      // Sort by the selected field and take top 5
       return [...allPlayerAverages]
-        .sort((a, b) => parseFloat(b[avgField]) - parseFloat(a[avgField]))
+        .sort((a, b) => {
+          const aVal = parseFloat(a[fieldToUse]) || 0;
+          const bVal = parseFloat(b[fieldToUse]) || 0;
+          return bVal - aVal;
+        })
         .slice(0, 5)
         .map(player => ({
           ...player,
-          avg: player[avgField]
+          value: leagueLeadersView === 'averages' 
+            ? player[fields.avgField] 
+            : Math.round(player[fields.totalField]) // Round totals to whole numbers
         }));
     };
 
