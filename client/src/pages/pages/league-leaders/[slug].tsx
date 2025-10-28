@@ -33,6 +33,7 @@ export default function LeagueLeadersPage() {
   const [leaderboardStats, setLeaderboardStats] = useState<LeaderboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'averages' | 'totals'>('averages');
 
   useEffect(() => {
     const fetchLeagueAndStats = async () => {
@@ -91,7 +92,30 @@ export default function LeagueLeadersPage() {
           games_played: []
         };
 
-        // Group stats by player name and calculate totals/averages
+        // Helper function to check if two names are similar (fuzzy match)
+        const areSimilarNames = (name1: string, name2: string): boolean => {
+          const n1 = name1.toLowerCase().trim();
+          const n2 = name2.toLowerCase().trim();
+          
+          // Exact match
+          if (n1 === n2) return true;
+          
+          // Check if names differ by only 1-2 characters (handles "Murray Henry" vs "Murray Hendry")
+          const maxLength = Math.max(n1.length, n2.length);
+          if (Math.abs(n1.length - n2.length) <= 2 && maxLength > 5) {
+            // Simple edit distance check
+            let differences = 0;
+            for (let i = 0; i < Math.min(n1.length, n2.length); i++) {
+              if (n1[i] !== n2[i]) differences++;
+              if (differences > 2) return false;
+            }
+            return true;
+          }
+          
+          return false;
+        };
+
+        // First pass: Group stats by player_id
         const playerStatsMap = new Map();
 
         allPlayerStats.forEach(stat => {
@@ -141,7 +165,40 @@ export default function LeagueLeadersPage() {
           playerData.games_played += 1;
         });
 
-        const playersArray = Array.from(playerStatsMap.values());
+        // Second pass: Merge duplicates by name (handles data quality issues where same player has multiple IDs)
+        const playersByIdArray = Array.from(playerStatsMap.values());
+        const mergedByName = new Map<string, typeof playersByIdArray[0]>();
+        
+        playersByIdArray.forEach((player) => {
+          // Check if we already have a similar name
+          let foundMatch = false;
+          for (const [existingName, existingPlayer] of mergedByName.entries()) {
+            if (areSimilarNames(player.name, existingName)) {
+              // Merge with existing player
+              existingPlayer.games_played += player.games_played;
+              existingPlayer.total_points += player.total_points;
+              existingPlayer.total_rebounds += player.total_rebounds;
+              existingPlayer.total_assists += player.total_assists;
+              existingPlayer.total_steals += player.total_steals;
+              existingPlayer.total_blocks += player.total_blocks;
+              existingPlayer.total_field_goals_made += player.total_field_goals_made;
+              existingPlayer.total_field_goals_attempted += player.total_field_goals_attempted;
+              existingPlayer.total_three_points_made += player.total_three_points_made;
+              existingPlayer.total_three_points_attempted += player.total_three_points_attempted;
+              existingPlayer.total_free_throws_made += player.total_free_throws_made;
+              existingPlayer.total_free_throws_attempted += player.total_free_throws_attempted;
+              foundMatch = true;
+              break;
+            }
+          }
+          
+          if (!foundMatch) {
+            // First time seeing this name - add it
+            mergedByName.set(player.name, { ...player });
+          }
+        });
+
+        const playersArray = Array.from(mergedByName.values());
 
         // Data processing complete
 
@@ -150,45 +207,65 @@ export default function LeagueLeadersPage() {
           .map(p => ({
             ...p,
             avg_points: p.total_points / p.games_played,
-            display_value: `${(p.total_points / p.games_played).toFixed(1)} PPG`
+            display_value: viewMode === 'averages' 
+              ? `${(p.total_points / p.games_played).toFixed(1)} PPG`
+              : `${Math.round(p.total_points)} PTS`
           }))
-          .sort((a, b) => b.avg_points - a.avg_points)
+          .sort((a, b) => viewMode === 'averages' 
+            ? b.avg_points - a.avg_points 
+            : b.total_points - a.total_points)
           .slice(0, 5);
 
         processedStats.rebounds_total = playersArray
           .map(p => ({
             ...p,
             avg_rebounds: p.total_rebounds / p.games_played,
-            display_value: `${(p.total_rebounds / p.games_played).toFixed(1)} RPG`
+            display_value: viewMode === 'averages'
+              ? `${(p.total_rebounds / p.games_played).toFixed(1)} RPG`
+              : `${Math.round(p.total_rebounds)} REB`
           }))
-          .sort((a, b) => b.avg_rebounds - a.avg_rebounds)
+          .sort((a, b) => viewMode === 'averages'
+            ? b.avg_rebounds - a.avg_rebounds
+            : b.total_rebounds - a.total_rebounds)
           .slice(0, 5);
 
         processedStats.assists = playersArray
           .map(p => ({
             ...p,
             avg_assists: p.total_assists / p.games_played,
-            display_value: `${(p.total_assists / p.games_played).toFixed(1)} APG`
+            display_value: viewMode === 'averages'
+              ? `${(p.total_assists / p.games_played).toFixed(1)} APG`
+              : `${Math.round(p.total_assists)} AST`
           }))
-          .sort((a, b) => b.avg_assists - a.avg_assists)
+          .sort((a, b) => viewMode === 'averages'
+            ? b.avg_assists - a.avg_assists
+            : b.total_assists - a.total_assists)
           .slice(0, 5);
 
         processedStats.steals = playersArray
           .map(p => ({
             ...p,
             avg_steals: p.total_steals / p.games_played,
-            display_value: `${(p.total_steals / p.games_played).toFixed(1)} SPG`
+            display_value: viewMode === 'averages'
+              ? `${(p.total_steals / p.games_played).toFixed(1)} SPG`
+              : `${Math.round(p.total_steals)} STL`
           }))
-          .sort((a, b) => b.avg_steals - a.avg_steals)
+          .sort((a, b) => viewMode === 'averages'
+            ? b.avg_steals - a.avg_steals
+            : b.total_steals - a.total_steals)
           .slice(0, 5);
 
         processedStats.blocks = playersArray
           .map(p => ({
             ...p,
             avg_blocks: p.total_blocks / p.games_played,
-            display_value: `${(p.total_blocks / p.games_played).toFixed(1)} BPG`
+            display_value: viewMode === 'averages'
+              ? `${(p.total_blocks / p.games_played).toFixed(1)} BPG`
+              : `${Math.round(p.total_blocks)} BLK`
           }))
-          .sort((a, b) => b.avg_blocks - a.avg_blocks)
+          .sort((a, b) => viewMode === 'averages'
+            ? b.avg_blocks - a.avg_blocks
+            : b.total_blocks - a.total_blocks)
           .slice(0, 5);
 
         // Calculate shooting percentages (minimum 1 game)
@@ -236,10 +313,11 @@ export default function LeagueLeadersPage() {
           .sort((a, b) => b.ft_percentage - a.ft_percentage)
           .slice(0, 5);
 
+        // Games played is same for both modes (no average needed)
         processedStats.games_played = playersArray
           .map(p => ({
             ...p,
-            display_value: `${p.games_played} Games`
+            display_value: `${p.games_played} GP`
           }))
           .sort((a, b) => b.games_played - a.games_played)
           .slice(0, 5);
@@ -255,7 +333,7 @@ export default function LeagueLeadersPage() {
     };
 
     fetchLeagueAndStats();
-  }, [slug]);
+  }, [slug, viewMode]);
 
   const StatLeaderboard = ({ 
     title, 
@@ -370,6 +448,34 @@ export default function LeagueLeadersPage() {
           {league?.description && (
             <p className="text-sm md:text-base text-orange-700 max-w-2xl mx-auto">{league.description}</p>
           )}
+          
+          {/* Toggle between Averages and Totals */}
+          <div className="flex justify-center pt-2">
+            <div className="inline-flex rounded-lg border border-orange-200 bg-orange-50 p-1">
+              <button
+                onClick={() => setViewMode('averages')}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                  viewMode === 'averages'
+                    ? 'bg-white text-orange-600 shadow-sm'
+                    : 'text-orange-700 hover:text-orange-800'
+                }`}
+                data-testid="button-view-averages"
+              >
+                Averages
+              </button>
+              <button
+                onClick={() => setViewMode('totals')}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                  viewMode === 'totals'
+                    ? 'bg-white text-orange-600 shadow-sm'
+                    : 'text-orange-700 hover:text-orange-800'
+                }`}
+                data-testid="button-view-totals"
+              >
+                Totals
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Leaderboards Grid */}
