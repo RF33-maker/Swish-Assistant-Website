@@ -107,6 +107,7 @@ export default function LeaguePage() {
   const [teamStatsView, setTeamStatsView] = useState<'totals' | 'averages'>('averages'); // Toggle for team stats
   const [teamStatsData, setTeamStatsData] = useState<any[]>([]);
   const [isLoadingTeamStats, setIsLoadingTeamStats] = useState(false);
+  const [leagueLeadersView, setLeagueLeadersView] = useState<'averages' | 'totals'>('averages'); // Toggle for league leaders
   const [standingsView, setStandingsView] = useState<'poolA' | 'poolB' | 'full'>('full'); // Toggle for standings view
   const [poolAStandings, setPoolAStandings] = useState<any[]>([]);
   const [poolBStandings, setPoolBStandings] = useState<any[]>([]);
