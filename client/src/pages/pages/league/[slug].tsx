@@ -1691,7 +1691,13 @@ export default function LeaguePage() {
               <a 
                 href="#" 
                 className={`hover:text-orange-500 cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'teams' ? 'text-orange-500 font-semibold border-b-2 border-orange-500' : ''}`}
-                onClick={() => setActiveSection('teams')}
+                onClick={() => {
+                  setActiveSection('teams');
+                  // Ensure standings are loaded for Teams section
+                  if (league?.league_id && fullLeagueStandings.length === 0 && standings.length === 0) {
+                    calculatePoolStandings(league.league_id);
+                  }
+                }}
               >
                 Teams
               </a>
