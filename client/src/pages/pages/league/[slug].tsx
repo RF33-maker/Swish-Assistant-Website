@@ -2008,17 +2008,215 @@ export default function LeaguePage() {
                       <thead>
                         <tr className="border-b border-gray-200 bg-orange-50">
                           <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 sticky left-0 bg-orange-50 z-10 min-w-[100px] md:min-w-[140px]">Player</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[45px]">GP</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">MIN</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">PTS</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">REB</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">AST</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">STL</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">BLK</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">TO</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">FG%</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">3P%</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">FT%</th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === 'GP') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('GP');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[45px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'GP' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-gp"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              GP
+                              {statsSortColumn === 'GP' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === 'MIN') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('MIN');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'MIN' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-min"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              MIN
+                              {statsSortColumn === 'MIN' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === 'PTS') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('PTS');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'PTS' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-pts"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              PTS
+                              {statsSortColumn === 'PTS' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === 'REB') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('REB');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'REB' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-reb"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              REB
+                              {statsSortColumn === 'REB' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === 'AST') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('AST');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'AST' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-ast"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              AST
+                              {statsSortColumn === 'AST' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === 'STL') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('STL');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'STL' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-stl"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              STL
+                              {statsSortColumn === 'STL' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === 'BLK') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('BLK');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'BLK' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-blk"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              BLK
+                              {statsSortColumn === 'BLK' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === 'TO') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('TO');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'TO' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-to"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              TO
+                              {statsSortColumn === 'TO' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === 'FG%') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('FG%');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[55px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'FG%' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-fg"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              FG%
+                              {statsSortColumn === 'FG%' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === '3P%') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('3P%');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[55px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === '3P%' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-3p"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              3P%
+                              {statsSortColumn === '3P%' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === 'FT%') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('FT%');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[55px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'FT%' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-ft"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              FT%
+                              {statsSortColumn === 'FT%' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
