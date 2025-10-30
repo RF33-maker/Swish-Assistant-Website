@@ -7,6 +7,7 @@ import React from "react";
 import { EditableDescription } from "@/components/EditableDescription";
 import { useAuth } from "@/hooks/use-auth";
 import { Helmet } from "react-helmet-async";
+import { normalizeTeamName } from "@/lib/teamUtils";
 
 interface League {
   league_id: string;
@@ -114,36 +115,44 @@ export default function TeamProfile() {
       setLoading(true);
       try {
         const decodedTeamName = decodeURIComponent(teamName);
+        const normalizedTeamName = normalizeTeamName(decodedTeamName);
+        
+        console.log("🏀 Looking for team:", decodedTeamName, "→ normalized:", normalizedTeamName);
+        
+        // Fetch all stats with team names that match when normalized
+        const { data: allTeamStats, error: allStatsError } = await supabase
+          .from("player_stats")
+          .select("*, players:player_id(slug)")
+          .ilike("team_name", `%${normalizedTeamName}%`);
+        
+        // Filter to exact normalized match
+        const allStats = (allTeamStats || []).filter(stat => 
+          normalizeTeamName(stat.team_name || stat.team || '') === normalizedTeamName
+        );
+        
+        console.log("📊 Found", allStats?.length, "player stats for", normalizedTeamName);
         
         // Fetch all data in parallel
         const [
-          { data: allStats, error: statsError },
           { data: teamData },
           { data: upcomingGamesData, error: scheduleError }
         ] = await Promise.all([
-          // Get all stats for this team
-          supabase
-            .from("player_stats")
-            .select("*, players:player_id(slug)")
-            .eq("team_name", decodedTeamName),
           // Get team description
           supabase
             .from("teams")
             .select("description")
-            .eq("name", decodedTeamName)
+            .eq("name", normalizedTeamName)
             .single(),
-          // Get upcoming games
+          // Get upcoming games - search for games where normalized team names match
           supabase
             .from("game_schedule")
             .select("*")
-            .or(`hometeam.eq.${decodedTeamName},awayteam.eq.${decodedTeamName}`)
             .gte("matchtime", new Date().toISOString())
             .order("matchtime", { ascending: true })
-            .limit(5)
         ]);
 
-        if (statsError) {
-          console.error("Error fetching player stats:", statsError);
+        if (allStatsError) {
+          console.error("Error fetching player stats:", allStatsError);
           setLoading(false);
           return;
         }
@@ -155,13 +164,24 @@ export default function TeamProfile() {
         }
 
         if (!scheduleError && upcomingGamesData) {
-          const formattedUpcomingGames = upcomingGamesData.map((game: any) => ({
-            matchtime: game.matchtime,
-            hometeam: game.hometeam,
-            awayteam: game.awayteam,
-            isHome: game.hometeam === decodedTeamName,
-            opponent: game.hometeam === decodedTeamName ? game.awayteam : game.hometeam
-          }));
+          // Filter upcoming games to those involving this team (normalized match)
+          const teamGames = upcomingGamesData.filter((game: any) => {
+            const normalizedHome = normalizeTeamName(game.hometeam || '');
+            const normalizedAway = normalizeTeamName(game.awayteam || '');
+            return normalizedHome === normalizedTeamName || normalizedAway === normalizedTeamName;
+          }).slice(0, 5);
+          
+          const formattedUpcomingGames = teamGames.map((game: any) => {
+            const normalizedHome = normalizeTeamName(game.hometeam || '');
+            const isHome = normalizedHome === normalizedTeamName;
+            return {
+              matchtime: game.matchtime,
+              hometeam: game.hometeam,
+              awayteam: game.awayteam,
+              isHome: isHome,
+              opponent: isHome ? game.awayteam : game.hometeam
+            };
+          });
           setUpcomingGames(formattedUpcomingGames);
         }
 
@@ -207,7 +227,12 @@ export default function TeamProfile() {
           
           const games = Object.values(gamesByGameKey).map((gameData: any) => {
             const ourScore = gameData.playerStats.reduce((sum: number, stat: any) => sum + (stat.spoints || 0), 0);
-            const opponent = gameData.home_team === decodedTeamName ? gameData.away_team : gameData.home_team;
+            
+            // Use normalized team names for comparison
+            const normalizedHome = normalizeTeamName(gameData.home_team || '');
+            const normalizedAway = normalizeTeamName(gameData.away_team || '');
+            const isHome = normalizedHome === normalizedTeamName;
+            const opponent = isHome ? gameData.away_team : gameData.home_team;
             
             const opponentStats = opponentStatsByGame[gameData.game_key] || [];
             const opponentScore = opponentStats.reduce((sum: number, stat: any) => sum + (stat.spoints || 0), 0);
@@ -286,25 +311,52 @@ export default function TeamProfile() {
           // First pass: Group by player_id
           const playersByIdArray = Array.from(playerStatsMap.values());
           
+          // Helper function to check if two names are similar (fuzzy match)
+          const areSimilarNames = (name1: string, name2: string): boolean => {
+            const n1 = name1.toLowerCase().trim();
+            const n2 = name2.toLowerCase().trim();
+            
+            // Exact match
+            if (n1 === n2) return true;
+            
+            // Check if names differ by only 1-2 characters (handles "Murray Henry" vs "Murray Hendry")
+            const maxLength = Math.max(n1.length, n2.length);
+            if (Math.abs(n1.length - n2.length) <= 2 && maxLength > 5) {
+              // Simple edit distance check
+              let differences = 0;
+              for (let i = 0; i < Math.min(n1.length, n2.length); i++) {
+                if (n1[i] !== n2[i]) differences++;
+                if (differences > 2) return false;
+              }
+              return true;
+            }
+            
+            return false;
+          };
+          
           // Second pass: Merge duplicates by name (handles data quality issues where same player has multiple IDs)
           const mergedByName = new Map<string, typeof playersByIdArray[0]>();
           
           playersByIdArray.forEach((player) => {
-            const nameKey = player.name.toLowerCase().trim();
+            // Check if we already have a similar name
+            let foundMatch = false;
+            for (const [existingName, existingPlayer] of mergedByName.entries()) {
+              if (areSimilarNames(player.name, existingName)) {
+                // Merge with existing player
+                existingPlayer.totalPoints += player.totalPoints;
+                existingPlayer.totalRebounds += player.totalRebounds;
+                existingPlayer.totalAssists += player.totalAssists;
+                existingPlayer.totalSteals += player.totalSteals;
+                existingPlayer.totalBlocks += player.totalBlocks;
+                existingPlayer.gamesPlayed += player.gamesPlayed;
+                foundMatch = true;
+                break;
+              }
+            }
             
-            if (!mergedByName.has(nameKey)) {
+            if (!foundMatch) {
               // First time seeing this name - add it
-              mergedByName.set(nameKey, { ...player });
-            } else {
-              // Duplicate name - merge the stats
-              const existing = mergedByName.get(nameKey)!;
-              existing.totalPoints += player.totalPoints;
-              existing.totalRebounds += player.totalRebounds;
-              existing.totalAssists += player.totalAssists;
-              existing.totalSteals += player.totalSteals;
-              existing.totalBlocks += player.totalBlocks;
-              existing.gamesPlayed += player.gamesPlayed;
-              // Keep the first player_id and slug we encountered
+              mergedByName.set(player.name, { ...player });
             }
           });
           
