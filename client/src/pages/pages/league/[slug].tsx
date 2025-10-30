@@ -867,6 +867,54 @@ export default function LeaguePage() {
         // Exact match
         if (n1 === n2) return true;
         
+        // Split names into parts
+        const parts1 = n1.split(/[\s-]+/);
+        const parts2 = n2.split(/[\s-]+/);
+        
+        // Check if one name is a subset/abbreviation of the other
+        // Example: "R Faure" vs "Reiss Faure-Daley"
+        if (parts1.length !== parts2.length) {
+          const shorter = parts1.length < parts2.length ? parts1 : parts2;
+          const longer = parts1.length < parts2.length ? parts2 : parts1;
+          
+          // Check if all parts of shorter name match (as initials or full) parts of longer name
+          let matchCount = 0;
+          for (const shortPart of shorter) {
+            for (const longPart of longer) {
+              // Match if: 1) exact match, 2) initial match (R = Reiss), 3) substring (Faure in Faure-Daley)
+              if (longPart === shortPart || 
+                  longPart.startsWith(shortPart) || 
+                  (shortPart.length === 1 && longPart.startsWith(shortPart))) {
+                matchCount++;
+                break;
+              }
+            }
+          }
+          if (matchCount === shorter.length) return true;
+        }
+        
+        // If same number of parts, check if they're similar
+        if (parts1.length === parts2.length) {
+          // Check if last names match (for Chuck Duru vs Chukwuma Duru)
+          const lastName1 = parts1[parts1.length - 1];
+          const lastName2 = parts2[parts2.length - 1];
+          
+          if (lastName1 === lastName2 && parts1.length >= 2) {
+            // Last names match - check if first names are similar
+            const firstName1 = parts1[0];
+            const firstName2 = parts2[0];
+            
+            // Check if one is a nickname/substring of the other
+            // Example: "Chuck" in "Chukwuma"
+            if (firstName1.startsWith(firstName2.substring(0, 3)) || 
+                firstName2.startsWith(firstName1.substring(0, 3)) ||
+                firstName1.includes(firstName2) || 
+                firstName2.includes(firstName1)) {
+              return true;
+            }
+          }
+        }
+        
         // Check if names differ by only 1-2 characters (handles "Murray Henry" vs "Murray Hendry")
         const maxLength = Math.max(n1.length, n2.length);
         if (Math.abs(n1.length - n2.length) <= 2 && maxLength > 5) {
@@ -888,7 +936,7 @@ export default function LeaguePage() {
       playersByIdArray.forEach((player) => {
         // Check if we already have a similar name
         let foundMatch = false;
-        for (const [existingName, existingPlayer] of mergedByName.entries()) {
+        for (const [existingName, existingPlayer] of Array.from(mergedByName.entries())) {
           if (areSimilarNames(player.name, existingName)) {
             // Merge with existing player
             existingPlayer.games += player.games;
