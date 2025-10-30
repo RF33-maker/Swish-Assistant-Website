@@ -108,6 +108,7 @@ export default function LeaguePage() {
   const [teamStatsData, setTeamStatsData] = useState<any[]>([]);
   const [isLoadingTeamStats, setIsLoadingTeamStats] = useState(false);
   const [leagueLeadersView, setLeagueLeadersView] = useState<'averages' | 'totals'>('averages'); // Toggle for league leaders
+  const [playerStatsView, setPlayerStatsView] = useState<'averages' | 'totals'>('averages'); // Toggle for player statistics table
   const [standingsView, setStandingsView] = useState<'poolA' | 'poolB' | 'full'>('full'); // Toggle for standings view
   const [poolAStandings, setPoolAStandings] = useState<any[]>([]);
   const [poolBStandings, setPoolBStandings] = useState<any[]>([]);
@@ -174,32 +175,32 @@ export default function LeaguePage() {
             valueB = b.games || 0;
             break;
           case 'MIN':
-            valueA = parseFloat(a.avgMinutes) || 0;
-            valueB = parseFloat(b.avgMinutes) || 0;
+            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgMinutes) || 0) : (a.totalMinutes || 0);
+            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgMinutes) || 0) : (b.totalMinutes || 0);
             break;
           case 'PTS':
-            valueA = parseFloat(a.avgPoints) || 0;
-            valueB = parseFloat(b.avgPoints) || 0;
+            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgPoints) || 0) : (a.totalPoints || 0);
+            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgPoints) || 0) : (b.totalPoints || 0);
             break;
           case 'REB':
-            valueA = parseFloat(a.avgRebounds) || 0;
-            valueB = parseFloat(b.avgRebounds) || 0;
+            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgRebounds) || 0) : (a.totalRebounds || 0);
+            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgRebounds) || 0) : (b.totalRebounds || 0);
             break;
           case 'AST':
-            valueA = parseFloat(a.avgAssists) || 0;
-            valueB = parseFloat(b.avgAssists) || 0;
+            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgAssists) || 0) : (a.totalAssists || 0);
+            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgAssists) || 0) : (b.totalAssists || 0);
             break;
           case 'STL':
-            valueA = parseFloat(a.avgSteals) || 0;
-            valueB = parseFloat(b.avgSteals) || 0;
+            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgSteals) || 0) : (a.totalSteals || 0);
+            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgSteals) || 0) : (b.totalSteals || 0);
             break;
           case 'BLK':
-            valueA = parseFloat(a.avgBlocks) || 0;
-            valueB = parseFloat(b.avgBlocks) || 0;
+            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgBlocks) || 0) : (a.totalBlocks || 0);
+            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgBlocks) || 0) : (b.totalBlocks || 0);
             break;
           case 'TO':
-            valueA = parseFloat(a.avgTurnovers) || 0;
-            valueB = parseFloat(b.avgTurnovers) || 0;
+            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgTurnovers) || 0) : (a.totalTurnovers || 0);
+            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgTurnovers) || 0) : (b.totalTurnovers || 0);
             break;
           case 'FG%':
             valueA = parseFloat(a.fgPercentage) || 0;
@@ -225,7 +226,7 @@ export default function LeaguePage() {
       if (statsSearch.trim()) {
         setDisplayedPlayerCount(20); // Reset pagination when searching
       }
-    }, [statsSearch, allPlayerAverages, statsSortColumn, statsSortDirection]);
+    }, [statsSearch, allPlayerAverages, statsSortColumn, statsSortDirection, playerStatsView]);
 
     // Reset standings view to 'full' if no pools exist and user is on a pool view
     useEffect(() => {
@@ -1998,9 +1999,36 @@ export default function LeaguePage() {
               <div className="bg-white rounded-xl shadow p-4 md:p-6">
                 <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 mb-4 md:mb-6">
                   <h2 className="text-base md:text-lg font-semibold text-slate-800">Player Statistics - {league?.name}</h2>
-                  <div className="text-xs md:text-sm text-gray-500">
-                    Showing {Math.min(displayedPlayerCount, filteredPlayerAverages.length)} of {filteredPlayerAverages.length} players
-                    {statsSearch && ` (filtered from ${allPlayerAverages.length})`}
+                  <div className="flex items-center gap-4">
+                    {/* Averages/Totals Toggle */}
+                    <div className="flex items-center gap-2 bg-orange-50 rounded-lg p-1">
+                      <button
+                        onClick={() => setPlayerStatsView('averages')}
+                        className={`px-3 py-1.5 text-xs md:text-sm font-medium rounded transition-colors ${
+                          playerStatsView === 'averages'
+                            ? 'bg-orange-500 text-white'
+                            : 'text-slate-600 hover:text-orange-600'
+                        }`}
+                        data-testid="toggle-averages"
+                      >
+                        Averages
+                      </button>
+                      <button
+                        onClick={() => setPlayerStatsView('totals')}
+                        className={`px-3 py-1.5 text-xs md:text-sm font-medium rounded transition-colors ${
+                          playerStatsView === 'totals'
+                            ? 'bg-orange-500 text-white'
+                            : 'text-slate-600 hover:text-orange-600'
+                        }`}
+                        data-testid="toggle-totals"
+                      >
+                        Totals
+                      </button>
+                    </div>
+                    <div className="text-xs md:text-sm text-gray-500">
+                      Showing {Math.min(displayedPlayerCount, filteredPlayerAverages.length)} of {filteredPlayerAverages.length} players
+                      {statsSearch && ` (filtered from ${allPlayerAverages.length})`}
+                    </div>
                   </div>
                 </div>
                 
@@ -2291,13 +2319,27 @@ export default function LeaguePage() {
                               </div>
                             </td>
                             <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 font-medium">{player.games}</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.avgMinutes}</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center font-semibold text-orange-600">{player.avgPoints}</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center font-medium text-slate-700">{player.avgRebounds}</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center font-medium text-slate-700">{player.avgAssists}</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.avgSteals}</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.avgBlocks}</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.avgTurnovers}</td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
+                              {playerStatsView === 'averages' ? player.avgMinutes : Math.round(player.totalMinutes)}
+                            </td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center font-semibold text-orange-600">
+                              {playerStatsView === 'averages' ? player.avgPoints : Math.round(player.totalPoints)}
+                            </td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center font-medium text-slate-700">
+                              {playerStatsView === 'averages' ? player.avgRebounds : Math.round(player.totalRebounds)}
+                            </td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center font-medium text-slate-700">
+                              {playerStatsView === 'averages' ? player.avgAssists : Math.round(player.totalAssists)}
+                            </td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
+                              {playerStatsView === 'averages' ? player.avgSteals : Math.round(player.totalSteals)}
+                            </td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
+                              {playerStatsView === 'averages' ? player.avgBlocks : Math.round(player.totalBlocks)}
+                            </td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
+                              {playerStatsView === 'averages' ? player.avgTurnovers : Math.round(player.totalTurnovers)}
+                            </td>
                             <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.fgPercentage}%</td>
                             <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.threePercentage}%</td>
                             <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.ftPercentage}%</td>
