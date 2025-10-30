@@ -116,6 +116,8 @@ export default function LeaguePage() {
   const [hasPools, setHasPools] = useState(false); // Track if league has pools
   const [viewMode, setViewMode] = useState<'standings' | 'bracket'>('standings'); // Toggle between standings and bracket
   const [scheduleView, setScheduleView] = useState<'upcoming' | 'results'>('upcoming'); // Toggle for schedule view
+  const [statsSortColumn, setStatsSortColumn] = useState<string>('PTS'); // Column to sort by in Player Statistics
+  const [statsSortDirection, setStatsSortDirection] = useState<'asc' | 'desc'>('desc'); // Sort direction
 
     
 
