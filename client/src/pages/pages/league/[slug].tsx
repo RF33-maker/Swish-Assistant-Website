@@ -147,25 +147,85 @@ export default function LeaguePage() {
       return () => clearTimeout(delay);
     }, [search]);
 
-    // Filter players based on search in stats section (player names only)
+    // Filter and sort players based on search and sort settings in stats section
     useEffect(() => {
       console.log("🔍 Filtering players. Search term:", statsSearch);
       console.log("📊 All players:", allPlayerAverages.length);
       
-      if (!statsSearch.trim()) {
-        setFilteredPlayerAverages(allPlayerAverages);
+      let filtered = allPlayerAverages;
+      
+      // Apply search filter if search term exists
+      if (statsSearch.trim()) {
+        filtered = allPlayerAverages.filter(player => 
+          player.name.toLowerCase().includes(statsSearch.toLowerCase())
+        );
+        console.log("🎯 Filtered players:", filtered.length, "matching:", statsSearch);
+      } else {
         console.log("✅ No search term, showing all players");
-        return;
       }
 
-      const filtered = allPlayerAverages.filter(player => 
-        player.name.toLowerCase().includes(statsSearch.toLowerCase())
-      );
+      // Apply sorting based on selected column and direction
+      const sorted = [...filtered].sort((a, b) => {
+        let valueA: number, valueB: number;
+        
+        switch (statsSortColumn) {
+          case 'GP':
+            valueA = a.games || 0;
+            valueB = b.games || 0;
+            break;
+          case 'MIN':
+            valueA = parseFloat(a.avgMinutes) || 0;
+            valueB = parseFloat(b.avgMinutes) || 0;
+            break;
+          case 'PTS':
+            valueA = parseFloat(a.avgPoints) || 0;
+            valueB = parseFloat(b.avgPoints) || 0;
+            break;
+          case 'REB':
+            valueA = parseFloat(a.avgRebounds) || 0;
+            valueB = parseFloat(b.avgRebounds) || 0;
+            break;
+          case 'AST':
+            valueA = parseFloat(a.avgAssists) || 0;
+            valueB = parseFloat(b.avgAssists) || 0;
+            break;
+          case 'STL':
+            valueA = parseFloat(a.avgSteals) || 0;
+            valueB = parseFloat(b.avgSteals) || 0;
+            break;
+          case 'BLK':
+            valueA = parseFloat(a.avgBlocks) || 0;
+            valueB = parseFloat(b.avgBlocks) || 0;
+            break;
+          case 'TO':
+            valueA = parseFloat(a.avgTurnovers) || 0;
+            valueB = parseFloat(b.avgTurnovers) || 0;
+            break;
+          case 'FG%':
+            valueA = parseFloat(a.fgPercentage) || 0;
+            valueB = parseFloat(b.fgPercentage) || 0;
+            break;
+          case '3P%':
+            valueA = parseFloat(a.threePercentage) || 0;
+            valueB = parseFloat(b.threePercentage) || 0;
+            break;
+          case 'FT%':
+            valueA = parseFloat(a.ftPercentage) || 0;
+            valueB = parseFloat(b.ftPercentage) || 0;
+            break;
+          default:
+            valueA = 0;
+            valueB = 0;
+        }
+        
+        return statsSortDirection === 'desc' ? valueB - valueA : valueA - valueB;
+      });
       
-      console.log("🎯 Filtered players:", filtered.length, "matching:", statsSearch);
-      setFilteredPlayerAverages(filtered);
-      setDisplayedPlayerCount(20); // Reset pagination when searching
-    }, [statsSearch, allPlayerAverages]);
+      setFilteredPlayerAverages(sorted);
+      if (statsSearch.trim()) {
+        setDisplayedPlayerCount(20); // Reset pagination when searching
+      }
+    }, [statsSearch, allPlayerAverages, statsSortColumn, statsSortDirection]);
 
     // Reset standings view to 'full' if no pools exist and user is on a pool view
     useEffect(() => {
