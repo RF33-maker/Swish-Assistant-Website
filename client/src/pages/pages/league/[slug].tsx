@@ -107,6 +107,8 @@ export default function LeaguePage() {
   const [teamStatsView, setTeamStatsView] = useState<'totals' | 'averages'>('averages'); // Toggle for team stats
   const [teamStatsData, setTeamStatsData] = useState<any[]>([]);
   const [isLoadingTeamStats, setIsLoadingTeamStats] = useState(false);
+  const [leagueLeadersView, setLeagueLeadersView] = useState<'averages' | 'totals'>('averages'); // Toggle for league leaders
+  const [playerStatsView, setPlayerStatsView] = useState<'averages' | 'totals'>('averages'); // Toggle for player statistics table
   const [standingsView, setStandingsView] = useState<'poolA' | 'poolB' | 'full'>('full'); // Toggle for standings view
   const [poolAStandings, setPoolAStandings] = useState<any[]>([]);
   const [poolBStandings, setPoolBStandings] = useState<any[]>([]);
@@ -115,6 +117,8 @@ export default function LeaguePage() {
   const [hasPools, setHasPools] = useState(false); // Track if league has pools
   const [viewMode, setViewMode] = useState<'standings' | 'bracket'>('standings'); // Toggle between standings and bracket
   const [scheduleView, setScheduleView] = useState<'upcoming' | 'results'>('upcoming'); // Toggle for schedule view
+  const [statsSortColumn, setStatsSortColumn] = useState<string>('PTS'); // Column to sort by in Player Statistics
+  const [statsSortDirection, setStatsSortDirection] = useState<'asc' | 'desc'>('desc'); // Sort direction
 
     
 
@@ -144,25 +148,85 @@ export default function LeaguePage() {
       return () => clearTimeout(delay);
     }, [search]);
 
-    // Filter players based on search in stats section (player names only)
+    // Filter and sort players based on search and sort settings in stats section
     useEffect(() => {
       console.log("🔍 Filtering players. Search term:", statsSearch);
       console.log("📊 All players:", allPlayerAverages.length);
       
-      if (!statsSearch.trim()) {
-        setFilteredPlayerAverages(allPlayerAverages);
+      let filtered = allPlayerAverages;
+      
+      // Apply search filter if search term exists
+      if (statsSearch.trim()) {
+        filtered = allPlayerAverages.filter(player => 
+          player.name.toLowerCase().includes(statsSearch.toLowerCase())
+        );
+        console.log("🎯 Filtered players:", filtered.length, "matching:", statsSearch);
+      } else {
         console.log("✅ No search term, showing all players");
-        return;
       }
 
-      const filtered = allPlayerAverages.filter(player => 
-        player.name.toLowerCase().includes(statsSearch.toLowerCase())
-      );
+      // Apply sorting based on selected column and direction
+      const sorted = [...filtered].sort((a, b) => {
+        let valueA: number, valueB: number;
+        
+        switch (statsSortColumn) {
+          case 'GP':
+            valueA = a.games || 0;
+            valueB = b.games || 0;
+            break;
+          case 'MIN':
+            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgMinutes) || 0) : (a.totalMinutes || 0);
+            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgMinutes) || 0) : (b.totalMinutes || 0);
+            break;
+          case 'PTS':
+            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgPoints) || 0) : (a.totalPoints || 0);
+            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgPoints) || 0) : (b.totalPoints || 0);
+            break;
+          case 'REB':
+            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgRebounds) || 0) : (a.totalRebounds || 0);
+            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgRebounds) || 0) : (b.totalRebounds || 0);
+            break;
+          case 'AST':
+            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgAssists) || 0) : (a.totalAssists || 0);
+            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgAssists) || 0) : (b.totalAssists || 0);
+            break;
+          case 'STL':
+            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgSteals) || 0) : (a.totalSteals || 0);
+            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgSteals) || 0) : (b.totalSteals || 0);
+            break;
+          case 'BLK':
+            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgBlocks) || 0) : (a.totalBlocks || 0);
+            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgBlocks) || 0) : (b.totalBlocks || 0);
+            break;
+          case 'TO':
+            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgTurnovers) || 0) : (a.totalTurnovers || 0);
+            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgTurnovers) || 0) : (b.totalTurnovers || 0);
+            break;
+          case 'FG%':
+            valueA = parseFloat(a.fgPercentage) || 0;
+            valueB = parseFloat(b.fgPercentage) || 0;
+            break;
+          case '3P%':
+            valueA = parseFloat(a.threePercentage) || 0;
+            valueB = parseFloat(b.threePercentage) || 0;
+            break;
+          case 'FT%':
+            valueA = parseFloat(a.ftPercentage) || 0;
+            valueB = parseFloat(b.ftPercentage) || 0;
+            break;
+          default:
+            valueA = 0;
+            valueB = 0;
+        }
+        
+        return statsSortDirection === 'desc' ? valueB - valueA : valueA - valueB;
+      });
       
-      console.log("🎯 Filtered players:", filtered.length, "matching:", statsSearch);
-      setFilteredPlayerAverages(filtered);
-      setDisplayedPlayerCount(20); // Reset pagination when searching
-    }, [statsSearch, allPlayerAverages]);
+      setFilteredPlayerAverages(sorted);
+      if (statsSearch.trim()) {
+        setDisplayedPlayerCount(20); // Reset pagination when searching
+      }
+    }, [statsSearch, allPlayerAverages, statsSortColumn, statsSortDirection, playerStatsView]);
 
     // Reset standings view to 'full' if no pools exist and user is on a pool view
     useEffect(() => {
@@ -413,23 +477,32 @@ export default function LeaguePage() {
     };
 
     const getTopList = (statKey: string) => {
-      // Map stat keys to the average field names in allPlayerAverages
-      const statToAvgField: Record<string, string> = {
-        'spoints': 'avgPoints',
-        'sreboundstotal': 'avgRebounds',
-        'sassists': 'avgAssists'
+      // Map stat keys to both average and total field names
+      const statToFields: Record<string, { avgField: string; totalField: string }> = {
+        'spoints': { avgField: 'avgPoints', totalField: 'totalPoints' },
+        'sreboundstotal': { avgField: 'avgRebounds', totalField: 'totalRebounds' },
+        'sassists': { avgField: 'avgAssists', totalField: 'totalAssists' }
       };
       
-      const avgField = statToAvgField[statKey];
-      if (!avgField || !allPlayerAverages.length) return [];
+      const fields = statToFields[statKey];
+      if (!fields || !allPlayerAverages.length) return [];
       
-      // Sort by the average field and take top 5
+      // Choose field based on leagueLeadersView state
+      const fieldToUse = leagueLeadersView === 'averages' ? fields.avgField : fields.totalField;
+      
+      // Sort by the selected field and take top 5
       return [...allPlayerAverages]
-        .sort((a, b) => parseFloat(b[avgField]) - parseFloat(a[avgField]))
+        .sort((a, b) => {
+          const aVal = parseFloat(a[fieldToUse]) || 0;
+          const bVal = parseFloat(b[fieldToUse]) || 0;
+          return bVal - aVal;
+        })
         .slice(0, 5)
         .map(player => ({
           ...player,
-          avg: player[avgField]
+          value: leagueLeadersView === 'averages' 
+            ? player[fields.avgField] 
+            : Math.round(player[fields.totalField]) // Round totals to whole numbers
         }));
     };
 
@@ -784,10 +857,119 @@ export default function LeaguePage() {
         }
       });
 
-      // Calculate averages and percentages
-      const averagesList = Array.from(playerMap.entries()).map(([playerKey, player]) => ({
+      // First pass: Group by player_id
+      const playersByIdArray = Array.from(playerMap.values());
+      
+      // Helper function to check if two names are similar (fuzzy match)
+      const areSimilarNames = (name1: string, name2: string): boolean => {
+        const n1 = name1.toLowerCase().trim();
+        const n2 = name2.toLowerCase().trim();
+        
+        // Exact match
+        if (n1 === n2) return true;
+        
+        // Split names into parts
+        const parts1 = n1.split(/[\s-]+/);
+        const parts2 = n2.split(/[\s-]+/);
+        
+        // Check if one name is a subset/abbreviation of the other
+        // Example: "R Faure" vs "Reiss Faure-Daley"
+        if (parts1.length !== parts2.length) {
+          const shorter = parts1.length < parts2.length ? parts1 : parts2;
+          const longer = parts1.length < parts2.length ? parts2 : parts1;
+          
+          // Check if all parts of shorter name match (as initials or full) parts of longer name
+          let matchCount = 0;
+          for (const shortPart of shorter) {
+            for (const longPart of longer) {
+              // Match if: 1) exact match, 2) initial match (R = Reiss), 3) substring (Faure in Faure-Daley)
+              if (longPart === shortPart || 
+                  longPart.startsWith(shortPart) || 
+                  (shortPart.length === 1 && longPart.startsWith(shortPart))) {
+                matchCount++;
+                break;
+              }
+            }
+          }
+          if (matchCount === shorter.length) return true;
+        }
+        
+        // If same number of parts, check if they're similar
+        if (parts1.length === parts2.length) {
+          // Check if last names match (for Chuck Duru vs Chukwuma Duru)
+          const lastName1 = parts1[parts1.length - 1];
+          const lastName2 = parts2[parts2.length - 1];
+          
+          if (lastName1 === lastName2 && parts1.length >= 2) {
+            // Last names match - check if first names are similar
+            const firstName1 = parts1[0];
+            const firstName2 = parts2[0];
+            
+            // Check if one is a nickname/substring of the other
+            // Example: "Chuck" in "Chukwuma"
+            if (firstName1.startsWith(firstName2.substring(0, 3)) || 
+                firstName2.startsWith(firstName1.substring(0, 3)) ||
+                firstName1.includes(firstName2) || 
+                firstName2.includes(firstName1)) {
+              return true;
+            }
+          }
+        }
+        
+        // Check if names differ by only 1-2 characters (handles "Murray Henry" vs "Murray Hendry")
+        const maxLength = Math.max(n1.length, n2.length);
+        if (Math.abs(n1.length - n2.length) <= 2 && maxLength > 5) {
+          // Simple edit distance check
+          let differences = 0;
+          for (let i = 0; i < Math.min(n1.length, n2.length); i++) {
+            if (n1[i] !== n2[i]) differences++;
+            if (differences > 2) return false;
+          }
+          return true;
+        }
+        
+        return false;
+      };
+      
+      // Second pass: Merge duplicates by name (handles data quality issues where same player has multiple IDs)
+      const mergedByName = new Map<string, typeof playersByIdArray[0]>();
+      
+      playersByIdArray.forEach((player) => {
+        // Check if we already have a similar name
+        let foundMatch = false;
+        for (const [existingName, existingPlayer] of Array.from(mergedByName.entries())) {
+          if (areSimilarNames(player.name, existingName)) {
+            // Merge with existing player
+            existingPlayer.games += player.games;
+            existingPlayer.totalPoints += player.totalPoints;
+            existingPlayer.totalRebounds += player.totalRebounds;
+            existingPlayer.totalAssists += player.totalAssists;
+            existingPlayer.totalSteals += player.totalSteals;
+            existingPlayer.totalBlocks += player.totalBlocks;
+            existingPlayer.totalTurnovers += player.totalTurnovers;
+            existingPlayer.totalFGM += player.totalFGM;
+            existingPlayer.totalFGA += player.totalFGA;
+            existingPlayer.total3PM += player.total3PM;
+            existingPlayer.total3PA += player.total3PA;
+            existingPlayer.totalFTM += player.totalFTM;
+            existingPlayer.totalFTA += player.totalFTA;
+            existingPlayer.totalPersonalFouls += player.totalPersonalFouls;
+            existingPlayer.totalMinutes += player.totalMinutes;
+            foundMatch = true;
+            break;
+          }
+        }
+        
+        if (!foundMatch) {
+          // First time seeing this name - add it
+          mergedByName.set(player.name, { ...player });
+        }
+      });
+
+      // Calculate averages and percentages from merged data
+      const averagesList = Array.from(mergedByName.values()).map((player) => ({
         ...player,
-        playerKey,
+        playerKey: player.id,
         avgPoints: (player.totalPoints / player.games).toFixed(1),
         avgRebounds: (player.totalRebounds / player.games).toFixed(1),
         avgAssists: (player.totalAssists / player.games).toFixed(1),
@@ -839,8 +1021,8 @@ export default function LeaguePage() {
         rawTeamStats.forEach(stat => {
           if (!stat.name) return; // Skip records without team name
 
-          // Normalize team name to handle variations
-          const normalizedName = normalizeTeamName(stat.name);
+          // Normalize team name to handle variations (including MK Breakers → Milton Keynes Breakers, Essex Rebels (M) → Essex Rebels)
+          const normalizedName = normalizeAndMapTeamName(stat.name);
 
           if (!teamMap.has(normalizedName)) {
             teamMap.set(normalizedName, {
@@ -1002,14 +1184,43 @@ export default function LeaguePage() {
           games: stats.games,
           avgPoints: stats.games > 0 ? Math.round((stats.pointsFor / stats.games) * 10) / 10 : 0,
           record: `${stats.wins}-${stats.losses}`
-        })).sort((a, b) => {
+        }));
+
+        // Merge duplicate teams (handles data quality issues where same team appears multiple times)
+        // Apply normalization to catch variations like "Essex Rebels (M)" vs "Essex Rebels" or "MK Breakers" vs "Milton Keynes Breakers"
+        const mergedStandings = new Map<string, typeof standingsArray[0]>();
+        
+        standingsArray.forEach(team => {
+          // Re-normalize the team name to catch any variations
+          const teamKey = normalizeAndMapTeamName(team.team);
+          
+          if (!mergedStandings.has(teamKey)) {
+            // First time seeing this normalized team - add it with normalized name
+            mergedStandings.set(teamKey, { ...team, team: teamKey });
+          } else {
+            // Duplicate team - merge the stats
+            const existing = mergedStandings.get(teamKey)!;
+            existing.wins += team.wins;
+            existing.losses += team.losses;
+            existing.games += team.games;
+            existing.pointsFor += team.pointsFor;
+            existing.pointsAgainst += team.pointsAgainst;
+            existing.pointsDiff = existing.pointsFor - existing.pointsAgainst;
+            existing.winPct = existing.games > 0 ? Math.round((existing.wins / existing.games) * 1000) / 1000 : 0;
+            existing.avgPoints = existing.games > 0 ? Math.round((existing.pointsFor / existing.games) * 10) / 10 : 0;
+            existing.record = `${existing.wins}-${existing.losses}`;
+            // Keep the first team name we encountered
+          }
+        });
+
+        const finalStandings = Array.from(mergedStandings.values()).sort((a, b) => {
           // Sort by win percentage first, then by point differential, then by average points
           if (b.winPct !== a.winPct) return b.winPct - a.winPct;
           if (b.pointsDiff !== a.pointsDiff) return b.pointsDiff - a.pointsDiff;
           return b.avgPoints - a.avgPoints;
         });
 
-        setStandings(standingsArray);
+        setStandings(finalStandings);
       } catch (error) {
         console.error("Error calculating standings:", error);
         setStandings([]);
@@ -1282,10 +1493,39 @@ export default function LeaguePage() {
           pool: stats.pool
         }));
 
+        // Merge duplicate teams (handles data quality issues where same team appears multiple times)
+        // Apply normalization to catch variations like "Essex Rebels (M)" vs "Essex Rebels" or "MK Breakers" vs "Milton Keynes Breakers"
+        const mergedTeams = new Map<string, typeof allTeamsArray[0]>();
+        
+        allTeamsArray.forEach(team => {
+          // Re-normalize the team name to catch any variations
+          const teamKey = normalizeAndMapTeamName(team.team);
+          
+          if (!mergedTeams.has(teamKey)) {
+            // First time seeing this normalized team - add it with normalized name
+            mergedTeams.set(teamKey, { ...team, team: teamKey });
+          } else {
+            // Duplicate team - merge the stats
+            const existing = mergedTeams.get(teamKey)!;
+            existing.wins += team.wins;
+            existing.losses += team.losses;
+            existing.games += team.games;
+            existing.pointsFor += team.pointsFor;
+            existing.pointsAgainst += team.pointsAgainst;
+            existing.pointsDiff = existing.pointsFor - existing.pointsAgainst;
+            existing.winPct = existing.games > 0 ? Math.round((existing.wins / existing.games) * 1000) / 1000 : 0;
+            existing.avgPoints = existing.games > 0 ? Math.round((existing.pointsFor / existing.games) * 10) / 10 : 0;
+            existing.record = `${existing.wins}-${existing.losses}`;
+            // Keep the first originalName and pool we encountered
+          }
+        });
+
+        const mergedTeamsArray = Array.from(mergedTeams.values());
+
         // Set standings for each view
-        const fullStandings = formatStandings(allTeamsArray);
-        const poolAStandings = formatStandings(allTeamsArray, 'Pool A');
-        const poolBStandings = formatStandings(allTeamsArray, 'Pool B');
+        const fullStandings = formatStandings(mergedTeamsArray);
+        const poolAStandings = formatStandings(mergedTeamsArray, 'Pool A');
+        const poolBStandings = formatStandings(mergedTeamsArray, 'Pool B');
 
         setFullLeagueStandings(fullStandings);
         setPoolAStandings(poolAStandings);
@@ -1500,7 +1740,13 @@ export default function LeaguePage() {
               <a 
                 href="#" 
                 className={`hover:text-orange-500 cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'teams' ? 'text-orange-500 font-semibold border-b-2 border-orange-500' : ''}`}
-                onClick={() => setActiveSection('teams')}
+                onClick={() => {
+                  setActiveSection('teams');
+                  // Ensure standings are loaded for Teams section
+                  if (league?.league_id && fullLeagueStandings.length === 0 && standings.length === 0) {
+                    calculatePoolStandings(league.league_id);
+                  }
+                }}
               >
                 Teams
               </a>
@@ -1753,9 +1999,36 @@ export default function LeaguePage() {
               <div className="bg-white rounded-xl shadow p-4 md:p-6">
                 <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 mb-4 md:mb-6">
                   <h2 className="text-base md:text-lg font-semibold text-slate-800">Player Statistics - {league?.name}</h2>
-                  <div className="text-xs md:text-sm text-gray-500">
-                    Showing {Math.min(displayedPlayerCount, filteredPlayerAverages.length)} of {filteredPlayerAverages.length} players
-                    {statsSearch && ` (filtered from ${allPlayerAverages.length})`}
+                  <div className="flex items-center gap-4">
+                    {/* Averages/Totals Toggle */}
+                    <div className="flex items-center gap-2 bg-orange-50 rounded-lg p-1">
+                      <button
+                        onClick={() => setPlayerStatsView('averages')}
+                        className={`px-3 py-1.5 text-xs md:text-sm font-medium rounded transition-colors ${
+                          playerStatsView === 'averages'
+                            ? 'bg-orange-500 text-white'
+                            : 'text-slate-600 hover:text-orange-600'
+                        }`}
+                        data-testid="toggle-averages"
+                      >
+                        Averages
+                      </button>
+                      <button
+                        onClick={() => setPlayerStatsView('totals')}
+                        className={`px-3 py-1.5 text-xs md:text-sm font-medium rounded transition-colors ${
+                          playerStatsView === 'totals'
+                            ? 'bg-orange-500 text-white'
+                            : 'text-slate-600 hover:text-orange-600'
+                        }`}
+                        data-testid="toggle-totals"
+                      >
+                        Totals
+                      </button>
+                    </div>
+                    <div className="text-xs md:text-sm text-gray-500">
+                      Showing {Math.min(displayedPlayerCount, filteredPlayerAverages.length)} of {filteredPlayerAverages.length} players
+                      {statsSearch && ` (filtered from ${allPlayerAverages.length})`}
+                    </div>
                   </div>
                 </div>
                 
@@ -1817,17 +2090,215 @@ export default function LeaguePage() {
                       <thead>
                         <tr className="border-b border-gray-200 bg-orange-50">
                           <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 sticky left-0 bg-orange-50 z-10 min-w-[100px] md:min-w-[140px]">Player</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[45px]">GP</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">MIN</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">PTS</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">REB</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">AST</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">STL</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">BLK</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">TO</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">FG%</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">3P%</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">FT%</th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === 'GP') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('GP');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[45px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'GP' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-gp"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              GP
+                              {statsSortColumn === 'GP' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === 'MIN') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('MIN');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'MIN' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-min"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              MIN
+                              {statsSortColumn === 'MIN' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === 'PTS') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('PTS');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'PTS' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-pts"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              PTS
+                              {statsSortColumn === 'PTS' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === 'REB') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('REB');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'REB' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-reb"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              REB
+                              {statsSortColumn === 'REB' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === 'AST') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('AST');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'AST' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-ast"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              AST
+                              {statsSortColumn === 'AST' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === 'STL') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('STL');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'STL' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-stl"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              STL
+                              {statsSortColumn === 'STL' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === 'BLK') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('BLK');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'BLK' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-blk"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              BLK
+                              {statsSortColumn === 'BLK' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === 'TO') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('TO');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'TO' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-to"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              TO
+                              {statsSortColumn === 'TO' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === 'FG%') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('FG%');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[55px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'FG%' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-fg"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              FG%
+                              {statsSortColumn === 'FG%' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === '3P%') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('3P%');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[55px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === '3P%' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-3p"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              3P%
+                              {statsSortColumn === '3P%' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === 'FT%') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('FT%');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[55px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'FT%' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-ft"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              FT%
+                              {statsSortColumn === 'FT%' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1848,13 +2319,27 @@ export default function LeaguePage() {
                               </div>
                             </td>
                             <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 font-medium">{player.games}</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.avgMinutes}</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center font-semibold text-orange-600">{player.avgPoints}</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center font-medium text-slate-700">{player.avgRebounds}</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center font-medium text-slate-700">{player.avgAssists}</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.avgSteals}</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.avgBlocks}</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.avgTurnovers}</td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
+                              {playerStatsView === 'averages' ? player.avgMinutes : Math.round(player.totalMinutes)}
+                            </td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center font-semibold text-orange-600">
+                              {playerStatsView === 'averages' ? player.avgPoints : Math.round(player.totalPoints)}
+                            </td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center font-medium text-slate-700">
+                              {playerStatsView === 'averages' ? player.avgRebounds : Math.round(player.totalRebounds)}
+                            </td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center font-medium text-slate-700">
+                              {playerStatsView === 'averages' ? player.avgAssists : Math.round(player.totalAssists)}
+                            </td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
+                              {playerStatsView === 'averages' ? player.avgSteals : Math.round(player.totalSteals)}
+                            </td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
+                              {playerStatsView === 'averages' ? player.avgBlocks : Math.round(player.totalBlocks)}
+                            </td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
+                              {playerStatsView === 'averages' ? player.avgTurnovers : Math.round(player.totalTurnovers)}
+                            </td>
                             <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.fgPercentage}%</td>
                             <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.threePercentage}%</td>
                             <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.ftPercentage}%</td>
@@ -2473,12 +2958,39 @@ export default function LeaguePage() {
                 <div className="bg-white rounded-xl shadow p-4 md:p-6">
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-4 md:mb-6">
                 <h2 className="text-base md:text-lg font-semibold text-slate-800">League Leaders</h2>
-                <button
-                  onClick={() => navigate(`/league-leaders/${slug}`)}
-                  className="text-xs md:text-sm text-orange-500 hover:text-orange-600 font-medium hover:underline text-left sm:text-right"
-                >
-                  View All Leaders →
-                </button>
+                <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                  {/* Toggle between Averages and Totals */}
+                  <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1">
+                    <button
+                      onClick={() => setLeagueLeadersView('averages')}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                        leagueLeadersView === 'averages'
+                          ? 'bg-white text-orange-600 shadow-sm'
+                          : 'text-slate-600 hover:text-slate-800'
+                      }`}
+                      data-testid="button-league-leaders-averages"
+                    >
+                      Averages
+                    </button>
+                    <button
+                      onClick={() => setLeagueLeadersView('totals')}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                        leagueLeadersView === 'totals'
+                          ? 'bg-white text-orange-600 shadow-sm'
+                          : 'text-slate-600 hover:text-slate-800'
+                      }`}
+                      data-testid="button-league-leaders-totals"
+                    >
+                      Totals
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => navigate(`/league-leaders/${slug}`)}
+                    className="text-xs md:text-sm text-orange-500 hover:text-orange-600 font-medium hover:underline text-left sm:text-right"
+                  >
+                    View All Leaders →
+                  </button>
+                </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
                 {isLoadingLeaders ? (
@@ -2487,10 +2999,25 @@ export default function LeaguePage() {
                   ))
                 ) : (
                   ([
-                    { title: "Top Scorers", list: topScorers, label: "PPG", key: "avg" },
-                    { title: "Top Rebounders", list: topRebounders, label: "RPG", key: "avg" },
-                    { title: "Top Playmakers", list: topAssistsList, label: "APG", key: "avg" },
-                  ] as const).map(({ title, list, label, key }) => (
+                    { 
+                      title: "Top Scorers", 
+                      list: topScorers, 
+                      avgLabel: "PPG", 
+                      totalLabel: "PTS",
+                    },
+                    { 
+                      title: "Top Rebounders", 
+                      list: topRebounders, 
+                      avgLabel: "RPG", 
+                      totalLabel: "REB",
+                    },
+                    { 
+                      title: "Top Playmakers", 
+                      list: topAssistsList, 
+                      avgLabel: "APG", 
+                      totalLabel: "AST",
+                    },
+                  ] as const).map(({ title, list, avgLabel, totalLabel }) => (
                     <div key={title} className="bg-gray-50 rounded-lg p-3 md:p-4 shadow-inner">
                       <h3 className="text-xs md:text-sm font-semibold text-slate-700 mb-2 md:mb-3 text-center">{title}</h3>
                       <ul className="space-y-1 text-xs md:text-sm text-slate-800">
@@ -2499,7 +3026,7 @@ export default function LeaguePage() {
                             <li key={`${title}-${p.name}-${i}`} className="flex justify-between">
                               <span className="truncate mr-2">{p.name}</span>
                               <span className="font-medium text-orange-500 whitespace-nowrap">
-                                {p[key]} {label}
+                                {p.value} {leagueLeadersView === 'averages' ? avgLabel : totalLabel}
                               </span>
                             </li>
                           ))}
