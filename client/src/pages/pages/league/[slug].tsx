@@ -1754,25 +1754,57 @@ export default function LeaguePage() {
           </div>
         </section>
 
+        {/* Competition Selector - Subtle dropdown between banner and carousel */}
+        {childCompetitions.length > 0 && (
+          <div className="bg-white border-b border-gray-200">
+            <div className="max-w-7xl mx-auto px-4 md:px-6 py-3">
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-slate-600">View Competition:</span>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => {}}
+                    className="px-3 py-1.5 bg-orange-500 text-white text-sm font-medium rounded-lg cursor-default"
+                    data-testid="button-current-competition"
+                  >
+                    {league?.name}
+                  </button>
+                  {childCompetitions.map((competition) => (
+                    <button
+                      key={competition.league_id}
+                      onClick={() => navigate(`/league/${competition.slug}`)}
+                      className="px-3 py-1.5 bg-white border border-gray-300 hover:border-orange-500 hover:bg-orange-50 text-slate-700 hover:text-orange-600 text-sm font-medium rounded-lg transition-colors"
+                      data-testid={`button-switch-${competition.slug}`}
+                    >
+                      {competition.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Breadcrumb for Sub-Competitions */}
         {parentLeague && (
-          <div className="max-w-7xl mx-auto px-4 md:px-6 py-4">
-            <Link href={`/league/${parentLeague.slug}`}>
-              <a className="inline-flex items-center gap-2 text-sm md:text-base text-slate-600 hover:text-orange-500 transition-colors group" data-testid="link-parent-league">
-                <div className="flex items-center gap-2">
-                  {parentLeague.logo_url && (
-                    <img 
-                      src={parentLeague.logo_url} 
-                      alt={parentLeague.name}
-                      className="w-6 h-6 md:w-8 md:h-8 rounded object-cover"
-                    />
-                  )}
-                  <span className="font-medium group-hover:underline">{parentLeague.name}</span>
-                </div>
-                <ChevronRight className="w-4 h-4 md:w-5 md:h-5 text-slate-400" />
-                <span className="text-slate-800 font-semibold">{league?.name}</span>
-              </a>
-            </Link>
+          <div className="bg-white border-b border-gray-200">
+            <div className="max-w-7xl mx-auto px-4 md:px-6 py-3">
+              <Link href={`/league/${parentLeague.slug}`}>
+                <a className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-orange-500 transition-colors group" data-testid="link-parent-league">
+                  <div className="flex items-center gap-2">
+                    {parentLeague.logo_url && (
+                      <img 
+                        src={parentLeague.logo_url} 
+                        alt={parentLeague.name}
+                        className="w-5 h-5 rounded object-cover"
+                      />
+                    )}
+                    <span className="font-medium group-hover:underline">{parentLeague.name}</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-slate-400" />
+                  <span className="text-slate-700 font-medium">{league?.name}</span>
+                </a>
+              </Link>
+            </div>
           </div>
         )}
 
@@ -1880,58 +1912,6 @@ export default function LeaguePage() {
             </div>
           </div>
         </div>
-
-        {/* Competitions Section - Prominently displayed for parent leagues */}
-        {childCompetitions.length > 0 && (
-          <div className="bg-gradient-to-br from-orange-50 to-amber-50 border-b border-orange-100" data-section="competitions">
-            <div className="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-8">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="bg-orange-500 p-2 rounded-lg">
-                  <Trophy className="w-6 h-6 md:w-7 md:h-7 text-white" />
-                </div>
-                <div>
-                  <h2 className="text-xl md:text-2xl font-bold text-slate-800">Competitions</h2>
-                  <p className="text-sm text-slate-600 mt-1">
-                    {childCompetitions.length} {childCompetitions.length === 1 ? 'competition' : 'competitions'} available
-                  </p>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-                {childCompetitions.map((competition) => (
-                  <Link key={competition.league_id} href={`/league/${competition.slug}`}>
-                    <a className="group block" data-testid={`card-competition-${competition.slug}`}>
-                      <div className="bg-white rounded-xl p-4 md:p-6 shadow-md hover:shadow-xl transition-all duration-300 hover:scale-105 border border-gray-200 hover:border-orange-300 h-full">
-                        <div className="flex items-start gap-4">
-                          {competition.logo_url ? (
-                            <img 
-                              src={competition.logo_url} 
-                              alt={competition.name}
-                              className="w-16 h-16 md:w-20 md:h-20 rounded-lg object-cover flex-shrink-0 ring-2 ring-gray-100 group-hover:ring-orange-200 transition-all"
-                            />
-                          ) : (
-                            <div className="w-16 h-16 md:w-20 md:h-20 rounded-lg bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center flex-shrink-0">
-                              <Trophy className="w-8 h-8 md:w-10 md:h-10 text-white" />
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <h3 className="font-semibold text-slate-800 text-base md:text-lg group-hover:text-orange-600 transition-colors line-clamp-2">
-                              {competition.name}
-                            </h3>
-                            <div className="mt-3 flex items-center gap-2 text-orange-600 text-sm font-medium">
-                              <span>View Competition</span>
-                              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </a>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
 
         <main className="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-10 grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
           <section className="md:col-span-2 space-y-6">
@@ -3035,38 +3015,6 @@ export default function LeaguePage() {
             {/* Overview Section - Default view */}
             {activeSection === 'overview' && (
               <>
-                {/* Competition Quick Navigation */}
-                {childCompetitions.length > 0 && (
-                  <div className="bg-gradient-to-r from-orange-500 to-amber-500 rounded-xl shadow-lg p-4 md:p-6 text-white">
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-3">
-                        <div className="bg-white/20 p-2 rounded-lg">
-                          <Trophy className="w-6 h-6 md:w-7 md:h-7" />
-                        </div>
-                        <div>
-                          <h3 className="text-lg md:text-xl font-bold">
-                            {childCompetitions.length} {childCompetitions.length === 1 ? 'Competition' : 'Competitions'} Available
-                          </h3>
-                          <p className="text-sm text-white/90 mt-1">
-                            View all competitions in this league
-                          </p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => {
-                          const competitionsSection = document.querySelector('[data-section="competitions"]');
-                          competitionsSection?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        }}
-                        className="bg-white text-orange-600 px-4 py-2 rounded-lg font-semibold hover:bg-orange-50 transition-colors flex items-center gap-2 whitespace-nowrap"
-                        data-testid="button-view-competitions"
-                      >
-                        View All
-                        <ArrowRight className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-                
                 {/* About This League */}
                 {(league?.description || isOwner) && (
                   <div className="bg-white rounded-xl shadow p-4 md:p-6">
