@@ -9,6 +9,26 @@ export const users = pgTable("users", {
 });
 
 // Team logos table for storing team logo assignments by league owners
+// Leagues table for storing league information and hierarchy
+export const leagues = pgTable("leagues", {
+  league_id: uuid("league_id").primaryKey().defaultRandom(),
+  parent_league_id: uuid("parent_league_id"), // References leagues.league_id for hierarchy
+  name: varchar("name", { length: 255 }).notNull(),
+  slug: varchar("slug", { length: 255 }).notNull().unique(),
+  logo_url: text("logo_url"),
+  banner_url: text("banner_url"),
+  description: text("description"),
+  organiser_name: text("organiser_name"),
+  user_id: varchar("user_id", { length: 255 }),
+  created_by: varchar("created_by", { length: 255 }),
+  is_public: boolean("is_public").default(true),
+  approved: boolean("approved").default(false),
+  instagram_embed_url: text("instagram_embed_url"),
+  youtube_embed_url: text("youtube_embed_url"),
+  created_at: timestamp("created_at").defaultNow(),
+  updated_at: timestamp("updated_at").defaultNow(),
+});
+
 export const teamLogos = pgTable("team_logos", {
   id: serial("id").primaryKey(),
   leagueId: varchar("league_id", { length: 255 }).notNull(),
@@ -140,6 +160,22 @@ export const teamStats = pgTable("team_stats", {
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
+});
+
+export const insertLeagueSchema = createInsertSchema(leagues).pick({
+  parent_league_id: true,
+  name: true,
+  slug: true,
+  logo_url: true,
+  banner_url: true,
+  description: true,
+  organiser_name: true,
+  user_id: true,
+  created_by: true,
+  is_public: true,
+  approved: true,
+  instagram_embed_url: true,
+  youtube_embed_url: true,
 });
 
 export const insertTeamLogoSchema = createInsertSchema(teamLogos).pick({
@@ -331,6 +367,8 @@ export const insertScoutingReportSchema = createInsertSchema(scoutingReports).pi
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+export type InsertLeague = z.infer<typeof insertLeagueSchema>;
+export type League = typeof leagues.$inferSelect;
 export type InsertTeamLogo = z.infer<typeof insertTeamLogoSchema>;
 export type TeamLogo = typeof teamLogos.$inferSelect;
 export type InsertTeam = z.infer<typeof insertTeamSchema>;
