@@ -1754,31 +1754,25 @@ export default function LeaguePage() {
           </div>
         </section>
 
-        {/* Competition Selector - Subtle dropdown between banner and carousel */}
+        {/* Competition Selector - Dropdown for mobile-friendly competition switching */}
         {childCompetitions.length > 0 && (
-          <div className="bg-white border-b border-gray-200">
+          <div className="bg-white border-b border-gray-100">
             <div className="max-w-7xl mx-auto px-4 md:px-6 py-3">
-              <div className="flex items-center gap-3">
-                <span className="text-sm text-slate-600">View Competition:</span>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => {}}
-                    className="px-3 py-1.5 bg-orange-500 text-white text-sm font-medium rounded-lg cursor-default"
-                    data-testid="button-current-competition"
-                  >
-                    {league?.name}
-                  </button>
+              <div className="flex items-center gap-2 md:gap-3">
+                <Trophy className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                <select
+                  value={league?.slug || ''}
+                  onChange={(e) => navigate(`/league/${e.target.value}`)}
+                  className="flex-1 md:flex-initial md:min-w-[280px] px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-gray-300 rounded-lg hover:border-orange-300 focus:border-orange-400 focus:ring-2 focus:ring-orange-100 focus:outline-none transition-all cursor-pointer"
+                  data-testid="select-competition"
+                >
+                  <option value={league?.slug}>{league?.name}</option>
                   {childCompetitions.map((competition) => (
-                    <button
-                      key={competition.league_id}
-                      onClick={() => navigate(`/league/${competition.slug}`)}
-                      className="px-3 py-1.5 bg-white border border-gray-300 hover:border-orange-500 hover:bg-orange-50 text-slate-700 hover:text-orange-600 text-sm font-medium rounded-lg transition-colors"
-                      data-testid={`button-switch-${competition.slug}`}
-                    >
+                    <option key={competition.league_id} value={competition.slug}>
                       {competition.name}
-                    </button>
+                    </option>
                   ))}
-                </div>
+                </select>
               </div>
             </div>
           </div>
@@ -1786,10 +1780,10 @@ export default function LeaguePage() {
 
         {/* Breadcrumb for Sub-Competitions */}
         {parentLeague && (
-          <div className="bg-white border-b border-gray-200">
+          <div className="bg-white border-b border-gray-100">
             <div className="max-w-7xl mx-auto px-4 md:px-6 py-3">
               <Link href={`/league/${parentLeague.slug}`}>
-                <a className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-orange-500 transition-colors group" data-testid="link-parent-league">
+                <a className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-orange-400 transition-colors group" data-testid="link-parent-league">
                   <div className="flex items-center gap-2">
                     {parentLeague.logo_url && (
                       <img 
