@@ -53,17 +53,47 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
           
           gameMap.forEach((gameTeams, numericId) => {
             if (gameTeams.length === 2) { // Valid game with 2 teams
-              const [team1, team2] = gameTeams;
-              const team1Score = team1.tot_spoints || 0;
-              const team2Score = team2.tot_spoints || 0;
+              // Find which team is home and which is away using is_home field
+              const homeTeam = gameTeams.find(team => team.is_home === true);
+              const awayTeam = gameTeams.find(team => team.is_home === false);
+              
+              let finalHomeTeam;
+              let finalAwayTeam;
+              
+              // If we found both teams with proper is_home flags and they're different, use them
+              if (homeTeam && awayTeam && homeTeam !== awayTeam) {
+                finalHomeTeam = homeTeam;
+                finalAwayTeam = awayTeam;
+              } 
+              // If we only found home team, the other one must be away
+              else if (homeTeam && !awayTeam) {
+                finalHomeTeam = homeTeam;
+                finalAwayTeam = gameTeams.find(team => team !== homeTeam);
+              }
+              // If we only found away team, the other one must be home
+              else if (!homeTeam && awayTeam) {
+                finalAwayTeam = awayTeam;
+                finalHomeTeam = gameTeams.find(team => team !== awayTeam);
+              }
+              // Fallback: neither team has proper is_home flags, just assign them as is
+              else {
+                finalHomeTeam = gameTeams[0];
+                finalAwayTeam = gameTeams[1];
+              }
+              
+              // Safety check: ensure we have two distinct teams
+              if (!finalHomeTeam || !finalAwayTeam || finalHomeTeam === finalAwayTeam) {
+                console.warn(`⚠️ Invalid team data for game ${numericId}, skipping`);
+                return;
+              }
               
               gamesFromTeamStats.push({
                 game_id: numericId,
-                game_date: team1.created_at || new Date().toISOString(),
-                home_team: team1.name,
-                away_team: team2.name,
-                home_score: team1Score,
-                away_score: team2Score,
+                game_date: finalHomeTeam.created_at || new Date().toISOString(),
+                home_team: finalHomeTeam.name,
+                away_team: finalAwayTeam.name,
+                home_score: finalHomeTeam.tot_spoints || 0,
+                away_score: finalAwayTeam.tot_spoints || 0,
                 status: "FINAL"
               });
             }
