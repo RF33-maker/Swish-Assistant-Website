@@ -146,11 +146,11 @@ export async function extractTeamColors(teamName: string, leagueId: string): Pro
   }
   
   // Extract fresh colors
-  const normalizedTeamName = teamName.replace(/\s+/g, '_').toLowerCase();
+  const normalizedTeamName = teamName.replace(/\s+/g, '_');
   const possibleFilenames = [
-    `${leagueId}/${normalizedTeamName}.png`,
-    `${leagueId}/${normalizedTeamName}.jpg`,
-    `${leagueId}/${normalizedTeamName}.jpeg`,
+    `${leagueId}_${normalizedTeamName}.png`,
+    `${leagueId}_${normalizedTeamName}.jpg`,
+    `${leagueId}_${normalizedTeamName}.jpeg`,
   ];
   
   for (const filename of possibleFilenames) {
