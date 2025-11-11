@@ -492,6 +492,12 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
   });
 
   const selectedTeamStats = teamStats?.find(team => team.name === selectedTeam);
+  
+  // Compute team colors for stat bars (before JSX)
+  const team1Color = teamStats && teamStats.length >= 1 && teamStats[0]?.name ? 
+    (teamColors[teamStats[0].name]?.primary || 'rgb(251, 146, 60)') : 'rgb(251, 146, 60)';
+  const team2Color = teamStats && teamStats.length >= 2 && teamStats[1]?.name ?
+    (teamColors[teamStats[1].name]?.primary || 'rgb(59, 130, 246)') : 'rgb(59, 130, 246)';
   const selectedTeamPlayers = selectedTeamStats?.players || [];
 
   return (
@@ -573,16 +579,66 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                 <TabsContent value="summary" className="mt-4 space-y-4">
                   {/* Final Score Summary */}
                   {gameInfo && (
-                    <div className="bg-gradient-to-r from-orange-50 to-orange-100 rounded-lg p-3 md:p-4 border border-orange-200">
-                      <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-0">
-                        <div className="text-center flex-1">
-                          <div className="text-sm md:text-base lg:text-lg font-semibold text-slate-800 truncate">{gameInfo.teams[0]}</div>
-                          <div className="text-2xl md:text-3xl font-bold text-orange-600">{gameInfo.teamScores[gameInfo.teams[0]]}</div>
+                    <div className="grid grid-cols-2 gap-2 rounded-lg overflow-hidden border border-gray-200">
+                      {/* Team 1 */}
+                      <div 
+                        className="relative overflow-hidden p-4 md:p-6"
+                        style={teamColors[gameInfo.teams[0]] ? {
+                          background: `linear-gradient(135deg, ${adjustOpacity(teamColors[gameInfo.teams[0]].primaryRgb, 0.15)} 0%, ${adjustOpacity(teamColors[gameInfo.teams[0]].primaryRgb, 0.05)} 100%)`
+                        } : {
+                          background: 'linear-gradient(135deg, rgba(251, 146, 60, 0.15) 0%, rgba(251, 146, 60, 0.05) 100%)'
+                        }}
+                      >
+                        {leagueId && (
+                          <div className="absolute inset-0 opacity-10 flex items-center justify-center">
+                            <TeamLogo teamName={gameInfo.teams[0]} leagueId={leagueId} className="h-24 md:h-32 w-auto" />
+                          </div>
+                        )}
+                        <div className="relative z-10 text-center">
+                          <div className="text-sm md:text-base lg:text-lg font-semibold text-slate-800 truncate mb-1">
+                            {gameInfo.teams[0]}
+                          </div>
+                          <div 
+                            className="text-3xl md:text-4xl font-bold"
+                            style={teamColors[gameInfo.teams[0]] ? {
+                              color: teamColors[gameInfo.teams[0]].primary
+                            } : {
+                              color: 'rgb(251, 146, 60)'
+                            }}
+                          >
+                            {gameInfo.teamScores[gameInfo.teams[0]]}
+                          </div>
                         </div>
-                        <div className="mx-4 md:mx-8 text-xs md:text-sm text-slate-400 font-medium">FINAL</div>
-                        <div className="text-center flex-1">
-                          <div className="text-sm md:text-base lg:text-lg font-semibold text-slate-800 truncate">{gameInfo.teams[1]}</div>
-                          <div className="text-2xl md:text-3xl font-bold text-orange-600">{gameInfo.teamScores[gameInfo.teams[1]]}</div>
+                      </div>
+
+                      {/* Team 2 */}
+                      <div 
+                        className="relative overflow-hidden p-4 md:p-6"
+                        style={teamColors[gameInfo.teams[1]] ? {
+                          background: `linear-gradient(135deg, ${adjustOpacity(teamColors[gameInfo.teams[1]].primaryRgb, 0.15)} 0%, ${adjustOpacity(teamColors[gameInfo.teams[1]].primaryRgb, 0.05)} 100%)`
+                        } : {
+                          background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(59, 130, 246, 0.05) 100%)'
+                        }}
+                      >
+                        {leagueId && (
+                          <div className="absolute inset-0 opacity-10 flex items-center justify-center">
+                            <TeamLogo teamName={gameInfo.teams[1]} leagueId={leagueId} className="h-24 md:h-32 w-auto" />
+                          </div>
+                        )}
+                        <div className="relative z-10 text-center">
+                          <div className="text-sm md:text-base lg:text-lg font-semibold text-slate-800 truncate mb-1">
+                            {gameInfo.teams[1]}
+                          </div>
+                          <div 
+                            className="text-3xl md:text-4xl font-bold"
+                            style={teamColors[gameInfo.teams[1]] ? {
+                              color: teamColors[gameInfo.teams[1]].primary
+                            } : {
+                              color: 'rgb(59, 130, 246)'
+                            }}
+                          >
+                            {gameInfo.teamScores[gameInfo.teams[1]]}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -630,26 +686,28 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                             <span className="text-sm font-medium text-slate-600">{teamStats[1].name}</span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold text-orange-600 w-12 text-right">
+                            <span className="text-sm font-semibold w-12 text-right" style={{ color: team1Color }}>
                               {teamStats[0].totalFgAttempted > 0 ? ((teamStats[0].totalFgMade / teamStats[0].totalFgAttempted) * 100).toFixed(1) : 0}%
                             </span>
                             <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
                               <div 
-                                className="h-full bg-gradient-to-r from-orange-500 to-orange-600"
+                                className="h-full"
                                 style={{ 
-                                  width: `${teamStats[0].totalFgAttempted > 0 ? (teamStats[0].totalFgMade / teamStats[0].totalFgAttempted) * 100 : 0}%` 
+                                  width: `${teamStats[0].totalFgAttempted > 0 ? (teamStats[0].totalFgMade / teamStats[0].totalFgAttempted) * 100 : 0}%`,
+                                  background: `linear-gradient(to right, ${team1Color}, ${team1Color})`
                                 }}
                               />
                             </div>
                             <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
                               <div 
-                                className="h-full bg-gradient-to-r from-blue-500 to-blue-600 float-right"
+                                className="h-full float-right"
                                 style={{ 
-                                  width: `${teamStats[1].totalFgAttempted > 0 ? (teamStats[1].totalFgMade / teamStats[1].totalFgAttempted) * 100 : 0}%` 
+                                  width: `${teamStats[1].totalFgAttempted > 0 ? (teamStats[1].totalFgMade / teamStats[1].totalFgAttempted) * 100 : 0}%`,
+                                  background: `linear-gradient(to right, ${team2Color}, ${team2Color})`
                                 }}
                               />
                             </div>
-                            <span className="text-sm font-semibold text-blue-600 w-12">
+                            <span className="text-sm font-semibold w-12" style={{ color: team2Color }}>
                               {teamStats[1].totalFgAttempted > 0 ? ((teamStats[1].totalFgMade / teamStats[1].totalFgAttempted) * 100).toFixed(1) : 0}%
                             </span>
                           </div>
@@ -663,26 +721,28 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                             <span className="text-sm font-medium text-slate-600">{teamStats[1].name}</span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold text-orange-600 w-12 text-right">
+                            <span className="text-sm font-semibold w-12 text-right" style={{ color: team1Color }}>
                               {teamStats[0].totalThreeAttempted > 0 ? ((teamStats[0].totalThreeMade / teamStats[0].totalThreeAttempted) * 100).toFixed(1) : 0}%
                             </span>
                             <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
                               <div 
-                                className="h-full bg-gradient-to-r from-orange-500 to-orange-600"
+                                className="h-full"
                                 style={{ 
-                                  width: `${teamStats[0].totalThreeAttempted > 0 ? (teamStats[0].totalThreeMade / teamStats[0].totalThreeAttempted) * 100 : 0}%` 
+                                  width: `${teamStats[0].totalThreeAttempted > 0 ? (teamStats[0].totalThreeMade / teamStats[0].totalThreeAttempted) * 100 : 0}%`,
+                                  background: `linear-gradient(to right, ${team1Color}, ${team1Color})`
                                 }}
                               />
                             </div>
                             <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
                               <div 
-                                className="h-full bg-gradient-to-r from-blue-500 to-blue-600 float-right"
+                                className="h-full float-right"
                                 style={{ 
-                                  width: `${teamStats[1].totalThreeAttempted > 0 ? (teamStats[1].totalThreeMade / teamStats[1].totalThreeAttempted) * 100 : 0}%` 
+                                  width: `${teamStats[1].totalThreeAttempted > 0 ? (teamStats[1].totalThreeMade / teamStats[1].totalThreeAttempted) * 100 : 0}%`,
+                                  background: `linear-gradient(to right, ${team2Color}, ${team2Color})`
                                 }}
                               />
                             </div>
-                            <span className="text-sm font-semibold text-blue-600 w-12">
+                            <span className="text-sm font-semibold w-12" style={{ color: team2Color }}>
                               {teamStats[1].totalThreeAttempted > 0 ? ((teamStats[1].totalThreeMade / teamStats[1].totalThreeAttempted) * 100).toFixed(1) : 0}%
                             </span>
                           </div>
@@ -696,26 +756,28 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                             <span className="text-sm font-medium text-slate-600">{teamStats[1].name}</span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold text-orange-600 w-12 text-right">
+                            <span className="text-sm font-semibold w-12 text-right" style={{ color: team1Color }}>
                               {teamStats[0].totalFtAttempted > 0 ? ((teamStats[0].totalFtMade / teamStats[0].totalFtAttempted) * 100).toFixed(1) : 0}%
                             </span>
                             <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
                               <div 
-                                className="h-full bg-gradient-to-r from-orange-500 to-orange-600"
+                                className="h-full"
                                 style={{ 
-                                  width: `${teamStats[0].totalFtAttempted > 0 ? (teamStats[0].totalFtMade / teamStats[0].totalFtAttempted) * 100 : 0}%` 
+                                  width: `${teamStats[0].totalFtAttempted > 0 ? (teamStats[0].totalFtMade / teamStats[0].totalFtAttempted) * 100 : 0}%`,
+                                  background: `linear-gradient(to right, ${team1Color}, ${team1Color})`
                                 }}
                               />
                             </div>
                             <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
                               <div 
-                                className="h-full bg-gradient-to-r from-blue-500 to-blue-600 float-right"
+                                className="h-full float-right"
                                 style={{ 
-                                  width: `${teamStats[1].totalFtAttempted > 0 ? (teamStats[1].totalFtMade / teamStats[1].totalFtAttempted) * 100 : 0}%` 
+                                  width: `${teamStats[1].totalFtAttempted > 0 ? (teamStats[1].totalFtMade / teamStats[1].totalFtAttempted) * 100 : 0}%`,
+                                  background: `linear-gradient(to right, ${team2Color}, ${team2Color})`
                                 }}
                               />
                             </div>
-                            <span className="text-sm font-semibold text-blue-600 w-12">
+                            <span className="text-sm font-semibold w-12" style={{ color: team2Color }}>
                               {teamStats[1].totalFtAttempted > 0 ? ((teamStats[1].totalFtMade / teamStats[1].totalFtAttempted) * 100).toFixed(1) : 0}%
                             </span>
                           </div>
@@ -729,24 +791,26 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                             <span className="text-sm font-medium text-slate-600">{teamStats[1].name}</span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold text-orange-600 w-12 text-right">{teamStats[0].totalRebounds}</span>
+                            <span className="text-sm font-semibold w-12 text-right" style={{ color: team1Color }}>{teamStats[0].totalRebounds}</span>
                             <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
                               <div 
-                                className="h-full bg-gradient-to-r from-orange-500 to-orange-600"
+                                className="h-full"
                                 style={{ 
-                                  width: `${(teamStats[0].totalRebounds / (teamStats[0].totalRebounds + teamStats[1].totalRebounds)) * 100}%` 
+                                  width: `${(teamStats[0].totalRebounds / (teamStats[0].totalRebounds + teamStats[1].totalRebounds)) * 100}%`,
+                                  background: `linear-gradient(to right, ${team1Color}, ${team1Color})`
                                 }}
                               />
                             </div>
                             <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
                               <div 
-                                className="h-full bg-gradient-to-r from-blue-500 to-blue-600 float-right"
+                                className="h-full float-right"
                                 style={{ 
-                                  width: `${(teamStats[1].totalRebounds / (teamStats[0].totalRebounds + teamStats[1].totalRebounds)) * 100}%` 
+                                  width: `${(teamStats[1].totalRebounds / (teamStats[0].totalRebounds + teamStats[1].totalRebounds)) * 100}%`,
+                                  background: `linear-gradient(to right, ${team2Color}, ${team2Color})`
                                 }}
                               />
                             </div>
-                            <span className="text-sm font-semibold text-blue-600 w-12">{teamStats[1].totalRebounds}</span>
+                            <span className="text-sm font-semibold w-12" style={{ color: team2Color }}>{teamStats[1].totalRebounds}</span>
                           </div>
                         </div>
 
@@ -758,24 +822,26 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                             <span className="text-sm font-medium text-slate-600">{teamStats[1].name}</span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold text-orange-600 w-12 text-right">{teamStats[0].totalAssists}</span>
+                            <span className="text-sm font-semibold w-12 text-right" style={{ color: team1Color }}>{teamStats[0].totalAssists}</span>
                             <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
                               <div 
-                                className="h-full bg-gradient-to-r from-orange-500 to-orange-600"
+                                className="h-full"
                                 style={{ 
-                                  width: `${(teamStats[0].totalAssists / (teamStats[0].totalAssists + teamStats[1].totalAssists)) * 100}%` 
+                                  width: `${(teamStats[0].totalAssists / (teamStats[0].totalAssists + teamStats[1].totalAssists)) * 100}%`,
+                                  background: `linear-gradient(to right, ${team1Color}, ${team1Color})`
                                 }}
                               />
                             </div>
                             <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
                               <div 
-                                className="h-full bg-gradient-to-r from-blue-500 to-blue-600 float-right"
+                                className="h-full float-right"
                                 style={{ 
-                                  width: `${(teamStats[1].totalAssists / (teamStats[0].totalAssists + teamStats[1].totalAssists)) * 100}%` 
+                                  width: `${(teamStats[1].totalAssists / (teamStats[0].totalAssists + teamStats[1].totalAssists)) * 100}%`,
+                                  background: `linear-gradient(to right, ${team2Color}, ${team2Color})`
                                 }}
                               />
                             </div>
-                            <span className="text-sm font-semibold text-blue-600 w-12">{teamStats[1].totalAssists}</span>
+                            <span className="text-sm font-semibold w-12" style={{ color: team2Color }}>{teamStats[1].totalAssists}</span>
                           </div>
                         </div>
                       </div>
