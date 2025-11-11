@@ -117,3 +117,65 @@ export function getContrastColor(rgb: { r: number; g: number; b: number }): stri
 export function adjustOpacity(rgb: { r: number; g: number; b: number }, opacity: number): string {
   return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${opacity})`;
 }
+
+export async function extractTeamColors(teamName: string, leagueId: string): Promise<TeamColors | null> {
+  const CACHE_KEY = 'team_colors_cache';
+  const CACHE_VERSION = '2';
+  const CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days
+  
+  // Try to load from cache
+  let cache: Record<string, { colors: TeamColors; timestamp: number; version: string }> = {};
+  try {
+    const cached = localStorage.getItem(CACHE_KEY);
+    if (cached) {
+      cache = JSON.parse(cached);
+    }
+  } catch (err) {
+    console.warn("Failed to load color cache:", err);
+  }
+  
+  const cacheKey = `${leagueId}_${teamName}`;
+  const cachedEntry = cache[cacheKey];
+  
+  // Return cached color if valid
+  if (cachedEntry && 
+      cachedEntry.version === CACHE_VERSION && 
+      Date.now() - cachedEntry.timestamp < CACHE_DURATION) {
+    console.log(`🎨 Using cached colors for ${teamName}`);
+    return cachedEntry.colors;
+  }
+  
+  // Extract fresh colors
+  const normalizedTeamName = teamName.replace(/\s+/g, '_').toLowerCase();
+  const possibleFilenames = [
+    `${leagueId}/${normalizedTeamName}.png`,
+    `${leagueId}/${normalizedTeamName}.jpg`,
+    `${leagueId}/${normalizedTeamName}.jpeg`,
+  ];
+  
+  for (const filename of possibleFilenames) {
+    const logoUrl = `https://omkwqpcgttrgvbhcxgqf.supabase.co/storage/v1/object/public/team-logos/${filename}`;
+    const extractedColors = await extractColorsFromImage(logoUrl);
+    
+    if (extractedColors) {
+      // Cache the result
+      cache[cacheKey] = {
+        colors: extractedColors,
+        timestamp: Date.now(),
+        version: CACHE_VERSION,
+      };
+      
+      try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+      } catch (err) {
+        console.warn("Failed to cache colors:", err);
+      }
+      
+      console.log(`🎨 Extracted and cached colors for ${teamName}:`, extractedColors);
+      return extractedColors;
+    }
+  }
+  
+  console.log(`🎨 No colors found for ${teamName}, will use defaults`);
+  return null;
+}
