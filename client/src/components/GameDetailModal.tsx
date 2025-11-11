@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { X, Calendar, Users, Trophy, TrendingUp, Clock, Target, Bot, Sparkles, Zap, Activity, MapPin } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { TeamLogo } from "./TeamLogo";
+import { extractColorsFromImage, TeamColors, adjustOpacity } from "@/lib/colorExtractor";
 
 interface PlayerGameStats {
   id: string;
@@ -87,6 +89,10 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
   const [shotQuarterFilter, setShotQuarterFilter] = useState<string>("all");
   const [shotTypeFilter, setShotTypeFilter] = useState<string>("all");
   const [quarterFilter, setQuarterFilter] = useState<string>("all");
+  
+  // Team branding colors
+  const [teamColors, setTeamColors] = useState<Record<string, TeamColors>>({});
+  const [leagueId, setLeagueId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchGameDetails = async () => {
@@ -122,6 +128,10 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
           });
           // Use the created_at from team_stats for the game date
           gameDate = teamStatsData[0].created_at || new Date().toISOString();
+          // Store league_id for logo fetching
+          if (teamStatsData[0]?.league_id) {
+            setLeagueId(teamStatsData[0].league_id);
+          }
           console.log("🏆 Teams from team_stats:", Object.keys(teamsInfo), "Scores:", teamsInfo);
         }
         
@@ -355,10 +365,11 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
     }
   };
 
-  // Reset events when gameId changes
+  // Reset events and team colors when gameId changes
   useEffect(() => {
     setEventsLoaded(false);
     setLiveEvents([]);
+    setTeamColors({}); // Clear colors to prevent showing stale branding
   }, [gameId]);
 
   // Load events when Feed or Shot Chart tab is activated, or when gameId changes while on those tabs
@@ -367,6 +378,85 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
       fetchLiveEvents();
     }
   }, [activeTab, eventsLoaded, gameId]);
+
+  // Extract team colors from logos with caching
+  useEffect(() => {
+    const extractTeamColors = async () => {
+      if (!gameInfo?.teams || !leagueId) return;
+      
+      const colors: Record<string, TeamColors> = {};
+      const CACHE_KEY = 'team_colors_cache';
+      const CACHE_VERSION = '2'; // Increment when color extraction changes
+      
+      // Try to load from cache
+      let cache: Record<string, { colors: TeamColors; timestamp: number; version: string }> = {};
+      try {
+        const cached = localStorage.getItem(CACHE_KEY);
+        if (cached) {
+          cache = JSON.parse(cached);
+        }
+      } catch (error) {
+        console.warn("Failed to load color cache:", error);
+      }
+      
+      for (const teamName of gameInfo.teams) {
+        const cacheKey = `${leagueId}_${teamName}`;
+        const cachedEntry = cache[cacheKey];
+        
+        // Use cached color if valid (less than 7 days old and same version)
+        if (cachedEntry && 
+            cachedEntry.version === CACHE_VERSION &&
+            Date.now() - cachedEntry.timestamp < 7 * 24 * 60 * 60 * 1000) {
+          colors[teamName] = cachedEntry.colors;
+          console.log(`✅ Using cached colors for ${teamName}`);
+          continue;
+        }
+        
+        // Extract colors from logo
+        const teamNameNormalized = teamName.replace(/\s+/g, '_');
+        const possibleFilenames = [
+          `${leagueId}_${teamNameNormalized}.png`,
+          `${leagueId}_${teamNameNormalized}.jpg`,
+          `${leagueId}_${teamNameNormalized}_Senior_Men.png`,
+        ];
+        
+        for (const filename of possibleFilenames) {
+          const logoUrl = `https://omkwqpcgttrgvbhcxgqf.supabase.co/storage/v1/object/public/team-logos/${filename}`;
+          const extractedColors = await extractColorsFromImage(logoUrl);
+          
+          if (extractedColors) {
+            colors[teamName] = extractedColors;
+            // Cache the result
+            cache[cacheKey] = {
+              colors: extractedColors,
+              timestamp: Date.now(),
+              version: CACHE_VERSION,
+            };
+            console.log(`🎨 Extracted and cached colors for ${teamName}:`, extractedColors);
+            break;
+          }
+        }
+      }
+      
+      // Save updated cache
+      try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+      } catch (error) {
+        console.warn("Failed to save color cache:", error);
+      }
+      
+      // Always set teamColors (even if empty) to ensure clean state
+      setTeamColors(colors);
+      
+      if (Object.keys(colors).length === 0) {
+        console.log("⚠️ No team colors extracted, using default theme");
+      } else {
+        console.log("✅ Team colors loaded:", Object.keys(colors));
+      }
+    };
+    
+    extractTeamColors();
+  }, [gameInfo?.teams, leagueId]);
 
   if (!isOpen) return null;
 
