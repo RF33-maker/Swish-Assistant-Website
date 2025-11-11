@@ -312,10 +312,30 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
     
     setEventsLoading(true);
     try {
+      // First, get the game_key from player_stats using numeric_id
+      const { data: gameData, error: gameError } = await supabase
+        .from("player_stats")
+        .select("game_key")
+        .eq("numeric_id", gameId)
+        .limit(1)
+        .single();
+      
+      if (gameError || !gameData?.game_key) {
+        console.error("Error fetching game_key:", gameError);
+        console.log(`⚠️ No game_key found for numeric_id ${gameId}`);
+        setEventsLoaded(true); // Mark as loaded to prevent retry loop
+        setEventsLoading(false);
+        return;
+      }
+      
+      const gameKey = gameData.game_key;
+      console.log(`🔑 Found game_key: ${gameKey} for numeric_id: ${gameId}`);
+      
+      // Now fetch live_events using the game_key
       const { data: events, error } = await supabase
         .from("live_events")
         .select("*")
-        .eq("game_key", gameId)
+        .eq("game_key", gameKey)
         .order("action_number", { ascending: true });
       
       if (error) {
@@ -324,7 +344,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
       }
       
       if (events) {
-        console.log(`📊 Loaded ${events.length} live events for game ${gameId}`);
+        console.log(`📊 Loaded ${events.length} live events for game_key ${gameKey} (numeric_id: ${gameId})`);
         setLiveEvents(events);
         setEventsLoaded(true);
       }
