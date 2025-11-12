@@ -235,18 +235,33 @@ export default function TeamProfile() {
           const playerIds = Array.from(new Set(allStats.map((stat: any) => stat.player_id).filter(Boolean)));
           const gameKeys = Object.keys(gamesByGameKey);
 
-          // Fetch team names from team_stats for each game
-          const { data: teamStatsData } = await supabase
+          // Fetch team stats for all games to get opponent names
+          // Each game_key has 2 records in team_stats (one for each team with side="1" and side="2")
+          const { data: allTeamStats } = await supabase
             .from("team_stats")
-            .select("game_key, home_team, away_team")
+            .select("game_key, name, side")
             .in("game_key", gameKeys);
           
-          // Update gamesByGameKey with team names from team_stats
-          if (teamStatsData) {
-            teamStatsData.forEach((teamStat: any) => {
-              if (gamesByGameKey[teamStat.game_key]) {
-                gamesByGameKey[teamStat.game_key].home_team = teamStat.home_team;
-                gamesByGameKey[teamStat.game_key].away_team = teamStat.away_team;
+          // Group team stats by game_key to find opponents
+          if (allTeamStats) {
+            const statsByGame: Record<string, any[]> = {};
+            allTeamStats.forEach((stat: any) => {
+              if (!statsByGame[stat.game_key]) {
+                statsByGame[stat.game_key] = [];
+              }
+              statsByGame[stat.game_key].push(stat);
+            });
+            
+            // For each game, find the opponent (the team that's NOT this team)
+            Object.keys(statsByGame).forEach((gameKey: string) => {
+              const teamsInGame = statsByGame[gameKey];
+              const ourTeam = teamsInGame.find((t: any) => normalizeTeamName(t.name) === normalizedTeamName);
+              const opponent = teamsInGame.find((t: any) => normalizeTeamName(t.name) !== normalizedTeamName);
+              
+              if (gamesByGameKey[gameKey] && opponent) {
+                gamesByGameKey[gameKey].opponent_name = opponent.name;
+                // side="1" is typically the home team
+                gamesByGameKey[gameKey].is_home_game = ourTeam?.side === "1";
               }
             });
           }
@@ -275,11 +290,9 @@ export default function TeamProfile() {
           const games = Object.values(gamesByGameKey).map((gameData: any) => {
             const ourScore = gameData.playerStats.reduce((sum: number, stat: any) => sum + (stat.spoints || 0), 0);
             
-            // Use normalized team names for comparison
-            const normalizedHome = normalizeTeamName(gameData.home_team || '');
-            const normalizedAway = normalizeTeamName(gameData.away_team || '');
-            const isHome = normalizedHome === normalizedTeamName;
-            const opponent = isHome ? gameData.away_team : gameData.home_team;
+            // Get opponent and home status from team_stats data
+            const opponent = gameData.opponent_name || 'Unknown Opponent';
+            const isHome = gameData.is_home_game || false;
             
             const opponentStats = opponentStatsByGame[gameData.game_key] || [];
             const opponentScore = opponentStats.reduce((sum: number, stat: any) => sum + (stat.spoints || 0), 0);
