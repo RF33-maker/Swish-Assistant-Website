@@ -235,6 +235,22 @@ export default function TeamProfile() {
           const playerIds = Array.from(new Set(allStats.map((stat: any) => stat.player_id).filter(Boolean)));
           const gameKeys = Object.keys(gamesByGameKey);
 
+          // Fetch team names from team_stats for each game
+          const { data: teamStatsData } = await supabase
+            .from("team_stats")
+            .select("game_key, home_team, away_team")
+            .in("game_key", gameKeys);
+          
+          // Update gamesByGameKey with team names from team_stats
+          if (teamStatsData) {
+            teamStatsData.forEach((teamStat: any) => {
+              if (gamesByGameKey[teamStat.game_key]) {
+                gamesByGameKey[teamStat.game_key].home_team = teamStat.home_team;
+                gamesByGameKey[teamStat.game_key].away_team = teamStat.away_team;
+              }
+            });
+          }
+
           // Fetch ALL game stats in ONE query instead of one per game
           const { data: allGamesStats } = await supabase
             .from("player_stats")
