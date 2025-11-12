@@ -64,6 +64,63 @@ interface GameDetailModalProps {
   onClose: () => void;
 }
 
+// Helper function to format detailed event descriptions
+function formatEventDescription(event: LiveEvent): string {
+  const actionType = event.action_type?.toLowerCase() || '';
+  const subType = event.sub_type?.toLowerCase() || '';
+  const qualifiers = event.qualifiers || [];
+  
+  // Build description based on action type
+  let description = '';
+  
+  if (actionType.includes('2pt') || actionType.includes('3pt')) {
+    // Shot events
+    const pointValue = actionType.includes('3pt') ? '3pt' : '2pt';
+    if (subType) {
+      // Capitalize sub_type for display
+      const formattedSubType = subType.split(' ').map(word => 
+        word.charAt(0).toUpperCase() + word.slice(1)
+      ).join(' ');
+      description = `${pointValue} ${formattedSubType}`;
+    } else {
+      description = `${pointValue} Shot`;
+    }
+    // Add qualifiers if present
+    if (qualifiers.length > 0) {
+      const formattedQualifiers = qualifiers.map(q => 
+        q.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+      ).join(', ');
+      description += ` (${formattedQualifiers})`;
+    }
+  } else if (actionType.includes('rebound')) {
+    // Rebound events
+    if (subType) {
+      const reboundType = subType.charAt(0).toUpperCase() + subType.slice(1);
+      description = `${reboundType} Rebound`;
+    } else {
+      description = 'Rebound';
+    }
+  } else if (actionType.includes('assist')) {
+    description = 'Assist';
+  } else if (actionType.includes('turnover')) {
+    description = subType ? `Turnover (${subType})` : 'Turnover';
+  } else if (actionType.includes('foul')) {
+    description = subType ? `${subType} Foul` : 'Foul';
+  } else if (actionType.includes('block')) {
+    description = 'Block';
+  } else if (actionType.includes('steal')) {
+    description = 'Steal';
+  } else if (actionType.includes('freethrow') || actionType.includes('free throw')) {
+    description = 'Free Throw';
+    if (subType) description += ` (${subType})`;
+  } else {
+    // Fallback to description or action_type
+    description = event.description || actionType || 'Unknown Action';
+  }
+  
+  return description;
+}
+
 export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailModalProps) {
   const [gameStats, setGameStats] = useState<PlayerGameStats[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1161,7 +1218,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                     {event.player_name}
                                   </div>
                                   <div className="text-sm text-slate-600 mt-1">
-                                    {event.description || event.action_type}
+                                    {formatEventDescription(event)}
                                   </div>
                                 </div>
                                 {event.score && (
