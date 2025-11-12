@@ -41,6 +41,7 @@ interface Game {
   opponent: string;
   opponentScore?: number;
   isWin?: boolean;
+  isHome?: boolean;
 }
 
 interface UpcomingGame {
@@ -280,7 +281,8 @@ export default function TeamProfile() {
               date: gameData.created_at,
               opponent: opponent,
               opponentScore: opponentScore,
-              isWin: isWin
+              isWin: isWin,
+              isHome: isHome
             };
           });
           
@@ -925,7 +927,9 @@ export default function TeamProfile() {
                 {team.recentGames.slice(0, 8).map((game: Game, index: number) => (
                   <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
                     <div className="flex-1">
-                      <div className="font-medium text-slate-800 text-sm md:text-base">vs {game.opponent}</div>
+                      <div className="font-medium text-slate-800 text-sm md:text-base">
+                        {game.isHome ? 'vs' : '@'} {game.opponent}
+                      </div>
                       <div className="text-xs md:text-sm text-slate-500 mt-1">
                         Final: <span className="font-semibold text-slate-700">{game.totalPoints} - {game.opponentScore}</span>
                       </div>
