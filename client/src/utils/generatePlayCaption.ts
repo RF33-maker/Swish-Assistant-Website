@@ -1,9 +1,10 @@
 export function generatePlayCaption(play: any): string {
-  const player = play.player_name || "Unknown Player";
-  const action = play.action_type;
+  const action = play.action_type?.toLowerCase() || "";
   const sub = play.sub_type || "";
   const qualifiers: string[] = play.qualifiers || [];
   const score = play.score || "";
+  const period = play.period;
+  const player = play.player_name?.trim();
   
   const emojis: Record<string, string> = {
     "2pt": "🏀",
@@ -15,10 +16,64 @@ export function generatePlayCaption(play: any): string {
     "turnover": "⚡",
     "steal": "🔒",
     "block": "⛔",
+    "timeout": "🕐",
+    "period": "🏀",
+    "jumpball": "🏀",
   };
 
   if (!action) return "";
 
+  // System events (no player involved)
+  const systemEvents = [
+    "period_start", "periodstart", "period start", "start",
+    "period_end", "periodend", "period end", "end",
+    "timeout", "time out",
+    "jumpball", "jump ball",
+    "game_start", "gamestart", "game start",
+    "game_end", "gameend", "game end",
+    "teamrebound", "team rebound", "teamreb"
+  ];
+
+  const isSystemEvent = systemEvents.some(evt => action.includes(evt)) || !player;
+
+  if (isSystemEvent) {
+    // Period starts
+    if (action.includes("start") || action.includes("begin")) {
+      const quarterNames = ["1st Quarter", "2nd Quarter", "3rd Quarter", "4th Quarter"];
+      const periodName = period && period <= 4 ? quarterNames[period - 1] : `Period ${period || ""}`;
+      return `Start of ${periodName} 🏀`;
+    }
+
+    // Period ends
+    if (action.includes("end")) {
+      const quarterNames = ["1st Quarter", "2nd Quarter", "3rd Quarter", "4th Quarter"];
+      const periodName = period && period <= 4 ? quarterNames[period - 1] : `Period ${period || ""}`;
+      return `End of ${periodName}`;
+    }
+
+    // Timeouts
+    if (action.includes("timeout") || action.includes("time out")) {
+      return `Timeout called 🕐`;
+    }
+
+    // Jump ball
+    if (action.includes("jumpball") || action.includes("jump ball")) {
+      return `Jump ball 🏀`;
+    }
+
+    // Team rebounds
+    if (action.includes("teamreb") || action.includes("team rebound")) {
+      return `Team rebound 💪`;
+    }
+
+    // Generic system event
+    if (sub) {
+      return `${sub}`;
+    }
+    return action.charAt(0).toUpperCase() + action.slice(1);
+  }
+
+  // Player-based events
   // Shot events - 2pt and 3pt
   if (["2pt", "3pt"].includes(action)) {
     const shotWord = sub || "jumper";
@@ -43,7 +98,7 @@ export function generatePlayCaption(play: any): string {
   }
 
   // Rebounds
-  if (action === "rebound") {
+  if (action.includes("rebound")) {
     if (sub.toLowerCase().includes("defensive")) {
       return `${player} cleans the glass with the defensive rebound. 💪`;
     }
@@ -55,17 +110,17 @@ export function generatePlayCaption(play: any): string {
   }
 
   // Free throws
-  if (action === "freethrow") {
+  if (action.includes("freethrow") || action.includes("free throw")) {
     return `${player} sinks it from the line. 🎯`;
   }
 
   // Assists
-  if (action === "assist") {
+  if (action.includes("assist")) {
     return `${player} threads the needle for the dime. 🧠`;
   }
 
   // Fouls
-  if (action === "foul") {
+  if (action.includes("foul")) {
     if (sub) {
       return `${sub} foul on ${player}. 🚫`;
     }
@@ -73,20 +128,25 @@ export function generatePlayCaption(play: any): string {
   }
 
   // Turnovers
-  if (action === "turnover") {
+  if (action.includes("turnover")) {
     return `${player} turns it over — going the other way! ⚡`;
   }
 
   // Steals
-  if (action === "steal") {
+  if (action.includes("steal")) {
     return `${player} picks his pocket! 🔒`;
   }
 
   // Blocks
-  if (action === "block") {
+  if (action.includes("block")) {
     return `${player} denies it at the rim! ⛔`;
   }
 
-  // Default fallback
-  return `${player} ${action} ${sub ? sub : ""}`.trim();
+  // Default fallback with player
+  if (player) {
+    return `${player} ${action} ${sub ? sub : ""}`.trim();
+  }
+  
+  // Fallback for unknown events
+  return sub || action.charAt(0).toUpperCase() + action.slice(1);
 }

@@ -1159,10 +1159,12 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                       {event.clock}
                                     </span>
                                   </div>
-                                  <div className="text-sm font-medium text-slate-800">
-                                    {event.player_name}
-                                  </div>
-                                  <div className="text-sm text-slate-600 mt-1">
+                                  {event.player_name && (
+                                    <div className="text-sm font-medium text-slate-800">
+                                      {event.player_name}
+                                    </div>
+                                  )}
+                                  <div className="text-sm font-bold text-orange-700 mt-1">
                                     {generatePlayCaption(event)}
                                   </div>
                                 </div>
