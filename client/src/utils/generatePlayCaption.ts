@@ -37,28 +37,24 @@ export function generatePlayCaption(play: any): string {
   const isSystemEvent = systemEvents.some(evt => action.includes(evt)) || !player;
 
   if (isSystemEvent) {
-    // Period starts
+    // Period starts - just show "Start"
     if (action.includes("start") || action.includes("begin")) {
-      const quarterNames = ["1st Quarter", "2nd Quarter", "3rd Quarter", "4th Quarter"];
-      const periodName = period && period <= 4 ? quarterNames[period - 1] : `Period ${period || ""}`;
-      return `Start of ${periodName} 🏀`;
+      return `Start`;
     }
 
     // Period ends
     if (action.includes("end")) {
-      const quarterNames = ["1st Quarter", "2nd Quarter", "3rd Quarter", "4th Quarter"];
-      const periodName = period && period <= 4 ? quarterNames[period - 1] : `Period ${period || ""}`;
-      return `End of ${periodName}`;
+      return `End of quarter`;
     }
 
     // Timeouts
     if (action.includes("timeout") || action.includes("time out")) {
-      return `Timeout called 🕐`;
+      return `Timeout 🕐`;
     }
 
-    // Jump ball
-    if (action.includes("jumpball") || action.includes("jump ball")) {
-      return `Jump ball 🏀`;
+    // Jump ball - just show "Jump ball"
+    if (action.includes("jumpball") || action.includes("jump ball") || action === "jump") {
+      return `Jump ball`;
     }
 
     // Team rebounds
