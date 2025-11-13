@@ -1,0 +1,82 @@
+🧩 TASK: Upgrade the play-by-play feed section in GameDetailModal.tsx to use dynamic, human-readable captions with emojis and natural phrasing — similar to Real Sports or ESPN GameCast.
+
+---
+
+📁 Files to Edit:
+- src/components/GameDetailModal.tsx
+- (create helper) src/utils/generatePlayCaption.ts
+
+---
+
+🎯 GOAL:
+Transform plain events like:
+  “L. Ayinla — 2pt”
+into vibrant, contextual captions such as:
+  “L. Ayinla finishes the fast break with a layup! 🏀”
+  “Sagkovits cleans the glass with the defensive rebound 💪”
+  “Lewis drills the jumper from mid-range 🎯”
+
+---
+
+✅ STEPS TO IMPLEMENT:
+
+### 1️⃣ Create helper file:
+**src/utils/generatePlayCaption.ts**
+```ts
+export function generatePlayCaption(play: any): string {
+  const player = play.player_name || "Unknown Player";
+  const action = play.action_type;
+  const sub = play.sub_type || "";
+  const qualifiers: string[] = play.qualifiers || [];
+  const score = play.score || "";
+  const emojis: Record<string, string> = {
+    "2pt": "🏀",
+    "3pt": "🎯",
+    "rebound": "💪",
+    "freethrow": "🎯",
+    "assist": "🧠",
+    "foul": "🚫",
+    "turnover": "⚡",
+    "steal": "🔒",
+    "block": "⛔",
+  };
+
+  if (!action) return "";
+
+  // Shot events
+  if (["2pt", "3pt"].includes(action)) {
+    const shotWord = sub || "jumper";
+    if (qualifiers.includes("fastbreak")) 
+      return `${player} finishes the fast break with a ${shotWord}! ${emojis[action]}`;
+    if (qualifiers.includes("pointsinthepaint")) 
+      return `${player} scores inside with a ${shotWord}. ${emojis[action]}`;
+    return `${player} hits the ${shotWord}! ${emojis[action]} ${score ? `(${score})` : ""}`;
+  }
+
+  // Rebounds
+  if (action === "rebound") {
+    const type = sub ? `${sub} rebound` : "rebound";
+    return `${player} secures the ${type}. 💪`;
+  }
+
+  // Free throws
+  if (action === "freethrow") return `${player} sinks it from the line. 🎯`;
+
+  // Assists
+  if (action === "assist") return `${player} threads the needle for the dime. 🧠`;
+
+  // Fouls
+  if (action === "foul") return `Foul on ${player}. 🚫`;
+
+  // Turnovers
+  if (action === "turnover") return `${player} turns it over — going the other way! ⚡`;
+
+  // Steals
+  if (action === "steal") return `${player} picks his pocket! 🔒`;
+
+  // Blocks
+  if (action === "block") return `${player} denies it at the rim! ⛔`;
+
+  // Default fallback
+  return `${player} ${action} ${sub ? sub : ""}`.trim();
+}
