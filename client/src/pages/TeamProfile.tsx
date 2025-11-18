@@ -235,11 +235,11 @@ export default function TeamProfile() {
           const playerIds = Array.from(new Set(allStats.map((stat: any) => stat.player_id).filter(Boolean)));
           const gameKeys = Object.keys(gamesByGameKey);
 
-          // Fetch team stats for all games to get opponent names
+          // Fetch team stats for all games to get opponent names and full stats
           // Each game_key has 2 records in team_stats (one for each team with side="1" and side="2")
           const { data: allTeamStats } = await supabase
             .from("team_stats")
-            .select("game_key, name, side")
+            .select("*")  // Select all fields including tot_s* stats
             .in("game_key", gameKeys);
           
           // Group team stats by game_key to find opponents
