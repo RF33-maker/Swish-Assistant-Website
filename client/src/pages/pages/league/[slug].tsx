@@ -217,6 +217,62 @@ export default function LeaguePage() {
             valueA = parseFloat(a.ftPercentage) || 0;
             valueB = parseFloat(b.ftPercentage) || 0;
             break;
+          case 'FGM':
+            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgFGM) || 0) : (a.totalFGM || 0);
+            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgFGM) || 0) : (b.totalFGM || 0);
+            break;
+          case 'FGA':
+            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgFGA) || 0) : (a.totalFGA || 0);
+            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgFGA) || 0) : (b.totalFGA || 0);
+            break;
+          case '2PM':
+            valueA = playerStatsView === 'averages' ? (parseFloat(a.avg2PM) || 0) : (a.total2PM || 0);
+            valueB = playerStatsView === 'averages' ? (parseFloat(b.avg2PM) || 0) : (b.total2PM || 0);
+            break;
+          case '2PA':
+            valueA = playerStatsView === 'averages' ? (parseFloat(a.avg2PA) || 0) : (a.total2PA || 0);
+            valueB = playerStatsView === 'averages' ? (parseFloat(b.avg2PA) || 0) : (b.total2PA || 0);
+            break;
+          case '2P%':
+            valueA = parseFloat(a.twoPercentage) || 0;
+            valueB = parseFloat(b.twoPercentage) || 0;
+            break;
+          case '3PM':
+            valueA = playerStatsView === 'averages' ? (parseFloat(a.avg3PM) || 0) : (a.total3PM || 0);
+            valueB = playerStatsView === 'averages' ? (parseFloat(b.avg3PM) || 0) : (b.total3PM || 0);
+            break;
+          case '3PA':
+            valueA = playerStatsView === 'averages' ? (parseFloat(a.avg3PA) || 0) : (a.total3PA || 0);
+            valueB = playerStatsView === 'averages' ? (parseFloat(b.avg3PA) || 0) : (b.total3PA || 0);
+            break;
+          case 'FTM':
+            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgFTM) || 0) : (a.totalFTM || 0);
+            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgFTM) || 0) : (b.totalFTM || 0);
+            break;
+          case 'FTA':
+            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgFTA) || 0) : (a.totalFTA || 0);
+            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgFTA) || 0) : (b.totalFTA || 0);
+            break;
+          case 'ORB':
+            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgORB) || 0) : (a.totalORB || 0);
+            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgORB) || 0) : (b.totalORB || 0);
+            break;
+          case 'DRB':
+            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgDRB) || 0) : (a.totalDRB || 0);
+            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgDRB) || 0) : (b.totalDRB || 0);
+            break;
+          case 'TRB':
+            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgRebounds) || 0) : (a.totalRebounds || 0);
+            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgRebounds) || 0) : (b.totalRebounds || 0);
+            break;
+          case 'PF':
+            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgPersonalFouls) || 0) : (a.totalPersonalFouls || 0);
+            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgPersonalFouls) || 0) : (b.totalPersonalFouls || 0);
+            break;
+          case '+/-':
+            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgPlusMinus) || 0) : (a.totalPlusMinus || 0);
+            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgPlusMinus) || 0) : (b.totalPlusMinus || 0);
+            break;
           default:
             valueA = 0;
             valueB = 0;
@@ -855,12 +911,17 @@ export default function LeaguePage() {
             totalTurnovers: 0,
             totalFGM: 0,
             totalFGA: 0,
+            total2PM: 0,
+            total2PA: 0,
             total3PM: 0,
             total3PA: 0,
             totalFTM: 0,
             totalFTA: 0,
+            totalORB: 0,
+            totalDRB: 0,
             totalMinutes: 0,
-            totalPersonalFouls: 0
+            totalPersonalFouls: 0,
+            totalPlusMinus: 0
           });
         }
 
@@ -874,11 +935,16 @@ export default function LeaguePage() {
         player.totalTurnovers += stat.sturnovers || 0;
         player.totalFGM += stat.sfieldgoalsmade || 0;
         player.totalFGA += stat.sfieldgoalsattempted || 0;
+        player.total2PM += stat.stwopointersmade || 0;
+        player.total2PA += stat.stwopointersattempted || 0;
         player.total3PM += stat.sthreepointersmade || 0;
         player.total3PA += stat.sthreepointersattempted || 0;
         player.totalFTM += stat.sfreethrowsmade || 0;
         player.totalFTA += stat.sfreethrowsattempted || 0;
+        player.totalORB += stat.sreboundsoffensive || 0;
+        player.totalDRB += stat.sreboundsdefensive || 0;
         player.totalPersonalFouls += stat.sfoulspersonal || 0;
+        player.totalPlusMinus += stat.splusminuspoints || 0;
         
         // Parse minutes from sminutes field
         const minutesParts = stat.sminutes?.split(':');
@@ -980,11 +1046,16 @@ export default function LeaguePage() {
             existingPlayer.totalTurnovers += player.totalTurnovers;
             existingPlayer.totalFGM += player.totalFGM;
             existingPlayer.totalFGA += player.totalFGA;
+            existingPlayer.total2PM += player.total2PM;
+            existingPlayer.total2PA += player.total2PA;
             existingPlayer.total3PM += player.total3PM;
             existingPlayer.total3PA += player.total3PA;
             existingPlayer.totalFTM += player.totalFTM;
             existingPlayer.totalFTA += player.totalFTA;
+            existingPlayer.totalORB += player.totalORB;
+            existingPlayer.totalDRB += player.totalDRB;
             existingPlayer.totalPersonalFouls += player.totalPersonalFouls;
+            existingPlayer.totalPlusMinus += player.totalPlusMinus;
             existingPlayer.totalMinutes += player.totalMinutes;
             foundMatch = true;
             break;
@@ -1008,8 +1079,20 @@ export default function LeaguePage() {
         avgBlocks: (player.totalBlocks / player.games).toFixed(1),
         avgTurnovers: (player.totalTurnovers / player.games).toFixed(1),
         avgMinutes: (player.totalMinutes / player.games).toFixed(1),
+        avgFGM: (player.totalFGM / player.games).toFixed(1),
+        avgFGA: (player.totalFGA / player.games).toFixed(1),
+        avg2PM: (player.total2PM / player.games).toFixed(1),
+        avg2PA: (player.total2PA / player.games).toFixed(1),
+        avg3PM: (player.total3PM / player.games).toFixed(1),
+        avg3PA: (player.total3PA / player.games).toFixed(1),
+        avgFTM: (player.totalFTM / player.games).toFixed(1),
+        avgFTA: (player.totalFTA / player.games).toFixed(1),
+        avgORB: (player.totalORB / player.games).toFixed(1),
+        avgDRB: (player.totalDRB / player.games).toFixed(1),
         avgPersonalFouls: (player.totalPersonalFouls / player.games).toFixed(1),
+        avgPlusMinus: (player.totalPlusMinus / player.games).toFixed(1),
         fgPercentage: player.totalFGA > 0 ? ((player.totalFGM / player.totalFGA) * 100).toFixed(1) : '0.0',
+        twoPercentage: player.total2PA > 0 ? ((player.total2PM / player.total2PA) * 100).toFixed(1) : '0.0',
         threePercentage: player.total3PA > 0 ? ((player.total3PM / player.total3PA) * 100).toFixed(1) : '0.0',
         ftPercentage: player.totalFTA > 0 ? ((player.totalFTM / player.totalFTA) * 100).toFixed(1) : '0.0'
       })).sort((a, b) => parseFloat(b.avgPoints) - parseFloat(a.avgPoints));
@@ -2145,15 +2228,28 @@ export default function LeaguePage() {
                           <th className="text-left py-3 px-2 font-semibold text-slate-700 sticky left-0 bg-white">Player</th>
                           <th className="text-center py-3 px-2 font-semibold text-slate-700">GP</th>
                           <th className="text-center py-3 px-2 font-semibold text-slate-700">MIN</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">PTS</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">REB</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FGM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FGA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FG%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">2PM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">2PA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">2P%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">3PM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">3PA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">3P%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FTM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FTA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FT%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">ORB</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">DRB</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">TRB</th>
                           <th className="text-center py-3 px-2 font-semibold text-slate-700">AST</th>
                           <th className="text-center py-3 px-2 font-semibold text-slate-700">STL</th>
                           <th className="text-center py-3 px-2 font-semibold text-slate-700">BLK</th>
                           <th className="text-center py-3 px-2 font-semibold text-slate-700">TO</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FG%</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">3P%</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FT%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">PF</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">+/-</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">PTS</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -2209,38 +2305,285 @@ export default function LeaguePage() {
                           </th>
                           <th 
                             onClick={() => {
-                              if (statsSortColumn === 'PTS') {
+                              if (statsSortColumn === 'FGM') {
                                 setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
                               } else {
-                                setStatsSortColumn('PTS');
+                                setStatsSortColumn('FGM');
                                 setStatsSortDirection('desc');
                               }
                             }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'PTS' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-pts"
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'FGM' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-fgm"
                           >
                             <div className="flex items-center justify-center gap-1">
-                              PTS
-                              {statsSortColumn === 'PTS' && (
+                              FGM
+                              {statsSortColumn === 'FGM' && (
                                 <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
                               )}
                             </div>
                           </th>
                           <th 
                             onClick={() => {
-                              if (statsSortColumn === 'REB') {
+                              if (statsSortColumn === 'FGA') {
                                 setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
                               } else {
-                                setStatsSortColumn('REB');
+                                setStatsSortColumn('FGA');
                                 setStatsSortDirection('desc');
                               }
                             }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'REB' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-reb"
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'FGA' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-fga"
                           >
                             <div className="flex items-center justify-center gap-1">
-                              REB
-                              {statsSortColumn === 'REB' && (
+                              FGA
+                              {statsSortColumn === 'FGA' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === 'FG%') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('FG%');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[55px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'FG%' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-fg"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              FG%
+                              {statsSortColumn === 'FG%' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === '2PM') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('2PM');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === '2PM' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-2pm"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              2PM
+                              {statsSortColumn === '2PM' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === '2PA') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('2PA');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === '2PA' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-2pa"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              2PA
+                              {statsSortColumn === '2PA' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === '2P%') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('2P%');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[55px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === '2P%' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-2p"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              2P%
+                              {statsSortColumn === '2P%' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === '3PM') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('3PM');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === '3PM' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-3pm"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              3PM
+                              {statsSortColumn === '3PM' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === '3PA') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('3PA');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === '3PA' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-3pa"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              3PA
+                              {statsSortColumn === '3PA' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === '3P%') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('3P%');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[55px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === '3P%' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-3p"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              3P%
+                              {statsSortColumn === '3P%' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === 'FTM') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('FTM');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'FTM' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-ftm"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              FTM
+                              {statsSortColumn === 'FTM' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === 'FTA') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('FTA');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'FTA' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-fta"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              FTA
+                              {statsSortColumn === 'FTA' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === 'FT%') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('FT%');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[55px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'FT%' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-ft"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              FT%
+                              {statsSortColumn === 'FT%' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === 'ORB') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('ORB');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'ORB' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-orb"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              ORB
+                              {statsSortColumn === 'ORB' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === 'DRB') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('DRB');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'DRB' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-drb"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              DRB
+                              {statsSortColumn === 'DRB' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === 'TRB') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('TRB');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'TRB' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-trb"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              TRB
+                              {statsSortColumn === 'TRB' && (
                                 <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
                               )}
                             </div>
@@ -2323,57 +2666,57 @@ export default function LeaguePage() {
                           </th>
                           <th 
                             onClick={() => {
-                              if (statsSortColumn === 'FG%') {
+                              if (statsSortColumn === 'PF') {
                                 setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
                               } else {
-                                setStatsSortColumn('FG%');
+                                setStatsSortColumn('PF');
                                 setStatsSortDirection('desc');
                               }
                             }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[55px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'FG%' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-fg"
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'PF' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-pf"
                           >
                             <div className="flex items-center justify-center gap-1">
-                              FG%
-                              {statsSortColumn === 'FG%' && (
+                              PF
+                              {statsSortColumn === 'PF' && (
                                 <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
                               )}
                             </div>
                           </th>
                           <th 
                             onClick={() => {
-                              if (statsSortColumn === '3P%') {
+                              if (statsSortColumn === '+/-') {
                                 setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
                               } else {
-                                setStatsSortColumn('3P%');
+                                setStatsSortColumn('+/-');
                                 setStatsSortDirection('desc');
                               }
                             }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[55px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === '3P%' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-3p"
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === '+/-' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-plusminus"
                           >
                             <div className="flex items-center justify-center gap-1">
-                              3P%
-                              {statsSortColumn === '3P%' && (
+                              +/-
+                              {statsSortColumn === '+/-' && (
                                 <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
                               )}
                             </div>
                           </th>
                           <th 
                             onClick={() => {
-                              if (statsSortColumn === 'FT%') {
+                              if (statsSortColumn === 'PTS') {
                                 setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
                               } else {
-                                setStatsSortColumn('FT%');
+                                setStatsSortColumn('PTS');
                                 setStatsSortDirection('desc');
                               }
                             }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[55px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'FT%' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-ft"
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'PTS' ? 'text-orange-600' : 'text-slate-700'}`}
+                            data-testid="header-sort-pts"
                           >
                             <div className="flex items-center justify-center gap-1">
-                              FT%
-                              {statsSortColumn === 'FT%' && (
+                              PTS
+                              {statsSortColumn === 'PTS' && (
                                 <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
                               )}
                             </div>
@@ -2401,8 +2744,39 @@ export default function LeaguePage() {
                             <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
                               {playerStatsView === 'averages' ? player.avgMinutes : Math.round(player.totalMinutes)}
                             </td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center font-semibold text-orange-600">
-                              {playerStatsView === 'averages' ? player.avgPoints : Math.round(player.totalPoints)}
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
+                              {playerStatsView === 'averages' ? player.avgFGM : Math.round(player.totalFGM)}
+                            </td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
+                              {playerStatsView === 'averages' ? player.avgFGA : Math.round(player.totalFGA)}
+                            </td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.fgPercentage}%</td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
+                              {playerStatsView === 'averages' ? player.avg2PM : Math.round(player.total2PM)}
+                            </td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
+                              {playerStatsView === 'averages' ? player.avg2PA : Math.round(player.total2PA)}
+                            </td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.twoPercentage}%</td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
+                              {playerStatsView === 'averages' ? player.avg3PM : Math.round(player.total3PM)}
+                            </td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
+                              {playerStatsView === 'averages' ? player.avg3PA : Math.round(player.total3PA)}
+                            </td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.threePercentage}%</td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
+                              {playerStatsView === 'averages' ? player.avgFTM : Math.round(player.totalFTM)}
+                            </td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
+                              {playerStatsView === 'averages' ? player.avgFTA : Math.round(player.totalFTA)}
+                            </td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.ftPercentage}%</td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
+                              {playerStatsView === 'averages' ? player.avgORB : Math.round(player.totalORB)}
+                            </td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
+                              {playerStatsView === 'averages' ? player.avgDRB : Math.round(player.totalDRB)}
                             </td>
                             <td className="py-2 md:py-3 px-2 md:px-3 text-center font-medium text-slate-700">
                               {playerStatsView === 'averages' ? player.avgRebounds : Math.round(player.totalRebounds)}
@@ -2419,9 +2793,15 @@ export default function LeaguePage() {
                             <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
                               {playerStatsView === 'averages' ? player.avgTurnovers : Math.round(player.totalTurnovers)}
                             </td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.fgPercentage}%</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.threePercentage}%</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.ftPercentage}%</td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
+                              {playerStatsView === 'averages' ? player.avgPersonalFouls : Math.round(player.totalPersonalFouls)}
+                            </td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
+                              {playerStatsView === 'averages' ? player.avgPlusMinus : Math.round(player.totalPlusMinus)}
+                            </td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center font-semibold text-orange-600">
+                              {playerStatsView === 'averages' ? player.avgPoints : Math.round(player.totalPoints)}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -2470,21 +2850,34 @@ export default function LeaguePage() {
                     )}
 
                     <div className="mt-4 text-xs text-slate-500">
-                      <div className="flex gap-4 flex-wrap">
+                      <div className="flex gap-3 flex-wrap">
                         <span>GP = Games Played</span>
-                        <span>MIN = Minutes Per Game</span>
-                        <span>PTS = Points Per Game</span>
-                        <span>REB = Rebounds Per Game</span>
-                        <span>AST = Assists Per Game</span>
-                        <span>STL = Steals Per Game</span>
-                        <span>BLK = Blocks Per Game</span>
-                        <span>TO = Turnovers Per Game</span>
+                        <span>MIN = Minutes</span>
+                        <span>FGM = Field Goals Made</span>
+                        <span>FGA = Field Goals Attempted</span>
                         <span>FG% = Field Goal Percentage</span>
+                        <span>2PM = Two Pointers Made</span>
+                        <span>2PA = Two Pointers Attempted</span>
+                        <span>2P% = Two Point Percentage</span>
+                        <span>3PM = Three Pointers Made</span>
+                        <span>3PA = Three Pointers Attempted</span>
                         <span>3P% = Three Point Percentage</span>
+                        <span>FTM = Free Throws Made</span>
+                        <span>FTA = Free Throws Attempted</span>
                         <span>FT% = Free Throw Percentage</span>
+                        <span>ORB = Offensive Rebounds</span>
+                        <span>DRB = Defensive Rebounds</span>
+                        <span>TRB = Total Rebounds</span>
+                        <span>AST = Assists</span>
+                        <span>STL = Steals</span>
+                        <span>BLK = Blocks</span>
+                        <span>TO = Turnovers</span>
+                        <span>PF = Personal Fouls</span>
+                        <span>+/- = Plus/Minus</span>
+                        <span>PTS = Points</span>
                       </div>
                       <div className="mt-2 text-xs text-slate-400">
-                        Click on any player to view their detailed profile
+                        Click on any player to view their detailed profile • Swipe horizontally to see all stats
                       </div>
                     </div>
                   </div>

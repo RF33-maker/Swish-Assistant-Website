@@ -44,8 +44,8 @@ export function PlayerRowSkeleton() {
           </div>
         </div>
       </td>
-      {/* Stats columns */}
-      {Array.from({ length: 11 }).map((_, i) => (
+      {/* Stats columns - 24 columns total: GP, MIN, FGM, FGA, FG%, 2PM, 2PA, 2P%, 3PM, 3PA, 3P%, FTM, FTA, FT%, ORB, DRB, TRB, AST, STL, BLK, TO, PF, +/-, PTS */}
+      {Array.from({ length: 24 }).map((_, i) => (
         <td key={i} className="py-3 px-2 text-center">
           <LoadingSkeleton height="h-4" width="w-8" className="mx-auto" />
         </td>
