@@ -2967,26 +2967,31 @@ export default function LeaguePage() {
                         <tr className="border-b border-gray-200">
                           <th className="text-left py-3 px-2 font-semibold text-slate-700 sticky left-0 bg-white">Team</th>
                           <th className="text-center py-3 px-2 font-semibold text-slate-700">GP</th>
-                          {teamStatsView === 'averages' ? (
-                            <>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">PPG</th>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">RPG</th>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">APG</th>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">FG%</th>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">3P%</th>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">2P%</th>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">FT%</th>
-                            </>
-                          ) : (
-                            <>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">PTS</th>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">REB</th>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">AST</th>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">FGM</th>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">3PM</th>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">FTM</th>
-                            </>
-                          )}
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FGM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FGA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FG%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">2PM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">2PA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">2P%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">3PM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">3PA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">3P%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FTM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FTA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FT%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">ORB</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">DRB</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">TRB</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">AST</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">STL</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">BLK</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">TO</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">PF</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">+/-</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">PTS</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">PITP</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FB PTS</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">2ND CH</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -2998,32 +3003,11 @@ export default function LeaguePage() {
                                 <div className="h-4 bg-gray-200 rounded w-24 animate-pulse"></div>
                               </div>
                             </td>
-                            <td className="py-3 px-2">
-                              <div className="h-4 bg-gray-200 rounded w-8 mx-auto animate-pulse"></div>
-                            </td>
-                            <td className="py-3 px-2">
-                              <div className="h-4 bg-gray-200 rounded w-12 mx-auto animate-pulse"></div>
-                            </td>
-                            <td className="py-3 px-2">
-                              <div className="h-4 bg-gray-200 rounded w-12 mx-auto animate-pulse"></div>
-                            </td>
-                            <td className="py-3 px-2">
-                              <div className="h-4 bg-gray-200 rounded w-12 mx-auto animate-pulse"></div>
-                            </td>
-                            <td className="py-3 px-2">
-                              <div className="h-4 bg-gray-200 rounded w-12 mx-auto animate-pulse"></div>
-                            </td>
-                            <td className="py-3 px-2">
-                              <div className="h-4 bg-gray-200 rounded w-12 mx-auto animate-pulse"></div>
-                            </td>
-                            <td className="py-3 px-2">
-                              <div className="h-4 bg-gray-200 rounded w-12 mx-auto animate-pulse"></div>
-                            </td>
-                            {teamStatsView === 'averages' && (
-                              <td className="py-3 px-2">
+                            {Array.from({ length: 26 }).map((_, colIndex) => (
+                              <td key={`skeleton-col-${colIndex}`} className="py-3 px-2">
                                 <div className="h-4 bg-gray-200 rounded w-12 mx-auto animate-pulse"></div>
                               </td>
-                            )}
+                            ))}
                           </tr>
                         ))}
                       </tbody>
@@ -3037,26 +3021,31 @@ export default function LeaguePage() {
                           <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 sticky left-0 bg-orange-50 z-10 w-16">Logo</th>
                           <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[120px]">Team</th>
                           <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[45px]">GP</th>
-                          {teamStatsView === 'averages' ? (
-                            <>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">PPG</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">RPG</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">APG</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">FG%</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">3P%</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">2P%</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">FT%</th>
-                            </>
-                          ) : (
-                            <>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">PTS</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">REB</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">AST</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">FGM</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">3PM</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">FTM</th>
-                            </>
-                          )}
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">FGM</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">FGA</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">FG%</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">2PM</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">2PA</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">2P%</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">3PM</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">3PA</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">3P%</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">FTM</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">FTA</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">FT%</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">ORB</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">DRB</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">TRB</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">AST</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">STL</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">BLK</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">TO</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">PF</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">+/-</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">PTS</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">PITP</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[60px]">FB PTS</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[60px]">2ND CH</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
@@ -3076,52 +3065,81 @@ export default function LeaguePage() {
                             <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 font-medium" data-testid={`text-gp-${team.teamName}`}>
                               {team.gamesPlayed}
                             </td>
-                            {teamStatsView === 'averages' ? (
-                              <>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-orange-600" data-testid={`text-ppg-${team.teamName}`}>
-                                  {team.ppg}
-                                </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 font-medium text-slate-700" data-testid={`text-rpg-${team.teamName}`}>
-                                  {team.rpg}
-                                </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 font-medium text-slate-700" data-testid={`text-apg-${team.teamName}`}>
-                                  {team.apg}
-                                </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-fg%-${team.teamName}`}>
-                                  {team.fgPercentage}%
-                                </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-3p%-${team.teamName}`}>
-                                  {team.threePtPercentage}%
-                                </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-2p%-${team.teamName}`}>
-                                  {team.twoPtPercentage}%
-                                </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-ft%-${team.teamName}`}>
-                                  {team.ftPercentage}%
-                                </td>
-                              </>
-                            ) : (
-                              <>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-orange-600" data-testid={`text-total-pts-${team.teamName}`}>
-                                  {team.totalPoints}
-                                </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 font-medium text-slate-700" data-testid={`text-total-reb-${team.teamName}`}>
-                                  {team.totalRebounds}
-                                </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 font-medium text-slate-700" data-testid={`text-total-ast-${team.teamName}`}>
-                                  {team.totalAssists}
-                                </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-total-fgm-${team.teamName}`}>
-                                  {team.totalFGM}
-                                </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-total-3pm-${team.teamName}`}>
-                                  {team.total3PM}
-                                </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-total-ftm-${team.teamName}`}>
-                                  {team.totalFTM}
-                                </td>
-                              </>
-                            )}
+                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-fgm-${team.teamName}`}>
+                              {teamStatsView === 'averages' ? team.avgFGM : team.totalFGM}
+                            </td>
+                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-fga-${team.teamName}`}>
+                              {teamStatsView === 'averages' ? team.avgFGA : team.totalFGA}
+                            </td>
+                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-fg%-${team.teamName}`}>
+                              {team.fgPercentage}%
+                            </td>
+                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-2pm-${team.teamName}`}>
+                              {teamStatsView === 'averages' ? team.avg2PM : team.total2PM}
+                            </td>
+                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-2pa-${team.teamName}`}>
+                              {teamStatsView === 'averages' ? team.avg2PA : team.total2PA}
+                            </td>
+                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-2p%-${team.teamName}`}>
+                              {team.twoPtPercentage}%
+                            </td>
+                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-3pm-${team.teamName}`}>
+                              {teamStatsView === 'averages' ? team.avg3PM : team.total3PM}
+                            </td>
+                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-3pa-${team.teamName}`}>
+                              {teamStatsView === 'averages' ? team.avg3PA : team.total3PA}
+                            </td>
+                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-3p%-${team.teamName}`}>
+                              {team.threePtPercentage}%
+                            </td>
+                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-ftm-${team.teamName}`}>
+                              {teamStatsView === 'averages' ? team.avgFTM : team.totalFTM}
+                            </td>
+                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-fta-${team.teamName}`}>
+                              {teamStatsView === 'averages' ? team.avgFTA : team.totalFTA}
+                            </td>
+                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-ft%-${team.teamName}`}>
+                              {team.ftPercentage}%
+                            </td>
+                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-orb-${team.teamName}`}>
+                              {teamStatsView === 'averages' ? team.avgORB : team.totalORB}
+                            </td>
+                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-drb-${team.teamName}`}>
+                              {teamStatsView === 'averages' ? team.avgDRB : team.totalDRB}
+                            </td>
+                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-trb-${team.teamName}`}>
+                              {teamStatsView === 'averages' ? team.rpg : team.totalRebounds}
+                            </td>
+                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-ast-${team.teamName}`}>
+                              {teamStatsView === 'averages' ? team.apg : team.totalAssists}
+                            </td>
+                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-stl-${team.teamName}`}>
+                              {teamStatsView === 'averages' ? team.spg : team.totalSteals}
+                            </td>
+                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-blk-${team.teamName}`}>
+                              {teamStatsView === 'averages' ? team.bpg : team.totalBlocks}
+                            </td>
+                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-to-${team.teamName}`}>
+                              {teamStatsView === 'averages' ? team.tpg : team.totalTurnovers}
+                            </td>
+                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-pf-${team.teamName}`}>
+                              {teamStatsView === 'averages' ? team.avgPF : team.totalFouls}
+                            </td>
+                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-plusminus-${team.teamName}`}>
+                              {teamStatsView === 'averages' ? team.avgPlusMinus : team.totalPlusMinus}
+                            </td>
+                            <td className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-orange-600" data-testid={`text-pts-${team.teamName}`}>
+                              {teamStatsView === 'averages' ? team.ppg : team.totalPoints}
+                            </td>
+                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-pitp-${team.teamName}`}>
+                              {teamStatsView === 'averages' ? team.avgPITP : team.totalPITP}
+                            </td>
+                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-fbpts-${team.teamName}`}>
+                              {teamStatsView === 'averages' ? team.avgFBPTS : team.totalFBPTS}
+                            </td>
+                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-2ndch-${team.teamName}`}>
+                              {teamStatsView === 'averages' ? team.avg2ndCH : team.total2ndCH}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -3145,26 +3163,34 @@ export default function LeaguePage() {
                     <div className="font-semibold text-slate-600 mb-2">Legend:</div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                       <span>GP = Games Played</span>
-                      {teamStatsView === 'averages' ? (
-                        <>
-                          <span>PPG = Points Per Game</span>
-                          <span>RPG = Rebounds Per Game</span>
-                          <span>APG = Assists Per Game</span>
-                          <span>FG% = Field Goal %</span>
-                          <span>3P% = Three Point %</span>
-                          <span>2P% = Two Point %</span>
-                          <span>FT% = Free Throw %</span>
-                        </>
-                      ) : (
-                        <>
-                          <span>PTS = Total Points</span>
-                          <span>REB = Total Rebounds</span>
-                          <span>AST = Total Assists</span>
-                          <span>FGM = Field Goals Made</span>
-                          <span>3PM = Three Pointers Made</span>
-                          <span>FTM = Free Throws Made</span>
-                        </>
-                      )}
+                      <span>FGM = Field Goals Made</span>
+                      <span>FGA = Field Goals Attempted</span>
+                      <span>FG% = Field Goal Percentage</span>
+                      <span>2PM = 2-Pointers Made</span>
+                      <span>2PA = 2-Pointers Attempted</span>
+                      <span>2P% = 2-Point Percentage</span>
+                      <span>3PM = 3-Pointers Made</span>
+                      <span>3PA = 3-Pointers Attempted</span>
+                      <span>3P% = 3-Point Percentage</span>
+                      <span>FTM = Free Throws Made</span>
+                      <span>FTA = Free Throws Attempted</span>
+                      <span>FT% = Free Throw Percentage</span>
+                      <span>ORB = Offensive Rebounds</span>
+                      <span>DRB = Defensive Rebounds</span>
+                      <span>TRB = Total Rebounds</span>
+                      <span>AST = Assists</span>
+                      <span>STL = Steals</span>
+                      <span>BLK = Blocks</span>
+                      <span>TO = Turnovers</span>
+                      <span>PF = Personal Fouls</span>
+                      <span>+/- = Plus/Minus</span>
+                      <span>PTS = Points</span>
+                      <span>PITP = Points In The Paint</span>
+                      <span>FB PTS = Fastbreak Points</span>
+                      <span>2ND CH = Second Chance Points</span>
+                    </div>
+                    <div className="mt-2 text-xs text-slate-400">
+                      Click on any team to view their detailed profile • Swipe horizontally to see all stats
                     </div>
                   </div>
                 </div>
