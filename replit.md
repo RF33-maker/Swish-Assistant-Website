@@ -34,6 +34,7 @@ The application is structured into a React frontend and integrates with external
     - **Player Profiles**: Individual player pages at `/player/[id]` showing season averages and game-by-game stats, with AI-powered analysis.
     - **Game Results**: Redesigned game results section with horizontal scrolling ticker and detailed game view modals with team-filtered box scores.
     - **Statistical Leaderboards**: `/league-leaders/[slug]` displays top players across 9 statistical categories.
+    - **Player Statistics Table**: Comprehensive table on league pages displaying full traditional basketball box score statistics with 25 columns (Player, GP, MIN, FGM, FGA, FG%, 2PM, 2PA, 2P%, 3PM, 3PA, 3P%, FTM, FTA, FT%, ORB, DRB, TRB, AST, STL, BLK, TO, PF, +/-, PTS). Features include sortable columns, averages/totals toggle, search filtering, mobile-responsive horizontal scrolling with sticky player column, and comprehensive legend explaining all abbreviations.
 
 ## SEO Implementation
 - **Dynamic Sitemap**: Automated sitemap generation via `scripts/generate-sitemap.ts` that queries Supabase for all public leagues, teams, and players. Run `npx tsx scripts/generate-sitemap.ts` to regenerate. Sitemap is served as a static file at `/sitemap.xml` with proper XML structure including lastmod dates, changefreq, and priority values.
