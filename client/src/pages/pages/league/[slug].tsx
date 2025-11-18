@@ -1152,11 +1152,17 @@ export default function LeaguePage() {
               totalFTM: 0,
               totalFTA: 0,
               totalRebounds: 0,
+              totalORB: 0,
+              totalDRB: 0,
               totalAssists: 0,
               totalSteals: 0,
               totalBlocks: 0,
               totalTurnovers: 0,
-              totalFouls: 0
+              totalFouls: 0,
+              totalPlusMinus: 0,
+              totalPITP: 0,
+              totalFBPTS: 0,
+              total2ndCH: 0
             });
           }
 
@@ -1172,11 +1178,17 @@ export default function LeaguePage() {
           team.totalFTM += stat.tot_sfreethrowsmade || 0;
           team.totalFTA += stat.tot_sfreethrowsattempted || 0;
           team.totalRebounds += stat.tot_sreboundstotal || 0;
+          team.totalORB += stat.tot_sreboundsoffensive || 0;
+          team.totalDRB += stat.tot_sreboundsdefensive || 0;
           team.totalAssists += stat.tot_sassists || 0;
           team.totalSteals += stat.tot_ssteals || 0;
           team.totalBlocks += stat.tot_sblocks || 0;
           team.totalTurnovers += stat.tot_sturnovers || 0;
           team.totalFouls += stat.tot_sfoulspersonal || 0;
+          team.totalPlusMinus += stat.tot_splusminuspoints || 0;
+          team.totalPITP += stat.tot_spointsinthepaint || 0;
+          team.totalFBPTS += stat.tot_spointsfastbreak || 0;
+          team.total2ndCH += stat.tot_spointssecondchance || 0;
         });
 
         // Calculate percentages and averages
@@ -1193,7 +1205,22 @@ export default function LeaguePage() {
           apg: team.gamesPlayed > 0 ? (team.totalAssists / team.gamesPlayed).toFixed(1) : '0.0',
           spg: team.gamesPlayed > 0 ? (team.totalSteals / team.gamesPlayed).toFixed(1) : '0.0',
           bpg: team.gamesPlayed > 0 ? (team.totalBlocks / team.gamesPlayed).toFixed(1) : '0.0',
-          tpg: team.gamesPlayed > 0 ? (team.totalTurnovers / team.gamesPlayed).toFixed(1) : '0.0'
+          tpg: team.gamesPlayed > 0 ? (team.totalTurnovers / team.gamesPlayed).toFixed(1) : '0.0',
+          avgFGM: team.gamesPlayed > 0 ? (team.totalFGM / team.gamesPlayed).toFixed(1) : '0.0',
+          avgFGA: team.gamesPlayed > 0 ? (team.totalFGA / team.gamesPlayed).toFixed(1) : '0.0',
+          avg2PM: team.gamesPlayed > 0 ? (team.total2PM / team.gamesPlayed).toFixed(1) : '0.0',
+          avg2PA: team.gamesPlayed > 0 ? (team.total2PA / team.gamesPlayed).toFixed(1) : '0.0',
+          avg3PM: team.gamesPlayed > 0 ? (team.total3PM / team.gamesPlayed).toFixed(1) : '0.0',
+          avg3PA: team.gamesPlayed > 0 ? (team.total3PA / team.gamesPlayed).toFixed(1) : '0.0',
+          avgFTM: team.gamesPlayed > 0 ? (team.totalFTM / team.gamesPlayed).toFixed(1) : '0.0',
+          avgFTA: team.gamesPlayed > 0 ? (team.totalFTA / team.gamesPlayed).toFixed(1) : '0.0',
+          avgORB: team.gamesPlayed > 0 ? (team.totalORB / team.gamesPlayed).toFixed(1) : '0.0',
+          avgDRB: team.gamesPlayed > 0 ? (team.totalDRB / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPF: team.gamesPlayed > 0 ? (team.totalFouls / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPlusMinus: team.gamesPlayed > 0 ? (team.totalPlusMinus / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPITP: team.gamesPlayed > 0 ? (team.totalPITP / team.gamesPlayed).toFixed(1) : '0.0',
+          avgFBPTS: team.gamesPlayed > 0 ? (team.totalFBPTS / team.gamesPlayed).toFixed(1) : '0.0',
+          avg2ndCH: team.gamesPlayed > 0 ? (team.total2ndCH / team.gamesPlayed).toFixed(1) : '0.0'
         })).sort((a, b) => parseFloat(b.ppg) - parseFloat(a.ppg)); // Sort by PPG
 
         setTeamStatsData(aggregatedStats);
