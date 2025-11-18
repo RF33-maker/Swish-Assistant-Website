@@ -2,30 +2,18 @@
 import React, { useEffect, useState } from "react";
 import { supabase }   from "@/lib/supabase";
 import { GameSummaryRow} from "./GameSummaryRow";
-
-
-interface StatRow {
-  id:              string;
-  name:            string;
-  game_date:       string;
-  team:            string;
-  opponent:        string;
-  league_id:       string;
-  points:          number;
-  rebounds_total:  number;
-  assists:         number;
-}
+import type { PlayerStats } from "@shared/schema";
 
 type Props = { leagueId: string };
 
 export default function GamesList({ leagueId }: Props) {
-  const [stats, setStats]   = useState<StatRow[]>([]);
+  const [stats, setStats]   = useState<any[]>([]);  // Supabase returns data with string dates, not Date objects
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     supabase
       .from("player_stats")
-      .select("id, name, game_date, team, opponent, league_id, points, rebounds_total, assists")
+      .select("*")  // Select all fields including raw s-prefixed stats
       .eq("league_id", leagueId)                // ← only this league
       .order("game_date", { ascending: false })
       .then(({ data, error }) => {
@@ -48,18 +36,18 @@ export default function GamesList({ leagueId }: Props) {
       <tbody>
         {stats.map(stat => (
           <tr key={stat.id} className="border-t">
-            <td>{stat.name}</td>
-            <td>{stat.points}</td>
-            <td>{stat.rebounds_total}</td>
-            <td>{stat.assists}</td>
+            <td>{stat.name || 'Unknown Player'}</td>
+            <td>{stat.points ?? 0}</td>
+            <td>{stat.rebounds_total ?? 0}</td>
+            <td>{stat.assists ?? 0}</td>
             <td>
               <GameSummaryRow
-                player={{ name: stat.name }}
+                player={{ name: stat.name || 'Unknown Player' }}
                 game={{
                   id:         stat.id,
                   game_date:  stat.game_date,
-                  team:       stat.team,
-                  opponent:   stat.opponent,
+                  team:       stat.team || 'Unknown Team',
+                  opponent:   stat.away_team || stat.home_team || 'Unknown',
                   league_id:  stat.league_id,
                 }}
               />
