@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useLocation, useParams } from "wouter";
 import { supabase } from "@/lib/supabase";
 import type { League } from "@shared/schema";
@@ -289,11 +289,11 @@ export default function LeaguePage() {
       }
     }, [statsSearch, allPlayerAverages, statsSortColumn, statsSortDirection, playerStatsView]);
 
-    // Sort team stats based on selected column and direction
-    useEffect(() => {
-      if (teamStatsData.length === 0) return;
+    // Sort team stats based on selected column and direction (derived view, doesn't mutate original data)
+    const sortedTeamStats = useMemo(() => {
+      if (teamStatsData.length === 0) return [];
       
-      const sorted = [...teamStatsData].sort((a, b) => {
+      return [...teamStatsData].sort((a, b) => {
         let valueA: number, valueB: number;
         
         switch (teamStatsSortColumn) {
@@ -408,9 +408,7 @@ export default function LeaguePage() {
         
         return teamStatsSortDirection === 'desc' ? valueB - valueA : valueA - valueB;
       });
-      
-      setTeamStatsData(sorted);
-    }, [teamStatsSortColumn, teamStatsSortDirection, teamStatsView]);
+    }, [teamStatsData, teamStatsSortColumn, teamStatsSortDirection, teamStatsView]);
 
     // Reset standings view to 'full' if no pools exist and user is on a pool view
     useEffect(() => {
@@ -3138,7 +3136,7 @@ export default function LeaguePage() {
                       </tbody>
                     </table>
                   </div>
-                ) : teamStatsData.length > 0 ? (
+                ) : sortedTeamStats.length > 0 ? (
                   <div className="overflow-x-auto -mx-4 md:mx-0 border border-orange-200 rounded-lg">
                     <table className="w-full text-xs md:text-sm">
                       <thead>
@@ -3616,7 +3614,7 @@ export default function LeaguePage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                        {teamStatsData.map((team, index) => (
+                        {sortedTeamStats.map((team, index) => (
                           <tr 
                             key={`team-stats-${team.teamName}-${index}`}
                             className="hover:bg-orange-50 transition-colors cursor-pointer group"
