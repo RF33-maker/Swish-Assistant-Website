@@ -65,6 +65,187 @@ const normalizeAndMapTeamName = (name: string): string => {
   return normalizeTeamName(mapped);
 };
 
+// Team stats column configuration by category
+type TeamStatColumn = {
+  key: string;
+  label: string;
+  sortable: boolean;
+  getValue: (team: any, view: 'averages' | 'totals') => number | string;
+  format?: (value: number) => string;
+};
+
+const TEAM_STAT_COLUMNS: Record<string, TeamStatColumn[]> = {
+  Traditional: [
+    {
+      key: 'PTS',
+      label: 'PTS',
+      sortable: true,
+      getValue: (team, view) => view === 'averages' ? (parseFloat(team.ppg) || 0) : (team.totalPoints || 0),
+    },
+    {
+      key: 'FGM',
+      label: 'FGM',
+      sortable: true,
+      getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgFGM) || 0) : (team.totalFGM || 0),
+    },
+    {
+      key: 'FGA',
+      label: 'FGA',
+      sortable: true,
+      getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgFGA) || 0) : (team.totalFGA || 0),
+    },
+    {
+      key: 'REB',
+      label: 'REB',
+      sortable: true,
+      getValue: (team, view) => view === 'averages' ? (parseFloat(team.rpg) || 0) : (team.totalRebounds || 0),
+    },
+    {
+      key: 'AST',
+      label: 'AST',
+      sortable: true,
+      getValue: (team, view) => view === 'averages' ? (parseFloat(team.apg) || 0) : (team.totalAssists || 0),
+    },
+    {
+      key: 'STL',
+      label: 'STL',
+      sortable: true,
+      getValue: (team, view) => view === 'averages' ? (parseFloat(team.spg) || 0) : (team.totalSteals || 0),
+    },
+    {
+      key: 'BLK',
+      label: 'BLK',
+      sortable: true,
+      getValue: (team, view) => view === 'averages' ? (parseFloat(team.bpg) || 0) : (team.totalBlocks || 0),
+    },
+    {
+      key: 'TO',
+      label: 'TO',
+      sortable: true,
+      getValue: (team, view) => view === 'averages' ? (parseFloat(team.tpg) || 0) : (team.totalTurnovers || 0),
+    },
+    {
+      key: 'PF',
+      label: 'PF',
+      sortable: true,
+      getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgPF) || 0) : (team.totalFouls || 0),
+    },
+    {
+      key: '+/-',
+      label: '+/-',
+      sortable: true,
+      getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgPlusMinus) || 0) : (team.totalPlusMinus || 0),
+    },
+  ],
+  Advanced: [
+    {
+      key: 'OFFRTG',
+      label: 'OFFRTG',
+      sortable: true,
+      getValue: (team) => 0, // Placeholder - not calculated yet
+    },
+    {
+      key: 'DEFRTG',
+      label: 'DEFRTG',
+      sortable: true,
+      getValue: (team) => 0, // Placeholder - not calculated yet
+    },
+    {
+      key: 'NETRTG',
+      label: 'NETRTG',
+      sortable: true,
+      getValue: (team) => 0, // Placeholder - not calculated yet
+    },
+    {
+      key: 'PACE',
+      label: 'PACE',
+      sortable: true,
+      getValue: (team) => 0, // Placeholder - not calculated yet
+    },
+  ],
+  'Four Factors': [
+    {
+      key: 'eFG%',
+      label: 'eFG%',
+      sortable: true,
+      getValue: (team) => 0, // Placeholder - not calculated yet
+      format: (val) => `${val.toFixed(1)}%`,
+    },
+    {
+      key: 'TOV%',
+      label: 'TOV%',
+      sortable: true,
+      getValue: (team) => 0, // Placeholder - not calculated yet
+      format: (val) => `${val.toFixed(1)}%`,
+    },
+    {
+      key: 'OREB%',
+      label: 'OREB%',
+      sortable: true,
+      getValue: (team) => 0, // Placeholder - not calculated yet
+      format: (val) => `${val.toFixed(1)}%`,
+    },
+    {
+      key: 'FT RATE',
+      label: 'FT RATE',
+      sortable: true,
+      getValue: (team) => 0, // Placeholder - not calculated yet
+    },
+  ],
+  Scoring: [
+    {
+      key: 'PITP',
+      label: 'PITP',
+      sortable: true,
+      getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgPITP) || 0) : (team.totalPITP || 0),
+    },
+    {
+      key: 'FB PTS',
+      label: 'FB PTS',
+      sortable: true,
+      getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgFBPTS) || 0) : (team.totalFBPTS || 0),
+    },
+    {
+      key: '2ND CH',
+      label: '2ND CH',
+      sortable: true,
+      getValue: (team, view) => view === 'averages' ? (parseFloat(team.avg2ndCH) || 0) : (team.total2ndCH || 0),
+    },
+    {
+      key: 'PTS OFF TO',
+      label: 'PTS OFF TO',
+      sortable: true,
+      getValue: (team) => 0, // Placeholder - not calculated yet
+    },
+  ],
+  Misc: [
+    {
+      key: 'ORB',
+      label: 'ORB',
+      sortable: true,
+      getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgORB) || 0) : (team.totalORB || 0),
+    },
+    {
+      key: 'DRB',
+      label: 'DRB',
+      sortable: true,
+      getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgDRB) || 0) : (team.totalDRB || 0),
+    },
+    {
+      key: 'TIES',
+      label: 'TIES',
+      sortable: true,
+      getValue: (team) => 0, // Placeholder - not calculated yet
+    },
+    {
+      key: 'LEAD CHG',
+      label: 'LEAD CHG',
+      sortable: true,
+      getValue: (team) => 0, // Placeholder - not calculated yet
+    },
+  ],
+};
+
 export default function LeaguePage() {
   const { slug } = useParams();
     // SEO formatting helper for title
@@ -418,6 +599,11 @@ export default function LeaguePage() {
         return teamStatsSortDirection === 'desc' ? valueB - valueA : valueA - valueB;
       });
     }, [teamStatsData, teamStatsSortColumn, teamStatsSortDirection, teamStatsView]);
+
+    // Get active columns based on selected category
+    const activeTeamStatColumns = useMemo(() => {
+      return TEAM_STAT_COLUMNS[teamStatsCategory] || TEAM_STAT_COLUMNS['Traditional'];
+    }, [teamStatsCategory]);
 
     // Reset standings view to 'full' if no pools exist and user is on a pool view
     useEffect(() => {
@@ -3198,479 +3384,42 @@ export default function LeaguePage() {
                         <tr className="border-b border-gray-200 bg-orange-50">
                           <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 sticky left-0 bg-orange-50 z-10 w-16">Logo</th>
                           <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[120px]">Team</th>
-                          <th 
-                            onClick={() => {
-                              if (teamStatsSortColumn === 'GP') {
-                                setTeamStatsSortDirection(teamStatsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setTeamStatsSortColumn('GP');
-                                setTeamStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[45px] cursor-pointer hover:bg-orange-100 transition-colors ${teamStatsSortColumn === 'GP' ? 'text-orange-600' : 'text-slate-700'}`}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              GP
-                              {teamStatsSortColumn === 'GP' && (
-                                <span className="text-xs">{teamStatsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[45px]">
+                            <div className="flex items-center justify-center gap-1">GP</div>
                           </th>
-                          <th 
-                            onClick={() => {
-                              if (teamStatsSortColumn === 'FGM') {
-                                setTeamStatsSortDirection(teamStatsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setTeamStatsSortColumn('FGM');
-                                setTeamStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${teamStatsSortColumn === 'FGM' ? 'text-orange-600' : 'text-slate-700'}`}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              FGM
-                              {teamStatsSortColumn === 'FGM' && (
-                                <span className="text-xs">{teamStatsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (teamStatsSortColumn === 'FGA') {
-                                setTeamStatsSortDirection(teamStatsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setTeamStatsSortColumn('FGA');
-                                setTeamStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${teamStatsSortColumn === 'FGA' ? 'text-orange-600' : 'text-slate-700'}`}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              FGA
-                              {teamStatsSortColumn === 'FGA' && (
-                                <span className="text-xs">{teamStatsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (teamStatsSortColumn === 'FG%') {
-                                setTeamStatsSortDirection(teamStatsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setTeamStatsSortColumn('FG%');
-                                setTeamStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[55px] cursor-pointer hover:bg-orange-100 transition-colors ${teamStatsSortColumn === 'FG%' ? 'text-orange-600' : 'text-slate-700'}`}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              FG%
-                              {teamStatsSortColumn === 'FG%' && (
-                                <span className="text-xs">{teamStatsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (teamStatsSortColumn === '2PM') {
-                                setTeamStatsSortDirection(teamStatsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setTeamStatsSortColumn('2PM');
-                                setTeamStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${teamStatsSortColumn === '2PM' ? 'text-orange-600' : 'text-slate-700'}`}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              2PM
-                              {teamStatsSortColumn === '2PM' && (
-                                <span className="text-xs">{teamStatsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (teamStatsSortColumn === '2PA') {
-                                setTeamStatsSortDirection(teamStatsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setTeamStatsSortColumn('2PA');
-                                setTeamStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${teamStatsSortColumn === '2PA' ? 'text-orange-600' : 'text-slate-700'}`}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              2PA
-                              {teamStatsSortColumn === '2PA' && (
-                                <span className="text-xs">{teamStatsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (teamStatsSortColumn === '2P%') {
-                                setTeamStatsSortDirection(teamStatsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setTeamStatsSortColumn('2P%');
-                                setTeamStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[55px] cursor-pointer hover:bg-orange-100 transition-colors ${teamStatsSortColumn === '2P%' ? 'text-orange-600' : 'text-slate-700'}`}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              2P%
-                              {teamStatsSortColumn === '2P%' && (
-                                <span className="text-xs">{teamStatsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (teamStatsSortColumn === '3PM') {
-                                setTeamStatsSortDirection(teamStatsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setTeamStatsSortColumn('3PM');
-                                setTeamStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${teamStatsSortColumn === '3PM' ? 'text-orange-600' : 'text-slate-700'}`}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              3PM
-                              {teamStatsSortColumn === '3PM' && (
-                                <span className="text-xs">{teamStatsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (teamStatsSortColumn === '3PA') {
-                                setTeamStatsSortDirection(teamStatsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setTeamStatsSortColumn('3PA');
-                                setTeamStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${teamStatsSortColumn === '3PA' ? 'text-orange-600' : 'text-slate-700'}`}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              3PA
-                              {teamStatsSortColumn === '3PA' && (
-                                <span className="text-xs">{teamStatsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (teamStatsSortColumn === '3P%') {
-                                setTeamStatsSortDirection(teamStatsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setTeamStatsSortColumn('3P%');
-                                setTeamStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[55px] cursor-pointer hover:bg-orange-100 transition-colors ${teamStatsSortColumn === '3P%' ? 'text-orange-600' : 'text-slate-700'}`}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              3P%
-                              {teamStatsSortColumn === '3P%' && (
-                                <span className="text-xs">{teamStatsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (teamStatsSortColumn === 'FTM') {
-                                setTeamStatsSortDirection(teamStatsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setTeamStatsSortColumn('FTM');
-                                setTeamStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${teamStatsSortColumn === 'FTM' ? 'text-orange-600' : 'text-slate-700'}`}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              FTM
-                              {teamStatsSortColumn === 'FTM' && (
-                                <span className="text-xs">{teamStatsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (teamStatsSortColumn === 'FTA') {
-                                setTeamStatsSortDirection(teamStatsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setTeamStatsSortColumn('FTA');
-                                setTeamStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${teamStatsSortColumn === 'FTA' ? 'text-orange-600' : 'text-slate-700'}`}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              FTA
-                              {teamStatsSortColumn === 'FTA' && (
-                                <span className="text-xs">{teamStatsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (teamStatsSortColumn === 'FT%') {
-                                setTeamStatsSortDirection(teamStatsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setTeamStatsSortColumn('FT%');
-                                setTeamStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[55px] cursor-pointer hover:bg-orange-100 transition-colors ${teamStatsSortColumn === 'FT%' ? 'text-orange-600' : 'text-slate-700'}`}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              FT%
-                              {teamStatsSortColumn === 'FT%' && (
-                                <span className="text-xs">{teamStatsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (teamStatsSortColumn === 'ORB') {
-                                setTeamStatsSortDirection(teamStatsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setTeamStatsSortColumn('ORB');
-                                setTeamStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${teamStatsSortColumn === 'ORB' ? 'text-orange-600' : 'text-slate-700'}`}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              ORB
-                              {teamStatsSortColumn === 'ORB' && (
-                                <span className="text-xs">{teamStatsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (teamStatsSortColumn === 'DRB') {
-                                setTeamStatsSortDirection(teamStatsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setTeamStatsSortColumn('DRB');
-                                setTeamStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${teamStatsSortColumn === 'DRB' ? 'text-orange-600' : 'text-slate-700'}`}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              DRB
-                              {teamStatsSortColumn === 'DRB' && (
-                                <span className="text-xs">{teamStatsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (teamStatsSortColumn === 'TRB') {
-                                setTeamStatsSortDirection(teamStatsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setTeamStatsSortColumn('TRB');
-                                setTeamStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${teamStatsSortColumn === 'TRB' ? 'text-orange-600' : 'text-slate-700'}`}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              TRB
-                              {teamStatsSortColumn === 'TRB' && (
-                                <span className="text-xs">{teamStatsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (teamStatsSortColumn === 'AST') {
-                                setTeamStatsSortDirection(teamStatsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setTeamStatsSortColumn('AST');
-                                setTeamStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${teamStatsSortColumn === 'AST' ? 'text-orange-600' : 'text-slate-700'}`}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              AST
-                              {teamStatsSortColumn === 'AST' && (
-                                <span className="text-xs">{teamStatsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (teamStatsSortColumn === 'STL') {
-                                setTeamStatsSortDirection(teamStatsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setTeamStatsSortColumn('STL');
-                                setTeamStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${teamStatsSortColumn === 'STL' ? 'text-orange-600' : 'text-slate-700'}`}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              STL
-                              {teamStatsSortColumn === 'STL' && (
-                                <span className="text-xs">{teamStatsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (teamStatsSortColumn === 'BLK') {
-                                setTeamStatsSortDirection(teamStatsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setTeamStatsSortColumn('BLK');
-                                setTeamStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${teamStatsSortColumn === 'BLK' ? 'text-orange-600' : 'text-slate-700'}`}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              BLK
-                              {teamStatsSortColumn === 'BLK' && (
-                                <span className="text-xs">{teamStatsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (teamStatsSortColumn === 'TO') {
-                                setTeamStatsSortDirection(teamStatsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setTeamStatsSortColumn('TO');
-                                setTeamStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${teamStatsSortColumn === 'TO' ? 'text-orange-600' : 'text-slate-700'}`}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              TO
-                              {teamStatsSortColumn === 'TO' && (
-                                <span className="text-xs">{teamStatsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (teamStatsSortColumn === 'PF') {
-                                setTeamStatsSortDirection(teamStatsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setTeamStatsSortColumn('PF');
-                                setTeamStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${teamStatsSortColumn === 'PF' ? 'text-orange-600' : 'text-slate-700'}`}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              PF
-                              {teamStatsSortColumn === 'PF' && (
-                                <span className="text-xs">{teamStatsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (teamStatsSortColumn === '+/-') {
-                                setTeamStatsSortDirection(teamStatsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setTeamStatsSortColumn('+/-');
-                                setTeamStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${teamStatsSortColumn === '+/-' ? 'text-orange-600' : 'text-slate-700'}`}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              +/-
-                              {teamStatsSortColumn === '+/-' && (
-                                <span className="text-xs">{teamStatsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (teamStatsSortColumn === 'PTS') {
-                                setTeamStatsSortDirection(teamStatsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setTeamStatsSortColumn('PTS');
-                                setTeamStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${teamStatsSortColumn === 'PTS' ? 'text-orange-600' : 'text-slate-700'}`}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              PTS
-                              {teamStatsSortColumn === 'PTS' && (
-                                <span className="text-xs">{teamStatsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (teamStatsSortColumn === 'PITP') {
-                                setTeamStatsSortDirection(teamStatsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setTeamStatsSortColumn('PITP');
-                                setTeamStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[55px] cursor-pointer hover:bg-orange-100 transition-colors ${teamStatsSortColumn === 'PITP' ? 'text-orange-600' : 'text-slate-700'}`}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              PITP
-                              {teamStatsSortColumn === 'PITP' && (
-                                <span className="text-xs">{teamStatsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (teamStatsSortColumn === 'FB PTS') {
-                                setTeamStatsSortDirection(teamStatsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setTeamStatsSortColumn('FB PTS');
-                                setTeamStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[60px] cursor-pointer hover:bg-orange-100 transition-colors ${teamStatsSortColumn === 'FB PTS' ? 'text-orange-600' : 'text-slate-700'}`}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              FB PTS
-                              {teamStatsSortColumn === 'FB PTS' && (
-                                <span className="text-xs">{teamStatsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (teamStatsSortColumn === '2ND CH') {
-                                setTeamStatsSortDirection(teamStatsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setTeamStatsSortColumn('2ND CH');
-                                setTeamStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[60px] cursor-pointer hover:bg-orange-100 transition-colors ${teamStatsSortColumn === '2ND CH' ? 'text-orange-600' : 'text-slate-700'}`}
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              2ND CH
-                              {teamStatsSortColumn === '2ND CH' && (
-                                <span className="text-xs">{teamStatsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
+                          {activeTeamStatColumns.map((column) => (
+                            <th
+                              key={column.key}
+                              onClick={() => {
+                                if (column.sortable) {
+                                  if (teamStatsSortColumn === column.key) {
+                                    setTeamStatsSortDirection(teamStatsSortDirection === 'desc' ? 'asc' : 'desc');
+                                  } else {
+                                    setTeamStatsSortColumn(column.key);
+                                    setTeamStatsSortDirection('desc');
+                                  }
+                                }
+                              }}
+                              className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] ${
+                                column.sortable ? 'cursor-pointer hover:bg-orange-100' : ''
+                              } transition-colors ${
+                                teamStatsSortColumn === column.key ? 'text-orange-600' : 'text-slate-700'
+                              }`}
+                              data-testid={`header-${column.key.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
+                            >
+                              <div className="flex items-center justify-center gap-1">
+                                {column.label}
+                                {teamStatsSortColumn === column.key && column.sortable && (
+                                  <span className="text-xs">{teamStatsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                                )}
+                              </div>
+                            </th>
+                          ))}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                         {sortedTeamStats.map((team, index) => (
-                          <tr 
+                          <tr
                             key={`team-stats-${team.teamName}-${index}`}
                             className="hover:bg-orange-50 transition-colors cursor-pointer group"
                             onClick={() => navigate(`/team/${encodeURIComponent(team.teamName)}`)}
@@ -3685,81 +3434,19 @@ export default function LeaguePage() {
                             <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 font-medium" data-testid={`text-gp-${team.teamName}`}>
                               {team.gamesPlayed}
                             </td>
-                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-fgm-${team.teamName}`}>
-                              {teamStatsView === 'averages' ? team.avgFGM : team.totalFGM}
-                            </td>
-                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-fga-${team.teamName}`}>
-                              {teamStatsView === 'averages' ? team.avgFGA : team.totalFGA}
-                            </td>
-                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-fg%-${team.teamName}`}>
-                              {team.fgPercentage}%
-                            </td>
-                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-2pm-${team.teamName}`}>
-                              {teamStatsView === 'averages' ? team.avg2PM : team.total2PM}
-                            </td>
-                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-2pa-${team.teamName}`}>
-                              {teamStatsView === 'averages' ? team.avg2PA : team.total2PA}
-                            </td>
-                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-2p%-${team.teamName}`}>
-                              {team.twoPtPercentage}%
-                            </td>
-                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-3pm-${team.teamName}`}>
-                              {teamStatsView === 'averages' ? team.avg3PM : team.total3PM}
-                            </td>
-                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-3pa-${team.teamName}`}>
-                              {teamStatsView === 'averages' ? team.avg3PA : team.total3PA}
-                            </td>
-                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-3p%-${team.teamName}`}>
-                              {team.threePtPercentage}%
-                            </td>
-                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-ftm-${team.teamName}`}>
-                              {teamStatsView === 'averages' ? team.avgFTM : team.totalFTM}
-                            </td>
-                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-fta-${team.teamName}`}>
-                              {teamStatsView === 'averages' ? team.avgFTA : team.totalFTA}
-                            </td>
-                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-ft%-${team.teamName}`}>
-                              {team.ftPercentage}%
-                            </td>
-                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-orb-${team.teamName}`}>
-                              {teamStatsView === 'averages' ? team.avgORB : team.totalORB}
-                            </td>
-                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-drb-${team.teamName}`}>
-                              {teamStatsView === 'averages' ? team.avgDRB : team.totalDRB}
-                            </td>
-                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-trb-${team.teamName}`}>
-                              {teamStatsView === 'averages' ? team.rpg : team.totalRebounds}
-                            </td>
-                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-ast-${team.teamName}`}>
-                              {teamStatsView === 'averages' ? team.apg : team.totalAssists}
-                            </td>
-                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-stl-${team.teamName}`}>
-                              {teamStatsView === 'averages' ? team.spg : team.totalSteals}
-                            </td>
-                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-blk-${team.teamName}`}>
-                              {teamStatsView === 'averages' ? team.bpg : team.totalBlocks}
-                            </td>
-                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-to-${team.teamName}`}>
-                              {teamStatsView === 'averages' ? team.tpg : team.totalTurnovers}
-                            </td>
-                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-pf-${team.teamName}`}>
-                              {teamStatsView === 'averages' ? team.avgPF : team.totalFouls}
-                            </td>
-                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-plusminus-${team.teamName}`}>
-                              {teamStatsView === 'averages' ? team.avgPlusMinus : team.totalPlusMinus}
-                            </td>
-                            <td className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-orange-600" data-testid={`text-pts-${team.teamName}`}>
-                              {teamStatsView === 'averages' ? team.ppg : team.totalPoints}
-                            </td>
-                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-pitp-${team.teamName}`}>
-                              {teamStatsView === 'averages' ? team.avgPITP : team.totalPITP}
-                            </td>
-                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-fbpts-${team.teamName}`}>
-                              {teamStatsView === 'averages' ? team.avgFBPTS : team.totalFBPTS}
-                            </td>
-                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-2ndch-${team.teamName}`}>
-                              {teamStatsView === 'averages' ? team.avg2ndCH : team.total2ndCH}
-                            </td>
+                            {activeTeamStatColumns.map((column) => {
+                              const value = column.getValue(team, teamStatsView);
+                              const displayValue = column.format ? column.format(Number(value)) : value;
+                              return (
+                                <td
+                                  key={`${team.teamName}-${column.key}`}
+                                  className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600"
+                                  data-testid={`text-${column.key.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${team.teamName}`}
+                                >
+                                  {displayValue}
+                                </td>
+                              );
+                            })}
                           </tr>
                         ))}
                       </tbody>

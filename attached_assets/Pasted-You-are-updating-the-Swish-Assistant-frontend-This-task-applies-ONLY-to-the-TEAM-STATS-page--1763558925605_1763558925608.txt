@@ -1,0 +1,75 @@
+You are updating the Swish Assistant frontend.  
+This task applies ONLY to the TEAM STATS page.
+
+Goal:
+Connect the newly added dropdowns (Category + Mode) to the team stats table so that the displayed columns change based on the selected category. 
+Do NOT calculate advanced statistics yet; only wire up the column mapping.
+
+Instructions:
+
+1. Locate the component where the dropdown state is defined and where the team stats table receives its columns.
+   Likely files:
+   - TeamStatsPage.tsx
+   - TeamStatsTable.tsx
+   - team-columns.ts
+
+2. Create a new object in the file that defines column groups based on the selected category:
+
+   Example structure:
+   const TEAM_STAT_COLUMNS = {
+     Traditional: [ ... ],
+     Advanced: [ ... ],
+     FourFactors: [ ... ],
+     Scoring: [ ... ],
+     Misc: [ ... ]
+   };
+
+3. Populate these groups with the following columns:
+
+   Traditional:
+   - tot_spoints → "PTS"
+   - tot_sfieldgoalsmade → "FGM"
+   - tot_sfieldgoalsattempted → "FGA"
+   - tot_sreboundstotal → "REB"
+   - tot_sassists → "AST"
+   - tot_ssteals → "STL"
+   - tot_sblocks → "BLK"
+   - tot_sturnovers → "TO"
+   - tot_sfoulspersonal → "PF"
+   - tot_splusminuspoints → "+/-"
+
+   Advanced:
+   - off_rating → "OFFRTG"
+   - def_rating → "DEFRTG"
+   - net_rating → "NETRTG"
+   - pace → "PACE"
+
+   Four Factors:
+   - efg → "eFG%"
+   - tov_percent → "TOV%"
+   - oreb_percent → "OREB%"
+   - ft_rate → "FT RATE"
+
+   Scoring:
+   - tot_spointsinthepaint → "PITP"
+   - tot_spointsfastbreak → "FB PTS"
+   - tot_spointssecondchance → "2ND CH"
+   - tot_spointsfromturnovers → "PTS OFF TO"
+
+   Misc:
+   - tot_sreboundsoffensive → "ORB"
+   - tot_sreboundsdefensive → "DRB"
+   - tot_timesscoreslevel → "TIES"
+   - tot_leadchanges → "LEAD CHG"
+
+4. Update the table to use:
+   const columns = TEAM_STAT_COLUMNS[category];
+
+5. Maintain:
+   - current styling
+   - mobile responsiveness
+   - no backend changes
+   - no calculations yet
+
+6. Return only the code changes.
+
