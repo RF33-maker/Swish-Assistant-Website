@@ -16,6 +16,13 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
 import { ChevronRight, Trophy, ArrowRight } from "lucide-react";
 import { Link } from "wouter";
 import { EditableDescription } from "@/components/EditableDescription";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { 
   LoadingSkeleton, 
   PlayerRowSkeleton, 
