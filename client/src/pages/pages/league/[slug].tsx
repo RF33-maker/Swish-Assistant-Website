@@ -543,6 +543,170 @@ export default function LeaguePage() {
             valueA = teamStatsView === 'averages' ? (parseFloat(a.avg2ndCH) || 0) : (a.total2ndCH || 0);
             valueB = teamStatsView === 'averages' ? (parseFloat(b.avg2ndCH) || 0) : (b.total2ndCH || 0);
             break;
+          // Advanced stats
+          case 'OFFRTG':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgOffRating) || 0) : (a.totalOffRating || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgOffRating) || 0) : (b.totalOffRating || 0);
+            break;
+          case 'DEFRTG':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgDefRating) || 0) : (a.totalDefRating || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgDefRating) || 0) : (b.totalDefRating || 0);
+            break;
+          case 'NETRTG':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgNetRating) || 0) : (a.totalNetRating || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgNetRating) || 0) : (b.totalNetRating || 0);
+            break;
+          case 'PACE':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgPace) || 0) : (a.totalPace || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgPace) || 0) : (b.totalPace || 0);
+            break;
+          case 'AST%':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgAstPercent) || 0) : (a.totalAstPercent || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgAstPercent) || 0) : (b.totalAstPercent || 0);
+            break;
+          case 'AST/TO':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgAstToRatio) || 0) : (a.totalAstToRatio || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgAstToRatio) || 0) : (b.totalAstToRatio || 0);
+            break;
+          case 'OREB%':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgOrebPercent) || 0) : (a.totalOrebPercent || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgOrebPercent) || 0) : (b.totalOrebPercent || 0);
+            break;
+          case 'DREB%':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgDrebPercent) || 0) : (a.totalDrebPercent || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgDrebPercent) || 0) : (b.totalDrebPercent || 0);
+            break;
+          case 'REB%':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgRebPercent) || 0) : (a.totalRebPercent || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgRebPercent) || 0) : (b.totalRebPercent || 0);
+            break;
+          case 'TOV%':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgTovPercent) || 0) : (a.totalTovPercent || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgTovPercent) || 0) : (b.totalTovPercent || 0);
+            break;
+          case 'EFG%':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgEfgPercent) || 0) : (a.totalEfgPercent || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgEfgPercent) || 0) : (b.totalEfgPercent || 0);
+            break;
+          case 'TS%':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgTsPercent) || 0) : (a.totalTsPercent || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgTsPercent) || 0) : (b.totalTsPercent || 0);
+            break;
+          case 'FTA RATE':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgFtRate) || 0) : (a.totalFtRate || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgFtRate) || 0) : (b.totalFtRate || 0);
+            break;
+          case '3P RATE':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgThreePointRate) || 0) : (a.totalThreePointRate || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgThreePointRate) || 0) : (b.totalThreePointRate || 0);
+            break;
+          case 'PIE':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgPie) || 0) : (a.totalPie || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgPie) || 0) : (b.totalPie || 0);
+            break;
+          // Opponent stats
+          case 'OPP EFG%':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgOppEfgPercent) || 0) : (a.totalOppEfgPercent || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgOppEfgPercent) || 0) : (b.totalOppEfgPercent || 0);
+            break;
+          case 'OPP FTA RATE':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgOppFtRate) || 0) : (a.totalOppFtRate || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgOppFtRate) || 0) : (b.totalOppFtRate || 0);
+            break;
+          case 'OPP TOV%':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgOppTovPercent) || 0) : (a.totalOppTovPercent || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgOppTovPercent) || 0) : (b.totalOppTovPercent || 0);
+            break;
+          case 'OPP OREB%':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgOppOrebPercent) || 0) : (a.totalOppOrebPercent || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgOppOrebPercent) || 0) : (b.totalOppOrebPercent || 0);
+            break;
+          case 'OPP 3PM':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgOpp3PM) || 0) : (a.totalOpp3PM || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgOpp3PM) || 0) : (b.totalOpp3PM || 0);
+            break;
+          case 'OPP FGM':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgOppFGM) || 0) : (a.totalOppFGM || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgOppFGM) || 0) : (b.totalOppFGM || 0);
+            break;
+          case 'OPP FGA':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgOppFGA) || 0) : (a.totalOppFGA || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgOppFGA) || 0) : (b.totalOppFGA || 0);
+            break;
+          case 'OPP PTS':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgOppPoints) || 0) : (a.totalOppPoints || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgOppPoints) || 0) : (b.totalOppPoints || 0);
+            break;
+          case 'OPP TO':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgOppTurnovers) || 0) : (a.totalOppTurnovers || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgOppTurnovers) || 0) : (b.totalOppTurnovers || 0);
+            break;
+          // Scoring breakdown percentages
+          case '%FGA 2PT':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgFgaPercent2pt) || 0) : (a.totalFgaPercent2pt || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgFgaPercent2pt) || 0) : (b.totalFgaPercent2pt || 0);
+            break;
+          case '%FGA 3PT':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgFgaPercent3pt) || 0) : (a.totalFgaPercent3pt || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgFgaPercent3pt) || 0) : (b.totalFgaPercent3pt || 0);
+            break;
+          case '%FGA MR':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgFgaPercentMidrange) || 0) : (a.totalFgaPercentMidrange || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgFgaPercentMidrange) || 0) : (b.totalFgaPercentMidrange || 0);
+            break;
+          case '%PTS 2PT':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgPtsPercent2pt) || 0) : (a.totalPtsPercent2pt || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgPtsPercent2pt) || 0) : (b.totalPtsPercent2pt || 0);
+            break;
+          case '%PTS 3PT':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgPtsPercent3pt) || 0) : (a.totalPtsPercent3pt || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgPtsPercent3pt) || 0) : (b.totalPtsPercent3pt || 0);
+            break;
+          case '%PTS MR':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgPtsPercentMidrange) || 0) : (a.totalPtsPercentMidrange || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgPtsPercentMidrange) || 0) : (b.totalPtsPercentMidrange || 0);
+            break;
+          case '%PTS PITP':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgPtsPercentPitp) || 0) : (a.totalPtsPercentPitp || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgPtsPercentPitp) || 0) : (b.totalPtsPercentPitp || 0);
+            break;
+          case '%PTS FBPS':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgPtsPercentFastbreak) || 0) : (a.totalPtsPercentFastbreak || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgPtsPercentFastbreak) || 0) : (b.totalPtsPercentFastbreak || 0);
+            break;
+          case '%PTS 2ND CH':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgPtsPercentSecondChance) || 0) : (a.totalPtsPercentSecondChance || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgPtsPercentSecondChance) || 0) : (b.totalPtsPercentSecondChance || 0);
+            break;
+          case '%PTS OFFTO':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgPtsPercentOffTurnovers) || 0) : (a.totalPtsPercentOffTurnovers || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgPtsPercentOffTurnovers) || 0) : (b.totalPtsPercentOffTurnovers || 0);
+            break;
+          case '%PTS FT':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgPtsPercentFt) || 0) : (a.totalPtsPercentFt || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgPtsPercentFt) || 0) : (b.totalPtsPercentFt || 0);
+            break;
+          case 'PTS OFF TO':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgPtsFromTurnovers) || 0) : (a.totalPtsFromTurnovers || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgPtsFromTurnovers) || 0) : (b.totalPtsFromTurnovers || 0);
+            break;
+          // Misc stats
+          case 'TIES':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgTimesScoresLevel) || 0) : (a.totalTimesScoresLevel || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgTimesScoresLevel) || 0) : (b.totalTimesScoresLevel || 0);
+            break;
+          case 'LEAD CHG':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgLeadChanges) || 0) : (a.totalLeadChanges || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgLeadChanges) || 0) : (b.totalLeadChanges || 0);
+            break;
+          case 'TIME LEADING':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgTimeLeading) || 0) : (a.totalTimeLeading || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgTimeLeading) || 0) : (b.totalTimeLeading || 0);
+            break;
+          case 'BIG RUN':
+            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgBiggestScoringRun) || 0) : (a.totalBiggestScoringRun || 0);
+            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgBiggestScoringRun) || 0) : (b.totalBiggestScoringRun || 0);
+            break;
           default:
             valueA = 0;
             valueB = 0;
