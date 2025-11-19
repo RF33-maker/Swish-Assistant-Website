@@ -3092,6 +3092,52 @@ export default function LeaguePage() {
                   </div>
                 </div>
 
+                {/* Dropdowns for Category and Mode */}
+                <div className="flex flex-col sm:flex-row gap-3 mb-6">
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-slate-600 mb-1.5">Category</label>
+                    <Select
+                      value={teamStatsCategory}
+                      onValueChange={(value) => setTeamStatsCategory(value as typeof teamStatsCategory)}
+                    >
+                      <SelectTrigger 
+                        className="w-full bg-white border-slate-200 text-slate-700 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500"
+                        data-testid="select-category"
+                      >
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Traditional" data-testid="option-traditional">Traditional</SelectItem>
+                        <SelectItem value="Advanced" data-testid="option-advanced">Advanced</SelectItem>
+                        <SelectItem value="Four Factors" data-testid="option-four-factors">Four Factors</SelectItem>
+                        <SelectItem value="Scoring" data-testid="option-scoring">Scoring</SelectItem>
+                        <SelectItem value="Misc" data-testid="option-misc">Misc</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-slate-600 mb-1.5">Mode</label>
+                    <Select
+                      value={teamStatsMode}
+                      onValueChange={(value) => setTeamStatsMode(value as typeof teamStatsMode)}
+                    >
+                      <SelectTrigger 
+                        className="w-full bg-white border-slate-200 text-slate-700 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500"
+                        data-testid="select-mode"
+                      >
+                        <SelectValue placeholder="Select mode" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Per Game" data-testid="option-per-game">Per Game</SelectItem>
+                        <SelectItem value="Totals" data-testid="option-totals">Totals</SelectItem>
+                        <SelectItem value="Per 40 Minutes" data-testid="option-per-40">Per 40 Minutes</SelectItem>
+                        <SelectItem value="Per 100 Possessions" data-testid="option-per-100">Per 100 Possessions</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
                 {isLoadingTeamStats ? (
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
