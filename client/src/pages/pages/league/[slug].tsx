@@ -1432,7 +1432,51 @@ export default function LeaguePage() {
               totalPlusMinus: 0,
               totalPITP: 0,
               totalFBPTS: 0,
-              total2ndCH: 0
+              total2ndCH: 0,
+              // Advanced stats
+              totalOffRating: 0,
+              totalDefRating: 0,
+              totalNetRating: 0,
+              totalPace: 0,
+              totalAstPercent: 0,
+              totalAstToRatio: 0,
+              totalOrebPercent: 0,
+              totalDrebPercent: 0,
+              totalRebPercent: 0,
+              totalTovPercent: 0,
+              totalEfgPercent: 0,
+              totalTsPercent: 0,
+              totalFtRate: 0,
+              totalThreePointRate: 0,
+              totalPie: 0,
+              // Opponent stats
+              totalOppEfgPercent: 0,
+              totalOppFtRate: 0,
+              totalOppTovPercent: 0,
+              totalOppOrebPercent: 0,
+              totalOpp3PM: 0,
+              totalOppFGM: 0,
+              totalOppFGA: 0,
+              totalOppPoints: 0,
+              totalOppTurnovers: 0,
+              // Misc stats
+              totalTimesScoresLevel: 0,
+              totalLeadChanges: 0,
+              totalTimeLeading: 0,
+              totalBiggestScoringRun: 0,
+              // Scoring breakdown percentages
+              totalFgaPercent2pt: 0,
+              totalFgaPercent3pt: 0,
+              totalFgaPercentMidrange: 0,
+              totalPtsPercent2pt: 0,
+              totalPtsPercent3pt: 0,
+              totalPtsPercentMidrange: 0,
+              totalPtsPercentPitp: 0,
+              totalPtsPercentFastbreak: 0,
+              totalPtsPercentSecondChance: 0,
+              totalPtsPercentOffTurnovers: 0,
+              totalPtsPercentFt: 0,
+              totalPtsFromTurnovers: 0
             });
           }
 
@@ -1459,6 +1503,50 @@ export default function LeaguePage() {
           team.totalPITP += stat.tot_spointsinthepaint || 0;
           team.totalFBPTS += stat.tot_spointsfastbreak || 0;
           team.total2ndCH += stat.tot_spointssecondchance || 0;
+          // Advanced stats
+          team.totalOffRating += stat.off_rating || 0;
+          team.totalDefRating += stat.def_rating || 0;
+          team.totalNetRating += stat.net_rating || 0;
+          team.totalPace += stat.pace || 0;
+          team.totalAstPercent += stat.ast_percent || 0;
+          team.totalAstToRatio += stat.ast_to_ratio || 0;
+          team.totalOrebPercent += stat.oreb_percent || 0;
+          team.totalDrebPercent += stat.dreb_percent || 0;
+          team.totalRebPercent += stat.reb_percent || 0;
+          team.totalTovPercent += stat.tov_percent || 0;
+          team.totalEfgPercent += stat.efg_percent || 0;
+          team.totalTsPercent += stat.ts_percent || 0;
+          team.totalFtRate += stat.ft_rate || 0;
+          team.totalThreePointRate += stat.three_point_rate || 0;
+          team.totalPie += stat.pie || 0;
+          // Opponent stats
+          team.totalOppEfgPercent += stat.opp_efg_percent || 0;
+          team.totalOppFtRate += stat.opp_ft_rate || 0;
+          team.totalOppTovPercent += stat.opp_tov_percent || 0;
+          team.totalOppOrebPercent += stat.opp_oreb_percent || 0;
+          team.totalOpp3PM += stat.opp_sthreepointersmade || 0;
+          team.totalOppFGM += stat.opp_sfieldgoalsmade || 0;
+          team.totalOppFGA += stat.opp_sfieldgoalsattempted || 0;
+          team.totalOppPoints += stat.opp_points || 0;
+          team.totalOppTurnovers += stat.opp_turnovers || 0;
+          // Misc stats
+          team.totalTimesScoresLevel += stat.tot_timesscoreslevel || 0;
+          team.totalLeadChanges += stat.tot_leadchanges || 0;
+          team.totalTimeLeading += stat.tot_timeleading || 0;
+          team.totalBiggestScoringRun += stat.tot_biggestscoringrun || 0;
+          // Scoring breakdown percentages
+          team.totalFgaPercent2pt += stat.fga_percent_2pt || 0;
+          team.totalFgaPercent3pt += stat.fga_percent_3pt || 0;
+          team.totalFgaPercentMidrange += stat.fga_percent_midrange || 0;
+          team.totalPtsPercent2pt += stat.pts_percent_2pt || 0;
+          team.totalPtsPercent3pt += stat.pts_percent_3pt || 0;
+          team.totalPtsPercentMidrange += stat.pts_percent_midrange || 0;
+          team.totalPtsPercentPitp += stat.pts_percent_pitp || 0;
+          team.totalPtsPercentFastbreak += stat.pts_percent_fastbreak || 0;
+          team.totalPtsPercentSecondChance += stat.pts_percent_second_chance || 0;
+          team.totalPtsPercentOffTurnovers += stat.pts_percent_off_turnovers || 0;
+          team.totalPtsPercentFt += stat.pts_percent_ft || 0;
+          team.totalPtsFromTurnovers += stat.tot_spointsfromturnovers || 0;
         });
 
         // Calculate percentages and averages
@@ -1490,7 +1578,51 @@ export default function LeaguePage() {
           avgPlusMinus: team.gamesPlayed > 0 ? (team.totalPlusMinus / team.gamesPlayed).toFixed(1) : '0.0',
           avgPITP: team.gamesPlayed > 0 ? (team.totalPITP / team.gamesPlayed).toFixed(1) : '0.0',
           avgFBPTS: team.gamesPlayed > 0 ? (team.totalFBPTS / team.gamesPlayed).toFixed(1) : '0.0',
-          avg2ndCH: team.gamesPlayed > 0 ? (team.total2ndCH / team.gamesPlayed).toFixed(1) : '0.0'
+          avg2ndCH: team.gamesPlayed > 0 ? (team.total2ndCH / team.gamesPlayed).toFixed(1) : '0.0',
+          // Advanced stats averages
+          avgOffRating: team.gamesPlayed > 0 ? (team.totalOffRating / team.gamesPlayed).toFixed(1) : '0.0',
+          avgDefRating: team.gamesPlayed > 0 ? (team.totalDefRating / team.gamesPlayed).toFixed(1) : '0.0',
+          avgNetRating: team.gamesPlayed > 0 ? (team.totalNetRating / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPace: team.gamesPlayed > 0 ? (team.totalPace / team.gamesPlayed).toFixed(1) : '0.0',
+          avgAstPercent: team.gamesPlayed > 0 ? (team.totalAstPercent / team.gamesPlayed).toFixed(1) : '0.0',
+          avgAstToRatio: team.gamesPlayed > 0 ? (team.totalAstToRatio / team.gamesPlayed).toFixed(1) : '0.0',
+          avgOrebPercent: team.gamesPlayed > 0 ? (team.totalOrebPercent / team.gamesPlayed).toFixed(1) : '0.0',
+          avgDrebPercent: team.gamesPlayed > 0 ? (team.totalDrebPercent / team.gamesPlayed).toFixed(1) : '0.0',
+          avgRebPercent: team.gamesPlayed > 0 ? (team.totalRebPercent / team.gamesPlayed).toFixed(1) : '0.0',
+          avgTovPercent: team.gamesPlayed > 0 ? (team.totalTovPercent / team.gamesPlayed).toFixed(1) : '0.0',
+          avgEfgPercent: team.gamesPlayed > 0 ? (team.totalEfgPercent / team.gamesPlayed).toFixed(1) : '0.0',
+          avgTsPercent: team.gamesPlayed > 0 ? (team.totalTsPercent / team.gamesPlayed).toFixed(1) : '0.0',
+          avgFtRate: team.gamesPlayed > 0 ? (team.totalFtRate / team.gamesPlayed).toFixed(1) : '0.0',
+          avgThreePointRate: team.gamesPlayed > 0 ? (team.totalThreePointRate / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPie: team.gamesPlayed > 0 ? (team.totalPie / team.gamesPlayed).toFixed(3) : '0.000',
+          // Opponent stats averages
+          avgOppEfgPercent: team.gamesPlayed > 0 ? (team.totalOppEfgPercent / team.gamesPlayed).toFixed(1) : '0.0',
+          avgOppFtRate: team.gamesPlayed > 0 ? (team.totalOppFtRate / team.gamesPlayed).toFixed(1) : '0.0',
+          avgOppTovPercent: team.gamesPlayed > 0 ? (team.totalOppTovPercent / team.gamesPlayed).toFixed(1) : '0.0',
+          avgOppOrebPercent: team.gamesPlayed > 0 ? (team.totalOppOrebPercent / team.gamesPlayed).toFixed(1) : '0.0',
+          avgOpp3PM: team.gamesPlayed > 0 ? (team.totalOpp3PM / team.gamesPlayed).toFixed(1) : '0.0',
+          avgOppFGM: team.gamesPlayed > 0 ? (team.totalOppFGM / team.gamesPlayed).toFixed(1) : '0.0',
+          avgOppFGA: team.gamesPlayed > 0 ? (team.totalOppFGA / team.gamesPlayed).toFixed(1) : '0.0',
+          avgOppPoints: team.gamesPlayed > 0 ? (team.totalOppPoints / team.gamesPlayed).toFixed(1) : '0.0',
+          avgOppTurnovers: team.gamesPlayed > 0 ? (team.totalOppTurnovers / team.gamesPlayed).toFixed(1) : '0.0',
+          // Misc stats averages
+          avgTimesScoresLevel: team.gamesPlayed > 0 ? (team.totalTimesScoresLevel / team.gamesPlayed).toFixed(1) : '0.0',
+          avgLeadChanges: team.gamesPlayed > 0 ? (team.totalLeadChanges / team.gamesPlayed).toFixed(1) : '0.0',
+          avgTimeLeading: team.gamesPlayed > 0 ? (team.totalTimeLeading / team.gamesPlayed).toFixed(1) : '0.0',
+          avgBiggestScoringRun: team.gamesPlayed > 0 ? (team.totalBiggestScoringRun / team.gamesPlayed).toFixed(1) : '0.0',
+          // Scoring breakdown percentages averages
+          avgFgaPercent2pt: team.gamesPlayed > 0 ? (team.totalFgaPercent2pt / team.gamesPlayed).toFixed(1) : '0.0',
+          avgFgaPercent3pt: team.gamesPlayed > 0 ? (team.totalFgaPercent3pt / team.gamesPlayed).toFixed(1) : '0.0',
+          avgFgaPercentMidrange: team.gamesPlayed > 0 ? (team.totalFgaPercentMidrange / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPtsPercent2pt: team.gamesPlayed > 0 ? (team.totalPtsPercent2pt / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPtsPercent3pt: team.gamesPlayed > 0 ? (team.totalPtsPercent3pt / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPtsPercentMidrange: team.gamesPlayed > 0 ? (team.totalPtsPercentMidrange / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPtsPercentPitp: team.gamesPlayed > 0 ? (team.totalPtsPercentPitp / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPtsPercentFastbreak: team.gamesPlayed > 0 ? (team.totalPtsPercentFastbreak / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPtsPercentSecondChance: team.gamesPlayed > 0 ? (team.totalPtsPercentSecondChance / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPtsPercentOffTurnovers: team.gamesPlayed > 0 ? (team.totalPtsPercentOffTurnovers / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPtsPercentFt: team.gamesPlayed > 0 ? (team.totalPtsPercentFt / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPtsFromTurnovers: team.gamesPlayed > 0 ? (team.totalPtsFromTurnovers / team.gamesPlayed).toFixed(1) : '0.0'
         })).sort((a, b) => parseFloat(b.ppg) - parseFloat(a.ppg)); // Sort by PPG
 
         setTeamStatsData(aggregatedStats);
