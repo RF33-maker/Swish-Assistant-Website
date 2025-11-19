@@ -65,12 +65,35 @@ const normalizeAndMapTeamName = (name: string): string => {
   return normalizeTeamName(mapped);
 };
 
+// Helper function to calculate stat value based on mode
+const getStatValueByMode = (
+  team: any,
+  mode: 'Per Game' | 'Totals' | 'Per 40 Minutes' | 'Per 100 Possessions',
+  totalField: string,
+  avgField?: string
+): number => {
+  switch (mode) {
+    case 'Per Game':
+      return avgField ? (parseFloat(team[avgField]) || 0) : (team.gamesPlayed > 0 ? team[totalField] / team.gamesPlayed : 0);
+    case 'Totals':
+      return team[totalField] || 0;
+    case 'Per 40 Minutes':
+      // Normalize to per-40-minute basis
+      return team.totalMinutes > 0 ? (team[totalField] / team.totalMinutes) * 40 : 0;
+    case 'Per 100 Possessions':
+      // Normalize to per-100-possession basis
+      return team.totalPossessions > 0 ? (team[totalField] / team.totalPossessions) * 100 : 0;
+    default:
+      return team[totalField] || 0;
+  }
+};
+
 // Team stats column configuration by category
 type TeamStatColumn = {
   key: string;
   label: string;
   sortable: boolean;
-  getValue: (team: any, view: 'averages' | 'totals') => number | string;
+  getValue: (team: any, mode: 'Per Game' | 'Totals' | 'Per 40 Minutes' | 'Per 100 Possessions') => number | string;
   format?: (value: number) => string;
 };
 
@@ -80,121 +103,121 @@ const TEAM_STAT_COLUMNS: Record<string, TeamStatColumn[]> = {
       key: 'PTS',
       label: 'PTS',
       sortable: true,
-      getValue: (team, view) => view === 'averages' ? (parseFloat(team.ppg) || 0) : (team.totalPoints || 0),
+      getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPoints', 'ppg'),
     },
     {
       key: 'FGM',
       label: 'FGM',
       sortable: true,
-      getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgFGM) || 0) : (team.totalFGM || 0),
+      getValue: (team, mode) => getStatValueByMode(team, mode, 'totalFGM', 'avgFGM'),
     },
     {
       key: 'FGA',
       label: 'FGA',
       sortable: true,
-      getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgFGA) || 0) : (team.totalFGA || 0),
+      getValue: (team, mode) => getStatValueByMode(team, mode, 'totalFGA', 'avgFGA'),
     },
     {
       key: 'REB',
       label: 'REB',
       sortable: true,
-      getValue: (team, view) => view === 'averages' ? (parseFloat(team.rpg) || 0) : (team.totalRebounds || 0),
+      getValue: (team, mode) => getStatValueByMode(team, mode, 'totalRebounds', 'rpg'),
     },
     {
       key: 'AST',
       label: 'AST',
       sortable: true,
-      getValue: (team, view) => view === 'averages' ? (parseFloat(team.apg) || 0) : (team.totalAssists || 0),
+      getValue: (team, mode) => getStatValueByMode(team, mode, 'totalAssists', 'apg'),
     },
     {
       key: 'STL',
       label: 'STL',
       sortable: true,
-      getValue: (team, view) => view === 'averages' ? (parseFloat(team.spg) || 0) : (team.totalSteals || 0),
+      getValue: (team, mode) => getStatValueByMode(team, mode, 'totalSteals', 'spg'),
     },
     {
       key: 'BLK',
       label: 'BLK',
       sortable: true,
-      getValue: (team, view) => view === 'averages' ? (parseFloat(team.bpg) || 0) : (team.totalBlocks || 0),
+      getValue: (team, mode) => getStatValueByMode(team, mode, 'totalBlocks', 'bpg'),
     },
     {
       key: 'TO',
       label: 'TO',
       sortable: true,
-      getValue: (team, view) => view === 'averages' ? (parseFloat(team.tpg) || 0) : (team.totalTurnovers || 0),
+      getValue: (team, mode) => getStatValueByMode(team, mode, 'totalTurnovers', 'tpg'),
     },
     {
       key: 'PF',
       label: 'PF',
       sortable: true,
-      getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgPF) || 0) : (team.totalFouls || 0),
+      getValue: (team, mode) => getStatValueByMode(team, mode, 'totalFouls', 'avgPF'),
     },
     {
       key: '+/-',
       label: '+/-',
       sortable: true,
-      getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgPlusMinus) || 0) : (team.totalPlusMinus || 0),
+      getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPlusMinus', 'avgPlusMinus'),
     },
   ],
   Advanced: [
-    { key: 'off_rating', label: 'OFFRTG', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgOffRating) || 0) : (team.totalOffRating || 0) },
-    { key: 'def_rating', label: 'DEFRTG', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgDefRating) || 0) : (team.totalDefRating || 0) },
-    { key: 'net_rating', label: 'NETRTG', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgNetRating) || 0) : (team.totalNetRating || 0) },
-    { key: 'pace', label: 'PACE', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgPace) || 0) : (team.totalPace || 0) },
-    { key: 'ast_percent', label: 'AST%', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgAstPercent) || 0) : (team.totalAstPercent || 0) },
-    { key: 'ast_to_ratio', label: 'AST/TO', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgAstToRatio) || 0) : (team.totalAstToRatio || 0) },
-    { key: 'oreb_percent', label: 'OREB%', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgOrebPercent) || 0) : (team.totalOrebPercent || 0) },
-    { key: 'dreb_percent', label: 'DREB%', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgDrebPercent) || 0) : (team.totalDrebPercent || 0) },
-    { key: 'reb_percent', label: 'REB%', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgRebPercent) || 0) : (team.totalRebPercent || 0) },
-    { key: 'tov_percent', label: 'TOV%', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgTovPercent) || 0) : (team.totalTovPercent || 0) },
-    { key: 'efg_percent', label: 'EFG%', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgEfgPercent) || 0) : (team.totalEfgPercent || 0) },
-    { key: 'ts_percent', label: 'TS%', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgTsPercent) || 0) : (team.totalTsPercent || 0) },
-    { key: 'ft_rate', label: 'FTA RATE', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgFtRate) || 0) : (team.totalFtRate || 0) },
-    { key: 'three_point_rate', label: '3P RATE', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgThreePointRate) || 0) : (team.totalThreePointRate || 0) },
-    { key: 'pie', label: 'PIE', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgPie) || 0) : (team.totalPie || 0) },
+    { key: 'off_rating', label: 'OFFRTG', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOffRating', 'avgOffRating') },
+    { key: 'def_rating', label: 'DEFRTG', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalDefRating', 'avgDefRating') },
+    { key: 'net_rating', label: 'NETRTG', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalNetRating', 'avgNetRating') },
+    { key: 'pace', label: 'PACE', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPace', 'avgPace') },
+    { key: 'ast_percent', label: 'AST%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalAstPercent', 'avgAstPercent') },
+    { key: 'ast_to_ratio', label: 'AST/TO', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalAstToRatio', 'avgAstToRatio') },
+    { key: 'oreb_percent', label: 'OREB%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOrebPercent', 'avgOrebPercent') },
+    { key: 'dreb_percent', label: 'DREB%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalDrebPercent', 'avgDrebPercent') },
+    { key: 'reb_percent', label: 'REB%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalRebPercent', 'avgRebPercent') },
+    { key: 'tov_percent', label: 'TOV%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalTovPercent', 'avgTovPercent') },
+    { key: 'efg_percent', label: 'EFG%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalEfgPercent', 'avgEfgPercent') },
+    { key: 'ts_percent', label: 'TS%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalTsPercent', 'avgTsPercent') },
+    { key: 'ft_rate', label: 'FTA RATE', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalFtRate', 'avgFtRate') },
+    { key: 'three_point_rate', label: '3P RATE', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalThreePointRate', 'avgThreePointRate') },
+    { key: 'pie', label: 'PIE', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPie', 'avgPie') },
   ],
   'Four Factors': [
-    { key: 'efg_percent', label: 'EFG%', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgEfgPercent) || 0) : (team.totalEfgPercent || 0) },
-    { key: 'ft_rate', label: 'FTA RATE', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgFtRate) || 0) : (team.totalFtRate || 0) },
-    { key: 'tov_percent', label: 'TOV%', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgTovPercent) || 0) : (team.totalTovPercent || 0) },
-    { key: 'oreb_percent', label: 'OREB%', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgOrebPercent) || 0) : (team.totalOrebPercent || 0) },
-    { key: 'opp_efg_percent', label: 'OPP EFG%', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgOppEfgPercent) || 0) : (team.totalOppEfgPercent || 0) },
-    { key: 'opp_ft_rate', label: 'OPP FTA RATE', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgOppFtRate) || 0) : (team.totalOppFtRate || 0) },
-    { key: 'opp_tov_percent', label: 'OPP TOV%', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgOppTovPercent) || 0) : (team.totalOppTovPercent || 0) },
-    { key: 'opp_oreb_percent', label: 'OPP OREB%', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgOppOrebPercent) || 0) : (team.totalOppOrebPercent || 0) },
+    { key: 'efg_percent', label: 'EFG%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalEfgPercent', 'avgEfgPercent') },
+    { key: 'ft_rate', label: 'FTA RATE', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalFtRate', 'avgFtRate') },
+    { key: 'tov_percent', label: 'TOV%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalTovPercent', 'avgTovPercent') },
+    { key: 'oreb_percent', label: 'OREB%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOrebPercent', 'avgOrebPercent') },
+    { key: 'opp_efg_percent', label: 'OPP EFG%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppEfgPercent', 'avgOppEfgPercent') },
+    { key: 'opp_ft_rate', label: 'OPP FTA RATE', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppFtRate', 'avgOppFtRate') },
+    { key: 'opp_tov_percent', label: 'OPP TOV%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppTovPercent', 'avgOppTovPercent') },
+    { key: 'opp_oreb_percent', label: 'OPP OREB%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppOrebPercent', 'avgOppOrebPercent') },
   ],
   Scoring: [
-    { key: 'fga_percent_2pt', label: '%FGA 2PT', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgFgaPercent2pt) || 0) : (team.totalFgaPercent2pt || 0) },
-    { key: 'fga_percent_3pt', label: '%FGA 3PT', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgFgaPercent3pt) || 0) : (team.totalFgaPercent3pt || 0) },
-    { key: 'fga_percent_midrange', label: '%FGA MR', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgFgaPercentMidrange) || 0) : (team.totalFgaPercentMidrange || 0) },
-    { key: 'pts_percent_2pt', label: '%PTS 2PT', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgPtsPercent2pt) || 0) : (team.totalPtsPercent2pt || 0) },
-    { key: 'pts_percent_3pt', label: '%PTS 3PT', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgPtsPercent3pt) || 0) : (team.totalPtsPercent3pt || 0) },
-    { key: 'pts_percent_midrange', label: '%PTS MR', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgPtsPercentMidrange) || 0) : (team.totalPtsPercentMidrange || 0) },
-    { key: 'pts_percent_pitp', label: '%PTS PITP', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgPtsPercentPitp) || 0) : (team.totalPtsPercentPitp || 0) },
-    { key: 'pts_percent_fastbreak', label: '%PTS FBPS', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgPtsPercentFastbreak) || 0) : (team.totalPtsPercentFastbreak || 0) },
-    { key: 'pts_percent_second_chance', label: '%PTS 2ND CH', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgPtsPercentSecondChance) || 0) : (team.totalPtsPercentSecondChance || 0) },
-    { key: 'pts_percent_off_turnovers', label: '%PTS OFFTO', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgPtsPercentOffTurnovers) || 0) : (team.totalPtsPercentOffTurnovers || 0) },
-    { key: 'pts_percent_ft', label: '%PTS FT', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgPtsPercentFt) || 0) : (team.totalPtsPercentFt || 0) },
-    { key: 'tot_spointsinthepaint', label: 'PITP', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgPITP) || 0) : (team.totalPITP || 0) },
-    { key: 'tot_spointsfastbreak', label: 'FB PTS', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgFBPTS) || 0) : (team.totalFBPTS || 0) },
-    { key: 'tot_spointssecondchance', label: '2ND CH', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avg2ndCH) || 0) : (team.total2ndCH || 0) },
-    { key: 'tot_spointsfromturnovers', label: 'PTS OFF TO', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgPtsFromTurnovers) || 0) : (team.totalPtsFromTurnovers || 0) },
-    { key: 'tot_sfreethrowsmade', label: 'FTM', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgFTM) || 0) : (team.totalFTM || 0) },
-    { key: 'tot_sthreepointersmade', label: '3PM', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avg3PM) || 0) : (team.total3PM || 0) },
-    { key: 'tot_stwopointersmade', label: '2PM', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avg2PM) || 0) : (team.total2PM || 0) },
+    { key: 'fga_percent_2pt', label: '%FGA 2PT', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalFgaPercent2pt', 'avgFgaPercent2pt') },
+    { key: 'fga_percent_3pt', label: '%FGA 3PT', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalFgaPercent3pt', 'avgFgaPercent3pt') },
+    { key: 'fga_percent_midrange', label: '%FGA MR', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalFgaPercentMidrange', 'avgFgaPercentMidrange') },
+    { key: 'pts_percent_2pt', label: '%PTS 2PT', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPtsPercent2pt', 'avgPtsPercent2pt') },
+    { key: 'pts_percent_3pt', label: '%PTS 3PT', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPtsPercent3pt', 'avgPtsPercent3pt') },
+    { key: 'pts_percent_midrange', label: '%PTS MR', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPtsPercentMidrange', 'avgPtsPercentMidrange') },
+    { key: 'pts_percent_pitp', label: '%PTS PITP', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPtsPercentPitp', 'avgPtsPercentPitp') },
+    { key: 'pts_percent_fastbreak', label: '%PTS FBPS', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPtsPercentFastbreak', 'avgPtsPercentFastbreak') },
+    { key: 'pts_percent_second_chance', label: '%PTS 2ND CH', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPtsPercentSecondChance', 'avgPtsPercentSecondChance') },
+    { key: 'pts_percent_off_turnovers', label: '%PTS OFFTO', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPtsPercentOffTurnovers', 'avgPtsPercentOffTurnovers') },
+    { key: 'pts_percent_ft', label: '%PTS FT', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPtsPercentFt', 'avgPtsPercentFt') },
+    { key: 'tot_spointsinthepaint', label: 'PITP', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPITP', 'avgPITP') },
+    { key: 'tot_spointsfastbreak', label: 'FB PTS', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalFBPTS', 'avgFBPTS') },
+    { key: 'tot_spointssecondchance', label: '2ND CH', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'total2ndCH', 'avg2ndCH') },
+    { key: 'tot_spointsfromturnovers', label: 'PTS OFF TO', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPtsFromTurnovers', 'avgPtsFromTurnovers') },
+    { key: 'tot_sfreethrowsmade', label: 'FTM', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalFTM', 'avgFTM') },
+    { key: 'tot_sthreepointersmade', label: '3PM', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'total3PM', 'avg3PM') },
+    { key: 'tot_stwopointersmade', label: '2PM', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'total2PM', 'avg2PM') },
   ],
   Misc: [
-    { key: 'tot_timesscoreslevel', label: 'TIES', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgTimesScoresLevel) || 0) : (team.totalTimesScoresLevel || 0) },
-    { key: 'tot_leadchanges', label: 'LEAD CHG', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgLeadChanges) || 0) : (team.totalLeadChanges || 0) },
-    { key: 'tot_timeleading', label: 'TIME LEADING', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgTimeLeading) || 0) : (team.totalTimeLeading || 0) },
-    { key: 'tot_biggestscoringrun', label: 'BIG RUN', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgBiggestScoringRun) || 0) : (team.totalBiggestScoringRun || 0) },
-    { key: 'tot_splusminuspoints', label: '+/-', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgPlusMinus) || 0) : (team.totalPlusMinus || 0) },
-    { key: 'opp_sthreepointersmade', label: 'OPP 3PM', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgOpp3PM) || 0) : (team.totalOpp3PM || 0) },
-    { key: 'opp_sfieldgoalsmade', label: 'OPP FGM', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgOppFGM) || 0) : (team.totalOppFGM || 0) },
-    { key: 'opp_sfieldgoalsattempted', label: 'OPP FGA', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgOppFGA) || 0) : (team.totalOppFGA || 0) },
-    { key: 'opp_points', label: 'OPP PTS', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgOppPoints) || 0) : (team.totalOppPoints || 0) },
-    { key: 'opp_turnovers', label: 'OPP TO', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgOppTurnovers) || 0) : (team.totalOppTurnovers || 0) },
+    { key: 'tot_timesscoreslevel', label: 'TIES', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalTimesScoresLevel', 'avgTimesScoresLevel') },
+    { key: 'tot_leadchanges', label: 'LEAD CHG', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalLeadChanges', 'avgLeadChanges') },
+    { key: 'tot_timeleading', label: 'TIME LEADING', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalTimeLeading', 'avgTimeLeading') },
+    { key: 'tot_biggestscoringrun', label: 'BIG RUN', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalBiggestScoringRun', 'avgBiggestScoringRun') },
+    { key: 'tot_splusminuspoints', label: '+/-', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPlusMinus', 'avgPlusMinus') },
+    { key: 'opp_sthreepointersmade', label: 'OPP 3PM', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOpp3PM', 'avgOpp3PM') },
+    { key: 'opp_sfieldgoalsmade', label: 'OPP FGM', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppFGM', 'avgOppFGM') },
+    { key: 'opp_sfieldgoalsattempted', label: 'OPP FGA', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppFGA', 'avgOppFGA') },
+    { key: 'opp_points', label: 'OPP PTS', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppPoints', 'avgOppPoints') },
+    { key: 'opp_turnovers', label: 'OPP TO', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppTurnovers', 'avgOppTurnovers') },
   ],
 };
 
@@ -444,268 +467,268 @@ export default function LeaguePage() {
             valueB = b.gamesPlayed || 0;
             break;
           case 'FGM':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgFGM) || 0) : (a.totalFGM || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgFGM) || 0) : (b.totalFGM || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalFGM', 'avgFGM');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalFGM', 'avgFGM');
             break;
           case 'FGA':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgFGA) || 0) : (a.totalFGA || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgFGA) || 0) : (b.totalFGA || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalFGA', 'avgFGA');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalFGA', 'avgFGA');
             break;
           case 'FG%':
             valueA = parseFloat(a.fgPercentage) || 0;
             valueB = parseFloat(b.fgPercentage) || 0;
             break;
           case '2PM':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avg2PM) || 0) : (a.total2PM || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avg2PM) || 0) : (b.total2PM || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'total2PM', 'avg2PM');
+            valueB = getStatValueByMode(b, teamStatsMode, 'total2PM', 'avg2PM');
             break;
           case '2PA':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avg2PA) || 0) : (a.total2PA || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avg2PA) || 0) : (b.total2PA || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'total2PA', 'avg2PA');
+            valueB = getStatValueByMode(b, teamStatsMode, 'total2PA', 'avg2PA');
             break;
           case '2P%':
             valueA = parseFloat(a.twoPtPercentage) || 0;
             valueB = parseFloat(b.twoPtPercentage) || 0;
             break;
           case '3PM':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avg3PM) || 0) : (a.total3PM || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avg3PM) || 0) : (b.total3PM || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'total3PM', 'avg3PM');
+            valueB = getStatValueByMode(b, teamStatsMode, 'total3PM', 'avg3PM');
             break;
           case '3PA':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avg3PA) || 0) : (a.total3PA || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avg3PA) || 0) : (b.total3PA || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'total3PA', 'avg3PA');
+            valueB = getStatValueByMode(b, teamStatsMode, 'total3PA', 'avg3PA');
             break;
           case '3P%':
             valueA = parseFloat(a.threePtPercentage) || 0;
             valueB = parseFloat(b.threePtPercentage) || 0;
             break;
           case 'FTM':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgFTM) || 0) : (a.totalFTM || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgFTM) || 0) : (b.totalFTM || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalFTM', 'avgFTM');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalFTM', 'avgFTM');
             break;
           case 'FTA':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgFTA) || 0) : (a.totalFTA || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgFTA) || 0) : (b.totalFTA || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalFTA', 'avgFTA');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalFTA', 'avgFTA');
             break;
           case 'FT%':
             valueA = parseFloat(a.ftPercentage) || 0;
             valueB = parseFloat(b.ftPercentage) || 0;
             break;
           case 'ORB':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgORB) || 0) : (a.totalORB || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgORB) || 0) : (b.totalORB || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalORB', 'avgORB');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalORB', 'avgORB');
             break;
           case 'DRB':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgDRB) || 0) : (a.totalDRB || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgDRB) || 0) : (b.totalDRB || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalDRB', 'avgDRB');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalDRB', 'avgDRB');
             break;
           case 'TRB':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.rpg) || 0) : (a.totalRebounds || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.rpg) || 0) : (b.totalRebounds || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalRebounds', 'rpg');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalRebounds', 'rpg');
             break;
           case 'AST':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.apg) || 0) : (a.totalAssists || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.apg) || 0) : (b.totalAssists || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalAssists', 'apg');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalAssists', 'apg');
             break;
           case 'STL':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.spg) || 0) : (a.totalSteals || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.spg) || 0) : (b.totalSteals || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalSteals', 'spg');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalSteals', 'spg');
             break;
           case 'BLK':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.bpg) || 0) : (a.totalBlocks || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.bpg) || 0) : (b.totalBlocks || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalBlocks', 'bpg');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalBlocks', 'bpg');
             break;
           case 'TO':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.tpg) || 0) : (a.totalTurnovers || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.tpg) || 0) : (b.totalTurnovers || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalTurnovers', 'tpg');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalTurnovers', 'tpg');
             break;
           case 'PF':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgPF) || 0) : (a.totalFouls || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgPF) || 0) : (b.totalFouls || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalFouls', 'avgPF');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalFouls', 'avgPF');
             break;
           case '+/-':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgPlusMinus) || 0) : (a.totalPlusMinus || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgPlusMinus) || 0) : (b.totalPlusMinus || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPlusMinus', 'avgPlusMinus');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPlusMinus', 'avgPlusMinus');
             break;
           case 'PTS':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.ppg) || 0) : (a.totalPoints || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.ppg) || 0) : (b.totalPoints || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPoints', 'ppg');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPoints', 'ppg');
             break;
           case 'PITP':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgPITP) || 0) : (a.totalPITP || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgPITP) || 0) : (b.totalPITP || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPITP', 'avgPITP');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPITP', 'avgPITP');
             break;
           case 'FB PTS':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgFBPTS) || 0) : (a.totalFBPTS || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgFBPTS) || 0) : (b.totalFBPTS || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalFBPTS', 'avgFBPTS');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalFBPTS', 'avgFBPTS');
             break;
           case '2ND CH':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avg2ndCH) || 0) : (a.total2ndCH || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avg2ndCH) || 0) : (b.total2ndCH || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'total2ndCH', 'avg2ndCH');
+            valueB = getStatValueByMode(b, teamStatsMode, 'total2ndCH', 'avg2ndCH');
             break;
           // Advanced stats
           case 'OFFRTG':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgOffRating) || 0) : (a.totalOffRating || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgOffRating) || 0) : (b.totalOffRating || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalOffRating', 'avgOffRating');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalOffRating', 'avgOffRating');
             break;
           case 'DEFRTG':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgDefRating) || 0) : (a.totalDefRating || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgDefRating) || 0) : (b.totalDefRating || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalDefRating', 'avgDefRating');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalDefRating', 'avgDefRating');
             break;
           case 'NETRTG':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgNetRating) || 0) : (a.totalNetRating || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgNetRating) || 0) : (b.totalNetRating || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalNetRating', 'avgNetRating');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalNetRating', 'avgNetRating');
             break;
           case 'PACE':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgPace) || 0) : (a.totalPace || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgPace) || 0) : (b.totalPace || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPace', 'avgPace');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPace', 'avgPace');
             break;
           case 'AST%':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgAstPercent) || 0) : (a.totalAstPercent || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgAstPercent) || 0) : (b.totalAstPercent || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalAstPercent', 'avgAstPercent');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalAstPercent', 'avgAstPercent');
             break;
           case 'AST/TO':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgAstToRatio) || 0) : (a.totalAstToRatio || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgAstToRatio) || 0) : (b.totalAstToRatio || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalAstToRatio', 'avgAstToRatio');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalAstToRatio', 'avgAstToRatio');
             break;
           case 'OREB%':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgOrebPercent) || 0) : (a.totalOrebPercent || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgOrebPercent) || 0) : (b.totalOrebPercent || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalOrebPercent', 'avgOrebPercent');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalOrebPercent', 'avgOrebPercent');
             break;
           case 'DREB%':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgDrebPercent) || 0) : (a.totalDrebPercent || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgDrebPercent) || 0) : (b.totalDrebPercent || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalDrebPercent', 'avgDrebPercent');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalDrebPercent', 'avgDrebPercent');
             break;
           case 'REB%':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgRebPercent) || 0) : (a.totalRebPercent || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgRebPercent) || 0) : (b.totalRebPercent || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalRebPercent', 'avgRebPercent');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalRebPercent', 'avgRebPercent');
             break;
           case 'TOV%':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgTovPercent) || 0) : (a.totalTovPercent || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgTovPercent) || 0) : (b.totalTovPercent || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalTovPercent', 'avgTovPercent');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalTovPercent', 'avgTovPercent');
             break;
           case 'EFG%':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgEfgPercent) || 0) : (a.totalEfgPercent || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgEfgPercent) || 0) : (b.totalEfgPercent || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalEfgPercent', 'avgEfgPercent');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalEfgPercent', 'avgEfgPercent');
             break;
           case 'TS%':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgTsPercent) || 0) : (a.totalTsPercent || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgTsPercent) || 0) : (b.totalTsPercent || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalTsPercent', 'avgTsPercent');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalTsPercent', 'avgTsPercent');
             break;
           case 'FTA RATE':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgFtRate) || 0) : (a.totalFtRate || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgFtRate) || 0) : (b.totalFtRate || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalFtRate', 'avgFtRate');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalFtRate', 'avgFtRate');
             break;
           case '3P RATE':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgThreePointRate) || 0) : (a.totalThreePointRate || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgThreePointRate) || 0) : (b.totalThreePointRate || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalThreePointRate', 'avgThreePointRate');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalThreePointRate', 'avgThreePointRate');
             break;
           case 'PIE':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgPie) || 0) : (a.totalPie || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgPie) || 0) : (b.totalPie || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPie', 'avgPie');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPie', 'avgPie');
             break;
           // Opponent stats
           case 'OPP EFG%':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgOppEfgPercent) || 0) : (a.totalOppEfgPercent || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgOppEfgPercent) || 0) : (b.totalOppEfgPercent || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalOppEfgPercent', 'avgOppEfgPercent');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalOppEfgPercent', 'avgOppEfgPercent');
             break;
           case 'OPP FTA RATE':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgOppFtRate) || 0) : (a.totalOppFtRate || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgOppFtRate) || 0) : (b.totalOppFtRate || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalOppFtRate', 'avgOppFtRate');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalOppFtRate', 'avgOppFtRate');
             break;
           case 'OPP TOV%':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgOppTovPercent) || 0) : (a.totalOppTovPercent || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgOppTovPercent) || 0) : (b.totalOppTovPercent || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalOppTovPercent', 'avgOppTovPercent');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalOppTovPercent', 'avgOppTovPercent');
             break;
           case 'OPP OREB%':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgOppOrebPercent) || 0) : (a.totalOppOrebPercent || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgOppOrebPercent) || 0) : (b.totalOppOrebPercent || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalOppOrebPercent', 'avgOppOrebPercent');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalOppOrebPercent', 'avgOppOrebPercent');
             break;
           case 'OPP 3PM':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgOpp3PM) || 0) : (a.totalOpp3PM || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgOpp3PM) || 0) : (b.totalOpp3PM || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalOpp3PM', 'avgOpp3PM');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalOpp3PM', 'avgOpp3PM');
             break;
           case 'OPP FGM':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgOppFGM) || 0) : (a.totalOppFGM || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgOppFGM) || 0) : (b.totalOppFGM || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalOppFGM', 'avgOppFGM');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalOppFGM', 'avgOppFGM');
             break;
           case 'OPP FGA':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgOppFGA) || 0) : (a.totalOppFGA || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgOppFGA) || 0) : (b.totalOppFGA || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalOppFGA', 'avgOppFGA');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalOppFGA', 'avgOppFGA');
             break;
           case 'OPP PTS':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgOppPoints) || 0) : (a.totalOppPoints || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgOppPoints) || 0) : (b.totalOppPoints || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalOppPoints', 'avgOppPoints');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalOppPoints', 'avgOppPoints');
             break;
           case 'OPP TO':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgOppTurnovers) || 0) : (a.totalOppTurnovers || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgOppTurnovers) || 0) : (b.totalOppTurnovers || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalOppTurnovers', 'avgOppTurnovers');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalOppTurnovers', 'avgOppTurnovers');
             break;
           // Scoring breakdown percentages
           case '%FGA 2PT':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgFgaPercent2pt) || 0) : (a.totalFgaPercent2pt || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgFgaPercent2pt) || 0) : (b.totalFgaPercent2pt || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalFgaPercent2pt', 'avgFgaPercent2pt');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalFgaPercent2pt', 'avgFgaPercent2pt');
             break;
           case '%FGA 3PT':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgFgaPercent3pt) || 0) : (a.totalFgaPercent3pt || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgFgaPercent3pt) || 0) : (b.totalFgaPercent3pt || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalFgaPercent3pt', 'avgFgaPercent3pt');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalFgaPercent3pt', 'avgFgaPercent3pt');
             break;
           case '%FGA MR':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgFgaPercentMidrange) || 0) : (a.totalFgaPercentMidrange || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgFgaPercentMidrange) || 0) : (b.totalFgaPercentMidrange || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalFgaPercentMidrange', 'avgFgaPercentMidrange');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalFgaPercentMidrange', 'avgFgaPercentMidrange');
             break;
           case '%PTS 2PT':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgPtsPercent2pt) || 0) : (a.totalPtsPercent2pt || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgPtsPercent2pt) || 0) : (b.totalPtsPercent2pt || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPtsPercent2pt', 'avgPtsPercent2pt');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPtsPercent2pt', 'avgPtsPercent2pt');
             break;
           case '%PTS 3PT':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgPtsPercent3pt) || 0) : (a.totalPtsPercent3pt || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgPtsPercent3pt) || 0) : (b.totalPtsPercent3pt || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPtsPercent3pt', 'avgPtsPercent3pt');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPtsPercent3pt', 'avgPtsPercent3pt');
             break;
           case '%PTS MR':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgPtsPercentMidrange) || 0) : (a.totalPtsPercentMidrange || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgPtsPercentMidrange) || 0) : (b.totalPtsPercentMidrange || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPtsPercentMidrange', 'avgPtsPercentMidrange');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPtsPercentMidrange', 'avgPtsPercentMidrange');
             break;
           case '%PTS PITP':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgPtsPercentPitp) || 0) : (a.totalPtsPercentPitp || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgPtsPercentPitp) || 0) : (b.totalPtsPercentPitp || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPtsPercentPitp', 'avgPtsPercentPitp');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPtsPercentPitp', 'avgPtsPercentPitp');
             break;
           case '%PTS FBPS':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgPtsPercentFastbreak) || 0) : (a.totalPtsPercentFastbreak || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgPtsPercentFastbreak) || 0) : (b.totalPtsPercentFastbreak || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPtsPercentFastbreak', 'avgPtsPercentFastbreak');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPtsPercentFastbreak', 'avgPtsPercentFastbreak');
             break;
           case '%PTS 2ND CH':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgPtsPercentSecondChance) || 0) : (a.totalPtsPercentSecondChance || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgPtsPercentSecondChance) || 0) : (b.totalPtsPercentSecondChance || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPtsPercentSecondChance', 'avgPtsPercentSecondChance');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPtsPercentSecondChance', 'avgPtsPercentSecondChance');
             break;
           case '%PTS OFFTO':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgPtsPercentOffTurnovers) || 0) : (a.totalPtsPercentOffTurnovers || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgPtsPercentOffTurnovers) || 0) : (b.totalPtsPercentOffTurnovers || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPtsPercentOffTurnovers', 'avgPtsPercentOffTurnovers');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPtsPercentOffTurnovers', 'avgPtsPercentOffTurnovers');
             break;
           case '%PTS FT':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgPtsPercentFt) || 0) : (a.totalPtsPercentFt || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgPtsPercentFt) || 0) : (b.totalPtsPercentFt || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPtsPercentFt', 'avgPtsPercentFt');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPtsPercentFt', 'avgPtsPercentFt');
             break;
           case 'PTS OFF TO':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgPtsFromTurnovers) || 0) : (a.totalPtsFromTurnovers || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgPtsFromTurnovers) || 0) : (b.totalPtsFromTurnovers || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPtsFromTurnovers', 'avgPtsFromTurnovers');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPtsFromTurnovers', 'avgPtsFromTurnovers');
             break;
           // Misc stats
           case 'TIES':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgTimesScoresLevel) || 0) : (a.totalTimesScoresLevel || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgTimesScoresLevel) || 0) : (b.totalTimesScoresLevel || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalTimesScoresLevel', 'avgTimesScoresLevel');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalTimesScoresLevel', 'avgTimesScoresLevel');
             break;
           case 'LEAD CHG':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgLeadChanges) || 0) : (a.totalLeadChanges || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgLeadChanges) || 0) : (b.totalLeadChanges || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalLeadChanges', 'avgLeadChanges');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalLeadChanges', 'avgLeadChanges');
             break;
           case 'TIME LEADING':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgTimeLeading) || 0) : (a.totalTimeLeading || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgTimeLeading) || 0) : (b.totalTimeLeading || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalTimeLeading', 'avgTimeLeading');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalTimeLeading', 'avgTimeLeading');
             break;
           case 'BIG RUN':
-            valueA = teamStatsView === 'averages' ? (parseFloat(a.avgBiggestScoringRun) || 0) : (a.totalBiggestScoringRun || 0);
-            valueB = teamStatsView === 'averages' ? (parseFloat(b.avgBiggestScoringRun) || 0) : (b.totalBiggestScoringRun || 0);
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalBiggestScoringRun', 'avgBiggestScoringRun');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalBiggestScoringRun', 'avgBiggestScoringRun');
             break;
           default:
             valueA = 0;
@@ -714,7 +737,7 @@ export default function LeaguePage() {
         
         return teamStatsSortDirection === 'desc' ? valueB - valueA : valueA - valueB;
       });
-    }, [teamStatsData, teamStatsSortColumn, teamStatsSortDirection, teamStatsView]);
+    }, [teamStatsData, teamStatsSortColumn, teamStatsSortDirection, teamStatsMode]);
 
     // Get active columns based on selected category
     const activeTeamStatColumns = useMemo(() => {
@@ -1576,6 +1599,7 @@ export default function LeaguePage() {
             teamMap.set(normalizedName, {
               teamName: normalizedName,
               gamesPlayed: 0,
+              totalMinutes: 0,
               totalPoints: 0,
               totalFGM: 0,
               totalFGA: 0,
@@ -1646,6 +1670,14 @@ export default function LeaguePage() {
 
           const team = teamMap.get(normalizedName)!;
           team.gamesPlayed += 1;
+          // Parse and add minutes
+          if (stat.sminutes) {
+            const minutesParts = stat.sminutes.split(':');
+            if (minutesParts && minutesParts.length === 2) {
+              const minutes = parseInt(minutesParts[0]) + parseInt(minutesParts[1]) / 60;
+              team.totalMinutes += minutes;
+            }
+          }
           team.totalPoints += stat.tot_spoints || 0;
           team.totalFGM += stat.tot_sfieldgoalsmade || 0;
           team.totalFGA += stat.tot_sfieldgoalsattempted || 0;
@@ -1713,9 +1745,14 @@ export default function LeaguePage() {
           team.totalPtsFromTurnovers += stat.tot_spointsfromturnovers || 0;
         });
 
-        // Calculate percentages and averages
-        const aggregatedStats = Array.from(teamMap.values()).map(team => ({
+        // Calculate percentages, averages, and possessions
+        const aggregatedStats = Array.from(teamMap.values()).map(team => {
+          // Calculate possessions: FGA + 0.44 * FTA - ORB + TO
+          const totalPossessions = team.totalFGA + (0.44 * team.totalFTA) - team.totalORB + team.totalTurnovers;
+          
+          return {
           ...team,
+          totalPossessions,
           // Percentages (use totals for accurate calculation)
           fgPercentage: team.totalFGA > 0 ? ((team.totalFGM / team.totalFGA) * 100).toFixed(1) : '0.0',
           threePtPercentage: team.total3PA > 0 ? ((team.total3PM / team.total3PA) * 100).toFixed(1) : '0.0',
@@ -1787,7 +1824,8 @@ export default function LeaguePage() {
           avgPtsPercentOffTurnovers: team.gamesPlayed > 0 ? (team.totalPtsPercentOffTurnovers / team.gamesPlayed).toFixed(1) : '0.0',
           avgPtsPercentFt: team.gamesPlayed > 0 ? (team.totalPtsPercentFt / team.gamesPlayed).toFixed(1) : '0.0',
           avgPtsFromTurnovers: team.gamesPlayed > 0 ? (team.totalPtsFromTurnovers / team.gamesPlayed).toFixed(1) : '0.0'
-        })).sort((a, b) => parseFloat(b.ppg) - parseFloat(a.ppg)); // Sort by PPG
+          };
+        }).sort((a, b) => parseFloat(b.ppg) - parseFloat(a.ppg)); // Sort by PPG
 
         setTeamStatsData(aggregatedStats);
       } catch (error) {
@@ -3683,7 +3721,7 @@ export default function LeaguePage() {
                               {team.gamesPlayed}
                             </td>
                             {activeTeamStatColumns.map((column) => {
-                              const value = column.getValue(team, teamStatsView);
+                              const value = column.getValue(team, teamStatsMode);
                               const displayValue = column.format ? column.format(Number(value)) : value;
                               return (
                                 <td
