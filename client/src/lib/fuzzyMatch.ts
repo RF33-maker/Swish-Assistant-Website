@@ -150,3 +150,18 @@ export function getMostCompleteName(names: string[]): string {
     return current.length > best.length ? current : best;
   });
 }
+
+/**
+ * Convert a slug back to a searchable name
+ * Examples:
+ * - "j-thames" → "J Thames"
+ * - "john-doe" → "John Doe"
+ * - "r-farrell-1" → "R Farrell" (strips numeric suffix)
+ */
+export function slugToName(slug: string): string {
+  return slug
+    .replace(/-\d+$/, '') // Remove numeric suffix like "-1", "-2"
+    .split('-')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}

@@ -10,7 +10,7 @@ import { generatePlayerAnalysis, type PlayerAnalysisData } from "@/lib/ai-analys
 import SwishLogoImg from "@/assets/Swish Assistant Logo.png";
 import { TeamLogo } from "@/components/TeamLogo";
 import { Helmet } from "react-helmet-async";
-import { namesMatch, getMostCompleteName, type PlayerMatch } from "@/lib/fuzzyMatch";
+import { namesMatch, getMostCompleteName, slugToName, type PlayerMatch } from "@/lib/fuzzyMatch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface PlayerStat {
@@ -120,6 +120,29 @@ export default function PlayerStatsPage() {
             .eq('slug', playerSlugOrId)
             .single();
           if (data && !error) initialPlayer = data;
+          
+          // Fallback: If slug not found, try fuzzy matching by name
+          if (!initialPlayer) {
+            console.log('📋 Slug not found, trying name-based search...');
+            const searchName = slugToName(playerSlugOrId);
+            console.log('📋 Searching for name:', searchName);
+            
+            const { data: allPlayers, error: allPlayersError } = await supabase
+              .from('players')
+              .select('*');
+            
+            if (allPlayers && !allPlayersError) {
+              // Find first player whose name fuzzy matches
+              const matchedPlayer = allPlayers.find(player => 
+                namesMatch(player.full_name, searchName)
+              );
+              
+              if (matchedPlayer) {
+                console.log('✅ Found player via name matching:', matchedPlayer.full_name);
+                initialPlayer = matchedPlayer;
+              }
+            }
+          }
         }
 
         if (!initialPlayer) {
@@ -137,14 +160,23 @@ export default function PlayerStatsPage() {
 
         // Step 2: Find ALL matching player records using fuzzy matching
         console.log('🔍 Step 2: Finding all matching player records via fuzzy matching...');
-        const { data: allPlayersData, error: allPlayersError } = await supabase
-          .from('players')
-          .select('*')
-          .eq('team', initialPlayer.team);
+        
+        let allPlayers = [initialPlayer];
+        
+        // Only query by team if the player has a team
+        if (initialPlayer.team) {
+          const { data: allPlayersData, error: allPlayersError } = await supabase
+            .from('players')
+            .select('*')
+            .eq('team', initialPlayer.team);
 
-        const allPlayers = allPlayersData || [initialPlayer];
-        if (allPlayersError) {
-          console.error('❌ Error fetching team players:', allPlayersError);
+          if (!allPlayersError && allPlayersData) {
+            allPlayers = allPlayersData;
+          } else if (allPlayersError) {
+            console.error('❌ Error fetching team players:', allPlayersError);
+          }
+        } else {
+          console.log('⚠️ Player has no team, skipping team-based search');
         }
 
         console.log('📋 Found', allPlayers.length, 'players on team:', initialPlayer.team);
