@@ -138,111 +138,63 @@ const TEAM_STAT_COLUMNS: Record<string, TeamStatColumn[]> = {
     },
   ],
   Advanced: [
-    {
-      key: 'OFFRTG',
-      label: 'OFFRTG',
-      sortable: true,
-      getValue: (team) => 0, // Placeholder - not calculated yet
-    },
-    {
-      key: 'DEFRTG',
-      label: 'DEFRTG',
-      sortable: true,
-      getValue: (team) => 0, // Placeholder - not calculated yet
-    },
-    {
-      key: 'NETRTG',
-      label: 'NETRTG',
-      sortable: true,
-      getValue: (team) => 0, // Placeholder - not calculated yet
-    },
-    {
-      key: 'PACE',
-      label: 'PACE',
-      sortable: true,
-      getValue: (team) => 0, // Placeholder - not calculated yet
-    },
+    { key: 'off_rating', label: 'OFFRTG', sortable: true, getValue: () => '—' },
+    { key: 'def_rating', label: 'DEFRTG', sortable: true, getValue: () => '—' },
+    { key: 'net_rating', label: 'NETRTG', sortable: true, getValue: () => '—' },
+    { key: 'pace', label: 'PACE', sortable: true, getValue: () => '—' },
+    { key: 'ast_percent', label: 'AST%', sortable: true, getValue: () => '—' },
+    { key: 'ast_to_ratio', label: 'AST/TO', sortable: true, getValue: () => '—' },
+    { key: 'oreb_percent', label: 'OREB%', sortable: true, getValue: () => '—' },
+    { key: 'dreb_percent', label: 'DREB%', sortable: true, getValue: () => '—' },
+    { key: 'reb_percent', label: 'REB%', sortable: true, getValue: () => '—' },
+    { key: 'tov_percent', label: 'TOV%', sortable: true, getValue: () => '—' },
+    { key: 'efg_percent', label: 'EFG%', sortable: true, getValue: () => '—' },
+    { key: 'ts_percent', label: 'TS%', sortable: true, getValue: () => '—' },
+    { key: 'ft_rate', label: 'FTA RATE', sortable: true, getValue: () => '—' },
+    { key: 'three_point_rate', label: '3P RATE', sortable: true, getValue: () => '—' },
+    { key: 'pie', label: 'PIE', sortable: true, getValue: () => '—' },
   ],
   'Four Factors': [
-    {
-      key: 'eFG%',
-      label: 'eFG%',
-      sortable: true,
-      getValue: (team) => 0, // Placeholder - not calculated yet
-      format: (val) => `${val.toFixed(1)}%`,
-    },
-    {
-      key: 'TOV%',
-      label: 'TOV%',
-      sortable: true,
-      getValue: (team) => 0, // Placeholder - not calculated yet
-      format: (val) => `${val.toFixed(1)}%`,
-    },
-    {
-      key: 'OREB%',
-      label: 'OREB%',
-      sortable: true,
-      getValue: (team) => 0, // Placeholder - not calculated yet
-      format: (val) => `${val.toFixed(1)}%`,
-    },
-    {
-      key: 'FT RATE',
-      label: 'FT RATE',
-      sortable: true,
-      getValue: (team) => 0, // Placeholder - not calculated yet
-    },
+    { key: 'efg_percent', label: 'EFG%', sortable: true, getValue: () => '—' },
+    { key: 'ft_rate', label: 'FTA RATE', sortable: true, getValue: () => '—' },
+    { key: 'tov_percent', label: 'TOV%', sortable: true, getValue: () => '—' },
+    { key: 'oreb_percent', label: 'OREB%', sortable: true, getValue: () => '—' },
+    { key: 'opp_efg_percent', label: 'OPP EFG%', sortable: true, getValue: () => '—' },
+    { key: 'opp_ft_rate', label: 'OPP FTA RATE', sortable: true, getValue: () => '—' },
+    { key: 'opp_tov_percent', label: 'OPP TOV%', sortable: true, getValue: () => '—' },
+    { key: 'opp_oreb_percent', label: 'OPP OREB%', sortable: true, getValue: () => '—' },
   ],
   Scoring: [
-    {
-      key: 'PITP',
-      label: 'PITP',
-      sortable: true,
-      getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgPITP) || 0) : (team.totalPITP || 0),
-    },
-    {
-      key: 'FB PTS',
-      label: 'FB PTS',
-      sortable: true,
-      getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgFBPTS) || 0) : (team.totalFBPTS || 0),
-    },
-    {
-      key: '2ND CH',
-      label: '2ND CH',
-      sortable: true,
-      getValue: (team, view) => view === 'averages' ? (parseFloat(team.avg2ndCH) || 0) : (team.total2ndCH || 0),
-    },
-    {
-      key: 'PTS OFF TO',
-      label: 'PTS OFF TO',
-      sortable: true,
-      getValue: (team) => 0, // Placeholder - not calculated yet
-    },
+    { key: 'fga_percent_2pt', label: '%FGA 2PT', sortable: true, getValue: () => '—' },
+    { key: 'fga_percent_3pt', label: '%FGA 3PT', sortable: true, getValue: () => '—' },
+    { key: 'fga_percent_midrange', label: '%FGA MR', sortable: true, getValue: () => '—' },
+    { key: 'pts_percent_2pt', label: '%PTS 2PT', sortable: true, getValue: () => '—' },
+    { key: 'pts_percent_3pt', label: '%PTS 3PT', sortable: true, getValue: () => '—' },
+    { key: 'pts_percent_midrange', label: '%PTS MR', sortable: true, getValue: () => '—' },
+    { key: 'pts_percent_pitp', label: '%PTS PITP', sortable: true, getValue: () => '—' },
+    { key: 'pts_percent_fastbreak', label: '%PTS FBPS', sortable: true, getValue: () => '—' },
+    { key: 'pts_percent_second_chance', label: '%PTS 2ND CH', sortable: true, getValue: () => '—' },
+    { key: 'pts_percent_off_turnovers', label: '%PTS OFFTO', sortable: true, getValue: () => '—' },
+    { key: 'pts_percent_ft', label: '%PTS FT', sortable: true, getValue: () => '—' },
+    { key: 'tot_spointsinthepaint', label: 'PITP', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgPITP) || 0) : (team.totalPITP || 0) },
+    { key: 'tot_spointsfastbreak', label: 'FB PTS', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgFBPTS) || 0) : (team.totalFBPTS || 0) },
+    { key: 'tot_spointssecondchance', label: '2ND CH', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avg2ndCH) || 0) : (team.total2ndCH || 0) },
+    { key: 'tot_spointsfromturnovers', label: 'PTS OFF TO', sortable: true, getValue: () => '—' },
+    { key: 'tot_sfreethrowsmade', label: 'FTM', sortable: true, getValue: () => '—' },
+    { key: 'tot_sthreepointersmade', label: '3PM', sortable: true, getValue: () => '—' },
+    { key: 'tot_stwopointersmade', label: '2PM', sortable: true, getValue: () => '—' },
   ],
   Misc: [
-    {
-      key: 'ORB',
-      label: 'ORB',
-      sortable: true,
-      getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgORB) || 0) : (team.totalORB || 0),
-    },
-    {
-      key: 'DRB',
-      label: 'DRB',
-      sortable: true,
-      getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgDRB) || 0) : (team.totalDRB || 0),
-    },
-    {
-      key: 'TIES',
-      label: 'TIES',
-      sortable: true,
-      getValue: (team) => 0, // Placeholder - not calculated yet
-    },
-    {
-      key: 'LEAD CHG',
-      label: 'LEAD CHG',
-      sortable: true,
-      getValue: (team) => 0, // Placeholder - not calculated yet
-    },
+    { key: 'tot_timesscoreslevel', label: 'TIES', sortable: true, getValue: () => '—' },
+    { key: 'tot_leadchanges', label: 'LEAD CHG', sortable: true, getValue: () => '—' },
+    { key: 'tot_timeleading', label: 'TIME LEADING', sortable: true, getValue: () => '—' },
+    { key: 'tot_biggestscoringrun', label: 'BIG RUN', sortable: true, getValue: () => '—' },
+    { key: 'tot_splusminuspoints', label: '+/-', sortable: true, getValue: (team, view) => view === 'averages' ? (parseFloat(team.avgPlusMinus) || 0) : (team.totalPlusMinus || 0) },
+    { key: 'opp_sthreepointersmade', label: 'OPP 3PM', sortable: true, getValue: () => '—' },
+    { key: 'opp_sfieldgoalsmade', label: 'OPP FGM', sortable: true, getValue: () => '—' },
+    { key: 'opp_sfieldgoalsattempted', label: 'OPP FGA', sortable: true, getValue: () => '—' },
+    { key: 'opp_points', label: 'OPP PTS', sortable: true, getValue: () => '—' },
+    { key: 'opp_turnovers', label: 'OPP TO', sortable: true, getValue: () => '—' },
   ],
 };
 
