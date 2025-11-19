@@ -108,6 +108,8 @@ export default function LeaguePage() {
   const [teamStatsView, setTeamStatsView] = useState<'totals' | 'averages'>('averages'); // Toggle for team stats
   const [teamStatsData, setTeamStatsData] = useState<any[]>([]);
   const [isLoadingTeamStats, setIsLoadingTeamStats] = useState(false);
+  const [teamStatsCategory, setTeamStatsCategory] = useState<'Traditional' | 'Advanced' | 'Four Factors' | 'Scoring' | 'Misc'>('Traditional'); // Category dropdown
+  const [teamStatsMode, setTeamStatsMode] = useState<'Per Game' | 'Totals' | 'Per 40 Minutes' | 'Per 100 Possessions'>('Per Game'); // Mode dropdown
   const [leagueLeadersView, setLeagueLeadersView] = useState<'averages' | 'totals'>('averages'); // Toggle for league leaders
   const [playerStatsView, setPlayerStatsView] = useState<'averages' | 'totals'>('averages'); // Toggle for player statistics table
   const [standingsView, setStandingsView] = useState<'poolA' | 'poolB' | 'full'>('full'); // Toggle for standings view
