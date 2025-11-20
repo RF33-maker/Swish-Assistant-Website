@@ -342,7 +342,6 @@ export default function LeaguePage() {
   const [isLoadingStats, setIsLoadingStats] = useState(false);
   const [isLoadingStandings, setIsLoadingStandings] = useState(false);
   const [isLoadingLeaders, setIsLoadingLeaders] = useState(false);
-  const [teamStatsView, setTeamStatsView] = useState<'totals' | 'averages'>('averages'); // Toggle for team stats
   const [teamStatsData, setTeamStatsData] = useState<any[]>([]);
   const [isLoadingTeamStats, setIsLoadingTeamStats] = useState(false);
   const [teamStatsCategory, setTeamStatsCategory] = useState<'Traditional' | 'Advanced' | 'Four Factors' | 'Scoring' | 'Misc'>('Traditional'); // Category dropdown
@@ -3612,34 +3611,8 @@ export default function LeaguePage() {
             {/* Team Stats Section */}
             {activeSection === 'teamstats' && (
               <div className="bg-white rounded-xl shadow p-4 md:p-6">
-                <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 md:gap-0 mb-4 md:mb-6">
-                  <h2 className="text-base md:text-lg font-semibold text-slate-800">Team Statistics - {league?.name}</h2>
-                  
-                  {/* Toggle for Totals/Averages */}
-                  <div className="flex gap-1 md:gap-2 bg-gray-100 rounded-lg p-1">
-                    <button
-                      onClick={() => setTeamStatsView('averages')}
-                      className={`px-3 md:px-4 py-1.5 rounded-md text-xs md:text-sm font-medium transition-colors ${
-                        teamStatsView === 'averages'
-                          ? 'bg-orange-500 text-white'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                      data-testid="button-averages-toggle"
-                    >
-                      Averages
-                    </button>
-                    <button
-                      onClick={() => setTeamStatsView('totals')}
-                      className={`px-3 md:px-4 py-1.5 rounded-md text-xs md:text-sm font-medium transition-colors ${
-                        teamStatsView === 'totals'
-                          ? 'bg-orange-500 text-white'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                      data-testid="button-totals-toggle"
-                    >
-                      Totals
-                    </button>
-                  </div>
+                <div className="mb-4 md:mb-6">
+                  <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-4">Team Statistics - {league?.name}</h2>
                 </div>
 
                 {/* Dropdowns for Category and Mode */}
