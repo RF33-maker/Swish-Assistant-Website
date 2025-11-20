@@ -303,6 +303,30 @@ const applyPlayerMode = (
   totalMinutes: number,
   playerMode: 'Total' | 'Per Game' | 'Per 40'
 ): number => {
+  // These stats are already rates/percentages - return as-is across all modes
+  const rateStats = [
+    'efg_percent', 'ts_percent', 'three_point_rate',
+    'ast_percent', 'ast_to_ratio',
+    'oreb_percent', 'dreb_percent', 'reb_percent',
+    'tov_percent', 'usage_percent', 'pie',
+    'off_rating', 'def_rating', 'net_rating',
+    'pts_percent_2pt', 'pts_percent_3pt', 'pts_percent_ft',
+    'pts_percent_midrange', 'pts_percent_pitp', 'pts_percent_fastbreak',
+    'pts_percent_second_chance', 'pts_percent_off_turnovers'
+  ];
+
+  // For rate stats, return the value unchanged across all modes
+  if (rateStats.includes(statKey)) {
+    return value;
+  }
+
+  // For minutes, handle per mode
+  if (statKey === 'sminutes') {
+    if (playerMode === 'Total') return value;
+    return gamesPlayed > 0 ? value / gamesPlayed : 0;
+  }
+
+  // For counting stats
   if (playerMode === 'Total') return value;
 
   if (playerMode === 'Per Game') {
@@ -310,20 +334,6 @@ const applyPlayerMode = (
   }
 
   if (playerMode === 'Per 40') {
-    // These stats are already rates/percentages and should not be scaled
-    const rateStats = [
-      'efg_percent', 'ts_percent', 'three_point_rate',
-      'ast_percent', 'ast_to_ratio',
-      'oreb_percent', 'dreb_percent', 'reb_percent',
-      'tov_percent', 'usage_percent', 'pie',
-      'off_rating', 'def_rating', 'net_rating',
-      'pts_percent_2pt', 'pts_percent_3pt', 'pts_percent_ft',
-      'pts_percent_midrange', 'pts_percent_pitp', 'pts_percent_fastbreak',
-      'pts_percent_second_chance', 'pts_percent_off_turnovers'
-    ];
-
-    if (rateStats.includes(statKey)) return value;
-
     // Scale counting stats to per-40-minute basis
     return totalMinutes > 0 ? (value / totalMinutes) * 40 : 0;
   }
@@ -867,19 +877,37 @@ export default function LeaguePage() {
             const rawStatsA = a.rawStats || [];
             const rawStatsB = b.rawStats || [];
             
-            // Calculate total values from raw stats
-            const totalA = rawStatsA.reduce((acc: number, stat: any) => {
+            // Rate stats should be averaged, not summed
+            const rateStats = [
+              'efg_percent', 'ts_percent', 'three_point_rate',
+              'ast_percent', 'ast_to_ratio',
+              'oreb_percent', 'dreb_percent', 'reb_percent',
+              'tov_percent', 'usage_percent', 'pie',
+              'off_rating', 'def_rating', 'net_rating',
+              'pts_percent_2pt', 'pts_percent_3pt', 'pts_percent_ft',
+              'pts_percent_midrange', 'pts_percent_pitp', 'pts_percent_fastbreak',
+              'pts_percent_second_chance', 'pts_percent_off_turnovers'
+            ];
+            
+            const isRateStat = rateStats.includes(column.key);
+            
+            // Calculate aggregated values from raw stats
+            const aggregatedA = rawStatsA.reduce((acc: number, stat: any) => {
               const statValue = stat[column.key];
               return acc + (typeof statValue === 'number' ? statValue : (typeof statValue === 'string' && !isNaN(parseFloat(statValue)) ? parseFloat(statValue) : 0));
             }, 0);
-            const totalB = rawStatsB.reduce((acc: number, stat: any) => {
+            const aggregatedB = rawStatsB.reduce((acc: number, stat: any) => {
               const statValue = stat[column.key];
               return acc + (typeof statValue === 'number' ? statValue : (typeof statValue === 'string' && !isNaN(parseFloat(statValue)) ? parseFloat(statValue) : 0));
             }, 0);
             
+            // For rate stats, convert sum to average before applying mode transformation
+            const baseA = isRateStat && rawStatsA.length > 0 ? aggregatedA / rawStatsA.length : aggregatedA;
+            const baseB = isRateStat && rawStatsB.length > 0 ? aggregatedB / rawStatsB.length : aggregatedB;
+            
             // Apply mode transformation
-            valueA = applyPlayerMode(column.key, totalA, a.games, a.totalMinutes || 0, playerStatsView);
-            valueB = applyPlayerMode(column.key, totalB, b.games, b.totalMinutes || 0, playerStatsView);
+            valueA = applyPlayerMode(column.key, baseA, a.games, a.totalMinutes || 0, playerStatsView);
+            valueB = applyPlayerMode(column.key, baseB, b.games, b.totalMinutes || 0, playerStatsView);
           } else {
             valueA = 0;
             valueB = 0;
@@ -3135,8 +3163,22 @@ export default function LeaguePage() {
                             {activePlayerStatColumns.map((column) => {
                               const rawStats = player.rawStats || [];
                               
-                              // Calculate total value from raw stats
-                              const totalValue = rawStats.reduce((acc: number, stat: any) => {
+                              // Rate stats should be averaged, not summed
+                              const rateStats = [
+                                'efg_percent', 'ts_percent', 'three_point_rate',
+                                'ast_percent', 'ast_to_ratio',
+                                'oreb_percent', 'dreb_percent', 'reb_percent',
+                                'tov_percent', 'usage_percent', 'pie',
+                                'off_rating', 'def_rating', 'net_rating',
+                                'pts_percent_2pt', 'pts_percent_3pt', 'pts_percent_ft',
+                                'pts_percent_midrange', 'pts_percent_pitp', 'pts_percent_fastbreak',
+                                'pts_percent_second_chance', 'pts_percent_off_turnovers'
+                              ];
+                              
+                              const isRateStat = rateStats.includes(column.key);
+                              
+                              // For rate stats, calculate average; for counting stats, calculate total
+                              const aggregatedValue = rawStats.reduce((acc: number, stat: any) => {
                                 const statValue = stat[column.key];
                                 if (typeof statValue === 'number') {
                                   return acc + statValue;
@@ -3146,13 +3188,16 @@ export default function LeaguePage() {
                                 return acc;
                               }, 0);
                               
+                              // For rate stats, convert sum to average before passing to applyPlayerMode
+                              const baseValue = isRateStat && rawStats.length > 0 ? aggregatedValue / rawStats.length : aggregatedValue;
+                              
                               // Calculate total minutes from player.totalMinutes (already in decimal format)
                               const totalMinutes = player.totalMinutes || 0;
                               
                               // Apply the mode transformation
                               const value = applyPlayerMode(
                                 column.key,
-                                totalValue,
+                                baseValue,
                                 player.games,
                                 totalMinutes,
                                 playerStatsView
