@@ -68,7 +68,7 @@ const normalizeAndMapTeamName = (name: string): string => {
 // Helper function to calculate stat value based on mode
 const getStatValueByMode = (
   team: any,
-  mode: 'Per Game' | 'Totals' | 'Per 40 Minutes' | 'Per 100 Possessions',
+  mode: 'Per Game' | 'Totals' | 'Per 100 Possessions',
   totalField: string,
   avgField?: string
 ): number => {
@@ -77,12 +77,10 @@ const getStatValueByMode = (
       return avgField ? (parseFloat(team[avgField]) || 0) : (team.gamesPlayed > 0 ? team[totalField] / team.gamesPlayed : 0);
     case 'Totals':
       return team[totalField] || 0;
-    case 'Per 40 Minutes':
-      // Normalize to per-40-minute basis
-      return team.totalMinutes > 0 ? (team[totalField] / team.totalMinutes) * 40 : 0;
     case 'Per 100 Possessions':
-      // Normalize to per-100-possession basis
-      return team.totalPossessions > 0 ? (team[totalField] / team.totalPossessions) * 100 : 0;
+      // Normalize to per-100-possession basis, rounded to 1 decimal
+      const per100Value = team.totalPossessions > 0 ? (team[totalField] / team.totalPossessions) * 100 : 0;
+      return Math.round(per100Value * 10) / 10;
     default:
       return team[totalField] || 0;
   }
@@ -93,7 +91,7 @@ type TeamStatColumn = {
   key: string;
   label: string;
   sortable: boolean;
-  getValue: (team: any, mode: 'Per Game' | 'Totals' | 'Per 40 Minutes' | 'Per 100 Possessions') => number | string;
+  getValue: (team: any, mode: 'Per Game' | 'Totals' | 'Per 100 Possessions') => number | string;
   format?: (value: number) => string;
 };
 
@@ -190,10 +188,10 @@ const TEAM_STAT_COLUMNS: Record<string, TeamStatColumn[]> = {
   Scoring: [
     { key: '%FGA 2PT', label: '%FGA 2PT', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalFgaPercent2pt', 'avgFgaPercent2pt') },
     { key: '%FGA 3PT', label: '%FGA 3PT', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalFgaPercent3pt', 'avgFgaPercent3pt') },
-    { key: '%FGA MR', label: '%FGA MR', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalFgaPercentMidrange', 'avgFgaPercentMidrange') },
+    { key: '%FGA MR', label: '%FGA MR', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalFgaPercentMidrange', 'avgFgaPercentMidrange'), format: (value) => value === 0 ? '' : value.toFixed(1) },
     { key: '%PTS 2PT', label: '%PTS 2PT', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPtsPercent2pt', 'avgPtsPercent2pt') },
     { key: '%PTS 3PT', label: '%PTS 3PT', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPtsPercent3pt', 'avgPtsPercent3pt') },
-    { key: '%PTS MR', label: '%PTS MR', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPtsPercentMidrange', 'avgPtsPercentMidrange') },
+    { key: '%PTS MR', label: '%PTS MR', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPtsPercentMidrange', 'avgPtsPercentMidrange'), format: (value) => value === 0 ? '' : value.toFixed(1) },
     { key: '%PTS PITP', label: '%PTS PITP', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPtsPercentPitp', 'avgPtsPercentPitp') },
     { key: '%PTS FBPS', label: '%PTS FBPS', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPtsPercentFastbreak', 'avgPtsPercentFastbreak') },
     { key: '%PTS 2ND CH', label: '%PTS 2ND CH', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPtsPercentSecondChance', 'avgPtsPercentSecondChance') },
@@ -219,6 +217,82 @@ const TEAM_STAT_COLUMNS: Record<string, TeamStatColumn[]> = {
     { key: 'OPP PTS', label: 'OPP PTS', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppPoints', 'avgOppPoints') },
     { key: 'OPP TO', label: 'OPP TO', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppTurnovers', 'avgOppTurnovers') },
   ],
+};
+
+// Dynamic legends for each category
+const TEAM_STAT_LEGENDS: Record<string, string[]> = {
+  Traditional: [
+    'GP = Games Played',
+    'PTS = Points',
+    'FGM = Field Goals Made',
+    'FGA = Field Goals Attempted',
+    'REB = Rebounds',
+    'AST = Assists',
+    'STL = Steals',
+    'BLK = Blocks',
+    'TO = Turnovers',
+    'PF = Personal Fouls',
+    '+/- = Plus/Minus'
+  ],
+  Advanced: [
+    'OFFRTG = Offensive Rating',
+    'DEFRTG = Defensive Rating',
+    'NETRTG = Net Rating',
+    'PACE = Pace of Play',
+    'AST% = Assist Percentage',
+    'AST/TO = Assist to Turnover Ratio',
+    'OREB% = Offensive Rebound Percentage',
+    'DREB% = Defensive Rebound Percentage',
+    'REB% = Total Rebound Percentage',
+    'TOV% = Turnover Percentage',
+    'EFG% = Effective Field Goal Percentage',
+    'TS% = True Shooting Percentage',
+    'FTA RATE = Free Throw Attempt Rate',
+    '3P RATE = Three-Point Attempt Rate',
+    'PIE = Player Impact Estimate'
+  ],
+  'Four Factors': [
+    'EFG% = Effective Field Goal Percentage',
+    'FTA RATE = Free Throw Attempt Rate',
+    'TOV% = Turnover Percentage',
+    'OREB% = Offensive Rebound Percentage',
+    'OPP EFG% = Opponent Effective FG%',
+    'OPP FTA RATE = Opponent FT Attempt Rate',
+    'OPP TOV% = Opponent Turnover %',
+    'OPP OREB% = Opponent Offensive Rebound %'
+  ],
+  Scoring: [
+    '%FGA 2PT = % of FGA from 2-Point Range',
+    '%FGA 3PT = % of FGA from 3-Point Range',
+    '%FGA MR = % of FGA from Mid-Range',
+    '%PTS 2PT = % of Points from 2-Pointers',
+    '%PTS 3PT = % of Points from 3-Pointers',
+    '%PTS MR = % of Points from Mid-Range',
+    '%PTS PITP = % of Points in the Paint',
+    '%PTS FBPS = % of Points from Fastbreaks',
+    '%PTS 2ND CH = % of Points from 2nd Chance',
+    '%PTS OFFTO = % of Points off Turnovers',
+    '%PTS FT = % of Points from Free Throws',
+    'PITP = Points In The Paint',
+    'FB PTS = Fastbreak Points',
+    '2ND CH = Second Chance Points',
+    'PTS OFF TO = Points from Turnovers',
+    'FTM = Free Throws Made',
+    '3PM = 3-Pointers Made',
+    '2PM = 2-Pointers Made'
+  ],
+  Misc: [
+    'TIES = Times Scores Were Tied',
+    'LEAD CHG = Lead Changes',
+    'TIME LEADING = Time Spent Leading (minutes)',
+    'BIG RUN = Biggest Scoring Run',
+    '+/- = Plus/Minus',
+    'OPP 3PM = Opponent 3-Pointers Made',
+    'OPP FGM = Opponent Field Goals Made',
+    'OPP FGA = Opponent Field Goals Attempted',
+    'OPP PTS = Opponent Points',
+    'OPP TO = Opponent Turnovers'
+  ]
 };
 
 export default function LeaguePage() {
@@ -272,7 +346,7 @@ export default function LeaguePage() {
   const [teamStatsData, setTeamStatsData] = useState<any[]>([]);
   const [isLoadingTeamStats, setIsLoadingTeamStats] = useState(false);
   const [teamStatsCategory, setTeamStatsCategory] = useState<'Traditional' | 'Advanced' | 'Four Factors' | 'Scoring' | 'Misc'>('Traditional'); // Category dropdown
-  const [teamStatsMode, setTeamStatsMode] = useState<'Per Game' | 'Totals' | 'Per 40 Minutes' | 'Per 100 Possessions'>('Per Game'); // Mode dropdown
+  const [teamStatsMode, setTeamStatsMode] = useState<'Per Game' | 'Totals' | 'Per 100 Possessions'>('Per Game'); // Mode dropdown
   const [leagueLeadersView, setLeagueLeadersView] = useState<'averages' | 'totals'>('averages'); // Toggle for league leaders
   const [playerStatsView, setPlayerStatsView] = useState<'averages' | 'totals'>('averages'); // Toggle for player statistics table
   const [standingsView, setStandingsView] = useState<'poolA' | 'poolB' | 'full'>('full'); // Toggle for standings view
@@ -3607,7 +3681,6 @@ export default function LeaguePage() {
                       <SelectContent>
                         <SelectItem value="Per Game" data-testid="option-per-game">Per Game</SelectItem>
                         <SelectItem value="Totals" data-testid="option-totals">Totals</SelectItem>
-                        <SelectItem value="Per 40 Minutes" data-testid="option-per-40">Per 40 Minutes</SelectItem>
                         <SelectItem value="Per 100 Possessions" data-testid="option-per-100">Per 100 Possessions</SelectItem>
                       </SelectContent>
                     </Select>
@@ -3754,37 +3827,14 @@ export default function LeaguePage() {
                   </div>
                 )}
                 
-                {/* Legend */}
+                {/* Dynamic Legend based on category */}
                 <div className="mt-6 pt-4 border-t border-gray-200">
                   <div className="text-xs text-slate-500 space-y-1">
-                    <div className="font-semibold text-slate-600 mb-2">Legend:</div>
+                    <div className="font-semibold text-slate-600 mb-2">Legend ({teamStatsCategory}):</div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                      <span>GP = Games Played</span>
-                      <span>FGM = Field Goals Made</span>
-                      <span>FGA = Field Goals Attempted</span>
-                      <span>FG% = Field Goal Percentage</span>
-                      <span>2PM = 2-Pointers Made</span>
-                      <span>2PA = 2-Pointers Attempted</span>
-                      <span>2P% = 2-Point Percentage</span>
-                      <span>3PM = 3-Pointers Made</span>
-                      <span>3PA = 3-Pointers Attempted</span>
-                      <span>3P% = 3-Point Percentage</span>
-                      <span>FTM = Free Throws Made</span>
-                      <span>FTA = Free Throws Attempted</span>
-                      <span>FT% = Free Throw Percentage</span>
-                      <span>ORB = Offensive Rebounds</span>
-                      <span>DRB = Defensive Rebounds</span>
-                      <span>TRB = Total Rebounds</span>
-                      <span>AST = Assists</span>
-                      <span>STL = Steals</span>
-                      <span>BLK = Blocks</span>
-                      <span>TO = Turnovers</span>
-                      <span>PF = Personal Fouls</span>
-                      <span>+/- = Plus/Minus</span>
-                      <span>PTS = Points</span>
-                      <span>PITP = Points In The Paint</span>
-                      <span>FB PTS = Fastbreak Points</span>
-                      <span>2ND CH = Second Chance Points</span>
+                      {TEAM_STAT_LEGENDS[teamStatsCategory]?.map((legend, index) => (
+                        <span key={`legend-${index}`}>{legend}</span>
+                      ))}
                     </div>
                     <div className="mt-2 text-xs text-slate-400">
                       Click on any team to view their detailed profile • Swipe horizontally to see all stats
