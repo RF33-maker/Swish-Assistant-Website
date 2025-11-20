@@ -295,6 +295,115 @@ const TEAM_STAT_LEGENDS: Record<string, string[]> = {
   ]
 };
 
+// Player stats column configuration by category
+// Note: Advanced, Scoring, and Misc categories reference fields that are calculated by the backend
+// (advanced_player_stats.py). Traditional stats use raw Supabase fields that are always present.
+type PlayerStatColumn = {
+  key: string;
+  label: string;
+};
+
+const PLAYER_STAT_COLUMNS: Record<string, PlayerStatColumn[]> = {
+  Traditional: [
+    { key: "spoints", label: "PTS" },
+    { key: "sminutes", label: "MIN" },
+    { key: "sfieldgoalsmade", label: "FGM" },
+    { key: "sfieldgoalsattempted", label: "FGA" },
+    { key: "sthreepointersmade", label: "3PM" },
+    { key: "sthreepointersattempted", label: "3PA" },
+    { key: "sfreethrowsmade", label: "FTM" },
+    { key: "sfreethrowsattempted", label: "FTA" },
+    { key: "sreboundstotal", label: "REB" },
+    { key: "sassists", label: "AST" },
+    { key: "sturnovers", label: "TO" },
+    { key: "ssteals", label: "STL" },
+    { key: "sblocks", label: "BLK" },
+  ],
+  Advanced: [
+    { key: "efg_percent", label: "EFG%" },
+    { key: "ts_percent", label: "TS%" },
+    { key: "usage_percent", label: "USG%" },
+    { key: "ast_percent", label: "AST%" },
+    { key: "ast_to_ratio", label: "AST/TO" },
+    { key: "oreb_percent", label: "OREB%" },
+    { key: "dreb_percent", label: "DREB%" },
+    { key: "reb_percent", label: "REB%" },
+    { key: "tov_percent", label: "TOV%" },
+    { key: "three_point_rate", label: "3P RATE" },
+    { key: "player_possessions", label: "POSS" },
+    { key: "off_rating", label: "OFFRTG" },
+    { key: "def_rating", label: "DEFRTG" },
+    { key: "net_rating", label: "NETRTG" },
+    { key: "pie", label: "PIE" },
+  ],
+  Scoring: [
+    { key: "pts_percent_2pt", label: "%PTS 2PT" },
+    { key: "pts_percent_3pt", label: "%PTS 3PT" },
+    { key: "pts_percent_ft", label: "%PTS FT" },
+    { key: "pts_percent_midrange", label: "%PTS MR" },
+    { key: "pts_percent_pitp", label: "%PTS PITP" },
+    { key: "pts_percent_fastbreak", label: "%PTS FBPS" },
+    { key: "pts_percent_second_chance", label: "%PTS 2ND CH" },
+    { key: "pts_percent_off_turnovers", label: "%PTS OFFTO" }
+  ],
+  Misc: [
+    { key: "splusminuspoints", label: "+/-" },
+    { key: "sfoulspersonal", label: "PF" },
+    { key: "sblocksreceived", label: "BLK AGAINST" }
+  ]
+};
+
+// Dynamic legends for each player stat category
+const PLAYER_STAT_LEGENDS: Record<string, string[]> = {
+  Traditional: [
+    'PTS = Points',
+    'MIN = Minutes',
+    'FGM = Field Goals Made',
+    'FGA = Field Goals Attempted',
+    '3PM = Three-Pointers Made',
+    '3PA = Three-Pointers Attempted',
+    'FTM = Free Throws Made',
+    'FTA = Free Throws Attempted',
+    'REB = Total Rebounds',
+    'AST = Assists',
+    'TO = Turnovers',
+    'STL = Steals',
+    'BLK = Blocks'
+  ],
+  Advanced: [
+    'EFG% = Effective Field Goal Percentage',
+    'TS% = True Shooting Percentage',
+    'USG% = Usage Percentage',
+    'AST% = Assist Percentage',
+    'AST/TO = Assist to Turnover Ratio',
+    'OREB% = Offensive Rebound Percentage',
+    'DREB% = Defensive Rebound Percentage',
+    'REB% = Total Rebound Percentage',
+    'TOV% = Turnover Percentage',
+    '3P RATE = Three-Point Attempt Rate',
+    'POSS = Player Possessions',
+    'OFFRTG = Offensive Rating',
+    'DEFRTG = Defensive Rating',
+    'NETRTG = Net Rating',
+    'PIE = Player Impact Estimate'
+  ],
+  Scoring: [
+    '%PTS 2PT = % of Points from 2-Pointers',
+    '%PTS 3PT = % of Points from 3-Pointers',
+    '%PTS FT = % of Points from Free Throws',
+    '%PTS MR = % of Points from Mid-Range',
+    '%PTS PITP = % of Points in the Paint',
+    '%PTS FBPS = % of Points from Fastbreaks',
+    '%PTS 2ND CH = % of Points from 2nd Chance',
+    '%PTS OFFTO = % of Points off Turnovers'
+  ],
+  Misc: [
+    '+/- = Plus/Minus',
+    'PF = Personal Fouls',
+    'BLK AGAINST = Blocks Received'
+  ]
+};
+
 export default function LeaguePage() {
   const { slug } = useParams();
     // SEO formatting helper for title
@@ -348,6 +457,7 @@ export default function LeaguePage() {
   const [teamStatsMode, setTeamStatsMode] = useState<'Per Game' | 'Totals' | 'Per 100 Possessions'>('Per Game'); // Mode dropdown
   const [leagueLeadersView, setLeagueLeadersView] = useState<'averages' | 'totals'>('averages'); // Toggle for league leaders
   const [playerStatsView, setPlayerStatsView] = useState<'averages' | 'totals'>('averages'); // Toggle for player statistics table
+  const [playerStatsCategory, setPlayerStatsCategory] = useState<'Traditional' | 'Advanced' | 'Scoring' | 'Misc'>('Traditional'); // Category dropdown for player stats
   const [standingsView, setStandingsView] = useState<'poolA' | 'poolB' | 'full'>('full'); // Toggle for standings view
   const [poolAStandings, setPoolAStandings] = useState<any[]>([]);
   const [poolBStandings, setPoolBStandings] = useState<any[]>([]);
@@ -390,142 +500,6 @@ export default function LeaguePage() {
       const delay = setTimeout(fetchSuggestions, 300);
       return () => clearTimeout(delay);
     }, [search]);
-
-    // Filter and sort players based on search and sort settings in stats section
-    useEffect(() => {
-      console.log("🔍 Filtering players. Search term:", statsSearch);
-      console.log("📊 All players:", allPlayerAverages.length);
-      
-      let filtered = allPlayerAverages;
-      
-      // Apply search filter if search term exists
-      if (statsSearch.trim()) {
-        filtered = allPlayerAverages.filter(player => 
-          player.name.toLowerCase().includes(statsSearch.toLowerCase())
-        );
-        console.log("🎯 Filtered players:", filtered.length, "matching:", statsSearch);
-      } else {
-        console.log("✅ No search term, showing all players");
-      }
-
-      // Apply sorting based on selected column and direction
-      const sorted = [...filtered].sort((a, b) => {
-        let valueA: number, valueB: number;
-        
-        switch (statsSortColumn) {
-          case 'GP':
-            valueA = a.games || 0;
-            valueB = b.games || 0;
-            break;
-          case 'MIN':
-            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgMinutes) || 0) : (a.totalMinutes || 0);
-            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgMinutes) || 0) : (b.totalMinutes || 0);
-            break;
-          case 'PTS':
-            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgPoints) || 0) : (a.totalPoints || 0);
-            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgPoints) || 0) : (b.totalPoints || 0);
-            break;
-          case 'REB':
-            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgRebounds) || 0) : (a.totalRebounds || 0);
-            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgRebounds) || 0) : (b.totalRebounds || 0);
-            break;
-          case 'AST':
-            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgAssists) || 0) : (a.totalAssists || 0);
-            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgAssists) || 0) : (b.totalAssists || 0);
-            break;
-          case 'STL':
-            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgSteals) || 0) : (a.totalSteals || 0);
-            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgSteals) || 0) : (b.totalSteals || 0);
-            break;
-          case 'BLK':
-            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgBlocks) || 0) : (a.totalBlocks || 0);
-            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgBlocks) || 0) : (b.totalBlocks || 0);
-            break;
-          case 'TO':
-            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgTurnovers) || 0) : (a.totalTurnovers || 0);
-            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgTurnovers) || 0) : (b.totalTurnovers || 0);
-            break;
-          case 'FG%':
-            valueA = parseFloat(a.fgPercentage) || 0;
-            valueB = parseFloat(b.fgPercentage) || 0;
-            break;
-          case '3P%':
-            valueA = parseFloat(a.threePercentage) || 0;
-            valueB = parseFloat(b.threePercentage) || 0;
-            break;
-          case 'FT%':
-            valueA = parseFloat(a.ftPercentage) || 0;
-            valueB = parseFloat(b.ftPercentage) || 0;
-            break;
-          case 'FGM':
-            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgFGM) || 0) : (a.totalFGM || 0);
-            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgFGM) || 0) : (b.totalFGM || 0);
-            break;
-          case 'FGA':
-            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgFGA) || 0) : (a.totalFGA || 0);
-            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgFGA) || 0) : (b.totalFGA || 0);
-            break;
-          case '2PM':
-            valueA = playerStatsView === 'averages' ? (parseFloat(a.avg2PM) || 0) : (a.total2PM || 0);
-            valueB = playerStatsView === 'averages' ? (parseFloat(b.avg2PM) || 0) : (b.total2PM || 0);
-            break;
-          case '2PA':
-            valueA = playerStatsView === 'averages' ? (parseFloat(a.avg2PA) || 0) : (a.total2PA || 0);
-            valueB = playerStatsView === 'averages' ? (parseFloat(b.avg2PA) || 0) : (b.total2PA || 0);
-            break;
-          case '2P%':
-            valueA = parseFloat(a.twoPercentage) || 0;
-            valueB = parseFloat(b.twoPercentage) || 0;
-            break;
-          case '3PM':
-            valueA = playerStatsView === 'averages' ? (parseFloat(a.avg3PM) || 0) : (a.total3PM || 0);
-            valueB = playerStatsView === 'averages' ? (parseFloat(b.avg3PM) || 0) : (b.total3PM || 0);
-            break;
-          case '3PA':
-            valueA = playerStatsView === 'averages' ? (parseFloat(a.avg3PA) || 0) : (a.total3PA || 0);
-            valueB = playerStatsView === 'averages' ? (parseFloat(b.avg3PA) || 0) : (b.total3PA || 0);
-            break;
-          case 'FTM':
-            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgFTM) || 0) : (a.totalFTM || 0);
-            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgFTM) || 0) : (b.totalFTM || 0);
-            break;
-          case 'FTA':
-            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgFTA) || 0) : (a.totalFTA || 0);
-            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgFTA) || 0) : (b.totalFTA || 0);
-            break;
-          case 'ORB':
-            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgORB) || 0) : (a.totalORB || 0);
-            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgORB) || 0) : (b.totalORB || 0);
-            break;
-          case 'DRB':
-            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgDRB) || 0) : (a.totalDRB || 0);
-            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgDRB) || 0) : (b.totalDRB || 0);
-            break;
-          case 'TRB':
-            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgRebounds) || 0) : (a.totalRebounds || 0);
-            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgRebounds) || 0) : (b.totalRebounds || 0);
-            break;
-          case 'PF':
-            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgPersonalFouls) || 0) : (a.totalPersonalFouls || 0);
-            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgPersonalFouls) || 0) : (b.totalPersonalFouls || 0);
-            break;
-          case '+/-':
-            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgPlusMinus) || 0) : (a.totalPlusMinus || 0);
-            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgPlusMinus) || 0) : (b.totalPlusMinus || 0);
-            break;
-          default:
-            valueA = 0;
-            valueB = 0;
-        }
-        
-        return statsSortDirection === 'desc' ? valueB - valueA : valueA - valueB;
-      });
-      
-      setFilteredPlayerAverages(sorted);
-      if (statsSearch.trim()) {
-        setDisplayedPlayerCount(20); // Reset pagination when searching
-      }
-    }, [statsSearch, allPlayerAverages, statsSortColumn, statsSortDirection, playerStatsView]);
 
     // Sort team stats based on selected column and direction (derived view, doesn't mutate original data)
     const sortedTeamStats = useMemo(() => {
@@ -820,6 +794,78 @@ export default function LeaguePage() {
     const activeTeamStatColumns = useMemo(() => {
       return TEAM_STAT_COLUMNS[teamStatsCategory] || TEAM_STAT_COLUMNS['Traditional'];
     }, [teamStatsCategory]);
+
+    // Get active player stat columns based on selected category
+    const activePlayerStatColumns = useMemo(() => {
+      return PLAYER_STAT_COLUMNS[playerStatsCategory] || PLAYER_STAT_COLUMNS['Traditional'];
+    }, [playerStatsCategory]);
+
+    // Filter and sort players based on search and sort settings in stats section
+    useEffect(() => {
+      console.log("🔍 Filtering players. Search term:", statsSearch);
+      console.log("📊 All players:", allPlayerAverages.length);
+      
+      let filtered = allPlayerAverages;
+      
+      // Apply search filter if search term exists
+      if (statsSearch.trim()) {
+        filtered = allPlayerAverages.filter(player => 
+          player.name.toLowerCase().includes(statsSearch.toLowerCase())
+        );
+        console.log("🎯 Filtered players:", filtered.length, "matching:", statsSearch);
+      } else {
+        console.log("✅ No search term, showing all players");
+      }
+
+      // Apply sorting based on selected column and direction
+      const sorted = [...filtered].sort((a, b) => {
+        let valueA: number, valueB: number;
+        
+        if (statsSortColumn === 'GP') {
+          valueA = a.games || 0;
+          valueB = b.games || 0;
+        } else {
+          const column = activePlayerStatColumns.find(col => col.label === statsSortColumn);
+          
+          if (column) {
+            const rawStatsA = a.rawStats || [];
+            const rawStatsB = b.rawStats || [];
+            
+            if (playerStatsView === 'averages') {
+              const sumA = rawStatsA.reduce((acc: number, stat: any) => {
+                const statValue = stat[column.key];
+                return acc + (typeof statValue === 'number' ? statValue : (typeof statValue === 'string' && !isNaN(parseFloat(statValue)) ? parseFloat(statValue) : 0));
+              }, 0);
+              const sumB = rawStatsB.reduce((acc: number, stat: any) => {
+                const statValue = stat[column.key];
+                return acc + (typeof statValue === 'number' ? statValue : (typeof statValue === 'string' && !isNaN(parseFloat(statValue)) ? parseFloat(statValue) : 0));
+              }, 0);
+              valueA = rawStatsA.length > 0 ? sumA / rawStatsA.length : 0;
+              valueB = rawStatsB.length > 0 ? sumB / rawStatsB.length : 0;
+            } else {
+              valueA = rawStatsA.reduce((acc: number, stat: any) => {
+                const statValue = stat[column.key];
+                return acc + (typeof statValue === 'number' ? statValue : (typeof statValue === 'string' && !isNaN(parseFloat(statValue)) ? parseFloat(statValue) : 0));
+              }, 0);
+              valueB = rawStatsB.reduce((acc: number, stat: any) => {
+                const statValue = stat[column.key];
+                return acc + (typeof statValue === 'number' ? statValue : (typeof statValue === 'string' && !isNaN(parseFloat(statValue)) ? parseFloat(statValue) : 0));
+              }, 0);
+            }
+          } else {
+            valueA = 0;
+            valueB = 0;
+          }
+        }
+        
+        return statsSortDirection === 'desc' ? valueB - valueA : valueA - valueB;
+      });
+      
+      setFilteredPlayerAverages(sorted);
+      if (statsSearch.trim()) {
+        setDisplayedPlayerCount(20); // Reset pagination when searching
+      }
+    }, [statsSearch, allPlayerAverages, statsSortColumn, statsSortDirection, playerStatsView, activePlayerStatColumns]);
 
     // Reset standings view to 'full' if no pools exist and user is on a pool view
     useEffect(() => {
@@ -1406,7 +1452,7 @@ export default function LeaguePage() {
 
       setIsLoadingStats(true);
       try {
-        // Fetch player stats and join with players table to get slug
+        // Fetch player stats and join with players table to get slug - using select('*') to get all fields including advanced stats
         const { data: playerStats, error } = await supabase
           .from("player_stats")
           .select("*, players:player_id(slug)")
@@ -1455,7 +1501,8 @@ export default function LeaguePage() {
             totalDRB: 0,
             totalMinutes: 0,
             totalPersonalFouls: 0,
-            totalPlusMinus: 0
+            totalPlusMinus: 0,
+            rawStats: []
           });
         }
 
@@ -1479,6 +1526,9 @@ export default function LeaguePage() {
         player.totalDRB += stat.sreboundsdefensive || 0;
         player.totalPersonalFouls += stat.sfoulspersonal || 0;
         player.totalPlusMinus += stat.splusminuspoints || 0;
+        
+        // Store raw stat row for accessing advanced stats later
+        player.rawStats.push(stat);
         
         // Parse minutes from sminutes field
         const minutesParts = stat.sminutes?.split(':');
@@ -1591,6 +1641,7 @@ export default function LeaguePage() {
             existingPlayer.totalPersonalFouls += player.totalPersonalFouls;
             existingPlayer.totalPlusMinus += player.totalPlusMinus;
             existingPlayer.totalMinutes += player.totalMinutes;
+            existingPlayer.rawStats.push(...player.rawStats);
             foundMatch = true;
             break;
           }
@@ -2927,6 +2978,28 @@ export default function LeaguePage() {
                     </svg>
                   </div>
                 </div>
+
+                {/* Category Dropdown */}
+                <div className="mb-6">
+                  <label className="block text-xs font-medium text-slate-600 mb-1.5">Stat Category</label>
+                  <Select
+                    value={playerStatsCategory}
+                    onValueChange={(value) => setPlayerStatsCategory(value as typeof playerStatsCategory)}
+                  >
+                    <SelectTrigger 
+                      className="w-full md:w-64 bg-white border-slate-200 text-slate-700 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500"
+                      data-testid="select-player-category"
+                    >
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Traditional" data-testid="option-player-traditional">Traditional</SelectItem>
+                      <SelectItem value="Advanced" data-testid="option-player-advanced">Advanced</SelectItem>
+                      <SelectItem value="Scoring" data-testid="option-player-scoring">Scoring</SelectItem>
+                      <SelectItem value="Misc" data-testid="option-player-misc">Misc</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 
                 {isLoadingStats ? (
                   <div className="overflow-x-auto">
@@ -2992,443 +3065,30 @@ export default function LeaguePage() {
                               )}
                             </div>
                           </th>
-                          <th 
-                            onClick={() => {
-                              if (statsSortColumn === 'MIN') {
-                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setStatsSortColumn('MIN');
-                                setStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'MIN' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-min"
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              MIN
-                              {statsSortColumn === 'MIN' && (
-                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (statsSortColumn === 'FGM') {
-                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setStatsSortColumn('FGM');
-                                setStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'FGM' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-fgm"
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              FGM
-                              {statsSortColumn === 'FGM' && (
-                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (statsSortColumn === 'FGA') {
-                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setStatsSortColumn('FGA');
-                                setStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'FGA' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-fga"
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              FGA
-                              {statsSortColumn === 'FGA' && (
-                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (statsSortColumn === 'FG%') {
-                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setStatsSortColumn('FG%');
-                                setStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[55px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'FG%' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-fg"
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              FG%
-                              {statsSortColumn === 'FG%' && (
-                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (statsSortColumn === '2PM') {
-                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setStatsSortColumn('2PM');
-                                setStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === '2PM' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-2pm"
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              2PM
-                              {statsSortColumn === '2PM' && (
-                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (statsSortColumn === '2PA') {
-                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setStatsSortColumn('2PA');
-                                setStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === '2PA' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-2pa"
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              2PA
-                              {statsSortColumn === '2PA' && (
-                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (statsSortColumn === '2P%') {
-                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setStatsSortColumn('2P%');
-                                setStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[55px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === '2P%' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-2p"
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              2P%
-                              {statsSortColumn === '2P%' && (
-                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (statsSortColumn === '3PM') {
-                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setStatsSortColumn('3PM');
-                                setStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === '3PM' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-3pm"
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              3PM
-                              {statsSortColumn === '3PM' && (
-                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (statsSortColumn === '3PA') {
-                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setStatsSortColumn('3PA');
-                                setStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === '3PA' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-3pa"
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              3PA
-                              {statsSortColumn === '3PA' && (
-                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (statsSortColumn === '3P%') {
-                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setStatsSortColumn('3P%');
-                                setStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[55px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === '3P%' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-3p"
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              3P%
-                              {statsSortColumn === '3P%' && (
-                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (statsSortColumn === 'FTM') {
-                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setStatsSortColumn('FTM');
-                                setStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'FTM' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-ftm"
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              FTM
-                              {statsSortColumn === 'FTM' && (
-                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (statsSortColumn === 'FTA') {
-                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setStatsSortColumn('FTA');
-                                setStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'FTA' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-fta"
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              FTA
-                              {statsSortColumn === 'FTA' && (
-                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (statsSortColumn === 'FT%') {
-                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setStatsSortColumn('FT%');
-                                setStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[55px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'FT%' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-ft"
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              FT%
-                              {statsSortColumn === 'FT%' && (
-                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (statsSortColumn === 'ORB') {
-                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setStatsSortColumn('ORB');
-                                setStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'ORB' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-orb"
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              ORB
-                              {statsSortColumn === 'ORB' && (
-                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (statsSortColumn === 'DRB') {
-                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setStatsSortColumn('DRB');
-                                setStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'DRB' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-drb"
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              DRB
-                              {statsSortColumn === 'DRB' && (
-                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (statsSortColumn === 'TRB') {
-                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setStatsSortColumn('TRB');
-                                setStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'TRB' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-trb"
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              TRB
-                              {statsSortColumn === 'TRB' && (
-                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (statsSortColumn === 'AST') {
-                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setStatsSortColumn('AST');
-                                setStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'AST' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-ast"
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              AST
-                              {statsSortColumn === 'AST' && (
-                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (statsSortColumn === 'STL') {
-                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setStatsSortColumn('STL');
-                                setStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'STL' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-stl"
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              STL
-                              {statsSortColumn === 'STL' && (
-                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (statsSortColumn === 'BLK') {
-                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setStatsSortColumn('BLK');
-                                setStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'BLK' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-blk"
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              BLK
-                              {statsSortColumn === 'BLK' && (
-                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (statsSortColumn === 'TO') {
-                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setStatsSortColumn('TO');
-                                setStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'TO' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-to"
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              TO
-                              {statsSortColumn === 'TO' && (
-                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (statsSortColumn === 'PF') {
-                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setStatsSortColumn('PF');
-                                setStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'PF' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-pf"
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              PF
-                              {statsSortColumn === 'PF' && (
-                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (statsSortColumn === '+/-') {
-                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setStatsSortColumn('+/-');
-                                setStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === '+/-' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-plusminus"
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              +/-
-                              {statsSortColumn === '+/-' && (
-                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (statsSortColumn === 'PTS') {
-                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setStatsSortColumn('PTS');
-                                setStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'PTS' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-pts"
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              PTS
-                              {statsSortColumn === 'PTS' && (
-                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
+                          {activePlayerStatColumns.map((column) => (
+                            <th
+                              key={column.key}
+                              onClick={() => {
+                                if (statsSortColumn === column.label) {
+                                  setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                                } else {
+                                  setStatsSortColumn(column.label);
+                                  setStatsSortDirection('desc');
+                                }
+                              }}
+                              className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${
+                                statsSortColumn === column.label ? 'text-orange-600' : 'text-slate-700'
+                              }`}
+                              data-testid={`header-${column.key.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
+                            >
+                              <div className="flex items-center justify-center gap-1">
+                                {column.label}
+                                {statsSortColumn === column.label && (
+                                  <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                                )}
+                              </div>
+                            </th>
+                          ))}
                         </tr>
                       </thead>
                       <tbody>
@@ -3449,67 +3109,46 @@ export default function LeaguePage() {
                               </div>
                             </td>
                             <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 font-medium">{player.games}</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
-                              {playerStatsView === 'averages' ? player.avgMinutes : Math.round(player.totalMinutes)}
-                            </td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
-                              {playerStatsView === 'averages' ? player.avgFGM : Math.round(player.totalFGM)}
-                            </td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
-                              {playerStatsView === 'averages' ? player.avgFGA : Math.round(player.totalFGA)}
-                            </td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.fgPercentage}%</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
-                              {playerStatsView === 'averages' ? player.avg2PM : Math.round(player.total2PM)}
-                            </td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
-                              {playerStatsView === 'averages' ? player.avg2PA : Math.round(player.total2PA)}
-                            </td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.twoPercentage}%</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
-                              {playerStatsView === 'averages' ? player.avg3PM : Math.round(player.total3PM)}
-                            </td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
-                              {playerStatsView === 'averages' ? player.avg3PA : Math.round(player.total3PA)}
-                            </td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.threePercentage}%</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
-                              {playerStatsView === 'averages' ? player.avgFTM : Math.round(player.totalFTM)}
-                            </td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
-                              {playerStatsView === 'averages' ? player.avgFTA : Math.round(player.totalFTA)}
-                            </td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.ftPercentage}%</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
-                              {playerStatsView === 'averages' ? player.avgORB : Math.round(player.totalORB)}
-                            </td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
-                              {playerStatsView === 'averages' ? player.avgDRB : Math.round(player.totalDRB)}
-                            </td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center font-medium text-slate-700">
-                              {playerStatsView === 'averages' ? player.avgRebounds : Math.round(player.totalRebounds)}
-                            </td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center font-medium text-slate-700">
-                              {playerStatsView === 'averages' ? player.avgAssists : Math.round(player.totalAssists)}
-                            </td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
-                              {playerStatsView === 'averages' ? player.avgSteals : Math.round(player.totalSteals)}
-                            </td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
-                              {playerStatsView === 'averages' ? player.avgBlocks : Math.round(player.totalBlocks)}
-                            </td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
-                              {playerStatsView === 'averages' ? player.avgTurnovers : Math.round(player.totalTurnovers)}
-                            </td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
-                              {playerStatsView === 'averages' ? player.avgPersonalFouls : Math.round(player.totalPersonalFouls)}
-                            </td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
-                              {playerStatsView === 'averages' ? player.avgPlusMinus : Math.round(player.totalPlusMinus)}
-                            </td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center font-semibold text-orange-600">
-                              {playerStatsView === 'averages' ? player.avgPoints : Math.round(player.totalPoints)}
-                            </td>
+                            {activePlayerStatColumns.map((column) => {
+                              const rawStats = player.rawStats || [];
+                              let value = 0;
+                              
+                              if (rawStats.length > 0) {
+                                if (playerStatsView === 'averages') {
+                                  const sum = rawStats.reduce((acc: number, stat: any) => {
+                                    const statValue = stat[column.key];
+                                    if (typeof statValue === 'number') {
+                                      return acc + statValue;
+                                    } else if (typeof statValue === 'string' && !isNaN(parseFloat(statValue))) {
+                                      return acc + parseFloat(statValue);
+                                    }
+                                    return acc;
+                                  }, 0);
+                                  value = rawStats.length > 0 ? sum / rawStats.length : 0;
+                                } else {
+                                  value = rawStats.reduce((acc: number, stat: any) => {
+                                    const statValue = stat[column.key];
+                                    if (typeof statValue === 'number') {
+                                      return acc + statValue;
+                                    } else if (typeof statValue === 'string' && !isNaN(parseFloat(statValue))) {
+                                      return acc + parseFloat(statValue);
+                                    }
+                                    return acc;
+                                  }, 0);
+                                }
+                              }
+                              
+                              const displayValue = value === 0 ? '0.0' : value.toFixed(1);
+                              
+                              return (
+                                <td 
+                                  key={`${player.id}-${column.key}`}
+                                  className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600"
+                                >
+                                  {displayValue}
+                                </td>
+                              );
+                            })}
                           </tr>
                         ))}
                       </tbody>
@@ -3557,35 +3196,17 @@ export default function LeaguePage() {
                       </div>
                     )}
 
-                    <div className="mt-4 text-xs text-slate-500">
-                      <div className="flex gap-3 flex-wrap">
-                        <span>GP = Games Played</span>
-                        <span>MIN = Minutes</span>
-                        <span>FGM = Field Goals Made</span>
-                        <span>FGA = Field Goals Attempted</span>
-                        <span>FG% = Field Goal Percentage</span>
-                        <span>2PM = Two Pointers Made</span>
-                        <span>2PA = Two Pointers Attempted</span>
-                        <span>2P% = Two Point Percentage</span>
-                        <span>3PM = Three Pointers Made</span>
-                        <span>3PA = Three Pointers Attempted</span>
-                        <span>3P% = Three Point Percentage</span>
-                        <span>FTM = Free Throws Made</span>
-                        <span>FTA = Free Throws Attempted</span>
-                        <span>FT% = Free Throw Percentage</span>
-                        <span>ORB = Offensive Rebounds</span>
-                        <span>DRB = Defensive Rebounds</span>
-                        <span>TRB = Total Rebounds</span>
-                        <span>AST = Assists</span>
-                        <span>STL = Steals</span>
-                        <span>BLK = Blocks</span>
-                        <span>TO = Turnovers</span>
-                        <span>PF = Personal Fouls</span>
-                        <span>+/- = Plus/Minus</span>
-                        <span>PTS = Points</span>
-                      </div>
-                      <div className="mt-2 text-xs text-slate-400">
-                        Click on any player to view their detailed profile • Swipe horizontally to see all stats
+                    <div className="mt-6 pt-4 border-t border-gray-200">
+                      <div className="text-xs text-slate-500 space-y-1">
+                        <div className="font-semibold text-slate-600 mb-2">Legend ({playerStatsCategory}):</div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                          {PLAYER_STAT_LEGENDS[playerStatsCategory]?.map((legend, index) => (
+                            <span key={`legend-${index}`}>{legend}</span>
+                          ))}
+                        </div>
+                        <div className="mt-2 text-xs text-slate-400">
+                          Click on any player to view their detailed profile • Swipe horizontally to see all stats
+                        </div>
                       </div>
                     </div>
                   </div>
