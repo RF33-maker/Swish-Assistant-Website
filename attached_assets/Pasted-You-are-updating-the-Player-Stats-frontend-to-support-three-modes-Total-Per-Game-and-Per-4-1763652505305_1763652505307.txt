@@ -1,0 +1,83 @@
+You are updating the Player Stats frontend to support three modes: 
+"Total", "Per Game", and "Per 40".
+
+TARGET FILE:
+The component responsible for rendering Player Stats (PlayerStatsPage or equivalent).
+
+============================================================
+STEP 1 — Add Mode Selector
+============================================================
+Create UI identical to the Team Stats mode selector (Totals / Averages / Per 40).
+
+Use:
+["Total", "Per Game", "Per 40"]
+
+Track it in state:
+const [playerMode, setPlayerMode] = useState("Per Game");
+
+Display the same button group style already used for Team Stats.
+
+============================================================
+STEP 2 — Create helper: applyPlayerMode()
+============================================================
+Add this helper inside the component or in a utils file:
+
+function applyPlayerMode(statKey, value, row, gamesPlayed, totalMinutes, playerMode) {
+  if (playerMode === "Total") return value;
+
+  if (playerMode === "Per Game") {
+    return value / gamesPlayed;
+  }
+
+  if (playerMode === "Per 40") {
+    if (!totalMinutes || totalMinutes === 0) return 0;
+
+    const rateStats = [
+      "efg_percent", "ts_percent", "three_point_rate",
+      "ast_percent", "ast_to_ratio", 
+      "oreb_percent", "dreb_percent", "reb_percent",
+      "tov_percent", "usage_percent", "pie",
+      "off_rating", "def_rating", "net_rating"
+    ];
+
+    if (rateStats.includes(statKey)) return value;
+
+    return (value / totalMinutes) * 40;
+  }
+}
+
+============================================================
+STEP 3 — Apply helper to each rendered value
+============================================================
+Where the table currently renders:
+
+row[col.key]
+
+Replace with:
+
+applyPlayerMode(
+  col.key,
+  row[col.key],
+  row,
+  playerGamesPlayed[row.player_id], 
+  playerMinutes[row.player_id],
+  playerMode
+)
+
+============================================================
+STEP 4 — Ensure minute parsing exists
+============================================================
+Make sure minutes like "32:15" are converted to decimal minutes inside aggregation.
+
+============================================================
+STEP 5 — Keep styling EXACTLY matching Team Stats
+============================================================
+Use table wrapper:
+overflow-x-auto
+whitespace-nowrap
+sticky left name column
+mobile-friendly text-sm
+
+============================================================
+END OF TASK
+============================================================

@@ -295,6 +295,42 @@ const TEAM_STAT_LEGENDS: Record<string, string[]> = {
   ]
 };
 
+// Helper function to apply player stats mode transformations
+const applyPlayerMode = (
+  statKey: string,
+  value: number,
+  gamesPlayed: number,
+  totalMinutes: number,
+  playerMode: 'Total' | 'Per Game' | 'Per 40'
+): number => {
+  if (playerMode === 'Total') return value;
+
+  if (playerMode === 'Per Game') {
+    return gamesPlayed > 0 ? value / gamesPlayed : 0;
+  }
+
+  if (playerMode === 'Per 40') {
+    // These stats are already rates/percentages and should not be scaled
+    const rateStats = [
+      'efg_percent', 'ts_percent', 'three_point_rate',
+      'ast_percent', 'ast_to_ratio',
+      'oreb_percent', 'dreb_percent', 'reb_percent',
+      'tov_percent', 'usage_percent', 'pie',
+      'off_rating', 'def_rating', 'net_rating',
+      'pts_percent_2pt', 'pts_percent_3pt', 'pts_percent_ft',
+      'pts_percent_midrange', 'pts_percent_pitp', 'pts_percent_fastbreak',
+      'pts_percent_second_chance', 'pts_percent_off_turnovers'
+    ];
+
+    if (rateStats.includes(statKey)) return value;
+
+    // Scale counting stats to per-40-minute basis
+    return totalMinutes > 0 ? (value / totalMinutes) * 40 : 0;
+  }
+
+  return value;
+};
+
 // Player stats column configuration by category
 // Note: Advanced, Scoring, and Misc categories reference fields that are calculated by the backend
 // (advanced_player_stats.py). Traditional stats use raw Supabase fields that are always present.
@@ -456,7 +492,7 @@ export default function LeaguePage() {
   const [teamStatsCategory, setTeamStatsCategory] = useState<'Traditional' | 'Advanced' | 'Four Factors' | 'Scoring' | 'Misc'>('Traditional'); // Category dropdown
   const [teamStatsMode, setTeamStatsMode] = useState<'Per Game' | 'Totals' | 'Per 100 Possessions'>('Per Game'); // Mode dropdown
   const [leagueLeadersView, setLeagueLeadersView] = useState<'averages' | 'totals'>('averages'); // Toggle for league leaders
-  const [playerStatsView, setPlayerStatsView] = useState<'averages' | 'totals'>('averages'); // Toggle for player statistics table
+  const [playerStatsView, setPlayerStatsView] = useState<'Total' | 'Per Game' | 'Per 40'>('Per Game'); // Mode selector for player statistics table
   const [playerStatsCategory, setPlayerStatsCategory] = useState<'Traditional' | 'Advanced' | 'Scoring' | 'Misc'>('Traditional'); // Category dropdown for player stats
   const [standingsView, setStandingsView] = useState<'poolA' | 'poolB' | 'full'>('full'); // Toggle for standings view
   const [poolAStandings, setPoolAStandings] = useState<any[]>([]);
@@ -831,27 +867,19 @@ export default function LeaguePage() {
             const rawStatsA = a.rawStats || [];
             const rawStatsB = b.rawStats || [];
             
-            if (playerStatsView === 'averages') {
-              const sumA = rawStatsA.reduce((acc: number, stat: any) => {
-                const statValue = stat[column.key];
-                return acc + (typeof statValue === 'number' ? statValue : (typeof statValue === 'string' && !isNaN(parseFloat(statValue)) ? parseFloat(statValue) : 0));
-              }, 0);
-              const sumB = rawStatsB.reduce((acc: number, stat: any) => {
-                const statValue = stat[column.key];
-                return acc + (typeof statValue === 'number' ? statValue : (typeof statValue === 'string' && !isNaN(parseFloat(statValue)) ? parseFloat(statValue) : 0));
-              }, 0);
-              valueA = rawStatsA.length > 0 ? sumA / rawStatsA.length : 0;
-              valueB = rawStatsB.length > 0 ? sumB / rawStatsB.length : 0;
-            } else {
-              valueA = rawStatsA.reduce((acc: number, stat: any) => {
-                const statValue = stat[column.key];
-                return acc + (typeof statValue === 'number' ? statValue : (typeof statValue === 'string' && !isNaN(parseFloat(statValue)) ? parseFloat(statValue) : 0));
-              }, 0);
-              valueB = rawStatsB.reduce((acc: number, stat: any) => {
-                const statValue = stat[column.key];
-                return acc + (typeof statValue === 'number' ? statValue : (typeof statValue === 'string' && !isNaN(parseFloat(statValue)) ? parseFloat(statValue) : 0));
-              }, 0);
-            }
+            // Calculate total values from raw stats
+            const totalA = rawStatsA.reduce((acc: number, stat: any) => {
+              const statValue = stat[column.key];
+              return acc + (typeof statValue === 'number' ? statValue : (typeof statValue === 'string' && !isNaN(parseFloat(statValue)) ? parseFloat(statValue) : 0));
+            }, 0);
+            const totalB = rawStatsB.reduce((acc: number, stat: any) => {
+              const statValue = stat[column.key];
+              return acc + (typeof statValue === 'number' ? statValue : (typeof statValue === 'string' && !isNaN(parseFloat(statValue)) ? parseFloat(statValue) : 0));
+            }, 0);
+            
+            // Apply mode transformation
+            valueA = applyPlayerMode(column.key, totalA, a.games, a.totalMinutes || 0, playerStatsView);
+            valueB = applyPlayerMode(column.key, totalB, b.games, b.totalMinutes || 0, playerStatsView);
           } else {
             valueA = 0;
             valueB = 0;
@@ -2920,36 +2948,9 @@ export default function LeaguePage() {
               <div className="bg-white rounded-xl shadow p-4 md:p-6">
                 <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 mb-4 md:mb-6">
                   <h2 className="text-base md:text-lg font-semibold text-slate-800">Player Statistics - {league?.name}</h2>
-                  <div className="flex items-center gap-4">
-                    {/* Averages/Totals Toggle */}
-                    <div className="flex items-center gap-2 bg-orange-50 rounded-lg p-1">
-                      <button
-                        onClick={() => setPlayerStatsView('averages')}
-                        className={`px-3 py-1.5 text-xs md:text-sm font-medium rounded transition-colors ${
-                          playerStatsView === 'averages'
-                            ? 'bg-orange-500 text-white'
-                            : 'text-slate-600 hover:text-orange-600'
-                        }`}
-                        data-testid="toggle-averages"
-                      >
-                        Averages
-                      </button>
-                      <button
-                        onClick={() => setPlayerStatsView('totals')}
-                        className={`px-3 py-1.5 text-xs md:text-sm font-medium rounded transition-colors ${
-                          playerStatsView === 'totals'
-                            ? 'bg-orange-500 text-white'
-                            : 'text-slate-600 hover:text-orange-600'
-                        }`}
-                        data-testid="toggle-totals"
-                      >
-                        Totals
-                      </button>
-                    </div>
-                    <div className="text-xs md:text-sm text-gray-500">
-                      Showing {Math.min(displayedPlayerCount, filteredPlayerAverages.length)} of {filteredPlayerAverages.length} players
-                      {statsSearch && ` (filtered from ${allPlayerAverages.length})`}
-                    </div>
+                  <div className="text-xs md:text-sm text-gray-500">
+                    Showing {Math.min(displayedPlayerCount, filteredPlayerAverages.length)} of {filteredPlayerAverages.length} players
+                    {statsSearch && ` (filtered from ${allPlayerAverages.length})`}
                   </div>
                 </div>
                 
@@ -2979,26 +2980,48 @@ export default function LeaguePage() {
                   </div>
                 </div>
 
-                {/* Category Dropdown */}
-                <div className="mb-6">
-                  <label className="block text-xs font-medium text-slate-600 mb-1.5">Stat Category</label>
-                  <Select
-                    value={playerStatsCategory}
-                    onValueChange={(value) => setPlayerStatsCategory(value as typeof playerStatsCategory)}
-                  >
-                    <SelectTrigger 
-                      className="w-full md:w-64 bg-white border-slate-200 text-slate-700 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500"
-                      data-testid="select-player-category"
+                {/* Category and Mode Selectors */}
+                <div className="flex flex-col md:flex-row gap-4 mb-6">
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-slate-600 mb-1.5">Stat Category</label>
+                    <Select
+                      value={playerStatsCategory}
+                      onValueChange={(value) => setPlayerStatsCategory(value as typeof playerStatsCategory)}
                     >
-                      <SelectValue placeholder="Select category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Traditional" data-testid="option-player-traditional">Traditional</SelectItem>
-                      <SelectItem value="Advanced" data-testid="option-player-advanced">Advanced</SelectItem>
-                      <SelectItem value="Scoring" data-testid="option-player-scoring">Scoring</SelectItem>
-                      <SelectItem value="Misc" data-testid="option-player-misc">Misc</SelectItem>
-                    </SelectContent>
-                  </Select>
+                      <SelectTrigger 
+                        className="w-full bg-white border-slate-200 text-slate-700 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500"
+                        data-testid="select-player-category"
+                      >
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Traditional" data-testid="option-player-traditional">Traditional</SelectItem>
+                        <SelectItem value="Advanced" data-testid="option-player-advanced">Advanced</SelectItem>
+                        <SelectItem value="Scoring" data-testid="option-player-scoring">Scoring</SelectItem>
+                        <SelectItem value="Misc" data-testid="option-player-misc">Misc</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-slate-600 mb-1.5">Mode</label>
+                    <Select
+                      value={playerStatsView}
+                      onValueChange={(value) => setPlayerStatsView(value as typeof playerStatsView)}
+                    >
+                      <SelectTrigger 
+                        className="w-full bg-white border-slate-200 text-slate-700 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500"
+                        data-testid="select-player-mode"
+                      >
+                        <SelectValue placeholder="Select mode" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Per Game" data-testid="option-player-per-game">Per Game</SelectItem>
+                        <SelectItem value="Total" data-testid="option-player-total">Total</SelectItem>
+                        <SelectItem value="Per 40" data-testid="option-player-per-40">Per 40</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
                 
                 {isLoadingStats ? (
@@ -3111,32 +3134,29 @@ export default function LeaguePage() {
                             <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 font-medium">{player.games}</td>
                             {activePlayerStatColumns.map((column) => {
                               const rawStats = player.rawStats || [];
-                              let value = 0;
                               
-                              if (rawStats.length > 0) {
-                                if (playerStatsView === 'averages') {
-                                  const sum = rawStats.reduce((acc: number, stat: any) => {
-                                    const statValue = stat[column.key];
-                                    if (typeof statValue === 'number') {
-                                      return acc + statValue;
-                                    } else if (typeof statValue === 'string' && !isNaN(parseFloat(statValue))) {
-                                      return acc + parseFloat(statValue);
-                                    }
-                                    return acc;
-                                  }, 0);
-                                  value = rawStats.length > 0 ? sum / rawStats.length : 0;
-                                } else {
-                                  value = rawStats.reduce((acc: number, stat: any) => {
-                                    const statValue = stat[column.key];
-                                    if (typeof statValue === 'number') {
-                                      return acc + statValue;
-                                    } else if (typeof statValue === 'string' && !isNaN(parseFloat(statValue))) {
-                                      return acc + parseFloat(statValue);
-                                    }
-                                    return acc;
-                                  }, 0);
+                              // Calculate total value from raw stats
+                              const totalValue = rawStats.reduce((acc: number, stat: any) => {
+                                const statValue = stat[column.key];
+                                if (typeof statValue === 'number') {
+                                  return acc + statValue;
+                                } else if (typeof statValue === 'string' && !isNaN(parseFloat(statValue))) {
+                                  return acc + parseFloat(statValue);
                                 }
-                              }
+                                return acc;
+                              }, 0);
+                              
+                              // Calculate total minutes from player.totalMinutes (already in decimal format)
+                              const totalMinutes = player.totalMinutes || 0;
+                              
+                              // Apply the mode transformation
+                              const value = applyPlayerMode(
+                                column.key,
+                                totalValue,
+                                player.games,
+                                totalMinutes,
+                                playerStatsView
+                              );
                               
                               const displayValue = value === 0 ? '0.0' : value.toFixed(1);
                               
