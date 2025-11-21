@@ -652,26 +652,100 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                       <Trophy className="w-5 h-5 text-orange-500" />
                       Top Performers
                     </h3>
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {gameStats
                         .sort((a, b) => (b.spoints || 0) - (a.spoints || 0))
                         .slice(0, 3)
-                        .map((player, index) => (
-                          <div key={player.id} className="flex items-center justify-between p-3 bg-gradient-to-r from-orange-50 to-yellow-50 rounded-md">
-                            <div className="flex items-center gap-3">
-                              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-white ${
-                                index === 0 ? 'bg-yellow-500' : index === 1 ? 'bg-gray-400' : 'bg-orange-600'
-                              }`}>
-                                {index + 1}
-                              </div>
-                              <div>
-                                <div className="font-medium text-slate-800">{player.firstname} {player.familyname}</div>
-                                <div className="text-xs text-slate-500">{player.team}</div>
+                        .map((player, index) => {
+                          const playerTeamColor = teamColors[player.team];
+                          const fgPercentage = (player.sfieldgoalsattempted || 0) > 0 
+                            ? Number(((player.sfieldgoalsmade || 0) / (player.sfieldgoalsattempted || 0) * 100)).toFixed(1)
+                            : '0.0';
+                          
+                          return (
+                            <div 
+                              key={player.id} 
+                              className="relative overflow-hidden rounded-lg p-4 border-2"
+                              style={playerTeamColor ? {
+                                background: `linear-gradient(135deg, ${adjustOpacity(playerTeamColor.primaryRgb, 0.12)} 0%, ${adjustOpacity(playerTeamColor.primaryRgb, 0.04)} 100%)`,
+                                borderColor: adjustOpacity(playerTeamColor.primaryRgb, 0.3)
+                              } : {
+                                background: 'linear-gradient(135deg, rgba(251, 146, 60, 0.12) 0%, rgba(251, 146, 60, 0.04) 100%)',
+                                borderColor: 'rgba(251, 146, 60, 0.3)'
+                              }}
+                            >
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="flex items-center gap-3">
+                                  <div 
+                                    className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-white flex-shrink-0 ${
+                                      index === 0 ? 'bg-yellow-500' : index === 1 ? 'bg-gray-400' : 'bg-orange-600'
+                                    }`}
+                                  >
+                                    {index + 1}
+                                  </div>
+                                  <div>
+                                    <div className="font-semibold text-slate-800">{player.firstname} {player.familyname}</div>
+                                    <div className="text-xs text-slate-600 font-medium">{player.team}</div>
+                                  </div>
+                                </div>
+                                <div className="flex gap-3 text-sm">
+                                  <div className="text-center">
+                                    <div 
+                                      className="text-lg font-bold"
+                                      style={playerTeamColor ? {
+                                        color: playerTeamColor.primary
+                                      } : {
+                                        color: 'rgb(251, 146, 60)'
+                                      }}
+                                    >
+                                      {player.spoints ?? 0}
+                                    </div>
+                                    <div className="text-xs text-slate-500">PTS</div>
+                                  </div>
+                                  <div className="text-center">
+                                    <div 
+                                      className="text-lg font-bold"
+                                      style={playerTeamColor ? {
+                                        color: playerTeamColor.primary
+                                      } : {
+                                        color: 'rgb(251, 146, 60)'
+                                      }}
+                                    >
+                                      {player.sreboundstotal ?? 0}
+                                    </div>
+                                    <div className="text-xs text-slate-500">REB</div>
+                                  </div>
+                                  <div className="text-center">
+                                    <div 
+                                      className="text-lg font-bold"
+                                      style={playerTeamColor ? {
+                                        color: playerTeamColor.primary
+                                      } : {
+                                        color: 'rgb(251, 146, 60)'
+                                      }}
+                                    >
+                                      {player.sassists ?? 0}
+                                    </div>
+                                    <div className="text-xs text-slate-500">AST</div>
+                                  </div>
+                                  <div className="text-center">
+                                    <div 
+                                      className="text-lg font-bold"
+                                      style={playerTeamColor ? {
+                                        color: playerTeamColor.primary
+                                      } : {
+                                        color: 'rgb(251, 146, 60)'
+                                      }}
+                                    >
+                                      {fgPercentage}%
+                                    </div>
+                                    <div className="text-xs text-slate-500">FG%</div>
+                                  </div>
+                                </div>
                               </div>
                             </div>
-                            <div className="text-xl font-bold text-orange-600">{player.spoints} pts</div>
-                          </div>
-                        ))}
+                          );
+                        })}
                     </div>
                   </div>
 
