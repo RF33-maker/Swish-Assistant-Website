@@ -930,31 +930,76 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                   {/* Team Filter Buttons */}
                   {gameInfo && (
                     <div className="flex flex-col sm:flex-row justify-center gap-2 -mx-4 md:mx-0 overflow-x-auto px-4 md:px-0">
-                      {gameInfo.teams.map((team) => (
-                        <button
-                          key={team}
-                          onClick={() => setSelectedTeam(team)}
-                          className={`px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium transition-colors whitespace-nowrap ${
-                            selectedTeam === team
-                              ? 'bg-orange-500 text-white shadow-md'
-                              : 'bg-white text-slate-700 border border-orange-200 hover:bg-orange-50'
-                          }`}
-                        >
-                          {team} Box Score
-                        </button>
-                      ))}
+                      {gameInfo.teams.map((team) => {
+                        const teamColor = teamColors[team];
+                        return (
+                          <button
+                            key={team}
+                            onClick={() => setSelectedTeam(team)}
+                            className={`px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium transition-colors whitespace-nowrap ${
+                              selectedTeam === team
+                                ? 'text-white shadow-md'
+                                : 'bg-white text-slate-700 hover:opacity-90'
+                            }`}
+                            style={selectedTeam === team ? (teamColor ? {
+                              backgroundColor: teamColor.primary,
+                            } : {
+                              backgroundColor: 'rgb(249, 115, 22)'
+                            }) : (teamColor ? {
+                              borderColor: adjustOpacity(teamColor.primaryRgb, 0.3),
+                              borderWidth: '1px',
+                              borderStyle: 'solid'
+                            } : {
+                              borderColor: 'rgba(251, 146, 60, 0.3)',
+                              borderWidth: '1px',
+                              borderStyle: 'solid'
+                            })}
+                          >
+                            {team} Box Score
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
 
                   {/* Selected Team Summary */}
                   {selectedTeamStats && (
-                    <div className="bg-orange-50 rounded-lg border border-orange-200 overflow-hidden">
+                    <div 
+                      className="rounded-lg overflow-hidden"
+                      style={teamColors[selectedTeamStats.name] ? {
+                        background: `linear-gradient(135deg, ${adjustOpacity(teamColors[selectedTeamStats.name].primaryRgb, 0.1)} 0%, ${adjustOpacity(teamColors[selectedTeamStats.name].primaryRgb, 0.05)} 100%)`,
+                        borderColor: adjustOpacity(teamColors[selectedTeamStats.name].primaryRgb, 0.3),
+                        borderWidth: '1px',
+                        borderStyle: 'solid'
+                      } : {
+                        background: 'linear-gradient(135deg, rgba(251, 146, 60, 0.1) 0%, rgba(251, 146, 60, 0.05) 100%)',
+                        borderColor: 'rgba(251, 146, 60, 0.3)',
+                        borderWidth: '1px',
+                        borderStyle: 'solid'
+                      }}
+                    >
                       {/* Team Header */}
-                      <div className="flex items-center gap-3 md:gap-4 p-3 md:p-4 border-b border-orange-200">
+                      <div 
+                        className="flex items-center gap-3 md:gap-4 p-3 md:p-4 border-b"
+                        style={teamColors[selectedTeamStats.name] ? {
+                          borderColor: adjustOpacity(teamColors[selectedTeamStats.name].primaryRgb, 0.3)
+                        } : {
+                          borderColor: 'rgba(251, 146, 60, 0.3)'
+                        }}
+                      >
                         <div className="flex-1 min-w-0">
                           <h3 className="text-base md:text-xl font-bold text-slate-800 truncate">{selectedTeamStats.name}</h3>
                         </div>
-                        <div className="text-2xl md:text-3xl font-bold text-orange-600 shrink-0">{selectedTeamStats.score}</div>
+                        <div 
+                          className="text-2xl md:text-3xl font-bold shrink-0"
+                          style={teamColors[selectedTeamStats.name] ? {
+                            color: teamColors[selectedTeamStats.name].primary
+                          } : {
+                            color: 'rgb(249, 115, 22)'
+                          }}
+                        >
+                          {selectedTeamStats.score}
+                        </div>
                       </div>
                       
                       {/* Stats Container */}
@@ -1041,8 +1086,34 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                           </tr>
                         </thead>
                         <tbody>
-                          {selectedTeamPlayers.map((player, index) => (
-                            <tr key={player.id} className={`border-b border-gray-100 ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-orange-50 transition-colors`}>
+                          {selectedTeamPlayers.map((player, index) => {
+                            const playerTeamColor = teamColors[player.team];
+                            return (
+                            <tr 
+                              key={player.id} 
+                              className="border-b transition-colors"
+                              style={playerTeamColor ? {
+                                backgroundColor: index % 2 === 0 ? adjustOpacity(playerTeamColor.primaryRgb, 0.04) : adjustOpacity(playerTeamColor.primaryRgb, 0.08),
+                                borderColor: adjustOpacity(playerTeamColor.primaryRgb, 0.1)
+                              } : {
+                                backgroundColor: index % 2 === 0 ? 'rgba(251, 146, 60, 0.04)' : 'rgba(251, 146, 60, 0.08)',
+                                borderColor: 'rgba(251, 146, 60, 0.1)'
+                              }}
+                              onMouseEnter={(e) => {
+                                if (playerTeamColor) {
+                                  e.currentTarget.style.backgroundColor = adjustOpacity(playerTeamColor.primaryRgb, 0.15);
+                                } else {
+                                  e.currentTarget.style.backgroundColor = 'rgba(251, 146, 60, 0.15)';
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (playerTeamColor) {
+                                  e.currentTarget.style.backgroundColor = index % 2 === 0 ? adjustOpacity(playerTeamColor.primaryRgb, 0.04) : adjustOpacity(playerTeamColor.primaryRgb, 0.08);
+                                } else {
+                                  e.currentTarget.style.backgroundColor = index % 2 === 0 ? 'rgba(251, 146, 60, 0.04)' : 'rgba(251, 146, 60, 0.08)';
+                                }
+                              }}
+                            >
                               <td className="py-1.5 md:p-3 sticky left-4 md:left-0 bg-inherit z-10 w-28 md:w-32 pl-2 pr-1">
                                 <div className="max-w-none whitespace-normal">
                                   <div className="font-medium text-slate-800">{player.firstname} {player.familyname}</div>
@@ -1110,7 +1181,8 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                 ) : <span className="text-slate-400">-</span>}
                               </td>
                             </tr>
-                          ))}
+                            );
+                          })}
                         </tbody>
                         
                         {/* Team Totals Row */}
@@ -1269,39 +1341,84 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                       <div className="space-y-3">
                         {liveEvents
                           .filter(event => quarterFilter === 'all' || `Q${event.period}` === quarterFilter)
-                          .map((event) => (
-                            <div 
-                              key={event.id} 
-                              className="bg-white border border-gray-200 rounded-lg p-3 hover:shadow-md transition-shadow"
-                            >
-                              <div className="flex items-start justify-between gap-3">
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-xs font-medium rounded">
-                                      Q{event.period}
-                                    </span>
-                                    <span className="text-xs text-slate-500 flex items-center gap-1">
-                                      <Clock className="w-3 h-3" />
-                                      {event.clock}
-                                    </span>
+                          .map((event) => {
+                            // Find which team this event belongs to by matching player name
+                            const eventPlayer = gameStats.find(p => 
+                              event.player_name && (
+                                `${p.firstname} ${p.familyname}`.toLowerCase().includes(event.player_name.toLowerCase()) ||
+                                event.player_name.toLowerCase().includes(`${p.firstname} ${p.familyname}`.toLowerCase())
+                              )
+                            );
+                            const eventTeamColor = eventPlayer ? teamColors[eventPlayer.team] : null;
+                            
+                            return (
+                              <div 
+                                key={event.id} 
+                                className="border rounded-lg p-3 hover:shadow-md transition-shadow"
+                                style={eventTeamColor ? {
+                                  background: `linear-gradient(135deg, ${adjustOpacity(eventTeamColor.primaryRgb, 0.08)} 0%, ${adjustOpacity(eventTeamColor.primaryRgb, 0.03)} 100%)`,
+                                  borderColor: adjustOpacity(eventTeamColor.primaryRgb, 0.25),
+                                  borderWidth: '1px'
+                                } : {
+                                  background: 'white',
+                                  borderColor: 'rgb(229, 231, 235)',
+                                  borderWidth: '1px'
+                                }}
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <span 
+                                        className="px-2 py-0.5 text-xs font-medium rounded"
+                                        style={eventTeamColor ? {
+                                          backgroundColor: adjustOpacity(eventTeamColor.primaryRgb, 0.15),
+                                          color: eventTeamColor.primary
+                                        } : {
+                                          backgroundColor: 'rgba(251, 146, 60, 0.15)',
+                                          color: 'rgb(249, 115, 22)'
+                                        }}
+                                      >
+                                        Q{event.period}
+                                      </span>
+                                      <span className="text-xs text-slate-500 flex items-center gap-1">
+                                        <Clock className="w-3 h-3" />
+                                        {event.clock}
+                                      </span>
+                                    </div>
+                                    {event.player_name && (
+                                      <div className="text-sm font-medium text-slate-800">
+                                        {event.player_name}
+                                      </div>
+                                    )}
+                                    <div 
+                                      className="text-sm font-bold mt-1"
+                                      style={eventTeamColor ? {
+                                        color: eventTeamColor.primary
+                                      } : {
+                                        color: 'rgb(194, 65, 12)'
+                                      }}
+                                    >
+                                      {generatePlayCaption(event)}
+                                    </div>
                                   </div>
-                                  {event.player_name && (
-                                    <div className="text-sm font-medium text-slate-800">
-                                      {event.player_name}
+                                  {event.score && (
+                                    <div className="text-right shrink-0">
+                                      <div 
+                                        className="text-lg font-bold"
+                                        style={eventTeamColor ? {
+                                          color: eventTeamColor.primary
+                                        } : {
+                                          color: 'rgb(249, 115, 22)'
+                                        }}
+                                      >
+                                        {event.score}
+                                      </div>
                                     </div>
                                   )}
-                                  <div className="text-sm font-bold text-orange-700 mt-1">
-                                    {generatePlayCaption(event)}
-                                  </div>
                                 </div>
-                                {event.score && (
-                                  <div className="text-right shrink-0">
-                                    <div className="text-lg font-bold text-orange-600">{event.score}</div>
-                                  </div>
-                                )}
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                       </div>
                     </>
                   )}
