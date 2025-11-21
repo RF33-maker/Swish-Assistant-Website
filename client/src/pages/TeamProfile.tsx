@@ -8,6 +8,8 @@ import { EditableDescription } from "@/components/EditableDescription";
 import { useAuth } from "@/hooks/use-auth";
 import { Helmet } from "react-helmet-async";
 import { normalizeTeamName } from "@/lib/teamUtils";
+import { useTeamBranding } from "@/hooks/useTeamBranding";
+import { adjustOpacity } from "@/lib/colorExtractor";
 
 interface League {
   league_id: string;
@@ -39,6 +41,7 @@ interface Game {
   opponent: string;
   opponentScore?: number;
   isWin?: boolean;
+  isHome?: boolean;
 }
 
 interface UpcomingGame {
@@ -78,6 +81,34 @@ export default function TeamProfile() {
   const [teamDescription, setTeamDescription] = useState<string | null>(null);
   const [isOwner, setIsOwner] = useState(false);
   const { user } = useAuth();
+
+  // Extract team branding colors
+  const { colors: teamBranding, primaryColor, secondaryColor } = useTeamBranding({
+    teamName: team?.name || '',
+    leagueId: team?.league?.league_id || '',
+    enabled: !!team?.name && !!team?.league?.league_id,
+  });
+
+  // Compute color for text on white backgrounds (needs good contrast)
+  const textOnWhiteColor = React.useMemo(() => {
+    if (!teamBranding) return 'rgb(251, 146, 60)'; // orange default
+    
+    // Check brightness of primary color
+    const { r, g, b } = teamBranding.primaryRgb;
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+    
+    // If primary is too bright for white backgrounds, use secondary or orange
+    if (brightness > 180) {
+      // Check if secondary has better contrast
+      const secBrightness = (teamBranding.secondaryRgb.r * 299 + 
+                            teamBranding.secondaryRgb.g * 587 + 
+                            teamBranding.secondaryRgb.b * 114) / 1000;
+      
+      return secBrightness < 180 ? secondaryColor : 'rgb(251, 146, 60)';
+    }
+    
+    return primaryColor;
+  }, [teamBranding, primaryColor, secondaryColor]);
 
   useEffect(() => {
     const fetchSuggestions = async () => {
@@ -204,6 +235,37 @@ export default function TeamProfile() {
           const playerIds = Array.from(new Set(allStats.map((stat: any) => stat.player_id).filter(Boolean)));
           const gameKeys = Object.keys(gamesByGameKey);
 
+          // Fetch team stats for all games to get opponent names and full stats
+          // Each game_key has 2 records in team_stats (one for each team with side="1" and side="2")
+          const { data: allTeamStats } = await supabase
+            .from("team_stats")
+            .select("*")  // Select all fields including tot_s* stats
+            .in("game_key", gameKeys);
+          
+          // Group team stats by game_key to find opponents
+          if (allTeamStats) {
+            const statsByGame: Record<string, any[]> = {};
+            allTeamStats.forEach((stat: any) => {
+              if (!statsByGame[stat.game_key]) {
+                statsByGame[stat.game_key] = [];
+              }
+              statsByGame[stat.game_key].push(stat);
+            });
+            
+            // For each game, find the opponent (the team that's NOT this team)
+            Object.keys(statsByGame).forEach((gameKey: string) => {
+              const teamsInGame = statsByGame[gameKey];
+              const ourTeam = teamsInGame.find((t: any) => normalizeTeamName(t.name) === normalizedTeamName);
+              const opponent = teamsInGame.find((t: any) => normalizeTeamName(t.name) !== normalizedTeamName);
+              
+              if (gamesByGameKey[gameKey] && opponent) {
+                gamesByGameKey[gameKey].opponent_name = opponent.name;
+                // side="1" is typically the home team
+                gamesByGameKey[gameKey].is_home_game = ourTeam?.side === "1";
+              }
+            });
+          }
+
           // Fetch ALL game stats in ONE query instead of one per game
           const { data: allGamesStats } = await supabase
             .from("player_stats")
@@ -228,11 +290,9 @@ export default function TeamProfile() {
           const games = Object.values(gamesByGameKey).map((gameData: any) => {
             const ourScore = gameData.playerStats.reduce((sum: number, stat: any) => sum + (stat.spoints || 0), 0);
             
-            // Use normalized team names for comparison
-            const normalizedHome = normalizeTeamName(gameData.home_team || '');
-            const normalizedAway = normalizeTeamName(gameData.away_team || '');
-            const isHome = normalizedHome === normalizedTeamName;
-            const opponent = isHome ? gameData.away_team : gameData.home_team;
+            // Get opponent and home status from team_stats data
+            const opponent = gameData.opponent_name || 'Unknown Opponent';
+            const isHome = gameData.is_home_game || false;
             
             const opponentStats = opponentStatsByGame[gameData.game_key] || [];
             const opponentScore = opponentStats.reduce((sum: number, stat: any) => sum + (stat.spoints || 0), 0);
@@ -250,7 +310,8 @@ export default function TeamProfile() {
               date: gameData.created_at,
               opponent: opponent,
               opponentScore: opponentScore,
-              isWin: isWin
+              isWin: isWin,
+              isHome: isHome
             };
           });
           
@@ -612,7 +673,15 @@ export default function TeamProfile() {
 
       <main className="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-10">
         {/* Team Header */}
-        <div className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl p-6 md:p-8 text-white mb-6 md:mb-8">
+        <div 
+          className="rounded-xl p-6 md:p-8 mb-6 md:mb-8"
+          style={{
+            background: teamBranding 
+              ? `linear-gradient(to right, ${primaryColor}, ${adjustOpacity(teamBranding.primaryRgb, 0.8)})`
+              : 'linear-gradient(to right, rgb(251, 146, 60), rgb(249, 115, 22))',
+            color: teamBranding?.textContrast || '#ffffff'
+          }}
+        >
           <div className="flex flex-col md:flex-row items-center md:items-start gap-4 md:gap-6">
             {/* Team Logo Placeholder */}
             <TeamLogo 
@@ -679,9 +748,27 @@ export default function TeamProfile() {
             </div>
 
             {/* Team Stats Summary */}
-            <div className="bg-gradient-to-br from-orange-50 to-yellow-50 border-2 border-orange-300 rounded-xl shadow-md p-4 md:p-6">
+            <div 
+              className="rounded-xl shadow-md p-4 md:p-6"
+              style={{
+                background: teamBranding 
+                  ? `linear-gradient(to bottom right, ${adjustOpacity(teamBranding.primaryRgb, 0.1)}, ${adjustOpacity(teamBranding.secondaryRgb, 0.1)})`
+                  : 'linear-gradient(to bottom right, rgb(255, 247, 237), rgb(254, 249, 195))',
+                borderWidth: '2px',
+                borderStyle: 'solid',
+                borderColor: teamBranding 
+                  ? adjustOpacity(teamBranding.primaryRgb, 0.3)
+                  : 'rgb(253, 186, 116)'
+              }}
+            >
               <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-3 md:mb-4 flex items-center gap-2">
-                <svg className="w-4 h-4 md:w-5 md:h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg 
+                  className="w-4 h-4 md:w-5 md:h-5" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                  style={{ color: textOnWhiteColor }}
+                >
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
                 Team Statistics
@@ -690,32 +777,32 @@ export default function TeamProfile() {
                 <div className="bg-white rounded-lg p-3 md:p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <svg className="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: textOnWhiteColor }}>
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                       <span className="text-slate-600 font-medium">W-L Record</span>
                     </div>
-                    <span className="text-2xl md:text-3xl font-bold text-orange-600" data-testid="team-record">
+                    <span className="text-2xl md:text-3xl font-bold" data-testid="team-record" style={{ color: textOnWhiteColor }}>
                       {team.wins}-{team.losses}
                     </span>
                   </div>
                 </div>
                 <div className="flex justify-between text-sm md:text-base">
                   <span className="text-slate-600">Games Played</span>
-                  <span className="font-semibold text-orange-600">{team.totalGames}</span>
+                  <span className="font-semibold" style={{ color: textOnWhiteColor }}>{team.totalGames}</span>
                 </div>
                 <div className="flex justify-between text-sm md:text-base">
                   <span className="text-slate-600">Avg Points Per Game</span>
-                  <span className="font-semibold text-orange-600">{team.avgTeamPoints} PPG</span>
+                  <span className="font-semibold" style={{ color: textOnWhiteColor }}>{team.avgTeamPoints} PPG</span>
                 </div>
                 <div className="flex justify-between text-sm md:text-base">
                   <span className="text-slate-600">Roster Size</span>
-                  <span className="font-semibold text-orange-600">{team.roster.length} Players</span>
+                  <span className="font-semibold" style={{ color: textOnWhiteColor }}>{team.roster.length} Players</span>
                 </div>
                 {team.topPlayer && (
                   <div className="flex justify-between text-sm md:text-base">
                     <span className="text-slate-600">Top Scorer</span>
-                    <span className="font-semibold text-orange-600">{team.topPlayer.name}</span>
+                    <span className="font-semibold" style={{ color: textOnWhiteColor }}>{team.topPlayer.name}</span>
                   </div>
                 )}
               </div>
@@ -726,9 +813,21 @@ export default function TeamProfile() {
           <div className="lg:col-span-2 space-y-4 md:space-y-6">
             {/* Top Player Highlight */}
             {team.topPlayer && (
-              <div className="bg-gradient-to-r from-orange-50 to-yellow-50 border border-orange-200 rounded-xl p-4 md:p-6">
+              <div 
+                className="rounded-xl p-4 md:p-6"
+                style={{
+                  background: teamBranding 
+                    ? `linear-gradient(to right, ${adjustOpacity(teamBranding.primaryRgb, 0.1)}, ${adjustOpacity(teamBranding.secondaryRgb, 0.1)})`
+                    : 'linear-gradient(to right, rgb(255, 247, 237), rgb(254, 249, 195))',
+                  borderWidth: '1px',
+                  borderStyle: 'solid',
+                  borderColor: teamBranding 
+                    ? adjustOpacity(teamBranding.primaryRgb, 0.2)
+                    : 'rgb(254, 215, 170)'
+                }}
+              >
                 <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-3 md:mb-4 flex items-center gap-2">
-                  <svg className="w-4 h-4 md:w-5 md:h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: textOnWhiteColor }}>
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
                   </svg>
                   Star Player
@@ -742,7 +841,13 @@ export default function TeamProfile() {
                   data-testid={`player-card-${team.topPlayer.player_id}`}
                 >
                   <div className="flex flex-col md:flex-row items-center md:items-start gap-3 md:gap-4">
-                    <div className="w-12 h-12 md:w-16 md:h-16 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold text-lg md:text-xl">
+                    <div 
+                      className="w-12 h-12 md:w-16 md:h-16 rounded-full flex items-center justify-center font-bold text-lg md:text-xl"
+                      style={{ 
+                        backgroundColor: primaryColor,
+                        color: teamBranding?.textContrast || '#ffffff'
+                      }}
+                    >
                       {team.topPlayer.name.charAt(0)}
                     </div>
                     <div className="flex-1 text-center md:text-left">
@@ -752,19 +857,19 @@ export default function TeamProfile() {
                     </div>
                     <div className="grid grid-cols-2 gap-3 md:gap-4 text-center w-full md:w-auto">
                       <div>
-                        <div className="text-xl md:text-2xl font-bold text-orange-600">{team.topPlayer.avgPoints}</div>
+                        <div className="text-xl md:text-2xl font-bold" style={{ color: textOnWhiteColor }}>{team.topPlayer.avgPoints}</div>
                         <div className="text-xs text-slate-500">PPG</div>
                       </div>
                       <div>
-                        <div className="text-xl md:text-2xl font-bold text-orange-600">{team.topPlayer.avgRebounds}</div>
+                        <div className="text-xl md:text-2xl font-bold" style={{ color: textOnWhiteColor }}>{team.topPlayer.avgRebounds}</div>
                         <div className="text-xs text-slate-500">RPG</div>
                       </div>
                       <div>
-                        <div className="text-xl md:text-2xl font-bold text-orange-600">{team.topPlayer.avgAssists}</div>
+                        <div className="text-xl md:text-2xl font-bold" style={{ color: textOnWhiteColor }}>{team.topPlayer.avgAssists}</div>
                         <div className="text-xs text-slate-500">APG</div>
                       </div>
                       <div>
-                        <div className="text-xl md:text-2xl font-bold text-orange-600">{team.topPlayer.totalPoints}</div>
+                        <div className="text-xl md:text-2xl font-bold" style={{ color: textOnWhiteColor }}>{team.topPlayer.totalPoints}</div>
                         <div className="text-xs text-slate-500">Total PTS</div>
                       </div>
                     </div>
@@ -776,7 +881,7 @@ export default function TeamProfile() {
             {/* Team Roster */}
             <div className="bg-white rounded-xl shadow p-4 md:p-6">
               <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-3 md:mb-4 flex items-center gap-2">
-                <svg className="w-4 h-4 md:w-5 md:h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: textOnWhiteColor }}>
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
                 </svg>
                 Team Roster ({team.roster.length} Players)
@@ -801,18 +906,35 @@ export default function TeamProfile() {
                           if (identifier) navigate(`/player/${identifier}`);
                         }}
                         data-testid={`player-card-${player.player_id}`}
-                        className="border-b border-gray-100 hover:bg-orange-50 transition-colors cursor-pointer"
+                        className="border-b border-gray-100 transition-colors cursor-pointer"
+                        style={{
+                          backgroundColor: 'transparent'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = teamBranding 
+                            ? adjustOpacity(teamBranding.primaryRgb, 0.05)
+                            : 'rgb(255, 247, 237)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                        }}
                       >
                         <td className="sticky left-0 bg-inherit py-2 md:py-3 px-2 z-10">
                           <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 md:w-8 md:h-8 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold text-xs">
+                            <div 
+                              className="w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center font-bold text-xs"
+                              style={{ 
+                                backgroundColor: primaryColor,
+                                color: teamBranding?.textContrast || '#ffffff'
+                              }}
+                            >
                               {player.name.charAt(0)}
                             </div>
                             <span className="font-medium text-slate-800">{player.name}</span>
                           </div>
                         </td>
                         <td className="hidden md:table-cell py-3 px-2 text-center text-slate-600">{player.gamesPlayed}</td>
-                        <td className="py-2 md:py-3 px-2 text-right font-medium text-orange-600">{player.avgPoints}</td>
+                        <td className="py-2 md:py-3 px-2 text-right font-medium" style={{ color: textOnWhiteColor }}>{player.avgPoints}</td>
                         <td className="py-2 md:py-3 px-2 text-right text-slate-600">{player.avgRebounds}</td>
                         <td className="hidden md:table-cell py-3 px-2 text-right text-slate-600">{player.avgAssists}</td>
                       </tr>
@@ -825,7 +947,7 @@ export default function TeamProfile() {
             {/* Recent Games */}
             <div className="bg-white rounded-xl shadow p-4 md:p-6">
               <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-3 md:mb-4 flex items-center gap-2">
-                <svg className="w-4 h-4 md:w-5 md:h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: textOnWhiteColor }}>
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 Recent Games ({team.recentGames.length})
@@ -834,7 +956,9 @@ export default function TeamProfile() {
                 {team.recentGames.slice(0, 8).map((game: Game, index: number) => (
                   <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
                     <div className="flex-1">
-                      <div className="font-medium text-slate-800 text-sm md:text-base">vs {game.opponent}</div>
+                      <div className="font-medium text-slate-800 text-sm md:text-base">
+                        {game.isHome ? 'vs' : '@'} {game.opponent}
+                      </div>
                       <div className="text-xs md:text-sm text-slate-500 mt-1">
                         Final: <span className="font-semibold text-slate-700">{game.totalPoints} - {game.opponentScore}</span>
                       </div>

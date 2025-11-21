@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useLocation, useParams } from "wouter";
 import { supabase } from "@/lib/supabase";
+import type { League } from "@shared/schema";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import LeagueDefaultImage from "@/assets/league-default.png";
 import { Helmet } from "react-helmet-async";
@@ -12,9 +13,16 @@ import GamePreviewModal from "@/components/GamePreviewModal";
 import LeagueChatbot from "@/components/LeagueChatbot";
 import { TeamLogo } from "@/components/TeamLogo";
 import { TeamLogoUploader } from "@/components/TeamLogoUploader";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Trophy, ArrowRight } from "lucide-react";
 import { Link } from "wouter";
 import { EditableDescription } from "@/components/EditableDescription";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { 
   LoadingSkeleton, 
   PlayerRowSkeleton, 
@@ -55,6 +63,391 @@ const normalizeAndMapTeamName = (name: string): string => {
   const mapped = teamNameMap[trimmed] || trimmed;
   // Then apply general normalization (strips Senior Men, !, and Roman numeral I)
   return normalizeTeamName(mapped);
+};
+
+// Helper function to calculate stat value based on mode
+const getStatValueByMode = (
+  team: any,
+  mode: 'Per Game' | 'Totals' | 'Per 100 Possessions',
+  totalField: string,
+  avgField?: string
+): number => {
+  switch (mode) {
+    case 'Per Game':
+      return avgField ? (parseFloat(team[avgField]) || 0) : (team.gamesPlayed > 0 ? team[totalField] / team.gamesPlayed : 0);
+    case 'Totals':
+      return team[totalField] || 0;
+    case 'Per 100 Possessions':
+      // Normalize to per-100-possession basis, rounded to 1 decimal
+      const per100Value = team.totalPossessions > 0 ? (team[totalField] / team.totalPossessions) * 100 : 0;
+      return Math.round(per100Value * 10) / 10;
+    default:
+      return team[totalField] || 0;
+  }
+};
+
+// Team stats column configuration by category
+type TeamStatColumn = {
+  key: string;
+  label: string;
+  sortable: boolean;
+  getValue: (team: any, mode: 'Per Game' | 'Totals' | 'Per 100 Possessions') => number | string;
+  format?: (value: number) => string;
+};
+
+const TEAM_STAT_COLUMNS: Record<string, TeamStatColumn[]> = {
+  Traditional: [
+    {
+      key: 'PTS',
+      label: 'PTS',
+      sortable: true,
+      getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPoints', 'ppg'),
+    },
+    {
+      key: 'FGM',
+      label: 'FGM',
+      sortable: true,
+      getValue: (team, mode) => getStatValueByMode(team, mode, 'totalFGM', 'avgFGM'),
+    },
+    {
+      key: 'FGA',
+      label: 'FGA',
+      sortable: true,
+      getValue: (team, mode) => getStatValueByMode(team, mode, 'totalFGA', 'avgFGA'),
+    },
+    {
+      key: 'REB',
+      label: 'REB',
+      sortable: true,
+      getValue: (team, mode) => getStatValueByMode(team, mode, 'totalRebounds', 'rpg'),
+    },
+    {
+      key: 'AST',
+      label: 'AST',
+      sortable: true,
+      getValue: (team, mode) => getStatValueByMode(team, mode, 'totalAssists', 'apg'),
+    },
+    {
+      key: 'STL',
+      label: 'STL',
+      sortable: true,
+      getValue: (team, mode) => getStatValueByMode(team, mode, 'totalSteals', 'spg'),
+    },
+    {
+      key: 'BLK',
+      label: 'BLK',
+      sortable: true,
+      getValue: (team, mode) => getStatValueByMode(team, mode, 'totalBlocks', 'bpg'),
+    },
+    {
+      key: 'TO',
+      label: 'TO',
+      sortable: true,
+      getValue: (team, mode) => getStatValueByMode(team, mode, 'totalTurnovers', 'tpg'),
+    },
+    {
+      key: 'PF',
+      label: 'PF',
+      sortable: true,
+      getValue: (team, mode) => getStatValueByMode(team, mode, 'totalFouls', 'avgPF'),
+    },
+    {
+      key: '+/-',
+      label: '+/-',
+      sortable: true,
+      getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPlusMinus', 'avgPlusMinus'),
+    },
+  ],
+  Advanced: [
+    { key: 'OFFRTG', label: 'OFFRTG', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOffRating', 'avgOffRating') },
+    { key: 'DEFRTG', label: 'DEFRTG', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalDefRating', 'avgDefRating') },
+    { key: 'NETRTG', label: 'NETRTG', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalNetRating', 'avgNetRating') },
+    { key: 'PACE', label: 'PACE', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPace', 'avgPace') },
+    { key: 'AST%', label: 'AST%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalAstPercent', 'avgAstPercent') },
+    { key: 'AST/TO', label: 'AST/TO', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalAstToRatio', 'avgAstToRatio') },
+    { key: 'OREB%', label: 'OREB%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOrebPercent', 'avgOrebPercent') },
+    { key: 'DREB%', label: 'DREB%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalDrebPercent', 'avgDrebPercent') },
+    { key: 'REB%', label: 'REB%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalRebPercent', 'avgRebPercent') },
+    { key: 'TOV%', label: 'TOV%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalTovPercent', 'avgTovPercent') },
+    { key: 'EFG%', label: 'EFG%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalEfgPercent', 'avgEfgPercent') },
+    { key: 'TS%', label: 'TS%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalTsPercent', 'avgTsPercent') },
+    { key: 'FTA RATE', label: 'FTA RATE', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalFtRate', 'avgFtRate') },
+    { key: '3P RATE', label: '3P RATE', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalThreePointRate', 'avgThreePointRate') },
+    { key: 'PIE', label: 'PIE', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPie', 'avgPie') },
+  ],
+  'Four Factors': [
+    { key: 'EFG%', label: 'EFG%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalEfgPercent', 'avgEfgPercent') },
+    { key: 'FTA RATE', label: 'FTA RATE', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalFtRate', 'avgFtRate') },
+    { key: 'TOV%', label: 'TOV%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalTovPercent', 'avgTovPercent') },
+    { key: 'OREB%', label: 'OREB%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOrebPercent', 'avgOrebPercent') },
+    { key: 'OPP EFG%', label: 'OPP EFG%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppEfgPercent', 'avgOppEfgPercent') },
+    { key: 'OPP FTA RATE', label: 'OPP FTA RATE', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppFtRate', 'avgOppFtRate') },
+    { key: 'OPP TOV%', label: 'OPP TOV%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppTovPercent', 'avgOppTovPercent') },
+    { key: 'OPP OREB%', label: 'OPP OREB%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppOrebPercent', 'avgOppOrebPercent') },
+  ],
+  Scoring: [
+    { key: '%FGA 2PT', label: '%FGA 2PT', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalFgaPercent2pt', 'avgFgaPercent2pt') },
+    { key: '%FGA 3PT', label: '%FGA 3PT', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalFgaPercent3pt', 'avgFgaPercent3pt') },
+    { key: '%FGA MR', label: '%FGA MR', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalFgaPercentMidrange', 'avgFgaPercentMidrange'), format: (value) => value === 0 ? '' : value.toFixed(1) },
+    { key: '%PTS 2PT', label: '%PTS 2PT', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPtsPercent2pt', 'avgPtsPercent2pt') },
+    { key: '%PTS 3PT', label: '%PTS 3PT', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPtsPercent3pt', 'avgPtsPercent3pt') },
+    { key: '%PTS MR', label: '%PTS MR', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPtsPercentMidrange', 'avgPtsPercentMidrange'), format: (value) => value === 0 ? '' : value.toFixed(1) },
+    { key: '%PTS PITP', label: '%PTS PITP', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPtsPercentPitp', 'avgPtsPercentPitp') },
+    { key: '%PTS FBPS', label: '%PTS FBPS', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPtsPercentFastbreak', 'avgPtsPercentFastbreak') },
+    { key: '%PTS 2ND CH', label: '%PTS 2ND CH', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPtsPercentSecondChance', 'avgPtsPercentSecondChance') },
+    { key: '%PTS OFFTO', label: '%PTS OFFTO', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPtsPercentOffTurnovers', 'avgPtsPercentOffTurnovers') },
+    { key: '%PTS FT', label: '%PTS FT', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPtsPercentFt', 'avgPtsPercentFt') },
+    { key: 'PITP', label: 'PITP', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPITP', 'avgPITP') },
+    { key: 'FB PTS', label: 'FB PTS', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalFBPTS', 'avgFBPTS') },
+    { key: '2ND CH', label: '2ND CH', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'total2ndCH', 'avg2ndCH') },
+    { key: 'PTS OFF TO', label: 'PTS OFF TO', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPtsFromTurnovers', 'avgPtsFromTurnovers') },
+    { key: 'FTM', label: 'FTM', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalFTM', 'avgFTM') },
+    { key: '3PM', label: '3PM', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'total3PM', 'avg3PM') },
+    { key: '2PM', label: '2PM', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'total2PM', 'avg2PM') },
+  ],
+  Misc: [
+    { key: 'TIES', label: 'TIES', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalTimesScoresLevel', 'avgTimesScoresLevel') },
+    { key: 'LEAD CHG', label: 'LEAD CHG', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalLeadChanges', 'avgLeadChanges') },
+    { key: 'TIME LEADING', label: 'TIME LEADING', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalTimeLeading', 'avgTimeLeading') },
+    { key: 'BIG RUN', label: 'BIG RUN', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalBiggestScoringRun', 'avgBiggestScoringRun') },
+    { key: 'MISC +/-', label: '+/-', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPlusMinus', 'avgPlusMinus') },
+    { key: 'OPP 3PM', label: 'OPP 3PM', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOpp3PM', 'avgOpp3PM') },
+    { key: 'OPP FGM', label: 'OPP FGM', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppFGM', 'avgOppFGM') },
+    { key: 'OPP FGA', label: 'OPP FGA', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppFGA', 'avgOppFGA') },
+    { key: 'OPP PTS', label: 'OPP PTS', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppPoints', 'avgOppPoints') },
+    { key: 'OPP TO', label: 'OPP TO', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppTurnovers', 'avgOppTurnovers') },
+  ],
+};
+
+// Dynamic legends for each category
+const TEAM_STAT_LEGENDS: Record<string, string[]> = {
+  Traditional: [
+    'GP = Games Played',
+    'PTS = Points',
+    'FGM = Field Goals Made',
+    'FGA = Field Goals Attempted',
+    'REB = Rebounds',
+    'AST = Assists',
+    'STL = Steals',
+    'BLK = Blocks',
+    'TO = Turnovers',
+    'PF = Personal Fouls',
+    '+/- = Plus/Minus'
+  ],
+  Advanced: [
+    'OFFRTG = Offensive Rating',
+    'DEFRTG = Defensive Rating',
+    'NETRTG = Net Rating',
+    'PACE = Pace of Play',
+    'AST% = Assist Percentage',
+    'AST/TO = Assist to Turnover Ratio',
+    'OREB% = Offensive Rebound Percentage',
+    'DREB% = Defensive Rebound Percentage',
+    'REB% = Total Rebound Percentage',
+    'TOV% = Turnover Percentage',
+    'EFG% = Effective Field Goal Percentage',
+    'TS% = True Shooting Percentage',
+    'FTA RATE = Free Throw Attempt Rate',
+    '3P RATE = Three-Point Attempt Rate',
+    'PIE = Player Impact Estimate'
+  ],
+  'Four Factors': [
+    'EFG% = Effective Field Goal Percentage',
+    'FTA RATE = Free Throw Attempt Rate',
+    'TOV% = Turnover Percentage',
+    'OREB% = Offensive Rebound Percentage',
+    'OPP EFG% = Opponent Effective FG%',
+    'OPP FTA RATE = Opponent FT Attempt Rate',
+    'OPP TOV% = Opponent Turnover %',
+    'OPP OREB% = Opponent Offensive Rebound %'
+  ],
+  Scoring: [
+    '%FGA 2PT = % of FGA from 2-Point Range',
+    '%FGA 3PT = % of FGA from 3-Point Range',
+    '%FGA MR = % of FGA from Mid-Range',
+    '%PTS 2PT = % of Points from 2-Pointers',
+    '%PTS 3PT = % of Points from 3-Pointers',
+    '%PTS MR = % of Points from Mid-Range',
+    '%PTS PITP = % of Points in the Paint',
+    '%PTS FBPS = % of Points from Fastbreaks',
+    '%PTS 2ND CH = % of Points from 2nd Chance',
+    '%PTS OFFTO = % of Points off Turnovers',
+    '%PTS FT = % of Points from Free Throws',
+    'PITP = Points In The Paint',
+    'FB PTS = Fastbreak Points',
+    '2ND CH = Second Chance Points',
+    'PTS OFF TO = Points from Turnovers',
+    'FTM = Free Throws Made',
+    '3PM = 3-Pointers Made',
+    '2PM = 2-Pointers Made'
+  ],
+  Misc: [
+    'TIES = Times Scores Were Tied',
+    'LEAD CHG = Lead Changes',
+    'TIME LEADING = Time Spent Leading (minutes)',
+    'BIG RUN = Biggest Scoring Run',
+    '+/- = Plus/Minus',
+    'OPP 3PM = Opponent 3-Pointers Made',
+    'OPP FGM = Opponent Field Goals Made',
+    'OPP FGA = Opponent Field Goals Attempted',
+    'OPP PTS = Opponent Points',
+    'OPP TO = Opponent Turnovers'
+  ]
+};
+
+// Helper function to apply player stats mode transformations
+const applyPlayerMode = (
+  statKey: string,
+  value: number,
+  gamesPlayed: number,
+  totalMinutes: number,
+  playerMode: 'Total' | 'Per Game' | 'Per 40'
+): number => {
+  // These stats are already rates/percentages - return as-is across all modes
+  const rateStats = [
+    'efg_percent', 'ts_percent', 'three_point_rate',
+    'ast_percent', 'ast_to_ratio',
+    'oreb_percent', 'dreb_percent', 'reb_percent',
+    'tov_percent', 'usage_percent', 'pie',
+    'off_rating', 'def_rating', 'net_rating',
+    'pts_percent_2pt', 'pts_percent_3pt', 'pts_percent_ft',
+    'pts_percent_midrange', 'pts_percent_pitp', 'pts_percent_fastbreak',
+    'pts_percent_second_chance', 'pts_percent_off_turnovers'
+  ];
+
+  // For rate stats, return the value unchanged across all modes
+  if (rateStats.includes(statKey)) {
+    return value;
+  }
+
+  // For minutes, handle per mode
+  if (statKey === 'sminutes') {
+    if (playerMode === 'Total') return value;
+    return gamesPlayed > 0 ? value / gamesPlayed : 0;
+  }
+
+  // For counting stats
+  if (playerMode === 'Total') return value;
+
+  if (playerMode === 'Per Game') {
+    return gamesPlayed > 0 ? value / gamesPlayed : 0;
+  }
+
+  if (playerMode === 'Per 40') {
+    // Scale counting stats to per-40-minute basis
+    return totalMinutes > 0 ? (value / totalMinutes) * 40 : 0;
+  }
+
+  return value;
+};
+
+// Player stats column configuration by category
+// Note: Advanced, Scoring, and Misc categories reference fields that are calculated by the backend
+// (advanced_player_stats.py). Traditional stats use raw Supabase fields that are always present.
+type PlayerStatColumn = {
+  key: string;
+  label: string;
+};
+
+const PLAYER_STAT_COLUMNS: Record<string, PlayerStatColumn[]> = {
+  Traditional: [
+    { key: "spoints", label: "PTS" },
+    { key: "sminutes", label: "MIN" },
+    { key: "sfieldgoalsmade", label: "FGM" },
+    { key: "sfieldgoalsattempted", label: "FGA" },
+    { key: "sthreepointersmade", label: "3PM" },
+    { key: "sthreepointersattempted", label: "3PA" },
+    { key: "sfreethrowsmade", label: "FTM" },
+    { key: "sfreethrowsattempted", label: "FTA" },
+    { key: "sreboundstotal", label: "REB" },
+    { key: "sassists", label: "AST" },
+    { key: "sturnovers", label: "TO" },
+    { key: "ssteals", label: "STL" },
+    { key: "sblocks", label: "BLK" },
+  ],
+  Advanced: [
+    { key: "efg_percent", label: "EFG%" },
+    { key: "ts_percent", label: "TS%" },
+    { key: "usage_percent", label: "USG%" },
+    { key: "ast_percent", label: "AST%" },
+    { key: "ast_to_ratio", label: "AST/TO" },
+    { key: "oreb_percent", label: "OREB%" },
+    { key: "dreb_percent", label: "DREB%" },
+    { key: "reb_percent", label: "REB%" },
+    { key: "tov_percent", label: "TOV%" },
+    { key: "three_point_rate", label: "3P RATE" },
+    { key: "player_possessions", label: "POSS" },
+    { key: "off_rating", label: "OFFRTG" },
+    { key: "def_rating", label: "DEFRTG" },
+    { key: "net_rating", label: "NETRTG" },
+    { key: "pie", label: "PIE" },
+  ],
+  Scoring: [
+    { key: "pts_percent_2pt", label: "%PTS 2PT" },
+    { key: "pts_percent_3pt", label: "%PTS 3PT" },
+    { key: "pts_percent_ft", label: "%PTS FT" },
+    { key: "pts_percent_midrange", label: "%PTS MR" },
+    { key: "pts_percent_pitp", label: "%PTS PITP" },
+    { key: "pts_percent_fastbreak", label: "%PTS FBPS" },
+    { key: "pts_percent_second_chance", label: "%PTS 2ND CH" },
+    { key: "pts_percent_off_turnovers", label: "%PTS OFFTO" }
+  ],
+  Misc: [
+    { key: "splusminuspoints", label: "+/-" },
+    { key: "sfoulspersonal", label: "PF" },
+    { key: "sblocksreceived", label: "BLK AGAINST" }
+  ]
+};
+
+// Dynamic legends for each player stat category
+const PLAYER_STAT_LEGENDS: Record<string, string[]> = {
+  Traditional: [
+    'PTS = Points',
+    'MIN = Minutes',
+    'FGM = Field Goals Made',
+    'FGA = Field Goals Attempted',
+    '3PM = Three-Pointers Made',
+    '3PA = Three-Pointers Attempted',
+    'FTM = Free Throws Made',
+    'FTA = Free Throws Attempted',
+    'REB = Total Rebounds',
+    'AST = Assists',
+    'TO = Turnovers',
+    'STL = Steals',
+    'BLK = Blocks'
+  ],
+  Advanced: [
+    'EFG% = Effective Field Goal Percentage',
+    'TS% = True Shooting Percentage',
+    'USG% = Usage Percentage',
+    'AST% = Assist Percentage',
+    'AST/TO = Assist to Turnover Ratio',
+    'OREB% = Offensive Rebound Percentage',
+    'DREB% = Defensive Rebound Percentage',
+    'REB% = Total Rebound Percentage',
+    'TOV% = Turnover Percentage',
+    '3P RATE = Three-Point Attempt Rate',
+    'POSS = Player Possessions',
+    'OFFRTG = Offensive Rating',
+    'DEFRTG = Defensive Rating',
+    'NETRTG = Net Rating',
+    'PIE = Player Impact Estimate'
+  ],
+  Scoring: [
+    '%PTS 2PT = % of Points from 2-Pointers',
+    '%PTS 3PT = % of Points from 3-Pointers',
+    '%PTS FT = % of Points from Free Throws',
+    '%PTS MR = % of Points from Mid-Range',
+    '%PTS PITP = % of Points in the Paint',
+    '%PTS FBPS = % of Points from Fastbreaks',
+    '%PTS 2ND CH = % of Points from 2nd Chance',
+    '%PTS OFFTO = % of Points off Turnovers'
+  ],
+  Misc: [
+    '+/- = Plus/Minus',
+    'PF = Personal Fouls',
+    'BLK AGAINST = Blocks Received'
+  ]
 };
 
 export default function LeaguePage() {
@@ -104,11 +497,13 @@ export default function LeaguePage() {
   const [isLoadingStats, setIsLoadingStats] = useState(false);
   const [isLoadingStandings, setIsLoadingStandings] = useState(false);
   const [isLoadingLeaders, setIsLoadingLeaders] = useState(false);
-  const [teamStatsView, setTeamStatsView] = useState<'totals' | 'averages'>('averages'); // Toggle for team stats
   const [teamStatsData, setTeamStatsData] = useState<any[]>([]);
   const [isLoadingTeamStats, setIsLoadingTeamStats] = useState(false);
+  const [teamStatsCategory, setTeamStatsCategory] = useState<'Traditional' | 'Advanced' | 'Four Factors' | 'Scoring' | 'Misc'>('Traditional'); // Category dropdown
+  const [teamStatsMode, setTeamStatsMode] = useState<'Per Game' | 'Totals' | 'Per 100 Possessions'>('Per Game'); // Mode dropdown
   const [leagueLeadersView, setLeagueLeadersView] = useState<'averages' | 'totals'>('averages'); // Toggle for league leaders
-  const [playerStatsView, setPlayerStatsView] = useState<'averages' | 'totals'>('averages'); // Toggle for player statistics table
+  const [playerStatsView, setPlayerStatsView] = useState<'Total' | 'Per Game' | 'Per 40'>('Per Game'); // Mode selector for player statistics table
+  const [playerStatsCategory, setPlayerStatsCategory] = useState<'Traditional' | 'Advanced' | 'Scoring' | 'Misc'>('Traditional'); // Category dropdown for player stats
   const [standingsView, setStandingsView] = useState<'poolA' | 'poolB' | 'full'>('full'); // Toggle for standings view
   const [poolAStandings, setPoolAStandings] = useState<any[]>([]);
   const [poolBStandings, setPoolBStandings] = useState<any[]>([]);
@@ -119,6 +514,10 @@ export default function LeaguePage() {
   const [scheduleView, setScheduleView] = useState<'upcoming' | 'results'>('upcoming'); // Toggle for schedule view
   const [statsSortColumn, setStatsSortColumn] = useState<string>('PTS'); // Column to sort by in Player Statistics
   const [statsSortDirection, setStatsSortDirection] = useState<'asc' | 'desc'>('desc'); // Sort direction
+  const [teamStatsSortColumn, setTeamStatsSortColumn] = useState<string>('PTS'); // Column to sort by in Team Statistics
+  const [teamStatsSortDirection, setTeamStatsSortDirection] = useState<'asc' | 'desc'>('desc'); // Sort direction for team stats
+  const [childCompetitions, setChildCompetitions] = useState<Pick<League, 'league_id' | 'name' | 'slug' | 'logo_url'>[]>([]); // Child leagues/competitions
+  const [parentLeague, setParentLeague] = useState<Pick<League, 'league_id' | 'name' | 'slug' | 'logo_url'> | null>(null); // Parent league for breadcrumb
 
     
 
@@ -148,6 +547,305 @@ export default function LeaguePage() {
       return () => clearTimeout(delay);
     }, [search]);
 
+    // Sort team stats based on selected column and direction (derived view, doesn't mutate original data)
+    const sortedTeamStats = useMemo(() => {
+      if (teamStatsData.length === 0) return [];
+      
+      return [...teamStatsData].sort((a, b) => {
+        let valueA: number, valueB: number;
+        
+        switch (teamStatsSortColumn) {
+          case 'GP':
+            valueA = a.gamesPlayed || 0;
+            valueB = b.gamesPlayed || 0;
+            break;
+          case 'FGM':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalFGM', 'avgFGM');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalFGM', 'avgFGM');
+            break;
+          case 'FGA':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalFGA', 'avgFGA');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalFGA', 'avgFGA');
+            break;
+          case 'FG%':
+            valueA = parseFloat(a.fgPercentage) || 0;
+            valueB = parseFloat(b.fgPercentage) || 0;
+            break;
+          case '2PM':
+            valueA = getStatValueByMode(a, teamStatsMode, 'total2PM', 'avg2PM');
+            valueB = getStatValueByMode(b, teamStatsMode, 'total2PM', 'avg2PM');
+            break;
+          case '2PA':
+            valueA = getStatValueByMode(a, teamStatsMode, 'total2PA', 'avg2PA');
+            valueB = getStatValueByMode(b, teamStatsMode, 'total2PA', 'avg2PA');
+            break;
+          case '2P%':
+            valueA = parseFloat(a.twoPtPercentage) || 0;
+            valueB = parseFloat(b.twoPtPercentage) || 0;
+            break;
+          case '3PM':
+            valueA = getStatValueByMode(a, teamStatsMode, 'total3PM', 'avg3PM');
+            valueB = getStatValueByMode(b, teamStatsMode, 'total3PM', 'avg3PM');
+            break;
+          case '3PA':
+            valueA = getStatValueByMode(a, teamStatsMode, 'total3PA', 'avg3PA');
+            valueB = getStatValueByMode(b, teamStatsMode, 'total3PA', 'avg3PA');
+            break;
+          case '3P%':
+            valueA = parseFloat(a.threePtPercentage) || 0;
+            valueB = parseFloat(b.threePtPercentage) || 0;
+            break;
+          case 'FTM':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalFTM', 'avgFTM');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalFTM', 'avgFTM');
+            break;
+          case 'FTA':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalFTA', 'avgFTA');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalFTA', 'avgFTA');
+            break;
+          case 'FT%':
+            valueA = parseFloat(a.ftPercentage) || 0;
+            valueB = parseFloat(b.ftPercentage) || 0;
+            break;
+          case 'ORB':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalORB', 'avgORB');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalORB', 'avgORB');
+            break;
+          case 'DRB':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalDRB', 'avgDRB');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalDRB', 'avgDRB');
+            break;
+          case 'TRB':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalRebounds', 'rpg');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalRebounds', 'rpg');
+            break;
+          case 'AST':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalAssists', 'apg');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalAssists', 'apg');
+            break;
+          case 'STL':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalSteals', 'spg');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalSteals', 'spg');
+            break;
+          case 'BLK':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalBlocks', 'bpg');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalBlocks', 'bpg');
+            break;
+          case 'TO':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalTurnovers', 'tpg');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalTurnovers', 'tpg');
+            break;
+          case 'PF':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalFouls', 'avgPF');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalFouls', 'avgPF');
+            break;
+          case '+/-':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPlusMinus', 'avgPlusMinus');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPlusMinus', 'avgPlusMinus');
+            break;
+          case 'PTS':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPoints', 'ppg');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPoints', 'ppg');
+            break;
+          case 'PITP':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPITP', 'avgPITP');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPITP', 'avgPITP');
+            break;
+          case 'FB PTS':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalFBPTS', 'avgFBPTS');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalFBPTS', 'avgFBPTS');
+            break;
+          case '2ND CH':
+            valueA = getStatValueByMode(a, teamStatsMode, 'total2ndCH', 'avg2ndCH');
+            valueB = getStatValueByMode(b, teamStatsMode, 'total2ndCH', 'avg2ndCH');
+            break;
+          // Advanced stats
+          case 'OFFRTG':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalOffRating', 'avgOffRating');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalOffRating', 'avgOffRating');
+            break;
+          case 'DEFRTG':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalDefRating', 'avgDefRating');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalDefRating', 'avgDefRating');
+            break;
+          case 'NETRTG':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalNetRating', 'avgNetRating');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalNetRating', 'avgNetRating');
+            break;
+          case 'PACE':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPace', 'avgPace');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPace', 'avgPace');
+            break;
+          case 'AST%':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalAstPercent', 'avgAstPercent');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalAstPercent', 'avgAstPercent');
+            break;
+          case 'AST/TO':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalAstToRatio', 'avgAstToRatio');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalAstToRatio', 'avgAstToRatio');
+            break;
+          case 'OREB%':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalOrebPercent', 'avgOrebPercent');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalOrebPercent', 'avgOrebPercent');
+            break;
+          case 'DREB%':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalDrebPercent', 'avgDrebPercent');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalDrebPercent', 'avgDrebPercent');
+            break;
+          case 'REB%':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalRebPercent', 'avgRebPercent');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalRebPercent', 'avgRebPercent');
+            break;
+          case 'TOV%':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalTovPercent', 'avgTovPercent');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalTovPercent', 'avgTovPercent');
+            break;
+          case 'EFG%':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalEfgPercent', 'avgEfgPercent');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalEfgPercent', 'avgEfgPercent');
+            break;
+          case 'TS%':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalTsPercent', 'avgTsPercent');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalTsPercent', 'avgTsPercent');
+            break;
+          case 'FTA RATE':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalFtRate', 'avgFtRate');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalFtRate', 'avgFtRate');
+            break;
+          case '3P RATE':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalThreePointRate', 'avgThreePointRate');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalThreePointRate', 'avgThreePointRate');
+            break;
+          case 'PIE':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPie', 'avgPie');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPie', 'avgPie');
+            break;
+          // Opponent stats
+          case 'OPP EFG%':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalOppEfgPercent', 'avgOppEfgPercent');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalOppEfgPercent', 'avgOppEfgPercent');
+            break;
+          case 'OPP FTA RATE':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalOppFtRate', 'avgOppFtRate');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalOppFtRate', 'avgOppFtRate');
+            break;
+          case 'OPP TOV%':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalOppTovPercent', 'avgOppTovPercent');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalOppTovPercent', 'avgOppTovPercent');
+            break;
+          case 'OPP OREB%':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalOppOrebPercent', 'avgOppOrebPercent');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalOppOrebPercent', 'avgOppOrebPercent');
+            break;
+          case 'OPP 3PM':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalOpp3PM', 'avgOpp3PM');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalOpp3PM', 'avgOpp3PM');
+            break;
+          case 'OPP FGM':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalOppFGM', 'avgOppFGM');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalOppFGM', 'avgOppFGM');
+            break;
+          case 'OPP FGA':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalOppFGA', 'avgOppFGA');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalOppFGA', 'avgOppFGA');
+            break;
+          case 'OPP PTS':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalOppPoints', 'avgOppPoints');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalOppPoints', 'avgOppPoints');
+            break;
+          case 'OPP TO':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalOppTurnovers', 'avgOppTurnovers');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalOppTurnovers', 'avgOppTurnovers');
+            break;
+          // Scoring breakdown percentages
+          case '%FGA 2PT':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalFgaPercent2pt', 'avgFgaPercent2pt');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalFgaPercent2pt', 'avgFgaPercent2pt');
+            break;
+          case '%FGA 3PT':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalFgaPercent3pt', 'avgFgaPercent3pt');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalFgaPercent3pt', 'avgFgaPercent3pt');
+            break;
+          case '%FGA MR':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalFgaPercentMidrange', 'avgFgaPercentMidrange');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalFgaPercentMidrange', 'avgFgaPercentMidrange');
+            break;
+          case '%PTS 2PT':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPtsPercent2pt', 'avgPtsPercent2pt');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPtsPercent2pt', 'avgPtsPercent2pt');
+            break;
+          case '%PTS 3PT':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPtsPercent3pt', 'avgPtsPercent3pt');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPtsPercent3pt', 'avgPtsPercent3pt');
+            break;
+          case '%PTS MR':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPtsPercentMidrange', 'avgPtsPercentMidrange');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPtsPercentMidrange', 'avgPtsPercentMidrange');
+            break;
+          case '%PTS PITP':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPtsPercentPitp', 'avgPtsPercentPitp');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPtsPercentPitp', 'avgPtsPercentPitp');
+            break;
+          case '%PTS FBPS':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPtsPercentFastbreak', 'avgPtsPercentFastbreak');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPtsPercentFastbreak', 'avgPtsPercentFastbreak');
+            break;
+          case '%PTS 2ND CH':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPtsPercentSecondChance', 'avgPtsPercentSecondChance');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPtsPercentSecondChance', 'avgPtsPercentSecondChance');
+            break;
+          case '%PTS OFFTO':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPtsPercentOffTurnovers', 'avgPtsPercentOffTurnovers');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPtsPercentOffTurnovers', 'avgPtsPercentOffTurnovers');
+            break;
+          case '%PTS FT':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPtsPercentFt', 'avgPtsPercentFt');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPtsPercentFt', 'avgPtsPercentFt');
+            break;
+          case 'PTS OFF TO':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPtsFromTurnovers', 'avgPtsFromTurnovers');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPtsFromTurnovers', 'avgPtsFromTurnovers');
+            break;
+          // Misc stats
+          case 'TIES':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalTimesScoresLevel', 'avgTimesScoresLevel');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalTimesScoresLevel', 'avgTimesScoresLevel');
+            break;
+          case 'LEAD CHG':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalLeadChanges', 'avgLeadChanges');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalLeadChanges', 'avgLeadChanges');
+            break;
+          case 'TIME LEADING':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalTimeLeading', 'avgTimeLeading');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalTimeLeading', 'avgTimeLeading');
+            break;
+          case 'BIG RUN':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalBiggestScoringRun', 'avgBiggestScoringRun');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalBiggestScoringRun', 'avgBiggestScoringRun');
+            break;
+          case 'MISC +/-':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPlusMinus', 'avgPlusMinus');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPlusMinus', 'avgPlusMinus');
+            break;
+          default:
+            valueA = 0;
+            valueB = 0;
+        }
+        
+        return teamStatsSortDirection === 'desc' ? valueB - valueA : valueA - valueB;
+      });
+    }, [teamStatsData, teamStatsSortColumn, teamStatsSortDirection, teamStatsMode]);
+
+    // Get active columns based on selected category
+    const activeTeamStatColumns = useMemo(() => {
+      return TEAM_STAT_COLUMNS[teamStatsCategory] || TEAM_STAT_COLUMNS['Traditional'];
+    }, [teamStatsCategory]);
+
+    // Get active player stat columns based on selected category
+    const activePlayerStatColumns = useMemo(() => {
+      return PLAYER_STAT_COLUMNS[playerStatsCategory] || PLAYER_STAT_COLUMNS['Traditional'];
+    }, [playerStatsCategory]);
+
     // Filter and sort players based on search and sort settings in stats section
     useEffect(() => {
       console.log("🔍 Filtering players. Search term:", statsSearch);
@@ -169,54 +867,51 @@ export default function LeaguePage() {
       const sorted = [...filtered].sort((a, b) => {
         let valueA: number, valueB: number;
         
-        switch (statsSortColumn) {
-          case 'GP':
-            valueA = a.games || 0;
-            valueB = b.games || 0;
-            break;
-          case 'MIN':
-            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgMinutes) || 0) : (a.totalMinutes || 0);
-            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgMinutes) || 0) : (b.totalMinutes || 0);
-            break;
-          case 'PTS':
-            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgPoints) || 0) : (a.totalPoints || 0);
-            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgPoints) || 0) : (b.totalPoints || 0);
-            break;
-          case 'REB':
-            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgRebounds) || 0) : (a.totalRebounds || 0);
-            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgRebounds) || 0) : (b.totalRebounds || 0);
-            break;
-          case 'AST':
-            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgAssists) || 0) : (a.totalAssists || 0);
-            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgAssists) || 0) : (b.totalAssists || 0);
-            break;
-          case 'STL':
-            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgSteals) || 0) : (a.totalSteals || 0);
-            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgSteals) || 0) : (b.totalSteals || 0);
-            break;
-          case 'BLK':
-            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgBlocks) || 0) : (a.totalBlocks || 0);
-            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgBlocks) || 0) : (b.totalBlocks || 0);
-            break;
-          case 'TO':
-            valueA = playerStatsView === 'averages' ? (parseFloat(a.avgTurnovers) || 0) : (a.totalTurnovers || 0);
-            valueB = playerStatsView === 'averages' ? (parseFloat(b.avgTurnovers) || 0) : (b.totalTurnovers || 0);
-            break;
-          case 'FG%':
-            valueA = parseFloat(a.fgPercentage) || 0;
-            valueB = parseFloat(b.fgPercentage) || 0;
-            break;
-          case '3P%':
-            valueA = parseFloat(a.threePercentage) || 0;
-            valueB = parseFloat(b.threePercentage) || 0;
-            break;
-          case 'FT%':
-            valueA = parseFloat(a.ftPercentage) || 0;
-            valueB = parseFloat(b.ftPercentage) || 0;
-            break;
-          default:
+        if (statsSortColumn === 'GP') {
+          valueA = a.games || 0;
+          valueB = b.games || 0;
+        } else {
+          const column = activePlayerStatColumns.find(col => col.label === statsSortColumn);
+          
+          if (column) {
+            const rawStatsA = a.rawStats || [];
+            const rawStatsB = b.rawStats || [];
+            
+            // Rate stats should be averaged, not summed
+            const rateStats = [
+              'efg_percent', 'ts_percent', 'three_point_rate',
+              'ast_percent', 'ast_to_ratio',
+              'oreb_percent', 'dreb_percent', 'reb_percent',
+              'tov_percent', 'usage_percent', 'pie',
+              'off_rating', 'def_rating', 'net_rating',
+              'pts_percent_2pt', 'pts_percent_3pt', 'pts_percent_ft',
+              'pts_percent_midrange', 'pts_percent_pitp', 'pts_percent_fastbreak',
+              'pts_percent_second_chance', 'pts_percent_off_turnovers'
+            ];
+            
+            const isRateStat = rateStats.includes(column.key);
+            
+            // Calculate aggregated values from raw stats
+            const aggregatedA = rawStatsA.reduce((acc: number, stat: any) => {
+              const statValue = stat[column.key];
+              return acc + (typeof statValue === 'number' ? statValue : (typeof statValue === 'string' && !isNaN(parseFloat(statValue)) ? parseFloat(statValue) : 0));
+            }, 0);
+            const aggregatedB = rawStatsB.reduce((acc: number, stat: any) => {
+              const statValue = stat[column.key];
+              return acc + (typeof statValue === 'number' ? statValue : (typeof statValue === 'string' && !isNaN(parseFloat(statValue)) ? parseFloat(statValue) : 0));
+            }, 0);
+            
+            // For rate stats, convert sum to average before applying mode transformation
+            const baseA = isRateStat && rawStatsA.length > 0 ? aggregatedA / rawStatsA.length : aggregatedA;
+            const baseB = isRateStat && rawStatsB.length > 0 ? aggregatedB / rawStatsB.length : aggregatedB;
+            
+            // Apply mode transformation
+            valueA = applyPlayerMode(column.key, baseA, a.games, a.totalMinutes || 0, playerStatsView);
+            valueB = applyPlayerMode(column.key, baseB, b.games, b.totalMinutes || 0, playerStatsView);
+          } else {
             valueA = 0;
             valueB = 0;
+          }
         }
         
         return statsSortDirection === 'desc' ? valueB - valueA : valueA - valueB;
@@ -226,7 +921,7 @@ export default function LeaguePage() {
       if (statsSearch.trim()) {
         setDisplayedPlayerCount(20); // Reset pagination when searching
       }
-    }, [statsSearch, allPlayerAverages, statsSortColumn, statsSortDirection, playerStatsView]);
+    }, [statsSearch, allPlayerAverages, statsSortColumn, statsSortDirection, playerStatsView, activePlayerStatColumns]);
 
     // Reset standings view to 'full' if no pools exist and user is on a pool view
     useEffect(() => {
@@ -261,6 +956,34 @@ export default function LeaguePage() {
           setInstagramUrl(data.instagram_embed_url || "");
           setYoutubeUrl(data.youtube_embed_url || "");
           console.log("Is owner?", ownerStatus, "User ID:", user?.id, "League owner ID:", data.user_id);
+          
+          // Fetch child competitions if this is a parent league
+          const { data: competitions, error: competitionsError } = await supabase
+            .from("leagues")
+            .select("league_id, name, slug, logo_url")
+            .eq("parent_league_id", data.league_id)
+            .eq("is_public", true);
+          
+          if (competitions && !competitionsError) {
+            setChildCompetitions(competitions);
+          } else if (competitionsError) {
+            console.error("Failed to fetch child competitions:", competitionsError);
+          }
+          
+          // Fetch parent league if this is a sub-competition
+          if (data.parent_league_id) {
+            const { data: parent, error: parentError } = await supabase
+              .from("leagues")
+              .select("league_id, name, slug, logo_url")
+              .eq("league_id", data.parent_league_id)
+              .single();
+            
+            if (parent && !parentError) {
+              setParentLeague(parent);
+            } else if (parentError) {
+              console.error("Failed to fetch parent league:", parentError);
+            }
+          }
         }
         
         if (error) {
@@ -785,7 +1508,7 @@ export default function LeaguePage() {
 
       setIsLoadingStats(true);
       try {
-        // Fetch player stats and join with players table to get slug
+        // Fetch player stats and join with players table to get slug - using select('*') to get all fields including advanced stats
         const { data: playerStats, error } = await supabase
           .from("player_stats")
           .select("*, players:player_id(slug)")
@@ -824,12 +1547,18 @@ export default function LeaguePage() {
             totalTurnovers: 0,
             totalFGM: 0,
             totalFGA: 0,
+            total2PM: 0,
+            total2PA: 0,
             total3PM: 0,
             total3PA: 0,
             totalFTM: 0,
             totalFTA: 0,
+            totalORB: 0,
+            totalDRB: 0,
             totalMinutes: 0,
-            totalPersonalFouls: 0
+            totalPersonalFouls: 0,
+            totalPlusMinus: 0,
+            rawStats: []
           });
         }
 
@@ -843,11 +1572,19 @@ export default function LeaguePage() {
         player.totalTurnovers += stat.sturnovers || 0;
         player.totalFGM += stat.sfieldgoalsmade || 0;
         player.totalFGA += stat.sfieldgoalsattempted || 0;
+        player.total2PM += stat.stwopointersmade || 0;
+        player.total2PA += stat.stwopointersattempted || 0;
         player.total3PM += stat.sthreepointersmade || 0;
         player.total3PA += stat.sthreepointersattempted || 0;
         player.totalFTM += stat.sfreethrowsmade || 0;
         player.totalFTA += stat.sfreethrowsattempted || 0;
+        player.totalORB += stat.sreboundsoffensive || 0;
+        player.totalDRB += stat.sreboundsdefensive || 0;
         player.totalPersonalFouls += stat.sfoulspersonal || 0;
+        player.totalPlusMinus += stat.splusminuspoints || 0;
+        
+        // Store raw stat row for accessing advanced stats later
+        player.rawStats.push(stat);
         
         // Parse minutes from sminutes field
         const minutesParts = stat.sminutes?.split(':');
@@ -949,12 +1686,18 @@ export default function LeaguePage() {
             existingPlayer.totalTurnovers += player.totalTurnovers;
             existingPlayer.totalFGM += player.totalFGM;
             existingPlayer.totalFGA += player.totalFGA;
+            existingPlayer.total2PM += player.total2PM;
+            existingPlayer.total2PA += player.total2PA;
             existingPlayer.total3PM += player.total3PM;
             existingPlayer.total3PA += player.total3PA;
             existingPlayer.totalFTM += player.totalFTM;
             existingPlayer.totalFTA += player.totalFTA;
+            existingPlayer.totalORB += player.totalORB;
+            existingPlayer.totalDRB += player.totalDRB;
             existingPlayer.totalPersonalFouls += player.totalPersonalFouls;
+            existingPlayer.totalPlusMinus += player.totalPlusMinus;
             existingPlayer.totalMinutes += player.totalMinutes;
+            existingPlayer.rawStats.push(...player.rawStats);
             foundMatch = true;
             break;
           }
@@ -977,8 +1720,20 @@ export default function LeaguePage() {
         avgBlocks: (player.totalBlocks / player.games).toFixed(1),
         avgTurnovers: (player.totalTurnovers / player.games).toFixed(1),
         avgMinutes: (player.totalMinutes / player.games).toFixed(1),
+        avgFGM: (player.totalFGM / player.games).toFixed(1),
+        avgFGA: (player.totalFGA / player.games).toFixed(1),
+        avg2PM: (player.total2PM / player.games).toFixed(1),
+        avg2PA: (player.total2PA / player.games).toFixed(1),
+        avg3PM: (player.total3PM / player.games).toFixed(1),
+        avg3PA: (player.total3PA / player.games).toFixed(1),
+        avgFTM: (player.totalFTM / player.games).toFixed(1),
+        avgFTA: (player.totalFTA / player.games).toFixed(1),
+        avgORB: (player.totalORB / player.games).toFixed(1),
+        avgDRB: (player.totalDRB / player.games).toFixed(1),
         avgPersonalFouls: (player.totalPersonalFouls / player.games).toFixed(1),
+        avgPlusMinus: (player.totalPlusMinus / player.games).toFixed(1),
         fgPercentage: player.totalFGA > 0 ? ((player.totalFGM / player.totalFGA) * 100).toFixed(1) : '0.0',
+        twoPercentage: player.total2PA > 0 ? ((player.total2PM / player.total2PA) * 100).toFixed(1) : '0.0',
         threePercentage: player.total3PA > 0 ? ((player.total3PM / player.total3PA) * 100).toFixed(1) : '0.0',
         ftPercentage: player.totalFTA > 0 ? ((player.totalFTM / player.totalFTA) * 100).toFixed(1) : '0.0'
       })).sort((a, b) => parseFloat(b.avgPoints) - parseFloat(a.avgPoints));
@@ -1028,6 +1783,7 @@ export default function LeaguePage() {
             teamMap.set(normalizedName, {
               teamName: normalizedName,
               gamesPlayed: 0,
+              totalMinutes: 0,
               totalPoints: 0,
               totalFGM: 0,
               totalFGA: 0,
@@ -1038,16 +1794,74 @@ export default function LeaguePage() {
               totalFTM: 0,
               totalFTA: 0,
               totalRebounds: 0,
+              totalORB: 0,
+              totalDRB: 0,
               totalAssists: 0,
               totalSteals: 0,
               totalBlocks: 0,
               totalTurnovers: 0,
-              totalFouls: 0
+              totalFouls: 0,
+              totalPlusMinus: 0,
+              totalPITP: 0,
+              totalFBPTS: 0,
+              total2ndCH: 0,
+              // Advanced stats
+              totalOffRating: 0,
+              totalDefRating: 0,
+              totalNetRating: 0,
+              totalPace: 0,
+              totalAstPercent: 0,
+              totalAstToRatio: 0,
+              totalOrebPercent: 0,
+              totalDrebPercent: 0,
+              totalRebPercent: 0,
+              totalTovPercent: 0,
+              totalEfgPercent: 0,
+              totalTsPercent: 0,
+              totalFtRate: 0,
+              totalThreePointRate: 0,
+              totalPie: 0,
+              // Opponent stats
+              totalOppEfgPercent: 0,
+              totalOppFtRate: 0,
+              totalOppTovPercent: 0,
+              totalOppOrebPercent: 0,
+              totalOpp3PM: 0,
+              totalOppFGM: 0,
+              totalOppFGA: 0,
+              totalOppPoints: 0,
+              totalOppTurnovers: 0,
+              // Misc stats
+              totalTimesScoresLevel: 0,
+              totalLeadChanges: 0,
+              totalTimeLeading: 0,
+              totalBiggestScoringRun: 0,
+              // Scoring breakdown percentages
+              totalFgaPercent2pt: 0,
+              totalFgaPercent3pt: 0,
+              totalFgaPercentMidrange: 0,
+              totalPtsPercent2pt: 0,
+              totalPtsPercent3pt: 0,
+              totalPtsPercentMidrange: 0,
+              totalPtsPercentPitp: 0,
+              totalPtsPercentFastbreak: 0,
+              totalPtsPercentSecondChance: 0,
+              totalPtsPercentOffTurnovers: 0,
+              totalPtsPercentFt: 0,
+              totalPtsFromTurnovers: 0
             });
           }
 
           const team = teamMap.get(normalizedName)!;
           team.gamesPlayed += 1;
+          // Parse and add minutes
+          if (stat.sminutes) {
+            const minutesParts = stat.sminutes.split(':');
+            if (minutesParts && minutesParts.length === 2) {
+              const minutes = parseInt(minutesParts[0]) + parseInt(minutesParts[1]) / 60;
+              team.totalMinutes += minutes;
+            }
+          }
           team.totalPoints += stat.tot_spoints || 0;
           team.totalFGM += stat.tot_sfieldgoalsmade || 0;
           team.totalFGA += stat.tot_sfieldgoalsattempted || 0;
@@ -1058,16 +1872,71 @@ export default function LeaguePage() {
           team.totalFTM += stat.tot_sfreethrowsmade || 0;
           team.totalFTA += stat.tot_sfreethrowsattempted || 0;
           team.totalRebounds += stat.tot_sreboundstotal || 0;
+          team.totalORB += stat.tot_sreboundsoffensive || 0;
+          team.totalDRB += stat.tot_sreboundsdefensive || 0;
           team.totalAssists += stat.tot_sassists || 0;
           team.totalSteals += stat.tot_ssteals || 0;
           team.totalBlocks += stat.tot_sblocks || 0;
           team.totalTurnovers += stat.tot_sturnovers || 0;
           team.totalFouls += stat.tot_sfoulspersonal || 0;
+          team.totalPlusMinus += stat.tot_splusminuspoints || 0;
+          team.totalPITP += stat.tot_spointsinthepaint || 0;
+          team.totalFBPTS += stat.tot_spointsfastbreak || 0;
+          team.total2ndCH += stat.tot_spointssecondchance || 0;
+          // Advanced stats
+          team.totalOffRating += stat.off_rating || 0;
+          team.totalDefRating += stat.def_rating || 0;
+          team.totalNetRating += stat.net_rating || 0;
+          team.totalPace += stat.pace || 0;
+          team.totalAstPercent += stat.ast_percent || 0;
+          team.totalAstToRatio += stat.ast_to_ratio || 0;
+          team.totalOrebPercent += stat.oreb_percent || 0;
+          team.totalDrebPercent += stat.dreb_percent || 0;
+          team.totalRebPercent += stat.reb_percent || 0;
+          team.totalTovPercent += stat.tov_percent || 0;
+          team.totalEfgPercent += stat.efg_percent || 0;
+          team.totalTsPercent += stat.ts_percent || 0;
+          team.totalFtRate += stat.ft_rate || 0;
+          team.totalThreePointRate += stat.three_point_rate || 0;
+          team.totalPie += stat.pie || 0;
+          // Opponent stats
+          team.totalOppEfgPercent += stat.opp_efg_percent || 0;
+          team.totalOppFtRate += stat.opp_ft_rate || 0;
+          team.totalOppTovPercent += stat.opp_tov_percent || 0;
+          team.totalOppOrebPercent += stat.opp_oreb_percent || 0;
+          team.totalOpp3PM += stat.opp_sthreepointersmade || 0;
+          team.totalOppFGM += stat.opp_sfieldgoalsmade || 0;
+          team.totalOppFGA += stat.opp_sfieldgoalsattempted || 0;
+          team.totalOppPoints += stat.opp_points || 0;
+          team.totalOppTurnovers += stat.opp_turnovers || 0;
+          // Misc stats
+          team.totalTimesScoresLevel += stat.tot_timesscoreslevel || 0;
+          team.totalLeadChanges += stat.tot_leadchanges || 0;
+          team.totalTimeLeading += stat.tot_timeleading || 0;
+          team.totalBiggestScoringRun += stat.tot_biggestscoringrun || 0;
+          // Scoring breakdown percentages
+          team.totalFgaPercent2pt += stat.fga_percent_2pt || 0;
+          team.totalFgaPercent3pt += stat.fga_percent_3pt || 0;
+          team.totalFgaPercentMidrange += stat.fga_percent_midrange || 0;
+          team.totalPtsPercent2pt += stat.pts_percent_2pt || 0;
+          team.totalPtsPercent3pt += stat.pts_percent_3pt || 0;
+          team.totalPtsPercentMidrange += stat.pts_percent_midrange || 0;
+          team.totalPtsPercentPitp += stat.pts_percent_pitp || 0;
+          team.totalPtsPercentFastbreak += stat.pts_percent_fastbreak || 0;
+          team.totalPtsPercentSecondChance += stat.pts_percent_second_chance || 0;
+          team.totalPtsPercentOffTurnovers += stat.pts_percent_off_turnovers || 0;
+          team.totalPtsPercentFt += stat.pts_percent_ft || 0;
+          team.totalPtsFromTurnovers += stat.tot_spointsfromturnovers || 0;
         });
 
-        // Calculate percentages and averages
-        const aggregatedStats = Array.from(teamMap.values()).map(team => ({
+        // Calculate percentages, averages, and possessions
+        const aggregatedStats = Array.from(teamMap.values()).map(team => {
+          // Calculate possessions: FGA + 0.44 * FTA - ORB + TO
+          const totalPossessions = team.totalFGA + (0.44 * team.totalFTA) - team.totalORB + team.totalTurnovers;
+          
+          return {
           ...team,
+          totalPossessions,
           // Percentages (use totals for accurate calculation)
           fgPercentage: team.totalFGA > 0 ? ((team.totalFGM / team.totalFGA) * 100).toFixed(1) : '0.0',
           threePtPercentage: team.total3PA > 0 ? ((team.total3PM / team.total3PA) * 100).toFixed(1) : '0.0',
@@ -1079,8 +1948,68 @@ export default function LeaguePage() {
           apg: team.gamesPlayed > 0 ? (team.totalAssists / team.gamesPlayed).toFixed(1) : '0.0',
           spg: team.gamesPlayed > 0 ? (team.totalSteals / team.gamesPlayed).toFixed(1) : '0.0',
           bpg: team.gamesPlayed > 0 ? (team.totalBlocks / team.gamesPlayed).toFixed(1) : '0.0',
-          tpg: team.gamesPlayed > 0 ? (team.totalTurnovers / team.gamesPlayed).toFixed(1) : '0.0'
-        })).sort((a, b) => parseFloat(b.ppg) - parseFloat(a.ppg)); // Sort by PPG
+          tpg: team.gamesPlayed > 0 ? (team.totalTurnovers / team.gamesPlayed).toFixed(1) : '0.0',
+          avgFGM: team.gamesPlayed > 0 ? (team.totalFGM / team.gamesPlayed).toFixed(1) : '0.0',
+          avgFGA: team.gamesPlayed > 0 ? (team.totalFGA / team.gamesPlayed).toFixed(1) : '0.0',
+          avg2PM: team.gamesPlayed > 0 ? (team.total2PM / team.gamesPlayed).toFixed(1) : '0.0',
+          avg2PA: team.gamesPlayed > 0 ? (team.total2PA / team.gamesPlayed).toFixed(1) : '0.0',
+          avg3PM: team.gamesPlayed > 0 ? (team.total3PM / team.gamesPlayed).toFixed(1) : '0.0',
+          avg3PA: team.gamesPlayed > 0 ? (team.total3PA / team.gamesPlayed).toFixed(1) : '0.0',
+          avgFTM: team.gamesPlayed > 0 ? (team.totalFTM / team.gamesPlayed).toFixed(1) : '0.0',
+          avgFTA: team.gamesPlayed > 0 ? (team.totalFTA / team.gamesPlayed).toFixed(1) : '0.0',
+          avgORB: team.gamesPlayed > 0 ? (team.totalORB / team.gamesPlayed).toFixed(1) : '0.0',
+          avgDRB: team.gamesPlayed > 0 ? (team.totalDRB / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPF: team.gamesPlayed > 0 ? (team.totalFouls / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPlusMinus: team.gamesPlayed > 0 ? (team.totalPlusMinus / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPITP: team.gamesPlayed > 0 ? (team.totalPITP / team.gamesPlayed).toFixed(1) : '0.0',
+          avgFBPTS: team.gamesPlayed > 0 ? (team.totalFBPTS / team.gamesPlayed).toFixed(1) : '0.0',
+          avg2ndCH: team.gamesPlayed > 0 ? (team.total2ndCH / team.gamesPlayed).toFixed(1) : '0.0',
+          // Advanced stats averages
+          avgOffRating: team.gamesPlayed > 0 ? (team.totalOffRating / team.gamesPlayed).toFixed(1) : '0.0',
+          avgDefRating: team.gamesPlayed > 0 ? (team.totalDefRating / team.gamesPlayed).toFixed(1) : '0.0',
+          avgNetRating: team.gamesPlayed > 0 ? (team.totalNetRating / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPace: team.gamesPlayed > 0 ? (team.totalPace / team.gamesPlayed).toFixed(1) : '0.0',
+          avgAstPercent: team.gamesPlayed > 0 ? (team.totalAstPercent / team.gamesPlayed).toFixed(1) : '0.0',
+          avgAstToRatio: team.gamesPlayed > 0 ? (team.totalAstToRatio / team.gamesPlayed).toFixed(1) : '0.0',
+          avgOrebPercent: team.gamesPlayed > 0 ? (team.totalOrebPercent / team.gamesPlayed).toFixed(1) : '0.0',
+          avgDrebPercent: team.gamesPlayed > 0 ? (team.totalDrebPercent / team.gamesPlayed).toFixed(1) : '0.0',
+          avgRebPercent: team.gamesPlayed > 0 ? (team.totalRebPercent / team.gamesPlayed).toFixed(1) : '0.0',
+          avgTovPercent: team.gamesPlayed > 0 ? (team.totalTovPercent / team.gamesPlayed).toFixed(1) : '0.0',
+          avgEfgPercent: team.gamesPlayed > 0 ? (team.totalEfgPercent / team.gamesPlayed).toFixed(1) : '0.0',
+          avgTsPercent: team.gamesPlayed > 0 ? (team.totalTsPercent / team.gamesPlayed).toFixed(1) : '0.0',
+          avgFtRate: team.gamesPlayed > 0 ? (team.totalFtRate / team.gamesPlayed).toFixed(1) : '0.0',
+          avgThreePointRate: team.gamesPlayed > 0 ? (team.totalThreePointRate / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPie: team.gamesPlayed > 0 ? (team.totalPie / team.gamesPlayed).toFixed(3) : '0.000',
+          // Opponent stats averages
+          avgOppEfgPercent: team.gamesPlayed > 0 ? (team.totalOppEfgPercent / team.gamesPlayed).toFixed(1) : '0.0',
+          avgOppFtRate: team.gamesPlayed > 0 ? (team.totalOppFtRate / team.gamesPlayed).toFixed(1) : '0.0',
+          avgOppTovPercent: team.gamesPlayed > 0 ? (team.totalOppTovPercent / team.gamesPlayed).toFixed(1) : '0.0',
+          avgOppOrebPercent: team.gamesPlayed > 0 ? (team.totalOppOrebPercent / team.gamesPlayed).toFixed(1) : '0.0',
+          avgOpp3PM: team.gamesPlayed > 0 ? (team.totalOpp3PM / team.gamesPlayed).toFixed(1) : '0.0',
+          avgOppFGM: team.gamesPlayed > 0 ? (team.totalOppFGM / team.gamesPlayed).toFixed(1) : '0.0',
+          avgOppFGA: team.gamesPlayed > 0 ? (team.totalOppFGA / team.gamesPlayed).toFixed(1) : '0.0',
+          avgOppPoints: team.gamesPlayed > 0 ? (team.totalOppPoints / team.gamesPlayed).toFixed(1) : '0.0',
+          avgOppTurnovers: team.gamesPlayed > 0 ? (team.totalOppTurnovers / team.gamesPlayed).toFixed(1) : '0.0',
+          // Misc stats averages
+          avgTimesScoresLevel: team.gamesPlayed > 0 ? (team.totalTimesScoresLevel / team.gamesPlayed).toFixed(1) : '0.0',
+          avgLeadChanges: team.gamesPlayed > 0 ? (team.totalLeadChanges / team.gamesPlayed).toFixed(1) : '0.0',
+          avgTimeLeading: team.gamesPlayed > 0 ? (team.totalTimeLeading / team.gamesPlayed).toFixed(1) : '0.0',
+          avgBiggestScoringRun: team.gamesPlayed > 0 ? (team.totalBiggestScoringRun / team.gamesPlayed).toFixed(1) : '0.0',
+          // Scoring breakdown percentages averages
+          avgFgaPercent2pt: team.gamesPlayed > 0 ? (team.totalFgaPercent2pt / team.gamesPlayed).toFixed(1) : '0.0',
+          avgFgaPercent3pt: team.gamesPlayed > 0 ? (team.totalFgaPercent3pt / team.gamesPlayed).toFixed(1) : '0.0',
+          avgFgaPercentMidrange: team.gamesPlayed > 0 ? (team.totalFgaPercentMidrange / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPtsPercent2pt: team.gamesPlayed > 0 ? (team.totalPtsPercent2pt / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPtsPercent3pt: team.gamesPlayed > 0 ? (team.totalPtsPercent3pt / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPtsPercentMidrange: team.gamesPlayed > 0 ? (team.totalPtsPercentMidrange / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPtsPercentPitp: team.gamesPlayed > 0 ? (team.totalPtsPercentPitp / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPtsPercentFastbreak: team.gamesPlayed > 0 ? (team.totalPtsPercentFastbreak / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPtsPercentSecondChance: team.gamesPlayed > 0 ? (team.totalPtsPercentSecondChance / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPtsPercentOffTurnovers: team.gamesPlayed > 0 ? (team.totalPtsPercentOffTurnovers / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPtsPercentFt: team.gamesPlayed > 0 ? (team.totalPtsPercentFt / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPtsFromTurnovers: team.gamesPlayed > 0 ? (team.totalPtsFromTurnovers / team.gamesPlayed).toFixed(1) : '0.0'
+          };
+        }).sort((a, b) => parseFloat(b.ppg) - parseFloat(a.ppg)); // Sort by PPG
 
         setTeamStatsData(aggregatedStats);
       } catch (error) {
@@ -1723,6 +2652,54 @@ export default function LeaguePage() {
           </div>
         </section>
 
+        {/* Competition Selector - Dropdown for mobile-friendly competition switching */}
+        {childCompetitions.length > 0 && (
+          <div className="bg-white border-b border-gray-100">
+            <div className="max-w-7xl mx-auto px-4 md:px-6 py-3">
+              <div className="flex items-center gap-2 md:gap-3">
+                <Trophy className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                <select
+                  value={league?.slug || ''}
+                  onChange={(e) => navigate(`/league/${e.target.value}`)}
+                  className="flex-1 md:flex-initial md:min-w-[280px] px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-gray-300 rounded-lg hover:border-orange-300 focus:border-orange-400 focus:ring-2 focus:ring-orange-100 focus:outline-none transition-all cursor-pointer"
+                  data-testid="select-competition"
+                >
+                  <option value={league?.slug}>{league?.name}</option>
+                  {childCompetitions.map((competition) => (
+                    <option key={competition.league_id} value={competition.slug}>
+                      {competition.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Breadcrumb for Sub-Competitions */}
+        {parentLeague && (
+          <div className="bg-white border-b border-gray-100">
+            <div className="max-w-7xl mx-auto px-4 md:px-6 py-3">
+              <Link href={`/league/${parentLeague.slug}`}>
+                <a className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-orange-400 transition-colors group" data-testid="link-parent-league">
+                  <div className="flex items-center gap-2">
+                    {parentLeague.logo_url && (
+                      <img 
+                        src={parentLeague.logo_url} 
+                        alt={parentLeague.name}
+                        className="w-5 h-5 rounded object-cover"
+                      />
+                    )}
+                    <span className="font-medium group-hover:underline">{parentLeague.name}</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-slate-400" />
+                  <span className="text-slate-700 font-medium">{league?.name}</span>
+                </a>
+              </Link>
+            </div>
+          </div>
+        )}
+
         {/* Horizontal Game Results Ticker */}
         {league?.league_id && (
           <section className="bg-gray-900 text-white py-4 overflow-hidden">
@@ -1999,36 +2976,9 @@ export default function LeaguePage() {
               <div className="bg-white rounded-xl shadow p-4 md:p-6">
                 <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 mb-4 md:mb-6">
                   <h2 className="text-base md:text-lg font-semibold text-slate-800">Player Statistics - {league?.name}</h2>
-                  <div className="flex items-center gap-4">
-                    {/* Averages/Totals Toggle */}
-                    <div className="flex items-center gap-2 bg-orange-50 rounded-lg p-1">
-                      <button
-                        onClick={() => setPlayerStatsView('averages')}
-                        className={`px-3 py-1.5 text-xs md:text-sm font-medium rounded transition-colors ${
-                          playerStatsView === 'averages'
-                            ? 'bg-orange-500 text-white'
-                            : 'text-slate-600 hover:text-orange-600'
-                        }`}
-                        data-testid="toggle-averages"
-                      >
-                        Averages
-                      </button>
-                      <button
-                        onClick={() => setPlayerStatsView('totals')}
-                        className={`px-3 py-1.5 text-xs md:text-sm font-medium rounded transition-colors ${
-                          playerStatsView === 'totals'
-                            ? 'bg-orange-500 text-white'
-                            : 'text-slate-600 hover:text-orange-600'
-                        }`}
-                        data-testid="toggle-totals"
-                      >
-                        Totals
-                      </button>
-                    </div>
-                    <div className="text-xs md:text-sm text-gray-500">
-                      Showing {Math.min(displayedPlayerCount, filteredPlayerAverages.length)} of {filteredPlayerAverages.length} players
-                      {statsSearch && ` (filtered from ${allPlayerAverages.length})`}
-                    </div>
+                  <div className="text-xs md:text-sm text-gray-500">
+                    Showing {Math.min(displayedPlayerCount, filteredPlayerAverages.length)} of {filteredPlayerAverages.length} players
+                    {statsSearch && ` (filtered from ${allPlayerAverages.length})`}
                   </div>
                 </div>
                 
@@ -2057,6 +3007,50 @@ export default function LeaguePage() {
                     </svg>
                   </div>
                 </div>
+
+                {/* Category and Mode Selectors */}
+                <div className="flex flex-col md:flex-row gap-4 mb-6">
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-slate-600 mb-1.5">Stat Category</label>
+                    <Select
+                      value={playerStatsCategory}
+                      onValueChange={(value) => setPlayerStatsCategory(value as typeof playerStatsCategory)}
+                    >
+                      <SelectTrigger 
+                        className="w-full bg-white border-slate-200 text-slate-700 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500"
+                        data-testid="select-player-category"
+                      >
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Traditional" data-testid="option-player-traditional">Traditional</SelectItem>
+                        <SelectItem value="Advanced" data-testid="option-player-advanced">Advanced</SelectItem>
+                        <SelectItem value="Scoring" data-testid="option-player-scoring">Scoring</SelectItem>
+                        <SelectItem value="Misc" data-testid="option-player-misc">Misc</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-slate-600 mb-1.5">Mode</label>
+                    <Select
+                      value={playerStatsView}
+                      onValueChange={(value) => setPlayerStatsView(value as typeof playerStatsView)}
+                    >
+                      <SelectTrigger 
+                        className="w-full bg-white border-slate-200 text-slate-700 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500"
+                        data-testid="select-player-mode"
+                      >
+                        <SelectValue placeholder="Select mode" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Per Game" data-testid="option-player-per-game">Per Game</SelectItem>
+                        <SelectItem value="Total" data-testid="option-player-total">Total</SelectItem>
+                        <SelectItem value="Per 40" data-testid="option-player-per-40">Per 40</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
                 
                 {isLoadingStats ? (
                   <div className="overflow-x-auto">
@@ -2066,15 +3060,28 @@ export default function LeaguePage() {
                           <th className="text-left py-3 px-2 font-semibold text-slate-700 sticky left-0 bg-white">Player</th>
                           <th className="text-center py-3 px-2 font-semibold text-slate-700">GP</th>
                           <th className="text-center py-3 px-2 font-semibold text-slate-700">MIN</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">PTS</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">REB</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FGM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FGA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FG%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">2PM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">2PA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">2P%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">3PM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">3PA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">3P%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FTM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FTA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FT%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">ORB</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">DRB</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">TRB</th>
                           <th className="text-center py-3 px-2 font-semibold text-slate-700">AST</th>
                           <th className="text-center py-3 px-2 font-semibold text-slate-700">STL</th>
                           <th className="text-center py-3 px-2 font-semibold text-slate-700">BLK</th>
                           <th className="text-center py-3 px-2 font-semibold text-slate-700">TO</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FG%</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">3P%</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FT%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">PF</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">+/-</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">PTS</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -2109,196 +3116,30 @@ export default function LeaguePage() {
                               )}
                             </div>
                           </th>
-                          <th 
-                            onClick={() => {
-                              if (statsSortColumn === 'MIN') {
-                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setStatsSortColumn('MIN');
-                                setStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'MIN' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-min"
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              MIN
-                              {statsSortColumn === 'MIN' && (
-                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (statsSortColumn === 'PTS') {
-                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setStatsSortColumn('PTS');
-                                setStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'PTS' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-pts"
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              PTS
-                              {statsSortColumn === 'PTS' && (
-                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (statsSortColumn === 'REB') {
-                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setStatsSortColumn('REB');
-                                setStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'REB' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-reb"
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              REB
-                              {statsSortColumn === 'REB' && (
-                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (statsSortColumn === 'AST') {
-                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setStatsSortColumn('AST');
-                                setStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'AST' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-ast"
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              AST
-                              {statsSortColumn === 'AST' && (
-                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (statsSortColumn === 'STL') {
-                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setStatsSortColumn('STL');
-                                setStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'STL' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-stl"
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              STL
-                              {statsSortColumn === 'STL' && (
-                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (statsSortColumn === 'BLK') {
-                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setStatsSortColumn('BLK');
-                                setStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'BLK' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-blk"
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              BLK
-                              {statsSortColumn === 'BLK' && (
-                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (statsSortColumn === 'TO') {
-                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setStatsSortColumn('TO');
-                                setStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'TO' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-to"
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              TO
-                              {statsSortColumn === 'TO' && (
-                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (statsSortColumn === 'FG%') {
-                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setStatsSortColumn('FG%');
-                                setStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[55px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'FG%' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-fg"
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              FG%
-                              {statsSortColumn === 'FG%' && (
-                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (statsSortColumn === '3P%') {
-                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setStatsSortColumn('3P%');
-                                setStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[55px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === '3P%' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-3p"
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              3P%
-                              {statsSortColumn === '3P%' && (
-                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
-                          <th 
-                            onClick={() => {
-                              if (statsSortColumn === 'FT%') {
-                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
-                              } else {
-                                setStatsSortColumn('FT%');
-                                setStatsSortDirection('desc');
-                              }
-                            }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[55px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'FT%' ? 'text-orange-600' : 'text-slate-700'}`}
-                            data-testid="header-sort-ft"
-                          >
-                            <div className="flex items-center justify-center gap-1">
-                              FT%
-                              {statsSortColumn === 'FT%' && (
-                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
-                              )}
-                            </div>
-                          </th>
+                          {activePlayerStatColumns.map((column) => (
+                            <th
+                              key={column.key}
+                              onClick={() => {
+                                if (statsSortColumn === column.label) {
+                                  setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                                } else {
+                                  setStatsSortColumn(column.label);
+                                  setStatsSortDirection('desc');
+                                }
+                              }}
+                              className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${
+                                statsSortColumn === column.label ? 'text-orange-600' : 'text-slate-700'
+                              }`}
+                              data-testid={`header-${column.key.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
+                            >
+                              <div className="flex items-center justify-center gap-1">
+                                {column.label}
+                                {statsSortColumn === column.label && (
+                                  <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                                )}
+                              </div>
+                            </th>
+                          ))}
                         </tr>
                       </thead>
                       <tbody>
@@ -2319,30 +3160,60 @@ export default function LeaguePage() {
                               </div>
                             </td>
                             <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 font-medium">{player.games}</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
-                              {playerStatsView === 'averages' ? player.avgMinutes : Math.round(player.totalMinutes)}
-                            </td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center font-semibold text-orange-600">
-                              {playerStatsView === 'averages' ? player.avgPoints : Math.round(player.totalPoints)}
-                            </td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center font-medium text-slate-700">
-                              {playerStatsView === 'averages' ? player.avgRebounds : Math.round(player.totalRebounds)}
-                            </td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center font-medium text-slate-700">
-                              {playerStatsView === 'averages' ? player.avgAssists : Math.round(player.totalAssists)}
-                            </td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
-                              {playerStatsView === 'averages' ? player.avgSteals : Math.round(player.totalSteals)}
-                            </td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
-                              {playerStatsView === 'averages' ? player.avgBlocks : Math.round(player.totalBlocks)}
-                            </td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">
-                              {playerStatsView === 'averages' ? player.avgTurnovers : Math.round(player.totalTurnovers)}
-                            </td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.fgPercentage}%</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.threePercentage}%</td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600">{player.ftPercentage}%</td>
+                            {activePlayerStatColumns.map((column) => {
+                              const rawStats = player.rawStats || [];
+                              
+                              // Rate stats should be averaged, not summed
+                              const rateStats = [
+                                'efg_percent', 'ts_percent', 'three_point_rate',
+                                'ast_percent', 'ast_to_ratio',
+                                'oreb_percent', 'dreb_percent', 'reb_percent',
+                                'tov_percent', 'usage_percent', 'pie',
+                                'off_rating', 'def_rating', 'net_rating',
+                                'pts_percent_2pt', 'pts_percent_3pt', 'pts_percent_ft',
+                                'pts_percent_midrange', 'pts_percent_pitp', 'pts_percent_fastbreak',
+                                'pts_percent_second_chance', 'pts_percent_off_turnovers'
+                              ];
+                              
+                              const isRateStat = rateStats.includes(column.key);
+                              
+                              // For rate stats, calculate average; for counting stats, calculate total
+                              const aggregatedValue = rawStats.reduce((acc: number, stat: any) => {
+                                const statValue = stat[column.key];
+                                if (typeof statValue === 'number') {
+                                  return acc + statValue;
+                                } else if (typeof statValue === 'string' && !isNaN(parseFloat(statValue))) {
+                                  return acc + parseFloat(statValue);
+                                }
+                                return acc;
+                              }, 0);
+                              
+                              // For rate stats, convert sum to average before passing to applyPlayerMode
+                              const baseValue = isRateStat && rawStats.length > 0 ? aggregatedValue / rawStats.length : aggregatedValue;
+                              
+                              // Calculate total minutes from player.totalMinutes (already in decimal format)
+                              const totalMinutes = player.totalMinutes || 0;
+                              
+                              // Apply the mode transformation
+                              const value = applyPlayerMode(
+                                column.key,
+                                baseValue,
+                                player.games,
+                                totalMinutes,
+                                playerStatsView
+                              );
+                              
+                              const displayValue = value === 0 ? '0.0' : value.toFixed(1);
+                              
+                              return (
+                                <td 
+                                  key={`${player.id}-${column.key}`}
+                                  className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600"
+                                >
+                                  {displayValue}
+                                </td>
+                              );
+                            })}
                           </tr>
                         ))}
                       </tbody>
@@ -2390,22 +3261,17 @@ export default function LeaguePage() {
                       </div>
                     )}
 
-                    <div className="mt-4 text-xs text-slate-500">
-                      <div className="flex gap-4 flex-wrap">
-                        <span>GP = Games Played</span>
-                        <span>MIN = Minutes Per Game</span>
-                        <span>PTS = Points Per Game</span>
-                        <span>REB = Rebounds Per Game</span>
-                        <span>AST = Assists Per Game</span>
-                        <span>STL = Steals Per Game</span>
-                        <span>BLK = Blocks Per Game</span>
-                        <span>TO = Turnovers Per Game</span>
-                        <span>FG% = Field Goal Percentage</span>
-                        <span>3P% = Three Point Percentage</span>
-                        <span>FT% = Free Throw Percentage</span>
-                      </div>
-                      <div className="mt-2 text-xs text-slate-400">
-                        Click on any player to view their detailed profile
+                    <div className="mt-6 pt-4 border-t border-gray-200">
+                      <div className="text-xs text-slate-500 space-y-1">
+                        <div className="font-semibold text-slate-600 mb-2">Legend ({playerStatsCategory}):</div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                          {PLAYER_STAT_LEGENDS[playerStatsCategory]?.map((legend, index) => (
+                            <span key={`legend-${index}`}>{legend}</span>
+                          ))}
+                        </div>
+                        <div className="mt-2 text-xs text-slate-400">
+                          Click on any player to view their detailed profile • Swipe horizontally to see all stats
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -2431,33 +3297,52 @@ export default function LeaguePage() {
             {/* Team Stats Section */}
             {activeSection === 'teamstats' && (
               <div className="bg-white rounded-xl shadow p-4 md:p-6">
-                <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 md:gap-0 mb-4 md:mb-6">
-                  <h2 className="text-base md:text-lg font-semibold text-slate-800">Team Statistics - {league?.name}</h2>
-                  
-                  {/* Toggle for Totals/Averages */}
-                  <div className="flex gap-1 md:gap-2 bg-gray-100 rounded-lg p-1">
-                    <button
-                      onClick={() => setTeamStatsView('averages')}
-                      className={`px-3 md:px-4 py-1.5 rounded-md text-xs md:text-sm font-medium transition-colors ${
-                        teamStatsView === 'averages'
-                          ? 'bg-orange-500 text-white'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                      data-testid="button-averages-toggle"
+                <div className="mb-4 md:mb-6">
+                  <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-4">Team Statistics - {league?.name}</h2>
+                </div>
+
+                {/* Dropdowns for Category and Mode */}
+                <div className="flex flex-col sm:flex-row gap-3 mb-6">
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-slate-600 mb-1.5">Category</label>
+                    <Select
+                      value={teamStatsCategory}
+                      onValueChange={(value) => setTeamStatsCategory(value as typeof teamStatsCategory)}
                     >
-                      Averages
-                    </button>
-                    <button
-                      onClick={() => setTeamStatsView('totals')}
-                      className={`px-3 md:px-4 py-1.5 rounded-md text-xs md:text-sm font-medium transition-colors ${
-                        teamStatsView === 'totals'
-                          ? 'bg-orange-500 text-white'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                      data-testid="button-totals-toggle"
+                      <SelectTrigger 
+                        className="w-full bg-white border-slate-200 text-slate-700 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500"
+                        data-testid="select-category"
+                      >
+                        <SelectValue placeholder="Select category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Traditional" data-testid="option-traditional">Traditional</SelectItem>
+                        <SelectItem value="Advanced" data-testid="option-advanced">Advanced</SelectItem>
+                        <SelectItem value="Four Factors" data-testid="option-four-factors">Four Factors</SelectItem>
+                        <SelectItem value="Scoring" data-testid="option-scoring">Scoring</SelectItem>
+                        <SelectItem value="Misc" data-testid="option-misc">Misc</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-slate-600 mb-1.5">Mode</label>
+                    <Select
+                      value={teamStatsMode}
+                      onValueChange={(value) => setTeamStatsMode(value as typeof teamStatsMode)}
                     >
-                      Totals
-                    </button>
+                      <SelectTrigger 
+                        className="w-full bg-white border-slate-200 text-slate-700 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500"
+                        data-testid="select-mode"
+                      >
+                        <SelectValue placeholder="Select mode" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Per Game" data-testid="option-per-game">Per Game</SelectItem>
+                        <SelectItem value="Totals" data-testid="option-totals">Totals</SelectItem>
+                        <SelectItem value="Per 100 Possessions" data-testid="option-per-100">Per 100 Possessions</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
@@ -2468,26 +3353,31 @@ export default function LeaguePage() {
                         <tr className="border-b border-gray-200">
                           <th className="text-left py-3 px-2 font-semibold text-slate-700 sticky left-0 bg-white">Team</th>
                           <th className="text-center py-3 px-2 font-semibold text-slate-700">GP</th>
-                          {teamStatsView === 'averages' ? (
-                            <>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">PPG</th>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">RPG</th>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">APG</th>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">FG%</th>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">3P%</th>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">2P%</th>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">FT%</th>
-                            </>
-                          ) : (
-                            <>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">PTS</th>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">REB</th>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">AST</th>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">FGM</th>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">3PM</th>
-                              <th className="text-center py-3 px-2 font-semibold text-slate-700">FTM</th>
-                            </>
-                          )}
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FGM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FGA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FG%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">2PM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">2PA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">2P%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">3PM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">3PA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">3P%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FTM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FTA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FT%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">ORB</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">DRB</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">TRB</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">AST</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">STL</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">BLK</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">TO</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">PF</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">+/-</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">PTS</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">PITP</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FB PTS</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700">2ND CH</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -2499,70 +3389,59 @@ export default function LeaguePage() {
                                 <div className="h-4 bg-gray-200 rounded w-24 animate-pulse"></div>
                               </div>
                             </td>
-                            <td className="py-3 px-2">
-                              <div className="h-4 bg-gray-200 rounded w-8 mx-auto animate-pulse"></div>
-                            </td>
-                            <td className="py-3 px-2">
-                              <div className="h-4 bg-gray-200 rounded w-12 mx-auto animate-pulse"></div>
-                            </td>
-                            <td className="py-3 px-2">
-                              <div className="h-4 bg-gray-200 rounded w-12 mx-auto animate-pulse"></div>
-                            </td>
-                            <td className="py-3 px-2">
-                              <div className="h-4 bg-gray-200 rounded w-12 mx-auto animate-pulse"></div>
-                            </td>
-                            <td className="py-3 px-2">
-                              <div className="h-4 bg-gray-200 rounded w-12 mx-auto animate-pulse"></div>
-                            </td>
-                            <td className="py-3 px-2">
-                              <div className="h-4 bg-gray-200 rounded w-12 mx-auto animate-pulse"></div>
-                            </td>
-                            <td className="py-3 px-2">
-                              <div className="h-4 bg-gray-200 rounded w-12 mx-auto animate-pulse"></div>
-                            </td>
-                            {teamStatsView === 'averages' && (
-                              <td className="py-3 px-2">
+                            {Array.from({ length: 26 }).map((_, colIndex) => (
+                              <td key={`skeleton-col-${colIndex}`} className="py-3 px-2">
                                 <div className="h-4 bg-gray-200 rounded w-12 mx-auto animate-pulse"></div>
                               </td>
-                            )}
+                            ))}
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
-                ) : teamStatsData.length > 0 ? (
+                ) : sortedTeamStats.length > 0 ? (
                   <div className="overflow-x-auto -mx-4 md:mx-0 border border-orange-200 rounded-lg">
                     <table className="w-full text-xs md:text-sm">
                       <thead>
                         <tr className="border-b border-gray-200 bg-orange-50">
                           <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 sticky left-0 bg-orange-50 z-10 w-16">Logo</th>
                           <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[120px]">Team</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[45px]">GP</th>
-                          {teamStatsView === 'averages' ? (
-                            <>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">PPG</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">RPG</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">APG</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">FG%</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">3P%</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">2P%</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">FT%</th>
-                            </>
-                          ) : (
-                            <>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">PTS</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">REB</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[50px]">AST</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">FGM</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">3PM</th>
-                              <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[55px]">FTM</th>
-                            </>
-                          )}
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[45px]">
+                            <div className="flex items-center justify-center gap-1">GP</div>
+                          </th>
+                          {activeTeamStatColumns.map((column) => (
+                            <th
+                              key={column.key}
+                              onClick={() => {
+                                if (column.sortable) {
+                                  if (teamStatsSortColumn === column.key) {
+                                    setTeamStatsSortDirection(teamStatsSortDirection === 'desc' ? 'asc' : 'desc');
+                                  } else {
+                                    setTeamStatsSortColumn(column.key);
+                                    setTeamStatsSortDirection('desc');
+                                  }
+                                }
+                              }}
+                              className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] ${
+                                column.sortable ? 'cursor-pointer hover:bg-orange-100' : ''
+                              } transition-colors ${
+                                teamStatsSortColumn === column.key ? 'text-orange-600' : 'text-slate-700'
+                              }`}
+                              data-testid={`header-${column.key.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
+                            >
+                              <div className="flex items-center justify-center gap-1">
+                                {column.label}
+                                {teamStatsSortColumn === column.key && column.sortable && (
+                                  <span className="text-xs">{teamStatsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                                )}
+                              </div>
+                            </th>
+                          ))}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                        {teamStatsData.map((team, index) => (
-                          <tr 
+                        {sortedTeamStats.map((team, index) => (
+                          <tr
                             key={`team-stats-${team.teamName}-${index}`}
                             className="hover:bg-orange-50 transition-colors cursor-pointer group"
                             onClick={() => navigate(`/team/${encodeURIComponent(team.teamName)}`)}
@@ -2577,52 +3456,19 @@ export default function LeaguePage() {
                             <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 font-medium" data-testid={`text-gp-${team.teamName}`}>
                               {team.gamesPlayed}
                             </td>
-                            {teamStatsView === 'averages' ? (
-                              <>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-orange-600" data-testid={`text-ppg-${team.teamName}`}>
-                                  {team.ppg}
+                            {activeTeamStatColumns.map((column) => {
+                              const value = column.getValue(team, teamStatsMode);
+                              const displayValue = column.format ? column.format(Number(value)) : value;
+                              return (
+                                <td
+                                  key={`${team.teamName}-${column.key}`}
+                                  className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600"
+                                  data-testid={`text-${column.key.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${team.teamName}`}
+                                >
+                                  {displayValue}
                                 </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 font-medium text-slate-700" data-testid={`text-rpg-${team.teamName}`}>
-                                  {team.rpg}
-                                </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 font-medium text-slate-700" data-testid={`text-apg-${team.teamName}`}>
-                                  {team.apg}
-                                </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-fg%-${team.teamName}`}>
-                                  {team.fgPercentage}%
-                                </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-3p%-${team.teamName}`}>
-                                  {team.threePtPercentage}%
-                                </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-2p%-${team.teamName}`}>
-                                  {team.twoPtPercentage}%
-                                </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-ft%-${team.teamName}`}>
-                                  {team.ftPercentage}%
-                                </td>
-                              </>
-                            ) : (
-                              <>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-orange-600" data-testid={`text-total-pts-${team.teamName}`}>
-                                  {team.totalPoints}
-                                </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 font-medium text-slate-700" data-testid={`text-total-reb-${team.teamName}`}>
-                                  {team.totalRebounds}
-                                </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 font-medium text-slate-700" data-testid={`text-total-ast-${team.teamName}`}>
-                                  {team.totalAssists}
-                                </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-total-fgm-${team.teamName}`}>
-                                  {team.totalFGM}
-                                </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-total-3pm-${team.teamName}`}>
-                                  {team.total3PM}
-                                </td>
-                                <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600" data-testid={`text-total-ftm-${team.teamName}`}>
-                                  {team.totalFTM}
-                                </td>
-                              </>
-                            )}
+                              );
+                            })}
                           </tr>
                         ))}
                       </tbody>
@@ -2640,32 +3486,17 @@ export default function LeaguePage() {
                   </div>
                 )}
                 
-                {/* Legend */}
+                {/* Dynamic Legend based on category */}
                 <div className="mt-6 pt-4 border-t border-gray-200">
                   <div className="text-xs text-slate-500 space-y-1">
-                    <div className="font-semibold text-slate-600 mb-2">Legend:</div>
+                    <div className="font-semibold text-slate-600 mb-2">Legend ({teamStatsCategory}):</div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                      <span>GP = Games Played</span>
-                      {teamStatsView === 'averages' ? (
-                        <>
-                          <span>PPG = Points Per Game</span>
-                          <span>RPG = Rebounds Per Game</span>
-                          <span>APG = Assists Per Game</span>
-                          <span>FG% = Field Goal %</span>
-                          <span>3P% = Three Point %</span>
-                          <span>2P% = Two Point %</span>
-                          <span>FT% = Free Throw %</span>
-                        </>
-                      ) : (
-                        <>
-                          <span>PTS = Total Points</span>
-                          <span>REB = Total Rebounds</span>
-                          <span>AST = Total Assists</span>
-                          <span>FGM = Field Goals Made</span>
-                          <span>3PM = Three Pointers Made</span>
-                          <span>FTM = Free Throws Made</span>
-                        </>
-                      )}
+                      {TEAM_STAT_LEGENDS[teamStatsCategory]?.map((legend, index) => (
+                        <span key={`legend-${index}`}>{legend}</span>
+                      ))}
+                    </div>
+                    <div className="mt-2 text-xs text-slate-400">
+                      Click on any team to view their detailed profile • Swipe horizontally to see all stats
                     </div>
                   </div>
                 </div>

@@ -1,0 +1,99 @@
+You are updating the PLAYER STATS frontend so it matches the new TEAM STATS advanced architecture.
+
+TASK:
+Modify the player stats page (PlayerStatsPage or equivalent component) to support the same dropdown structure as team stats, including: Traditional, Advanced, Scoring, Misc.
+
+============================================================
+STEP 1 — Add new dropdown options for players
+============================================================
+Add a new UI dropdown identical to the team stats dropdown, but using:
+["Traditional", "Advanced", "Scoring", "Misc"]
+
+============================================================
+STEP 2 — Add player column mappings
+============================================================
+Create a new object PLAYER_STAT_COLUMNS:
+
+const PLAYER_STAT_COLUMNS = {
+  Traditional: [
+    { key: "spoints", label: "PTS" },
+    { key: "sminutes", label: "MIN" },
+    { key: "sfieldgoalsmade", label: "FGM" },
+    { key: "sfieldgoalsattempted", label: "FGA" },
+    { key: "sthreepointersmade", label: "3PM" },
+    { key: "sthreepointersattempted", label: "3PA" },
+    { key: "sfreethrowsmade", label: "FTM" },
+    { key: "sfreethrowsattempted", label: "FTA" },
+    { key: "sreboundstotal", label: "REB" },
+    { key: "sassists", label: "AST" },
+    { key: "sturnovers", label: "TO" },
+    { key: "ssteals", label: "STL" },
+    { key: "sblocks", label: "BLK" },
+  ],
+
+  Advanced: [
+    { key: "efg_percent", label: "EFG%" },
+    { key: "ts_percent", label: "TS%" },
+    { key: "usage_percent", label: "USG%" },
+    { key: "ast_percent", label: "AST%" },
+    { key: "ast_to_ratio", label: "AST/TO" },
+    { key: "oreb_percent", label: "OREB%" },
+    { key: "dreb_percent", label: "DREB%" },
+    { key: "reb_percent", label: "REB%" },
+    { key: "tov_percent", label: "TOV%" },
+    { key: "three_point_rate", label: "3P RATE" },
+    { key: "player_possessions", label: "POSS" },
+    { key: "off_rating", label: "OFFRTG" },
+    { key: "def_rating", label: "DEFRTG" },
+    { key: "net_rating", label: "NETRTG" },
+    { key: "pie", label: "PIE" },
+  ],
+
+  Scoring: [
+    { key: "pts_percent_2pt", label: "%PTS 2PT" },
+    { key: "pts_percent_3pt", label: "%PTS 3PT" },
+    { key: "pts_percent_ft", label: "%PTS FT" },
+    { key: "pts_percent_midrange", label: "%PTS MR" },
+    { key: "pts_percent_pitp", label: "%PTS PITP" },
+    { key: "pts_percent_fastbreak", label: "%PTS FBPS" },
+    { key: "pts_percent_second_chance", label: "%PTS 2ND CH" },
+    { key: "pts_percent_off_turnovers", label: "%PTS OFFTO" }
+  ],
+
+  Misc: [
+    { key: "splusminuspoints", label: "+/-" },
+    { key: "sfoulspersonal", label: "PF" },
+    { key: "sblocksreceived", label: "BLK AGAINST" }
+  ]
+};
+
+============================================================
+STEP 3 — Load new columns from Supabase
+============================================================
+Ensure player stats fetch uses:
+
+select("*")
+
+NOT a limited field list.
+
+============================================================
+STEP 4 — Hook dropdown to the renderer
+============================================================
+Use:
+
+activePlayerStatColumns = PLAYER_STAT_COLUMNS[selectedCategory];
+
+Render using the new advanced stat keys.
+
+============================================================
+STEP 5 — Ensure mobile responsiveness
+============================================================
+Use the same table wrapper classes as team stats:
+- overflow-x-auto
+- whitespace-nowrap
+- sticky left column for player name
+- text-sm on mobile
+
+============================================================
+END OF TASK
+============================================================

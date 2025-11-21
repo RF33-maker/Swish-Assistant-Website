@@ -24,6 +24,18 @@ interface GameResult {
   opponentScore: number;
 }
 
+// Helper function to parse minutes from "MM:SS" format to decimal minutes
+function parseMinutes(minutesStr: string | null | undefined): number {
+  if (!minutesStr) return 0;
+  const parts = minutesStr.split(':');
+  if (parts.length === 2) {
+    const minutes = parseInt(parts[0]) || 0;
+    const seconds = parseInt(parts[1]) || 0;
+    return minutes + seconds / 60;
+  }
+  return 0;
+}
+
 export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: GamePreviewModalProps) {
   // First, fetch team IDs from teams table
   const { data: team1Data } = useQuery({
@@ -264,7 +276,7 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
         player.points += stat.spoints || 0;
         player.rebounds += stat.sreboundstotal || 0;
         player.assists += stat.sassists || 0;
-        player.minutes += stat.sminutes || 0;
+        player.minutes += parseMinutes(stat.sminutes);
         player.steals += stat.ssteals || 0;
         player.blocks += stat.sblocks || 0;
         player.turnovers += stat.sturnovers || 0;
@@ -344,7 +356,7 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
         player.points += stat.spoints || 0;
         player.rebounds += stat.sreboundstotal || 0;
         player.assists += stat.sassists || 0;
-        player.minutes += stat.sminutes || 0;
+        player.minutes += parseMinutes(stat.sminutes);
         player.steals += stat.ssteals || 0;
         player.blocks += stat.sblocks || 0;
         player.turnovers += stat.sturnovers || 0;

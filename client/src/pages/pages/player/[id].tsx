@@ -1,23 +1,25 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Calendar, Trophy, User, TrendingUp, Camera, Brain, Sparkles } from "lucide-react";
+import { ArrowLeft, Calendar, Trophy, User, TrendingUp, Camera, Brain, Sparkles, Filter } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { generatePlayerAnalysis, type PlayerAnalysisData } from "@/lib/ai-analysis";
 import SwishLogoImg from "@/assets/Swish Assistant Logo.png";
 import { TeamLogo } from "@/components/TeamLogo";
 import { Helmet } from "react-helmet-async";
+import { namesMatch, getMostCompleteName, slugToName, type PlayerMatch } from "@/lib/fuzzyMatch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface PlayerStat {
   id: string;
   player_id: string;
-  name?: string;  // Using 'name' column as requested
-  player_name?: string;  // Fallback column
+  name?: string;
+  player_name?: string;
   team_name?: string;
-  team?: string;  // Fallback column
+  team?: string;
   game_date: string;
   opponent?: string;
   points?: number;
@@ -32,6 +34,22 @@ interface PlayerStat {
   free_throws_made?: number;
   free_throws_attempted?: number;
   minutes_played?: number;
+  league_id?: string;
+  spoints?: number;
+  sreboundstotal?: number;
+  sassists?: number;
+  ssteals?: number;
+  sblocks?: number;
+  sfieldgoalsmade?: number;
+  sfieldgoalsattempted?: number;
+  sthreepointersmade?: number;
+  sthreepointersattempted?: number;
+  sfreethrowsmade?: number;
+  sfreethrowsattempted?: number;
+  players?: {
+    full_name?: string;
+    league_id?: string;
+  };
 }
 
 interface SeasonAverages {
@@ -60,11 +78,15 @@ export default function PlayerStatsPage() {
   const [seasonAverages, setSeasonAverages] = useState<SeasonAverages | null>(null);
   const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string; position?: string; number?: number; leagueId?: string } | null>(null);
   const [playerLeagues, setPlayerLeagues] = useState<{ id: string; name: string; slug: string }[]>([]);
+  const [playerMatches, setPlayerMatches] = useState<PlayerMatch[]>([]);
+  const [nameVariations, setNameVariations] = useState<string[]>([]);
+  const [selectedLeagueFilter, setSelectedLeagueFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchSuggestions, setSearchSuggestions] = useState<any[]>([]);
   const [aiAnalysis, setAiAnalysis] = useState<string>("");
   const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [leagueNames, setLeagueNames] = useState<Map<string, string>>(new Map());
 
   useEffect(() => {
     if (!playerSlugOrId) {
@@ -77,61 +99,53 @@ export default function PlayerStatsPage() {
     const fetchPlayerData = async () => {
       setLoading(true);
       try {
-        console.log('🔍 Step 1: Fetching player record...');
+        console.log('🔍 Step 1: Fetching initial player record...');
         
-        let actualPlayerId = null;
-        let playerInfo = null;
-
-        // Check if it's a UUID (old ID format) or a slug
+        let initialPlayer: any = null;
         const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(playerSlugOrId);
 
         if (isUUID) {
-          // Backward compatibility: lookup by UUID
           console.log('📋 Looking up player by UUID...');
-          const { data: playerFromPlayersTable, error: playersError } = await supabase
+          const { data, error } = await supabase
             .from('players')
             .select('*')
             .eq('id', playerSlugOrId)
             .single();
-
-          if (playerFromPlayersTable && !playersError) {
-            playerInfo = {
-              name: playerFromPlayersTable.full_name,
-              team: playerFromPlayersTable.team,
-              position: playerFromPlayersTable.position,
-              number: playerFromPlayersTable.number
-            };
-            actualPlayerId = playerSlugOrId;
-            
-            // Redirect to slug-based URL if slug exists
-            if (playerFromPlayersTable.slug) {
-              console.log('🔄 Redirecting to slug-based URL:', playerFromPlayersTable.slug);
-              setLocation(`/player/${playerFromPlayersTable.slug}`);
-              return;
-            }
-          }
+          if (data && !error) initialPlayer = data;
         } else {
-          // Primary method: lookup by slug
           console.log('📋 Looking up player by slug:', playerSlugOrId);
-          const { data: playerFromPlayersTable, error: playersError } = await supabase
+          const { data, error } = await supabase
             .from('players')
             .select('*')
             .eq('slug', playerSlugOrId)
             .single();
-
-          if (playerFromPlayersTable && !playersError) {
-            playerInfo = {
-              name: playerFromPlayersTable.full_name,
-              team: playerFromPlayersTable.team,
-              position: playerFromPlayersTable.position,
-              number: playerFromPlayersTable.number
-            };
-            actualPlayerId = playerFromPlayersTable.id;
-            console.log('📋 Found player by slug:', playerInfo);
+          if (data && !error) initialPlayer = data;
+          
+          // Fallback: If slug not found, try fuzzy matching by name
+          if (!initialPlayer) {
+            console.log('📋 Slug not found, trying name-based search...');
+            const searchName = slugToName(playerSlugOrId);
+            console.log('📋 Searching for name:', searchName);
+            
+            const { data: allPlayers, error: allPlayersError } = await supabase
+              .from('players')
+              .select('*');
+            
+            if (allPlayers && !allPlayersError) {
+              // Find first player whose name fuzzy matches
+              const matchedPlayer = allPlayers.find(player => 
+                namesMatch(player.full_name, searchName)
+              );
+              
+              if (matchedPlayer) {
+                console.log('✅ Found player via name matching:', matchedPlayer.full_name);
+                initialPlayer = matchedPlayer;
+              }
+            }
           }
         }
 
-        if (!actualPlayerId || !playerInfo) {
+        if (!initialPlayer) {
           console.error('❌ Could not find player:', playerSlugOrId);
           toast({
             title: "Player Not Found",
@@ -142,12 +156,96 @@ export default function PlayerStatsPage() {
           return;
         }
 
-        console.log('🔍 Step 2: Getting all stats for player_id:', actualPlayerId);
+        console.log('✅ Found initial player:', initialPlayer.full_name);
+
+        // Step 2: Find ALL matching player records using fuzzy matching
+        console.log('🔍 Step 2: Finding all matching player records via fuzzy matching...');
+        
+        let allPlayers = [initialPlayer];
+        
+        // Only query by team if the player has a team
+        if (initialPlayer.team) {
+          const { data: allPlayersData, error: allPlayersError } = await supabase
+            .from('players')
+            .select('*')
+            .eq('team', initialPlayer.team);
+
+          if (!allPlayersError && allPlayersData) {
+            allPlayers = allPlayersData;
+          } else if (allPlayersError) {
+            console.error('❌ Error fetching team players:', allPlayersError);
+          }
+        } else {
+          console.log('⚠️ Player has no team, skipping team-based search');
+        }
+
+        console.log('📋 Found', allPlayers.length, 'players on team:', initialPlayer.team);
+
+        // Fuzzy match by name + team
+        const matchingPlayers = allPlayers.filter(player => 
+          namesMatch(player.full_name, initialPlayer.full_name)
+        );
+
+        console.log('🎯 Fuzzy matched', matchingPlayers.length, 'player records');
+        
+        const matches: PlayerMatch[] = matchingPlayers.map(p => ({
+          id: p.id,
+          name: p.name,
+          full_name: p.full_name,
+          team: p.team,
+          league_id: p.league_id,
+          position: p.position,
+          number: p.number,
+          slug: p.slug,
+          matchScore: 1.0
+        }));
+
+        setPlayerMatches(matches);
+
+        // Get all unique name variations
+        const variations = Array.from(new Set(matches.map(m => m.full_name)));
+        setNameVariations(variations);
+        console.log('📝 Name variations found:', variations);
+
+        // Use the most complete name as the canonical name
+        const canonicalName = getMostCompleteName(variations);
+        console.log('📛 Canonical name:', canonicalName);
+
+        // Set player info from initial player
+        let playerInfo = {
+          name: canonicalName,
+          team: initialPlayer.team,
+          position: initialPlayer.position,
+          number: initialPlayer.number,
+          leagueId: initialPlayer.league_id
+        };
+
+        // Step 3: Get ALL stats for ALL matching player IDs
+        const playerIds = matches.map(m => m.id);
+        console.log('🔍 Step 3: Getting stats for', playerIds.length, 'player IDs...');
         const { data: stats, error: statsError } = await supabase
           .from('player_stats')
-          .select('*, players:player_id(full_name)')
-          .eq('player_id', actualPlayerId)
+          .select('*, players:player_id(full_name, league_id)')
+          .in('player_id', playerIds)
           .order('created_at', { ascending: false });
+
+        // Fetch league names for all unique league_ids from playerMatches
+        const uniqueLeagueIds = Array.from(new Set(matches.map(m => m.league_id).filter(Boolean)));
+        if (uniqueLeagueIds.length > 0) {
+          const { data: leaguesData } = await supabase
+            .from('leagues')
+            .select('id, name')
+            .in('id', uniqueLeagueIds);
+          
+          if (leaguesData) {
+            const leagueMap = new Map<string, string>();
+            leaguesData.forEach(league => {
+              leagueMap.set(league.id, league.name);
+            });
+            setLeagueNames(leagueMap);
+            console.log('🏆 Fetched league names:', leagueMap);
+          }
+        }
 
         console.log('📊 Step 2 Result - Found', stats?.length || 0, 'stat records');
         console.log('📊 Stats data sample:', stats?.[0]);
@@ -376,6 +474,76 @@ export default function PlayerStatsPage() {
     fetchPlayerData();
   }, [playerSlugOrId, toast, setLocation]);
 
+  // Filter stats based on selected league
+  const filteredStats = useMemo(() => {
+    if (selectedLeagueFilter === "all") {
+      return playerStats;
+    }
+    
+    // Filter stats by league_id
+    return playerStats.filter(stat => {
+      const statLeagueId = stat.players?.league_id || stat.league_id;
+      return statLeagueId === selectedLeagueFilter;
+    });
+  }, [playerStats, selectedLeagueFilter]);
+
+  // Calculate season averages based on filtered stats
+  const filteredSeasonAverages = useMemo(() => {
+    if (!filteredStats || filteredStats.length === 0) {
+      return null;
+    }
+
+    const totals = filteredStats.reduce((acc, game) => ({
+      points: acc.points + (game.spoints || game.points || 0),
+      rebounds: acc.rebounds + (game.sreboundstotal || game.rebounds_total || 0),
+      assists: acc.assists + (game.sassists || game.assists || 0),
+      steals: acc.steals + (game.ssteals || game.steals || 0),
+      blocks: acc.blocks + (game.sblocks || game.blocks || 0),
+      field_goals_made: acc.field_goals_made + (game.sfieldgoalsmade || game.field_goals_made || 0),
+      field_goals_attempted: acc.field_goals_attempted + (game.sfieldgoalsattempted || game.field_goals_attempted || 0),
+      three_pointers_made: acc.three_pointers_made + (game.sthreepointersmade || game.three_pointers_made || 0),
+      three_pointers_attempted: acc.three_pointers_attempted + (game.sthreepointersattempted || game.three_pointers_attempted || 0),
+      free_throws_made: acc.free_throws_made + (game.sfreethrowsmade || game.free_throws_made || 0),
+      free_throws_attempted: acc.free_throws_attempted + (game.sfreethrowsattempted || game.free_throws_attempted || 0),
+    }), {
+      points: 0, rebounds: 0, assists: 0, steals: 0, blocks: 0,
+      field_goals_made: 0, field_goals_attempted: 0,
+      three_pointers_made: 0, three_pointers_attempted: 0,
+      free_throws_made: 0, free_throws_attempted: 0
+    });
+
+    const games = filteredStats.length;
+    return {
+      games_played: games,
+      avg_points: totals.points / games,
+      avg_rebounds: totals.rebounds / games,
+      avg_assists: totals.assists / games,
+      avg_steals: totals.steals / games,
+      avg_blocks: totals.blocks / games,
+      fg_percentage: totals.field_goals_attempted > 0 ? (totals.field_goals_made / totals.field_goals_attempted) * 100 : 0,
+      three_point_percentage: totals.three_pointers_attempted > 0 ? (totals.three_pointers_made / totals.three_pointers_attempted) * 100 : 0,
+      ft_percentage: totals.free_throws_attempted > 0 ? (totals.free_throws_made / totals.free_throws_attempted) * 100 : 0,
+    };
+  }, [filteredStats]);
+
+  // Get name variations with league info
+  const nameVariationsWithLeagues = useMemo(() => {
+    if (playerMatches.length <= 1) return [];
+
+    const variations = playerMatches.map(match => ({
+      name: match.full_name,
+      leagueId: match.league_id,
+      leagueName: leagueNames.get(match.league_id) || 'Unknown League'
+    }));
+
+    // Remove duplicates based on name
+    const uniqueVariations = variations.filter((v, index, self) => 
+      index === self.findIndex(t => t.name === v.name)
+    );
+
+    return uniqueVariations;
+  }, [playerMatches, leagueNames]);
+
   // Search functionality
   useEffect(() => {
     if (!searchQuery.trim()) {
@@ -510,7 +678,7 @@ export default function PlayerStatsPage() {
           name="description"
           content={
             playerInfo?.name
-              ? `View ${playerInfo.name}${playerInfo.team ? ` (${playerInfo.team})` : ''}'s basketball stats, game-by-game performance${seasonAverages ? `, averaging ${seasonAverages.avg_points.toFixed(1)} PPG` : ''}, and AI-powered analysis on Swish Assistant.`
+              ? `View ${playerInfo.name}${playerInfo.team ? ` (${playerInfo.team})` : ''}'s basketball stats, game-by-game performance${filteredSeasonAverages ? `, averaging ${filteredSeasonAverages.avg_points.toFixed(1)} PPG` : ''}, and AI-powered analysis on Swish Assistant.`
               : "Explore player stats and basketball performance data on Swish Assistant."
           }
         />
@@ -522,7 +690,7 @@ export default function PlayerStatsPage() {
           property="og:description"
           content={
             playerInfo?.name
-              ? `View ${playerInfo.name}${playerInfo.team ? ` (${playerInfo.team})` : ''}'s basketball stats${seasonAverages ? `, averaging ${seasonAverages.avg_points.toFixed(1)} PPG` : ''}.`
+              ? `View ${playerInfo.name}${playerInfo.team ? ` (${playerInfo.team})` : ''}'s basketball stats${filteredSeasonAverages ? `, averaging ${filteredSeasonAverages.avg_points.toFixed(1)} PPG` : ''}.`
               : "Explore player stats and basketball performance data on Swish Assistant."
           }
         />
@@ -538,7 +706,7 @@ export default function PlayerStatsPage() {
           name="twitter:description"
           content={
             playerInfo?.name
-              ? `${playerInfo.name}'s basketball stats${seasonAverages ? `: ${seasonAverages.avg_points.toFixed(1)} PPG, ${seasonAverages.avg_rebounds.toFixed(1)} RPG, ${seasonAverages.avg_assists.toFixed(1)} APG` : ''}`
+              ? `${playerInfo.name}'s basketball stats${filteredSeasonAverages ? `: ${filteredSeasonAverages.avg_points.toFixed(1)} PPG, ${filteredSeasonAverages.avg_rebounds.toFixed(1)} RPG, ${filteredSeasonAverages.avg_assists.toFixed(1)} APG` : ''}`
               : "Explore player stats on Swish Assistant."
           }
         />
@@ -645,6 +813,22 @@ export default function PlayerStatsPage() {
                   {/* Player Info */}
                   <div className="flex-1 min-w-0">
                     <h1 className="text-xl md:text-2xl font-bold text-orange-900 mb-1 break-words" data-testid="text-player-name">{playerInfo.name}</h1>
+                    
+                    {/* Name Variations Indicator */}
+                    {nameVariationsWithLeagues.length > 0 && (
+                      <div className="mb-2">
+                        <p className="text-xs md:text-sm text-orange-600 italic">
+                          <span className="font-semibold">Also known as: </span>
+                          {nameVariationsWithLeagues.map((variation, index) => (
+                            <span key={index}>
+                              {variation.name} ({variation.leagueName})
+                              {index < nameVariationsWithLeagues.length - 1 ? ', ' : ''}
+                            </span>
+                          ))}
+                        </p>
+                      </div>
+                    )}
+                    
                     <p className="text-orange-700 flex items-center gap-2 text-sm md:text-base mb-2" data-testid="text-player-team">
                       <Trophy className="h-4 w-4 flex-shrink-0" />
                       <span className="break-words">{playerInfo.team}</span>
@@ -746,13 +930,65 @@ export default function PlayerStatsPage() {
           </Card>
         )}
 
+        {/* League Filter Dropdown */}
+        {playerMatches.length > 1 && (
+          <Card className="mb-6 border-orange-200 shadow-md animate-slide-in-up bg-white">
+            <CardHeader className="bg-white text-orange-900 rounded-t-lg border-b border-orange-200">
+              <CardTitle className="flex items-center gap-2">
+                <Filter className="h-5 w-5 text-orange-700" />
+                Filter by Competition
+              </CardTitle>
+              <CardDescription className="text-orange-700">
+                View stats from specific competitions or all combined
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <Select 
+                value={selectedLeagueFilter} 
+                onValueChange={setSelectedLeagueFilter}
+              >
+                <SelectTrigger className="w-full md:w-80 border-orange-200 focus:ring-orange-500" data-testid="select-league-filter">
+                  <SelectValue placeholder="Select a competition" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all" data-testid="select-league-all">
+                    All Competitions
+                  </SelectItem>
+                  {Array.from(new Set(playerMatches.map(m => m.league_id)))
+                    .filter(Boolean)
+                    .map(leagueId => (
+                      <SelectItem 
+                        key={leagueId} 
+                        value={leagueId}
+                        data-testid={`select-league-${leagueId}`}
+                      >
+                        {leagueNames.get(leagueId) || leagueId}
+                      </SelectItem>
+                    ))
+                  }
+                </SelectContent>
+              </Select>
+              {selectedLeagueFilter !== "all" && (
+                <p className="mt-3 text-sm text-orange-600">
+                  Showing stats from: <span className="font-semibold">{leagueNames.get(selectedLeagueFilter) || selectedLeagueFilter}</span>
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Season Averages */}
-        {seasonAverages && (
+        {filteredSeasonAverages && (
           <Card className="mb-8 border-orange-200 shadow-md animate-slide-in-up hover:animate-glow bg-white">
             <CardHeader className="bg-white text-orange-900 rounded-t-lg border-b border-orange-200">
               <CardTitle className="flex items-center gap-2">
                 <Trophy className="h-5 w-5 animate-float text-orange-700" />
-                Season Averages ({seasonAverages.games_played} games)
+                Season Averages ({filteredSeasonAverages.games_played} games)
+                {selectedLeagueFilter !== "all" && (
+                  <Badge variant="outline" className="ml-2 bg-orange-50 text-orange-700 border-orange-300">
+                    {leagueNames.get(selectedLeagueFilter) || 'Filtered'}
+                  </Badge>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent className="p-4 md:pt-6">
@@ -761,13 +997,13 @@ export default function PlayerStatsPage() {
                 <div className="mx-auto max-w-[140px] w-full text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
                   <div className="relative p-2 sm:p-3">
                     <div className="text-lg font-semibold md:text-3xl lg:text-4xl md:font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
-                      {seasonAverages.avg_points.toFixed(1)}
+                      {filteredSeasonAverages.avg_points.toFixed(1)}
                     </div>
                     <div className="text-xs md:text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">PPG</div>
                     <div className="max-w-[120px] mx-auto bg-orange-50 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
-                        style={{ width: `${Math.min((seasonAverages.avg_points / 30) * 100, 100)}%` }}
+                        style={{ width: `${Math.min((filteredSeasonAverages.avg_points / 30) * 100, 100)}%` }}
                       ></div>
                     </div>
                   </div>
@@ -777,13 +1013,13 @@ export default function PlayerStatsPage() {
                 <div className="mx-auto max-w-[140px] w-full text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
                   <div className="relative p-2 sm:p-3">
                     <div className="text-lg font-semibold md:text-3xl lg:text-4xl md:font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-bounce">
-                      {seasonAverages.avg_rebounds.toFixed(1)}
+                      {filteredSeasonAverages.avg_rebounds.toFixed(1)}
                     </div>
                     <div className="text-xs md:text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">RPG</div>
                     <div className="max-w-[120px] mx-auto bg-orange-50 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
-                        style={{ width: `${Math.min((seasonAverages.avg_rebounds / 15) * 100, 100)}%` }}
+                        style={{ width: `${Math.min((filteredSeasonAverages.avg_rebounds / 15) * 100, 100)}%` }}
                       ></div>
                     </div>
                   </div>
@@ -793,13 +1029,13 @@ export default function PlayerStatsPage() {
                 <div className="mx-auto max-w-[140px] w-full text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
                   <div className="relative p-2 sm:p-3">
                     <div className="text-lg font-semibold md:text-3xl lg:text-4xl md:font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
-                      {seasonAverages.avg_assists.toFixed(1)}
+                      {filteredSeasonAverages.avg_assists.toFixed(1)}
                     </div>
                     <div className="text-xs md:text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">APG</div>
                     <div className="max-w-[120px] mx-auto bg-orange-50 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
-                        style={{ width: `${Math.min((seasonAverages.avg_assists / 12) * 100, 100)}%` }}
+                        style={{ width: `${Math.min((filteredSeasonAverages.avg_assists / 12) * 100, 100)}%` }}
                       ></div>
                     </div>
                   </div>
@@ -809,13 +1045,13 @@ export default function PlayerStatsPage() {
                 <div className="mx-auto max-w-[140px] w-full text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
                   <div className="relative p-2 sm:p-3">
                     <div className="text-lg font-semibold md:text-3xl lg:text-4xl md:font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
-                      {seasonAverages.avg_steals.toFixed(1)}
+                      {filteredSeasonAverages.avg_steals.toFixed(1)}
                     </div>
                     <div className="text-xs md:text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">SPG</div>
                     <div className="max-w-[120px] mx-auto bg-orange-50 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
-                        style={{ width: `${Math.min((seasonAverages.avg_steals / 5) * 100, 100)}%` }}
+                        style={{ width: `${Math.min((filteredSeasonAverages.avg_steals / 5) * 100, 100)}%` }}
                       ></div>
                     </div>
                   </div>
@@ -825,13 +1061,13 @@ export default function PlayerStatsPage() {
                 <div className="mx-auto max-w-[140px] w-full text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
                   <div className="relative p-2 sm:p-3">
                     <div className="text-lg font-semibold md:text-3xl lg:text-4xl md:font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
-                      {seasonAverages.avg_blocks.toFixed(1)}
+                      {filteredSeasonAverages.avg_blocks.toFixed(1)}
                     </div>
                     <div className="text-xs md:text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">BPG</div>
                     <div className="max-w-[120px] mx-auto bg-orange-50 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
-                        style={{ width: `${Math.min((seasonAverages.avg_blocks / 5) * 100, 100)}%` }}
+                        style={{ width: `${Math.min((filteredSeasonAverages.avg_blocks / 5) * 100, 100)}%` }}
                       ></div>
                     </div>
                   </div>
@@ -841,13 +1077,13 @@ export default function PlayerStatsPage() {
                 <div className="mx-auto max-w-[140px] w-full text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
                   <div className="relative p-2 sm:p-3">
                     <div className="text-lg font-semibold md:text-3xl lg:text-4xl md:font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
-                      {formatPercentage(seasonAverages.fg_percentage)}
+                      {formatPercentage(filteredSeasonAverages.fg_percentage)}
                     </div>
                     <div className="text-xs md:text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">FG%</div>
                     <div className="max-w-[120px] mx-auto bg-orange-50 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
-                        style={{ width: `${seasonAverages.fg_percentage}%` }}
+                        style={{ width: `${filteredSeasonAverages.fg_percentage}%` }}
                       ></div>
                     </div>
                   </div>
@@ -857,13 +1093,13 @@ export default function PlayerStatsPage() {
                 <div className="mx-auto max-w-[140px] w-full text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
                   <div className="relative p-2 sm:p-3">
                     <div className="text-lg font-semibold md:text-3xl lg:text-4xl md:font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
-                      {formatPercentage(seasonAverages.three_point_percentage)}
+                      {formatPercentage(filteredSeasonAverages.three_point_percentage)}
                     </div>
                     <div className="text-xs md:text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">3P%</div>
                     <div className="max-w-[120px] mx-auto bg-orange-50 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
-                        style={{ width: `${seasonAverages.three_point_percentage}%` }}
+                        style={{ width: `${filteredSeasonAverages.three_point_percentage}%` }}
                       ></div>
                     </div>
                   </div>
@@ -873,13 +1109,13 @@ export default function PlayerStatsPage() {
                 <div className="mx-auto max-w-[140px] w-full text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
                   <div className="relative p-2 sm:p-3">
                     <div className="text-lg font-semibold md:text-3xl lg:text-4xl md:font-bold text-orange-700 group-hover:text-orange-800 transition-colors duration-300 group-hover:animate-pulse">
-                      {formatPercentage(seasonAverages.ft_percentage)}
+                      {formatPercentage(filteredSeasonAverages.ft_percentage)}
                     </div>
                     <div className="text-xs md:text-sm text-orange-700 group-hover:text-orange-800 transition-colors duration-300 mt-1">FT%</div>
                     <div className="max-w-[120px] mx-auto bg-orange-50 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
-                        style={{ width: `${seasonAverages.ft_percentage}%` }}
+                        style={{ width: `${filteredSeasonAverages.ft_percentage}%` }}
                       ></div>
                     </div>
                   </div>
@@ -901,15 +1137,15 @@ export default function PlayerStatsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
-            {playerStats.length === 0 ? (
+            {filteredStats.length === 0 ? (
               <div className="p-6 md:p-8 text-center text-orange-600 text-sm md:text-base">
-                No game statistics found for this player.
+                No game statistics found for this player{selectedLeagueFilter !== "all" ? " in the selected competition" : ""}.
               </div>
             ) : (
               <>
                 {/* Mobile Card View */}
                 <div className="md:hidden border-t border-orange-200">
-                  {playerStats.map((game, index) => {
+                  {filteredStats.map((game, index) => {
                     const opponentName = game.opponent || 
                       (game.is_home_player === true && game.away_team) ||
                       (game.is_home_player === false && game.home_team) ||
@@ -972,7 +1208,7 @@ export default function PlayerStatsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {playerStats.map((game, index) => {
+                      {filteredStats.map((game, index) => {
                         const opponentName = game.opponent || 
                           (game.is_home_player === true && game.away_team) ||
                           (game.is_home_player === false && game.home_team) ||

@@ -75,7 +75,7 @@ export default function TeamLogoManager() {
         // 2. Get teams from team_stats (teams with live stats)
         const { data: teamStats, error: statsError } = await supabase
           .from("team_stats")
-          .select("name")
+          .select("*")  // Select all fields including tot_s* stats
           .eq("league_id", leagueData.league_id);
 
         if (teamStats && !statsError) {
