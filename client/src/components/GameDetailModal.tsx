@@ -549,28 +549,28 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                 <TabsList className="w-full flex flex-nowrap overflow-x-auto scrollbar-none bg-white border-b border-gray-200 sticky top-0 z-20 rounded-none h-auto p-0 justify-start">
                   <TabsTrigger 
                     value="summary" 
-                    className="flex-shrink-0 px-4 md:px-6 py-3 rounded-none data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-orange-500"
+                    className="flex-shrink-0 px-4 md:px-6 py-3 rounded-none data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-orange-500 data-[state=active]:text-orange-600"
                   >
                     <Trophy className="w-4 h-4 mr-2" />
                     <span className="text-sm font-medium">Summary</span>
                   </TabsTrigger>
                   <TabsTrigger 
                     value="boxscore" 
-                    className="flex-shrink-0 px-4 md:px-6 py-3 rounded-none data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-orange-500"
+                    className="flex-shrink-0 px-4 md:px-6 py-3 rounded-none data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-orange-500 data-[state=active]:text-orange-600"
                   >
                     <Users className="w-4 h-4 mr-2" />
                     <span className="text-sm font-medium">Box Score</span>
                   </TabsTrigger>
                   <TabsTrigger 
                     value="feed" 
-                    className="flex-shrink-0 px-4 md:px-6 py-3 rounded-none data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-orange-500"
+                    className="flex-shrink-0 px-4 md:px-6 py-3 rounded-none data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-orange-500 data-[state=active]:text-orange-600"
                   >
                     <Activity className="w-4 h-4 mr-2" />
                     <span className="text-sm font-medium">Feed</span>
                   </TabsTrigger>
                   <TabsTrigger 
                     value="shotchart" 
-                    className="flex-shrink-0 px-4 md:px-6 py-3 rounded-none data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-orange-500"
+                    className="flex-shrink-0 px-4 md:px-6 py-3 rounded-none data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-orange-500 data-[state=active]:text-orange-600"
                   >
                     <MapPin className="w-4 h-4 mr-2" />
                     <span className="text-sm font-medium">Shot Chart</span>
