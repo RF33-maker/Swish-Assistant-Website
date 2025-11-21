@@ -1339,17 +1339,38 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
 
                       {/* Events Feed */}
                       <div className="space-y-3">
-                        {liveEvents
-                          .filter(event => quarterFilter === 'all' || `Q${event.period}` === quarterFilter)
-                          .map((event) => {
-                            // Find which team this event belongs to by matching player name
-                            const eventPlayer = gameStats.find(p => 
-                              event.player_name && (
-                                `${p.firstname} ${p.familyname}`.toLowerCase().includes(event.player_name.toLowerCase()) ||
-                                event.player_name.toLowerCase().includes(`${p.firstname} ${p.familyname}`.toLowerCase())
-                              )
-                            );
-                            const eventTeamColor = eventPlayer ? teamColors[eventPlayer.team] : null;
+                        {(() => {
+                          // Preprocess: Build a map of each event to its previous scored event
+                          // This scans the full unfiltered liveEvents array for accurate score comparisons
+                          const eventToPreviousScoredEvent = new Map<number, LiveEvent>();
+                          let lastScoredEvent: LiveEvent | null = null;
+                          
+                          for (const event of liveEvents) {
+                            if (event.score && event.score.trim()) {
+                              if (lastScoredEvent) {
+                                eventToPreviousScoredEvent.set(event.id, lastScoredEvent);
+                              }
+                              lastScoredEvent = event;
+                            } else if (lastScoredEvent) {
+                              // Events without scores still get the last scored event as reference
+                              eventToPreviousScoredEvent.set(event.id, lastScoredEvent);
+                            }
+                          }
+                          
+                          return liveEvents
+                            .filter(event => quarterFilter === 'all' || `Q${event.period}` === quarterFilter)
+                            .map((event) => {
+                              // Find which team this event belongs to by matching player name
+                              const eventPlayer = gameStats.find(p => 
+                                event.player_name && (
+                                  `${p.firstname} ${p.familyname}`.toLowerCase().includes(event.player_name.toLowerCase()) ||
+                                  event.player_name.toLowerCase().includes(`${p.firstname} ${p.familyname}`.toLowerCase())
+                                )
+                              );
+                              const eventTeamColor = eventPlayer ? teamColors[eventPlayer.team] : null;
+                              
+                              // Get previous scored event from the preprocessed map
+                              const previousEvent = eventToPreviousScoredEvent.get(event.id) || null;
                             
                             return (
                               <div 
@@ -1398,7 +1419,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                         color: 'rgb(194, 65, 12)'
                                       }}
                                     >
-                                      {generatePlayCaption(event)}
+                                      {generatePlayCaption(event, previousEvent)}
                                     </div>
                                   </div>
                                   {event.score && (
@@ -1417,8 +1438,9 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                   )}
                                 </div>
                               </div>
-                            );
-                          })}
+                              );
+                            });
+                        })()}
                       </div>
                     </>
                   )}

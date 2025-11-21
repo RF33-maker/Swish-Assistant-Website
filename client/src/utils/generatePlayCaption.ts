@@ -1,4 +1,4 @@
-export function generatePlayCaption(play: any): string {
+export function generatePlayCaption(play: any, previousPlay?: any): string {
   const rawAction = play.action_type?.toLowerCase() || "";
   const sub = play.sub_type || "";
   const qualifiers: string[] = play.qualifiers || [];
@@ -18,6 +18,16 @@ export function generatePlayCaption(play: any): string {
     action = "freethrow";
   } else {
     action = rawAction;
+  }
+  
+  // Derive make/miss from score change as fallback
+  // If score changed from previous event, it's a make; otherwise it's a miss
+  let derivedSuccess: boolean | null = null;
+  if (previousPlay && score && previousPlay.score) {
+    // Normalize scores by trimming whitespace for accurate comparison
+    const currentScore = score.trim();
+    const previousScore = previousPlay.score.trim();
+    derivedSuccess = currentScore !== previousScore;
   }
   
   const emojis: Record<string, string> = {
@@ -93,7 +103,22 @@ export function generatePlayCaption(play: any): string {
     const shotWord = sub || "jumper";
     const subLower = sub.toLowerCase();
     const emoji = emojis[action];
-    const isMake = play.success === true || play.scoring === true;
+    
+    // Determine make/miss with fallback hierarchy:
+    // 1. Derived from score change (most reliable)
+    // 2. Check if points > 0 (heuristic)
+    // 3. Check qualifiers for "made" or similar
+    // 4. Fall back to success/scoring fields (least reliable)
+    let isMake: boolean;
+    if (derivedSuccess !== null) {
+      isMake = derivedSuccess;
+    } else if (play.points && play.points > 0) {
+      isMake = true;
+    } else if (qualifiers.some(q => q.toLowerCase().includes('made'))) {
+      isMake = true;
+    } else {
+      isMake = play.success === true || play.scoring === true;
+    }
     
     // Check for blocked shots
     const isBlocked = qualifiers.some(q => 
@@ -154,7 +179,18 @@ export function generatePlayCaption(play: any): string {
 
   // Free throws
   if (action.includes("freethrow") || action.includes("free throw")) {
-    const isMake = play.success === true || play.scoring === true;
+    // Determine make/miss with fallback hierarchy (same as shots)
+    let isMake: boolean;
+    if (derivedSuccess !== null) {
+      isMake = derivedSuccess;
+    } else if (play.points && play.points > 0) {
+      isMake = true;
+    } else if (qualifiers.some(q => q.toLowerCase().includes('made'))) {
+      isMake = true;
+    } else {
+      isMake = play.success === true || play.scoring === true;
+    }
+    
     if (isMake) {
       return `${player} sinks it from the line. 🎯`;
     } else {
