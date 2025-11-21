@@ -1083,23 +1083,75 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                         <TrendingUp className="w-5 h-5 text-orange-500" />
                         {selectedTeam} Game Highlights
                       </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
                         <div className="bg-white rounded-md p-3">
                           <div className="text-orange-600 font-medium">Top Scorer</div>
                           <div className="text-slate-800">
-                            {selectedTeamPlayers.sort((a, b) => (b.spoints || 0) - (a.spoints || 0))[0]?.firstname} {selectedTeamPlayers.sort((a, b) => (b.spoints || 0) - (a.spoints || 0))[0]?.familyname} - {selectedTeamPlayers.sort((a, b) => (b.spoints || 0) - (a.spoints || 0))[0]?.spoints} points
+                            {selectedTeamPlayers.sort((a, b) => (b.spoints || 0) - (a.spoints || 0))[0]?.firstname} {selectedTeamPlayers.sort((a, b) => (b.spoints || 0) - (a.spoints || 0))[0]?.familyname}
+                          </div>
+                          <div className="text-orange-600 font-bold">
+                            {selectedTeamPlayers.sort((a, b) => (b.spoints || 0) - (a.spoints || 0))[0]?.spoints} pts
                           </div>
                         </div>
                         <div className="bg-white rounded-md p-3">
                           <div className="text-orange-600 font-medium">Best Rebounder</div>
                           <div className="text-slate-800">
-                            {selectedTeamPlayers.sort((a, b) => (b.sreboundstotal || 0) - (a.sreboundstotal || 0))[0]?.firstname} {selectedTeamPlayers.sort((a, b) => (b.sreboundstotal || 0) - (a.sreboundstotal || 0))[0]?.familyname} - {selectedTeamPlayers.sort((a, b) => (b.sreboundstotal || 0) - (a.sreboundstotal || 0))[0]?.sreboundstotal} rebounds
+                            {selectedTeamPlayers.sort((a, b) => (b.sreboundstotal || 0) - (a.sreboundstotal || 0))[0]?.firstname} {selectedTeamPlayers.sort((a, b) => (b.sreboundstotal || 0) - (a.sreboundstotal || 0))[0]?.familyname}
+                          </div>
+                          <div className="text-orange-600 font-bold">
+                            {selectedTeamPlayers.sort((a, b) => (b.sreboundstotal || 0) - (a.sreboundstotal || 0))[0]?.sreboundstotal} reb
                           </div>
                         </div>
                         <div className="bg-white rounded-md p-3">
                           <div className="text-orange-600 font-medium">Best Playmaker</div>
                           <div className="text-slate-800">
-                            {selectedTeamPlayers.sort((a, b) => (b.sassists || 0) - (a.sassists || 0))[0]?.firstname} {selectedTeamPlayers.sort((a, b) => (b.sassists || 0) - (a.sassists || 0))[0]?.familyname} - {selectedTeamPlayers.sort((a, b) => (b.sassists || 0) - (a.sassists || 0))[0]?.sassists} assists
+                            {selectedTeamPlayers.sort((a, b) => (b.sassists || 0) - (a.sassists || 0))[0]?.firstname} {selectedTeamPlayers.sort((a, b) => (b.sassists || 0) - (a.sassists || 0))[0]?.familyname}
+                          </div>
+                          <div className="text-orange-600 font-bold">
+                            {selectedTeamPlayers.sort((a, b) => (b.sassists || 0) - (a.sassists || 0))[0]?.sassists} ast
+                          </div>
+                        </div>
+                        <div className="bg-white rounded-md p-3">
+                          <div className="text-orange-600 font-medium">Most Steals</div>
+                          <div className="text-slate-800">
+                            {selectedTeamPlayers.sort((a, b) => (b.ssteals || 0) - (a.ssteals || 0))[0]?.firstname} {selectedTeamPlayers.sort((a, b) => (b.ssteals || 0) - (a.ssteals || 0))[0]?.familyname}
+                          </div>
+                          <div className="text-orange-600 font-bold">
+                            {selectedTeamPlayers.sort((a, b) => (b.ssteals || 0) - (a.ssteals || 0))[0]?.ssteals || 0} stl
+                          </div>
+                        </div>
+                        <div className="bg-white rounded-md p-3">
+                          <div className="text-orange-600 font-medium">Most Blocks</div>
+                          <div className="text-slate-800">
+                            {selectedTeamPlayers.sort((a, b) => (b.sblocks || 0) - (a.sblocks || 0))[0]?.firstname} {selectedTeamPlayers.sort((a, b) => (b.sblocks || 0) - (a.sblocks || 0))[0]?.familyname}
+                          </div>
+                          <div className="text-orange-600 font-bold">
+                            {selectedTeamPlayers.sort((a, b) => (b.sblocks || 0) - (a.sblocks || 0))[0]?.sblocks || 0} blk
+                          </div>
+                        </div>
+                        <div className="bg-white rounded-md p-3">
+                          <div className="text-orange-600 font-medium">Best FG%</div>
+                          <div className="text-slate-800">
+                            {selectedTeamPlayers.filter(p => (p.sfieldgoalsattempted || 0) >= 3).sort((a, b) => {
+                              const aFG = (a.sfieldgoalsmade || 0) / (a.sfieldgoalsattempted || 1) * 100;
+                              const bFG = (b.sfieldgoalsmade || 0) / (b.sfieldgoalsattempted || 1) * 100;
+                              return bFG - aFG;
+                            })[0]?.firstname} {selectedTeamPlayers.filter(p => (p.sfieldgoalsattempted || 0) >= 3).sort((a, b) => {
+                              const aFG = (a.sfieldgoalsmade || 0) / (a.sfieldgoalsattempted || 1) * 100;
+                              const bFG = (b.sfieldgoalsmade || 0) / (b.sfieldgoalsattempted || 1) * 100;
+                              return bFG - aFG;
+                            })[0]?.familyname}
+                          </div>
+                          <div className="text-orange-600 font-bold">
+                            {selectedTeamPlayers.filter(p => (p.sfieldgoalsattempted || 0) >= 3).length > 0 ? (((selectedTeamPlayers.filter(p => (p.sfieldgoalsattempted || 0) >= 3).sort((a, b) => {
+                              const aFG = (a.sfieldgoalsmade || 0) / (a.sfieldgoalsattempted || 1) * 100;
+                              const bFG = (b.sfieldgoalsmade || 0) / (b.sfieldgoalsattempted || 1) * 100;
+                              return bFG - aFG;
+                            })[0]?.sfieldgoalsmade || 0) / (selectedTeamPlayers.filter(p => (p.sfieldgoalsattempted || 0) >= 3).sort((a, b) => {
+                              const aFG = (a.sfieldgoalsmade || 0) / (a.sfieldgoalsattempted || 1) * 100;
+                              const bFG = (b.sfieldgoalsmade || 0) / (b.sfieldgoalsattempted || 1) * 100;
+                              return bFG - aFG;
+                            })[0]?.sfieldgoalsattempted || 1) * 100).toFixed(0) + '%') : '-'}
                           </div>
                         </div>
                       </div>
