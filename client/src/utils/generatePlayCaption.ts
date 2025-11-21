@@ -1,10 +1,24 @@
 export function generatePlayCaption(play: any): string {
-  const action = play.action_type?.toLowerCase() || "";
+  const rawAction = play.action_type?.toLowerCase() || "";
   const sub = play.sub_type || "";
   const qualifiers: string[] = play.qualifiers || [];
   const score = play.score || "";
   const period = play.period;
   const player = play.player_name?.trim();
+  
+  // Normalize action type to standard format
+  let action = rawAction;
+  if (rawAction.includes("three") || rawAction.includes("3pt") || rawAction.includes("3-pt") || play.points === 3) {
+    action = "3pt";
+  } else if (rawAction.includes("field") || rawAction.includes("shot") || rawAction.includes("layup") || 
+             rawAction.includes("dunk") || rawAction.includes("jumper") || rawAction.includes("2pt") || 
+             rawAction.includes("2-pt") || (play.points === 2 && !rawAction.includes("free"))) {
+    action = "2pt";
+  } else if (rawAction.includes("free") || rawAction.includes("ft")) {
+    action = "freethrow";
+  } else {
+    action = rawAction;
+  }
   
   const emojis: Record<string, string> = {
     "2pt": "🏀",
@@ -77,18 +91,46 @@ export function generatePlayCaption(play: any): string {
   // Shot events - 2pt and 3pt
   if (["2pt", "3pt"].includes(action)) {
     const shotWord = sub || "jumper";
+    const subLower = sub.toLowerCase();
     const emoji = emojis[action];
+    const isMake = play.success === true || play.scoring === true;
     
-    if (qualifiers.includes("fastbreak")) {
+    // Check for blocked shots
+    const isBlocked = qualifiers.some(q => 
+      q.toLowerCase().includes("block") || q.toLowerCase().includes("goaltend")
+    );
+    
+    // Missed shots
+    if (!isMake) {
+      if (isBlocked) {
+        return `${player}'s shot is blocked! ⛔`;
+      }
+      if (subLower.includes("dunk")) {
+        return `${player} misses the dunk attempt! ${emoji}`;
+      }
+      if (subLower.includes("layup")) {
+        return `${player} can't finish the ${shotWord}. ${emoji}`;
+      }
+      if (action === "3pt") {
+        return `${player} misses the three-pointer. ${emoji}`;
+      }
+      if (qualifiers.some(q => q.toLowerCase().includes("fastbreak"))) {
+        return `${player} misses on the fast break. ${emoji}`;
+      }
+      return `${player} misses the ${shotWord}. ${emoji}`;
+    }
+    
+    // Made shots
+    if (qualifiers.some(q => q.toLowerCase().includes("fastbreak"))) {
       return `${player} finishes the fast break with a ${shotWord}! ${emoji}`;
     }
-    if (qualifiers.includes("pointsinthepaint")) {
+    if (qualifiers.some(q => q.toLowerCase().includes("paint"))) {
       return `${player} scores inside with a ${shotWord}. ${emoji}`;
     }
-    if (sub.toLowerCase().includes("layup")) {
+    if (subLower.includes("layup")) {
       return `${player} finishes with the ${shotWord}! ${emoji}`;
     }
-    if (sub.toLowerCase().includes("dunk")) {
+    if (subLower.includes("dunk")) {
       return `${player} throws it down with authority! ${emoji}`;
     }
     if (action === "3pt") {
@@ -99,10 +141,11 @@ export function generatePlayCaption(play: any): string {
 
   // Rebounds
   if (action.includes("rebound")) {
-    if (sub.toLowerCase().includes("defensive")) {
+    const subLower = sub.toLowerCase();
+    if (subLower.includes("defensive")) {
       return `${player} cleans the glass with the defensive rebound. 💪`;
     }
-    if (sub.toLowerCase().includes("offensive")) {
+    if (subLower.includes("offensive")) {
       return `${player} crashes the boards for the offensive rebound! 💪`;
     }
     const type = sub ? `${sub} rebound` : "rebound";
@@ -111,7 +154,12 @@ export function generatePlayCaption(play: any): string {
 
   // Free throws
   if (action.includes("freethrow") || action.includes("free throw")) {
-    return `${player} sinks it from the line. 🎯`;
+    const isMake = play.success === true || play.scoring === true;
+    if (isMake) {
+      return `${player} sinks it from the line. 🎯`;
+    } else {
+      return `${player} misses the free throw. 🎯`;
+    }
   }
 
   // Assists
