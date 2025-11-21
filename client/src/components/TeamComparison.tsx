@@ -135,6 +135,10 @@ export function TeamComparison({ leagueId, allTeams }: TeamComparisonProps) {
       sumPtsOffTo += stat.pts_percent_off_turnovers || 0;
     });
 
+    if (games === 0) {
+      return null;
+    }
+
     return {
       name: teamName,
       games,
