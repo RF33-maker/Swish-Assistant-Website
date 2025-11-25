@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useLocation, useParams } from "wouter";
 import { supabase } from "@/lib/supabase";
 import type { League } from "@shared/schema";
@@ -518,6 +518,8 @@ export default function LeaguePage() {
   const [teamStatsSortDirection, setTeamStatsSortDirection] = useState<'asc' | 'desc'>('desc'); // Sort direction for team stats
   const [childCompetitions, setChildCompetitions] = useState<Pick<League, 'league_id' | 'name' | 'slug' | 'logo_url'>[]>([]); // Child leagues/competitions
   const [parentLeague, setParentLeague] = useState<Pick<League, 'league_id' | 'name' | 'slug' | 'logo_url'> | null>(null); // Parent league for breadcrumb
+  const [isDividerVisible, setIsDividerVisible] = useState(false); // Track if orange divider is in view
+  const dividerRef = useRef<HTMLDivElement>(null); // Ref for the orange divider
 
     
 
@@ -546,6 +548,30 @@ export default function LeaguePage() {
       const delay = setTimeout(fetchSuggestions, 300);
       return () => clearTimeout(delay);
     }, [search]);
+
+    // Intersection Observer for orange divider animation
+    useEffect(() => {
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              setIsDividerVisible(true);
+            }
+          });
+        },
+        { threshold: 0.5 } // Trigger when 50% of element is visible
+      );
+
+      if (dividerRef.current) {
+        observer.observe(dividerRef.current);
+      }
+
+      return () => {
+        if (dividerRef.current) {
+          observer.unobserve(dividerRef.current);
+        }
+      };
+    }, [league?.description]); // Re-run when description changes
 
     // Sort team stats based on selected column and direction (derived view, doesn't mutate original data)
     const sortedTeamStats = useMemo(() => {
@@ -2683,7 +2709,12 @@ export default function LeaguePage() {
               <h2 className="text-2xl font-semibold text-slate-900 text-center mb-3">
                 About {league?.name}
               </h2>
-              <div className="h-1 w-20 bg-orange-500 mx-auto mb-6 rounded-full"></div>
+              <div 
+                ref={dividerRef}
+                className={`h-1 bg-orange-500 mx-auto mb-6 rounded-full transition-all duration-1000 ease-out ${
+                  isDividerVisible ? 'w-32' : 'w-12'
+                }`}
+              ></div>
               <p className="text-slate-700 leading-relaxed text-base text-left">
                 {league?.description}
               </p>
