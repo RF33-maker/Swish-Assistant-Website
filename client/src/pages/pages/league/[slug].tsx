@@ -2830,7 +2830,12 @@ export default function LeaguePage() {
               <a 
                 href="#" 
                 className={`hover:text-orange-500 cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'overview' ? 'text-orange-500 font-semibold border-b-2 border-orange-500' : ''}`}
-                onClick={() => setActiveSection('overview')}
+                onClick={() => {
+                  setActiveSection('overview');
+                  if (teamStatsData.length === 0) {
+                    fetchTeamStats();
+                  }
+                }}
               >
                 Overview
               </a>
