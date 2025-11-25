@@ -3928,16 +3928,16 @@ export default function LeaguePage() {
                         <ul className="space-y-1 text-xs md:text-sm text-slate-800">
                           {teamStatsData
                             .slice()
-                            .sort((a, b) => (b.ppg || 0) - (a.ppg || 0))
+                            .sort((a, b) => parseFloat(b.ppg || '0') - parseFloat(a.ppg || '0'))
                             .slice(0, 5)
                             .map((team, i) => (
-                              <li key={`scoring-${team.team}-${i}`} className="flex justify-between items-center gap-2">
+                              <li key={`scoring-${team.teamName}-${i}`} className="flex justify-between items-center gap-2">
                                 <div className="flex items-center gap-1.5 truncate flex-1 min-w-0">
-                                  <TeamLogo teamName={team.team} leagueId={league?.league_id} size="xs" />
-                                  <span className="truncate">{team.team}</span>
+                                  <TeamLogo teamName={team.teamName} leagueId={league?.league_id} size="xs" />
+                                  <span className="truncate">{team.teamName}</span>
                                 </div>
                                 <span className="font-medium text-orange-500 whitespace-nowrap">
-                                  {(team.ppg || 0).toFixed(1)} PPG
+                                  {team.ppg} PPG
                                 </span>
                               </li>
                             ))}
@@ -3950,16 +3950,16 @@ export default function LeaguePage() {
                         <ul className="space-y-1 text-xs md:text-sm text-slate-800">
                           {teamStatsData
                             .slice()
-                            .sort((a, b) => (b.rpg || 0) - (a.rpg || 0))
+                            .sort((a, b) => parseFloat(b.rpg || '0') - parseFloat(a.rpg || '0'))
                             .slice(0, 5)
                             .map((team, i) => (
-                              <li key={`rebounding-${team.team}-${i}`} className="flex justify-between items-center gap-2">
+                              <li key={`rebounding-${team.teamName}-${i}`} className="flex justify-between items-center gap-2">
                                 <div className="flex items-center gap-1.5 truncate flex-1 min-w-0">
-                                  <TeamLogo teamName={team.team} leagueId={league?.league_id} size="xs" />
-                                  <span className="truncate">{team.team}</span>
+                                  <TeamLogo teamName={team.teamName} leagueId={league?.league_id} size="xs" />
+                                  <span className="truncate">{team.teamName}</span>
                                 </div>
                                 <span className="font-medium text-orange-500 whitespace-nowrap">
-                                  {(team.rpg || 0).toFixed(1)} RPG
+                                  {team.rpg} RPG
                                 </span>
                               </li>
                             ))}
@@ -3972,16 +3972,16 @@ export default function LeaguePage() {
                         <ul className="space-y-1 text-xs md:text-sm text-slate-800">
                           {teamStatsData
                             .slice()
-                            .sort((a, b) => (b.apg || 0) - (a.apg || 0))
+                            .sort((a, b) => parseFloat(b.apg || '0') - parseFloat(a.apg || '0'))
                             .slice(0, 5)
                             .map((team, i) => (
-                              <li key={`assists-${team.team}-${i}`} className="flex justify-between items-center gap-2">
+                              <li key={`assists-${team.teamName}-${i}`} className="flex justify-between items-center gap-2">
                                 <div className="flex items-center gap-1.5 truncate flex-1 min-w-0">
-                                  <TeamLogo teamName={team.team} leagueId={league?.league_id} size="xs" />
-                                  <span className="truncate">{team.team}</span>
+                                  <TeamLogo teamName={team.teamName} leagueId={league?.league_id} size="xs" />
+                                  <span className="truncate">{team.teamName}</span>
                                 </div>
                                 <span className="font-medium text-orange-500 whitespace-nowrap">
-                                  {(team.apg || 0).toFixed(1)} APG
+                                  {team.apg} APG
                                 </span>
                               </li>
                             ))}
