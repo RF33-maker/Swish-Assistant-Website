@@ -1472,7 +1472,6 @@ export default function LeaguePage() {
           };
 
           fetchTopStats();
-          fetchTeamStats();
         }
       };
 
@@ -1483,6 +1482,13 @@ export default function LeaguePage() {
     useEffect(() => {
       if (league?.league_id) {
         fetchAllPlayerAverages();
+      }
+    }, [league?.league_id]);
+
+    // Fetch team stats when league is available
+    useEffect(() => {
+      if (league?.league_id) {
+        fetchTeamStats();
       }
     }, [league?.league_id]);
 
