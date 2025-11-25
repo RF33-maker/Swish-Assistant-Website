@@ -2678,7 +2678,7 @@ export default function LeaguePage() {
 
         {/* SEO-Optimized About This League Section */}
         {league?.description && (
-          <div className="w-full bg-gradient-to-b from-transparent to-[#fffaf5] pt-4 pb-10 px-4">
+          <div className="w-full bg-gradient-to-b from-transparent to-[#fffaf5] pt-1 pb-10 px-4">
             <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-sm p-8 border border-orange-100">
               <h2 className="text-2xl font-semibold text-slate-900 text-center mb-3">
                 About {league?.name}
