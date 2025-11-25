@@ -2681,7 +2681,7 @@ export default function LeaguePage() {
           <div className="w-full bg-orange-50/40 py-6 px-4 flex justify-center">
             <div className="max-w-4xl text-center">
               <h2 className="text-xl font-semibold text-slate-900 mb-2">
-                About {league?.name}
+                {league?.name} Stats, Insights & Advanced Metrics
               </h2>
               <p className="text-slate-700 leading-relaxed">{league?.description}</p>
             </div>
