@@ -2678,12 +2678,15 @@ export default function LeaguePage() {
 
         {/* SEO-Optimized About This League Section */}
         {league?.description && (
-          <div className="w-full bg-orange-50/40 py-6 px-4 flex justify-center">
-            <div className="max-w-4xl text-center">
-              <h2 className="text-xl font-semibold text-slate-900 mb-2">
-                {league?.name} Stats, Insights & Advanced Metrics
+          <div className="w-full bg-gradient-to-b from-transparent to-[#fffaf5] pt-4 pb-10 px-4">
+            <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-sm p-8 border border-orange-100">
+              <h2 className="text-2xl font-semibold text-slate-900 text-center mb-3">
+                About {league?.name}
               </h2>
-              <p className="text-slate-700 leading-relaxed">{league?.description}</p>
+              <div className="h-1 w-20 bg-orange-500 mx-auto mb-6 rounded-full"></div>
+              <p className="text-slate-700 leading-relaxed text-base text-left">
+                {league?.description}
+              </p>
             </div>
           </div>
         )}
