@@ -60,4 +60,14 @@ The application is structured into a React frontend and integrates with external
 ## External Dependencies
 - **Supabase**: Used for database storage, user authentication, and object storage (e.g., `team-logos`, `league-banners`).
 - **Python Flask Backend (https://sab-backend.onrender.com)**: An external service that handles file processing, document parsing, and AI-powered chatbot functionality (e.g., player analysis using OpenAI API).
-- **Instagram**: Integrated for displaying league-owner configured Instagram profiles or specific posts in the sidebar.
+- **Instagram**: Enhanced carousel integration for displaying multiple Instagram posts/reels in league sidebar:
+  - Auto-scrolling carousel with 6-second intervals
+  - Manual navigation controls (prev/next arrows, dot indicators)
+  - Play/pause toggle for auto-scroll
+  - Large display format (650px height) for better visibility
+  - Video playback support for Instagram reels
+  - League owners can manage multiple Instagram URLs through admin interface
+  - URLs stored as JSON array in existing `instagram_embed_url` field (backward compatible with single URL)
+  - URL normalization prevents duplicates (removes trailing slashes, query params)
+  - Supports profile URLs, post URLs (`/p/`), and reel URLs (`/reel/`, `/reels/`)
+  - Component: `InstagramCarousel.tsx` using Embla Carousel with Autoplay plugin
