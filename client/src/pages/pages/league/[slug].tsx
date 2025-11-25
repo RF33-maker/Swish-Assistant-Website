@@ -1200,6 +1200,7 @@ export default function LeaguePage() {
           };
 
           fetchTopStats();
+          fetchTeamStats();
         }
       };
 
