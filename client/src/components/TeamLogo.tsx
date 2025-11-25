@@ -5,12 +5,13 @@ import { normalizeTeamNameForFile } from "@/lib/teamUtils";
 interface TeamLogoProps {
   teamName: string;
   leagueId: string;
-  size?: "sm" | "md" | "lg" | "xl" | number;
+  size?: "xs" | "sm" | "md" | "lg" | "xl" | number;
   className?: string;
   logoUrl?: string;  // Optional logo URL from teams table
 }
 
 const sizeClasses = {
+  xs: "w-5 h-5",
   sm: "w-8 h-8",
   md: "w-12 h-12", 
   lg: "w-16 h-16",
@@ -154,10 +155,10 @@ export function TeamLogo({ teamName, leagueId, size = "md", className = "", logo
   return (
     <div className={`${baseClasses} bg-orange-500 text-white font-bold border-2 border-orange-600`}>
       <div className="text-center">
-        <div className={`font-bold ${size === 'sm' ? 'text-xs' : size === 'md' ? 'text-sm' : 'text-lg'}`}>
+        <div className={`font-bold ${size === 'xs' ? 'text-[8px]' : size === 'sm' ? 'text-xs' : size === 'md' ? 'text-sm' : 'text-lg'}`}>
           {teamName.charAt(0).toUpperCase()}
         </div>
-        {size !== 'sm' && (
+        {size !== 'xs' && size !== 'sm' && (
           <div className="text-xs opacity-75 leading-none">TEAM</div>
         )}
       </div>
