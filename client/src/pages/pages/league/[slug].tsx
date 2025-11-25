@@ -13,6 +13,7 @@ import GamePreviewModal from "@/components/GamePreviewModal";
 import LeagueChatbot from "@/components/LeagueChatbot";
 import { TeamLogo } from "@/components/TeamLogo";
 import { TeamLogoUploader } from "@/components/TeamLogoUploader";
+import { InstagramCarousel } from "@/components/InstagramCarousel";
 import { ChevronRight, Trophy, ArrowRight } from "lucide-react";
 import { Link } from "wouter";
 import { EditableDescription } from "@/components/EditableDescription";
@@ -482,7 +483,8 @@ export default function LeaguePage() {
   const [isOwner, setIsOwner] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
-  const [instagramUrl, setInstagramUrl] = useState("");
+  const [instagramUrls, setInstagramUrls] = useState<string[]>([]);
+  const [newInstagramUrl, setNewInstagramUrl] = useState("");
   const [isEditingInstagram, setIsEditingInstagram] = useState(false);
   const [updatingInstagram, setUpdatingInstagram] = useState(false);
   const [youtubeUrl, setYoutubeUrl] = useState("");
@@ -1251,7 +1253,30 @@ export default function LeaguePage() {
           // Now check ownership with the fetched user data
           const ownerStatus = user?.id === data.user_id || user?.id === data.created_by;
           setIsOwner(ownerStatus);
-          setInstagramUrl(data.instagram_embed_url || "");
+          
+          // Handle Instagram URLs - support both JSON array and legacy single URL
+          if (data.instagram_embed_url) {
+            try {
+              // Try to parse as JSON (could be array or single string)
+              const parsed = JSON.parse(data.instagram_embed_url);
+              if (Array.isArray(parsed)) {
+                // Multiple URLs stored as JSON array
+                setInstagramUrls(parsed.filter(url => url && url.trim()));
+              } else if (typeof parsed === 'string') {
+                // Single URL that was JSON-stringified
+                setInstagramUrls([parsed.trim()]);
+              } else {
+                // Unexpected format, fall back to raw value
+                setInstagramUrls([data.instagram_embed_url]);
+              }
+            } catch {
+              // Legacy single URL (not JSON) - convert to array
+              setInstagramUrls([data.instagram_embed_url]);
+            }
+          } else {
+            setInstagramUrls([]);
+          }
+          
           setYoutubeUrl(data.youtube_embed_url || "");
           console.log("Is owner?", ownerStatus, "User ID:", user?.id, "League owner ID:", data.user_id);
           
@@ -1640,30 +1665,76 @@ export default function LeaguePage() {
     };
 
     // Handle Instagram URL update
+    const normalizeInstagramUrl = (url: string): string => {
+      try {
+        const trimmed = url.trim();
+        // Parse URL to normalize it
+        const urlObj = new URL(trimmed);
+        // Remove trailing slash
+        urlObj.pathname = urlObj.pathname.replace(/\/$/, '');
+        // Remove query parameters for consistency
+        urlObj.search = '';
+        return urlObj.toString();
+      } catch {
+        // If URL parsing fails, just trim
+        return url.trim();
+      }
+    };
+
+    const handleAddInstagramUrl = () => {
+      if (!newInstagramUrl.trim()) return;
+      
+      const normalized = normalizeInstagramUrl(newInstagramUrl);
+      
+      // Check if URL already exists (compare normalized versions)
+      const normalizedExisting = instagramUrls.map(u => normalizeInstagramUrl(u));
+      if (normalizedExisting.includes(normalized)) {
+        alert('This URL is already in the list');
+        return;
+      }
+      
+      setInstagramUrls([...instagramUrls, normalized]);
+      setNewInstagramUrl("");
+    };
+
+    const handleRemoveInstagramUrl = (index: number) => {
+      setInstagramUrls(instagramUrls.filter((_, i) => i !== index));
+    };
+
     const handleInstagramUpdate = async () => {
       if (!isOwner || !league) return;
       
       setUpdatingInstagram(true);
       try {
+        // Filter out empty URLs
+        const cleanUrls = instagramUrls.filter(url => url && url.trim());
+        
+        // Store as JSON array if multiple URLs, or single URL string for backward compatibility
+        const instagramValue = cleanUrls.length === 0 
+          ? null 
+          : cleanUrls.length === 1 
+            ? cleanUrls[0] 
+            : JSON.stringify(cleanUrls);
+        
         const { data, error } = await supabase
           .from('leagues')
-          .update({ instagram_embed_url: instagramUrl })
+          .update({ instagram_embed_url: instagramValue })
           .eq('league_id', league.league_id)
           .select()
           .single();
 
         if (error) {
           console.error('Instagram update error:', error);
-          alert('Failed to update Instagram URL');
+          alert('Failed to update Instagram URLs');
           return;
         }
 
-        setLeague({ ...league, instagram_embed_url: instagramUrl });
+        setLeague({ ...league, instagram_embed_url: instagramValue });
         setIsEditingInstagram(false);
-        alert('Instagram URL updated successfully!');
+        alert('Instagram URLs updated successfully!');
       } catch (error) {
         console.error('Instagram update error:', error);
-        alert(`Failed to update Instagram URL: ${error.message}`);
+        alert(`Failed to update Instagram URLs: ${error.message}`);
       } finally {
         setUpdatingInstagram(false);
       }
@@ -4149,6 +4220,7 @@ export default function LeaguePage() {
                   <button
                     onClick={() => setIsEditingInstagram(!isEditingInstagram)}
                     className="text-xs text-orange-500 hover:text-orange-600 font-medium"
+                    data-testid="edit-instagram-button"
                   >
                     {isEditingInstagram ? 'Cancel' : 'Edit'}
                   </button>
@@ -4157,17 +4229,53 @@ export default function LeaguePage() {
 
               {isEditingInstagram && isOwner ? (
                 <div className="space-y-3">
-                  <input
-                    type="text"
-                    placeholder="Enter Instagram profile URL (e.g., https://www.instagram.com/yourleague) or specific post URL"
-                    value={instagramUrl}
-                    onChange={(e) => setInstagramUrl(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md"
-                  />
-                  <p className="text-xs text-gray-500">
-                    💡 Use profile URL to automatically show latest posts, or specific post URL for a fixed post
-                  </p>
-                  <div className="flex gap-2">
+                  {/* List of existing URLs */}
+                  {instagramUrls.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-slate-600">Current Posts ({instagramUrls.length})</p>
+                      {instagramUrls.map((url, index) => (
+                        <div key={index} className="flex items-center gap-2 p-2 bg-gray-50 rounded border border-gray-200">
+                          <span className="text-xs text-slate-700 flex-1 truncate">{url}</span>
+                          <button
+                            onClick={() => handleRemoveInstagramUrl(index)}
+                            className="text-xs text-red-500 hover:text-red-600 font-medium shrink-0"
+                            data-testid={`remove-instagram-url-${index}`}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Add new URL */}
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-slate-600">Add New Post</p>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Enter Instagram post or profile URL"
+                        value={newInstagramUrl}
+                        onChange={(e) => setNewInstagramUrl(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleAddInstagramUrl()}
+                        className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md"
+                        data-testid="new-instagram-url-input"
+                      />
+                      <button
+                        onClick={handleAddInstagramUrl}
+                        className="px-3 py-2 text-xs font-medium bg-gray-200 text-gray-700 rounded hover:bg-gray-300 shrink-0"
+                        data-testid="add-instagram-url-button"
+                      >
+                        Add
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      💡 Add profile URLs or specific post/reel URLs. Videos will auto-play in the carousel.
+                    </p>
+                  </div>
+
+                  {/* Save/Cancel buttons */}
+                  <div className="flex gap-2 pt-2 border-t border-gray-200">
                     <button
                       onClick={handleInstagramUpdate}
                       disabled={updatingInstagram}
@@ -4176,44 +4284,41 @@ export default function LeaguePage() {
                           ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
                           : 'bg-orange-500 text-white hover:bg-orange-600'
                       }`}
+                      data-testid="save-instagram-urls-button"
                     >
-                      {updatingInstagram ? 'Updating...' : 'Save'}
+                      {updatingInstagram ? 'Saving...' : 'Save Changes'}
                     </button>
                     <button
                       onClick={() => {
                         setIsEditingInstagram(false);
-                        setInstagramUrl(league?.instagram_embed_url || "");
+                        setNewInstagramUrl("");
+                        // Reset to league's current URLs
+                        if (league?.instagram_embed_url) {
+                          try {
+                            const parsed = JSON.parse(league.instagram_embed_url);
+                            if (Array.isArray(parsed)) {
+                              setInstagramUrls(parsed.filter(url => url && url.trim()));
+                            } else if (typeof parsed === 'string') {
+                              setInstagramUrls([parsed.trim()]);
+                            } else {
+                              setInstagramUrls([league.instagram_embed_url]);
+                            }
+                          } catch {
+                            setInstagramUrls([league.instagram_embed_url]);
+                          }
+                        } else {
+                          setInstagramUrls([]);
+                        }
                       }}
                       className="px-3 py-1 text-xs font-medium bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                      data-testid="cancel-instagram-edit-button"
                     >
                       Cancel
                     </button>
                   </div>
                 </div>
               ) : (
-                <div>
-                  {league?.instagram_embed_url && getInstagramEmbedUrl(league.instagram_embed_url) ? (
-                    <iframe
-                      src={getInstagramEmbedUrl(league.instagram_embed_url)}
-                      width="100%"
-                      height="400"
-                      className="rounded-md border"
-                      allow="autoplay; clipboard-write; encrypted-media; picture-in-picture"
-                    ></iframe>
-                  ) : (
-                    <div className="text-center py-8 text-gray-500">
-                      <p className="text-sm">No Instagram post added yet</p>
-                      {isOwner && (
-                        <button
-                          onClick={() => setIsEditingInstagram(true)}
-                          className="mt-2 text-xs text-orange-500 hover:text-orange-600 underline"
-                        >
-                          Add Instagram Post
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
+                <InstagramCarousel urls={instagramUrls} height={650} />
               )}
             </div>
 
