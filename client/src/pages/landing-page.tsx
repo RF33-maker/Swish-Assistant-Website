@@ -232,7 +232,9 @@ export default function LandingPage() {
         />
         <main className="flex flex-col items-center justify-center px-6 text-center">
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-semibold text-slate-900 max-w-2xl leading-relaxed tracking-tight mb-12 md:mb-16 lg:mb-20 animate-fade-in-up" style={{ animationDelay: '0.2s', opacity: 0, animationFillMode: 'forwards' }}>
-            Our sport, your leagues, your stats <br />
+            <h1>
+              The Home of Basketball Stats, Advanced Metrics & League Insights
+            </h1> <br />
             <span className="text-orange-500 font-bold drop-shadow-sm">Search below.</span>
           </h1>
 
