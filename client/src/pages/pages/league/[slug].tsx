@@ -2652,30 +2652,6 @@ export default function LeaguePage() {
           </div>
         </section>
 
-        {/* Competition Selector - Dropdown for mobile-friendly competition switching */}
-        {childCompetitions.length > 0 && (
-          <div className="bg-white border-b border-gray-100">
-            <div className="max-w-7xl mx-auto px-4 md:px-6 py-3">
-              <div className="flex items-center gap-2 md:gap-3">
-                <Trophy className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                <select
-                  value={league?.slug || ''}
-                  onChange={(e) => navigate(`/league/${e.target.value}`)}
-                  className="flex-1 md:flex-initial md:min-w-[280px] px-3 py-2 text-sm font-medium text-slate-700 bg-white border border-gray-300 rounded-lg hover:border-orange-300 focus:border-orange-400 focus:ring-2 focus:ring-orange-100 focus:outline-none transition-all cursor-pointer"
-                  data-testid="select-competition"
-                >
-                  <option value={league?.slug}>{league?.name}</option>
-                  {childCompetitions.map((competition) => (
-                    <option key={competition.league_id} value={competition.slug}>
-                      {competition.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Breadcrumb for Sub-Competitions */}
         {parentLeague && (
           <div className="bg-white border-b border-gray-100">
@@ -2725,20 +2701,22 @@ export default function LeaguePage() {
         {/* Navigation Tabs - Moved below carousel */}
         <div className="bg-white border-b border-gray-200">
           <div className="max-w-7xl mx-auto px-4 md:px-6">
-            <div className="flex gap-4 md:gap-6 text-sm font-medium text-slate-600 py-3 md:py-4 overflow-x-auto">
-              <a 
-                href="#" 
-                className={`hover:text-orange-500 cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'teams' ? 'text-orange-500 font-semibold border-b-2 border-orange-500' : ''}`}
-                onClick={() => {
-                  setActiveSection('teams');
-                  // Ensure standings are loaded for Teams section
-                  if (league?.league_id && fullLeagueStandings.length === 0 && standings.length === 0) {
-                    calculatePoolStandings(league.league_id);
-                  }
-                }}
-              >
-                Teams
-              </a>
+            <div className="flex items-center justify-between gap-4 py-3 md:py-4">
+              {/* Navigation Links */}
+              <div className="flex gap-4 md:gap-6 text-sm font-medium text-slate-600 overflow-x-auto">
+                <a 
+                  href="#" 
+                  className={`hover:text-orange-500 cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'teams' ? 'text-orange-500 font-semibold border-b-2 border-orange-500' : ''}`}
+                  onClick={() => {
+                    setActiveSection('teams');
+                    // Ensure standings are loaded for Teams section
+                    if (league?.league_id && fullLeagueStandings.length === 0 && standings.length === 0) {
+                      calculatePoolStandings(league.league_id);
+                    }
+                  }}
+                >
+                  Teams
+                </a>
               <a 
                 href="#" 
                 className={`hover:text-orange-500 cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'standings' ? 'text-orange-500 font-semibold border-b-2 border-orange-500' : ''}`}
@@ -2813,6 +2791,27 @@ export default function LeaguePage() {
               >
                 Overview
               </a>
+              </div>
+
+              {/* Competition Selector */}
+              {childCompetitions.length > 0 && (
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <Trophy className="w-4 h-4 text-slate-400 hidden md:block" />
+                  <select
+                    value={league?.slug || ''}
+                    onChange={(e) => navigate(`/league/${e.target.value}`)}
+                    className="px-3 py-1.5 text-xs md:text-sm font-medium text-slate-700 bg-white border border-gray-300 rounded-lg hover:border-orange-300 focus:border-orange-400 focus:ring-2 focus:ring-orange-100 focus:outline-none transition-all cursor-pointer"
+                    data-testid="select-competition"
+                  >
+                    <option value={league?.slug}>{league?.name}</option>
+                    {childCompetitions.map((competition) => (
+                      <option key={competition.league_id} value={competition.slug}>
+                        {competition.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -3773,30 +3772,6 @@ export default function LeaguePage() {
             {/* Overview Section - Default view */}
             {activeSection === 'overview' && (
               <>
-                {/* About This League */}
-                {(league?.description || isOwner) && (
-                  <div className="bg-white rounded-xl shadow p-4 md:p-6">
-                    <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-4">About This League</h2>
-                    <EditableDescription
-                      description={league?.description || null}
-                      onSave={async (newDescription) => {
-                        const { error } = await supabase
-                          .from('leagues')
-                          .update({ description: newDescription })
-                          .eq('league_id', league?.league_id);
-                        
-                        if (!error) {
-                          setLeague({ ...league, description: newDescription });
-                        } else {
-                          throw error;
-                        }
-                      }}
-                      placeholder="Add a description about this league to improve SEO and help visitors understand the league better..."
-                      canEdit={isOwner}
-                    />
-                  </div>
-                )}
-
                 {/* League Leaders */}
                 <div className="bg-white rounded-xl shadow p-4 md:p-6">
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-4 md:mb-6">
