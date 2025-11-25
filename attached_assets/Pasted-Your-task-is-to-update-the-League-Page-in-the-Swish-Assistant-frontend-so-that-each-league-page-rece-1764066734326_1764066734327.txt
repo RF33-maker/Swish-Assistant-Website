@@ -1,0 +1,48 @@
+Your task is to update the League Page in the Swish Assistant frontend so that each league page receives an SEO-optimised introductory block directly beneath the banner and H1, and above the game carousel. This update must work dynamically for every league slug.
+
+GOALS:
+1. Move (or reuse) the existing “About This League” description already stored in Supabase.
+2. Render it near the top of the page with:
+   - an H2 title: “About {LeagueName}”
+   - the league’s description text
+   - centered container (max-width: 4xl)
+   - light background, padding, and clean spacing
+3. The new SEO block must appear immediately under the H1 and above:
+   - the game carousel
+   - the tabs navigation
+4. Keep the existing Overview tab as-is; do not remove it.
+5. The implementation must work for ALL league slugs with no hardcoding.
+
+IMPLEMENTATION INSTRUCTIONS:
+- Find the React component responsible for rendering league pages (likely LeaguePage.tsx or similar).
+- Locate where the H1 is rendered (e.g., “British Championship Basketball 2025–2026”).
+- Insert a new JSX block directly after the H1 and before the carousel.
+- Pull `leagueName` and `leagueDescription` from the same data used for the Overview tab.
+
+REQUIRED JSX STRUCTURE (adjust styling as needed but keep structure):
+
+<div className="w-full bg-orange-50/40 py-6 px-4 flex justify-center">
+  <div className="max-w-4xl text-center">
+    <h2 className="text-xl font-semibold text-slate-900 mb-2">
+      About {leagueName}
+    </h2>
+    <p className="text-slate-700 leading-relaxed">{leagueDescription}</p>
+  </div>
+</div>
+
+DYNAMIC REQUIREMENTS:
+- leagueName must be taken from the league record.
+- leagueDescription must reuse the exact description field currently displayed inside the Overview tab content.
+- No hardcoded text. All content must depend on the active league slug.
+
+LAYOUT NOTES:
+- Keep the banner at the top.
+- Keep the carousel exactly where it is.
+- The SEO block must appear ABOVE the carousel.
+- Ensure mobile responsiveness is preserved.
+
+WHAT TO DELIVER:
+- Updated .tsx file(s) with the new SEO block inserted.
+- Clean, readable JSX.
+- No breaking changes to existing functionality.
+

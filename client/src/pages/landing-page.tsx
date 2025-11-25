@@ -82,7 +82,7 @@ export default function LandingPage() {
       const players = playersResponse.data || [];
 
       // Remove duplicate players (same name) and format
-      const uniquePlayers = players.reduce((acc: any[], player) => {
+      const uniquePlayers = players.reduce((acc: any[], player: any) => {
         if (!acc.some(p => p.name === player.name)) {
           acc.push({
             name: player.name,
@@ -226,14 +226,15 @@ export default function LandingPage() {
       </header>
 
       {/* Hero Section with Gradient Background */}
-      <div className="bg-gradient-to-b from-[#fffaf5] to-white pt-8 md:pt-12 lg:pt-16 pb-24 md:pb-32 lg:pb-40">
+      <div className="bg-gradient-to-b from-[#fffaf5] to-white pt-4 md:pt-6 lg:pt-8 pb-12 md:pb-16 lg:pb-20">
         <img src={SwishLogo} alt="Swish Logo"
-          className="mx-auto w-48 h-48 md:w-56 md:h-56 lg:w-64 lg:h-64 drop-shadow-lg mb-8 md:mb-12 lg:mb-16 animate-fade-in-up"
+          className="mx-auto w-32 h-32 md:w-40 md:h-40 lg:w-44 lg:h-44 drop-shadow-lg mb-4 md:mb-6 lg:mb-8 animate-fade-in-up"
         />
         <main className="flex flex-col items-center justify-center px-6 text-center">
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-semibold text-slate-900 max-w-2xl leading-relaxed tracking-tight mb-12 md:mb-16 lg:mb-20 animate-fade-in-up" style={{ animationDelay: '0.2s', opacity: 0, animationFillMode: 'forwards' }}>
-            Our sport, your leagues, your stats <br />
-            <span className="text-orange-500 font-bold drop-shadow-sm">Search below.</span>
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-semibold text-slate-900 max-w-3xl leading-tight tracking-tight mb-6 md:mb-8 lg:mb-10 animate-fade-in-up" style={{ animationDelay: '0.2s', opacity: 0, animationFillMode: 'forwards' }}>
+            The Home of Basketball Stats, Advanced Metrics & League Insights
+            <br />
+            <span className="text-orange-500 font-bold drop-shadow-sm text-2xl sm:text-3xl lg:text-4xl mt-2 inline-block">Search below.</span>
           </h1>
 
           {/* Search Bar with Suggestions */}
@@ -293,7 +294,7 @@ export default function LandingPage() {
         </div>
 
         {/* Suggestions */}
-        <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-4 max-w-xl w-full">
+        <div className="mt-4 md:mt-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-3 max-w-xl w-full">
           {trendingLeagues.length > 0
             ? trendingLeagues.map((league, i) => (
                 <button
@@ -331,14 +332,14 @@ export default function LandingPage() {
         </div>
 
         {/* Tagline */}
-        <p className="mt-12 text-slate-600 text-base md:text-lg font-medium max-w-2xl mx-auto animate-fade-in-up" style={{ animationDelay: '1.1s', opacity: 0, animationFillMode: 'forwards' }}>
+        <p className="mt-6 md:mt-8 text-slate-600 text-sm md:text-base font-medium max-w-2xl mx-auto animate-fade-in-up" style={{ animationDelay: '1.1s', opacity: 0, animationFillMode: 'forwards' }}>
           Explore stats, track performance, drive narrative and discover the next MVP.
         </p>
 
         {/* League Logos Section */}
-        <div className="mt-16 w-full max-w-5xl mx-auto">
+        <div className="mt-8 md:mt-12 w-full max-w-5xl mx-auto">
           {/* Heading */}
-          <h2 className="text-center text-xs md:text-sm uppercase text-orange-600 font-semibold tracking-wide mb-8 animate-fade-in-up" style={{ animationDelay: '1.2s', opacity: 0, animationFillMode: 'forwards' }}>
+          <h2 className="text-center text-xs md:text-sm uppercase text-orange-600 font-semibold tracking-wide mb-4 md:mb-6 animate-fade-in-up" style={{ animationDelay: '1.2s', opacity: 0, animationFillMode: 'forwards' }}>
             Already hosting these leagues and more!
           </h2>
           
@@ -362,8 +363,8 @@ export default function LandingPage() {
         </div>
 
         {/* Scroll Indicator */}
-        <div className="mt-16 flex justify-center animate-fade-in-up" style={{ animationDelay: '1.5s', opacity: 0, animationFillMode: 'forwards' }}>
-          <ChevronDown className="h-8 w-8 text-orange-500 animate-bounce" />
+        <div className="mt-8 md:mt-12 flex justify-center animate-fade-in-up" style={{ animationDelay: '1.5s', opacity: 0, animationFillMode: 'forwards' }}>
+          <ChevronDown className="h-6 w-6 md:h-8 md:w-8 text-orange-500 animate-bounce" />
         </div>
         </main>
       </div>
