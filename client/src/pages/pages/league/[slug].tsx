@@ -3898,6 +3898,94 @@ export default function LeaguePage() {
               </div>
                 </div>
 
+                {/* Team League Leaders */}
+                <div className="bg-white rounded-xl shadow p-4 md:p-6">
+                  <div className="flex justify-between items-center mb-4 md:mb-6">
+                    <h2 className="text-base md:text-lg font-semibold text-slate-800">Team Leaders</h2>
+                    <button
+                      onClick={() => setActiveSection('teamstats')}
+                      className="text-xs md:text-sm text-orange-500 hover:text-orange-600 font-medium hover:underline"
+                    >
+                      View All Team Stats →
+                    </button>
+                  </div>
+                  {isLoadingTeamStats || teamStatsData.length === 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+                      {Array.from({ length: 3 }).map((_, i) => (
+                        <LeaderCardSkeleton key={`team-leader-skeleton-${i}`} />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+                      {/* Top Scoring Teams */}
+                      <div className="bg-gray-50 rounded-lg p-3 md:p-4 shadow-inner">
+                        <h3 className="text-xs md:text-sm font-semibold text-slate-700 mb-2 md:mb-3 text-center">Top Scoring</h3>
+                        <ul className="space-y-1 text-xs md:text-sm text-slate-800">
+                          {teamStatsData
+                            .slice()
+                            .sort((a, b) => (b.ppg || 0) - (a.ppg || 0))
+                            .slice(0, 5)
+                            .map((team, i) => (
+                              <li key={`scoring-${team.team}-${i}`} className="flex justify-between items-center gap-2">
+                                <div className="flex items-center gap-1.5 truncate flex-1 min-w-0">
+                                  <TeamLogo teamName={team.team} leagueId={league?.league_id} size="xs" />
+                                  <span className="truncate">{team.team}</span>
+                                </div>
+                                <span className="font-medium text-orange-500 whitespace-nowrap">
+                                  {(team.ppg || 0).toFixed(1)} PPG
+                                </span>
+                              </li>
+                            ))}
+                        </ul>
+                      </div>
+
+                      {/* Top Rebounding Teams */}
+                      <div className="bg-gray-50 rounded-lg p-3 md:p-4 shadow-inner">
+                        <h3 className="text-xs md:text-sm font-semibold text-slate-700 mb-2 md:mb-3 text-center">Top Rebounding</h3>
+                        <ul className="space-y-1 text-xs md:text-sm text-slate-800">
+                          {teamStatsData
+                            .slice()
+                            .sort((a, b) => (b.rpg || 0) - (a.rpg || 0))
+                            .slice(0, 5)
+                            .map((team, i) => (
+                              <li key={`rebounding-${team.team}-${i}`} className="flex justify-between items-center gap-2">
+                                <div className="flex items-center gap-1.5 truncate flex-1 min-w-0">
+                                  <TeamLogo teamName={team.team} leagueId={league?.league_id} size="xs" />
+                                  <span className="truncate">{team.team}</span>
+                                </div>
+                                <span className="font-medium text-orange-500 whitespace-nowrap">
+                                  {(team.rpg || 0).toFixed(1)} RPG
+                                </span>
+                              </li>
+                            ))}
+                        </ul>
+                      </div>
+
+                      {/* Top Assists Teams */}
+                      <div className="bg-gray-50 rounded-lg p-3 md:p-4 shadow-inner">
+                        <h3 className="text-xs md:text-sm font-semibold text-slate-700 mb-2 md:mb-3 text-center">Top Playmaking</h3>
+                        <ul className="space-y-1 text-xs md:text-sm text-slate-800">
+                          {teamStatsData
+                            .slice()
+                            .sort((a, b) => (b.apg || 0) - (a.apg || 0))
+                            .slice(0, 5)
+                            .map((team, i) => (
+                              <li key={`assists-${team.team}-${i}`} className="flex justify-between items-center gap-2">
+                                <div className="flex items-center gap-1.5 truncate flex-1 min-w-0">
+                                  <TeamLogo teamName={team.team} leagueId={league?.league_id} size="xs" />
+                                  <span className="truncate">{team.team}</span>
+                                </div>
+                                <span className="font-medium text-orange-500 whitespace-nowrap">
+                                  {(team.apg || 0).toFixed(1)} APG
+                                </span>
+                              </li>
+                            ))}
+                        </ul>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
             {/* Tournament Bracket - Only for BCB Trophy */}
             {slug === 'british-championship-basketball' && league?.league_id && (
               <div className="bg-white rounded-xl shadow p-4 md:p-6">
