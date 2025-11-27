@@ -3163,13 +3163,13 @@ export default function LeaguePage() {
                   
                   {/* View Toggle - Only show for BCB Trophy */}
                   {slug === 'british-championship-basketball' && (
-                    <div className="inline-flex rounded-lg border border-gray-300 bg-gray-100 p-1">
+                    <div className="inline-flex rounded-lg border border-gray-300 dark:border-neutral-600 bg-gray-100 dark:bg-neutral-800 p-1">
                       <button
                         onClick={() => setViewMode('standings')}
                         className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
                           viewMode === 'standings'
-                            ? 'bg-white text-orange-600 shadow-sm'
-                            : 'text-gray-600 hover:text-gray-800'
+                            ? 'bg-white dark:bg-neutral-700 text-orange-600 shadow-sm'
+                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
                         }`}
                         data-testid="button-standings-view"
                       >
@@ -3179,8 +3179,8 @@ export default function LeaguePage() {
                         onClick={() => setViewMode('bracket')}
                         className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
                           viewMode === 'bracket'
-                            ? 'bg-white text-orange-600 shadow-sm'
-                            : 'text-gray-600 hover:text-gray-800'
+                            ? 'bg-white dark:bg-neutral-700 text-orange-600 shadow-sm'
+                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
                         }`}
                         data-testid="button-bracket-view"
                       >
@@ -3193,7 +3193,7 @@ export default function LeaguePage() {
                 {viewMode === 'standings' && (
                   <>
                     {/* Pool Tabs */}
-                    <div className="flex flex-wrap gap-2 mb-4 md:mb-6 border-b border-gray-200">
+                    <div className="flex flex-wrap gap-2 mb-4 md:mb-6 border-b border-gray-200 dark:border-neutral-700">
                   {hasPools && (
                     <>
                       <button
@@ -3201,7 +3201,7 @@ export default function LeaguePage() {
                         className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium transition-colors ${
                           standingsView === 'poolA' 
                             ? 'text-orange-600 border-b-2 border-orange-600' 
-                            : 'text-gray-600 hover:text-orange-500'
+                            : 'text-gray-600 dark:text-gray-400 hover:text-orange-500'
                         }`}
                       >
                         Pool A
@@ -3211,7 +3211,7 @@ export default function LeaguePage() {
                         className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium transition-colors ${
                           standingsView === 'poolB' 
                             ? 'text-orange-600 border-b-2 border-orange-600' 
-                            : 'text-gray-600 hover:text-orange-500'
+                            : 'text-gray-600 dark:text-gray-400 hover:text-orange-500'
                         }`}
                       >
                         Pool B
@@ -3223,7 +3223,7 @@ export default function LeaguePage() {
                     className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium transition-colors ${
                       standingsView === 'full' 
                         ? 'text-orange-600 border-b-2 border-orange-600' 
-                        : 'text-gray-600 hover:text-orange-500'
+                        : 'text-gray-600 dark:text-gray-400 hover:text-orange-500'
                     }`}
                   >
                     {hasPools ? 'Full League' : 'League Standings'}
@@ -3233,22 +3233,22 @@ export default function LeaguePage() {
                 {isLoadingStandings ? (
                   <div className="text-center py-8">
                     <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                    <p className="text-gray-600 mt-4">Loading standings...</p>
+                    <p className="text-gray-600 dark:text-gray-400 mt-4">Loading standings...</p>
                   </div>
                 ) : (
                   <div className="overflow-x-auto -mx-4 md:mx-0">
                     <table className="w-full text-sm min-w-[600px]">
                       <thead>
-                        <tr className="border-b-2 border-gray-200">
-                          <th className="text-left py-3 px-3 font-semibold text-slate-700 w-16 sticky left-0 bg-white z-10">Logo</th>
-                          <th className="text-left py-3 px-3 font-semibold text-slate-700 min-w-[140px]">Team</th>
-                          <th className="text-center py-3 px-3 font-semibold text-slate-700 w-16">W</th>
-                          <th className="text-center py-3 px-3 font-semibold text-slate-700 w-16">L</th>
-                          <th className="text-center py-3 px-3 font-semibold text-slate-700 w-20">Win%</th>
-                          <th className="text-right py-3 px-3 font-semibold text-slate-700 w-20">PF</th>
-                          <th className="text-right py-3 px-3 font-semibold text-slate-700 w-20">PA</th>
-                          <th className="text-right py-3 px-3 font-semibold text-slate-700 w-20">Diff</th>
-                          <th className="text-center py-3 px-3 font-semibold text-slate-700 w-12"></th>
+                        <tr className="border-b-2 border-gray-200 dark:border-neutral-700">
+                          <th className="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-16 sticky left-0 bg-white dark:bg-neutral-900 z-10">Logo</th>
+                          <th className="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 min-w-[140px]">Team</th>
+                          <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-16">W</th>
+                          <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-16">L</th>
+                          <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">Win%</th>
+                          <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">PF</th>
+                          <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">PA</th>
+                          <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">Diff</th>
+                          <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-12"></th>
                         </tr>
                       </thead>
                       <tbody>
@@ -3257,11 +3257,11 @@ export default function LeaguePage() {
                           fullLeagueStandings).map((team, index) => (
                           <tr 
                             key={`${team.team}-${index}`}
-                            className="border-b border-gray-100 hover:bg-orange-50 transition-colors group"
+                            className="border-b border-gray-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors group"
                           >
-                            <td className="py-3 px-3 sticky left-0 bg-white group-hover:bg-orange-50 z-10 transition-colors">
+                            <td className="py-3 px-3 sticky left-0 bg-white dark:bg-neutral-900 group-hover:bg-orange-50 dark:group-hover:bg-neutral-800 z-10 transition-colors">
                               <div className="flex items-center gap-2">
-                                <span className="font-medium text-slate-600 text-xs">{team.rank}</span>
+                                <span className="font-medium text-slate-600 dark:text-slate-400 text-xs">{team.rank}</span>
                                 <TeamLogo 
                                   teamName={team.originalName || team.team} 
                                   leagueId={league?.league_id} 
@@ -3269,15 +3269,15 @@ export default function LeaguePage() {
                                 />
                               </div>
                             </td>
-                            <td className="py-3 px-3 font-medium text-slate-800">
+                            <td className="py-3 px-3 font-medium text-slate-800 dark:text-slate-200">
                               <span className="truncate">{team.team}</span>
                             </td>
-                            <td className="py-3 px-3 text-center font-semibold text-slate-700">{team.wins}</td>
-                            <td className="py-3 px-3 text-center font-semibold text-slate-700">{team.losses}</td>
-                            <td className="py-3 px-3 text-center font-medium text-slate-600">{(team.winPct * 100).toFixed(1)}%</td>
-                            <td className="py-3 px-3 text-right font-medium text-slate-700">{team.pointsFor}</td>
-                            <td className="py-3 px-3 text-right font-medium text-slate-700">{team.pointsAgainst}</td>
-                            <td className={`py-3 px-3 text-right font-semibold ${team.pointsDiff > 0 ? 'text-green-600' : team.pointsDiff < 0 ? 'text-red-600' : 'text-slate-600'}`}>
+                            <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.wins}</td>
+                            <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.losses}</td>
+                            <td className="py-3 px-3 text-center font-medium text-slate-600 dark:text-slate-400">{(team.winPct * 100).toFixed(1)}%</td>
+                            <td className="py-3 px-3 text-right font-medium text-slate-700 dark:text-slate-300">{team.pointsFor}</td>
+                            <td className="py-3 px-3 text-right font-medium text-slate-700 dark:text-slate-300">{team.pointsAgainst}</td>
+                            <td className={`py-3 px-3 text-right font-semibold ${team.pointsDiff > 0 ? 'text-green-600 dark:text-green-400' : team.pointsDiff < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-400'}`}>
                               {team.pointsDiff > 0 ? `+${team.pointsDiff}` : team.pointsDiff}
                             </td>
                             <td className="py-3 px-3 text-center">
@@ -3320,10 +3320,10 @@ export default function LeaguePage() {
             
             {/* Stats Section - Comprehensive Player Averages */}
             {activeSection === 'stats' && (
-              <div className="bg-white rounded-xl shadow p-4 md:p-6">
+              <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
                 <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 mb-4 md:mb-6">
-                  <h2 className="text-base md:text-lg font-semibold text-slate-800">Player Statistics - {league?.name}</h2>
-                  <div className="text-xs md:text-sm text-gray-500">
+                  <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">Player Statistics - {league?.name}</h2>
+                  <div className="text-xs md:text-sm text-gray-500 dark:text-gray-400">
                     Showing {Math.min(displayedPlayerCount, filteredPlayerAverages.length)} of {filteredPlayerAverages.length} players
                     {statsSearch && ` (filtered from ${allPlayerAverages.length})`}
                   </div>
@@ -3337,10 +3337,10 @@ export default function LeaguePage() {
                       placeholder="Search players..."
                       value={statsSearch}
                       onChange={(e) => setStatsSearch(e.target.value)}
-                      className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                      className="w-full px-4 py-2 pl-10 border border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-neutral-800 text-slate-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500"
                     />
                     <svg
-                      className="absolute left-3 top-2.5 h-4 w-4 text-gray-400"
+                      className="absolute left-3 top-2.5 h-4 w-4 text-gray-400 dark:text-gray-500"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -3358,18 +3358,18 @@ export default function LeaguePage() {
                 {/* Category and Mode Selectors */}
                 <div className="flex flex-col md:flex-row gap-4 mb-6">
                   <div className="flex-1">
-                    <label className="block text-xs font-medium text-slate-600 mb-1.5">Stat Category</label>
+                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">Stat Category</label>
                     <Select
                       value={playerStatsCategory}
                       onValueChange={(value) => setPlayerStatsCategory(value as typeof playerStatsCategory)}
                     >
                       <SelectTrigger 
-                        className="w-full bg-white border-slate-200 text-slate-700 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500"
+                        className="w-full bg-white dark:bg-neutral-800 border-slate-200 dark:border-neutral-600 text-slate-700 dark:text-slate-200 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500"
                         data-testid="select-player-category"
                       >
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
                         <SelectItem value="Traditional" data-testid="option-player-traditional">Traditional</SelectItem>
                         <SelectItem value="Advanced" data-testid="option-player-advanced">Advanced</SelectItem>
                         <SelectItem value="Scoring" data-testid="option-player-scoring">Scoring</SelectItem>
@@ -3379,18 +3379,18 @@ export default function LeaguePage() {
                   </div>
 
                   <div className="flex-1">
-                    <label className="block text-xs font-medium text-slate-600 mb-1.5">Mode</label>
+                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">Mode</label>
                     <Select
                       value={playerStatsView}
                       onValueChange={(value) => setPlayerStatsView(value as typeof playerStatsView)}
                     >
                       <SelectTrigger 
-                        className="w-full bg-white border-slate-200 text-slate-700 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500"
+                        className="w-full bg-white dark:bg-neutral-800 border-slate-200 dark:border-neutral-600 text-slate-700 dark:text-slate-200 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500"
                         data-testid="select-player-mode"
                       >
                         <SelectValue placeholder="Select mode" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
                         <SelectItem value="Per Game" data-testid="option-player-per-game">Per Game</SelectItem>
                         <SelectItem value="Total" data-testid="option-player-total">Total</SelectItem>
                         <SelectItem value="Per 40" data-testid="option-player-per-40">Per 40</SelectItem>
@@ -3403,32 +3403,32 @@ export default function LeaguePage() {
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b border-gray-200">
-                          <th className="text-left py-3 px-2 font-semibold text-slate-700 sticky left-0 bg-white">Player</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">GP</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">MIN</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FGM</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FGA</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FG%</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">2PM</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">2PA</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">2P%</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">3PM</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">3PA</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">3P%</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FTM</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FTA</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FT%</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">ORB</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">DRB</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">TRB</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">AST</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">STL</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">BLK</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">TO</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">PF</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">+/-</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">PTS</th>
+                        <tr className="border-b border-gray-200 dark:border-neutral-700">
+                          <th className="text-left py-3 px-2 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-white dark:bg-neutral-900">Player</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">GP</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">MIN</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FGM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FGA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FG%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">2PM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">2PA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">2P%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">3PM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">3PA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">3P%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FTM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FTA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FT%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">ORB</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">DRB</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">TRB</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">AST</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">STL</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">BLK</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">TO</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">PF</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">+/-</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">PTS</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -3439,11 +3439,11 @@ export default function LeaguePage() {
                     </table>
                   </div>
                 ) : filteredPlayerAverages.length > 0 ? (
-                  <div className="overflow-x-auto -mx-4 md:mx-0 border border-orange-200 rounded-lg">
+                  <div className="overflow-x-auto -mx-4 md:mx-0 border border-orange-200 dark:border-neutral-700 rounded-lg">
                     <table className="w-full text-xs md:text-sm">
                       <thead>
-                        <tr className="border-b border-gray-200 bg-orange-50">
-                          <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 sticky left-0 bg-orange-50 z-10 min-w-[100px] md:min-w-[140px]">Player</th>
+                        <tr className="border-b border-gray-200 dark:border-neutral-700 bg-orange-50 dark:bg-neutral-800">
+                          <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-orange-50 dark:bg-neutral-800 z-10 min-w-[100px] md:min-w-[140px]">Player</th>
                           <th 
                             onClick={() => {
                               if (statsSortColumn === 'GP') {
@@ -3453,7 +3453,7 @@ export default function LeaguePage() {
                                 setStatsSortDirection('desc');
                               }
                             }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[45px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'GP' ? 'text-orange-600' : 'text-slate-700'}`}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[45px] cursor-pointer hover:bg-orange-100 dark:hover:bg-neutral-700 transition-colors ${statsSortColumn === 'GP' ? 'text-orange-600 dark:text-orange-400' : 'text-slate-700 dark:text-slate-200'}`}
                             data-testid="header-sort-gp"
                           >
                             <div className="flex items-center justify-center gap-1">
@@ -3474,8 +3474,8 @@ export default function LeaguePage() {
                                   setStatsSortDirection('desc');
                                 }
                               }}
-                              className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${
-                                statsSortColumn === column.label ? 'text-orange-600' : 'text-slate-700'
+                              className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 dark:hover:bg-neutral-700 transition-colors ${
+                                statsSortColumn === column.label ? 'text-orange-600 dark:text-orange-400' : 'text-slate-700 dark:text-slate-200'
                               }`}
                               data-testid={`header-${column.key.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
                             >
@@ -3493,7 +3493,7 @@ export default function LeaguePage() {
                         {filteredPlayerAverages.slice(0, displayedPlayerCount).map((player, index) => (
                           <tr 
                             key={`${player.name}-${index}`}
-                            className={`border-b border-gray-100 hover:bg-orange-50 transition-colors ${player.slug ? 'cursor-pointer' : ''}`}
+                            className={`border-b border-gray-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors ${player.slug ? 'cursor-pointer' : ''}`}
                             onClick={() => {
                               if (player.slug) {
                                 navigate(`/player/${player.slug}`);
@@ -3501,13 +3501,13 @@ export default function LeaguePage() {
                             }}
                             data-testid={`player-row-${player.id}`}
                           >
-                            <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 sticky left-0 bg-white hover:bg-orange-50 z-10">
+                            <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 dark:text-slate-200 sticky left-0 bg-white dark:bg-neutral-900 hover:bg-orange-50 dark:hover:bg-neutral-800 z-10">
                               <div className="min-w-0">
-                                <div className="font-medium text-slate-900 text-xs md:text-sm truncate">{player.name}</div>
-                                <div className="text-[10px] md:text-xs text-slate-500 truncate">{player.team}</div>
+                                <div className="font-medium text-slate-900 dark:text-white text-xs md:text-sm truncate">{player.name}</div>
+                                <div className="text-[10px] md:text-xs text-slate-500 dark:text-slate-400 truncate">{player.team}</div>
                               </div>
                             </td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 font-medium">{player.games}</td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 dark:text-slate-300 font-medium">{player.games}</td>
                             {activePlayerStatColumns.map((column) => {
                               const rawStats = player.rawStats || [];
                               
@@ -3556,7 +3556,7 @@ export default function LeaguePage() {
                               return (
                                 <td 
                                   key={`${player.id}-${column.key}`}
-                                  className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600"
+                                  className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 dark:text-slate-300"
                                 >
                                   {displayValue}
                                 </td>
@@ -3568,7 +3568,7 @@ export default function LeaguePage() {
                     </table>
                     
                     {/* Scroll hint for mobile */}
-                    <div className="md:hidden bg-orange-50 text-orange-700 text-center py-2 text-xs border-t border-orange-200">
+                    <div className="md:hidden bg-orange-50 dark:bg-neutral-800 text-orange-700 dark:text-orange-400 text-center py-2 text-xs border-t border-orange-200 dark:border-neutral-700">
                       ← Swipe to see all stats →
                     </div>
                     
@@ -3601,7 +3601,7 @@ export default function LeaguePage() {
                           )}
                           <button
                             onClick={() => setDisplayedPlayerCount(20)}
-                            className="text-slate-500 hover:text-slate-600 font-medium text-sm hover:underline"
+                            className="text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-medium text-sm hover:underline"
                           >
                             Collapse to Top 20
                           </button>
@@ -3609,15 +3609,15 @@ export default function LeaguePage() {
                       </div>
                     )}
 
-                    <div className="mt-6 pt-4 border-t border-gray-200">
-                      <div className="text-xs text-slate-500 space-y-1">
-                        <div className="font-semibold text-slate-600 mb-2">Legend ({playerStatsCategory}):</div>
+                    <div className="mt-6 pt-4 border-t border-gray-200 dark:border-neutral-700">
+                      <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1">
+                        <div className="font-semibold text-slate-600 dark:text-slate-300 mb-2">Legend ({playerStatsCategory}):</div>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                           {PLAYER_STAT_LEGENDS[playerStatsCategory]?.map((legend, index) => (
                             <span key={`legend-${index}`}>{legend}</span>
                           ))}
                         </div>
-                        <div className="mt-2 text-xs text-slate-400">
+                        <div className="mt-2 text-xs text-slate-400 dark:text-slate-500">
                           Click on any player to view their detailed profile • Swipe horizontally to see all stats
                         </div>
                       </div>
@@ -3644,26 +3644,26 @@ export default function LeaguePage() {
 
             {/* Team Stats Section */}
             {activeSection === 'teamstats' && (
-              <div className="bg-white rounded-xl shadow p-4 md:p-6">
+              <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
                 <div className="mb-4 md:mb-6">
-                  <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-4">Team Statistics - {league?.name}</h2>
+                  <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-4">Team Statistics - {league?.name}</h2>
                 </div>
 
                 {/* Dropdowns for Category and Mode */}
                 <div className="flex flex-col sm:flex-row gap-3 mb-6">
                   <div className="flex-1">
-                    <label className="block text-xs font-medium text-slate-600 mb-1.5">Category</label>
+                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">Category</label>
                     <Select
                       value={teamStatsCategory}
                       onValueChange={(value) => setTeamStatsCategory(value as typeof teamStatsCategory)}
                     >
                       <SelectTrigger 
-                        className="w-full bg-white border-slate-200 text-slate-700 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500"
+                        className="w-full bg-white dark:bg-neutral-800 border-slate-200 dark:border-neutral-600 text-slate-700 dark:text-slate-200 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500"
                         data-testid="select-category"
                       >
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
                         <SelectItem value="Traditional" data-testid="option-traditional">Traditional</SelectItem>
                         <SelectItem value="Advanced" data-testid="option-advanced">Advanced</SelectItem>
                         <SelectItem value="Four Factors" data-testid="option-four-factors">Four Factors</SelectItem>
@@ -3674,18 +3674,18 @@ export default function LeaguePage() {
                   </div>
 
                   <div className="flex-1">
-                    <label className="block text-xs font-medium text-slate-600 mb-1.5">Mode</label>
+                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">Mode</label>
                     <Select
                       value={teamStatsMode}
                       onValueChange={(value) => setTeamStatsMode(value as typeof teamStatsMode)}
                     >
                       <SelectTrigger 
-                        className="w-full bg-white border-slate-200 text-slate-700 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500"
+                        className="w-full bg-white dark:bg-neutral-800 border-slate-200 dark:border-neutral-600 text-slate-700 dark:text-slate-200 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500"
                         data-testid="select-mode"
                       >
                         <SelectValue placeholder="Select mode" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
                         <SelectItem value="Per Game" data-testid="option-per-game">Per Game</SelectItem>
                         <SelectItem value="Totals" data-testid="option-totals">Totals</SelectItem>
                         <SelectItem value="Per 100 Possessions" data-testid="option-per-100">Per 100 Possessions</SelectItem>
@@ -3698,48 +3698,48 @@ export default function LeaguePage() {
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b border-gray-200">
-                          <th className="text-left py-3 px-2 font-semibold text-slate-700 sticky left-0 bg-white">Team</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">GP</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FGM</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FGA</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FG%</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">2PM</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">2PA</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">2P%</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">3PM</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">3PA</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">3P%</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FTM</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FTA</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FT%</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">ORB</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">DRB</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">TRB</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">AST</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">STL</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">BLK</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">TO</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">PF</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">+/-</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">PTS</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">PITP</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FB PTS</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">2ND CH</th>
+                        <tr className="border-b border-gray-200 dark:border-neutral-700">
+                          <th className="text-left py-3 px-2 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-white dark:bg-neutral-900">Team</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">GP</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FGM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FGA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FG%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">2PM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">2PA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">2P%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">3PM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">3PA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">3P%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FTM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FTA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FT%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">ORB</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">DRB</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">TRB</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">AST</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">STL</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">BLK</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">TO</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">PF</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">+/-</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">PTS</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">PITP</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FB PTS</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">2ND CH</th>
                         </tr>
                       </thead>
                       <tbody>
                         {Array.from({ length: 8 }).map((_, index) => (
-                          <tr key={`skeleton-${index}`} className="border-b border-gray-100">
+                          <tr key={`skeleton-${index}`} className="border-b border-gray-100 dark:border-neutral-700">
                             <td className="py-3 px-2">
                               <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 bg-gray-200 rounded-full animate-pulse"></div>
-                                <div className="h-4 bg-gray-200 rounded w-24 animate-pulse"></div>
+                                <div className="w-8 h-8 bg-gray-200 dark:bg-neutral-700 rounded-full animate-pulse"></div>
+                                <div className="h-4 bg-gray-200 dark:bg-neutral-700 rounded w-24 animate-pulse"></div>
                               </div>
                             </td>
                             {Array.from({ length: 26 }).map((_, colIndex) => (
                               <td key={`skeleton-col-${colIndex}`} className="py-3 px-2">
-                                <div className="h-4 bg-gray-200 rounded w-12 mx-auto animate-pulse"></div>
+                                <div className="h-4 bg-gray-200 dark:bg-neutral-700 rounded w-12 mx-auto animate-pulse"></div>
                               </td>
                             ))}
                           </tr>
@@ -3748,13 +3748,13 @@ export default function LeaguePage() {
                     </table>
                   </div>
                 ) : sortedTeamStats.length > 0 ? (
-                  <div className="overflow-x-auto -mx-4 md:mx-0 border border-orange-200 rounded-lg">
+                  <div className="overflow-x-auto -mx-4 md:mx-0 border border-orange-200 dark:border-neutral-700 rounded-lg">
                     <table className="w-full text-xs md:text-sm">
                       <thead>
-                        <tr className="border-b border-gray-200 bg-orange-50">
-                          <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 sticky left-0 bg-orange-50 z-10 w-16">Logo</th>
-                          <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[120px]">Team</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[45px]">
+                        <tr className="border-b border-gray-200 dark:border-neutral-700 bg-orange-50 dark:bg-neutral-800">
+                          <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-orange-50 dark:bg-neutral-800 z-10 w-16">Logo</th>
+                          <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 dark:text-slate-200 min-w-[120px]">Team</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 dark:text-slate-200 min-w-[45px]">
                             <div className="flex items-center justify-center gap-1">GP</div>
                           </th>
                           {activeTeamStatColumns.map((column) => (
@@ -3771,9 +3771,9 @@ export default function LeaguePage() {
                                 }
                               }}
                               className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] ${
-                                column.sortable ? 'cursor-pointer hover:bg-orange-100' : ''
+                                column.sortable ? 'cursor-pointer hover:bg-orange-100 dark:hover:bg-neutral-700' : ''
                               } transition-colors ${
-                                teamStatsSortColumn === column.key ? 'text-orange-600' : 'text-slate-700'
+                                teamStatsSortColumn === column.key ? 'text-orange-600 dark:text-orange-400' : 'text-slate-700 dark:text-slate-200'
                               }`}
                               data-testid={`header-${column.key.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
                             >
@@ -3787,21 +3787,21 @@ export default function LeaguePage() {
                           ))}
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-100">
+                      <tbody className="divide-y divide-gray-100 dark:divide-neutral-700">
                         {sortedTeamStats.map((team, index) => (
                           <tr
                             key={`team-stats-${team.teamName}-${index}`}
-                            className="hover:bg-orange-50 transition-colors cursor-pointer group"
+                            className="hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors cursor-pointer group"
                             onClick={() => navigate(`/team/${encodeURIComponent(team.teamName)}`)}
                             data-testid={`row-team-${team.teamName}`}
                           >
-                            <td className="py-2 md:py-3 px-2 md:px-3 sticky left-0 bg-white group-hover:bg-orange-50 z-10 transition-colors">
+                            <td className="py-2 md:py-3 px-2 md:px-3 sticky left-0 bg-white dark:bg-neutral-900 group-hover:bg-orange-50 dark:group-hover:bg-neutral-800 z-10 transition-colors">
                               <TeamLogo teamName={team.teamName} leagueId={league?.league_id || ""} size="sm" />
                             </td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 text-xs md:text-sm truncate">
+                            <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 dark:text-slate-200 text-xs md:text-sm truncate">
                               {team.teamName}
                             </td>
-                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 font-medium" data-testid={`text-gp-${team.teamName}`}>
+                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 dark:text-slate-300 font-medium" data-testid={`text-gp-${team.teamName}`}>
                               {team.gamesPlayed}
                             </td>
                             {activeTeamStatColumns.map((column) => {
@@ -3810,7 +3810,7 @@ export default function LeaguePage() {
                               return (
                                 <td
                                   key={`${team.teamName}-${column.key}`}
-                                  className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600"
+                                  className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 dark:text-slate-300"
                                   data-testid={`text-${column.key.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${team.teamName}`}
                                 >
                                   {displayValue}
@@ -3823,27 +3823,27 @@ export default function LeaguePage() {
                     </table>
                     
                     {/* Scroll hint for mobile */}
-                    <div className="md:hidden bg-orange-50 text-orange-700 text-center py-2 text-xs border-t border-orange-200">
+                    <div className="md:hidden bg-orange-50 dark:bg-neutral-800 text-orange-700 dark:text-orange-400 text-center py-2 text-xs border-t border-orange-200 dark:border-neutral-700">
                       ← Swipe to see all stats →
                     </div>
                   </div>
                 ) : (
-                  <div className="text-center py-8 text-gray-500">
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                     <p className="text-sm">No team statistics available</p>
                     <p className="text-xs mt-1">Stats will appear once games are played</p>
                   </div>
                 )}
                 
                 {/* Dynamic Legend based on category */}
-                <div className="mt-6 pt-4 border-t border-gray-200">
-                  <div className="text-xs text-slate-500 space-y-1">
-                    <div className="font-semibold text-slate-600 mb-2">Legend ({teamStatsCategory}):</div>
+                <div className="mt-6 pt-4 border-t border-gray-200 dark:border-neutral-700">
+                  <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1">
+                    <div className="font-semibold text-slate-600 dark:text-slate-300 mb-2">Legend ({teamStatsCategory}):</div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                       {TEAM_STAT_LEGENDS[teamStatsCategory]?.map((legend, index) => (
                         <span key={`legend-${index}`}>{legend}</span>
                       ))}
                     </div>
-                    <div className="mt-2 text-xs text-slate-400">
+                    <div className="mt-2 text-xs text-slate-400 dark:text-slate-500">
                       Click on any team to view their detailed profile • Swipe horizontally to see all stats
                     </div>
                   </div>
@@ -3853,24 +3853,24 @@ export default function LeaguePage() {
 
             {/* Teams Section */}
             {activeSection === 'teams' && (
-              <div className="bg-white rounded-xl shadow p-4 md:p-6">
-                <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-4 md:mb-6">Teams</h2>
+              <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
+                <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-4 md:mb-6">Teams</h2>
                 {standings.length > 0 ? (
-                  <div className="divide-y divide-gray-200">
+                  <div className="divide-y divide-gray-200 dark:divide-neutral-700">
                     {standings.map((teamData, index) => (
                       <Link key={`team-${teamData.team}-${index}`} to={`/team/${encodeURIComponent(teamData.team)}`}>
-                        <div className="p-3 md:p-4 hover:bg-gray-50 transition-colors flex items-center justify-between group cursor-pointer">
+                        <div className="p-3 md:p-4 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors flex items-center justify-between group cursor-pointer">
                           <div className="flex items-center gap-2 md:gap-4">
                             <TeamLogo teamName={teamData.team} leagueId={league?.league_id || ""} size="md" />
-                            <h3 className="font-semibold text-slate-800 text-sm md:text-lg">{teamData.team}</h3>
+                            <h3 className="font-semibold text-slate-800 dark:text-white text-sm md:text-lg">{teamData.team}</h3>
                           </div>
-                          <ChevronRight className="w-4 md:w-5 h-4 md:h-5 text-gray-400 group-hover:text-orange-600 transition-colors" />
+                          <ChevronRight className="w-4 md:w-5 h-4 md:h-5 text-gray-400 dark:text-gray-500 group-hover:text-orange-600 transition-colors" />
                         </div>
                       </Link>
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-8 text-gray-500">
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                     <p className="text-xs md:text-sm">No teams available</p>
                     <p className="text-xs mt-1">Teams will appear once games are played</p>
                   </div>
@@ -3880,17 +3880,17 @@ export default function LeaguePage() {
 
             {/* Schedule Section */}
             {activeSection === 'schedule' && (
-              <div className="bg-white rounded-xl shadow p-4 md:p-6">
-                <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-3 md:mb-4">Game Schedule</h2>
+              <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
+                <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-3 md:mb-4">Game Schedule</h2>
                 
                 {/* Tabs for Upcoming / Results */}
-                <div className="flex gap-2 mb-4 border-b border-gray-200">
+                <div className="flex gap-2 mb-4 border-b border-gray-200 dark:border-neutral-700">
                   <button
                     onClick={() => setScheduleView('upcoming')}
                     className={`px-3 md:px-4 py-2 text-xs md:text-sm font-semibold transition-all ${
                       scheduleView === 'upcoming'
                         ? 'text-orange-500 border-b-2 border-orange-500 -mb-[2px]'
-                        : 'text-slate-600 hover:text-orange-500'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-orange-500'
                     }`}
                     data-testid="button-upcoming-games"
                   >
@@ -3901,7 +3901,7 @@ export default function LeaguePage() {
                     className={`px-3 md:px-4 py-2 text-xs md:text-sm font-semibold transition-all ${
                       scheduleView === 'results'
                         ? 'text-orange-500 border-b-2 border-orange-500 -mb-[2px]'
-                        : 'text-slate-600 hover:text-orange-500'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-orange-500'
                     }`}
                     data-testid="button-results"
                   >
@@ -4282,8 +4282,8 @@ export default function LeaguePage() {
 
             {/* Tournament Bracket - Only for BCB Trophy */}
             {slug === 'british-championship-basketball' && league?.league_id && (
-              <div className="bg-white rounded-xl shadow p-4 md:p-6">
-                <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-4 md:mb-6">Tournament Bracket</h2>
+              <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
+                <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-4 md:mb-6">Tournament Bracket</h2>
                 <TournamentBracket 
                   leagueId={league.league_id} 
                   onGameClick={handleGameClick}
@@ -4298,14 +4298,14 @@ export default function LeaguePage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-gray-200">
-                        <th className="text-left py-3 px-2 font-semibold text-slate-700">#</th>
-                        <th className="text-left py-3 px-2 font-semibold text-slate-700">Team</th>
-                        <th className="text-center py-3 px-2 font-semibold text-slate-700">Record</th>
-                        <th className="text-center py-3 px-2 font-semibold text-slate-700">Win%</th>
-                        <th className="text-right py-3 px-2 font-semibold text-slate-700">PF</th>
-                        <th className="text-right py-3 px-2 font-semibold text-slate-700">PA</th>
-                        <th className="text-right py-3 px-2 font-semibold text-slate-700">Diff</th>
+                      <tr className="border-b border-gray-200 dark:border-neutral-700">
+                        <th className="text-left py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">#</th>
+                        <th className="text-left py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">Team</th>
+                        <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">Record</th>
+                        <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">Win%</th>
+                        <th className="text-right py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">PF</th>
+                        <th className="text-right py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">PA</th>
+                        <th className="text-right py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">Diff</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -4319,43 +4319,43 @@ export default function LeaguePage() {
                 <div className="overflow-x-auto -mx-4 md:mx-0">
                   <table className="w-full text-sm min-w-[600px]">
                     <thead>
-                      <tr className="border-b-2 border-gray-200">
-                        <th className="text-left py-3 px-3 font-semibold text-slate-700 w-12 sticky left-0 bg-white z-10">#</th>
-                        <th className="text-left py-3 px-3 font-semibold text-slate-700 max-w-[180px] sticky left-12 md:static bg-white z-10">Team</th>
-                        <th className="text-center py-3 px-3 font-semibold text-slate-700 w-20">W</th>
-                        <th className="text-center py-3 px-3 font-semibold text-slate-700 w-20">L</th>
-                        <th className="text-center py-3 px-3 font-semibold text-slate-700 w-20">Win%</th>
-                        <th className="text-right py-3 px-3 font-semibold text-slate-700 w-20">PF</th>
-                        <th className="text-right py-3 px-3 font-semibold text-slate-700 w-20">PA</th>
-                        <th className="text-right py-3 px-3 font-semibold text-slate-700 w-20">Diff</th>
+                      <tr className="border-b-2 border-gray-200 dark:border-neutral-700">
+                        <th className="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-12 sticky left-0 bg-white dark:bg-neutral-900 z-10">#</th>
+                        <th className="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 max-w-[180px] sticky left-12 md:static bg-white dark:bg-neutral-900 z-10">Team</th>
+                        <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">W</th>
+                        <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">L</th>
+                        <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">Win%</th>
+                        <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">PF</th>
+                        <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">PA</th>
+                        <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">Diff</th>
                       </tr>
                     </thead>
                     <tbody>
                       {standings.map((team, index) => (
                         <tr 
                           key={team.team} 
-                          className={`border-b border-gray-100 hover:bg-orange-50 transition-colors ${
-                            index < 3 ? 'bg-green-50' : index >= standings.length - 2 ? 'bg-red-50' : ''
+                          className={`border-b border-gray-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors ${
+                            index < 3 ? 'bg-green-50 dark:bg-green-900/20' : index >= standings.length - 2 ? 'bg-red-50 dark:bg-red-900/20' : ''
                           }`}
                         >
-                          <td className="py-3 px-3 font-medium text-slate-600 sticky left-0 bg-inherit z-10">{index + 1}</td>
-                          <td className="py-3 px-3 font-medium text-slate-800 max-w-[180px] sticky left-12 md:static bg-inherit z-10">
+                          <td className="py-3 px-3 font-medium text-slate-600 dark:text-slate-400 sticky left-0 bg-inherit z-10">{index + 1}</td>
+                          <td className="py-3 px-3 font-medium text-slate-800 dark:text-slate-200 max-w-[180px] sticky left-12 md:static bg-inherit z-10">
                             <div className="flex items-center gap-2">
                               <TeamLogo teamName={team.team} leagueId={league?.league_id} size="sm" />
                               <span className="truncate">{team.team}</span>
                             </div>
                           </td>
-                          <td className="py-3 px-3 text-center font-semibold text-slate-700">{team.wins}</td>
-                          <td className="py-3 px-3 text-center font-semibold text-slate-700">{team.losses}</td>
-                          <td className="py-3 px-3 text-center font-medium text-slate-600">{(team.winPct * 100).toFixed(1)}%</td>
-                          <td className="py-3 px-3 text-right font-medium text-slate-700">{team.pointsFor}</td>
-                          <td className="py-3 px-3 text-right font-medium text-slate-700">{team.pointsAgainst}</td>
-                          <td className={`py-3 px-3 text-right font-semibold ${team.pointsDiff > 0 ? 'text-green-600' : team.pointsDiff < 0 ? 'text-red-600' : 'text-slate-600'}`}>{team.pointsDiff > 0 ? '+' : ''}{team.pointsDiff}</td>
+                          <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.wins}</td>
+                          <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.losses}</td>
+                          <td className="py-3 px-3 text-center font-medium text-slate-600 dark:text-slate-400">{(team.winPct * 100).toFixed(1)}%</td>
+                          <td className="py-3 px-3 text-right font-medium text-slate-700 dark:text-slate-300">{team.pointsFor}</td>
+                          <td className="py-3 px-3 text-right font-medium text-slate-700 dark:text-slate-300">{team.pointsAgainst}</td>
+                          <td className={`py-3 px-3 text-right font-semibold ${team.pointsDiff > 0 ? 'text-green-600 dark:text-green-400' : team.pointsDiff < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-400'}`}>{team.pointsDiff > 0 ? '+' : ''}{team.pointsDiff}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                  <div className="mt-4 pt-3 border-t border-gray-100 text-xs text-slate-500">
+                  <div className="mt-4 pt-3 border-t border-gray-100 dark:border-neutral-700 text-xs text-slate-500 dark:text-slate-400">
                     <div className="flex gap-4 flex-wrap">
                       <span><span className="font-semibold">W</span> = Wins</span>
                       <span><span className="font-semibold">L</span> = Losses</span>
@@ -4367,7 +4367,7 @@ export default function LeaguePage() {
                   </div>
                 </div>
               ) : (
-                <div className="text-center py-8 text-gray-500">
+                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                   <p className="text-sm">No standings available</p>
                   <p className="text-xs mt-1">Standings will appear once games are played</p>
                 </div>
@@ -4381,8 +4381,8 @@ export default function LeaguePage() {
           <aside className="space-y-6">
             {/* League Admin Panel */}
             {isOwner && league?.league_id && (
-              <div className="bg-white rounded-xl shadow p-6 border-l-4 border-blue-500">
-                <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+              <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-6 border-l-4 border-blue-500">
+                <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
                   <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.5 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -4391,7 +4391,7 @@ export default function LeaguePage() {
                 </h3>
                 
                 <div className="space-y-4">
-                  <p className="text-sm text-slate-600 mb-4">
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
                     Manage all aspects of your league from the dedicated admin area.
                   </p>
                   
@@ -4406,7 +4406,7 @@ export default function LeaguePage() {
                     Open League Admin
                   </button>
                   
-                  <div className="text-xs text-slate-500 space-y-1">
+                  <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1">
                     <p>• Team Logo Management</p>
                     <p>• Banner & Media Settings</p>
                     <p>• Social Media Integration</p>
@@ -4443,10 +4443,10 @@ export default function LeaguePage() {
                   {/* List of existing URLs */}
                   {instagramUrls.length > 0 && (
                     <div className="space-y-2">
-                      <p className="text-xs font-medium text-slate-600">Current Posts ({instagramUrls.length})</p>
+                      <p className="text-xs font-medium text-slate-600 dark:text-slate-400">Current Posts ({instagramUrls.length})</p>
                       {instagramUrls.map((url, index) => (
-                        <div key={index} className="flex items-center gap-2 p-2 bg-gray-50 rounded border border-gray-200">
-                          <span className="text-xs text-slate-700 flex-1 truncate">{url}</span>
+                        <div key={index} className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-neutral-800 rounded border border-gray-200 dark:border-neutral-700">
+                          <span className="text-xs text-slate-700 dark:text-slate-300 flex-1 truncate">{url}</span>
                           <button
                             onClick={() => handleRemoveInstagramUrl(index)}
                             className="text-xs text-red-500 hover:text-red-600 font-medium shrink-0"
@@ -4461,7 +4461,7 @@ export default function LeaguePage() {
 
                   {/* Add new URL */}
                   <div className="space-y-2">
-                    <p className="text-xs font-medium text-slate-600">Add New Post</p>
+                    <p className="text-xs font-medium text-slate-600 dark:text-slate-400">Add New Post</p>
                     <div className="flex gap-2">
                       <input
                         type="text"
@@ -4469,18 +4469,18 @@ export default function LeaguePage() {
                         value={newInstagramUrl}
                         onChange={(e) => setNewInstagramUrl(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleAddInstagramUrl()}
-                        className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md"
+                        className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-neutral-600 dark:bg-neutral-800 dark:text-white rounded-md"
                         data-testid="new-instagram-url-input"
                       />
                       <button
                         onClick={handleAddInstagramUrl}
-                        className="px-3 py-2 text-xs font-medium bg-gray-200 text-gray-700 rounded hover:bg-gray-300 shrink-0"
+                        className="px-3 py-2 text-xs font-medium bg-gray-200 dark:bg-neutral-700 text-gray-700 dark:text-gray-200 rounded hover:bg-gray-300 dark:hover:bg-neutral-600 shrink-0"
                         data-testid="add-instagram-url-button"
                       >
                         Add
                       </button>
                     </div>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
                       💡 Add profile URLs or specific post/reel URLs. Videos will auto-play in the carousel.
                     </p>
                   </div>
