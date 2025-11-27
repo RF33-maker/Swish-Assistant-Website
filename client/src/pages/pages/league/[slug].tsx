@@ -2627,8 +2627,8 @@ export default function LeaguePage() {
   
  return (
       
-      <div className="min-h-screen bg-[#fffaf1] dark:bg-gray-900 transition-colors duration-300">
-        <header className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-50 px-4 md:px-6 py-3 md:py-4">
+      <div className="min-h-screen bg-[#fffaf1] dark:bg-neutral-950 transition-colors duration-300">
+        <header className="bg-white dark:bg-neutral-900 shadow-sm sticky top-0 z-50 px-4 md:px-6 py-3 md:py-4">
           <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
             <div className="flex items-center justify-between md:justify-start">
               <img
@@ -2655,7 +2655,7 @@ export default function LeaguePage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-full text-sm bg-white dark:bg-gray-700 text-slate-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                className="w-full px-4 py-2 border border-gray-300 dark:border-neutral-700 rounded-full text-sm bg-white dark:bg-neutral-800 text-slate-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500"
               />
               <button
                 onClick={handleSearch}
@@ -2665,7 +2665,7 @@ export default function LeaguePage() {
               </button>
 
               {suggestions.length > 0 && (
-                <ul className="absolute z-50 mt-2 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                <ul className="absolute z-50 mt-2 w-full bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-md shadow-lg max-h-60 overflow-y-auto">
                   {suggestions.map((item, index) => (
                     <li
                       key={index}
@@ -2674,7 +2674,7 @@ export default function LeaguePage() {
                         setSuggestions([]);
                         navigate(`/league/${item.slug}`);
                       }}
-                      className="px-4 py-2 cursor-pointer hover:bg-orange-100 dark:hover:bg-gray-700 text-left text-slate-800 dark:text-slate-200 text-sm"
+                      className="px-4 py-2 cursor-pointer hover:bg-orange-100 dark:hover:bg-neutral-800 text-left text-slate-800 dark:text-slate-200 text-sm"
                     >
                       {item.name}
                     </li>
@@ -2761,7 +2761,7 @@ export default function LeaguePage() {
 
         {/* Breadcrumb for Sub-Competitions */}
         {parentLeague && (
-          <div className="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700">
+          <div className="bg-white dark:bg-neutral-900 border-b border-gray-100 dark:border-neutral-800">
             <div className="max-w-7xl mx-auto px-4 md:px-6 py-3">
               <Link href={`/league/${parentLeague.slug}`}>
                 <a className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-orange-400 dark:hover:text-orange-300 transition-colors group" data-testid="link-parent-league">
@@ -2785,8 +2785,8 @@ export default function LeaguePage() {
 
         {/* SEO-Optimized About This League Section */}
         {league?.description && (
-          <div className="w-full bg-gradient-to-b from-transparent to-[#fffaf5] dark:to-gray-800 pt-3 pb-5 px-4 animate-fade-in-up">
-            <div className="max-w-4xl mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 md:p-5 border border-orange-100 dark:border-gray-700">
+          <div className="w-full bg-gradient-to-b from-transparent to-[#fffaf5] dark:to-neutral-900 pt-3 pb-5 px-4 animate-fade-in-up">
+            <div className="max-w-4xl mx-auto bg-white dark:bg-neutral-900 rounded-lg shadow-sm p-4 md:p-5 border border-orange-100 dark:border-neutral-800">
               <div className="flex items-center gap-3 mb-3">
                 {league?.logo_url && (
                   <img
@@ -2823,7 +2823,7 @@ export default function LeaguePage() {
         )}
 
         {/* Navigation Tabs - Moved below carousel */}
-        <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-neutral-900 border-b border-gray-200 dark:border-neutral-800">
           <div className="max-w-7xl mx-auto px-4 md:px-6">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-4 py-3 md:py-4">
               {/* Navigation Links */}
@@ -2950,7 +2950,7 @@ export default function LeaguePage() {
             
             {/* Standings Section */}
             {activeSection === 'standings' && (
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4 md:p-6">
+              <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
                 <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-4 md:mb-6">
                   <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">League Standings</h2>
                   
@@ -3985,7 +3985,7 @@ export default function LeaguePage() {
                 </div>
 
                 {/* Team League Leaders */}
-                <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4 md:p-6">
+                <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
                   <div className="flex justify-between items-center mb-4 md:mb-6">
                     <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">Team Leaders</h2>
                     <button
@@ -4084,7 +4084,7 @@ export default function LeaguePage() {
             )}
 
             {/* League Standings */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4 md:p-6">
+            <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
               <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-4">League Standings</h2>
               {isLoadingStandings ? (
                 <div className="overflow-x-auto">
@@ -4216,7 +4216,7 @@ export default function LeaguePage() {
             )}
 
             {/* Instagram Embed */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+            <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4">
               <div className="flex justify-between items-center mb-3">
                 <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Instagram Feed</h3>
                 {isOwner && (
@@ -4326,7 +4326,7 @@ export default function LeaguePage() {
             </div>
 
             {/* YouTube Embed */}
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-4">
+            <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4">
               <div className="flex justify-between items-center mb-3">
                 <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Latest Highlights</h3>
                 {isOwner && (

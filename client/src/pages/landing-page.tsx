@@ -194,12 +194,12 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-900 text-slate-900 dark:text-slate-100 flex flex-col transition-colors duration-300">
+    <div className="min-h-screen bg-white dark:bg-neutral-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors duration-300">
       {/* Gradient Top Border */}
       <div className="h-[1px] bg-gradient-to-r from-orange-400 to-amber-400"></div>
       
       {/* Header */}
-      <header className="flex justify-between items-center px-6 py-4 bg-gradient-to-b from-[#fffaf5] to-transparent dark:from-gray-900 dark:to-transparent">
+      <header className="flex justify-between items-center px-6 py-4 bg-gradient-to-b from-[#fffaf5] to-transparent dark:from-neutral-950 dark:to-transparent">
         <div className="flex items-center gap-2">
           <img src={SwishLogo} alt="Swish Logo" className="h-8" />
           <span className="font-bold text-xl text-orange-600"></span>
@@ -228,7 +228,7 @@ export default function LandingPage() {
       </header>
 
       {/* Hero Section with Gradient Background */}
-      <div className="bg-gradient-to-b from-[#fffaf5] to-white dark:from-gray-900 dark:to-gray-800 pt-4 md:pt-6 lg:pt-8 pb-12 md:pb-16 lg:pb-20">
+      <div className="bg-gradient-to-b from-[#fffaf5] to-white dark:from-neutral-950 dark:to-neutral-900 pt-4 md:pt-6 lg:pt-8 pb-12 md:pb-16 lg:pb-20">
         <img src={SwishLogo} alt="Swish Logo"
           className="mx-auto w-32 h-32 md:w-40 md:h-40 lg:w-44 lg:h-44 drop-shadow-lg mb-4 md:mb-6 lg:mb-8 animate-fade-in-up"
         />
@@ -244,7 +244,7 @@ export default function LandingPage() {
           <div className="search-bar-animated-border transition-all duration-300 focus-within:scale-[1.02] animate-fade-in-up" style={{ animationDelay: '0.6s' }}>
             <form
               onSubmit={handleSubmit}
-              className="flex items-center shadow-lg rounded-full overflow-hidden bg-white dark:bg-gray-800 relative z-10"
+              className="flex items-center shadow-lg rounded-full overflow-hidden bg-white dark:bg-neutral-900 relative z-10"
             >
               <Search className="ml-5 h-5 w-5 text-slate-400 dark:text-slate-500" />
               <input
@@ -258,12 +258,12 @@ export default function LandingPage() {
           </div>
 
           {suggestions.length > 0 && (
-            <ul className="absolute z-50 w-full bg-white dark:bg-gray-800 border border-orange-200 dark:border-gray-600 mt-1 rounded-md shadow-lg max-h-60 overflow-y-auto">
+            <ul className="absolute z-50 w-full bg-white dark:bg-neutral-900 border border-orange-200 dark:border-neutral-700 mt-1 rounded-md shadow-lg max-h-60 overflow-y-auto">
               {suggestions.map((item, index) => (
                 <li
                   key={index}
                   onClick={() => handleSelect(item)}
-                  className="px-5 py-3 cursor-pointer hover:bg-orange-50 dark:hover:bg-gray-700 text-left border-b border-orange-100 dark:border-gray-700 last:border-b-0 transition-colors duration-200"
+                  className="px-5 py-3 cursor-pointer hover:bg-orange-50 dark:hover:bg-neutral-800 text-left border-b border-orange-100 dark:border-neutral-800 last:border-b-0 transition-colors duration-200"
                 >
                   <div className="flex items-center gap-3">
                     {item.type === 'league' ? (
@@ -302,7 +302,7 @@ export default function LandingPage() {
                 <button
                   key={i}
                   onClick={() => handleSelect({ type: 'league', slug: league.slug })}
-                  className="bg-gradient-to-r from-orange-100 to-amber-50 dark:from-gray-700 dark:to-gray-800 hover:scale-105 hover:shadow-md text-sm text-orange-800 dark:text-orange-300 px-5 py-3 rounded-xl text-left transition-all duration-300 flex items-center justify-between gap-3 animate-slide-in-left"
+                  className="bg-gradient-to-r from-orange-100 to-amber-50 dark:from-neutral-800 dark:to-neutral-900 hover:scale-105 hover:shadow-md text-sm text-orange-800 dark:text-orange-300 px-5 py-3 rounded-xl text-left transition-all duration-300 flex items-center justify-between gap-3 animate-slide-in-left"
                   style={{ animationDelay: `${0.8 + i * 0.075}s`, opacity: 0, animationFillMode: 'forwards' }}
                 >
                   <div className="flex items-center gap-2">
@@ -321,7 +321,7 @@ export default function LandingPage() {
                 <button
                   key={i}
                   onClick={() => handleSelect({ type: 'league', slug: league.slug })}
-                  className="bg-gradient-to-r from-orange-100 to-amber-50 dark:from-gray-700 dark:to-gray-800 hover:scale-105 hover:shadow-md text-sm text-orange-800 dark:text-orange-300 px-5 py-3 rounded-xl text-left transition-all duration-300 flex items-center justify-between gap-3 animate-slide-in-left"
+                  className="bg-gradient-to-r from-orange-100 to-amber-50 dark:from-neutral-800 dark:to-neutral-900 hover:scale-105 hover:shadow-md text-sm text-orange-800 dark:text-orange-300 px-5 py-3 rounded-xl text-left transition-all duration-300 flex items-center justify-between gap-3 animate-slide-in-left"
                   style={{ animationDelay: `${0.8 + i * 0.075}s`, opacity: 0, animationFillMode: 'forwards' }}
                 >
                   <div className="flex items-center gap-2">
@@ -351,7 +351,7 @@ export default function LandingPage() {
               {[...([Ballpark, NBLBE, BCB, SLB]), ...([Ballpark, NBLBE, BCB, SLB]), ...([Ballpark, NBLBE, BCB, SLB])].map((img, i) => (
                 <div 
                   key={i} 
-                  className="flex-shrink-0 flex items-center justify-center bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-md p-4 transition-all duration-300 hover:scale-110"
+                  className="flex-shrink-0 flex items-center justify-center bg-white dark:bg-neutral-900 rounded-lg shadow-sm hover:shadow-md p-4 transition-all duration-300 hover:scale-110"
                 >
                   <img
                     src={img}

@@ -14,7 +14,7 @@ export function ThemeToggle({ className = "" }: ThemeToggleProps) {
       variant="ghost"
       size="icon"
       onClick={toggleTheme}
-      className={`rounded-full hover:bg-orange-100 dark:hover:bg-gray-700 ${className}`}
+      className={`rounded-full hover:bg-orange-100 dark:hover:bg-neutral-800 ${className}`}
       data-testid="theme-toggle"
       aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
     >
