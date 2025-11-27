@@ -2825,9 +2825,9 @@ export default function LeaguePage() {
         {/* Navigation Tabs - Moved below carousel */}
         <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
           <div className="max-w-7xl mx-auto px-4 md:px-6">
-            <div className="flex items-center justify-between gap-4 py-3 md:py-4">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-4 py-3 md:py-4">
               {/* Navigation Links */}
-              <div className="flex gap-4 md:gap-6 text-sm font-medium text-slate-600 dark:text-slate-400 overflow-x-auto">
+              <div className="flex gap-4 md:gap-6 text-sm font-medium text-slate-600 dark:text-slate-400 overflow-x-auto pb-1 md:pb-0">
                 <a 
                   href="#" 
                   className={`hover:text-orange-500 cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'teams' ? 'text-orange-500 font-semibold border-b-2 border-orange-500' : ''}`}
