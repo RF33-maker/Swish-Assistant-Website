@@ -21,6 +21,7 @@ The application is structured into a React frontend and integrates with external
 **Frontend (React with Vite, Tailwind CSS, shadcn/ui, Wouter):**
 - **Structure**: Organized into `pages/` for main views, `components/` for reusable UI elements, `lib/` for utilities and configurations, and `hooks/` for custom React hooks.
 - **UI/UX Decisions**: Emphasizes a clean, professional design with a focus on readability and intuitive navigation. Utilizes a softer orange color palette (orange-50/100/300/400/700/800) for better aesthetics, with white backgrounds and soft orange borders (border-orange-200/300) for cards. Playful micro-interactions, hover animations, and smooth transitions are incorporated.
+    - **Dark Mode**: Site-wide dark mode support via ThemeProvider context with localStorage persistence. Toggle button (sun/moon icons) in navigation headers on landing and league pages. Dark theme uses gray-800/900 backgrounds with orange accent colors preserved. Tailwind's class-based dark mode enabled with `dark:` variants throughout components.
 - **Technical Implementations**:
     - **Authentication**: Supabase handles user authentication and session management, securing routes.
     - **Routing**: `Wouter` is used for client-side routing, enabling dynamic page navigation.
