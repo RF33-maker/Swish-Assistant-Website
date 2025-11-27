@@ -233,7 +233,7 @@ export default function LandingPage() {
           className="mx-auto w-32 h-32 md:w-40 md:h-40 lg:w-44 lg:h-44 drop-shadow-lg mb-4 md:mb-6 lg:mb-8 animate-fade-in-up"
         />
         <main className="flex flex-col items-center justify-center px-6 text-center">
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-semibold text-slate-900 max-w-3xl leading-tight tracking-tight mb-6 md:mb-8 lg:mb-10 animate-fade-in-up" style={{ animationDelay: '0.2s', opacity: 0, animationFillMode: 'forwards' }}>
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-semibold text-slate-900 dark:text-white max-w-3xl leading-tight tracking-tight mb-6 md:mb-8 lg:mb-10 animate-fade-in-up" style={{ animationDelay: '0.2s', opacity: 0, animationFillMode: 'forwards' }}>
             The Home of Basketball Stats, Advanced Metrics & League Insights
             <br />
             <span className="text-orange-500 font-bold drop-shadow-sm text-2xl sm:text-3xl lg:text-4xl mt-2 inline-block">Search below.</span>
@@ -244,26 +244,26 @@ export default function LandingPage() {
           <div className="search-bar-animated-border transition-all duration-300 focus-within:scale-[1.02] animate-fade-in-up" style={{ animationDelay: '0.6s' }}>
             <form
               onSubmit={handleSubmit}
-              className="flex items-center shadow-lg rounded-full overflow-hidden bg-white relative z-10"
+              className="flex items-center shadow-lg rounded-full overflow-hidden bg-white dark:bg-gray-800 relative z-10"
             >
-              <Search className="ml-5 h-5 w-5 text-slate-400" />
+              <Search className="ml-5 h-5 w-5 text-slate-400 dark:text-slate-500" />
               <input
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Find your league"
-                className="flex-1 px-4 py-4 text-base text-slate-900 focus:outline-none bg-transparent"
+                className="flex-1 px-4 py-4 text-base text-slate-900 dark:text-white focus:outline-none bg-transparent placeholder:text-slate-400 dark:placeholder:text-slate-500"
               />
             </form>
           </div>
 
           {suggestions.length > 0 && (
-            <ul className="absolute z-50 w-full bg-white border border-orange-200 mt-1 rounded-md shadow-lg max-h-60 overflow-y-auto">
+            <ul className="absolute z-50 w-full bg-white dark:bg-gray-800 border border-orange-200 dark:border-gray-600 mt-1 rounded-md shadow-lg max-h-60 overflow-y-auto">
               {suggestions.map((item, index) => (
                 <li
                   key={index}
                   onClick={() => handleSelect(item)}
-                  className="px-5 py-3 cursor-pointer hover:bg-orange-50 text-left border-b border-orange-100 last:border-b-0 transition-colors duration-200"
+                  className="px-5 py-3 cursor-pointer hover:bg-orange-50 dark:hover:bg-gray-700 text-left border-b border-orange-100 dark:border-gray-700 last:border-b-0 transition-colors duration-200"
                 >
                   <div className="flex items-center gap-3">
                     {item.type === 'league' ? (
@@ -276,15 +276,15 @@ export default function LandingPage() {
                       </div>
                     )}
                     <div className="flex-1">
-                      <div className="font-medium text-orange-900 text-sm">{item.name}</div>
+                      <div className="font-medium text-orange-900 dark:text-orange-300 text-sm">{item.name}</div>
                       {item.type === 'player' && (
-                        <div className="text-xs text-orange-600">{item.team}</div>
+                        <div className="text-xs text-orange-600 dark:text-orange-400">{item.team}</div>
                       )}
                       {item.type === 'league' && (
-                        <div className="text-xs text-orange-600">League</div>
+                        <div className="text-xs text-orange-600 dark:text-orange-400">League</div>
                       )}
                     </div>
-                    <div className="text-xs text-orange-700 capitalize bg-orange-100 px-2 py-1 rounded-full font-medium">
+                    <div className="text-xs text-orange-700 dark:text-orange-300 capitalize bg-orange-100 dark:bg-orange-900/50 px-2 py-1 rounded-full font-medium">
                       {item.type}
                     </div>
                   </div>
@@ -302,14 +302,14 @@ export default function LandingPage() {
                 <button
                   key={i}
                   onClick={() => handleSelect({ type: 'league', slug: league.slug })}
-                  className="bg-gradient-to-r from-orange-100 to-amber-50 hover:scale-105 hover:shadow-md text-sm text-orange-800 px-5 py-3 rounded-xl text-left transition-all duration-300 flex items-center justify-between gap-3 animate-slide-in-left"
+                  className="bg-gradient-to-r from-orange-100 to-amber-50 dark:from-gray-700 dark:to-gray-800 hover:scale-105 hover:shadow-md text-sm text-orange-800 dark:text-orange-300 px-5 py-3 rounded-xl text-left transition-all duration-300 flex items-center justify-between gap-3 animate-slide-in-left"
                   style={{ animationDelay: `${0.8 + i * 0.075}s`, opacity: 0, animationFillMode: 'forwards' }}
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-base">🔥</span>
                     <span className="font-medium">Trending: {league.name}</span>
                   </div>
-                  <span className="text-xs text-orange-600 bg-orange-200/50 px-2 py-0.5 rounded-full whitespace-nowrap">Updated today</span>
+                  <span className="text-xs text-orange-600 dark:text-orange-400 bg-orange-200/50 dark:bg-orange-900/50 px-2 py-0.5 rounded-full whitespace-nowrap">Updated today</span>
                 </button>
               ))
             : [
@@ -321,20 +321,20 @@ export default function LandingPage() {
                 <button
                   key={i}
                   onClick={() => handleSelect({ type: 'league', slug: league.slug })}
-                  className="bg-gradient-to-r from-orange-100 to-amber-50 hover:scale-105 hover:shadow-md text-sm text-orange-800 px-5 py-3 rounded-xl text-left transition-all duration-300 flex items-center justify-between gap-3 animate-slide-in-left"
+                  className="bg-gradient-to-r from-orange-100 to-amber-50 dark:from-gray-700 dark:to-gray-800 hover:scale-105 hover:shadow-md text-sm text-orange-800 dark:text-orange-300 px-5 py-3 rounded-xl text-left transition-all duration-300 flex items-center justify-between gap-3 animate-slide-in-left"
                   style={{ animationDelay: `${0.8 + i * 0.075}s`, opacity: 0, animationFillMode: 'forwards' }}
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-base">🔥</span>
                     <span className="font-medium">Trending: {league.name}</span>
                   </div>
-                  <span className="text-xs text-orange-600 bg-orange-200/50 px-2 py-0.5 rounded-full whitespace-nowrap">Updated today</span>
+                  <span className="text-xs text-orange-600 dark:text-orange-400 bg-orange-200/50 dark:bg-orange-900/50 px-2 py-0.5 rounded-full whitespace-nowrap">Updated today</span>
                 </button>
               ))}
         </div>
 
         {/* Tagline */}
-        <p className="mt-6 md:mt-8 text-slate-600 text-sm md:text-base font-medium max-w-2xl mx-auto animate-fade-in-up" style={{ animationDelay: '1.1s', opacity: 0, animationFillMode: 'forwards' }}>
+        <p className="mt-6 md:mt-8 text-slate-600 dark:text-slate-400 text-sm md:text-base font-medium max-w-2xl mx-auto animate-fade-in-up" style={{ animationDelay: '1.1s', opacity: 0, animationFillMode: 'forwards' }}>
           Explore stats, track performance, drive narrative and discover the next MVP.
         </p>
 
@@ -351,7 +351,7 @@ export default function LandingPage() {
               {[...([Ballpark, NBLBE, BCB, SLB]), ...([Ballpark, NBLBE, BCB, SLB]), ...([Ballpark, NBLBE, BCB, SLB])].map((img, i) => (
                 <div 
                   key={i} 
-                  className="flex-shrink-0 flex items-center justify-center bg-white rounded-lg shadow-sm hover:shadow-md p-4 transition-all duration-300 hover:scale-110"
+                  className="flex-shrink-0 flex items-center justify-center bg-white dark:bg-gray-800 rounded-lg shadow-sm hover:shadow-md p-4 transition-all duration-300 hover:scale-110"
                 >
                   <img
                     src={img}
