@@ -4064,14 +4064,14 @@ export default function LeaguePage() {
             {activeSection === 'comparison' && (
               <div className="space-y-4 md:space-y-6">
                 {/* Toggle between Player and Team Comparison */}
-                <div className="bg-white rounded-xl shadow p-3 md:p-4">
+                <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-3 md:p-4">
                   <div className="flex items-center justify-center gap-2">
                     <button
                       onClick={() => setComparisonMode('player')}
                       className={`px-4 md:px-6 py-1.5 md:py-2 rounded-lg text-sm md:text-base font-semibold transition-all ${
                         comparisonMode === 'player'
                           ? 'bg-orange-500 text-white shadow-md'
-                          : 'bg-gray-100 text-slate-600 hover:bg-gray-200'
+                          : 'bg-gray-100 dark:bg-neutral-800 text-slate-600 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-neutral-700'
                       }`}
                       data-testid="button-player-comparison"
                     >
@@ -4082,7 +4082,7 @@ export default function LeaguePage() {
                       className={`px-4 md:px-6 py-1.5 md:py-2 rounded-lg text-sm md:text-base font-semibold transition-all ${
                         comparisonMode === 'team'
                           ? 'bg-orange-500 text-white shadow-md'
-                          : 'bg-gray-100 text-slate-600 hover:bg-gray-200'
+                          : 'bg-gray-100 dark:bg-neutral-800 text-slate-600 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-neutral-700'
                       }`}
                       data-testid="button-team-comparison"
                     >
