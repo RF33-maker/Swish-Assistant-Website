@@ -1889,11 +1889,178 @@ export default function LeaguePage() {
 
       setIsLoadingStats(true);
       try {
-        console.log("📊 Fetching player_stats for league_id:", league.league_id);
-        // Fetch player stats and join with players table to get slug
+        // Helper function to check if two names are similar (fuzzy match)
+        const areSimilarNames = (name1: string, name2: string): boolean => {
+          if (!name1 || !name2) return false;
+          const n1 = name1.toLowerCase().trim();
+          const n2 = name2.toLowerCase().trim();
+          
+          if (n1 === n2) return true;
+          
+          const parts1 = n1.split(/[\s-]+/);
+          const parts2 = n2.split(/[\s-]+/);
+          
+          // Check if one name is abbreviation of the other (e.g., "R Farrell" vs "Rhys Farrell")
+          if (parts1.length !== parts2.length) {
+            const shorter = parts1.length < parts2.length ? parts1 : parts2;
+            const longer = parts1.length < parts2.length ? parts2 : parts1;
+            
+            let matchCount = 0;
+            for (const shortPart of shorter) {
+              for (const longPart of longer) {
+                if (longPart === shortPart || 
+                    longPart.startsWith(shortPart) || 
+                    (shortPart.length === 1 && longPart.startsWith(shortPart))) {
+                  matchCount++;
+                  break;
+                }
+              }
+            }
+            if (matchCount === shorter.length) return true;
+          }
+          
+          // Same number of parts - check if similar
+          if (parts1.length === parts2.length && parts1.length >= 2) {
+            const lastName1 = parts1[parts1.length - 1];
+            const lastName2 = parts2[parts2.length - 1];
+            
+            if (lastName1 === lastName2) {
+              const firstName1 = parts1[0];
+              const firstName2 = parts2[0];
+              
+              if (firstName1.startsWith(firstName2.substring(0, 3)) || 
+                  firstName2.startsWith(firstName1.substring(0, 3)) ||
+                  firstName1.includes(firstName2) || 
+                  firstName2.includes(firstName1)) {
+                return true;
+              }
+            }
+          }
+          
+          // Check for typos (1-2 character differences)
+          const maxLength = Math.max(n1.length, n2.length);
+          if (Math.abs(n1.length - n2.length) <= 2 && maxLength > 5) {
+            let differences = 0;
+            for (let i = 0; i < Math.min(n1.length, n2.length); i++) {
+              if (n1[i] !== n2[i]) differences++;
+              if (differences > 2) return false;
+            }
+            return true;
+          }
+          
+          return false;
+        };
+
+        // ========== PHASE 1: Build canonical player roster ==========
+        console.log("📊 Phase 1: Building canonical player roster from players table");
+        
+        const { data: rosterData, error: rosterError } = await supabase
+          .from("players")
+          .select("id, full_name, team, slug")
+          .eq("league_id", league.league_id);
+        
+        if (rosterError) {
+          console.error("Error fetching roster:", rosterError);
+        }
+        
+        console.log("📊 Phase 1: Fetched", rosterData?.length || 0, "players from roster");
+        
+        // Build canonical players by grouping similar names together
+        // Each canonical player has: name, team, slug, and a SET of all player_ids
+        type CanonicalPlayer = {
+          name: string;
+          team: string;
+          slug: string | null;
+          playerIds: Set<string>;
+          games: number;
+          totalPoints: number;
+          totalRebounds: number;
+          totalAssists: number;
+          totalSteals: number;
+          totalBlocks: number;
+          totalTurnovers: number;
+          totalFGM: number;
+          totalFGA: number;
+          total2PM: number;
+          total2PA: number;
+          total3PM: number;
+          total3PA: number;
+          totalFTM: number;
+          totalFTA: number;
+          totalORB: number;
+          totalDRB: number;
+          totalMinutes: number;
+          totalPersonalFouls: number;
+          totalPlusMinus: number;
+          rawStats: any[];
+        };
+        
+        const canonicalPlayers: CanonicalPlayer[] = [];
+        
+        rosterData?.forEach(player => {
+          // Check if this player matches any existing canonical player by name
+          let matchedCanonical = canonicalPlayers.find(cp => 
+            areSimilarNames(cp.name, player.full_name)
+          );
+          
+          if (matchedCanonical) {
+            // Add this player_id to the existing canonical player's ID set
+            matchedCanonical.playerIds.add(player.id);
+            // Prefer the slug if we don't have one yet
+            if (!matchedCanonical.slug && player.slug) {
+              matchedCanonical.slug = player.slug;
+            }
+            // Use the longer/more complete name
+            if (player.full_name && player.full_name.length > matchedCanonical.name.length) {
+              matchedCanonical.name = player.full_name;
+            }
+          } else {
+            // Create new canonical player
+            canonicalPlayers.push({
+              name: player.full_name,
+              team: player.team,
+              slug: player.slug,
+              playerIds: new Set([player.id]),
+              games: 0,
+              totalPoints: 0,
+              totalRebounds: 0,
+              totalAssists: 0,
+              totalSteals: 0,
+              totalBlocks: 0,
+              totalTurnovers: 0,
+              totalFGM: 0,
+              totalFGA: 0,
+              total2PM: 0,
+              total2PA: 0,
+              total3PM: 0,
+              total3PA: 0,
+              totalFTM: 0,
+              totalFTA: 0,
+              totalORB: 0,
+              totalDRB: 0,
+              totalMinutes: 0,
+              totalPersonalFouls: 0,
+              totalPlusMinus: 0,
+              rawStats: []
+            });
+          }
+        });
+        
+        console.log("📊 Phase 1: Created", canonicalPlayers.length, "canonical players");
+        
+        // Build a quick lookup: player_id -> canonical player index
+        const playerIdToCanonical = new Map<string, number>();
+        canonicalPlayers.forEach((cp, index) => {
+          cp.playerIds.forEach(id => {
+            playerIdToCanonical.set(id, index);
+          });
+        });
+        
+        // ========== PHASE 2: Fetch all player_stats ==========
+        console.log("📊 Phase 2: Fetching player_stats for league_id:", league.league_id);
         const { data: playerStats, error } = await supabase
           .from("player_stats")
-          .select("*, players:player_id(slug)")
+          .select("*")
           .eq("league_id", league.league_id);
 
         if (error) {
@@ -1901,223 +2068,205 @@ export default function LeaguePage() {
           return;
         }
 
-        console.log("📊 Fetched player stats:", playerStats?.length, "records");
+        console.log("📊 Phase 2: Fetched", playerStats?.length || 0, "stat records");
 
-      // Group stats by player and calculate averages
-      const playerMap = new Map();
-      
-      playerStats?.forEach(stat => {
-        // Build player name from firstname and familyname in player_stats
-        const playerName = stat.full_name || 
-                          stat.name || 
-                          `${stat.firstname || ''} ${stat.familyname || ''}`.trim() || 
-                          'Unknown Player';
+        // ========== PHASE 3: Match stats to canonical players ==========
+        console.log("📊 Phase 3: Matching stats to canonical players");
         
-        // Create a normalized name key for grouping when player_id is missing
-        const normalizedNameKey = playerName.toLowerCase().trim().replace(/\s+/g, '_');
+        // Track stats that don't match any canonical player (for fallback)
+        const unmatchedStats: any[] = [];
         
-        // Use player_id for grouping if available, otherwise use normalized name + team
-        const playerKey = stat.player_id || `name_${normalizedNameKey}_${stat.team?.toLowerCase().trim() || 'unknown'}`;
-        
-        if (!playerMap.has(playerKey)) {
-          playerMap.set(playerKey, {
-            name: playerName,
-            team: stat.team,
-            id: stat.player_id || playerKey,
-            slug: stat.players?.slug || null,
-            games: 0,
-            totalPoints: 0,
-            totalRebounds: 0,
-            totalAssists: 0,
-            totalSteals: 0,
-            totalBlocks: 0,
-            totalTurnovers: 0,
-            totalFGM: 0,
-            totalFGA: 0,
-            total2PM: 0,
-            total2PA: 0,
-            total3PM: 0,
-            total3PA: 0,
-            totalFTM: 0,
-            totalFTA: 0,
-            totalORB: 0,
-            totalDRB: 0,
-            totalMinutes: 0,
-            totalPersonalFouls: 0,
-            totalPlusMinus: 0,
-            rawStats: []
-          });
-        }
-
-        const player = playerMap.get(playerKey);
-        player.games += 1;
-        player.totalPoints += stat.spoints || 0;
-        player.totalRebounds += stat.sreboundstotal || 0;
-        player.totalAssists += stat.sassists || 0;
-        player.totalSteals += stat.ssteals || 0;
-        player.totalBlocks += stat.sblocks || 0;
-        player.totalTurnovers += stat.sturnovers || 0;
-        player.totalFGM += stat.sfieldgoalsmade || 0;
-        player.totalFGA += stat.sfieldgoalsattempted || 0;
-        player.total2PM += stat.stwopointersmade || 0;
-        player.total2PA += stat.stwopointersattempted || 0;
-        player.total3PM += stat.sthreepointersmade || 0;
-        player.total3PA += stat.sthreepointersattempted || 0;
-        player.totalFTM += stat.sfreethrowsmade || 0;
-        player.totalFTA += stat.sfreethrowsattempted || 0;
-        player.totalORB += stat.sreboundsoffensive || 0;
-        player.totalDRB += stat.sreboundsdefensive || 0;
-        player.totalPersonalFouls += stat.sfoulspersonal || 0;
-        player.totalPlusMinus += stat.splusminuspoints || 0;
-        
-        // Store raw stat row for accessing advanced stats later
-        player.rawStats.push(stat);
-        
-        // Parse minutes from sminutes field
-        const minutesParts = stat.sminutes?.split(':');
-        if (minutesParts && minutesParts.length === 2) {
-          const minutes = parseInt(minutesParts[0]) + parseInt(minutesParts[1]) / 60;
-          player.totalMinutes += minutes;
-        }
-      });
-
-      // First pass: Group by player_id
-      const playersByIdArray = Array.from(playerMap.values());
-      
-      // Helper function to check if two names are similar (fuzzy match)
-      const areSimilarNames = (name1: string, name2: string): boolean => {
-        const n1 = name1.toLowerCase().trim();
-        const n2 = name2.toLowerCase().trim();
-        
-        // Exact match
-        if (n1 === n2) return true;
-        
-        // Split names into parts
-        const parts1 = n1.split(/[\s-]+/);
-        const parts2 = n2.split(/[\s-]+/);
-        
-        // Check if one name is a subset/abbreviation of the other
-        if (parts1.length !== parts2.length) {
-          const shorter = parts1.length < parts2.length ? parts1 : parts2;
-          const longer = parts1.length < parts2.length ? parts2 : parts1;
+        playerStats?.forEach(stat => {
+          let canonicalIndex: number | undefined;
           
-          let matchCount = 0;
-          for (const shortPart of shorter) {
-            for (const longPart of longer) {
-              if (longPart === shortPart || 
-                  longPart.startsWith(shortPart) || 
-                  (shortPart.length === 1 && longPart.startsWith(shortPart))) {
-                matchCount++;
-                break;
+          // First, try to match by player_id
+          if (stat.player_id) {
+            canonicalIndex = playerIdToCanonical.get(stat.player_id);
+          }
+          
+          // If no match by ID, try fuzzy name matching
+          if (canonicalIndex === undefined) {
+            const statName = stat.full_name || stat.name || 
+                            `${stat.firstname || ''} ${stat.familyname || ''}`.trim();
+            
+            if (statName) {
+              const matchedIdx = canonicalPlayers.findIndex(cp => 
+                areSimilarNames(cp.name, statName)
+              );
+              if (matchedIdx >= 0) {
+                canonicalIndex = matchedIdx;
+                // Also add this player_id to the canonical player's set if it exists
+                if (stat.player_id) {
+                  canonicalPlayers[matchedIdx].playerIds.add(stat.player_id);
+                  playerIdToCanonical.set(stat.player_id, matchedIdx);
+                }
               }
             }
           }
-          if (matchCount === shorter.length) return true;
-        }
-        
-        // If same number of parts, check if they're similar
-        if (parts1.length === parts2.length) {
-          const lastName1 = parts1[parts1.length - 1];
-          const lastName2 = parts2[parts2.length - 1];
           
-          if (lastName1 === lastName2 && parts1.length >= 2) {
-            const firstName1 = parts1[0];
-            const firstName2 = parts2[0];
+          if (canonicalIndex !== undefined) {
+            // Found a match - aggregate the stat
+            const cp = canonicalPlayers[canonicalIndex];
+            cp.games += 1;
+            cp.totalPoints += stat.spoints || 0;
+            cp.totalRebounds += stat.sreboundstotal || 0;
+            cp.totalAssists += stat.sassists || 0;
+            cp.totalSteals += stat.ssteals || 0;
+            cp.totalBlocks += stat.sblocks || 0;
+            cp.totalTurnovers += stat.sturnovers || 0;
+            cp.totalFGM += stat.sfieldgoalsmade || 0;
+            cp.totalFGA += stat.sfieldgoalsattempted || 0;
+            cp.total2PM += stat.stwopointersmade || 0;
+            cp.total2PA += stat.stwopointersattempted || 0;
+            cp.total3PM += stat.sthreepointersmade || 0;
+            cp.total3PA += stat.sthreepointersattempted || 0;
+            cp.totalFTM += stat.sfreethrowsmade || 0;
+            cp.totalFTA += stat.sfreethrowsattempted || 0;
+            cp.totalORB += stat.sreboundsoffensive || 0;
+            cp.totalDRB += stat.sreboundsdefensive || 0;
+            cp.totalPersonalFouls += stat.sfoulspersonal || 0;
+            cp.totalPlusMinus += stat.splusminuspoints || 0;
+            cp.rawStats.push(stat);
             
-            if (firstName1.startsWith(firstName2.substring(0, 3)) || 
-                firstName2.startsWith(firstName1.substring(0, 3)) ||
-                firstName1.includes(firstName2) || 
-                firstName2.includes(firstName1)) {
-              return true;
+            const minutesParts = stat.sminutes?.split(':');
+            if (minutesParts && minutesParts.length === 2) {
+              const minutes = parseInt(minutesParts[0]) + parseInt(minutesParts[1]) / 60;
+              cp.totalMinutes += minutes;
+            }
+          } else {
+            // No match found - track for fallback handling
+            unmatchedStats.push(stat);
+          }
+        });
+        
+        console.log("📊 Phase 3: Matched stats,", unmatchedStats.length, "unmatched");
+        
+        // Handle unmatched stats by creating new entries (players not in roster)
+        const unmatchedPlayers = new Map<string, CanonicalPlayer>();
+        
+        unmatchedStats.forEach(stat => {
+          const statName = stat.full_name || stat.name || 
+                          `${stat.firstname || ''} ${stat.familyname || ''}`.trim() || 'Unknown Player';
+          const normalizedKey = statName.toLowerCase().trim();
+          
+          // Check if we already have this unmatched player
+          let existingUnmatched: CanonicalPlayer | undefined;
+          for (const [key, player] of unmatchedPlayers.entries()) {
+            if (areSimilarNames(player.name, statName)) {
+              existingUnmatched = player;
+              break;
             }
           }
-        }
-        
-        // Check if names differ by only 1-2 characters
-        const maxLength = Math.max(n1.length, n2.length);
-        if (Math.abs(n1.length - n2.length) <= 2 && maxLength > 5) {
-          let differences = 0;
-          for (let i = 0; i < Math.min(n1.length, n2.length); i++) {
-            if (n1[i] !== n2[i]) differences++;
-            if (differences > 2) return false;
-          }
-          return true;
-        }
-        
-        return false;
-      };
-      
-      // Second pass: Merge duplicates by name (handles data quality issues where same player has multiple IDs)
-      const mergedByName = new Map<string, typeof playersByIdArray[0]>();
-      
-      playersByIdArray.forEach((player) => {
-        let foundMatch = false;
-        for (const [existingName, existingPlayer] of Array.from(mergedByName.entries())) {
-          if (areSimilarNames(player.name, existingName)) {
-            // Merge with existing player
-            existingPlayer.games += player.games;
-            existingPlayer.totalPoints += player.totalPoints;
-            existingPlayer.totalRebounds += player.totalRebounds;
-            existingPlayer.totalAssists += player.totalAssists;
-            existingPlayer.totalSteals += player.totalSteals;
-            existingPlayer.totalBlocks += player.totalBlocks;
-            existingPlayer.totalTurnovers += player.totalTurnovers;
-            existingPlayer.totalFGM += player.totalFGM;
-            existingPlayer.totalFGA += player.totalFGA;
-            existingPlayer.total2PM += player.total2PM;
-            existingPlayer.total2PA += player.total2PA;
-            existingPlayer.total3PM += player.total3PM;
-            existingPlayer.total3PA += player.total3PA;
-            existingPlayer.totalFTM += player.totalFTM;
-            existingPlayer.totalFTA += player.totalFTA;
-            existingPlayer.totalORB += player.totalORB;
-            existingPlayer.totalDRB += player.totalDRB;
-            existingPlayer.totalPersonalFouls += player.totalPersonalFouls;
-            existingPlayer.totalPlusMinus += player.totalPlusMinus;
-            existingPlayer.totalMinutes += player.totalMinutes;
-            existingPlayer.rawStats.push(...player.rawStats);
-            // Keep the slug if current player has one
-            if (!existingPlayer.slug && player.slug) {
-              existingPlayer.slug = player.slug;
+          
+          if (existingUnmatched) {
+            existingUnmatched.games += 1;
+            existingUnmatched.totalPoints += stat.spoints || 0;
+            existingUnmatched.totalRebounds += stat.sreboundstotal || 0;
+            existingUnmatched.totalAssists += stat.sassists || 0;
+            existingUnmatched.totalSteals += stat.ssteals || 0;
+            existingUnmatched.totalBlocks += stat.sblocks || 0;
+            existingUnmatched.totalTurnovers += stat.sturnovers || 0;
+            existingUnmatched.totalFGM += stat.sfieldgoalsmade || 0;
+            existingUnmatched.totalFGA += stat.sfieldgoalsattempted || 0;
+            existingUnmatched.total2PM += stat.stwopointersmade || 0;
+            existingUnmatched.total2PA += stat.stwopointersattempted || 0;
+            existingUnmatched.total3PM += stat.sthreepointersmade || 0;
+            existingUnmatched.total3PA += stat.sthreepointersattempted || 0;
+            existingUnmatched.totalFTM += stat.sfreethrowsmade || 0;
+            existingUnmatched.totalFTA += stat.sfreethrowsattempted || 0;
+            existingUnmatched.totalORB += stat.sreboundsoffensive || 0;
+            existingUnmatched.totalDRB += stat.sreboundsdefensive || 0;
+            existingUnmatched.totalPersonalFouls += stat.sfoulspersonal || 0;
+            existingUnmatched.totalPlusMinus += stat.splusminuspoints || 0;
+            existingUnmatched.rawStats.push(stat);
+            
+            const minutesParts = stat.sminutes?.split(':');
+            if (minutesParts && minutesParts.length === 2) {
+              const minutes = parseInt(minutesParts[0]) + parseInt(minutesParts[1]) / 60;
+              existingUnmatched.totalMinutes += minutes;
             }
-            foundMatch = true;
-            break;
+          } else {
+            const newPlayer: CanonicalPlayer = {
+              name: statName,
+              team: stat.team || 'Unknown',
+              slug: null,
+              playerIds: stat.player_id ? new Set([stat.player_id]) : new Set(),
+              games: 1,
+              totalPoints: stat.spoints || 0,
+              totalRebounds: stat.sreboundstotal || 0,
+              totalAssists: stat.sassists || 0,
+              totalSteals: stat.ssteals || 0,
+              totalBlocks: stat.sblocks || 0,
+              totalTurnovers: stat.sturnovers || 0,
+              totalFGM: stat.sfieldgoalsmade || 0,
+              totalFGA: stat.sfieldgoalsattempted || 0,
+              total2PM: stat.stwopointersmade || 0,
+              total2PA: stat.stwopointersattempted || 0,
+              total3PM: stat.sthreepointersmade || 0,
+              total3PA: stat.sthreepointersattempted || 0,
+              totalFTM: stat.sfreethrowsmade || 0,
+              totalFTA: stat.sfreethrowsattempted || 0,
+              totalORB: stat.sreboundsoffensive || 0,
+              totalDRB: stat.sreboundsdefensive || 0,
+              totalMinutes: 0,
+              totalPersonalFouls: stat.sfoulspersonal || 0,
+              totalPlusMinus: stat.splusminuspoints || 0,
+              rawStats: [stat]
+            };
+            
+            const minutesParts = stat.sminutes?.split(':');
+            if (minutesParts && minutesParts.length === 2) {
+              newPlayer.totalMinutes = parseInt(minutesParts[0]) + parseInt(minutesParts[1]) / 60;
+            }
+            
+            unmatchedPlayers.set(normalizedKey, newPlayer);
           }
-        }
+        });
         
-        if (!foundMatch) {
-          mergedByName.set(player.name, { ...player });
-        }
-      });
+        // Combine canonical players with unmatched players
+        const allPlayers = [...canonicalPlayers.filter(cp => cp.games > 0), ...unmatchedPlayers.values()];
+        
+        console.log("📊 Phase 3: Total players with stats:", allPlayers.length);
+        
+        // Convert to the format expected by the UI
+        const mergedByName = new Map<string, CanonicalPlayer>();
+        allPlayers.forEach(player => {
+          mergedByName.set(player.name, player);
+        });
 
       // Calculate averages and percentages from merged data
-      const averagesList = Array.from(mergedByName.values()).map((player) => ({
-        ...player,
-        playerKey: player.id,
-        avgPoints: (player.totalPoints / player.games).toFixed(1),
-        avgRebounds: (player.totalRebounds / player.games).toFixed(1),
-        avgAssists: (player.totalAssists / player.games).toFixed(1),
-        avgSteals: (player.totalSteals / player.games).toFixed(1),
-        avgBlocks: (player.totalBlocks / player.games).toFixed(1),
-        avgTurnovers: (player.totalTurnovers / player.games).toFixed(1),
-        avgMinutes: (player.totalMinutes / player.games).toFixed(1),
-        avgFGM: (player.totalFGM / player.games).toFixed(1),
-        avgFGA: (player.totalFGA / player.games).toFixed(1),
-        avg2PM: (player.total2PM / player.games).toFixed(1),
-        avg2PA: (player.total2PA / player.games).toFixed(1),
-        avg3PM: (player.total3PM / player.games).toFixed(1),
-        avg3PA: (player.total3PA / player.games).toFixed(1),
-        avgFTM: (player.totalFTM / player.games).toFixed(1),
-        avgFTA: (player.totalFTA / player.games).toFixed(1),
-        avgORB: (player.totalORB / player.games).toFixed(1),
-        avgDRB: (player.totalDRB / player.games).toFixed(1),
-        avgPersonalFouls: (player.totalPersonalFouls / player.games).toFixed(1),
-        avgPlusMinus: (player.totalPlusMinus / player.games).toFixed(1),
-        fgPercentage: player.totalFGA > 0 ? ((player.totalFGM / player.totalFGA) * 100).toFixed(1) : '0.0',
-        twoPercentage: player.total2PA > 0 ? ((player.total2PM / player.total2PA) * 100).toFixed(1) : '0.0',
-        threePercentage: player.total3PA > 0 ? ((player.total3PM / player.total3PA) * 100).toFixed(1) : '0.0',
-        ftPercentage: player.totalFTA > 0 ? ((player.totalFTM / player.totalFTA) * 100).toFixed(1) : '0.0'
-      })).sort((a, b) => parseFloat(b.avgPoints) - parseFloat(a.avgPoints));
+      const averagesList = Array.from(mergedByName.values()).map((player) => {
+        // Get the first player_id from the set, or generate a fallback
+        const firstId = player.playerIds.size > 0 ? Array.from(player.playerIds)[0] : `name_${player.name.toLowerCase().replace(/\s+/g, '_')}`;
+        return {
+          ...player,
+          id: firstId,
+          playerKey: firstId,
+          avgPoints: (player.totalPoints / player.games).toFixed(1),
+          avgRebounds: (player.totalRebounds / player.games).toFixed(1),
+          avgAssists: (player.totalAssists / player.games).toFixed(1),
+          avgSteals: (player.totalSteals / player.games).toFixed(1),
+          avgBlocks: (player.totalBlocks / player.games).toFixed(1),
+          avgTurnovers: (player.totalTurnovers / player.games).toFixed(1),
+          avgMinutes: (player.totalMinutes / player.games).toFixed(1),
+          avgFGM: (player.totalFGM / player.games).toFixed(1),
+          avgFGA: (player.totalFGA / player.games).toFixed(1),
+          avg2PM: (player.total2PM / player.games).toFixed(1),
+          avg2PA: (player.total2PA / player.games).toFixed(1),
+          avg3PM: (player.total3PM / player.games).toFixed(1),
+          avg3PA: (player.total3PA / player.games).toFixed(1),
+          avgFTM: (player.totalFTM / player.games).toFixed(1),
+          avgFTA: (player.totalFTA / player.games).toFixed(1),
+          avgORB: (player.totalORB / player.games).toFixed(1),
+          avgDRB: (player.totalDRB / player.games).toFixed(1),
+          avgPersonalFouls: (player.totalPersonalFouls / player.games).toFixed(1),
+          avgPlusMinus: (player.totalPlusMinus / player.games).toFixed(1),
+          fgPercentage: player.totalFGA > 0 ? ((player.totalFGM / player.totalFGA) * 100).toFixed(1) : '0.0',
+          twoPercentage: player.total2PA > 0 ? ((player.total2PM / player.total2PA) * 100).toFixed(1) : '0.0',
+          threePercentage: player.total3PA > 0 ? ((player.total3PM / player.total3PA) * 100).toFixed(1) : '0.0',
+          ftPercentage: player.totalFTA > 0 ? ((player.totalFTM / player.totalFTA) * 100).toFixed(1) : '0.0'
+        };
+      }).sort((a, b) => parseFloat(b.avgPoints) - parseFloat(a.avgPoints));
 
       setAllPlayerAverages(averagesList);
       setFilteredPlayerAverages(averagesList);
