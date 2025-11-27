@@ -2785,27 +2785,27 @@ export default function LeaguePage() {
 
         {/* SEO-Optimized About This League Section */}
         {league?.description && (
-          <div className="w-full bg-gradient-to-b from-transparent to-[#fffaf5] dark:to-gray-800 pt-4 pb-10 px-4 animate-fade-in-up">
-            <div className="max-w-4xl mx-auto bg-white dark:bg-gray-800 rounded-xl shadow-sm p-8 border border-orange-100 dark:border-gray-700">
-              <div className="flex flex-col md:flex-row md:items-center md:justify-center mb-4">
+          <div className="w-full bg-gradient-to-b from-transparent to-[#fffaf5] dark:to-gray-800 pt-3 pb-5 px-4 animate-fade-in-up">
+            <div className="max-w-4xl mx-auto bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 md:p-5 border border-orange-100 dark:border-gray-700">
+              <div className="flex items-center gap-3 mb-3">
                 {league?.logo_url && (
                   <img
                     src={league.logo_url}
                     alt={`${league.name} logo`}
-                    className="h-14 w-auto mx-auto md:mx-0 mb-4 md:mb-0 md:mr-4 drop-shadow-sm"
+                    className="h-8 w-auto drop-shadow-sm"
                   />
                 )}
-                <h2 className="text-2xl font-semibold text-slate-900 text-center md:text-left">
+                <h2 className="text-base md:text-lg font-semibold text-slate-900 dark:text-white">
                   About {league?.name}
                 </h2>
               </div>
               <div 
                 ref={dividerRef}
-                className={`h-1 bg-orange-500 mx-auto mb-6 rounded-full transition-all duration-1000 ease-out ${
-                  isDividerVisible ? 'w-32' : 'w-12'
+                className={`h-0.5 bg-orange-500 mb-3 rounded-full transition-all duration-1000 ease-out ${
+                  isDividerVisible ? 'w-20' : 'w-8'
                 }`}
               ></div>
-              <p className="text-slate-700 leading-relaxed text-base text-left">
+              <p className="text-slate-600 dark:text-slate-400 leading-relaxed text-sm">
                 {league?.description}
               </p>
             </div>
