@@ -1881,10 +1881,15 @@ export default function LeaguePage() {
     };
 
     const fetchAllPlayerAverages = async () => {
-      if (!league?.league_id) return;
+      console.log("📊 fetchAllPlayerAverages called, league_id:", league?.league_id);
+      if (!league?.league_id) {
+        console.log("📊 No league_id, returning early");
+        return;
+      }
 
       setIsLoadingStats(true);
       try {
+        console.log("📊 Fetching player_stats for league_id:", league.league_id);
         // Fetch player stats and join with players table to get slug - using select('*') to get all fields including advanced stats
         const { data: playerStats, error } = await supabase
           .from("player_stats")
@@ -1897,6 +1902,10 @@ export default function LeaguePage() {
         }
 
         console.log("📊 Fetched player stats:", playerStats?.length, "records");
+        if (playerStats && playerStats.length > 0) {
+          console.log("📊 Sample player stat:", playerStats[0]);
+          console.log("📊 Player IDs in stats:", playerStats.slice(0, 5).map(s => ({ player_id: s.player_id, name: s.full_name || s.name })));
+        }
 
       // Group stats by player and calculate averages
       const playerMap = new Map();
