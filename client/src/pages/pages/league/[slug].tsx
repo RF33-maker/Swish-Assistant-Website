@@ -1907,8 +1907,14 @@ export default function LeaguePage() {
                           stat.name || 
                           `${stat.firstname || ''} ${stat.familyname || ''}`.trim() || 
                           'Unknown Player';
-        // Use player_id for grouping to avoid name mismatches, fallback to record id
-        const playerKey = stat.player_id || stat.id;
+        
+        // Create a normalized name key for grouping when player_id is missing
+        // This ensures players with null player_id are still grouped by name
+        const normalizedNameKey = playerName.toLowerCase().trim().replace(/\s+/g, '_');
+        
+        // Use player_id for grouping if available, otherwise use normalized name
+        // This fixes the issue where null player_id caused each game to be a separate entry
+        const playerKey = stat.player_id || `name_${normalizedNameKey}_${stat.team?.toLowerCase().trim() || 'unknown'}`;
         if (!playerMap.has(playerKey)) {
           playerMap.set(playerKey, {
             name: playerName,
