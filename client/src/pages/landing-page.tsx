@@ -13,6 +13,7 @@ import ChatbotExample from "@/assets/Chatbotexample.png"
 import { Button } from "@/components/ui/button"
 import { Analytics } from "@vercel/analytics/next"
 import { Search, ChevronDown, BarChart3, Zap, Clock, MessageSquare, Sparkles, TrendingUp, Trophy, FileText } from "lucide-react"
+import { ThemeToggle } from "@/components/ThemeToggle"
 
 function LeagueLogosCarousel() {
   const logos = [Ballpark, NBLBE, BCB, SLB]
@@ -193,20 +194,21 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-white text-slate-900 flex flex-col">
+    <div className="min-h-screen bg-white dark:bg-gray-900 text-slate-900 dark:text-slate-100 flex flex-col transition-colors duration-300">
       {/* Gradient Top Border */}
       <div className="h-[1px] bg-gradient-to-r from-orange-400 to-amber-400"></div>
       
       {/* Header */}
-      <header className="flex justify-between items-center px-6 py-4 bg-gradient-to-b from-[#fffaf5] to-transparent">
+      <header className="flex justify-between items-center px-6 py-4 bg-gradient-to-b from-[#fffaf5] to-transparent dark:from-gray-900 dark:to-transparent">
         <div className="flex items-center gap-2">
           <img src={SwishLogo} alt="Swish Logo" className="h-8" />
           <span className="font-bold text-xl text-orange-600"></span>
         </div>
-        <nav className="flex items-center gap-6 text-sm font-medium">
+        <nav className="flex items-center gap-4 text-sm font-medium">
+          <ThemeToggle />
           <a 
             href="/auth" 
-            className="text-slate-600 hover:text-orange-600 transition-colors relative group"
+            className="text-slate-600 dark:text-slate-300 hover:text-orange-600 dark:hover:text-orange-400 transition-colors relative group"
             data-testid="login-button"
           >
             Login
@@ -226,7 +228,7 @@ export default function LandingPage() {
       </header>
 
       {/* Hero Section with Gradient Background */}
-      <div className="bg-gradient-to-b from-[#fffaf5] to-white pt-4 md:pt-6 lg:pt-8 pb-12 md:pb-16 lg:pb-20">
+      <div className="bg-gradient-to-b from-[#fffaf5] to-white dark:from-gray-900 dark:to-gray-800 pt-4 md:pt-6 lg:pt-8 pb-12 md:pb-16 lg:pb-20">
         <img src={SwishLogo} alt="Swish Logo"
           className="mx-auto w-32 h-32 md:w-40 md:h-40 lg:w-44 lg:h-44 drop-shadow-lg mb-4 md:mb-6 lg:mb-8 animate-fade-in-up"
         />
