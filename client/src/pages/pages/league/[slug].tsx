@@ -3927,13 +3927,13 @@ export default function LeaguePage() {
                         
                         <>
                           {gamesToShow.length > 0 ? (
-                            <div className="divide-y divide-gray-200">
+                            <div className="divide-y divide-gray-200 dark:divide-neutral-700">
                               {scheduleView === 'upcoming' ? (
                                 /* Upcoming Games View */
                                 gamesToShow.map((game, index) => (
                                   <div 
                                     key={`upcoming-${game.game_id}-${index}`} 
-                                    className="py-2 md:py-3 hover:bg-gray-50 transition-colors cursor-pointer"
+                                    className="py-2 md:py-3 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
                                     onClick={() => {
                                       setSelectedPreviewGame(game);
                                       setIsPreviewModalOpen(true);
@@ -3944,7 +3944,7 @@ export default function LeaguePage() {
                                     <div className="flex flex-col gap-2">
                                       {/* Date and Time Row */}
                                       <div className="flex items-center justify-between">
-                                        <div className="text-[11px] md:text-xs text-slate-600 font-medium">
+                                        <div className="text-[11px] md:text-xs text-slate-600 dark:text-slate-300 font-medium">
                                           {new Date(game.game_date).toLocaleDateString('en-US', { 
                                             month: 'short', 
                                             day: 'numeric'
@@ -3952,7 +3952,7 @@ export default function LeaguePage() {
                                           {game.kickoff_time && ` • ${game.kickoff_time}`}
                                         </div>
                                         {game.venue && (
-                                          <div className="text-[10px] md:text-xs text-slate-400 truncate max-w-[100px] md:max-w-none">
+                                          <div className="text-[10px] md:text-xs text-slate-400 dark:text-slate-500 truncate max-w-[100px] md:max-w-none">
                                             {game.venue}
                                           </div>
                                         )}
@@ -3961,11 +3961,11 @@ export default function LeaguePage() {
                                       <div className="flex items-center gap-2 md:gap-3">
                                         <div className="flex items-center gap-1 md:gap-1.5 flex-1 min-w-0">
                                           <TeamLogo teamName={game.team1} leagueId={league?.league_id || ""} size="sm" />
-                                          <span className="font-medium text-slate-800 text-[11px] md:text-sm truncate">{game.team1}</span>
+                                          <span className="font-medium text-slate-800 dark:text-white text-[11px] md:text-sm truncate">{game.team1}</span>
                                         </div>
-                                        <span className="text-slate-400 text-[11px] md:text-xs flex-shrink-0">vs</span>
+                                        <span className="text-slate-400 dark:text-slate-500 text-[11px] md:text-xs flex-shrink-0">vs</span>
                                         <div className="flex items-center gap-1 md:gap-1.5 flex-1 justify-end min-w-0">
-                                          <span className="font-medium text-slate-800 text-[11px] md:text-sm truncate">{game.team2}</span>
+                                          <span className="font-medium text-slate-800 dark:text-white text-[11px] md:text-sm truncate">{game.team2}</span>
                                           <TeamLogo teamName={game.team2} leagueId={league?.league_id || ""} size="sm" />
                                         </div>
                                       </div>
@@ -3977,7 +3977,7 @@ export default function LeaguePage() {
                                 gamesToShow.map((game, index) => (
                                   <div 
                                     key={`past-${game.game_id}-${index}`} 
-                                    className={`py-2 md:py-3 transition-colors ${game.numeric_id ? 'cursor-pointer hover:bg-orange-50' : 'cursor-default'}`}
+                                    className={`py-2 md:py-3 transition-colors ${game.numeric_id ? 'cursor-pointer hover:bg-orange-50 dark:hover:bg-neutral-800' : 'cursor-default'}`}
                                     onClick={() => {
                                       if (game.numeric_id) {
                                         handleGameClick(game.numeric_id);
@@ -3989,19 +3989,19 @@ export default function LeaguePage() {
                                     <div className="flex flex-col gap-2">
                                       {/* Date and Status Row */}
                                       <div className="flex items-center justify-between">
-                                        <div className="text-[11px] md:text-xs text-slate-600 font-medium">
+                                        <div className="text-[11px] md:text-xs text-slate-600 dark:text-slate-300 font-medium">
                                           {new Date(game.game_date).toLocaleDateString('en-US', { 
                                             month: 'short', 
                                             day: 'numeric'
                                           })}
                                           {game.status && (
-                                            <span className="ml-2 text-[10px] md:text-xs text-green-600 font-semibold">
+                                            <span className="ml-2 text-[10px] md:text-xs text-green-600 dark:text-green-400 font-semibold">
                                               {game.status}
                                             </span>
                                           )}
                                         </div>
                                         {game.venue && (
-                                          <div className="text-[10px] md:text-xs text-slate-400 truncate max-w-[100px] md:max-w-none">
+                                          <div className="text-[10px] md:text-xs text-slate-400 dark:text-slate-500 truncate max-w-[100px] md:max-w-none">
                                             {game.venue}
                                           </div>
                                         )}
@@ -4010,23 +4010,23 @@ export default function LeaguePage() {
                                       <div className="flex items-center gap-2 md:gap-3">
                                         <div className="flex items-center gap-1 md:gap-1.5 flex-1 min-w-0">
                                           <TeamLogo teamName={game.team1} leagueId={league?.league_id || ""} size="sm" />
-                                          <span className="font-medium text-slate-800 text-[11px] md:text-sm truncate">{game.team1}</span>
+                                          <span className="font-medium text-slate-800 dark:text-white text-[11px] md:text-sm truncate">{game.team1}</span>
                                         </div>
                                         {game.team1_score !== undefined && game.team2_score !== undefined ? (
                                           <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0">
-                                            <span className={`text-base md:text-lg font-bold ${game.team1_score > game.team2_score ? 'text-green-600' : 'text-slate-600'}`}>
+                                            <span className={`text-base md:text-lg font-bold ${game.team1_score > game.team2_score ? 'text-green-600 dark:text-green-400' : 'text-slate-600 dark:text-slate-300'}`}>
                                               {game.team1_score}
                                             </span>
-                                            <span className="text-slate-400 text-[11px] md:text-sm">-</span>
-                                            <span className={`text-base md:text-lg font-bold ${game.team2_score > game.team1_score ? 'text-green-600' : 'text-slate-600'}`}>
+                                            <span className="text-slate-400 dark:text-slate-500 text-[11px] md:text-sm">-</span>
+                                            <span className={`text-base md:text-lg font-bold ${game.team2_score > game.team1_score ? 'text-green-600 dark:text-green-400' : 'text-slate-600 dark:text-slate-300'}`}>
                                               {game.team2_score}
                                             </span>
                                           </div>
                                         ) : (
-                                          <span className="text-slate-400 text-[11px] md:text-xs flex-shrink-0">vs</span>
+                                          <span className="text-slate-400 dark:text-slate-500 text-[11px] md:text-xs flex-shrink-0">vs</span>
                                         )}
                                         <div className="flex items-center gap-1 md:gap-1.5 flex-1 justify-end min-w-0">
-                                          <span className="font-medium text-slate-800 text-[11px] md:text-sm truncate">{game.team2}</span>
+                                          <span className="font-medium text-slate-800 dark:text-white text-[11px] md:text-sm truncate">{game.team2}</span>
                                           <TeamLogo teamName={game.team2} leagueId={league?.league_id || ""} size="sm" />
                                         </div>
                                       </div>
@@ -4036,7 +4036,7 @@ export default function LeaguePage() {
                               )}
                             </div>
                           ) : (
-                            <div className="text-center py-8 text-gray-500">
+                            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                               <p className="text-xs md:text-sm">
                                 {scheduleView === 'upcoming' ? 'No upcoming games' : 'No results available'}
                               </p>
@@ -4052,7 +4052,7 @@ export default function LeaguePage() {
                     })()}
                   </>
                 ) : (
-                  <div className="text-center py-8 text-gray-500">
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                     <p className="text-xs md:text-sm">No games scheduled</p>
                     <p className="text-[10px] md:text-xs mt-1">Games will appear when scheduled</p>
                   </div>
