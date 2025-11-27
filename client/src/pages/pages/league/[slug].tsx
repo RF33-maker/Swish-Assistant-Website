@@ -4110,18 +4110,18 @@ export default function LeaguePage() {
             {activeSection === 'overview' && (
               <>
                 {/* League Leaders */}
-                <div className="bg-white rounded-xl shadow p-4 md:p-6">
+                <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-4 md:mb-6">
-                <h2 className="text-base md:text-lg font-semibold text-slate-800">League Leaders</h2>
+                <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">League Leaders</h2>
                 <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
                   {/* Toggle between Averages and Totals */}
-                  <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1">
+                  <div className="inline-flex rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 p-1">
                     <button
                       onClick={() => setLeagueLeadersView('averages')}
                       className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                         leagueLeadersView === 'averages'
-                          ? 'bg-white text-orange-600 shadow-sm'
-                          : 'text-slate-600 hover:text-slate-800'
+                          ? 'bg-white dark:bg-neutral-700 text-orange-600 shadow-sm'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
                       }`}
                       data-testid="button-league-leaders-averages"
                     >
@@ -4131,8 +4131,8 @@ export default function LeaguePage() {
                       onClick={() => setLeagueLeadersView('totals')}
                       className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                         leagueLeadersView === 'totals'
-                          ? 'bg-white text-orange-600 shadow-sm'
-                          : 'text-slate-600 hover:text-slate-800'
+                          ? 'bg-white dark:bg-neutral-700 text-orange-600 shadow-sm'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
                       }`}
                       data-testid="button-league-leaders-totals"
                     >
@@ -4173,9 +4173,9 @@ export default function LeaguePage() {
                       totalLabel: "AST",
                     },
                   ] as const).map(({ title, list, avgLabel, totalLabel }) => (
-                    <div key={title} className="bg-gray-50 rounded-lg p-3 md:p-4 shadow-inner">
-                      <h3 className="text-xs md:text-sm font-semibold text-slate-700 mb-2 md:mb-3 text-center">{title}</h3>
-                      <ul className="space-y-1 text-xs md:text-sm text-slate-800">
+                    <div key={title} className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4 shadow-inner">
+                      <h3 className="text-xs md:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 md:mb-3 text-center">{title}</h3>
+                      <ul className="space-y-1 text-xs md:text-sm text-slate-800 dark:text-white">
                         {Array.isArray(list) &&
                           list.map((p, i) => (
                             <li key={`${title}-${p.name}-${i}`} className="flex justify-between">
@@ -4212,9 +4212,9 @@ export default function LeaguePage() {
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
                       {/* Top Scoring Teams */}
-                      <div className="bg-gray-50 rounded-lg p-3 md:p-4 shadow-inner">
-                        <h3 className="text-xs md:text-sm font-semibold text-slate-700 mb-2 md:mb-3 text-center">Top Scoring</h3>
-                        <ul className="space-y-1 text-xs md:text-sm text-slate-800">
+                      <div className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4 shadow-inner">
+                        <h3 className="text-xs md:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 md:mb-3 text-center">Top Scoring</h3>
+                        <ul className="space-y-1 text-xs md:text-sm text-slate-800 dark:text-white">
                           {teamStatsData
                             .slice()
                             .sort((a, b) => parseFloat(b.ppg || '0') - parseFloat(a.ppg || '0'))
@@ -4234,9 +4234,9 @@ export default function LeaguePage() {
                       </div>
 
                       {/* Top Rebounding Teams */}
-                      <div className="bg-gray-50 rounded-lg p-3 md:p-4 shadow-inner">
-                        <h3 className="text-xs md:text-sm font-semibold text-slate-700 mb-2 md:mb-3 text-center">Top Rebounding</h3>
-                        <ul className="space-y-1 text-xs md:text-sm text-slate-800">
+                      <div className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4 shadow-inner">
+                        <h3 className="text-xs md:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 md:mb-3 text-center">Top Rebounding</h3>
+                        <ul className="space-y-1 text-xs md:text-sm text-slate-800 dark:text-white">
                           {teamStatsData
                             .slice()
                             .sort((a, b) => parseFloat(b.rpg || '0') - parseFloat(a.rpg || '0'))
@@ -4256,9 +4256,9 @@ export default function LeaguePage() {
                       </div>
 
                       {/* Top Assists Teams */}
-                      <div className="bg-gray-50 rounded-lg p-3 md:p-4 shadow-inner">
-                        <h3 className="text-xs md:text-sm font-semibold text-slate-700 mb-2 md:mb-3 text-center">Top Playmaking</h3>
-                        <ul className="space-y-1 text-xs md:text-sm text-slate-800">
+                      <div className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4 shadow-inner">
+                        <h3 className="text-xs md:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 md:mb-3 text-center">Top Playmaking</h3>
+                        <ul className="space-y-1 text-xs md:text-sm text-slate-800 dark:text-white">
                           {teamStatsData
                             .slice()
                             .sort((a, b) => parseFloat(b.apg || '0') - parseFloat(a.apg || '0'))
