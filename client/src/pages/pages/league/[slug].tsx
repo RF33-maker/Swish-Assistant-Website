@@ -1506,7 +1506,9 @@ export default function LeaguePage() {
 
     // Fetch player averages when league is available
     useEffect(() => {
+      console.log("🔄 Player averages useEffect triggered, league_id:", league?.league_id);
       if (league?.league_id) {
+        console.log("🔄 Calling fetchAllPlayerAverages...");
         fetchAllPlayerAverages();
       }
     }, [league?.league_id]);
@@ -1952,19 +1954,39 @@ export default function LeaguePage() {
         };
 
         // ========== STATS-FIRST APPROACH ==========
-        // Step 1: Fetch all player_stats for the league
+        // Step 1: Fetch ALL player_stats for the league (paginated to bypass 1000 row limit)
         console.log("📊 Step 1: Fetching all player_stats for league_id:", league.league_id);
-        const { data: playerStats, error } = await supabase
-          .from("player_stats")
-          .select("*")
-          .eq("league_id", league.league_id);
-
-        if (error) {
-          console.error("Error fetching player stats:", error);
-          return;
+        
+        let allPlayerStats: any[] = [];
+        let page = 0;
+        const pageSize = 1000;
+        let hasMore = true;
+        
+        while (hasMore) {
+          const { data: pageData, error: pageError } = await supabase
+            .from("player_stats")
+            .select("*")
+            .eq("league_id", league.league_id)
+            .range(page * pageSize, (page + 1) * pageSize - 1);
+          
+          if (pageError) {
+            console.error("Error fetching player stats page", page, ":", pageError);
+            break;
+          }
+          
+          if (pageData && pageData.length > 0) {
+            allPlayerStats = [...allPlayerStats, ...pageData];
+            console.log("📊 Step 1: Fetched page", page, "with", pageData.length, "records, total:", allPlayerStats.length);
+            hasMore = pageData.length === pageSize;
+            page++;
+          } else {
+            hasMore = false;
+          }
         }
+        
+        const playerStats = allPlayerStats;
 
-        console.log("📊 Step 1: Fetched", playerStats?.length || 0, "stat records");
+        console.log("📊 Step 1: Fetched", playerStats?.length || 0, "total stat records");
 
         if (!playerStats || playerStats.length === 0) {
           console.log("📊 No stats found for this league");
