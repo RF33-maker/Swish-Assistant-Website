@@ -1951,26 +1951,34 @@ export default function LeaguePage() {
           return false;
         };
 
-        // ========== PHASE 1: Build canonical player roster ==========
-        console.log("📊 Phase 1: Building canonical player roster from players table");
-        
-        const { data: rosterData, error: rosterError } = await supabase
-          .from("players")
-          .select("id, full_name, team, slug")
+        // ========== STATS-FIRST APPROACH ==========
+        // Step 1: Fetch all player_stats for the league
+        console.log("📊 Step 1: Fetching all player_stats for league_id:", league.league_id);
+        const { data: playerStats, error } = await supabase
+          .from("player_stats")
+          .select("*")
           .eq("league_id", league.league_id);
-        
-        if (rosterError) {
-          console.error("Error fetching roster:", rosterError);
+
+        if (error) {
+          console.error("Error fetching player stats:", error);
+          return;
         }
+
+        console.log("📊 Step 1: Fetched", playerStats?.length || 0, "stat records");
+
+        if (!playerStats || playerStats.length === 0) {
+          console.log("📊 No stats found for this league");
+          setAllPlayerAverages([]);
+          setFilteredPlayerAverages([]);
+          return;
+        }
+
+        // Step 2: Group stats by player_id first
+        console.log("📊 Step 2: Grouping stats by player_id");
         
-        console.log("📊 Phase 1: Fetched", rosterData?.length || 0, "players from roster");
-        
-        // Build canonical players by grouping similar names together
-        // Each canonical player has: name, team, slug, and a SET of all player_ids
-        type CanonicalPlayer = {
+        type PlayerAggregate = {
           name: string;
           team: string;
-          slug: string | null;
           playerIds: Set<string>;
           games: number;
           totalPoints: number;
@@ -1994,203 +2002,185 @@ export default function LeaguePage() {
           totalPlusMinus: number;
           rawStats: any[];
         };
-        
-        const canonicalPlayers: CanonicalPlayer[] = [];
-        
-        rosterData?.forEach(player => {
-          // Check if this player matches any existing canonical player by name
-          let matchedCanonical = canonicalPlayers.find(cp => 
-            areSimilarNames(cp.name, player.full_name)
-          );
+
+        // First pass: group by player_id
+        const byPlayerId = new Map<string, PlayerAggregate>();
+        const noPlayerId: any[] = [];
+
+        playerStats.forEach(stat => {
+          const playerName = stat.full_name || stat.name || 'Unknown Player';
+          const team = stat.team || stat.team_name || 'Unknown';
           
-          if (matchedCanonical) {
-            // Add this player_id to the existing canonical player's ID set
-            matchedCanonical.playerIds.add(player.id);
-            // Prefer the slug if we don't have one yet
-            if (!matchedCanonical.slug && player.slug) {
-              matchedCanonical.slug = player.slug;
+          if (stat.player_id) {
+            if (!byPlayerId.has(stat.player_id)) {
+              byPlayerId.set(stat.player_id, {
+                name: playerName,
+                team: team,
+                playerIds: new Set([stat.player_id]),
+                games: 0,
+                totalPoints: 0,
+                totalRebounds: 0,
+                totalAssists: 0,
+                totalSteals: 0,
+                totalBlocks: 0,
+                totalTurnovers: 0,
+                totalFGM: 0,
+                totalFGA: 0,
+                total2PM: 0,
+                total2PA: 0,
+                total3PM: 0,
+                total3PA: 0,
+                totalFTM: 0,
+                totalFTA: 0,
+                totalORB: 0,
+                totalDRB: 0,
+                totalMinutes: 0,
+                totalPersonalFouls: 0,
+                totalPlusMinus: 0,
+                rawStats: []
+              });
             }
-            // Use the longer/more complete name
-            if (player.full_name && player.full_name.length > matchedCanonical.name.length) {
-              matchedCanonical.name = player.full_name;
+            const agg = byPlayerId.get(stat.player_id)!;
+            agg.games += 1;
+            agg.totalPoints += stat.spoints || 0;
+            agg.totalRebounds += stat.sreboundstotal || 0;
+            agg.totalAssists += stat.sassists || 0;
+            agg.totalSteals += stat.ssteals || 0;
+            agg.totalBlocks += stat.sblocks || 0;
+            agg.totalTurnovers += stat.sturnovers || 0;
+            agg.totalFGM += stat.sfieldgoalsmade || 0;
+            agg.totalFGA += stat.sfieldgoalsattempted || 0;
+            agg.total2PM += stat.stwopointersmade || 0;
+            agg.total2PA += stat.stwopointersattempted || 0;
+            agg.total3PM += stat.sthreepointersmade || 0;
+            agg.total3PA += stat.sthreepointersattempted || 0;
+            agg.totalFTM += stat.sfreethrowsmade || 0;
+            agg.totalFTA += stat.sfreethrowsattempted || 0;
+            agg.totalORB += stat.sreboundsoffensive || 0;
+            agg.totalDRB += stat.sreboundsdefensive || 0;
+            agg.totalPersonalFouls += stat.sfoulspersonal || 0;
+            agg.totalPlusMinus += stat.splusminuspoints || 0;
+            agg.rawStats.push(stat);
+            
+            // Use longer name if available
+            if (playerName.length > agg.name.length) {
+              agg.name = playerName;
+            }
+            
+            const minutesParts = stat.sminutes?.split(':');
+            if (minutesParts && minutesParts.length === 2) {
+              agg.totalMinutes += parseInt(minutesParts[0]) + parseInt(minutesParts[1]) / 60;
             }
           } else {
-            // Create new canonical player
-            canonicalPlayers.push({
-              name: player.full_name,
-              team: player.team,
-              slug: player.slug,
-              playerIds: new Set([player.id]),
-              games: 0,
-              totalPoints: 0,
-              totalRebounds: 0,
-              totalAssists: 0,
-              totalSteals: 0,
-              totalBlocks: 0,
-              totalTurnovers: 0,
-              totalFGM: 0,
-              totalFGA: 0,
-              total2PM: 0,
-              total2PA: 0,
-              total3PM: 0,
-              total3PA: 0,
-              totalFTM: 0,
-              totalFTA: 0,
-              totalORB: 0,
-              totalDRB: 0,
-              totalMinutes: 0,
-              totalPersonalFouls: 0,
-              totalPlusMinus: 0,
-              rawStats: []
-            });
+            noPlayerId.push(stat);
           }
         });
-        
-        console.log("📊 Phase 1: Created", canonicalPlayers.length, "canonical players");
-        
-        // Build a quick lookup: player_id -> canonical player index
-        const playerIdToCanonical = new Map<string, number>();
-        canonicalPlayers.forEach((cp, index) => {
-          cp.playerIds.forEach(id => {
-            playerIdToCanonical.set(id, index);
-          });
-        });
-        
-        // ========== PHASE 2: Fetch all player_stats ==========
-        console.log("📊 Phase 2: Fetching player_stats for league_id:", league.league_id);
-        const { data: playerStats, error } = await supabase
-          .from("player_stats")
-          .select("*")
-          .eq("league_id", league.league_id);
 
-        if (error) {
-          console.error("Error fetching player averages:", error);
-          return;
-        }
+        console.log("📊 Step 2: Grouped into", byPlayerId.size, "players by ID,", noPlayerId.length, "without ID");
 
-        console.log("📊 Phase 2: Fetched", playerStats?.length || 0, "stat records");
+        // Step 3: Merge player_id groups that have similar names (same player, different IDs)
+        console.log("📊 Step 3: Merging similar-named players");
+        
+        const mergedPlayers: PlayerAggregate[] = [];
+        const processedIds = new Set<string>();
 
-        // ========== PHASE 3: Match stats to canonical players ==========
-        console.log("📊 Phase 3: Matching stats to canonical players");
-        
-        // Track stats that don't match any canonical player (for fallback)
-        const unmatchedStats: any[] = [];
-        
-        playerStats?.forEach(stat => {
-          let canonicalIndex: number | undefined;
+        for (const [playerId, player] of byPlayerId.entries()) {
+          if (processedIds.has(playerId)) continue;
           
-          // First, try to match by player_id
-          if (stat.player_id) {
-            canonicalIndex = playerIdToCanonical.get(stat.player_id);
-          }
-          
-          // If no match by ID, try fuzzy name matching
-          if (canonicalIndex === undefined) {
-            const statName = stat.full_name || stat.name || 
-                            `${stat.firstname || ''} ${stat.familyname || ''}`.trim();
-            
-            if (statName) {
-              const matchedIdx = canonicalPlayers.findIndex(cp => 
-                areSimilarNames(cp.name, statName)
-              );
-              if (matchedIdx >= 0) {
-                canonicalIndex = matchedIdx;
-                // Also add this player_id to the canonical player's set if it exists
-                if (stat.player_id) {
-                  canonicalPlayers[matchedIdx].playerIds.add(stat.player_id);
-                  playerIdToCanonical.set(stat.player_id, matchedIdx);
-                }
+          // Find all other players with similar names
+          const similarPlayers: [string, PlayerAggregate][] = [];
+          for (const [otherId, otherPlayer] of byPlayerId.entries()) {
+            if (otherId !== playerId && !processedIds.has(otherId)) {
+              if (areSimilarNames(player.name, otherPlayer.name)) {
+                similarPlayers.push([otherId, otherPlayer]);
               }
             }
           }
           
-          if (canonicalIndex !== undefined) {
-            // Found a match - aggregate the stat
-            const cp = canonicalPlayers[canonicalIndex];
-            cp.games += 1;
-            cp.totalPoints += stat.spoints || 0;
-            cp.totalRebounds += stat.sreboundstotal || 0;
-            cp.totalAssists += stat.sassists || 0;
-            cp.totalSteals += stat.ssteals || 0;
-            cp.totalBlocks += stat.sblocks || 0;
-            cp.totalTurnovers += stat.sturnovers || 0;
-            cp.totalFGM += stat.sfieldgoalsmade || 0;
-            cp.totalFGA += stat.sfieldgoalsattempted || 0;
-            cp.total2PM += stat.stwopointersmade || 0;
-            cp.total2PA += stat.stwopointersattempted || 0;
-            cp.total3PM += stat.sthreepointersmade || 0;
-            cp.total3PA += stat.sthreepointersattempted || 0;
-            cp.totalFTM += stat.sfreethrowsmade || 0;
-            cp.totalFTA += stat.sfreethrowsattempted || 0;
-            cp.totalORB += stat.sreboundsoffensive || 0;
-            cp.totalDRB += stat.sreboundsdefensive || 0;
-            cp.totalPersonalFouls += stat.sfoulspersonal || 0;
-            cp.totalPlusMinus += stat.splusminuspoints || 0;
-            cp.rawStats.push(stat);
-            
-            const minutesParts = stat.sminutes?.split(':');
-            if (minutesParts && minutesParts.length === 2) {
-              const minutes = parseInt(minutesParts[0]) + parseInt(minutesParts[1]) / 60;
-              cp.totalMinutes += minutes;
-            }
-          } else {
-            // No match found - track for fallback handling
-            unmatchedStats.push(stat);
-          }
-        });
-        
-        console.log("📊 Phase 3: Matched stats,", unmatchedStats.length, "unmatched");
-        
-        // Handle unmatched stats by creating new entries (players not in roster)
-        const unmatchedPlayers = new Map<string, CanonicalPlayer>();
-        
-        unmatchedStats.forEach(stat => {
-          const statName = stat.full_name || stat.name || 
-                          `${stat.firstname || ''} ${stat.familyname || ''}`.trim() || 'Unknown Player';
-          const normalizedKey = statName.toLowerCase().trim();
-          
-          // Check if we already have this unmatched player
-          let existingUnmatched: CanonicalPlayer | undefined;
-          for (const [key, player] of unmatchedPlayers.entries()) {
-            if (areSimilarNames(player.name, statName)) {
-              existingUnmatched = player;
-              break;
+          // Merge all similar players into this one
+          if (similarPlayers.length > 0) {
+            console.log("📊 Merging", player.name, "with", similarPlayers.length, "similar entries");
+            for (const [otherId, other] of similarPlayers) {
+              player.playerIds.add(otherId);
+              player.games += other.games;
+              player.totalPoints += other.totalPoints;
+              player.totalRebounds += other.totalRebounds;
+              player.totalAssists += other.totalAssists;
+              player.totalSteals += other.totalSteals;
+              player.totalBlocks += other.totalBlocks;
+              player.totalTurnovers += other.totalTurnovers;
+              player.totalFGM += other.totalFGM;
+              player.totalFGA += other.totalFGA;
+              player.total2PM += other.total2PM;
+              player.total2PA += other.total2PA;
+              player.total3PM += other.total3PM;
+              player.total3PA += other.total3PA;
+              player.totalFTM += other.totalFTM;
+              player.totalFTA += other.totalFTA;
+              player.totalORB += other.totalORB;
+              player.totalDRB += other.totalDRB;
+              player.totalMinutes += other.totalMinutes;
+              player.totalPersonalFouls += other.totalPersonalFouls;
+              player.totalPlusMinus += other.totalPlusMinus;
+              player.rawStats.push(...other.rawStats);
+              
+              // Use longer name
+              if (other.name.length > player.name.length) {
+                player.name = other.name;
+              }
+              
+              processedIds.add(otherId);
             }
           }
           
-          if (existingUnmatched) {
-            existingUnmatched.games += 1;
-            existingUnmatched.totalPoints += stat.spoints || 0;
-            existingUnmatched.totalRebounds += stat.sreboundstotal || 0;
-            existingUnmatched.totalAssists += stat.sassists || 0;
-            existingUnmatched.totalSteals += stat.ssteals || 0;
-            existingUnmatched.totalBlocks += stat.sblocks || 0;
-            existingUnmatched.totalTurnovers += stat.sturnovers || 0;
-            existingUnmatched.totalFGM += stat.sfieldgoalsmade || 0;
-            existingUnmatched.totalFGA += stat.sfieldgoalsattempted || 0;
-            existingUnmatched.total2PM += stat.stwopointersmade || 0;
-            existingUnmatched.total2PA += stat.stwopointersattempted || 0;
-            existingUnmatched.total3PM += stat.sthreepointersmade || 0;
-            existingUnmatched.total3PA += stat.sthreepointersattempted || 0;
-            existingUnmatched.totalFTM += stat.sfreethrowsmade || 0;
-            existingUnmatched.totalFTA += stat.sfreethrowsattempted || 0;
-            existingUnmatched.totalORB += stat.sreboundsoffensive || 0;
-            existingUnmatched.totalDRB += stat.sreboundsdefensive || 0;
-            existingUnmatched.totalPersonalFouls += stat.sfoulspersonal || 0;
-            existingUnmatched.totalPlusMinus += stat.splusminuspoints || 0;
-            existingUnmatched.rawStats.push(stat);
+          processedIds.add(playerId);
+          mergedPlayers.push(player);
+        }
+
+        console.log("📊 Step 3: After merging:", mergedPlayers.length, "unique players");
+
+        // Step 4: Handle stats without player_id by grouping by name
+        console.log("📊 Step 4: Processing", noPlayerId.length, "stats without player_id");
+        
+        noPlayerId.forEach(stat => {
+          const playerName = stat.full_name || stat.name || 'Unknown Player';
+          const team = stat.team || stat.team_name || 'Unknown';
+          
+          // Try to find existing player by name
+          let existingPlayer = mergedPlayers.find(p => areSimilarNames(p.name, playerName));
+          
+          if (existingPlayer) {
+            existingPlayer.games += 1;
+            existingPlayer.totalPoints += stat.spoints || 0;
+            existingPlayer.totalRebounds += stat.sreboundstotal || 0;
+            existingPlayer.totalAssists += stat.sassists || 0;
+            existingPlayer.totalSteals += stat.ssteals || 0;
+            existingPlayer.totalBlocks += stat.sblocks || 0;
+            existingPlayer.totalTurnovers += stat.sturnovers || 0;
+            existingPlayer.totalFGM += stat.sfieldgoalsmade || 0;
+            existingPlayer.totalFGA += stat.sfieldgoalsattempted || 0;
+            existingPlayer.total2PM += stat.stwopointersmade || 0;
+            existingPlayer.total2PA += stat.stwopointersattempted || 0;
+            existingPlayer.total3PM += stat.sthreepointersmade || 0;
+            existingPlayer.total3PA += stat.sthreepointersattempted || 0;
+            existingPlayer.totalFTM += stat.sfreethrowsmade || 0;
+            existingPlayer.totalFTA += stat.sfreethrowsattempted || 0;
+            existingPlayer.totalORB += stat.sreboundsoffensive || 0;
+            existingPlayer.totalDRB += stat.sreboundsdefensive || 0;
+            existingPlayer.totalPersonalFouls += stat.sfoulspersonal || 0;
+            existingPlayer.totalPlusMinus += stat.splusminuspoints || 0;
+            existingPlayer.rawStats.push(stat);
             
             const minutesParts = stat.sminutes?.split(':');
             if (minutesParts && minutesParts.length === 2) {
-              const minutes = parseInt(minutesParts[0]) + parseInt(minutesParts[1]) / 60;
-              existingUnmatched.totalMinutes += minutes;
+              existingPlayer.totalMinutes += parseInt(minutesParts[0]) + parseInt(minutesParts[1]) / 60;
             }
           } else {
-            const newPlayer: CanonicalPlayer = {
-              name: statName,
-              team: stat.team || 'Unknown',
-              slug: null,
-              playerIds: stat.player_id ? new Set([stat.player_id]) : new Set(),
+            // Create new player entry
+            const newPlayer: PlayerAggregate = {
+              name: playerName,
+              team: team,
+              playerIds: new Set<string>(),
               games: 1,
               totalPoints: stat.spoints || 0,
               totalRebounds: stat.sreboundstotal || 0,
@@ -2219,57 +2209,99 @@ export default function LeaguePage() {
               newPlayer.totalMinutes = parseInt(minutesParts[0]) + parseInt(minutesParts[1]) / 60;
             }
             
-            unmatchedPlayers.set(normalizedKey, newPlayer);
+            mergedPlayers.push(newPlayer);
           }
         });
+
+        console.log("📊 Step 4: Total players after processing null IDs:", mergedPlayers.length);
+
+        // Step 5: Fetch slugs from players table
+        console.log("📊 Step 5: Fetching slugs from players table");
         
-        // Combine canonical players with unmatched players
-        const allPlayers = [...canonicalPlayers.filter(cp => cp.games > 0), ...unmatchedPlayers.values()];
+        const { data: rosterData } = await supabase
+          .from("players")
+          .select("id, full_name, slug")
+          .eq("league_id", league.league_id);
+
+        const slugLookup = new Map<string, string>();
+        const nameLookup = new Map<string, string>();
         
-        console.log("📊 Phase 3: Total players with stats:", allPlayers.length);
-        
-        // Convert to the format expected by the UI
-        const mergedByName = new Map<string, CanonicalPlayer>();
-        allPlayers.forEach(player => {
-          mergedByName.set(player.name, player);
+        rosterData?.forEach(p => {
+          if (p.slug) {
+            slugLookup.set(p.id, p.slug);
+            if (p.full_name) {
+              nameLookup.set(p.full_name.toLowerCase().trim(), p.slug);
+            }
+          }
         });
 
-      // Calculate averages and percentages from merged data
-      const averagesList = Array.from(mergedByName.values()).map((player) => {
-        // Get the first player_id from the set, or generate a fallback
-        const firstId = player.playerIds.size > 0 ? Array.from(player.playerIds)[0] : `name_${player.name.toLowerCase().replace(/\s+/g, '_')}`;
-        return {
-          ...player,
-          id: firstId,
-          playerKey: firstId,
-          avgPoints: (player.totalPoints / player.games).toFixed(1),
-          avgRebounds: (player.totalRebounds / player.games).toFixed(1),
-          avgAssists: (player.totalAssists / player.games).toFixed(1),
-          avgSteals: (player.totalSteals / player.games).toFixed(1),
-          avgBlocks: (player.totalBlocks / player.games).toFixed(1),
-          avgTurnovers: (player.totalTurnovers / player.games).toFixed(1),
-          avgMinutes: (player.totalMinutes / player.games).toFixed(1),
-          avgFGM: (player.totalFGM / player.games).toFixed(1),
-          avgFGA: (player.totalFGA / player.games).toFixed(1),
-          avg2PM: (player.total2PM / player.games).toFixed(1),
-          avg2PA: (player.total2PA / player.games).toFixed(1),
-          avg3PM: (player.total3PM / player.games).toFixed(1),
-          avg3PA: (player.total3PA / player.games).toFixed(1),
-          avgFTM: (player.totalFTM / player.games).toFixed(1),
-          avgFTA: (player.totalFTA / player.games).toFixed(1),
-          avgORB: (player.totalORB / player.games).toFixed(1),
-          avgDRB: (player.totalDRB / player.games).toFixed(1),
-          avgPersonalFouls: (player.totalPersonalFouls / player.games).toFixed(1),
-          avgPlusMinus: (player.totalPlusMinus / player.games).toFixed(1),
-          fgPercentage: player.totalFGA > 0 ? ((player.totalFGM / player.totalFGA) * 100).toFixed(1) : '0.0',
-          twoPercentage: player.total2PA > 0 ? ((player.total2PM / player.total2PA) * 100).toFixed(1) : '0.0',
-          threePercentage: player.total3PA > 0 ? ((player.total3PM / player.total3PA) * 100).toFixed(1) : '0.0',
-          ftPercentage: player.totalFTA > 0 ? ((player.totalFTM / player.totalFTA) * 100).toFixed(1) : '0.0'
-        };
-      }).sort((a, b) => parseFloat(b.avgPoints) - parseFloat(a.avgPoints));
+        console.log("📊 Step 5: Found", slugLookup.size, "slugs by ID,", nameLookup.size, "by name");
 
-      setAllPlayerAverages(averagesList);
-      setFilteredPlayerAverages(averagesList);
+        // Step 6: Calculate averages and build final list
+        console.log("📊 Step 6: Calculating averages");
+        
+        const averagesList = mergedPlayers.map((player) => {
+          // Try to find slug by player_id first, then by name
+          let slug: string | null = null;
+          for (const pid of player.playerIds) {
+            if (slugLookup.has(pid)) {
+              slug = slugLookup.get(pid)!;
+              break;
+            }
+          }
+          if (!slug) {
+            slug = nameLookup.get(player.name.toLowerCase().trim()) || null;
+          }
+          
+          // Also try fuzzy name match for slug
+          if (!slug) {
+            for (const [name, s] of nameLookup.entries()) {
+              if (areSimilarNames(player.name, name)) {
+                slug = s;
+                break;
+              }
+            }
+          }
+          
+          const firstId = player.playerIds.size > 0 
+            ? Array.from(player.playerIds)[0] 
+            : `name_${player.name.toLowerCase().replace(/\s+/g, '_')}`;
+          
+          return {
+            ...player,
+            id: firstId,
+            playerKey: firstId,
+            slug: slug,
+            avgPoints: (player.totalPoints / player.games).toFixed(1),
+            avgRebounds: (player.totalRebounds / player.games).toFixed(1),
+            avgAssists: (player.totalAssists / player.games).toFixed(1),
+            avgSteals: (player.totalSteals / player.games).toFixed(1),
+            avgBlocks: (player.totalBlocks / player.games).toFixed(1),
+            avgTurnovers: (player.totalTurnovers / player.games).toFixed(1),
+            avgMinutes: (player.totalMinutes / player.games).toFixed(1),
+            avgFGM: (player.totalFGM / player.games).toFixed(1),
+            avgFGA: (player.totalFGA / player.games).toFixed(1),
+            avg2PM: (player.total2PM / player.games).toFixed(1),
+            avg2PA: (player.total2PA / player.games).toFixed(1),
+            avg3PM: (player.total3PM / player.games).toFixed(1),
+            avg3PA: (player.total3PA / player.games).toFixed(1),
+            avgFTM: (player.totalFTM / player.games).toFixed(1),
+            avgFTA: (player.totalFTA / player.games).toFixed(1),
+            avgORB: (player.totalORB / player.games).toFixed(1),
+            avgDRB: (player.totalDRB / player.games).toFixed(1),
+            avgPersonalFouls: (player.totalPersonalFouls / player.games).toFixed(1),
+            avgPlusMinus: (player.totalPlusMinus / player.games).toFixed(1),
+            fgPercentage: player.totalFGA > 0 ? ((player.totalFGM / player.totalFGA) * 100).toFixed(1) : '0.0',
+            twoPercentage: player.total2PA > 0 ? ((player.total2PM / player.total2PA) * 100).toFixed(1) : '0.0',
+            threePercentage: player.total3PA > 0 ? ((player.total3PM / player.total3PA) * 100).toFixed(1) : '0.0',
+            ftPercentage: player.totalFTA > 0 ? ((player.totalFTM / player.totalFTA) * 100).toFixed(1) : '0.0'
+          };
+        }).sort((a, b) => parseFloat(b.avgPoints) - parseFloat(a.avgPoints));
+
+        console.log("📊 Step 6: Final player list has", averagesList.length, "players");
+
+        setAllPlayerAverages(averagesList);
+        setFilteredPlayerAverages(averagesList);
       } catch (error) {
         console.error("Error in fetchAllPlayerAverages:", error);
       } finally {
