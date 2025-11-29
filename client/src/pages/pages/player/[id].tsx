@@ -275,9 +275,59 @@ export default function PlayerStatsPage() {
 
         console.log('✅ Step 3: Setting player stats and info...');
         
-        // Fetch leagues
+        // Fetch opponent data using game_key
         let statsWithOpponents = stats || [];
         if (stats && stats.length > 0) {
+          const gameKeys = Array.from(new Set(stats.map(stat => stat.game_key).filter(Boolean)));
+          console.log('🎮 Game keys found:', gameKeys.length, gameKeys.slice(0, 3));
+          
+          if (gameKeys.length > 0) {
+            const { data: gamesData, error: gamesError } = await supabase
+              .from('games')
+              .select('game_key, home_team, away_team')
+              .in('game_key', gameKeys);
+            
+            if (!gamesError && gamesData) {
+              console.log('🏀 Games fetched:', gamesData.length, 'records');
+              
+              const gameKeyMap = new Map<string, { home_team: string; away_team: string }>();
+              gamesData.forEach(game => {
+                if (game.game_key) {
+                  gameKeyMap.set(game.game_key, {
+                    home_team: game.home_team,
+                    away_team: game.away_team
+                  });
+                }
+              });
+              
+              statsWithOpponents = stats.map(stat => {
+                let derivedOpponent = undefined;
+                
+                if (stat.game_key) {
+                  const gameInfo = gameKeyMap.get(stat.game_key);
+                  if (gameInfo) {
+                    const playerTeamRaw = stat.team_name || '';
+                    const playerTeamNorm = playerTeamRaw.trim().toLowerCase();
+                    
+                    const homeTeamNorm = (gameInfo.home_team || '').trim().toLowerCase();
+                    const awayTeamNorm = (gameInfo.away_team || '').trim().toLowerCase();
+                    
+                    if (playerTeamNorm === homeTeamNorm) {
+                      derivedOpponent = gameInfo.away_team;
+                    } else if (playerTeamNorm === awayTeamNorm) {
+                      derivedOpponent = gameInfo.home_team;
+                    }
+                  }
+                }
+                
+                return {
+                  ...stat,
+                  opponent: derivedOpponent || stat.opponent
+                };
+              });
+            }
+          }
+          
           const userId = stats[0].user_id;
           
           // Fetch leagues if we have a user_id
