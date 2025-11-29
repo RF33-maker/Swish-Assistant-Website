@@ -377,7 +377,7 @@ export default function LeagueLeadersPage() {
                 </div>
                 <div>
                   <p className="text-sm md:text-base font-medium text-orange-900 dark:text-orange-300">{player.name}</p>
-                  <p className="text-xs md:text-sm text-orange-700 dark:text-orange-400">{player.team_name || 'Unknown Team'}</p>
+                  <p className="text-xs md:text-sm text-gray-800 dark:text-white">{player.team_name || 'Unknown Team'}</p>
                 </div>
               </div>
               <div className="text-right">
