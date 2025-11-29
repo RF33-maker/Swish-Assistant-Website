@@ -3012,7 +3012,7 @@ export default function LeaguePage() {
                   isDividerVisible ? 'w-20' : 'w-8'
                 }`}
               ></div>
-              <p className="text-slate-600 dark:text-slate-400 leading-relaxed text-sm">
+              <p className="text-slate-600 dark:text-white leading-relaxed text-sm">
                 {league?.description}
               </p>
             </div>
