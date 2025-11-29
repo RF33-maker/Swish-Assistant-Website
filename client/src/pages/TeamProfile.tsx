@@ -10,6 +10,7 @@ import { Helmet } from "react-helmet-async";
 import { normalizeTeamName } from "@/lib/teamUtils";
 import { useTeamBranding } from "@/hooks/useTeamBranding";
 import { adjustOpacity } from "@/lib/colorExtractor";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 interface League {
   league_id: string;
@@ -538,10 +539,10 @@ export default function TeamProfile() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#fffaf1] flex items-center justify-center">
+      <div className="min-h-screen bg-[#fffaf1] dark:bg-neutral-950 flex items-center justify-center">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-slate-600">Loading team profile...</p>
+          <p className="text-slate-600 dark:text-slate-400">Loading team profile...</p>
         </div>
       </div>
     );
@@ -549,10 +550,10 @@ export default function TeamProfile() {
 
   if (!team) {
     return (
-      <div className="min-h-screen bg-[#fffaf1] flex items-center justify-center">
+      <div className="min-h-screen bg-[#fffaf1] dark:bg-neutral-950 flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-slate-800 mb-2">Team Not Found</h1>
-          <p className="text-slate-600 mb-4">The team you're looking for doesn't exist or has no data.</p>
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">Team Not Found</h1>
+          <p className="text-slate-600 dark:text-slate-400 mb-4">The team you're looking for doesn't exist or has no data.</p>
           <button
             onClick={() => navigate("/")}
             className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-2 rounded-lg"
@@ -607,8 +608,8 @@ export default function TeamProfile() {
         <link rel="canonical" href={`https://www.swishassistant.com/team/${encodeURIComponent(team.name.toLowerCase().replace(/\s+/g, '-'))}`} />
       </Helmet>
       
-      <div className="min-h-screen bg-[#fffaf1]">
-        <header className="bg-white shadow-sm sticky top-0 z-50 px-4 md:px-6 py-3 md:py-4 flex flex-col md:flex-row items-center justify-between gap-3 md:gap-0">
+      <div className="min-h-screen bg-[#fffaf1] dark:bg-neutral-950">
+        <header className="bg-white dark:bg-neutral-900 shadow-sm dark:shadow-neutral-800/50 sticky top-0 z-50 px-4 md:px-6 py-3 md:py-4 flex flex-col md:flex-row items-center justify-between gap-3 md:gap-0">
         <div className="flex items-center gap-3 w-full md:w-auto justify-center md:justify-start">
           <img
             src={SwishLogo}
@@ -625,7 +626,7 @@ export default function TeamProfile() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-            className="w-full px-4 py-2 border border-gray-300 rounded-full text-sm"
+            className="w-full px-4 py-2 border border-gray-300 dark:border-neutral-600 rounded-full text-sm bg-white dark:bg-neutral-800 dark:text-white dark:placeholder-slate-400"
           />
           <button
             onClick={handleSearch}
@@ -635,7 +636,7 @@ export default function TeamProfile() {
           </button>
 
           {suggestions.length > 0 && (
-            <ul className="absolute z-50 mt-2 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+            <ul className="absolute z-50 mt-2 w-full bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-md shadow-lg max-h-60 overflow-y-auto">
               {suggestions.map((item, index) => (
                 <li
                   key={index}
@@ -644,7 +645,7 @@ export default function TeamProfile() {
                     setSuggestions([]);
                     navigate(`/league/${item.slug}`);
                   }}
-                  className="px-4 py-2 cursor-pointer hover:bg-orange-100 text-left text-slate-800"
+                  className="px-4 py-2 cursor-pointer hover:bg-orange-100 dark:hover:bg-neutral-700 text-left text-slate-800 dark:text-white"
                 >
                   {item.name}
                 </li>
@@ -653,17 +654,18 @@ export default function TeamProfile() {
           )}
         </div>
 
-        <div className="flex gap-3 md:gap-4 text-xs md:text-sm w-full md:w-auto justify-center md:justify-end">
+        <div className="flex gap-3 md:gap-4 text-xs md:text-sm w-full md:w-auto justify-center md:justify-end items-center">
+          <ThemeToggle />
           <button
             onClick={() => navigate("/")}
-            className="text-slate-600 hover:text-orange-500"
+            className="text-slate-600 dark:text-slate-300 hover:text-orange-500 dark:hover:text-orange-400"
           >
             Home
           </button>
           {team?.league && (
             <button
               onClick={() => navigate(`/league/${team.league?.slug}`)}
-              className="text-slate-600 hover:text-orange-500"
+              className="text-slate-600 dark:text-slate-300 hover:text-orange-500 dark:hover:text-orange-400"
             >
               Back to League
             </button>
@@ -716,8 +718,8 @@ export default function TeamProfile() {
           {/* Left Column - Team Info */}
           <div className="lg:col-span-1 space-y-4 md:space-y-6">
             {/* Team Description */}
-            <div className="bg-white rounded-xl shadow p-4 md:p-6">
-              <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-3 md:mb-4 flex items-center gap-2">
+            <div className="bg-white dark:bg-neutral-900 rounded-xl shadow dark:shadow-neutral-800/50 p-4 md:p-6">
+              <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-3 md:mb-4 flex items-center gap-2">
                 <svg className="w-4 h-4 md:w-5 md:h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
@@ -752,7 +754,7 @@ export default function TeamProfile() {
               className="rounded-xl shadow-md p-4 md:p-6"
               style={{
                 background: teamBranding 
-                  ? `linear-gradient(to bottom right, ${adjustOpacity(teamBranding.primaryRgb, 0.1)}, ${adjustOpacity(teamBranding.secondaryRgb, 0.1)})`
+                  ? `linear-gradient(to bottom right, ${adjustOpacity(teamBranding.primaryRgb, 0.15)}, ${adjustOpacity(teamBranding.secondaryRgb, 0.15)})`
                   : 'linear-gradient(to bottom right, rgb(255, 247, 237), rgb(254, 249, 195))',
                 borderWidth: '2px',
                 borderStyle: 'solid',
@@ -761,7 +763,7 @@ export default function TeamProfile() {
                   : 'rgb(253, 186, 116)'
               }}
             >
-              <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-3 md:mb-4 flex items-center gap-2">
+              <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-3 md:mb-4 flex items-center gap-2">
                 <svg 
                   className="w-4 h-4 md:w-5 md:h-5" 
                   fill="none" 
@@ -774,13 +776,13 @@ export default function TeamProfile() {
                 Team Statistics
               </h2>
               <div className="space-y-3 md:space-y-4">
-                <div className="bg-white rounded-lg p-3 md:p-4">
+                <div className="bg-white dark:bg-neutral-800 rounded-lg p-3 md:p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: textOnWhiteColor }}>
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
-                      <span className="text-slate-600 font-medium">W-L Record</span>
+                      <span className="text-slate-600 dark:text-slate-300 font-medium">W-L Record</span>
                     </div>
                     <span className="text-2xl md:text-3xl font-bold" data-testid="team-record" style={{ color: textOnWhiteColor }}>
                       {team.wins}-{team.losses}
@@ -788,20 +790,20 @@ export default function TeamProfile() {
                   </div>
                 </div>
                 <div className="flex justify-between text-sm md:text-base">
-                  <span className="text-slate-600">Games Played</span>
+                  <span className="text-slate-600 dark:text-slate-300">Games Played</span>
                   <span className="font-semibold" style={{ color: textOnWhiteColor }}>{team.totalGames}</span>
                 </div>
                 <div className="flex justify-between text-sm md:text-base">
-                  <span className="text-slate-600">Avg Points Per Game</span>
+                  <span className="text-slate-600 dark:text-slate-300">Avg Points Per Game</span>
                   <span className="font-semibold" style={{ color: textOnWhiteColor }}>{team.avgTeamPoints} PPG</span>
                 </div>
                 <div className="flex justify-between text-sm md:text-base">
-                  <span className="text-slate-600">Roster Size</span>
+                  <span className="text-slate-600 dark:text-slate-300">Roster Size</span>
                   <span className="font-semibold" style={{ color: textOnWhiteColor }}>{team.roster.length} Players</span>
                 </div>
                 {team.topPlayer && (
                   <div className="flex justify-between text-sm md:text-base">
-                    <span className="text-slate-600">Top Scorer</span>
+                    <span className="text-slate-600 dark:text-slate-300">Top Scorer</span>
                     <span className="font-semibold" style={{ color: textOnWhiteColor }}>{team.topPlayer.name}</span>
                   </div>
                 )}
@@ -817,23 +819,23 @@ export default function TeamProfile() {
                 className="rounded-xl p-4 md:p-6"
                 style={{
                   background: teamBranding 
-                    ? `linear-gradient(to right, ${adjustOpacity(teamBranding.primaryRgb, 0.1)}, ${adjustOpacity(teamBranding.secondaryRgb, 0.1)})`
+                    ? `linear-gradient(to right, ${adjustOpacity(teamBranding.primaryRgb, 0.15)}, ${adjustOpacity(teamBranding.secondaryRgb, 0.15)})`
                     : 'linear-gradient(to right, rgb(255, 247, 237), rgb(254, 249, 195))',
                   borderWidth: '1px',
                   borderStyle: 'solid',
                   borderColor: teamBranding 
-                    ? adjustOpacity(teamBranding.primaryRgb, 0.2)
+                    ? adjustOpacity(teamBranding.primaryRgb, 0.25)
                     : 'rgb(254, 215, 170)'
                 }}
               >
-                <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-3 md:mb-4 flex items-center gap-2">
+                <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-3 md:mb-4 flex items-center gap-2">
                   <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: textOnWhiteColor }}>
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
                   </svg>
                   Star Player
                 </h2>
                 <div 
-                  className="bg-white rounded-lg p-3 md:p-4 cursor-pointer hover:shadow-md transition-shadow"
+                  className="bg-white dark:bg-neutral-800 rounded-lg p-3 md:p-4 cursor-pointer hover:shadow-md transition-shadow"
                   onClick={() => {
                     const identifier = team.topPlayer.player_slug || team.topPlayer.player_id;
                     if (identifier) navigate(`/player/${identifier}`);
@@ -851,26 +853,26 @@ export default function TeamProfile() {
                       {team.topPlayer.name.charAt(0)}
                     </div>
                     <div className="flex-1 text-center md:text-left">
-                      <h3 className="text-lg md:text-xl font-bold text-slate-800">{team.topPlayer.name}</h3>
-                      <p className="text-slate-600 text-sm md:text-base">{team.topPlayer.position}</p>
-                      <p className="text-xs md:text-sm text-slate-500">{team.topPlayer.gamesPlayed} games played</p>
+                      <h3 className="text-lg md:text-xl font-bold text-slate-800 dark:text-white">{team.topPlayer.name}</h3>
+                      <p className="text-slate-600 dark:text-slate-300 text-sm md:text-base">{team.topPlayer.position}</p>
+                      <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400">{team.topPlayer.gamesPlayed} games played</p>
                     </div>
                     <div className="grid grid-cols-2 gap-3 md:gap-4 text-center w-full md:w-auto">
                       <div>
                         <div className="text-xl md:text-2xl font-bold" style={{ color: textOnWhiteColor }}>{team.topPlayer.avgPoints}</div>
-                        <div className="text-xs text-slate-500">PPG</div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">PPG</div>
                       </div>
                       <div>
                         <div className="text-xl md:text-2xl font-bold" style={{ color: textOnWhiteColor }}>{team.topPlayer.avgRebounds}</div>
-                        <div className="text-xs text-slate-500">RPG</div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">RPG</div>
                       </div>
                       <div>
                         <div className="text-xl md:text-2xl font-bold" style={{ color: textOnWhiteColor }}>{team.topPlayer.avgAssists}</div>
-                        <div className="text-xs text-slate-500">APG</div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">APG</div>
                       </div>
                       <div>
                         <div className="text-xl md:text-2xl font-bold" style={{ color: textOnWhiteColor }}>{team.topPlayer.totalPoints}</div>
-                        <div className="text-xs text-slate-500">Total PTS</div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">Total PTS</div>
                       </div>
                     </div>
                   </div>
@@ -879,8 +881,8 @@ export default function TeamProfile() {
             )}
 
             {/* Team Roster */}
-            <div className="bg-white rounded-xl shadow p-4 md:p-6">
-              <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-3 md:mb-4 flex items-center gap-2">
+            <div className="bg-white dark:bg-neutral-900 rounded-xl shadow dark:shadow-neutral-800/50 p-4 md:p-6">
+              <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-3 md:mb-4 flex items-center gap-2">
                 <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: textOnWhiteColor }}>
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
                 </svg>
@@ -889,12 +891,12 @@ export default function TeamProfile() {
               <div className="overflow-x-auto -mx-4 md:mx-0">
                 <table className="w-full text-xs md:text-sm">
                   <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="sticky left-0 bg-white text-left py-2 md:py-3 px-2 font-semibold text-slate-700 z-10">Player</th>
-                      <th className="hidden md:table-cell text-center py-3 px-2 font-semibold text-slate-700">GP</th>
-                      <th className="text-right py-2 md:py-3 px-2 font-semibold text-slate-700">PPG</th>
-                      <th className="text-right py-2 md:py-3 px-2 font-semibold text-slate-700">RPG</th>
-                      <th className="hidden md:table-cell text-right py-3 px-2 font-semibold text-slate-700">APG</th>
+                    <tr className="border-b border-gray-200 dark:border-neutral-700">
+                      <th className="sticky left-0 bg-white dark:bg-neutral-900 text-left py-2 md:py-3 px-2 font-semibold text-slate-700 dark:text-slate-200 z-10">Player</th>
+                      <th className="hidden md:table-cell text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">GP</th>
+                      <th className="text-right py-2 md:py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">PPG</th>
+                      <th className="text-right py-2 md:py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">RPG</th>
+                      <th className="hidden md:table-cell text-right py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">APG</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -906,20 +908,9 @@ export default function TeamProfile() {
                           if (identifier) navigate(`/player/${identifier}`);
                         }}
                         data-testid={`player-card-${player.player_id}`}
-                        className="border-b border-gray-100 transition-colors cursor-pointer"
-                        style={{
-                          backgroundColor: 'transparent'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.backgroundColor = teamBranding 
-                            ? adjustOpacity(teamBranding.primaryRgb, 0.05)
-                            : 'rgb(255, 247, 237)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.backgroundColor = 'transparent';
-                        }}
+                        className="border-b border-gray-100 dark:border-neutral-800 transition-colors cursor-pointer hover:bg-orange-50/50 dark:hover:bg-neutral-800"
                       >
-                        <td className="sticky left-0 bg-inherit py-2 md:py-3 px-2 z-10">
+                        <td className="sticky left-0 bg-white dark:bg-neutral-900 py-2 md:py-3 px-2 z-10">
                           <div className="flex items-center gap-2">
                             <div 
                               className="w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center font-bold text-xs"
@@ -930,13 +921,13 @@ export default function TeamProfile() {
                             >
                               {player.name.charAt(0)}
                             </div>
-                            <span className="font-medium text-slate-800">{player.name}</span>
+                            <span className="font-medium text-slate-800 dark:text-white">{player.name}</span>
                           </div>
                         </td>
-                        <td className="hidden md:table-cell py-3 px-2 text-center text-slate-600">{player.gamesPlayed}</td>
+                        <td className="hidden md:table-cell py-3 px-2 text-center text-slate-600 dark:text-slate-400">{player.gamesPlayed}</td>
                         <td className="py-2 md:py-3 px-2 text-right font-medium" style={{ color: textOnWhiteColor }}>{player.avgPoints}</td>
-                        <td className="py-2 md:py-3 px-2 text-right text-slate-600">{player.avgRebounds}</td>
-                        <td className="hidden md:table-cell py-3 px-2 text-right text-slate-600">{player.avgAssists}</td>
+                        <td className="py-2 md:py-3 px-2 text-right text-slate-600 dark:text-slate-400">{player.avgRebounds}</td>
+                        <td className="hidden md:table-cell py-3 px-2 text-right text-slate-600 dark:text-slate-400">{player.avgAssists}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -945,8 +936,8 @@ export default function TeamProfile() {
             </div>
 
             {/* Recent Games */}
-            <div className="bg-white rounded-xl shadow p-4 md:p-6">
-              <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-3 md:mb-4 flex items-center gap-2">
+            <div className="bg-white dark:bg-neutral-900 rounded-xl shadow dark:shadow-neutral-800/50 p-4 md:p-6">
+              <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-3 md:mb-4 flex items-center gap-2">
                 <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: textOnWhiteColor }}>
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
@@ -954,18 +945,18 @@ export default function TeamProfile() {
               </h2>
               <div className="space-y-2 md:space-y-3">
                 {team.recentGames.slice(0, 8).map((game: Game, index: number) => (
-                  <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                  <div key={index} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-neutral-800 rounded-lg">
                     <div className="flex-1">
-                      <div className="font-medium text-slate-800 text-sm md:text-base">
+                      <div className="font-medium text-slate-800 dark:text-white text-sm md:text-base">
                         {game.isHome ? 'vs' : '@'} {game.opponent}
                       </div>
-                      <div className="text-xs md:text-sm text-slate-500 mt-1">
-                        Final: <span className="font-semibold text-slate-700">{game.totalPoints} - {game.opponentScore}</span>
+                      <div className="text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-1">
+                        Final: <span className="font-semibold text-slate-700 dark:text-slate-200">{game.totalPoints} - {game.opponentScore}</span>
                       </div>
                     </div>
                     <div>
                       {game.isWin !== undefined && (
-                        <span className={`text-xs md:text-sm px-3 py-1 rounded font-semibold ${game.isWin ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                        <span className={`text-xs md:text-sm px-3 py-1 rounded font-semibold ${game.isWin ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-400' : 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-400'}`}>
                           {game.isWin ? 'W' : 'L'}
                         </span>
                       )}
@@ -977,8 +968,8 @@ export default function TeamProfile() {
 
             {/* Upcoming Schedule */}
             {upcomingGames.length > 0 && (
-              <div className="bg-white rounded-xl shadow p-4 md:p-6">
-                <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-3 md:mb-4 flex items-center gap-2">
+              <div className="bg-white dark:bg-neutral-900 rounded-xl shadow dark:shadow-neutral-800/50 p-4 md:p-6">
+                <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-3 md:mb-4 flex items-center gap-2">
                   <svg className="w-4 h-4 md:w-5 md:h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                   </svg>
@@ -988,19 +979,19 @@ export default function TeamProfile() {
                   {upcomingGames.map((game: UpcomingGame, index: number) => (
                     <div 
                       key={index} 
-                      className="flex flex-col md:flex-row justify-between md:items-center p-3 bg-gradient-to-r from-orange-50 to-yellow-50 border border-orange-200 rounded-lg gap-2 md:gap-0"
+                      className="flex flex-col md:flex-row justify-between md:items-center p-3 bg-gradient-to-r from-orange-50 to-yellow-50 dark:from-neutral-800 dark:to-neutral-800 border border-orange-200 dark:border-orange-500/30 rounded-lg gap-2 md:gap-0"
                       data-testid={`upcoming-game-${index}`}
                     >
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <div className="font-medium text-slate-800 text-sm md:text-base">
+                          <div className="font-medium text-slate-800 dark:text-white text-sm md:text-base">
                             {game.isHome ? 'vs' : '@'} {game.opponent}
                           </div>
-                          <span className={`text-xs px-2 py-1 rounded ${game.isHome ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
+                          <span className={`text-xs px-2 py-1 rounded ${game.isHome ? 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-400' : 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400'}`}>
                             {game.isHome ? 'HOME' : 'AWAY'}
                           </span>
                         </div>
-                        <div className="text-xs md:text-sm text-slate-500 mt-1">
+                        <div className="text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-1">
                           {new Date(game.matchtime).toLocaleDateString('en-US', { 
                             weekday: 'short', 
                             month: 'short', 
