@@ -5,6 +5,7 @@ import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
 import { Trophy, TrendingUp, Users, Target, Shield, Zap, ArrowLeft } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 interface LeaderboardStats {
   points: any[];
@@ -346,9 +347,9 @@ export default function LeagueLeadersPage() {
     players: any[]; 
     iconColor: string;
   }) => (
-    <Card className="bg-white border-orange-200 shadow-[0_4px_20px_rgba(255,115,0,0.1)] hover:shadow-[0_8px_30px_rgba(255,115,0,0.15)] transition-all duration-300">
+    <Card className="bg-white dark:bg-neutral-900 border-orange-200 dark:border-neutral-700 shadow-[0_4px_20px_rgba(255,115,0,0.1)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.3)] hover:shadow-[0_8px_30px_rgba(255,115,0,0.15)] dark:hover:shadow-[0_8px_30px_rgba(0,0,0,0.5)] transition-all duration-300">
       <CardHeader className="pb-2 md:pb-3 p-4 md:p-6">
-        <CardTitle className="flex items-center gap-2 text-base md:text-lg font-semibold text-orange-800">
+        <CardTitle className="flex items-center gap-2 text-base md:text-lg font-semibold text-orange-800 dark:text-orange-400">
           <Icon className={`h-5 w-5 md:h-6 md:w-6 ${iconColor}`} />
           {title}
         </CardTitle>
@@ -358,7 +359,7 @@ export default function LeagueLeadersPage() {
           players.map((player, index) => (
             <div 
               key={`${player.player_id}-${index}`} 
-              className="flex items-center justify-between py-2 md:py-3 px-2 md:px-3 rounded-lg bg-orange-50 hover:bg-orange-100 transition-colors duration-200 cursor-pointer"
+              className="flex items-center justify-between py-2 md:py-3 px-2 md:px-3 rounded-lg bg-orange-50 dark:bg-neutral-800 hover:bg-orange-100 dark:hover:bg-neutral-700 transition-colors duration-200 cursor-pointer"
               onClick={() => {
                 const identifier = player.player_slug || player.player_id;
                 if (identifier) navigate(`/player/${identifier}`);
@@ -375,18 +376,18 @@ export default function LeagueLeadersPage() {
                   {index + 1}
                 </div>
                 <div>
-                  <p className="text-sm md:text-base font-medium text-orange-900">{player.name}</p>
-                  <p className="text-xs md:text-sm text-orange-700">{player.team_name || 'Unknown Team'}</p>
+                  <p className="text-sm md:text-base font-medium text-orange-900 dark:text-orange-300">{player.name}</p>
+                  <p className="text-xs md:text-sm text-orange-700 dark:text-orange-400">{player.team_name || 'Unknown Team'}</p>
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-sm md:text-base font-bold text-orange-800">{player.display_value}</p>
-                <p className="text-xs text-orange-600">{player.games_played} games</p>
+                <p className="text-sm md:text-base font-bold text-orange-800 dark:text-orange-400">{player.display_value}</p>
+                <p className="text-xs text-orange-600 dark:text-orange-500">{player.games_played} games</p>
               </div>
             </div>
           ))
         ) : (
-          <p className="text-orange-600 text-center py-4">No data available</p>
+          <p className="text-orange-600 dark:text-orange-400 text-center py-4">No data available</p>
         )}
       </CardContent>
     </Card>
@@ -394,12 +395,12 @@ export default function LeagueLeadersPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col bg-gray-50">
+      <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-neutral-950">
         <Header />
         <main className="flex-grow flex items-center justify-center">
           <div className="text-center space-y-4">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto"></div>
-            <p className="text-orange-700">Loading league leaders...</p>
+            <p className="text-orange-700 dark:text-orange-400">Loading league leaders...</p>
           </div>
         </main>
         <Footer />
@@ -409,13 +410,13 @@ export default function LeagueLeadersPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex flex-col bg-gray-50">
+      <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-neutral-950">
         <Header />
         <main className="flex-grow flex items-center justify-center">
           <div className="text-center space-y-4">
             <div className="text-red-500 text-xl">⚠️</div>
-            <h2 className="text-xl font-semibold text-gray-800">Unable to Load League Leaders</h2>
-            <p className="text-gray-600">{error}</p>
+            <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200">Unable to Load League Leaders</h2>
+            <p className="text-gray-600 dark:text-gray-400">{error}</p>
           </div>
         </main>
         <Footer />
@@ -424,14 +425,14 @@ export default function LeagueLeadersPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-neutral-950">
       <Header />
 
       <main className="flex-grow p-4 md:p-6 max-w-7xl mx-auto space-y-6 md:space-y-8">
         {/* Back Button */}
         <button
           onClick={() => navigate(`/league/${slug}`)}
-          className="flex items-center gap-2 text-orange-600 hover:text-orange-700 font-medium transition-colors"
+          className="flex items-center gap-2 text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 font-medium transition-colors"
           data-testid="button-back-to-league"
         >
           <ArrowLeft className="h-5 w-5" />
@@ -442,22 +443,22 @@ export default function LeagueLeadersPage() {
         <div className="text-center space-y-3 md:space-y-4">
           <div className="flex flex-col md:flex-row items-center justify-center gap-2 md:gap-3">
             <Trophy className="h-6 w-6 md:h-8 md:w-8 text-orange-500" />
-            <h1 className="text-2xl md:text-4xl font-bold text-orange-600">League Leaders</h1>
+            <h1 className="text-2xl md:text-4xl font-bold text-orange-600 dark:text-orange-400">League Leaders</h1>
           </div>
-          <h2 className="text-xl md:text-2xl font-semibold text-orange-800">{league?.name}</h2>
+          <h2 className="text-xl md:text-2xl font-semibold text-orange-800 dark:text-orange-300">{league?.name}</h2>
           {league?.description && (
-            <p className="text-sm md:text-base text-orange-700 max-w-2xl mx-auto">{league.description}</p>
+            <p className="text-sm md:text-base text-orange-700 dark:text-orange-400 max-w-2xl mx-auto">{league.description}</p>
           )}
           
           {/* Toggle between Averages and Totals */}
           <div className="flex justify-center pt-2">
-            <div className="inline-flex rounded-lg border border-orange-200 bg-orange-50 p-1">
+            <div className="inline-flex rounded-lg border border-orange-200 dark:border-neutral-700 bg-orange-50 dark:bg-neutral-800 p-1">
               <button
                 onClick={() => setViewMode('averages')}
                 className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
                   viewMode === 'averages'
-                    ? 'bg-white text-orange-600 shadow-sm'
-                    : 'text-orange-700 hover:text-orange-800'
+                    ? 'bg-white dark:bg-neutral-700 text-orange-600 dark:text-orange-400 shadow-sm'
+                    : 'text-orange-700 dark:text-orange-500 hover:text-orange-800 dark:hover:text-orange-300'
                 }`}
                 data-testid="button-view-averages"
               >
@@ -467,8 +468,8 @@ export default function LeagueLeadersPage() {
                 onClick={() => setViewMode('totals')}
                 className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
                   viewMode === 'totals'
-                    ? 'bg-white text-orange-600 shadow-sm'
-                    : 'text-orange-700 hover:text-orange-800'
+                    ? 'bg-white dark:bg-neutral-700 text-orange-600 dark:text-orange-400 shadow-sm'
+                    : 'text-orange-700 dark:text-orange-500 hover:text-orange-800 dark:hover:text-orange-300'
                 }`}
                 data-testid="button-view-totals"
               >
@@ -556,8 +557,8 @@ export default function LeagueLeadersPage() {
         )}
 
         {/* Note about minimum requirements */}
-        <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 md:p-4 text-center">
-          <p className="text-xs md:text-sm text-orange-700">
+        <div className="bg-orange-50 dark:bg-neutral-800 border border-orange-200 dark:border-neutral-700 rounded-lg p-3 md:p-4 text-center">
+          <p className="text-xs md:text-sm text-orange-700 dark:text-orange-400">
             * Shooting percentages require minimum attempts: Field Goals (2+), Three Pointers (1+), Free Throws (1+)
           </p>
         </div>
