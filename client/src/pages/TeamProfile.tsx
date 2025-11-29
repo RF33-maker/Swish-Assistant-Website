@@ -751,13 +751,13 @@ export default function TeamProfile() {
 
             {/* Team Stats Summary */}
             <div 
-              className="rounded-xl shadow-md p-4 md:p-6"
+              className="rounded-xl shadow-md p-4 md:p-6 border-2 bg-gradient-to-br dark:from-neutral-800 dark:to-neutral-850 dark:border-neutral-700"
               style={{
-                background: teamBranding 
-                  ? `linear-gradient(to bottom right, ${adjustOpacity(teamBranding.primaryRgb, 0.15)}, ${adjustOpacity(teamBranding.secondaryRgb, 0.15)})`
-                  : 'linear-gradient(to bottom right, rgb(255, 247, 237), rgb(254, 249, 195))',
-                borderWidth: '2px',
-                borderStyle: 'solid',
+                background: document.documentElement.classList.contains('dark')
+                  ? undefined
+                  : teamBranding 
+                    ? `linear-gradient(to bottom right, ${adjustOpacity(teamBranding.primaryRgb, 0.15)}, ${adjustOpacity(teamBranding.secondaryRgb, 0.15)})`
+                    : 'linear-gradient(to bottom right, rgb(255, 247, 237), rgb(254, 249, 195))',
                 borderColor: teamBranding 
                   ? adjustOpacity(teamBranding.primaryRgb, 0.3)
                   : 'rgb(253, 186, 116)'
@@ -816,13 +816,13 @@ export default function TeamProfile() {
             {/* Top Player Highlight */}
             {team.topPlayer && (
               <div 
-                className="rounded-xl p-4 md:p-6"
+                className="rounded-xl p-4 md:p-6 border bg-gradient-to-r dark:from-neutral-800 dark:to-neutral-850 dark:border-neutral-700"
                 style={{
-                  background: teamBranding 
-                    ? `linear-gradient(to right, ${adjustOpacity(teamBranding.primaryRgb, 0.15)}, ${adjustOpacity(teamBranding.secondaryRgb, 0.15)})`
-                    : 'linear-gradient(to right, rgb(255, 247, 237), rgb(254, 249, 195))',
-                  borderWidth: '1px',
-                  borderStyle: 'solid',
+                  background: document.documentElement.classList.contains('dark')
+                    ? undefined
+                    : teamBranding 
+                      ? `linear-gradient(to right, ${adjustOpacity(teamBranding.primaryRgb, 0.15)}, ${adjustOpacity(teamBranding.secondaryRgb, 0.15)})`
+                      : 'linear-gradient(to right, rgb(255, 247, 237), rgb(254, 249, 195))',
                   borderColor: teamBranding 
                     ? adjustOpacity(teamBranding.primaryRgb, 0.25)
                     : 'rgb(254, 215, 170)'
