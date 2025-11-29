@@ -208,15 +208,10 @@ const TEAM_STAT_COLUMNS: Record<string, TeamStatColumn[]> = {
     { key: '2PM', label: '2PM', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'total2PM', 'avg2PM') },
   ],
   Misc: [
-    { key: 'TIES', label: 'TIES', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalTimesScoresLevel', 'avgTimesScoresLevel') },
-    { key: 'LEAD CHG', label: 'LEAD CHG', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalLeadChanges', 'avgLeadChanges') },
-    { key: 'TIME LEADING', label: 'TIME LEADING', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalTimeLeading', 'avgTimeLeading') },
-    { key: 'BIG RUN', label: 'BIG RUN', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalBiggestScoringRun', 'avgBiggestScoringRun') },
-    { key: 'MISC +/-', label: '+/-', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPlusMinus', 'avgPlusMinus') },
-    { key: 'OPP 3PM', label: 'OPP 3PM', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOpp3PM', 'avgOpp3PM') },
+    { key: 'OPP PTS', label: 'OPP PTS', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppPoints', 'avgOppPoints') },
     { key: 'OPP FGM', label: 'OPP FGM', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppFGM', 'avgOppFGM') },
     { key: 'OPP FGA', label: 'OPP FGA', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppFGA', 'avgOppFGA') },
-    { key: 'OPP PTS', label: 'OPP PTS', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppPoints', 'avgOppPoints') },
+    { key: 'OPP 3PM', label: 'OPP 3PM', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOpp3PM', 'avgOpp3PM') },
     { key: 'OPP TO', label: 'OPP TO', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppTurnovers', 'avgOppTurnovers') },
   ],
 };
@@ -284,15 +279,10 @@ const TEAM_STAT_LEGENDS: Record<string, string[]> = {
     '2PM = 2-Pointers Made'
   ],
   Misc: [
-    'TIES = Times Scores Were Tied',
-    'LEAD CHG = Lead Changes',
-    'TIME LEADING = Time Spent Leading (minutes)',
-    'BIG RUN = Biggest Scoring Run',
-    '+/- = Plus/Minus',
-    'OPP 3PM = Opponent 3-Pointers Made',
+    'OPP PTS = Opponent Points',
     'OPP FGM = Opponent Field Goals Made',
     'OPP FGA = Opponent Field Goals Attempted',
-    'OPP PTS = Opponent Points',
+    'OPP 3PM = Opponent 3-Pointers Made',
     'OPP TO = Opponent Turnovers'
   ]
 };
