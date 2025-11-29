@@ -107,11 +107,29 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
       try {
         console.log("🎮 Fetching game details for gameId:", gameId);
         
-        // First get team information from team_stats
-        const { data: teamStatsData, error: teamError } = await supabase
-          .from("team_stats")
-          .select("*")
-          .eq("numeric_id", gameId);
+        // Determine if gameId is numeric_id or game_key based on format
+        const isGameKey = /^[A-Z0-9]{12,}$/.test(gameId); // game_key format check
+        
+        let teamStatsData = null;
+        let teamError = null;
+        
+        if (isGameKey) {
+          // Query by game_key (from team_stats)
+          const result = await supabase
+            .from("team_stats")
+            .select("*")
+            .eq("game_key", gameId);
+          teamStatsData = result.data;
+          teamError = result.error;
+        } else {
+          // Query by numeric_id (legacy format)
+          const result = await supabase
+            .from("team_stats")
+            .select("*")
+            .eq("numeric_id", gameId);
+          teamStatsData = result.data;
+          teamError = result.error;
+        }
           
         console.log("🏀 Team stats query result:", { teamError, teamStatsData, count: teamStatsData?.length });
 
@@ -138,11 +156,17 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
         }
         
         // Then get player stats with full names from players table
-        const { data: stats, error } = await supabase
+        let statsQuery = supabase
           .from("player_stats")
-          .select("*, players:player_id(full_name)")
-          .eq("numeric_id", gameId)
-          .order("spoints", { ascending: false });
+          .select("*, players:player_id(full_name)");
+        
+        if (isGameKey) {
+          statsQuery = statsQuery.eq("game_key", gameId);
+        } else {
+          statsQuery = statsQuery.eq("numeric_id", gameId);
+        }
+        
+        const { data: stats, error } = await statsQuery.order("spoints", { ascending: false });
 
         console.log("📊 Player stats query result:", { error, stats, count: stats?.length });
 
