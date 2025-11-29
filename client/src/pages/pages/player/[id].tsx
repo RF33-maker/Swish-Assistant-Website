@@ -17,12 +17,16 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 interface PlayerStat {
   id: string;
   player_id: string;
+  game_id?: string;
   name?: string;
   player_name?: string;
   team_name?: string;
   team?: string;
   game_date: string;
   opponent?: string;
+  is_home_player?: boolean;
+  away_team?: string;
+  home_team?: string;
   points?: number;
   rebounds_total?: number;
   assists?: number;
@@ -36,6 +40,10 @@ interface PlayerStat {
   free_throws_attempted?: number;
   minutes_played?: number;
   league_id?: string;
+  user_id?: string;
+  firstname?: string;
+  familyname?: string;
+  full_name?: string;
   spoints?: number;
   sreboundstotal?: number;
   sassists?: number;
@@ -47,6 +55,8 @@ interface PlayerStat {
   sthreepointersattempted?: number;
   sfreethrowsmade?: number;
   sfreethrowsattempted?: number;
+  sminutes?: string;
+  created_at?: string;
   players?: {
     full_name?: string;
     league_id?: string;
@@ -265,92 +275,40 @@ export default function PlayerStatsPage() {
 
         console.log('✅ Step 3: Setting player stats and info...');
         
-        // Fetch opponent data and leagues in parallel
+        // Fetch leagues
         let statsWithOpponents = stats || [];
         if (stats && stats.length > 0) {
-          const gameIds = Array.from(new Set(stats.map(stat => stat.game_id).filter(Boolean)));
           const userId = stats[0].user_id;
           
-          // Run team stats and leagues queries in parallel
-          const [teamStatsResult, leaguesResult] = await Promise.all([
-            gameIds.length > 0 
-              ? supabase.from('team_stats').select('game_id, team_name').in('game_id', gameIds)
-              : Promise.resolve({ data: null, error: null }),
-            userId
-              ? supabase.from('leagues').select('name, slug, user_id').eq('user_id', userId).eq('is_public', true)
-              : Promise.resolve({ data: null, error: null })
-          ]);
-          
-          const { data: teamStatsData, error: teamStatsError } = teamStatsResult;
-          const { data: leaguesData, error: leaguesError } = leaguesResult;
-          
-          // Process opponent data
-          if (!teamStatsError && teamStatsData) {
-            console.log('🏀 Team stats fetched:', teamStatsData.length, 'records');
+          // Fetch leagues if we have a user_id
+          if (userId) {
+            const { data: leaguesData, error: leaguesError } = await supabase
+              .from('leagues')
+              .select('name, slug, user_id')
+              .eq('user_id', userId)
+              .eq('is_public', true);
             
-            const gameTeamsMap = new Map<string, string[]>();
-            teamStatsData.forEach(ts => {
-              if (ts.game_id && ts.team_name) {
-                if (!gameTeamsMap.has(ts.game_id)) {
-                  gameTeamsMap.set(ts.game_id, []);
-                }
-                gameTeamsMap.get(ts.game_id)!.push(ts.team_name);
-              }
-            });
-            
-            statsWithOpponents = stats.map(stat => {
-              let derivedOpponent = undefined;
+            if (leaguesData && leaguesData.length > 0) {
+              let actualLeague = leaguesData.find(league => 
+                league.name.toLowerCase().includes('uwe') && 
+                league.name.toLowerCase().includes('d1')
+              );
               
-              if (stat.game_id) {
-                const teamsInGame = gameTeamsMap.get(stat.game_id) || [];
-                
-                if (teamsInGame.length === 2) {
-                  const playerTeamRaw = stat.team_name || stat.team || '';
-                  const playerTeamNorm = playerTeamRaw.trim().toLowerCase();
-                  
-                  const playerTeamInGame = teamsInGame.find(team => 
-                    team.trim().toLowerCase() === playerTeamNorm
-                  );
-                  
-                  if (playerTeamInGame) {
-                    derivedOpponent = teamsInGame.find(team => team !== playerTeamInGame);
-                  }
-                }
+              if (!actualLeague) {
+                actualLeague = leaguesData[0];
               }
               
-              return {
-                ...stat,
-                opponent: derivedOpponent || stat.opponent || 
-                  (stat.is_home_player === true && stat.away_team) ||
-                  (stat.is_home_player === false && stat.home_team) ||
-                  undefined
+              const playerLeague = {
+                id: actualLeague.slug,
+                name: actualLeague.name,
+                slug: actualLeague.slug
               };
-            });
-          }
-          
-          // Process leagues data
-          if (leaguesData && leaguesData.length > 0) {
-            const playerTeam = stats[0].team;
-            
-            let actualLeague = leaguesData.find(league => 
-              league.name.toLowerCase().includes('uwe') && 
-              league.name.toLowerCase().includes('d1')
-            );
-            
-            if (!actualLeague) {
-              actualLeague = leaguesData[0];
+              
+              setPlayerLeagues([playerLeague]);
+              console.log('🏆 Found actual league for player:', playerLeague);
+            } else {
+              setPlayerLeagues([]);
             }
-            
-            const playerLeague = {
-              id: actualLeague.slug,
-              name: actualLeague.name,
-              slug: actualLeague.slug
-            };
-            
-            setPlayerLeagues([playerLeague]);
-            console.log('🏆 Found actual league for player:', playerLeague);
-          } else {
-            setPlayerLeagues([]);
           }
         }
         
@@ -1149,10 +1107,7 @@ export default function PlayerStatsPage() {
                 {/* Mobile Card View */}
                 <div className="md:hidden border-t border-orange-200 dark:border-neutral-700">
                   {filteredStats.map((game, index) => {
-                    const opponentName = game.opponent || 
-                      (game.is_home_player === true && game.away_team) ||
-                      (game.is_home_player === false && game.home_team) ||
-                      'TBD';
+                    const opponentName = (game.opponent && game.opponent.trim()) || 'TBD';
                     
                     return (
                       <div
@@ -1212,10 +1167,7 @@ export default function PlayerStatsPage() {
                     </thead>
                     <tbody>
                       {filteredStats.map((game, index) => {
-                        const opponentName = game.opponent || 
-                          (game.is_home_player === true && game.away_team) ||
-                          (game.is_home_player === false && game.home_team) ||
-                          'TBD';
+                        const opponentName = (game.opponent && game.opponent.trim()) || 'TBD';
 
 
                         return (
