@@ -203,16 +203,20 @@ export default function PlayerStatsPage() {
         rankings.ft_percentage.push(totals.ft_attempted > 0 ? (totals.ft_made / totals.ft_attempted) * 100 : 0);
       });
 
-      // Sort and find ranks
+      // Calculate ranks by counting how many players are ahead
+      const calculateRank = (values: number[], current: number): number => {
+        return values.filter(val => val > current).length + 1;
+      };
+
       const ranks: PlayerRankings = {
-        points: rankings.points.sort((a, b) => b - a).indexOf(currentAverages.avg_points) + 1,
-        rebounds: rankings.rebounds.sort((a, b) => b - a).indexOf(currentAverages.avg_rebounds) + 1,
-        assists: rankings.assists.sort((a, b) => b - a).indexOf(currentAverages.avg_assists) + 1,
-        steals: rankings.steals.sort((a, b) => b - a).indexOf(currentAverages.avg_steals) + 1,
-        blocks: rankings.blocks.sort((a, b) => b - a).indexOf(currentAverages.avg_blocks) + 1,
-        fg_percentage: rankings.fg_percentage.sort((a, b) => b - a).indexOf(currentAverages.fg_percentage) + 1,
-        three_point_percentage: rankings.three_point_percentage.sort((a, b) => b - a).indexOf(currentAverages.three_point_percentage) + 1,
-        ft_percentage: rankings.ft_percentage.sort((a, b) => b - a).indexOf(currentAverages.ft_percentage) + 1
+        points: calculateRank(rankings.points, currentAverages.avg_points),
+        rebounds: calculateRank(rankings.rebounds, currentAverages.avg_rebounds),
+        assists: calculateRank(rankings.assists, currentAverages.avg_assists),
+        steals: calculateRank(rankings.steals, currentAverages.avg_steals),
+        blocks: calculateRank(rankings.blocks, currentAverages.avg_blocks),
+        fg_percentage: calculateRank(rankings.fg_percentage, currentAverages.fg_percentage),
+        three_point_percentage: calculateRank(rankings.three_point_percentage, currentAverages.three_point_percentage),
+        ft_percentage: calculateRank(rankings.ft_percentage, currentAverages.ft_percentage)
       };
 
       return ranks;
