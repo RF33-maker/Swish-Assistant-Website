@@ -447,7 +447,7 @@ export default function LeagueLeadersPage() {
           </div>
           <h2 className="text-xl md:text-2xl font-semibold text-orange-800 dark:text-orange-300">{league?.name}</h2>
           {league?.description && (
-            <p className="text-sm md:text-base text-orange-700 dark:text-orange-400 max-w-2xl mx-auto">{league.description}</p>
+            <p className="text-sm md:text-base text-gray-800 dark:text-white max-w-2xl mx-auto">{league.description}</p>
           )}
           
           {/* Toggle between Averages and Totals */}
