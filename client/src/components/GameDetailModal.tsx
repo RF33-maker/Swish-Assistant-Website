@@ -107,11 +107,29 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
       try {
         console.log("🎮 Fetching game details for gameId:", gameId);
         
-        // First get team information from team_stats
-        const { data: teamStatsData, error: teamError } = await supabase
-          .from("team_stats")
-          .select("*")
-          .eq("numeric_id", gameId);
+        // Determine if gameId is numeric_id or game_key based on format
+        const isGameKey = /^[A-Z0-9]{12,}$/.test(gameId); // game_key format check
+        
+        let teamStatsData = null;
+        let teamError = null;
+        
+        if (isGameKey) {
+          // Query by game_key (from team_stats)
+          const result = await supabase
+            .from("team_stats")
+            .select("*")
+            .eq("game_key", gameId);
+          teamStatsData = result.data;
+          teamError = result.error;
+        } else {
+          // Query by numeric_id (legacy format)
+          const result = await supabase
+            .from("team_stats")
+            .select("*")
+            .eq("numeric_id", gameId);
+          teamStatsData = result.data;
+          teamError = result.error;
+        }
           
         console.log("🏀 Team stats query result:", { teamError, teamStatsData, count: teamStatsData?.length });
 
@@ -138,11 +156,17 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
         }
         
         // Then get player stats with full names from players table
-        const { data: stats, error } = await supabase
+        let statsQuery = supabase
           .from("player_stats")
-          .select("*, players:player_id(full_name)")
-          .eq("numeric_id", gameId)
-          .order("spoints", { ascending: false });
+          .select("*, players:player_id(full_name)");
+        
+        if (isGameKey) {
+          statsQuery = statsQuery.eq("game_key", gameId);
+        } else {
+          statsQuery = statsQuery.eq("numeric_id", gameId);
+        }
+        
+        const { data: stats, error } = await statsQuery.order("spoints", { ascending: false });
 
         console.log("📊 Player stats query result:", { error, stats, count: stats?.length });
 
@@ -504,13 +528,13 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-2 md:p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-full md:max-w-4xl lg:max-w-6xl w-full max-h-[95vh] md:max-h-[90vh] overflow-hidden">
+      <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-2xl max-w-full md:max-w-4xl lg:max-w-6xl w-full max-h-[95vh] md:max-h-[90vh] overflow-hidden">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between p-4 md:p-6 border-b border-gray-200 bg-gradient-to-r from-orange-50 to-orange-100 gap-3 md:gap-0">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between p-4 md:p-6 border-b border-gray-200 dark:border-neutral-700 bg-gradient-to-r from-orange-50 to-orange-100 dark:from-neutral-800 dark:to-neutral-800 gap-3 md:gap-0">
           <div className="flex-1">
-            <h2 className="text-xl md:text-2xl font-bold text-slate-800">Game Details</h2>
+            <h2 className="text-xl md:text-2xl font-bold text-slate-800 dark:text-white">Game Details</h2>
             {gameInfo && (
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mt-2 text-xs md:text-sm text-slate-600">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mt-2 text-xs md:text-sm text-slate-600 dark:text-slate-300">
                 <div className="flex items-center gap-1">
                   <Calendar className="w-3 h-3 md:w-4 md:h-4" />
                   {new Date(gameInfo.date).toLocaleDateString()}
@@ -529,9 +553,9 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
           </div>
           <button
             onClick={onClose}
-            className="absolute top-3 right-3 md:static p-2 hover:bg-orange-200 rounded-full transition-colors"
+            className="absolute top-3 right-3 md:static p-2 hover:bg-orange-200 dark:hover:bg-neutral-700 rounded-full transition-colors"
           >
-            <X className="w-5 h-5 md:w-6 md:h-6 text-slate-600" />
+            <X className="w-5 h-5 md:w-6 md:h-6 text-slate-600 dark:text-slate-300" />
           </button>
         </div>
 
@@ -540,13 +564,13 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
           {loading ? (
             <div className="p-6 md:p-8 text-center">
               <div className="animate-spin rounded-full h-10 w-10 md:h-12 md:w-12 border-b-2 border-orange-500 mx-auto"></div>
-              <p className="mt-4 text-sm md:text-base text-slate-600">Loading game details...</p>
+              <p className="mt-4 text-sm md:text-base text-slate-600 dark:text-slate-400">Loading game details...</p>
             </div>
           ) : (
             <div className="p-4 md:p-6">
               <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                 {/* Mobile-optimized TabsList */}
-                <TabsList className="w-full flex flex-nowrap overflow-x-auto scrollbar-none bg-white border-b border-gray-200 sticky top-0 z-20 rounded-none h-auto p-0 justify-start">
+                <TabsList className="w-full flex flex-nowrap overflow-x-auto scrollbar-none bg-white dark:bg-neutral-900 border-b border-gray-200 dark:border-neutral-700 sticky top-0 z-20 rounded-none h-auto p-0 justify-start">
                   <TabsTrigger 
                     value="summary" 
                     className="flex-shrink-0 px-4 md:px-6 py-3 rounded-none data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-orange-500 data-[state=active]:text-orange-600"
@@ -581,7 +605,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                 <TabsContent value="summary" className="mt-4 space-y-4">
                   {/* Final Score Summary */}
                   {gameInfo && (
-                    <div className="grid grid-cols-2 gap-2 rounded-lg overflow-hidden border border-gray-200">
+                    <div className="grid grid-cols-2 gap-2 rounded-lg overflow-hidden border border-gray-200 dark:border-neutral-700">
                       {/* Team 1 */}
                       <div 
                         className="relative overflow-hidden p-4 md:p-6"
@@ -597,7 +621,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                           </div>
                         )}
                         <div className="relative z-10 text-center">
-                          <div className="text-sm md:text-base lg:text-lg font-semibold text-slate-800 truncate mb-1">
+                          <div className="text-sm md:text-base lg:text-lg font-semibold text-slate-800 dark:text-white truncate mb-1">
                             {gameInfo.teams[0]}
                           </div>
                           <div 
@@ -628,7 +652,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                           </div>
                         )}
                         <div className="relative z-10 text-center">
-                          <div className="text-sm md:text-base lg:text-lg font-semibold text-slate-800 truncate mb-1">
+                          <div className="text-sm md:text-base lg:text-lg font-semibold text-slate-800 dark:text-white truncate mb-1">
                             {gameInfo.teams[1]}
                           </div>
                           <div 
@@ -647,8 +671,8 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                   )}
 
                   {/* Top Performers */}
-                  <div className="bg-white rounded-lg p-4 border border-gray-200">
-                    <h3 className="text-lg font-semibold text-slate-800 mb-3 flex items-center gap-2">
+                  <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-gray-200 dark:border-neutral-700">
+                    <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
                       <Trophy className="w-5 h-5 text-orange-500" />
                       Top Performers
                     </h3>
@@ -684,8 +708,8 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                     {index + 1}
                                   </div>
                                   <div>
-                                    <div className="font-semibold text-slate-800">{player.firstname} {player.familyname}</div>
-                                    <div className="text-xs text-slate-600 font-medium">{player.team}</div>
+                                    <div className="font-semibold text-slate-800 dark:text-white">{player.firstname} {player.familyname}</div>
+                                    <div className="text-xs text-slate-600 dark:text-slate-400 font-medium">{player.team}</div>
                                   </div>
                                 </div>
                                 <div className="flex gap-3 text-sm">
@@ -700,7 +724,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                     >
                                       {player.spoints ?? 0}
                                     </div>
-                                    <div className="text-xs text-slate-500">PTS</div>
+                                    <div className="text-xs text-slate-500 dark:text-slate-400">PTS</div>
                                   </div>
                                   <div className="text-center">
                                     <div 
@@ -713,7 +737,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                     >
                                       {player.sreboundstotal ?? 0}
                                     </div>
-                                    <div className="text-xs text-slate-500">REB</div>
+                                    <div className="text-xs text-slate-500 dark:text-slate-400">REB</div>
                                   </div>
                                   <div className="text-center">
                                     <div 
@@ -726,7 +750,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                     >
                                       {player.sassists ?? 0}
                                     </div>
-                                    <div className="text-xs text-slate-500">AST</div>
+                                    <div className="text-xs text-slate-500 dark:text-slate-400">AST</div>
                                   </div>
                                   <div className="text-center">
                                     <div 
@@ -739,7 +763,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                     >
                                       {fgPercentage}%
                                     </div>
-                                    <div className="text-xs text-slate-500">FG%</div>
+                                    <div className="text-xs text-slate-500 dark:text-slate-400">FG%</div>
                                   </div>
                                 </div>
                               </div>
@@ -751,21 +775,21 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
 
                   {/* Team Stats Comparison */}
                   {teamStats && teamStats.length === 2 && (
-                    <div className="bg-white rounded-lg p-4 border border-gray-200">
-                      <h3 className="text-lg font-semibold text-slate-800 mb-3">Team Stats Comparison</h3>
+                    <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-gray-200 dark:border-neutral-700">
+                      <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-3">Team Stats Comparison</h3>
                       <div className="space-y-3">
                         {/* FG% */}
                         <div>
                           <div className="flex justify-between items-center mb-1">
-                            <span className="text-sm font-medium text-slate-600">{teamStats[0].name}</span>
-                            <span className="text-xs text-slate-500">FG%</span>
-                            <span className="text-sm font-medium text-slate-600">{teamStats[1].name}</span>
+                            <span className="text-sm font-medium text-slate-600 dark:text-slate-300">{teamStats[0].name}</span>
+                            <span className="text-xs text-slate-500 dark:text-slate-400">FG%</span>
+                            <span className="text-sm font-medium text-slate-600 dark:text-slate-300">{teamStats[1].name}</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-semibold w-12 text-right" style={{ color: team1Color }}>
                               {teamStats[0].totalFgAttempted > 0 ? ((teamStats[0].totalFgMade / teamStats[0].totalFgAttempted) * 100).toFixed(1) : 0}%
                             </span>
-                            <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                            <div className="flex-1 h-2 bg-gray-200 dark:bg-neutral-700 rounded-full overflow-hidden">
                               <div 
                                 className="h-full"
                                 style={{ 
@@ -774,7 +798,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                 }}
                               />
                             </div>
-                            <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                            <div className="flex-1 h-2 bg-gray-200 dark:bg-neutral-700 rounded-full overflow-hidden">
                               <div 
                                 className="h-full float-right"
                                 style={{ 
@@ -792,15 +816,15 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                         {/* 3P% */}
                         <div>
                           <div className="flex justify-between items-center mb-1">
-                            <span className="text-sm font-medium text-slate-600">{teamStats[0].name}</span>
-                            <span className="text-xs text-slate-500">3P%</span>
-                            <span className="text-sm font-medium text-slate-600">{teamStats[1].name}</span>
+                            <span className="text-sm font-medium text-slate-600 dark:text-slate-300">{teamStats[0].name}</span>
+                            <span className="text-xs text-slate-500 dark:text-slate-400">3P%</span>
+                            <span className="text-sm font-medium text-slate-600 dark:text-slate-300">{teamStats[1].name}</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-semibold w-12 text-right" style={{ color: team1Color }}>
                               {teamStats[0].totalThreeAttempted > 0 ? ((teamStats[0].totalThreeMade / teamStats[0].totalThreeAttempted) * 100).toFixed(1) : 0}%
                             </span>
-                            <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                            <div className="flex-1 h-2 bg-gray-200 dark:bg-neutral-700 rounded-full overflow-hidden">
                               <div 
                                 className="h-full"
                                 style={{ 
@@ -809,7 +833,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                 }}
                               />
                             </div>
-                            <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                            <div className="flex-1 h-2 bg-gray-200 dark:bg-neutral-700 rounded-full overflow-hidden">
                               <div 
                                 className="h-full float-right"
                                 style={{ 
@@ -827,15 +851,15 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                         {/* FT% */}
                         <div>
                           <div className="flex justify-between items-center mb-1">
-                            <span className="text-sm font-medium text-slate-600">{teamStats[0].name}</span>
-                            <span className="text-xs text-slate-500">FT%</span>
-                            <span className="text-sm font-medium text-slate-600">{teamStats[1].name}</span>
+                            <span className="text-sm font-medium text-slate-600 dark:text-slate-300">{teamStats[0].name}</span>
+                            <span className="text-xs text-slate-500 dark:text-slate-400">FT%</span>
+                            <span className="text-sm font-medium text-slate-600 dark:text-slate-300">{teamStats[1].name}</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-semibold w-12 text-right" style={{ color: team1Color }}>
                               {teamStats[0].totalFtAttempted > 0 ? ((teamStats[0].totalFtMade / teamStats[0].totalFtAttempted) * 100).toFixed(1) : 0}%
                             </span>
-                            <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                            <div className="flex-1 h-2 bg-gray-200 dark:bg-neutral-700 rounded-full overflow-hidden">
                               <div 
                                 className="h-full"
                                 style={{ 
@@ -844,7 +868,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                 }}
                               />
                             </div>
-                            <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                            <div className="flex-1 h-2 bg-gray-200 dark:bg-neutral-700 rounded-full overflow-hidden">
                               <div 
                                 className="h-full float-right"
                                 style={{ 
@@ -862,13 +886,13 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                         {/* Rebounds */}
                         <div>
                           <div className="flex justify-between items-center mb-1">
-                            <span className="text-sm font-medium text-slate-600">{teamStats[0].name}</span>
-                            <span className="text-xs text-slate-500">Rebounds</span>
-                            <span className="text-sm font-medium text-slate-600">{teamStats[1].name}</span>
+                            <span className="text-sm font-medium text-slate-600 dark:text-slate-300">{teamStats[0].name}</span>
+                            <span className="text-xs text-slate-500 dark:text-slate-400">Rebounds</span>
+                            <span className="text-sm font-medium text-slate-600 dark:text-slate-300">{teamStats[1].name}</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-semibold w-12 text-right" style={{ color: team1Color }}>{teamStats[0].totalRebounds}</span>
-                            <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                            <div className="flex-1 h-2 bg-gray-200 dark:bg-neutral-700 rounded-full overflow-hidden">
                               <div 
                                 className="h-full"
                                 style={{ 
@@ -877,7 +901,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                 }}
                               />
                             </div>
-                            <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                            <div className="flex-1 h-2 bg-gray-200 dark:bg-neutral-700 rounded-full overflow-hidden">
                               <div 
                                 className="h-full float-right"
                                 style={{ 
@@ -893,13 +917,13 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                         {/* Assists */}
                         <div>
                           <div className="flex justify-between items-center mb-1">
-                            <span className="text-sm font-medium text-slate-600">{teamStats[0].name}</span>
-                            <span className="text-xs text-slate-500">Assists</span>
-                            <span className="text-sm font-medium text-slate-600">{teamStats[1].name}</span>
+                            <span className="text-sm font-medium text-slate-600 dark:text-slate-300">{teamStats[0].name}</span>
+                            <span className="text-xs text-slate-500 dark:text-slate-400">Assists</span>
+                            <span className="text-sm font-medium text-slate-600 dark:text-slate-300">{teamStats[1].name}</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-semibold w-12 text-right" style={{ color: team1Color }}>{teamStats[0].totalAssists}</span>
-                            <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                            <div className="flex-1 h-2 bg-gray-200 dark:bg-neutral-700 rounded-full overflow-hidden">
                               <div 
                                 className="h-full"
                                 style={{ 
@@ -908,7 +932,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                 }}
                               />
                             </div>
-                            <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                            <div className="flex-1 h-2 bg-gray-200 dark:bg-neutral-700 rounded-full overflow-hidden">
                               <div 
                                 className="h-full float-right"
                                 style={{ 
@@ -939,7 +963,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                             className={`px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-medium transition-colors whitespace-nowrap ${
                               selectedTeam === team
                                 ? 'text-white shadow-md'
-                                : 'bg-white text-slate-700 hover:opacity-90'
+                                : 'bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 hover:opacity-90'
                             }`}
                             style={selectedTeam === team ? (teamColor ? {
                               backgroundColor: teamColor.primary,
@@ -988,7 +1012,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                         }}
                       >
                         <div className="flex-1 min-w-0">
-                          <h3 className="text-base md:text-xl font-bold text-slate-800 truncate">{selectedTeamStats.name}</h3>
+                          <h3 className="text-base md:text-xl font-bold text-slate-800 dark:text-white truncate">{selectedTeamStats.name}</h3>
                         </div>
                         <div 
                           className="text-2xl md:text-3xl font-bold shrink-0"
@@ -1006,53 +1030,53 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                       <div className="overflow-x-auto">
                         <div className="flex md:grid md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4 p-3 md:p-4 min-w-max md:min-w-0">
                           <div className="min-w-[140px] md:min-w-0">
-                            <div className="text-slate-800 font-medium text-xs md:text-sm">Field Goals</div>
-                            <div className="font-semibold text-slate-900 text-sm md:text-base">
+                            <div className="text-slate-800 dark:text-slate-200 font-medium text-xs md:text-sm">Field Goals</div>
+                            <div className="font-semibold text-slate-900 dark:text-white text-sm md:text-base">
                               {selectedTeamStats.totalFgMade}/{selectedTeamStats.totalFgAttempted} 
                               {selectedTeamStats.totalFgAttempted > 0 && (
-                                <span className="text-slate-700 ml-1 text-xs">
+                                <span className="text-slate-700 dark:text-slate-400 ml-1 text-xs">
                                   ({((selectedTeamStats.totalFgMade / selectedTeamStats.totalFgAttempted) * 100).toFixed(1)}%)
                                 </span>
                               )}
                             </div>
                           </div>
                           <div className="min-w-[140px] md:min-w-0">
-                            <div className="text-slate-800 font-medium text-xs md:text-sm">3-Pointers</div>
-                            <div className="font-semibold text-slate-900 text-sm md:text-base">
+                            <div className="text-slate-800 dark:text-slate-200 font-medium text-xs md:text-sm">3-Pointers</div>
+                            <div className="font-semibold text-slate-900 dark:text-white text-sm md:text-base">
                               {selectedTeamStats.totalThreeMade}/{selectedTeamStats.totalThreeAttempted}
                               {selectedTeamStats.totalThreeAttempted > 0 && (
-                                <span className="text-slate-700 ml-1 text-xs">
+                                <span className="text-slate-700 dark:text-slate-400 ml-1 text-xs">
                                   ({((selectedTeamStats.totalThreeMade / selectedTeamStats.totalThreeAttempted) * 100).toFixed(1)}%)
                                 </span>
                               )}
                             </div>
                           </div>
                           <div className="min-w-[140px] md:min-w-0">
-                            <div className="text-slate-800 font-medium text-xs md:text-sm">Free Throws</div>
-                            <div className="font-semibold text-slate-900 text-sm md:text-base">
+                            <div className="text-slate-800 dark:text-slate-200 font-medium text-xs md:text-sm">Free Throws</div>
+                            <div className="font-semibold text-slate-900 dark:text-white text-sm md:text-base">
                               {selectedTeamStats.totalFtMade}/{selectedTeamStats.totalFtAttempted}
                               {selectedTeamStats.totalFtAttempted > 0 && (
-                                <span className="text-slate-700 ml-1 text-xs">
+                                <span className="text-slate-700 dark:text-slate-400 ml-1 text-xs">
                                   ({((selectedTeamStats.totalFtMade / selectedTeamStats.totalFtAttempted) * 100).toFixed(1)}%)
                                 </span>
                               )}
                             </div>
                           </div>
                           <div className="min-w-[100px] md:min-w-0">
-                            <div className="text-slate-800 font-medium text-xs md:text-sm">Rebounds</div>
-                            <div className="font-semibold text-slate-900 text-sm md:text-base">{selectedTeamStats.totalRebounds}</div>
+                            <div className="text-slate-800 dark:text-slate-200 font-medium text-xs md:text-sm">Rebounds</div>
+                            <div className="font-semibold text-slate-900 dark:text-white text-sm md:text-base">{selectedTeamStats.totalRebounds}</div>
                           </div>
                           <div className="min-w-[100px] md:min-w-0">
-                            <div className="text-slate-800 font-medium text-xs md:text-sm">Assists</div>
-                            <div className="font-semibold text-slate-900 text-sm md:text-base">{selectedTeamStats.totalAssists}</div>
+                            <div className="text-slate-800 dark:text-slate-200 font-medium text-xs md:text-sm">Assists</div>
+                            <div className="font-semibold text-slate-900 dark:text-white text-sm md:text-base">{selectedTeamStats.totalAssists}</div>
                           </div>
                           <div className="min-w-[100px] md:min-w-0">
-                            <div className="text-slate-800 font-medium text-xs md:text-sm">Steals</div>
-                            <div className="font-semibold text-slate-900 text-sm md:text-base">{selectedTeamStats.totalSteals}</div>
+                            <div className="text-slate-800 dark:text-slate-200 font-medium text-xs md:text-sm">Steals</div>
+                            <div className="font-semibold text-slate-900 dark:text-white text-sm md:text-base">{selectedTeamStats.totalSteals}</div>
                           </div>
                           <div className="min-w-[100px] md:min-w-0">
-                            <div className="text-slate-800 font-medium text-xs md:text-sm">Blocks</div>
-                            <div className="font-semibold text-slate-900 text-sm md:text-base">{selectedTeamStats.totalBlocks}</div>
+                            <div className="text-slate-800 dark:text-slate-200 font-medium text-xs md:text-sm">Blocks</div>
+                            <div className="font-semibold text-slate-900 dark:text-white text-sm md:text-base">{selectedTeamStats.totalBlocks}</div>
                           </div>
                         </div>
                       </div>
@@ -1060,29 +1084,29 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                   )}
 
                   {/* Box Score Table for Selected Team */}
-                  <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                    <div className="p-3 md:p-4 bg-gray-50 border-b border-gray-200">
-                      <h3 className="text-sm md:text-lg font-semibold text-slate-800 flex items-center gap-2">
+                  <div className="bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg overflow-hidden">
+                    <div className="p-3 md:p-4 bg-gray-50 dark:bg-neutral-700 border-b border-gray-200 dark:border-neutral-600">
+                      <h3 className="text-sm md:text-lg font-semibold text-slate-800 dark:text-white flex items-center gap-2">
                         <Users className="w-4 h-4 md:w-5 md:h-5" />
                         {selectedTeam} Box Score
                       </h3>
                     </div>
                     <div className="overflow-x-auto -mx-4 md:mx-0">
                       <table className="w-full text-xs md:text-sm min-w-[800px]">
-                        <thead className="bg-gray-50 border-b border-gray-200">
+                        <thead className="bg-gray-50 dark:bg-neutral-700 border-b border-gray-200 dark:border-neutral-600">
                           <tr>
-                            <th className="text-left py-1.5 md:p-3 font-medium text-slate-700 sticky left-4 md:left-0 bg-gray-50 z-10 w-8 md:w-16 pl-2 pr-1">Player</th>
-                            <th className="text-center py-1.5 md:p-3 font-medium text-slate-700 pl-1 pr-1.5">MIN</th>
-                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700">PTS</th>
-                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700">FG</th>
-                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700">3P</th>
-                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700">FT</th>
-                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700">REB</th>
-                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700">AST</th>
-                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700">STL</th>
-                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700">BLK</th>
-                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700">TO</th>
-                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700">+/-</th>
+                            <th className="text-left py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200 sticky left-4 md:left-0 bg-gray-50 dark:bg-neutral-700 z-10 w-8 md:w-16 pl-2 pr-1">Player</th>
+                            <th className="text-center py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200 pl-1 pr-1.5">MIN</th>
+                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">PTS</th>
+                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">FG</th>
+                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">3P</th>
+                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">FT</th>
+                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">REB</th>
+                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">AST</th>
+                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">STL</th>
+                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">BLK</th>
+                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">TO</th>
+                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">+/-</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1116,63 +1140,63 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                             >
                               <td className="py-1.5 md:p-3 sticky left-4 md:left-0 bg-inherit z-10 w-28 md:w-32 pl-2 pr-1">
                                 <div className="max-w-none whitespace-normal">
-                                  <div className="font-medium text-slate-800">{player.firstname} {player.familyname}</div>
+                                  <div className="font-medium text-slate-800 dark:text-white">{player.firstname} {player.familyname}</div>
                                   {player.number && (
-                                    <div className="text-xs text-slate-500">#{player.number}</div>
+                                    <div className="text-xs text-slate-500 dark:text-slate-400">#{player.number}</div>
                                   )}
                                 </div>
                               </td>
-                              <td className="py-1.5 md:p-3 text-center text-slate-800 pl-1 pr-1.5">
+                              <td className="py-1.5 md:p-3 text-center text-slate-800 dark:text-slate-200 pl-1 pr-1.5">
                                 {player.sminutes ? (
                                   <div className="flex items-center justify-center gap-1">
                                     <Clock className="w-3 h-3 text-slate-400" />
-                                    <span className="text-slate-800">{player.sminutes}</span>
+                                    <span className="text-slate-800 dark:text-slate-200">{player.sminutes}</span>
                                   </div>
                                 ) : <span className="text-slate-400">-</span>}
                               </td>
-                              <td className="px-1.5 py-1.5 md:p-3 text-center font-semibold text-orange-600">{player.spoints}</td>
-                              <td className="px-1.5 py-1.5 md:p-3 text-center text-slate-800">
+                              <td className="px-1.5 py-1.5 md:p-3 text-center font-semibold text-orange-600 dark:text-orange-400">{player.spoints}</td>
+                              <td className="px-1.5 py-1.5 md:p-3 text-center text-slate-800 dark:text-slate-200">
                                 {player.sfieldgoalsmade !== undefined && player.sfieldgoalsattempted !== undefined ? (
                                   <div>
                                     <div className="font-medium">{player.sfieldgoalsmade}/{player.sfieldgoalsattempted}</div>
                                     {player.sfieldgoalspercentage && (
-                                      <div className="text-xs text-slate-500">{player.sfieldgoalspercentage}%</div>
+                                      <div className="text-xs text-slate-500 dark:text-slate-400">{player.sfieldgoalspercentage}%</div>
                                     )}
                                   </div>
                                 ) : <span className="text-slate-400">-</span>}
                               </td>
-                              <td className="px-1.5 py-1.5 md:p-3 text-center text-slate-800">
+                              <td className="px-1.5 py-1.5 md:p-3 text-center text-slate-800 dark:text-slate-200">
                                 {player.sthreepointersmade !== undefined && player.sthreepointersattempted !== undefined ? (
                                   <div>
                                     <div className="font-medium">{player.sthreepointersmade}/{player.sthreepointersattempted}</div>
                                     {player.sthreepointerspercentage && (
-                                      <div className="text-xs text-slate-500">{player.sthreepointerspercentage}%</div>
+                                      <div className="text-xs text-slate-500 dark:text-slate-400">{player.sthreepointerspercentage}%</div>
                                     )}
                                   </div>
                                 ) : <span className="text-slate-400">-</span>}
                               </td>
-                              <td className="px-1.5 py-1.5 md:p-3 text-center text-slate-800">
+                              <td className="px-1.5 py-1.5 md:p-3 text-center text-slate-800 dark:text-slate-200">
                                 {player.sfreethrowsmade !== undefined && player.sfreethrowsattempted !== undefined ? (
                                   <div>
                                     <div className="font-medium">{player.sfreethrowsmade}/{player.sfreethrowsattempted}</div>
                                     {player.sfreethrowspercentage && (
-                                      <div className="text-xs text-slate-500">{player.sfreethrowspercentage}%</div>
+                                      <div className="text-xs text-slate-500 dark:text-slate-400">{player.sfreethrowspercentage}%</div>
                                     )}
                                   </div>
                                 ) : <span className="text-slate-400">-</span>}
                               </td>
-                              <td className="px-1.5 py-1.5 md:p-3 text-center text-slate-800">
+                              <td className="px-1.5 py-1.5 md:p-3 text-center text-slate-800 dark:text-slate-200">
                                 <div className="font-medium">{player.sreboundstotal}</div>
                                 {(player.rebounds_o || player.rebounds_d) && (
-                                  <div className="text-xs text-slate-500">
+                                  <div className="text-xs text-slate-500 dark:text-slate-400">
                                     {player.rebounds_o || 0}O {player.rebounds_d || 0}D
                                   </div>
                                 )}
                               </td>
-                              <td className="px-1.5 py-1.5 md:p-3 text-center font-medium text-slate-800">{player.sassists}</td>
-                              <td className="px-1.5 py-1.5 md:p-3 text-center font-medium text-slate-800">{player.ssteals || 0}</td>
-                              <td className="px-1.5 py-1.5 md:p-3 text-center font-medium text-slate-800">{player.sblocks || 0}</td>
-                              <td className="px-1.5 py-1.5 md:p-3 text-center font-medium text-red-600">{player.sturnovers || 0}</td>
+                              <td className="px-1.5 py-1.5 md:p-3 text-center font-medium text-slate-800 dark:text-slate-200">{player.sassists}</td>
+                              <td className="px-1.5 py-1.5 md:p-3 text-center font-medium text-slate-800 dark:text-slate-200">{player.ssteals || 0}</td>
+                              <td className="px-1.5 py-1.5 md:p-3 text-center font-medium text-slate-800 dark:text-slate-200">{player.sblocks || 0}</td>
+                              <td className="px-1.5 py-1.5 md:p-3 text-center font-medium text-red-600 dark:text-red-400">{player.sturnovers || 0}</td>
                               <td className="px-1.5 py-1.5 md:p-3 text-center">
                                 {player.splusminuspoints !== undefined && player.splusminuspoints !== null ? (
                                   <span className={`font-medium ${player.splusminuspoints >= 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -1187,15 +1211,15 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                         
                         {/* Team Totals Row */}
                         {selectedTeamStats && (
-                          <tfoot className="bg-orange-50 border-t-2 border-orange-200">
-                            <tr className="font-semibold text-slate-800">
-                              <td className="py-1.5 md:p-3 sticky left-4 md:left-0 bg-orange-50 z-10 w-48 md:w-52 pl-2 pr-1">TEAM TOTALS</td>
+                          <tfoot className="bg-orange-50 dark:bg-neutral-700 border-t-2 border-orange-200 dark:border-neutral-600">
+                            <tr className="font-semibold text-slate-800 dark:text-white">
+                              <td className="py-1.5 md:p-3 sticky left-4 md:left-0 bg-orange-50 dark:bg-neutral-700 z-10 w-48 md:w-52 pl-2 pr-1">TEAM TOTALS</td>
                               <td className="py-1.5 md:p-3 text-center pl-1 pr-1.5">-</td>
-                              <td className="px-1.5 py-1.5 md:p-3 text-center text-orange-600">{selectedTeamStats.score}</td>
+                              <td className="px-1.5 py-1.5 md:p-3 text-center text-orange-600 dark:text-orange-400">{selectedTeamStats.score}</td>
                               <td className="px-1.5 py-1.5 md:p-3 text-center">
                                 {selectedTeamStats.totalFgMade}/{selectedTeamStats.totalFgAttempted}
                                 {selectedTeamStats.totalFgAttempted > 0 && (
-                                  <div className="text-xs text-slate-500">
+                                  <div className="text-xs text-slate-500 dark:text-slate-400">
                                     {((selectedTeamStats.totalFgMade / selectedTeamStats.totalFgAttempted) * 100).toFixed(1)}%
                                   </div>
                                 )}
@@ -1203,7 +1227,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                               <td className="px-1.5 py-1.5 md:p-3 text-center">
                                 {selectedTeamStats.totalThreeMade}/{selectedTeamStats.totalThreeAttempted}
                                 {selectedTeamStats.totalThreeAttempted > 0 && (
-                                  <div className="text-xs text-slate-500">
+                                  <div className="text-xs text-slate-500 dark:text-slate-400">
                                     {((selectedTeamStats.totalThreeMade / selectedTeamStats.totalThreeAttempted) * 100).toFixed(1)}%
                                   </div>
                                 )}
@@ -1224,60 +1248,60 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
 
                   {/* Team Insights */}
                   {selectedTeamPlayers.length > 0 && (
-                    <div className="bg-gradient-to-r from-orange-50 to-yellow-50 rounded-lg p-4 border border-orange-200">
-                      <h3 className="text-lg font-semibold text-slate-800 mb-3 flex items-center gap-2">
+                    <div className="bg-gradient-to-r from-orange-50 to-yellow-50 dark:from-neutral-800 dark:to-neutral-800 rounded-lg p-4 border border-orange-200 dark:border-neutral-700">
+                      <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
                         <TrendingUp className="w-5 h-5 text-orange-500" />
                         {selectedTeam} Game Highlights
                       </h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
-                        <div className="bg-white rounded-md p-3">
-                          <div className="text-orange-600 font-medium">Top Scorer</div>
-                          <div className="text-slate-800">
+                        <div className="bg-white dark:bg-neutral-700 rounded-md p-3">
+                          <div className="text-orange-600 dark:text-orange-400 font-medium">Top Scorer</div>
+                          <div className="text-slate-800 dark:text-white">
                             {selectedTeamPlayers.sort((a, b) => (b.spoints || 0) - (a.spoints || 0))[0]?.firstname} {selectedTeamPlayers.sort((a, b) => (b.spoints || 0) - (a.spoints || 0))[0]?.familyname}
                           </div>
-                          <div className="text-orange-600 font-bold">
+                          <div className="text-orange-600 dark:text-orange-400 font-bold">
                             {selectedTeamPlayers.sort((a, b) => (b.spoints || 0) - (a.spoints || 0))[0]?.spoints} pts
                           </div>
                         </div>
-                        <div className="bg-white rounded-md p-3">
-                          <div className="text-orange-600 font-medium">Best Rebounder</div>
-                          <div className="text-slate-800">
+                        <div className="bg-white dark:bg-neutral-700 rounded-md p-3">
+                          <div className="text-orange-600 dark:text-orange-400 font-medium">Best Rebounder</div>
+                          <div className="text-slate-800 dark:text-white">
                             {selectedTeamPlayers.sort((a, b) => (b.sreboundstotal || 0) - (a.sreboundstotal || 0))[0]?.firstname} {selectedTeamPlayers.sort((a, b) => (b.sreboundstotal || 0) - (a.sreboundstotal || 0))[0]?.familyname}
                           </div>
-                          <div className="text-orange-600 font-bold">
+                          <div className="text-orange-600 dark:text-orange-400 font-bold">
                             {selectedTeamPlayers.sort((a, b) => (b.sreboundstotal || 0) - (a.sreboundstotal || 0))[0]?.sreboundstotal} reb
                           </div>
                         </div>
-                        <div className="bg-white rounded-md p-3">
-                          <div className="text-orange-600 font-medium">Best Playmaker</div>
-                          <div className="text-slate-800">
+                        <div className="bg-white dark:bg-neutral-700 rounded-md p-3">
+                          <div className="text-orange-600 dark:text-orange-400 font-medium">Best Playmaker</div>
+                          <div className="text-slate-800 dark:text-white">
                             {selectedTeamPlayers.sort((a, b) => (b.sassists || 0) - (a.sassists || 0))[0]?.firstname} {selectedTeamPlayers.sort((a, b) => (b.sassists || 0) - (a.sassists || 0))[0]?.familyname}
                           </div>
-                          <div className="text-orange-600 font-bold">
+                          <div className="text-orange-600 dark:text-orange-400 font-bold">
                             {selectedTeamPlayers.sort((a, b) => (b.sassists || 0) - (a.sassists || 0))[0]?.sassists} ast
                           </div>
                         </div>
-                        <div className="bg-white rounded-md p-3">
-                          <div className="text-orange-600 font-medium">Most Steals</div>
-                          <div className="text-slate-800">
+                        <div className="bg-white dark:bg-neutral-700 rounded-md p-3">
+                          <div className="text-orange-600 dark:text-orange-400 font-medium">Most Steals</div>
+                          <div className="text-slate-800 dark:text-white">
                             {selectedTeamPlayers.sort((a, b) => (b.ssteals || 0) - (a.ssteals || 0))[0]?.firstname} {selectedTeamPlayers.sort((a, b) => (b.ssteals || 0) - (a.ssteals || 0))[0]?.familyname}
                           </div>
-                          <div className="text-orange-600 font-bold">
+                          <div className="text-orange-600 dark:text-orange-400 font-bold">
                             {selectedTeamPlayers.sort((a, b) => (b.ssteals || 0) - (a.ssteals || 0))[0]?.ssteals || 0} stl
                           </div>
                         </div>
-                        <div className="bg-white rounded-md p-3">
-                          <div className="text-orange-600 font-medium">Most Blocks</div>
-                          <div className="text-slate-800">
+                        <div className="bg-white dark:bg-neutral-700 rounded-md p-3">
+                          <div className="text-orange-600 dark:text-orange-400 font-medium">Most Blocks</div>
+                          <div className="text-slate-800 dark:text-white">
                             {selectedTeamPlayers.sort((a, b) => (b.sblocks || 0) - (a.sblocks || 0))[0]?.firstname} {selectedTeamPlayers.sort((a, b) => (b.sblocks || 0) - (a.sblocks || 0))[0]?.familyname}
                           </div>
-                          <div className="text-orange-600 font-bold">
+                          <div className="text-orange-600 dark:text-orange-400 font-bold">
                             {selectedTeamPlayers.sort((a, b) => (b.sblocks || 0) - (a.sblocks || 0))[0]?.sblocks || 0} blk
                           </div>
                         </div>
-                        <div className="bg-white rounded-md p-3">
-                          <div className="text-orange-600 font-medium">Best FG%</div>
-                          <div className="text-slate-800">
+                        <div className="bg-white dark:bg-neutral-700 rounded-md p-3">
+                          <div className="text-orange-600 dark:text-orange-400 font-medium">Best FG%</div>
+                          <div className="text-slate-800 dark:text-white">
                             {selectedTeamPlayers.filter(p => (p.sfieldgoalsattempted || 0) >= 3).sort((a, b) => {
                               const aFG = (a.sfieldgoalsmade || 0) / (a.sfieldgoalsattempted || 1) * 100;
                               const bFG = (b.sfieldgoalsmade || 0) / (b.sfieldgoalsattempted || 1) * 100;
@@ -1288,7 +1312,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                               return bFG - aFG;
                             })[0]?.familyname}
                           </div>
-                          <div className="text-orange-600 font-bold">
+                          <div className="text-orange-600 dark:text-orange-400 font-bold">
                             {selectedTeamPlayers.filter(p => (p.sfieldgoalsattempted || 0) >= 3).length > 0 ? (((selectedTeamPlayers.filter(p => (p.sfieldgoalsattempted || 0) >= 3).sort((a, b) => {
                               const aFG = (a.sfieldgoalsmade || 0) / (a.sfieldgoalsattempted || 1) * 100;
                               const bFG = (b.sfieldgoalsmade || 0) / (b.sfieldgoalsattempted || 1) * 100;
@@ -1310,18 +1334,18 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                   {eventsLoading ? (
                     <div className="p-8 text-center">
                       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto"></div>
-                      <p className="mt-4 text-slate-600">Loading play-by-play data...</p>
+                      <p className="mt-4 text-slate-600 dark:text-slate-400">Loading play-by-play data...</p>
                     </div>
                   ) : liveEvents.length === 0 ? (
-                    <div className="p-8 text-center bg-gray-50 rounded-lg">
+                    <div className="p-8 text-center bg-gray-50 dark:bg-neutral-800 rounded-lg">
                       <Activity className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                      <p className="text-slate-600">No play-by-play data available for this game.</p>
+                      <p className="text-slate-600 dark:text-slate-400">No play-by-play data available for this game.</p>
                     </div>
                   ) : (
                     <>
                       {/* Quarter Filter */}
                       <div className="flex items-center gap-2 overflow-x-auto pb-2">
-                        <span className="text-sm font-medium text-slate-700 whitespace-nowrap">Filter:</span>
+                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300 whitespace-nowrap">Filter:</span>
                         {['all', 'Q1', 'Q2', 'Q3', 'Q4'].map((quarter) => (
                           <button
                             key={quarter}

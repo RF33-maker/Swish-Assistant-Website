@@ -248,14 +248,14 @@ export function TeamComparison({ leagueId, allTeams }: TeamComparisonProps) {
     const t2Better = lowerIsBetter ? num2 < num1 : num2 > num1;
 
     return (
-      <tr className="border-b border-gray-100">
-        <td className={`py-3 px-4 text-right font-medium ${t1Better ? 'text-orange-600' : t2Better ? 'text-slate-600' : 'text-slate-700'}`}>
+      <tr className="border-b border-gray-100 dark:border-neutral-700">
+        <td className={`py-3 px-4 text-right font-medium ${t1Better ? 'text-orange-600' : t2Better ? 'text-slate-600 dark:text-slate-400' : 'text-slate-700 dark:text-slate-300'}`}>
           {value1}
         </td>
-        <td className="py-3 px-4 text-center font-semibold text-slate-800 bg-gray-50">
+        <td className="py-3 px-4 text-center font-semibold text-slate-800 dark:text-white bg-gray-50 dark:bg-neutral-800">
           {label}
         </td>
-        <td className={`py-3 px-4 text-left font-medium ${t2Better ? 'text-orange-600' : t1Better ? 'text-slate-600' : 'text-slate-700'}`}>
+        <td className={`py-3 px-4 text-left font-medium ${t2Better ? 'text-orange-600' : t1Better ? 'text-slate-600 dark:text-slate-400' : 'text-slate-700 dark:text-slate-300'}`}>
           {value2}
         </td>
       </tr>
@@ -337,22 +337,22 @@ export function TeamComparison({ leagueId, allTeams }: TeamComparisonProps) {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow p-6">
-      <h2 className="text-lg font-semibold text-slate-800 mb-6">Team Comparison</h2>
+    <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-6">
+      <h2 className="text-lg font-semibold text-slate-800 dark:text-white mb-6">Team Comparison</h2>
       
       {/* Category Selector */}
       <div className="mb-6">
-        <label className="block text-sm font-medium text-slate-700 mb-2">
+        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
           Comparison Category
         </label>
         <Select
           value={comparisonCategory}
           onValueChange={(value) => setComparisonCategory(value as typeof comparisonCategory)}
         >
-          <SelectTrigger className="w-full md:w-64 bg-white border-slate-200 text-slate-700 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500">
+          <SelectTrigger className="w-full md:w-64 bg-white dark:bg-neutral-800 border-slate-200 dark:border-neutral-600 text-slate-700 dark:text-slate-200 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500">
             <SelectValue placeholder="Select category" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
             <SelectItem value="Traditional">Traditional</SelectItem>
             <SelectItem value="Advanced">Advanced</SelectItem>
             <SelectItem value="Scoring">Scoring</SelectItem>
@@ -365,7 +365,7 @@ export function TeamComparison({ leagueId, allTeams }: TeamComparisonProps) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
         {/* Team 1 Search */}
         <div className="relative" ref={dropdown1Ref}>
-          <label className="block text-sm font-medium text-slate-700 mb-2">
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
             Team 1
           </label>
           <div className="relative">
@@ -382,22 +382,22 @@ export function TeamComparison({ leagueId, allTeams }: TeamComparisonProps) {
               }}
               onFocus={() => setShowDropdown1(true)}
               placeholder="Search for a team..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-neutral-600 dark:bg-neutral-800 dark:text-white rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
               data-testid="input-team1-search"
             />
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
           </div>
           {showDropdown1 && search1 && filteredTeams1.length > 0 && (
-            <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+            <div className="absolute z-50 w-full mt-1 bg-white dark:bg-neutral-800 border border-gray-300 dark:border-neutral-600 rounded-lg shadow-lg max-h-60 overflow-y-auto">
               {filteredTeams1.map((team, idx) => (
                 <div
                   key={idx}
                   onClick={() => selectTeam1(team)}
-                  className="px-4 py-2 hover:bg-orange-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                  className="px-4 py-2 hover:bg-orange-50 dark:hover:bg-neutral-700 cursor-pointer border-b border-gray-100 dark:border-neutral-700 last:border-b-0"
                   data-testid={`option-team1-${idx}`}
                 >
-                  <div className="font-medium text-slate-800">{team.teamName}</div>
-                  <div className="text-xs text-slate-600">{team.avgPoints} PPG</div>
+                  <div className="font-medium text-slate-800 dark:text-white">{team.teamName}</div>
+                  <div className="text-xs text-slate-600 dark:text-slate-400">{team.avgPoints} PPG</div>
                 </div>
               ))}
             </div>
@@ -406,7 +406,7 @@ export function TeamComparison({ leagueId, allTeams }: TeamComparisonProps) {
         
         {/* Team 2 Search */}
         <div className="relative" ref={dropdown2Ref}>
-          <label className="block text-sm font-medium text-slate-700 mb-2">
+          <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
             Team 2
           </label>
           <div className="relative">
@@ -423,22 +423,22 @@ export function TeamComparison({ leagueId, allTeams }: TeamComparisonProps) {
               }}
               onFocus={() => setShowDropdown2(true)}
               placeholder="Search for a team..."
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-neutral-600 dark:bg-neutral-800 dark:text-white rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
               data-testid="input-team2-search"
             />
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
           </div>
           {showDropdown2 && search2 && filteredTeams2.length > 0 && (
-            <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+            <div className="absolute z-50 w-full mt-1 bg-white dark:bg-neutral-800 border border-gray-300 dark:border-neutral-600 rounded-lg shadow-lg max-h-60 overflow-y-auto">
               {filteredTeams2.map((team, idx) => (
                 <div
                   key={idx}
                   onClick={() => selectTeam2(team)}
-                  className="px-4 py-2 hover:bg-orange-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                  className="px-4 py-2 hover:bg-orange-50 dark:hover:bg-neutral-700 cursor-pointer border-b border-gray-100 dark:border-neutral-700 last:border-b-0"
                   data-testid={`option-team2-${idx}`}
                 >
-                  <div className="font-medium text-slate-800">{team.teamName}</div>
-                  <div className="text-xs text-slate-600">{team.avgPoints} PPG</div>
+                  <div className="font-medium text-slate-800 dark:text-white">{team.teamName}</div>
+                  <div className="text-xs text-slate-600 dark:text-slate-400">{team.avgPoints} PPG</div>
                 </div>
               ))}
             </div>
@@ -450,7 +450,7 @@ export function TeamComparison({ leagueId, allTeams }: TeamComparisonProps) {
       {isLoading ? (
         <div className="text-center py-8">
           <div className="inline-block w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-          <p className="text-sm text-slate-600 mt-2">Loading comparison...</p>
+          <p className="text-sm text-slate-600 dark:text-slate-400 mt-2">Loading comparison...</p>
         </div>
       ) : team1Stats && team2Stats ? (
         <div className="max-w-5xl mx-auto">
@@ -473,8 +473,8 @@ export function TeamComparison({ leagueId, allTeams }: TeamComparisonProps) {
                 />
               </div>
               <div className="text-center">
-                <h3 className="text-base md:text-lg font-bold text-slate-800">{team1Stats.name}</h3>
-                <p className="text-xs text-slate-500 mt-1">{team1Stats.games} games</p>
+                <h3 className="text-base md:text-lg font-bold text-slate-800 dark:text-white">{team1Stats.name}</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{team1Stats.games} games</p>
               </div>
             </div>
 
@@ -500,8 +500,8 @@ export function TeamComparison({ leagueId, allTeams }: TeamComparisonProps) {
                 />
               </div>
               <div className="text-center">
-                <h3 className="text-base md:text-lg font-bold text-slate-800">{team2Stats.name}</h3>
-                <p className="text-xs text-slate-500 mt-1">{team2Stats.games} games</p>
+                <h3 className="text-base md:text-lg font-bold text-slate-800 dark:text-white">{team2Stats.name}</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{team2Stats.games} games</p>
               </div>
             </div>
           </div>
@@ -510,10 +510,10 @@ export function TeamComparison({ leagueId, allTeams }: TeamComparisonProps) {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b-2 border-gray-200">
-                  <th className="py-3 px-4 text-right font-bold text-slate-800">{team1Stats.name}</th>
-                  <th className="py-3 px-4 text-center font-bold text-slate-600">Stat</th>
-                  <th className="py-3 px-4 text-left font-bold text-slate-800">{team2Stats.name}</th>
+                <tr className="border-b-2 border-gray-200 dark:border-neutral-700">
+                  <th className="py-3 px-4 text-right font-bold text-slate-800 dark:text-white">{team1Stats.name}</th>
+                  <th className="py-3 px-4 text-center font-bold text-slate-600 dark:text-slate-300">Stat</th>
+                  <th className="py-3 px-4 text-left font-bold text-slate-800 dark:text-white">{team2Stats.name}</th>
                 </tr>
               </thead>
               <tbody>
@@ -531,16 +531,16 @@ export function TeamComparison({ leagueId, allTeams }: TeamComparisonProps) {
           </div>
 
           {/* Legend */}
-          <div className="mt-8 pt-6 border-t border-gray-200">
-            <div className="text-xs text-slate-500 text-center">
+          <div className="mt-8 pt-6 border-t border-gray-200 dark:border-neutral-700">
+            <div className="text-xs text-slate-500 dark:text-slate-400 text-center">
               <span className="text-orange-600 font-semibold">Orange</span> = Better stat
               <span className="mx-2">•</span>
-              <span className="text-slate-600">Gray</span> = Lower stat
+              <span className="text-slate-600 dark:text-slate-400">Gray</span> = Lower stat
             </div>
           </div>
         </div>
       ) : (
-        <div className="text-center py-8 text-gray-500">
+        <div className="text-center py-8 text-gray-500 dark:text-gray-400">
           <p className="text-sm">Search and select two teams to compare their stats</p>
           {allTeams.length === 0 && (
             <p className="text-xs text-orange-500 mt-2">Loading teams...</p>

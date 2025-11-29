@@ -13,6 +13,7 @@ import ChatbotExample from "@/assets/Chatbotexample.png"
 import { Button } from "@/components/ui/button"
 import { Analytics } from "@vercel/analytics/next"
 import { Search, ChevronDown, BarChart3, Zap, Clock, MessageSquare, Sparkles, TrendingUp, Trophy, FileText } from "lucide-react"
+import { ThemeToggle } from "@/components/ThemeToggle"
 
 function LeagueLogosCarousel() {
   const logos = [Ballpark, NBLBE, BCB, SLB]
@@ -193,20 +194,21 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-white text-slate-900 flex flex-col">
+    <div className="min-h-screen bg-white dark:bg-neutral-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors duration-300">
       {/* Gradient Top Border */}
       <div className="h-[1px] bg-gradient-to-r from-orange-400 to-amber-400"></div>
       
       {/* Header */}
-      <header className="flex justify-between items-center px-6 py-4 bg-gradient-to-b from-[#fffaf5] to-transparent">
+      <header className="flex justify-between items-center px-6 py-4 bg-gradient-to-b from-[#fffaf5] to-transparent dark:from-neutral-950 dark:to-transparent">
         <div className="flex items-center gap-2">
           <img src={SwishLogo} alt="Swish Logo" className="h-8" />
           <span className="font-bold text-xl text-orange-600"></span>
         </div>
-        <nav className="flex items-center gap-6 text-sm font-medium">
+        <nav className="flex items-center gap-4 text-sm font-medium">
+          <ThemeToggle />
           <a 
             href="/auth" 
-            className="text-slate-600 hover:text-orange-600 transition-colors relative group"
+            className="text-slate-600 dark:text-slate-300 hover:text-orange-600 dark:hover:text-orange-400 transition-colors relative group"
             data-testid="login-button"
           >
             Login
@@ -226,12 +228,12 @@ export default function LandingPage() {
       </header>
 
       {/* Hero Section with Gradient Background */}
-      <div className="bg-gradient-to-b from-[#fffaf5] to-white pt-4 md:pt-6 lg:pt-8 pb-12 md:pb-16 lg:pb-20">
+      <div className="bg-gradient-to-b from-[#fffaf5] to-white dark:from-neutral-950 dark:to-neutral-900 pt-4 md:pt-6 lg:pt-8 pb-12 md:pb-16 lg:pb-20">
         <img src={SwishLogo} alt="Swish Logo"
           className="mx-auto w-32 h-32 md:w-40 md:h-40 lg:w-44 lg:h-44 drop-shadow-lg mb-4 md:mb-6 lg:mb-8 animate-fade-in-up"
         />
         <main className="flex flex-col items-center justify-center px-6 text-center">
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-semibold text-slate-900 max-w-3xl leading-tight tracking-tight mb-6 md:mb-8 lg:mb-10 animate-fade-in-up" style={{ animationDelay: '0.2s', opacity: 0, animationFillMode: 'forwards' }}>
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-semibold text-slate-900 dark:text-white max-w-3xl leading-tight tracking-tight mb-6 md:mb-8 lg:mb-10 animate-fade-in-up" style={{ animationDelay: '0.2s', opacity: 0, animationFillMode: 'forwards' }}>
             The Home of Basketball Stats, Advanced Metrics & League Insights
             <br />
             <span className="text-orange-500 font-bold drop-shadow-sm text-2xl sm:text-3xl lg:text-4xl mt-2 inline-block">Search below.</span>
@@ -242,26 +244,26 @@ export default function LandingPage() {
           <div className="search-bar-animated-border transition-all duration-300 focus-within:scale-[1.02] animate-fade-in-up" style={{ animationDelay: '0.6s' }}>
             <form
               onSubmit={handleSubmit}
-              className="flex items-center shadow-lg rounded-full overflow-hidden bg-white relative z-10"
+              className="flex items-center shadow-lg rounded-full overflow-hidden bg-white dark:bg-neutral-900 relative z-10"
             >
-              <Search className="ml-5 h-5 w-5 text-slate-400" />
+              <Search className="ml-5 h-5 w-5 text-slate-400 dark:text-slate-500" />
               <input
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Find your league"
-                className="flex-1 px-4 py-4 text-base text-slate-900 focus:outline-none bg-transparent"
+                className="flex-1 px-4 py-4 text-base text-slate-900 dark:text-white focus:outline-none bg-transparent placeholder:text-slate-400 dark:placeholder:text-slate-500"
               />
             </form>
           </div>
 
           {suggestions.length > 0 && (
-            <ul className="absolute z-50 w-full bg-white border border-orange-200 mt-1 rounded-md shadow-lg max-h-60 overflow-y-auto">
+            <ul className="absolute z-50 w-full bg-white dark:bg-neutral-900 border border-orange-200 dark:border-neutral-700 mt-1 rounded-md shadow-lg max-h-60 overflow-y-auto">
               {suggestions.map((item, index) => (
                 <li
                   key={index}
                   onClick={() => handleSelect(item)}
-                  className="px-5 py-3 cursor-pointer hover:bg-orange-50 text-left border-b border-orange-100 last:border-b-0 transition-colors duration-200"
+                  className="px-5 py-3 cursor-pointer hover:bg-orange-50 dark:hover:bg-neutral-800 text-left border-b border-orange-100 dark:border-neutral-800 last:border-b-0 transition-colors duration-200"
                 >
                   <div className="flex items-center gap-3">
                     {item.type === 'league' ? (
@@ -274,15 +276,15 @@ export default function LandingPage() {
                       </div>
                     )}
                     <div className="flex-1">
-                      <div className="font-medium text-orange-900 text-sm">{item.name}</div>
+                      <div className="font-medium text-orange-900 dark:text-orange-300 text-sm">{item.name}</div>
                       {item.type === 'player' && (
-                        <div className="text-xs text-orange-600">{item.team}</div>
+                        <div className="text-xs text-orange-600 dark:text-orange-400">{item.team}</div>
                       )}
                       {item.type === 'league' && (
-                        <div className="text-xs text-orange-600">League</div>
+                        <div className="text-xs text-orange-600 dark:text-orange-400">League</div>
                       )}
                     </div>
-                    <div className="text-xs text-orange-700 capitalize bg-orange-100 px-2 py-1 rounded-full font-medium">
+                    <div className="text-xs text-orange-700 dark:text-orange-300 capitalize bg-orange-100 dark:bg-orange-900/50 px-2 py-1 rounded-full font-medium">
                       {item.type}
                     </div>
                   </div>
@@ -300,14 +302,14 @@ export default function LandingPage() {
                 <button
                   key={i}
                   onClick={() => handleSelect({ type: 'league', slug: league.slug })}
-                  className="bg-gradient-to-r from-orange-100 to-amber-50 hover:scale-105 hover:shadow-md text-sm text-orange-800 px-5 py-3 rounded-xl text-left transition-all duration-300 flex items-center justify-between gap-3 animate-slide-in-left"
+                  className="bg-gradient-to-r from-orange-100 to-amber-50 dark:from-neutral-800 dark:to-neutral-900 hover:scale-105 hover:shadow-md text-sm text-orange-800 dark:text-orange-300 px-5 py-3 rounded-xl text-left transition-all duration-300 flex items-center justify-between gap-3 animate-slide-in-left"
                   style={{ animationDelay: `${0.8 + i * 0.075}s`, opacity: 0, animationFillMode: 'forwards' }}
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-base">🔥</span>
                     <span className="font-medium">Trending: {league.name}</span>
                   </div>
-                  <span className="text-xs text-orange-600 bg-orange-200/50 px-2 py-0.5 rounded-full whitespace-nowrap">Updated today</span>
+                  <span className="text-xs text-orange-600 dark:text-orange-400 bg-orange-200/50 dark:bg-orange-900/50 px-2 py-0.5 rounded-full whitespace-nowrap">Updated today</span>
                 </button>
               ))
             : [
@@ -319,20 +321,20 @@ export default function LandingPage() {
                 <button
                   key={i}
                   onClick={() => handleSelect({ type: 'league', slug: league.slug })}
-                  className="bg-gradient-to-r from-orange-100 to-amber-50 hover:scale-105 hover:shadow-md text-sm text-orange-800 px-5 py-3 rounded-xl text-left transition-all duration-300 flex items-center justify-between gap-3 animate-slide-in-left"
+                  className="bg-gradient-to-r from-orange-100 to-amber-50 dark:from-neutral-800 dark:to-neutral-900 hover:scale-105 hover:shadow-md text-sm text-orange-800 dark:text-orange-300 px-5 py-3 rounded-xl text-left transition-all duration-300 flex items-center justify-between gap-3 animate-slide-in-left"
                   style={{ animationDelay: `${0.8 + i * 0.075}s`, opacity: 0, animationFillMode: 'forwards' }}
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-base">🔥</span>
                     <span className="font-medium">Trending: {league.name}</span>
                   </div>
-                  <span className="text-xs text-orange-600 bg-orange-200/50 px-2 py-0.5 rounded-full whitespace-nowrap">Updated today</span>
+                  <span className="text-xs text-orange-600 dark:text-orange-400 bg-orange-200/50 dark:bg-orange-900/50 px-2 py-0.5 rounded-full whitespace-nowrap">Updated today</span>
                 </button>
               ))}
         </div>
 
         {/* Tagline */}
-        <p className="mt-6 md:mt-8 text-slate-600 text-sm md:text-base font-medium max-w-2xl mx-auto animate-fade-in-up" style={{ animationDelay: '1.1s', opacity: 0, animationFillMode: 'forwards' }}>
+        <p className="mt-6 md:mt-8 text-slate-600 dark:text-slate-400 text-sm md:text-base font-medium max-w-2xl mx-auto animate-fade-in-up" style={{ animationDelay: '1.1s', opacity: 0, animationFillMode: 'forwards' }}>
           Explore stats, track performance, drive narrative and discover the next MVP.
         </p>
 
@@ -349,7 +351,7 @@ export default function LandingPage() {
               {[...([Ballpark, NBLBE, BCB, SLB]), ...([Ballpark, NBLBE, BCB, SLB]), ...([Ballpark, NBLBE, BCB, SLB])].map((img, i) => (
                 <div 
                   key={i} 
-                  className="flex-shrink-0 flex items-center justify-center bg-white rounded-lg shadow-sm hover:shadow-md p-4 transition-all duration-300 hover:scale-110"
+                  className="flex-shrink-0 flex items-center justify-center bg-white dark:bg-neutral-900 rounded-lg shadow-sm hover:shadow-md p-4 transition-all duration-300 hover:scale-110"
                 >
                   <img
                     src={img}
@@ -371,7 +373,7 @@ export default function LandingPage() {
 
        {/*What is Swish Assistant?*/}
 
-      <section className="py-20 bg-gradient-to-b from-orange-50 to-[#fffaf5]">
+      <section className="py-20 bg-gradient-to-b from-orange-50 to-[#fffaf5] dark:from-neutral-900 dark:to-neutral-900">
         <div className="max-w-6xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 items-center gap-12">
 
           {/* Left: Visual */}
@@ -385,14 +387,14 @@ export default function LandingPage() {
 
           {/* Right: Text Content */}
           <div>
-            <h3 className="text-2xl font-bold text-slate-900 mb-3">
+            <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">
               Find your league and discover all the stats
             </h3>
             <div className="w-16 h-1 bg-orange-500 rounded-full mb-6"></div>
-            <p className="text-slate-700 leading-relaxed mb-6">
+            <p className="text-slate-700 dark:text-slate-300 leading-relaxed mb-6">
               Find the information you need quickly in just a few clicks. Access comprehensive stats and insights with even greater detail than ever before.
             </p>
-            <ul className="text-left text-slate-700 space-y-3">
+            <ul className="text-left text-slate-700 dark:text-slate-300 space-y-3">
               <li className="flex items-start gap-3">
                 <BarChart3 className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
                 <span>Browse all hosted leagues in one place</span>
@@ -411,7 +413,7 @@ export default function LandingPage() {
       </section>
 
       {/* Unified AI Features Section */}
-      <section className="bg-gradient-to-b from-[#fffaf5] to-[#fffaf5] relative overflow-hidden shadow-[inset_0_-20px_40px_-20px_rgba(251,146,60,0.1)]">
+      <section className="bg-gradient-to-b from-[#fffaf5] to-[#fffaf5] dark:from-neutral-900 dark:to-neutral-900 relative overflow-hidden shadow-[inset_0_-20px_40px_-20px_rgba(251,146,60,0.1)] dark:shadow-none">
         
         {/* AI-Powered Chatbot */}
         <div className="py-20">
@@ -420,17 +422,17 @@ export default function LandingPage() {
             {/* Left: Text Content */}
             <div>
               <div className="flex items-center gap-3 mb-6">
-                <h3 ref={chatbotHeadingRef} className="text-2xl font-bold text-slate-900 underline-animate">
+                <h3 ref={chatbotHeadingRef} className="text-2xl font-bold text-slate-900 dark:text-white underline-animate">
                   AI-Powered Chatbot
                 </h3>
                 <span className="bg-orange-500 text-white text-xs font-semibold px-3 py-1 rounded-full hover:scale-110 hover:shadow-[0_0_10px_rgba(255,102,0,0.4)] transition-all duration-300 ease-out">
                   Coming Soon
                 </span>
               </div>
-              <p className="text-slate-700 leading-relaxed mb-6">
+              <p className="text-slate-700 dark:text-slate-300 leading-relaxed mb-6">
                 We're building an AI-powered chatbot to make it super quick and easy to find what you need. Ask questions and get instant answers about players, teams, and stats.
               </p>
-              <ul className="text-left text-slate-700 space-y-3">
+              <ul className="text-left text-slate-700 dark:text-slate-300 space-y-3">
                 <li className="flex items-start gap-3 animate-fade-in-up" style={{ animationDelay: '0.1s', opacity: 0, animationFillMode: 'forwards' }}>
                   <Clock className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
                   <span>Find information in seconds, not minutes</span>
@@ -460,7 +462,7 @@ export default function LandingPage() {
 
         {/* Basketball Court Texture Pattern */}
         <div 
-          className="absolute bottom-0 inset-x-0 h-1/2 opacity-[0.03] pointer-events-none"
+          className="absolute bottom-0 inset-x-0 h-1/2 opacity-[0.03] pointer-events-none dark:opacity-[0.02]"
           style={{
             backgroundImage: `repeating-linear-gradient(
               0deg,
@@ -486,31 +488,31 @@ export default function LandingPage() {
             {/* Left: Text Content */}
             <div>
               <div className="flex items-center gap-3 mb-6">
-                <h3 ref={coachesHeadingRef} className="text-2xl font-bold text-slate-900 underline-animate">
+                <h3 ref={coachesHeadingRef} className="text-2xl font-bold text-slate-900 dark:text-white underline-animate">
                   Coaches Hub
                 </h3>
                 <span className="bg-orange-500 text-white text-xs font-semibold px-3 py-1 rounded-full hover:scale-110 hover:shadow-[0_0_10px_rgba(255,102,0,0.4)] transition-all duration-300 ease-out">
                   Coming Soon
                 </span>
               </div>
-              <p className="text-orange-600 font-medium text-sm mb-4">
+              <p className="text-orange-600 dark:text-orange-400 font-medium text-sm mb-4">
                 Scouting simplified with AI insights.
               </p>
-              <p className="text-gray-600 mb-6">
+              <p className="text-gray-600 dark:text-slate-300 mb-6">
                 A dedicated space for coaches to access detailed insights to help prep for your next game. See team trends, discover top players, and build your scouting reports with ease.
               </p>
-              <ul className="text-left text-gray-600 space-y-3">
+              <ul className="text-left text-gray-600 dark:text-slate-300 space-y-3">
                 <li className="flex items-start gap-3">
                   <TrendingUp className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
-                  <span><strong className="text-slate-900">Detailed insights</strong> on team performance and trends</span>
+                  <span><strong className="text-slate-900 dark:text-white">Detailed insights</strong> on team performance and trends</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <Trophy className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
-                  <span>Quickly identify <strong className="text-slate-900">top players</strong> and key matchups</span>
+                  <span>Quickly identify <strong className="text-slate-900 dark:text-white">top players</strong> and key matchups</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <FileText className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
-                  <span><strong className="text-slate-900">Build comprehensive</strong> scouting reports effortlessly</span>
+                  <span><strong className="text-slate-900 dark:text-white">Build comprehensive</strong> scouting reports effortlessly</span>
                 </li>
               </ul>
             </div>
@@ -528,9 +530,9 @@ export default function LandingPage() {
       </section>
 
       {/* Newsletter Signup Section */}
-      <section id="subscribe" className="py-20 bg-gradient-to-br from-orange-50 to-orange-100 relative overflow-hidden flex items-center">
+      <section id="subscribe" className="py-20 bg-gradient-to-br from-orange-50 to-orange-100 dark:from-neutral-800 dark:to-neutral-900 relative overflow-hidden flex items-center">
         {/* Background Logo */}
-        <div className="absolute inset-0 flex items-center justify-center opacity-5">
+        <div className="absolute inset-0 flex items-center justify-center opacity-5 dark:opacity-[0.03]">
           <img 
             src={SwishLogo} 
             alt="Swish Logo Background" 
@@ -539,10 +541,10 @@ export default function LandingPage() {
         </div>
 
         <div className="max-w-4xl mx-auto px-6 text-center relative z-10">
-          <h3 className="text-3xl font-bold text-slate-900 mb-4">
+          <h3 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">
             Stay Updated with Swish Assistant
           </h3>
-          <p className="text-gray-600 mb-8 max-w-2xl mx-auto">
+          <p className="text-gray-600 dark:text-slate-300 mb-8 max-w-2xl mx-auto">
             Get the latest news, feature updates, and tips delivered straight to your inbox. 
             Be the first to know about new league management features and AI improvements.
           </p>
@@ -551,7 +553,7 @@ export default function LandingPage() {
             <input
               type="email"
               placeholder="Enter your email address"
-              className="flex-1 px-5 py-3.5 rounded-xl border border-orange-200 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent bg-white shadow-sm transition-all duration-200"
+              className="flex-1 px-5 py-3.5 rounded-xl border border-orange-200 dark:border-neutral-600 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:border-transparent bg-white dark:bg-neutral-800 dark:text-white dark:placeholder-slate-400 shadow-sm transition-all duration-200"
               required
             />
             <button
@@ -562,7 +564,7 @@ export default function LandingPage() {
             </button>
           </form>
 
-          <p className="text-xs text-gray-400 italic">
+          <p className="text-xs text-gray-400 dark:text-slate-500 italic">
             No spam, just updates. Unsubscribe anytime.
           </p>
         </div>

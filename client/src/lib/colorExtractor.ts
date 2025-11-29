@@ -120,7 +120,7 @@ export function adjustOpacity(rgb: { r: number; g: number; b: number }, opacity:
 
 export async function extractTeamColors(teamName: string, leagueId: string): Promise<TeamColors | null> {
   const CACHE_KEY = 'team_colors_cache';
-  const CACHE_VERSION = '2';
+  const CACHE_VERSION = '3';
   const CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days
   
   // Try to load from cache
@@ -151,6 +151,12 @@ export async function extractTeamColors(teamName: string, leagueId: string): Pro
     `${leagueId}_${normalizedTeamName}.png`,
     `${leagueId}_${normalizedTeamName}.jpg`,
     `${leagueId}_${normalizedTeamName}.jpeg`,
+    `${leagueId}_${normalizedTeamName}_Senior_Men.png`,
+    `${leagueId}_${normalizedTeamName}_Senior_Men.jpg`,
+    `${leagueId}_${normalizedTeamName}_Senior_Men.jpeg`,
+    `${leagueId}_${normalizedTeamName}_Senior_Men_I.png`,
+    `${leagueId}_${normalizedTeamName}_Senior_Men_I.jpg`,
+    `${leagueId}_${normalizedTeamName}_Senior_Men_I.jpeg`,
   ];
   
   for (const filename of possibleFilenames) {

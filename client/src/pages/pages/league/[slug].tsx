@@ -16,6 +16,7 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
 import { InstagramCarousel } from "@/components/InstagramCarousel";
 import { ChevronRight, Trophy, ArrowRight } from "lucide-react";
 import { Link } from "wouter";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { EditableDescription } from "@/components/EditableDescription";
 import {
   Select,
@@ -207,14 +208,6 @@ const TEAM_STAT_COLUMNS: Record<string, TeamStatColumn[]> = {
     { key: '2PM', label: '2PM', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'total2PM', 'avg2PM') },
   ],
   Misc: [
-    { key: 'TIES', label: 'TIES', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalTimesScoresLevel', 'avgTimesScoresLevel') },
-    { key: 'LEAD CHG', label: 'LEAD CHG', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalLeadChanges', 'avgLeadChanges') },
-    { key: 'TIME LEADING', label: 'TIME LEADING', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalTimeLeading', 'avgTimeLeading') },
-    { key: 'BIG RUN', label: 'BIG RUN', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalBiggestScoringRun', 'avgBiggestScoringRun') },
-    { key: 'MISC +/-', label: '+/-', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPlusMinus', 'avgPlusMinus') },
-    { key: 'OPP 3PM', label: 'OPP 3PM', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOpp3PM', 'avgOpp3PM') },
-    { key: 'OPP FGM', label: 'OPP FGM', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppFGM', 'avgOppFGM') },
-    { key: 'OPP FGA', label: 'OPP FGA', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppFGA', 'avgOppFGA') },
     { key: 'OPP PTS', label: 'OPP PTS', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppPoints', 'avgOppPoints') },
     { key: 'OPP TO', label: 'OPP TO', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppTurnovers', 'avgOppTurnovers') },
   ],
@@ -283,14 +276,6 @@ const TEAM_STAT_LEGENDS: Record<string, string[]> = {
     '2PM = 2-Pointers Made'
   ],
   Misc: [
-    'TIES = Times Scores Were Tied',
-    'LEAD CHG = Lead Changes',
-    'TIME LEADING = Time Spent Leading (minutes)',
-    'BIG RUN = Biggest Scoring Run',
-    '+/- = Plus/Minus',
-    'OPP 3PM = Opponent 3-Pointers Made',
-    'OPP FGM = Opponent Field Goals Made',
-    'OPP FGA = Opponent Field Goals Attempted',
     'OPP PTS = Opponent Points',
     'OPP TO = Opponent Turnovers'
   ]
@@ -1505,7 +1490,9 @@ export default function LeaguePage() {
 
     // Fetch player averages when league is available
     useEffect(() => {
+      console.log("🔄 Player averages useEffect triggered, league_id:", league?.league_id);
       if (league?.league_id) {
+        console.log("🔄 Calling fetchAllPlayerAverages...");
         fetchAllPlayerAverages();
       }
     }, [league?.league_id]);
@@ -1880,242 +1867,447 @@ export default function LeaguePage() {
     };
 
     const fetchAllPlayerAverages = async () => {
-      if (!league?.league_id) return;
+      console.log("📊 fetchAllPlayerAverages called, league_id:", league?.league_id);
+      if (!league?.league_id) {
+        console.log("📊 No league_id, returning early");
+        return;
+      }
 
       setIsLoadingStats(true);
       try {
-        // Fetch player stats and join with players table to get slug - using select('*') to get all fields including advanced stats
-        const { data: playerStats, error } = await supabase
-          .from("player_stats")
-          .select("*, players:player_id(slug)")
-          .eq("league_id", league.league_id);
+        // Helper function to check if two names are similar (fuzzy match)
+        const areSimilarNames = (name1: string, name2: string): boolean => {
+          if (!name1 || !name2) return false;
+          const n1 = name1.toLowerCase().trim();
+          const n2 = name2.toLowerCase().trim();
+          
+          if (n1 === n2) return true;
+          
+          const parts1 = n1.split(/[\s-]+/);
+          const parts2 = n2.split(/[\s-]+/);
+          
+          // Check if one name is abbreviation of the other (e.g., "R Farrell" vs "Rhys Farrell")
+          if (parts1.length !== parts2.length) {
+            const shorter = parts1.length < parts2.length ? parts1 : parts2;
+            const longer = parts1.length < parts2.length ? parts2 : parts1;
+            
+            let matchCount = 0;
+            for (const shortPart of shorter) {
+              for (const longPart of longer) {
+                if (longPart === shortPart || 
+                    longPart.startsWith(shortPart) || 
+                    (shortPart.length === 1 && longPart.startsWith(shortPart))) {
+                  matchCount++;
+                  break;
+                }
+              }
+            }
+            if (matchCount === shorter.length) return true;
+          }
+          
+          // Same number of parts - check if similar
+          if (parts1.length === parts2.length && parts1.length >= 2) {
+            const lastName1 = parts1[parts1.length - 1];
+            const lastName2 = parts2[parts2.length - 1];
+            
+            if (lastName1 === lastName2) {
+              const firstName1 = parts1[0];
+              const firstName2 = parts2[0];
+              
+              if (firstName1.startsWith(firstName2.substring(0, 3)) || 
+                  firstName2.startsWith(firstName1.substring(0, 3)) ||
+                  firstName1.includes(firstName2) || 
+                  firstName2.includes(firstName1)) {
+                return true;
+              }
+            }
+          }
+          
+          // Check for typos (1-2 character differences)
+          const maxLength = Math.max(n1.length, n2.length);
+          if (Math.abs(n1.length - n2.length) <= 2 && maxLength > 5) {
+            let differences = 0;
+            for (let i = 0; i < Math.min(n1.length, n2.length); i++) {
+              if (n1[i] !== n2[i]) differences++;
+              if (differences > 2) return false;
+            }
+            return true;
+          }
+          
+          return false;
+        };
 
-        if (error) {
-          console.error("Error fetching player averages:", error);
+        // ========== STATS-FIRST APPROACH ==========
+        // Step 1: Fetch ALL player_stats for the league (paginated to bypass 1000 row limit)
+        console.log("📊 Step 1: Fetching all player_stats for league_id:", league.league_id);
+        
+        let allPlayerStats: any[] = [];
+        let page = 0;
+        const pageSize = 1000;
+        let hasMore = true;
+        
+        while (hasMore) {
+          const { data: pageData, error: pageError } = await supabase
+            .from("player_stats")
+            .select("*")
+            .eq("league_id", league.league_id)
+            .range(page * pageSize, (page + 1) * pageSize - 1);
+          
+          if (pageError) {
+            console.error("Error fetching player stats page", page, ":", pageError);
+            break;
+          }
+          
+          if (pageData && pageData.length > 0) {
+            allPlayerStats = [...allPlayerStats, ...pageData];
+            console.log("📊 Step 1: Fetched page", page, "with", pageData.length, "records, total:", allPlayerStats.length);
+            hasMore = pageData.length === pageSize;
+            page++;
+          } else {
+            hasMore = false;
+          }
+        }
+        
+        const playerStats = allPlayerStats;
+
+        console.log("📊 Step 1: Fetched", playerStats?.length || 0, "total stat records");
+
+        if (!playerStats || playerStats.length === 0) {
+          console.log("📊 No stats found for this league");
+          setAllPlayerAverages([]);
+          setFilteredPlayerAverages([]);
           return;
         }
 
-        console.log("📊 Fetched player stats:", playerStats?.length, "records");
+        // Step 2: Group stats by player_id first
+        console.log("📊 Step 2: Grouping stats by player_id");
+        
+        type PlayerAggregate = {
+          name: string;
+          team: string;
+          playerIds: Set<string>;
+          games: number;
+          totalPoints: number;
+          totalRebounds: number;
+          totalAssists: number;
+          totalSteals: number;
+          totalBlocks: number;
+          totalTurnovers: number;
+          totalFGM: number;
+          totalFGA: number;
+          total2PM: number;
+          total2PA: number;
+          total3PM: number;
+          total3PA: number;
+          totalFTM: number;
+          totalFTA: number;
+          totalORB: number;
+          totalDRB: number;
+          totalMinutes: number;
+          totalPersonalFouls: number;
+          totalPlusMinus: number;
+          rawStats: any[];
+        };
 
-      // Group stats by player and calculate averages
-      const playerMap = new Map();
-      
-      playerStats?.forEach(stat => {
-        // Build player name from firstname and familyname in player_stats
-        const playerName = stat.full_name || 
-                          stat.name || 
-                          `${stat.firstname || ''} ${stat.familyname || ''}`.trim() || 
-                          'Unknown Player';
-        // Use player_id for grouping to avoid name mismatches, fallback to record id
-        const playerKey = stat.player_id || stat.id;
-        if (!playerMap.has(playerKey)) {
-          playerMap.set(playerKey, {
-            name: playerName,
-            team: stat.team,
-            id: playerKey,
-            slug: stat.players?.slug || null,
-            games: 0,
-            totalPoints: 0,
-            totalRebounds: 0,
-            totalAssists: 0,
-            totalSteals: 0,
-            totalBlocks: 0,
-            totalTurnovers: 0,
-            totalFGM: 0,
-            totalFGA: 0,
-            total2PM: 0,
-            total2PA: 0,
-            total3PM: 0,
-            total3PA: 0,
-            totalFTM: 0,
-            totalFTA: 0,
-            totalORB: 0,
-            totalDRB: 0,
-            totalMinutes: 0,
-            totalPersonalFouls: 0,
-            totalPlusMinus: 0,
-            rawStats: []
-          });
-        }
+        // First pass: group by player_id
+        const byPlayerId = new Map<string, PlayerAggregate>();
+        const noPlayerId: any[] = [];
 
-        const player = playerMap.get(playerKey);
-        player.games += 1;
-        player.totalPoints += stat.spoints || 0;
-        player.totalRebounds += stat.sreboundstotal || 0;
-        player.totalAssists += stat.sassists || 0;
-        player.totalSteals += stat.ssteals || 0;
-        player.totalBlocks += stat.sblocks || 0;
-        player.totalTurnovers += stat.sturnovers || 0;
-        player.totalFGM += stat.sfieldgoalsmade || 0;
-        player.totalFGA += stat.sfieldgoalsattempted || 0;
-        player.total2PM += stat.stwopointersmade || 0;
-        player.total2PA += stat.stwopointersattempted || 0;
-        player.total3PM += stat.sthreepointersmade || 0;
-        player.total3PA += stat.sthreepointersattempted || 0;
-        player.totalFTM += stat.sfreethrowsmade || 0;
-        player.totalFTA += stat.sfreethrowsattempted || 0;
-        player.totalORB += stat.sreboundsoffensive || 0;
-        player.totalDRB += stat.sreboundsdefensive || 0;
-        player.totalPersonalFouls += stat.sfoulspersonal || 0;
-        player.totalPlusMinus += stat.splusminuspoints || 0;
-        
-        // Store raw stat row for accessing advanced stats later
-        player.rawStats.push(stat);
-        
-        // Parse minutes from sminutes field
-        const minutesParts = stat.sminutes?.split(':');
-        if (minutesParts && minutesParts.length === 2) {
-          const minutes = parseInt(minutesParts[0]) + parseInt(minutesParts[1]) / 60;
-          player.totalMinutes += minutes;
-        }
-      });
-
-      // First pass: Group by player_id
-      const playersByIdArray = Array.from(playerMap.values());
-      
-      // Helper function to check if two names are similar (fuzzy match)
-      const areSimilarNames = (name1: string, name2: string): boolean => {
-        const n1 = name1.toLowerCase().trim();
-        const n2 = name2.toLowerCase().trim();
-        
-        // Exact match
-        if (n1 === n2) return true;
-        
-        // Split names into parts
-        const parts1 = n1.split(/[\s-]+/);
-        const parts2 = n2.split(/[\s-]+/);
-        
-        // Check if one name is a subset/abbreviation of the other
-        // Example: "R Faure" vs "Reiss Faure-Daley"
-        if (parts1.length !== parts2.length) {
-          const shorter = parts1.length < parts2.length ? parts1 : parts2;
-          const longer = parts1.length < parts2.length ? parts2 : parts1;
+        playerStats.forEach(stat => {
+          const playerName = stat.full_name || stat.name || 'Unknown Player';
+          const team = stat.team || stat.team_name || 'Unknown';
           
-          // Check if all parts of shorter name match (as initials or full) parts of longer name
-          let matchCount = 0;
-          for (const shortPart of shorter) {
-            for (const longPart of longer) {
-              // Match if: 1) exact match, 2) initial match (R = Reiss), 3) substring (Faure in Faure-Daley)
-              if (longPart === shortPart || 
-                  longPart.startsWith(shortPart) || 
-                  (shortPart.length === 1 && longPart.startsWith(shortPart))) {
-                matchCount++;
+          if (stat.player_id) {
+            if (!byPlayerId.has(stat.player_id)) {
+              byPlayerId.set(stat.player_id, {
+                name: playerName,
+                team: team,
+                playerIds: new Set([stat.player_id]),
+                games: 0,
+                totalPoints: 0,
+                totalRebounds: 0,
+                totalAssists: 0,
+                totalSteals: 0,
+                totalBlocks: 0,
+                totalTurnovers: 0,
+                totalFGM: 0,
+                totalFGA: 0,
+                total2PM: 0,
+                total2PA: 0,
+                total3PM: 0,
+                total3PA: 0,
+                totalFTM: 0,
+                totalFTA: 0,
+                totalORB: 0,
+                totalDRB: 0,
+                totalMinutes: 0,
+                totalPersonalFouls: 0,
+                totalPlusMinus: 0,
+                rawStats: []
+              });
+            }
+            const agg = byPlayerId.get(stat.player_id)!;
+            agg.games += 1;
+            agg.totalPoints += stat.spoints || 0;
+            agg.totalRebounds += stat.sreboundstotal || 0;
+            agg.totalAssists += stat.sassists || 0;
+            agg.totalSteals += stat.ssteals || 0;
+            agg.totalBlocks += stat.sblocks || 0;
+            agg.totalTurnovers += stat.sturnovers || 0;
+            agg.totalFGM += stat.sfieldgoalsmade || 0;
+            agg.totalFGA += stat.sfieldgoalsattempted || 0;
+            agg.total2PM += stat.stwopointersmade || 0;
+            agg.total2PA += stat.stwopointersattempted || 0;
+            agg.total3PM += stat.sthreepointersmade || 0;
+            agg.total3PA += stat.sthreepointersattempted || 0;
+            agg.totalFTM += stat.sfreethrowsmade || 0;
+            agg.totalFTA += stat.sfreethrowsattempted || 0;
+            agg.totalORB += stat.sreboundsoffensive || 0;
+            agg.totalDRB += stat.sreboundsdefensive || 0;
+            agg.totalPersonalFouls += stat.sfoulspersonal || 0;
+            agg.totalPlusMinus += stat.splusminuspoints || 0;
+            agg.rawStats.push(stat);
+            
+            // Use longer name if available
+            if (playerName.length > agg.name.length) {
+              agg.name = playerName;
+            }
+            
+            const minutesParts = stat.sminutes?.split(':');
+            if (minutesParts && minutesParts.length === 2) {
+              agg.totalMinutes += parseInt(minutesParts[0]) + parseInt(minutesParts[1]) / 60;
+            }
+          } else {
+            noPlayerId.push(stat);
+          }
+        });
+
+        console.log("📊 Step 2: Grouped into", byPlayerId.size, "players by ID,", noPlayerId.length, "without ID");
+
+        // Step 3: Merge player_id groups that have similar names (same player, different IDs)
+        console.log("📊 Step 3: Merging similar-named players");
+        
+        const mergedPlayers: PlayerAggregate[] = [];
+        const processedIds = new Set<string>();
+
+        for (const [playerId, player] of byPlayerId.entries()) {
+          if (processedIds.has(playerId)) continue;
+          
+          // Find all other players with similar names
+          const similarPlayers: [string, PlayerAggregate][] = [];
+          for (const [otherId, otherPlayer] of byPlayerId.entries()) {
+            if (otherId !== playerId && !processedIds.has(otherId)) {
+              if (areSimilarNames(player.name, otherPlayer.name)) {
+                similarPlayers.push([otherId, otherPlayer]);
+              }
+            }
+          }
+          
+          // Merge all similar players into this one
+          if (similarPlayers.length > 0) {
+            console.log("📊 Merging", player.name, "with", similarPlayers.length, "similar entries");
+            for (const [otherId, other] of similarPlayers) {
+              player.playerIds.add(otherId);
+              player.games += other.games;
+              player.totalPoints += other.totalPoints;
+              player.totalRebounds += other.totalRebounds;
+              player.totalAssists += other.totalAssists;
+              player.totalSteals += other.totalSteals;
+              player.totalBlocks += other.totalBlocks;
+              player.totalTurnovers += other.totalTurnovers;
+              player.totalFGM += other.totalFGM;
+              player.totalFGA += other.totalFGA;
+              player.total2PM += other.total2PM;
+              player.total2PA += other.total2PA;
+              player.total3PM += other.total3PM;
+              player.total3PA += other.total3PA;
+              player.totalFTM += other.totalFTM;
+              player.totalFTA += other.totalFTA;
+              player.totalORB += other.totalORB;
+              player.totalDRB += other.totalDRB;
+              player.totalMinutes += other.totalMinutes;
+              player.totalPersonalFouls += other.totalPersonalFouls;
+              player.totalPlusMinus += other.totalPlusMinus;
+              player.rawStats.push(...other.rawStats);
+              
+              // Use longer name
+              if (other.name.length > player.name.length) {
+                player.name = other.name;
+              }
+              
+              processedIds.add(otherId);
+            }
+          }
+          
+          processedIds.add(playerId);
+          mergedPlayers.push(player);
+        }
+
+        console.log("📊 Step 3: After merging:", mergedPlayers.length, "unique players");
+
+        // Step 4: Handle stats without player_id by grouping by name
+        console.log("📊 Step 4: Processing", noPlayerId.length, "stats without player_id");
+        
+        noPlayerId.forEach(stat => {
+          const playerName = stat.full_name || stat.name || 'Unknown Player';
+          const team = stat.team || stat.team_name || 'Unknown';
+          
+          // Try to find existing player by name
+          let existingPlayer = mergedPlayers.find(p => areSimilarNames(p.name, playerName));
+          
+          if (existingPlayer) {
+            existingPlayer.games += 1;
+            existingPlayer.totalPoints += stat.spoints || 0;
+            existingPlayer.totalRebounds += stat.sreboundstotal || 0;
+            existingPlayer.totalAssists += stat.sassists || 0;
+            existingPlayer.totalSteals += stat.ssteals || 0;
+            existingPlayer.totalBlocks += stat.sblocks || 0;
+            existingPlayer.totalTurnovers += stat.sturnovers || 0;
+            existingPlayer.totalFGM += stat.sfieldgoalsmade || 0;
+            existingPlayer.totalFGA += stat.sfieldgoalsattempted || 0;
+            existingPlayer.total2PM += stat.stwopointersmade || 0;
+            existingPlayer.total2PA += stat.stwopointersattempted || 0;
+            existingPlayer.total3PM += stat.sthreepointersmade || 0;
+            existingPlayer.total3PA += stat.sthreepointersattempted || 0;
+            existingPlayer.totalFTM += stat.sfreethrowsmade || 0;
+            existingPlayer.totalFTA += stat.sfreethrowsattempted || 0;
+            existingPlayer.totalORB += stat.sreboundsoffensive || 0;
+            existingPlayer.totalDRB += stat.sreboundsdefensive || 0;
+            existingPlayer.totalPersonalFouls += stat.sfoulspersonal || 0;
+            existingPlayer.totalPlusMinus += stat.splusminuspoints || 0;
+            existingPlayer.rawStats.push(stat);
+            
+            const minutesParts = stat.sminutes?.split(':');
+            if (minutesParts && minutesParts.length === 2) {
+              existingPlayer.totalMinutes += parseInt(minutesParts[0]) + parseInt(minutesParts[1]) / 60;
+            }
+          } else {
+            // Create new player entry
+            const newPlayer: PlayerAggregate = {
+              name: playerName,
+              team: team,
+              playerIds: new Set<string>(),
+              games: 1,
+              totalPoints: stat.spoints || 0,
+              totalRebounds: stat.sreboundstotal || 0,
+              totalAssists: stat.sassists || 0,
+              totalSteals: stat.ssteals || 0,
+              totalBlocks: stat.sblocks || 0,
+              totalTurnovers: stat.sturnovers || 0,
+              totalFGM: stat.sfieldgoalsmade || 0,
+              totalFGA: stat.sfieldgoalsattempted || 0,
+              total2PM: stat.stwopointersmade || 0,
+              total2PA: stat.stwopointersattempted || 0,
+              total3PM: stat.sthreepointersmade || 0,
+              total3PA: stat.sthreepointersattempted || 0,
+              totalFTM: stat.sfreethrowsmade || 0,
+              totalFTA: stat.sfreethrowsattempted || 0,
+              totalORB: stat.sreboundsoffensive || 0,
+              totalDRB: stat.sreboundsdefensive || 0,
+              totalMinutes: 0,
+              totalPersonalFouls: stat.sfoulspersonal || 0,
+              totalPlusMinus: stat.splusminuspoints || 0,
+              rawStats: [stat]
+            };
+            
+            const minutesParts = stat.sminutes?.split(':');
+            if (minutesParts && minutesParts.length === 2) {
+              newPlayer.totalMinutes = parseInt(minutesParts[0]) + parseInt(minutesParts[1]) / 60;
+            }
+            
+            mergedPlayers.push(newPlayer);
+          }
+        });
+
+        console.log("📊 Step 4: Total players after processing null IDs:", mergedPlayers.length);
+
+        // Step 5: Fetch slugs from players table
+        console.log("📊 Step 5: Fetching slugs from players table");
+        
+        const { data: rosterData } = await supabase
+          .from("players")
+          .select("id, full_name, slug")
+          .eq("league_id", league.league_id);
+
+        const slugLookup = new Map<string, string>();
+        const nameLookup = new Map<string, string>();
+        
+        rosterData?.forEach(p => {
+          if (p.slug) {
+            slugLookup.set(p.id, p.slug);
+            if (p.full_name) {
+              nameLookup.set(p.full_name.toLowerCase().trim(), p.slug);
+            }
+          }
+        });
+
+        console.log("📊 Step 5: Found", slugLookup.size, "slugs by ID,", nameLookup.size, "by name");
+
+        // Step 6: Calculate averages and build final list
+        console.log("📊 Step 6: Calculating averages");
+        
+        const averagesList = mergedPlayers.map((player) => {
+          // Try to find slug by player_id first, then by name
+          let slug: string | null = null;
+          for (const pid of player.playerIds) {
+            if (slugLookup.has(pid)) {
+              slug = slugLookup.get(pid)!;
+              break;
+            }
+          }
+          if (!slug) {
+            slug = nameLookup.get(player.name.toLowerCase().trim()) || null;
+          }
+          
+          // Also try fuzzy name match for slug
+          if (!slug) {
+            for (const [name, s] of nameLookup.entries()) {
+              if (areSimilarNames(player.name, name)) {
+                slug = s;
                 break;
               }
             }
           }
-          if (matchCount === shorter.length) return true;
-        }
-        
-        // If same number of parts, check if they're similar
-        if (parts1.length === parts2.length) {
-          // Check if last names match (for Chuck Duru vs Chukwuma Duru)
-          const lastName1 = parts1[parts1.length - 1];
-          const lastName2 = parts2[parts2.length - 1];
           
-          if (lastName1 === lastName2 && parts1.length >= 2) {
-            // Last names match - check if first names are similar
-            const firstName1 = parts1[0];
-            const firstName2 = parts2[0];
-            
-            // Check if one is a nickname/substring of the other
-            // Example: "Chuck" in "Chukwuma"
-            if (firstName1.startsWith(firstName2.substring(0, 3)) || 
-                firstName2.startsWith(firstName1.substring(0, 3)) ||
-                firstName1.includes(firstName2) || 
-                firstName2.includes(firstName1)) {
-              return true;
-            }
-          }
-        }
-        
-        // Check if names differ by only 1-2 characters (handles "Murray Henry" vs "Murray Hendry")
-        const maxLength = Math.max(n1.length, n2.length);
-        if (Math.abs(n1.length - n2.length) <= 2 && maxLength > 5) {
-          // Simple edit distance check
-          let differences = 0;
-          for (let i = 0; i < Math.min(n1.length, n2.length); i++) {
-            if (n1[i] !== n2[i]) differences++;
-            if (differences > 2) return false;
-          }
-          return true;
-        }
-        
-        return false;
-      };
-      
-      // Second pass: Merge duplicates by name (handles data quality issues where same player has multiple IDs)
-      const mergedByName = new Map<string, typeof playersByIdArray[0]>();
-      
-      playersByIdArray.forEach((player) => {
-        // Check if we already have a similar name
-        let foundMatch = false;
-        for (const [existingName, existingPlayer] of Array.from(mergedByName.entries())) {
-          if (areSimilarNames(player.name, existingName)) {
-            // Merge with existing player
-            existingPlayer.games += player.games;
-            existingPlayer.totalPoints += player.totalPoints;
-            existingPlayer.totalRebounds += player.totalRebounds;
-            existingPlayer.totalAssists += player.totalAssists;
-            existingPlayer.totalSteals += player.totalSteals;
-            existingPlayer.totalBlocks += player.totalBlocks;
-            existingPlayer.totalTurnovers += player.totalTurnovers;
-            existingPlayer.totalFGM += player.totalFGM;
-            existingPlayer.totalFGA += player.totalFGA;
-            existingPlayer.total2PM += player.total2PM;
-            existingPlayer.total2PA += player.total2PA;
-            existingPlayer.total3PM += player.total3PM;
-            existingPlayer.total3PA += player.total3PA;
-            existingPlayer.totalFTM += player.totalFTM;
-            existingPlayer.totalFTA += player.totalFTA;
-            existingPlayer.totalORB += player.totalORB;
-            existingPlayer.totalDRB += player.totalDRB;
-            existingPlayer.totalPersonalFouls += player.totalPersonalFouls;
-            existingPlayer.totalPlusMinus += player.totalPlusMinus;
-            existingPlayer.totalMinutes += player.totalMinutes;
-            existingPlayer.rawStats.push(...player.rawStats);
-            foundMatch = true;
-            break;
-          }
-        }
-        
-        if (!foundMatch) {
-          // First time seeing this name - add it
-          mergedByName.set(player.name, { ...player });
-        }
-      });
+          const firstId = player.playerIds.size > 0 
+            ? Array.from(player.playerIds)[0] 
+            : `name_${player.name.toLowerCase().replace(/\s+/g, '_')}`;
+          
+          return {
+            ...player,
+            id: firstId,
+            playerKey: firstId,
+            slug: slug,
+            avgPoints: (player.totalPoints / player.games).toFixed(1),
+            avgRebounds: (player.totalRebounds / player.games).toFixed(1),
+            avgAssists: (player.totalAssists / player.games).toFixed(1),
+            avgSteals: (player.totalSteals / player.games).toFixed(1),
+            avgBlocks: (player.totalBlocks / player.games).toFixed(1),
+            avgTurnovers: (player.totalTurnovers / player.games).toFixed(1),
+            avgMinutes: (player.totalMinutes / player.games).toFixed(1),
+            avgFGM: (player.totalFGM / player.games).toFixed(1),
+            avgFGA: (player.totalFGA / player.games).toFixed(1),
+            avg2PM: (player.total2PM / player.games).toFixed(1),
+            avg2PA: (player.total2PA / player.games).toFixed(1),
+            avg3PM: (player.total3PM / player.games).toFixed(1),
+            avg3PA: (player.total3PA / player.games).toFixed(1),
+            avgFTM: (player.totalFTM / player.games).toFixed(1),
+            avgFTA: (player.totalFTA / player.games).toFixed(1),
+            avgORB: (player.totalORB / player.games).toFixed(1),
+            avgDRB: (player.totalDRB / player.games).toFixed(1),
+            avgPersonalFouls: (player.totalPersonalFouls / player.games).toFixed(1),
+            avgPlusMinus: (player.totalPlusMinus / player.games).toFixed(1),
+            fgPercentage: player.totalFGA > 0 ? ((player.totalFGM / player.totalFGA) * 100).toFixed(1) : '0.0',
+            twoPercentage: player.total2PA > 0 ? ((player.total2PM / player.total2PA) * 100).toFixed(1) : '0.0',
+            threePercentage: player.total3PA > 0 ? ((player.total3PM / player.total3PA) * 100).toFixed(1) : '0.0',
+            ftPercentage: player.totalFTA > 0 ? ((player.totalFTM / player.totalFTA) * 100).toFixed(1) : '0.0'
+          };
+        }).sort((a, b) => parseFloat(b.avgPoints) - parseFloat(a.avgPoints));
 
-      // Calculate averages and percentages from merged data
-      const averagesList = Array.from(mergedByName.values()).map((player) => ({
-        ...player,
-        playerKey: player.id,
-        avgPoints: (player.totalPoints / player.games).toFixed(1),
-        avgRebounds: (player.totalRebounds / player.games).toFixed(1),
-        avgAssists: (player.totalAssists / player.games).toFixed(1),
-        avgSteals: (player.totalSteals / player.games).toFixed(1),
-        avgBlocks: (player.totalBlocks / player.games).toFixed(1),
-        avgTurnovers: (player.totalTurnovers / player.games).toFixed(1),
-        avgMinutes: (player.totalMinutes / player.games).toFixed(1),
-        avgFGM: (player.totalFGM / player.games).toFixed(1),
-        avgFGA: (player.totalFGA / player.games).toFixed(1),
-        avg2PM: (player.total2PM / player.games).toFixed(1),
-        avg2PA: (player.total2PA / player.games).toFixed(1),
-        avg3PM: (player.total3PM / player.games).toFixed(1),
-        avg3PA: (player.total3PA / player.games).toFixed(1),
-        avgFTM: (player.totalFTM / player.games).toFixed(1),
-        avgFTA: (player.totalFTA / player.games).toFixed(1),
-        avgORB: (player.totalORB / player.games).toFixed(1),
-        avgDRB: (player.totalDRB / player.games).toFixed(1),
-        avgPersonalFouls: (player.totalPersonalFouls / player.games).toFixed(1),
-        avgPlusMinus: (player.totalPlusMinus / player.games).toFixed(1),
-        fgPercentage: player.totalFGA > 0 ? ((player.totalFGM / player.totalFGA) * 100).toFixed(1) : '0.0',
-        twoPercentage: player.total2PA > 0 ? ((player.total2PM / player.total2PA) * 100).toFixed(1) : '0.0',
-        threePercentage: player.total3PA > 0 ? ((player.total3PM / player.total3PA) * 100).toFixed(1) : '0.0',
-        ftPercentage: player.totalFTA > 0 ? ((player.totalFTM / player.totalFTA) * 100).toFixed(1) : '0.0'
-      })).sort((a, b) => parseFloat(b.avgPoints) - parseFloat(a.avgPoints));
+        console.log("📊 Step 6: Final player list has", averagesList.length, "players");
 
-      setAllPlayerAverages(averagesList);
-      setFilteredPlayerAverages(averagesList);
+        setAllPlayerAverages(averagesList);
+        setFilteredPlayerAverages(averagesList);
       } catch (error) {
         console.error("Error in fetchAllPlayerAverages:", error);
       } finally {
@@ -2626,8 +2818,8 @@ export default function LeaguePage() {
   
  return (
       
-      <div className="min-h-screen bg-[#fffaf1]">
-        <header className="bg-white shadow-sm sticky top-0 z-50 px-4 md:px-6 py-3 md:py-4">
+      <div className="min-h-screen bg-[#fffaf1] dark:bg-neutral-950 transition-colors duration-300">
+        <header className="bg-white dark:bg-neutral-900 shadow-sm sticky top-0 z-50 px-4 md:px-6 py-3 md:py-4">
           <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
             <div className="flex items-center justify-between md:justify-start">
               <img
@@ -2654,7 +2846,7 @@ export default function LeaguePage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                className="w-full px-4 py-2 border border-gray-300 rounded-full text-sm"
+                className="w-full px-4 py-2 border border-gray-300 dark:border-neutral-700 rounded-full text-sm bg-white dark:bg-neutral-800 text-slate-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500"
               />
               <button
                 onClick={handleSearch}
@@ -2664,7 +2856,7 @@ export default function LeaguePage() {
               </button>
 
               {suggestions.length > 0 && (
-                <ul className="absolute z-50 mt-2 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                <ul className="absolute z-50 mt-2 w-full bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-md shadow-lg max-h-60 overflow-y-auto">
                   {suggestions.map((item, index) => (
                     <li
                       key={index}
@@ -2673,7 +2865,7 @@ export default function LeaguePage() {
                         setSuggestions([]);
                         navigate(`/league/${item.slug}`);
                       }}
-                      className="px-4 py-2 cursor-pointer hover:bg-orange-100 text-left text-slate-800 text-sm"
+                      className="px-4 py-2 cursor-pointer hover:bg-orange-100 dark:hover:bg-neutral-800 text-left text-slate-800 dark:text-slate-200 text-sm"
                     >
                       {item.name}
                     </li>
@@ -2681,6 +2873,8 @@ export default function LeaguePage() {
                 </ul>
               )}
             </div>
+
+            <ThemeToggle />
 
             {currentUser && (
               <button
@@ -2758,10 +2952,10 @@ export default function LeaguePage() {
 
         {/* Breadcrumb for Sub-Competitions */}
         {parentLeague && (
-          <div className="bg-white border-b border-gray-100">
+          <div className="bg-white dark:bg-neutral-900 border-b border-gray-100 dark:border-neutral-800">
             <div className="max-w-7xl mx-auto px-4 md:px-6 py-3">
               <Link href={`/league/${parentLeague.slug}`}>
-                <a className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-orange-400 transition-colors group" data-testid="link-parent-league">
+                <a className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-orange-400 dark:hover:text-orange-300 transition-colors group" data-testid="link-parent-league">
                   <div className="flex items-center gap-2">
                     {parentLeague.logo_url && (
                       <img 
@@ -2782,27 +2976,27 @@ export default function LeaguePage() {
 
         {/* SEO-Optimized About This League Section */}
         {league?.description && (
-          <div className="w-full bg-gradient-to-b from-transparent to-[#fffaf5] pt-4 pb-10 px-4 animate-fade-in-up">
-            <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-sm p-8 border border-orange-100">
-              <div className="flex flex-col md:flex-row md:items-center md:justify-center mb-4">
+          <div className="w-full bg-gradient-to-b from-transparent to-[#fffaf5] dark:to-neutral-900 pt-3 pb-5 px-4 animate-fade-in-up">
+            <div className="max-w-4xl mx-auto bg-white dark:bg-neutral-900 rounded-lg shadow-sm p-4 md:p-5 border border-orange-100 dark:border-neutral-800">
+              <div className="flex items-center gap-3 mb-3">
                 {league?.logo_url && (
                   <img
                     src={league.logo_url}
                     alt={`${league.name} logo`}
-                    className="h-14 w-auto mx-auto md:mx-0 mb-4 md:mb-0 md:mr-4 drop-shadow-sm"
+                    className="h-8 w-auto drop-shadow-sm"
                   />
                 )}
-                <h2 className="text-2xl font-semibold text-slate-900 text-center md:text-left">
+                <h2 className="text-base md:text-lg font-semibold text-slate-900 dark:text-white">
                   About {league?.name}
                 </h2>
               </div>
               <div 
                 ref={dividerRef}
-                className={`h-1 bg-orange-500 mx-auto mb-6 rounded-full transition-all duration-1000 ease-out ${
-                  isDividerVisible ? 'w-32' : 'w-12'
+                className={`h-0.5 bg-orange-500 mb-3 rounded-full transition-all duration-1000 ease-out ${
+                  isDividerVisible ? 'w-20' : 'w-8'
                 }`}
               ></div>
-              <p className="text-slate-700 leading-relaxed text-base text-left">
+              <p className="text-slate-600 dark:text-white leading-relaxed text-sm">
                 {league?.description}
               </p>
             </div>
@@ -2820,11 +3014,11 @@ export default function LeaguePage() {
         )}
 
         {/* Navigation Tabs - Moved below carousel */}
-        <div className="bg-white border-b border-gray-200">
+        <div className="bg-white dark:bg-neutral-900 border-b border-gray-200 dark:border-neutral-800">
           <div className="max-w-7xl mx-auto px-4 md:px-6">
-            <div className="flex items-center justify-between gap-4 py-3 md:py-4">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-4 py-3 md:py-4">
               {/* Navigation Links */}
-              <div className="flex gap-4 md:gap-6 text-sm font-medium text-slate-600 overflow-x-auto">
+              <div className="flex gap-4 md:gap-6 text-sm font-medium text-slate-600 dark:text-slate-400 overflow-x-auto pb-1 md:pb-0">
                 <a 
                   href="#" 
                   className={`hover:text-orange-500 cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'teams' ? 'text-orange-500 font-semibold border-b-2 border-orange-500' : ''}`}
@@ -2947,19 +3141,19 @@ export default function LeaguePage() {
             
             {/* Standings Section */}
             {activeSection === 'standings' && (
-              <div className="bg-white rounded-xl shadow p-4 md:p-6">
+              <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
                 <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-4 md:mb-6">
-                  <h2 className="text-base md:text-lg font-semibold text-slate-800">League Standings</h2>
+                  <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">League Standings</h2>
                   
                   {/* View Toggle - Only show for BCB Trophy */}
                   {slug === 'british-championship-basketball' && (
-                    <div className="inline-flex rounded-lg border border-gray-300 bg-gray-100 p-1">
+                    <div className="inline-flex rounded-lg border border-gray-300 dark:border-neutral-600 bg-gray-100 dark:bg-neutral-800 p-1">
                       <button
                         onClick={() => setViewMode('standings')}
                         className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
                           viewMode === 'standings'
-                            ? 'bg-white text-orange-600 shadow-sm'
-                            : 'text-gray-600 hover:text-gray-800'
+                            ? 'bg-white dark:bg-neutral-700 text-orange-600 shadow-sm'
+                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
                         }`}
                         data-testid="button-standings-view"
                       >
@@ -2969,8 +3163,8 @@ export default function LeaguePage() {
                         onClick={() => setViewMode('bracket')}
                         className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
                           viewMode === 'bracket'
-                            ? 'bg-white text-orange-600 shadow-sm'
-                            : 'text-gray-600 hover:text-gray-800'
+                            ? 'bg-white dark:bg-neutral-700 text-orange-600 shadow-sm'
+                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
                         }`}
                         data-testid="button-bracket-view"
                       >
@@ -2983,7 +3177,7 @@ export default function LeaguePage() {
                 {viewMode === 'standings' && (
                   <>
                     {/* Pool Tabs */}
-                    <div className="flex flex-wrap gap-2 mb-4 md:mb-6 border-b border-gray-200">
+                    <div className="flex flex-wrap gap-2 mb-4 md:mb-6 border-b border-gray-200 dark:border-neutral-700">
                   {hasPools && (
                     <>
                       <button
@@ -2991,7 +3185,7 @@ export default function LeaguePage() {
                         className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium transition-colors ${
                           standingsView === 'poolA' 
                             ? 'text-orange-600 border-b-2 border-orange-600' 
-                            : 'text-gray-600 hover:text-orange-500'
+                            : 'text-gray-600 dark:text-gray-400 hover:text-orange-500'
                         }`}
                       >
                         Pool A
@@ -3001,7 +3195,7 @@ export default function LeaguePage() {
                         className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium transition-colors ${
                           standingsView === 'poolB' 
                             ? 'text-orange-600 border-b-2 border-orange-600' 
-                            : 'text-gray-600 hover:text-orange-500'
+                            : 'text-gray-600 dark:text-gray-400 hover:text-orange-500'
                         }`}
                       >
                         Pool B
@@ -3013,7 +3207,7 @@ export default function LeaguePage() {
                     className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium transition-colors ${
                       standingsView === 'full' 
                         ? 'text-orange-600 border-b-2 border-orange-600' 
-                        : 'text-gray-600 hover:text-orange-500'
+                        : 'text-gray-600 dark:text-gray-400 hover:text-orange-500'
                     }`}
                   >
                     {hasPools ? 'Full League' : 'League Standings'}
@@ -3023,22 +3217,22 @@ export default function LeaguePage() {
                 {isLoadingStandings ? (
                   <div className="text-center py-8">
                     <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                    <p className="text-gray-600 mt-4">Loading standings...</p>
+                    <p className="text-gray-600 dark:text-gray-400 mt-4">Loading standings...</p>
                   </div>
                 ) : (
                   <div className="overflow-x-auto -mx-4 md:mx-0">
                     <table className="w-full text-sm min-w-[600px]">
                       <thead>
-                        <tr className="border-b-2 border-gray-200">
-                          <th className="text-left py-3 px-3 font-semibold text-slate-700 w-16 sticky left-0 bg-white z-10">Logo</th>
-                          <th className="text-left py-3 px-3 font-semibold text-slate-700 min-w-[140px]">Team</th>
-                          <th className="text-center py-3 px-3 font-semibold text-slate-700 w-16">W</th>
-                          <th className="text-center py-3 px-3 font-semibold text-slate-700 w-16">L</th>
-                          <th className="text-center py-3 px-3 font-semibold text-slate-700 w-20">Win%</th>
-                          <th className="text-right py-3 px-3 font-semibold text-slate-700 w-20">PF</th>
-                          <th className="text-right py-3 px-3 font-semibold text-slate-700 w-20">PA</th>
-                          <th className="text-right py-3 px-3 font-semibold text-slate-700 w-20">Diff</th>
-                          <th className="text-center py-3 px-3 font-semibold text-slate-700 w-12"></th>
+                        <tr className="border-b-2 border-gray-200 dark:border-neutral-700">
+                          <th className="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-16 sticky left-0 bg-white dark:bg-neutral-900 z-10">Logo</th>
+                          <th className="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 min-w-[140px]">Team</th>
+                          <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-16">W</th>
+                          <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-16">L</th>
+                          <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">Win%</th>
+                          <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">PF</th>
+                          <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">PA</th>
+                          <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">Diff</th>
+                          <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-12"></th>
                         </tr>
                       </thead>
                       <tbody>
@@ -3047,11 +3241,11 @@ export default function LeaguePage() {
                           fullLeagueStandings).map((team, index) => (
                           <tr 
                             key={`${team.team}-${index}`}
-                            className="border-b border-gray-100 hover:bg-orange-50 transition-colors group"
+                            className="border-b border-gray-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors group"
                           >
-                            <td className="py-3 px-3 sticky left-0 bg-white group-hover:bg-orange-50 z-10 transition-colors">
+                            <td className="py-3 px-3 sticky left-0 bg-white dark:bg-neutral-900 group-hover:bg-orange-50 dark:group-hover:bg-neutral-800 z-10 transition-colors">
                               <div className="flex items-center gap-2">
-                                <span className="font-medium text-slate-600 text-xs">{team.rank}</span>
+                                <span className="font-medium text-slate-600 dark:text-slate-400 text-xs">{team.rank}</span>
                                 <TeamLogo 
                                   teamName={team.originalName || team.team} 
                                   leagueId={league?.league_id} 
@@ -3059,15 +3253,15 @@ export default function LeaguePage() {
                                 />
                               </div>
                             </td>
-                            <td className="py-3 px-3 font-medium text-slate-800">
+                            <td className="py-3 px-3 font-medium text-slate-800 dark:text-slate-200">
                               <span className="truncate">{team.team}</span>
                             </td>
-                            <td className="py-3 px-3 text-center font-semibold text-slate-700">{team.wins}</td>
-                            <td className="py-3 px-3 text-center font-semibold text-slate-700">{team.losses}</td>
-                            <td className="py-3 px-3 text-center font-medium text-slate-600">{(team.winPct * 100).toFixed(1)}%</td>
-                            <td className="py-3 px-3 text-right font-medium text-slate-700">{team.pointsFor}</td>
-                            <td className="py-3 px-3 text-right font-medium text-slate-700">{team.pointsAgainst}</td>
-                            <td className={`py-3 px-3 text-right font-semibold ${team.pointsDiff > 0 ? 'text-green-600' : team.pointsDiff < 0 ? 'text-red-600' : 'text-slate-600'}`}>
+                            <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.wins}</td>
+                            <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.losses}</td>
+                            <td className="py-3 px-3 text-center font-medium text-slate-600 dark:text-slate-400">{(team.winPct * 100).toFixed(1)}%</td>
+                            <td className="py-3 px-3 text-right font-medium text-slate-700 dark:text-slate-300">{team.pointsFor}</td>
+                            <td className="py-3 px-3 text-right font-medium text-slate-700 dark:text-slate-300">{team.pointsAgainst}</td>
+                            <td className={`py-3 px-3 text-right font-semibold ${team.pointsDiff > 0 ? 'text-green-600 dark:text-green-400' : team.pointsDiff < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-400'}`}>
                               {team.pointsDiff > 0 ? `+${team.pointsDiff}` : team.pointsDiff}
                             </td>
                             <td className="py-3 px-3 text-center">
@@ -3110,10 +3304,10 @@ export default function LeaguePage() {
             
             {/* Stats Section - Comprehensive Player Averages */}
             {activeSection === 'stats' && (
-              <div className="bg-white rounded-xl shadow p-4 md:p-6">
+              <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
                 <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 mb-4 md:mb-6">
-                  <h2 className="text-base md:text-lg font-semibold text-slate-800">Player Statistics - {league?.name}</h2>
-                  <div className="text-xs md:text-sm text-gray-500">
+                  <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">Player Statistics - {league?.name}</h2>
+                  <div className="text-xs md:text-sm text-gray-500 dark:text-gray-400">
                     Showing {Math.min(displayedPlayerCount, filteredPlayerAverages.length)} of {filteredPlayerAverages.length} players
                     {statsSearch && ` (filtered from ${allPlayerAverages.length})`}
                   </div>
@@ -3127,10 +3321,10 @@ export default function LeaguePage() {
                       placeholder="Search players..."
                       value={statsSearch}
                       onChange={(e) => setStatsSearch(e.target.value)}
-                      className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                      className="w-full px-4 py-2 pl-10 border border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-neutral-800 text-slate-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500"
                     />
                     <svg
-                      className="absolute left-3 top-2.5 h-4 w-4 text-gray-400"
+                      className="absolute left-3 top-2.5 h-4 w-4 text-gray-400 dark:text-gray-500"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -3148,18 +3342,18 @@ export default function LeaguePage() {
                 {/* Category and Mode Selectors */}
                 <div className="flex flex-col md:flex-row gap-4 mb-6">
                   <div className="flex-1">
-                    <label className="block text-xs font-medium text-slate-600 mb-1.5">Stat Category</label>
+                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">Stat Category</label>
                     <Select
                       value={playerStatsCategory}
                       onValueChange={(value) => setPlayerStatsCategory(value as typeof playerStatsCategory)}
                     >
                       <SelectTrigger 
-                        className="w-full bg-white border-slate-200 text-slate-700 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500"
+                        className="w-full bg-white dark:bg-neutral-800 border-slate-200 dark:border-neutral-600 text-slate-700 dark:text-slate-200 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500"
                         data-testid="select-player-category"
                       >
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
                         <SelectItem value="Traditional" data-testid="option-player-traditional">Traditional</SelectItem>
                         <SelectItem value="Advanced" data-testid="option-player-advanced">Advanced</SelectItem>
                         <SelectItem value="Scoring" data-testid="option-player-scoring">Scoring</SelectItem>
@@ -3169,18 +3363,18 @@ export default function LeaguePage() {
                   </div>
 
                   <div className="flex-1">
-                    <label className="block text-xs font-medium text-slate-600 mb-1.5">Mode</label>
+                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">Mode</label>
                     <Select
                       value={playerStatsView}
                       onValueChange={(value) => setPlayerStatsView(value as typeof playerStatsView)}
                     >
                       <SelectTrigger 
-                        className="w-full bg-white border-slate-200 text-slate-700 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500"
+                        className="w-full bg-white dark:bg-neutral-800 border-slate-200 dark:border-neutral-600 text-slate-700 dark:text-slate-200 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500"
                         data-testid="select-player-mode"
                       >
                         <SelectValue placeholder="Select mode" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
                         <SelectItem value="Per Game" data-testid="option-player-per-game">Per Game</SelectItem>
                         <SelectItem value="Total" data-testid="option-player-total">Total</SelectItem>
                         <SelectItem value="Per 40" data-testid="option-player-per-40">Per 40</SelectItem>
@@ -3193,32 +3387,32 @@ export default function LeaguePage() {
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b border-gray-200">
-                          <th className="text-left py-3 px-2 font-semibold text-slate-700 sticky left-0 bg-white">Player</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">GP</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">MIN</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FGM</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FGA</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FG%</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">2PM</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">2PA</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">2P%</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">3PM</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">3PA</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">3P%</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FTM</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FTA</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FT%</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">ORB</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">DRB</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">TRB</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">AST</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">STL</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">BLK</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">TO</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">PF</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">+/-</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">PTS</th>
+                        <tr className="border-b border-gray-200 dark:border-neutral-700">
+                          <th className="text-left py-3 px-2 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-white dark:bg-neutral-900">Player</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">GP</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">MIN</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FGM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FGA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FG%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">2PM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">2PA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">2P%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">3PM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">3PA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">3P%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FTM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FTA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FT%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">ORB</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">DRB</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">TRB</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">AST</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">STL</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">BLK</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">TO</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">PF</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">+/-</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">PTS</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -3229,11 +3423,11 @@ export default function LeaguePage() {
                     </table>
                   </div>
                 ) : filteredPlayerAverages.length > 0 ? (
-                  <div className="overflow-x-auto -mx-4 md:mx-0 border border-orange-200 rounded-lg">
+                  <div className="overflow-x-auto -mx-4 md:mx-0 border border-orange-200 dark:border-neutral-700 rounded-lg">
                     <table className="w-full text-xs md:text-sm">
                       <thead>
-                        <tr className="border-b border-gray-200 bg-orange-50">
-                          <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 sticky left-0 bg-orange-50 z-10 min-w-[100px] md:min-w-[140px]">Player</th>
+                        <tr className="border-b border-gray-200 dark:border-neutral-700 bg-orange-50 dark:bg-neutral-800">
+                          <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-orange-50 dark:bg-neutral-800 z-10 min-w-[100px] md:min-w-[140px]">Player</th>
                           <th 
                             onClick={() => {
                               if (statsSortColumn === 'GP') {
@@ -3243,7 +3437,7 @@ export default function LeaguePage() {
                                 setStatsSortDirection('desc');
                               }
                             }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[45px] cursor-pointer hover:bg-orange-100 transition-colors ${statsSortColumn === 'GP' ? 'text-orange-600' : 'text-slate-700'}`}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[45px] cursor-pointer hover:bg-orange-100 dark:hover:bg-neutral-700 transition-colors ${statsSortColumn === 'GP' ? 'text-orange-600 dark:text-orange-400' : 'text-slate-700 dark:text-slate-200'}`}
                             data-testid="header-sort-gp"
                           >
                             <div className="flex items-center justify-center gap-1">
@@ -3264,8 +3458,8 @@ export default function LeaguePage() {
                                   setStatsSortDirection('desc');
                                 }
                               }}
-                              className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 transition-colors ${
-                                statsSortColumn === column.label ? 'text-orange-600' : 'text-slate-700'
+                              className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 dark:hover:bg-neutral-700 transition-colors ${
+                                statsSortColumn === column.label ? 'text-orange-600 dark:text-orange-400' : 'text-slate-700 dark:text-slate-200'
                               }`}
                               data-testid={`header-${column.key.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
                             >
@@ -3283,20 +3477,21 @@ export default function LeaguePage() {
                         {filteredPlayerAverages.slice(0, displayedPlayerCount).map((player, index) => (
                           <tr 
                             key={`${player.name}-${index}`}
-                            className="border-b border-gray-100 hover:bg-orange-50 transition-colors cursor-pointer"
+                            className={`border-b border-gray-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors ${player.slug ? 'cursor-pointer' : ''}`}
                             onClick={() => {
-                              const identifier = player.slug || player.id;
-                              navigate(`/player/${identifier}`);
+                              if (player.slug) {
+                                navigate(`/player/${player.slug}`);
+                              }
                             }}
                             data-testid={`player-row-${player.id}`}
                           >
-                            <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 sticky left-0 bg-white hover:bg-orange-50 z-10">
+                            <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 dark:text-slate-200 sticky left-0 bg-white dark:bg-neutral-900 hover:bg-orange-50 dark:hover:bg-neutral-800 z-10">
                               <div className="min-w-0">
-                                <div className="font-medium text-slate-900 text-xs md:text-sm truncate">{player.name}</div>
-                                <div className="text-[10px] md:text-xs text-slate-500 truncate">{player.team}</div>
+                                <div className="font-medium text-slate-900 dark:text-white text-xs md:text-sm truncate">{player.name}</div>
+                                <div className="text-[10px] md:text-xs text-slate-500 dark:text-slate-400 truncate">{player.team}</div>
                               </div>
                             </td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 font-medium">{player.games}</td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 dark:text-slate-300 font-medium">{player.games}</td>
                             {activePlayerStatColumns.map((column) => {
                               const rawStats = player.rawStats || [];
                               
@@ -3345,7 +3540,7 @@ export default function LeaguePage() {
                               return (
                                 <td 
                                   key={`${player.id}-${column.key}`}
-                                  className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600"
+                                  className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 dark:text-slate-300"
                                 >
                                   {displayValue}
                                 </td>
@@ -3357,7 +3552,7 @@ export default function LeaguePage() {
                     </table>
                     
                     {/* Scroll hint for mobile */}
-                    <div className="md:hidden bg-orange-50 text-orange-700 text-center py-2 text-xs border-t border-orange-200">
+                    <div className="md:hidden bg-orange-50 dark:bg-neutral-800 text-orange-700 dark:text-orange-400 text-center py-2 text-xs border-t border-orange-200 dark:border-neutral-700">
                       ← Swipe to see all stats →
                     </div>
                     
@@ -3390,7 +3585,7 @@ export default function LeaguePage() {
                           )}
                           <button
                             onClick={() => setDisplayedPlayerCount(20)}
-                            className="text-slate-500 hover:text-slate-600 font-medium text-sm hover:underline"
+                            className="text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-medium text-sm hover:underline"
                           >
                             Collapse to Top 20
                           </button>
@@ -3398,15 +3593,15 @@ export default function LeaguePage() {
                       </div>
                     )}
 
-                    <div className="mt-6 pt-4 border-t border-gray-200">
-                      <div className="text-xs text-slate-500 space-y-1">
-                        <div className="font-semibold text-slate-600 mb-2">Legend ({playerStatsCategory}):</div>
+                    <div className="mt-6 pt-4 border-t border-gray-200 dark:border-neutral-700">
+                      <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1">
+                        <div className="font-semibold text-slate-600 dark:text-slate-300 mb-2">Legend ({playerStatsCategory}):</div>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                           {PLAYER_STAT_LEGENDS[playerStatsCategory]?.map((legend, index) => (
                             <span key={`legend-${index}`}>{legend}</span>
                           ))}
                         </div>
-                        <div className="mt-2 text-xs text-slate-400">
+                        <div className="mt-2 text-xs text-slate-400 dark:text-slate-500">
                           Click on any player to view their detailed profile • Swipe horizontally to see all stats
                         </div>
                       </div>
@@ -3433,26 +3628,26 @@ export default function LeaguePage() {
 
             {/* Team Stats Section */}
             {activeSection === 'teamstats' && (
-              <div className="bg-white rounded-xl shadow p-4 md:p-6">
+              <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
                 <div className="mb-4 md:mb-6">
-                  <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-4">Team Statistics - {league?.name}</h2>
+                  <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-4">Team Statistics - {league?.name}</h2>
                 </div>
 
                 {/* Dropdowns for Category and Mode */}
                 <div className="flex flex-col sm:flex-row gap-3 mb-6">
                   <div className="flex-1">
-                    <label className="block text-xs font-medium text-slate-600 mb-1.5">Category</label>
+                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">Category</label>
                     <Select
                       value={teamStatsCategory}
                       onValueChange={(value) => setTeamStatsCategory(value as typeof teamStatsCategory)}
                     >
                       <SelectTrigger 
-                        className="w-full bg-white border-slate-200 text-slate-700 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500"
+                        className="w-full bg-white dark:bg-neutral-800 border-slate-200 dark:border-neutral-600 text-slate-700 dark:text-slate-200 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500"
                         data-testid="select-category"
                       >
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
                         <SelectItem value="Traditional" data-testid="option-traditional">Traditional</SelectItem>
                         <SelectItem value="Advanced" data-testid="option-advanced">Advanced</SelectItem>
                         <SelectItem value="Four Factors" data-testid="option-four-factors">Four Factors</SelectItem>
@@ -3463,18 +3658,18 @@ export default function LeaguePage() {
                   </div>
 
                   <div className="flex-1">
-                    <label className="block text-xs font-medium text-slate-600 mb-1.5">Mode</label>
+                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">Mode</label>
                     <Select
                       value={teamStatsMode}
                       onValueChange={(value) => setTeamStatsMode(value as typeof teamStatsMode)}
                     >
                       <SelectTrigger 
-                        className="w-full bg-white border-slate-200 text-slate-700 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500"
+                        className="w-full bg-white dark:bg-neutral-800 border-slate-200 dark:border-neutral-600 text-slate-700 dark:text-slate-200 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500"
                         data-testid="select-mode"
                       >
                         <SelectValue placeholder="Select mode" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
                         <SelectItem value="Per Game" data-testid="option-per-game">Per Game</SelectItem>
                         <SelectItem value="Totals" data-testid="option-totals">Totals</SelectItem>
                         <SelectItem value="Per 100 Possessions" data-testid="option-per-100">Per 100 Possessions</SelectItem>
@@ -3487,48 +3682,48 @@ export default function LeaguePage() {
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b border-gray-200">
-                          <th className="text-left py-3 px-2 font-semibold text-slate-700 sticky left-0 bg-white">Team</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">GP</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FGM</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FGA</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FG%</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">2PM</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">2PA</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">2P%</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">3PM</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">3PA</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">3P%</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FTM</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FTA</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FT%</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">ORB</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">DRB</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">TRB</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">AST</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">STL</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">BLK</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">TO</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">PF</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">+/-</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">PTS</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">PITP</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">FB PTS</th>
-                          <th className="text-center py-3 px-2 font-semibold text-slate-700">2ND CH</th>
+                        <tr className="border-b border-gray-200 dark:border-neutral-700">
+                          <th className="text-left py-3 px-2 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-white dark:bg-neutral-900">Team</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">GP</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FGM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FGA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FG%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">2PM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">2PA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">2P%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">3PM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">3PA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">3P%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FTM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FTA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FT%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">ORB</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">DRB</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">TRB</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">AST</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">STL</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">BLK</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">TO</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">PF</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">+/-</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">PTS</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">PITP</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FB PTS</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">2ND CH</th>
                         </tr>
                       </thead>
                       <tbody>
                         {Array.from({ length: 8 }).map((_, index) => (
-                          <tr key={`skeleton-${index}`} className="border-b border-gray-100">
+                          <tr key={`skeleton-${index}`} className="border-b border-gray-100 dark:border-neutral-700">
                             <td className="py-3 px-2">
                               <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 bg-gray-200 rounded-full animate-pulse"></div>
-                                <div className="h-4 bg-gray-200 rounded w-24 animate-pulse"></div>
+                                <div className="w-8 h-8 bg-gray-200 dark:bg-neutral-700 rounded-full animate-pulse"></div>
+                                <div className="h-4 bg-gray-200 dark:bg-neutral-700 rounded w-24 animate-pulse"></div>
                               </div>
                             </td>
                             {Array.from({ length: 26 }).map((_, colIndex) => (
                               <td key={`skeleton-col-${colIndex}`} className="py-3 px-2">
-                                <div className="h-4 bg-gray-200 rounded w-12 mx-auto animate-pulse"></div>
+                                <div className="h-4 bg-gray-200 dark:bg-neutral-700 rounded w-12 mx-auto animate-pulse"></div>
                               </td>
                             ))}
                           </tr>
@@ -3537,13 +3732,13 @@ export default function LeaguePage() {
                     </table>
                   </div>
                 ) : sortedTeamStats.length > 0 ? (
-                  <div className="overflow-x-auto -mx-4 md:mx-0 border border-orange-200 rounded-lg">
+                  <div className="overflow-x-auto -mx-4 md:mx-0 border border-orange-200 dark:border-neutral-700 rounded-lg">
                     <table className="w-full text-xs md:text-sm">
                       <thead>
-                        <tr className="border-b border-gray-200 bg-orange-50">
-                          <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 sticky left-0 bg-orange-50 z-10 w-16">Logo</th>
-                          <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[120px]">Team</th>
-                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 min-w-[45px]">
+                        <tr className="border-b border-gray-200 dark:border-neutral-700 bg-orange-50 dark:bg-neutral-800">
+                          <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-orange-50 dark:bg-neutral-800 z-10 w-16">Logo</th>
+                          <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 dark:text-slate-200 min-w-[120px]">Team</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 dark:text-slate-200 min-w-[45px]">
                             <div className="flex items-center justify-center gap-1">GP</div>
                           </th>
                           {activeTeamStatColumns.map((column) => (
@@ -3560,9 +3755,9 @@ export default function LeaguePage() {
                                 }
                               }}
                               className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] ${
-                                column.sortable ? 'cursor-pointer hover:bg-orange-100' : ''
+                                column.sortable ? 'cursor-pointer hover:bg-orange-100 dark:hover:bg-neutral-700' : ''
                               } transition-colors ${
-                                teamStatsSortColumn === column.key ? 'text-orange-600' : 'text-slate-700'
+                                teamStatsSortColumn === column.key ? 'text-orange-600 dark:text-orange-400' : 'text-slate-700 dark:text-slate-200'
                               }`}
                               data-testid={`header-${column.key.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
                             >
@@ -3576,21 +3771,21 @@ export default function LeaguePage() {
                           ))}
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-100">
+                      <tbody className="divide-y divide-gray-100 dark:divide-neutral-700">
                         {sortedTeamStats.map((team, index) => (
                           <tr
                             key={`team-stats-${team.teamName}-${index}`}
-                            className="hover:bg-orange-50 transition-colors cursor-pointer group"
+                            className="hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors cursor-pointer group"
                             onClick={() => navigate(`/team/${encodeURIComponent(team.teamName)}`)}
                             data-testid={`row-team-${team.teamName}`}
                           >
-                            <td className="py-2 md:py-3 px-2 md:px-3 sticky left-0 bg-white group-hover:bg-orange-50 z-10 transition-colors">
+                            <td className="py-2 md:py-3 px-2 md:px-3 sticky left-0 bg-white dark:bg-neutral-900 group-hover:bg-orange-50 dark:group-hover:bg-neutral-800 z-10 transition-colors">
                               <TeamLogo teamName={team.teamName} leagueId={league?.league_id || ""} size="sm" />
                             </td>
-                            <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 text-xs md:text-sm truncate">
+                            <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 dark:text-slate-200 text-xs md:text-sm truncate">
                               {team.teamName}
                             </td>
-                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 font-medium" data-testid={`text-gp-${team.teamName}`}>
+                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 dark:text-slate-300 font-medium" data-testid={`text-gp-${team.teamName}`}>
                               {team.gamesPlayed}
                             </td>
                             {activeTeamStatColumns.map((column) => {
@@ -3599,7 +3794,7 @@ export default function LeaguePage() {
                               return (
                                 <td
                                   key={`${team.teamName}-${column.key}`}
-                                  className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600"
+                                  className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 dark:text-slate-300"
                                   data-testid={`text-${column.key.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${team.teamName}`}
                                 >
                                   {displayValue}
@@ -3612,27 +3807,27 @@ export default function LeaguePage() {
                     </table>
                     
                     {/* Scroll hint for mobile */}
-                    <div className="md:hidden bg-orange-50 text-orange-700 text-center py-2 text-xs border-t border-orange-200">
+                    <div className="md:hidden bg-orange-50 dark:bg-neutral-800 text-orange-700 dark:text-orange-400 text-center py-2 text-xs border-t border-orange-200 dark:border-neutral-700">
                       ← Swipe to see all stats →
                     </div>
                   </div>
                 ) : (
-                  <div className="text-center py-8 text-gray-500">
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                     <p className="text-sm">No team statistics available</p>
                     <p className="text-xs mt-1">Stats will appear once games are played</p>
                   </div>
                 )}
                 
                 {/* Dynamic Legend based on category */}
-                <div className="mt-6 pt-4 border-t border-gray-200">
-                  <div className="text-xs text-slate-500 space-y-1">
-                    <div className="font-semibold text-slate-600 mb-2">Legend ({teamStatsCategory}):</div>
+                <div className="mt-6 pt-4 border-t border-gray-200 dark:border-neutral-700">
+                  <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1">
+                    <div className="font-semibold text-slate-600 dark:text-slate-300 mb-2">Legend ({teamStatsCategory}):</div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                       {TEAM_STAT_LEGENDS[teamStatsCategory]?.map((legend, index) => (
                         <span key={`legend-${index}`}>{legend}</span>
                       ))}
                     </div>
-                    <div className="mt-2 text-xs text-slate-400">
+                    <div className="mt-2 text-xs text-slate-400 dark:text-slate-500">
                       Click on any team to view their detailed profile • Swipe horizontally to see all stats
                     </div>
                   </div>
@@ -3642,24 +3837,24 @@ export default function LeaguePage() {
 
             {/* Teams Section */}
             {activeSection === 'teams' && (
-              <div className="bg-white rounded-xl shadow p-4 md:p-6">
-                <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-4 md:mb-6">Teams</h2>
+              <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
+                <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-4 md:mb-6">Teams</h2>
                 {standings.length > 0 ? (
-                  <div className="divide-y divide-gray-200">
+                  <div className="divide-y divide-gray-200 dark:divide-neutral-700">
                     {standings.map((teamData, index) => (
                       <Link key={`team-${teamData.team}-${index}`} to={`/team/${encodeURIComponent(teamData.team)}`}>
-                        <div className="p-3 md:p-4 hover:bg-gray-50 transition-colors flex items-center justify-between group cursor-pointer">
+                        <div className="p-3 md:p-4 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors flex items-center justify-between group cursor-pointer">
                           <div className="flex items-center gap-2 md:gap-4">
                             <TeamLogo teamName={teamData.team} leagueId={league?.league_id || ""} size="md" />
-                            <h3 className="font-semibold text-slate-800 text-sm md:text-lg">{teamData.team}</h3>
+                            <h3 className="font-semibold text-slate-800 dark:text-white text-sm md:text-lg">{teamData.team}</h3>
                           </div>
-                          <ChevronRight className="w-4 md:w-5 h-4 md:h-5 text-gray-400 group-hover:text-orange-600 transition-colors" />
+                          <ChevronRight className="w-4 md:w-5 h-4 md:h-5 text-gray-400 dark:text-gray-500 group-hover:text-orange-600 transition-colors" />
                         </div>
                       </Link>
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-8 text-gray-500">
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                     <p className="text-xs md:text-sm">No teams available</p>
                     <p className="text-xs mt-1">Teams will appear once games are played</p>
                   </div>
@@ -3669,17 +3864,17 @@ export default function LeaguePage() {
 
             {/* Schedule Section */}
             {activeSection === 'schedule' && (
-              <div className="bg-white rounded-xl shadow p-4 md:p-6">
-                <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-3 md:mb-4">Game Schedule</h2>
+              <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
+                <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-3 md:mb-4">Game Schedule</h2>
                 
                 {/* Tabs for Upcoming / Results */}
-                <div className="flex gap-2 mb-4 border-b border-gray-200">
+                <div className="flex gap-2 mb-4 border-b border-gray-200 dark:border-neutral-700">
                   <button
                     onClick={() => setScheduleView('upcoming')}
                     className={`px-3 md:px-4 py-2 text-xs md:text-sm font-semibold transition-all ${
                       scheduleView === 'upcoming'
                         ? 'text-orange-500 border-b-2 border-orange-500 -mb-[2px]'
-                        : 'text-slate-600 hover:text-orange-500'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-orange-500'
                     }`}
                     data-testid="button-upcoming-games"
                   >
@@ -3690,7 +3885,7 @@ export default function LeaguePage() {
                     className={`px-3 md:px-4 py-2 text-xs md:text-sm font-semibold transition-all ${
                       scheduleView === 'results'
                         ? 'text-orange-500 border-b-2 border-orange-500 -mb-[2px]'
-                        : 'text-slate-600 hover:text-orange-500'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-orange-500'
                     }`}
                     data-testid="button-results"
                   >
@@ -3716,13 +3911,13 @@ export default function LeaguePage() {
                         
                         <>
                           {gamesToShow.length > 0 ? (
-                            <div className="divide-y divide-gray-200">
+                            <div className="divide-y divide-gray-200 dark:divide-neutral-700">
                               {scheduleView === 'upcoming' ? (
                                 /* Upcoming Games View */
                                 gamesToShow.map((game, index) => (
                                   <div 
                                     key={`upcoming-${game.game_id}-${index}`} 
-                                    className="py-2 md:py-3 hover:bg-gray-50 transition-colors cursor-pointer"
+                                    className="py-2 md:py-3 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
                                     onClick={() => {
                                       setSelectedPreviewGame(game);
                                       setIsPreviewModalOpen(true);
@@ -3733,7 +3928,7 @@ export default function LeaguePage() {
                                     <div className="flex flex-col gap-2">
                                       {/* Date and Time Row */}
                                       <div className="flex items-center justify-between">
-                                        <div className="text-[11px] md:text-xs text-slate-600 font-medium">
+                                        <div className="text-[11px] md:text-xs text-slate-600 dark:text-slate-300 font-medium">
                                           {new Date(game.game_date).toLocaleDateString('en-US', { 
                                             month: 'short', 
                                             day: 'numeric'
@@ -3741,7 +3936,7 @@ export default function LeaguePage() {
                                           {game.kickoff_time && ` • ${game.kickoff_time}`}
                                         </div>
                                         {game.venue && (
-                                          <div className="text-[10px] md:text-xs text-slate-400 truncate max-w-[100px] md:max-w-none">
+                                          <div className="text-[10px] md:text-xs text-slate-400 dark:text-slate-500 truncate max-w-[100px] md:max-w-none">
                                             {game.venue}
                                           </div>
                                         )}
@@ -3750,11 +3945,11 @@ export default function LeaguePage() {
                                       <div className="flex items-center gap-2 md:gap-3">
                                         <div className="flex items-center gap-1 md:gap-1.5 flex-1 min-w-0">
                                           <TeamLogo teamName={game.team1} leagueId={league?.league_id || ""} size="sm" />
-                                          <span className="font-medium text-slate-800 text-[11px] md:text-sm truncate">{game.team1}</span>
+                                          <span className="font-medium text-slate-800 dark:text-white text-[11px] md:text-sm truncate">{game.team1}</span>
                                         </div>
-                                        <span className="text-slate-400 text-[11px] md:text-xs flex-shrink-0">vs</span>
+                                        <span className="text-slate-400 dark:text-slate-500 text-[11px] md:text-xs flex-shrink-0">vs</span>
                                         <div className="flex items-center gap-1 md:gap-1.5 flex-1 justify-end min-w-0">
-                                          <span className="font-medium text-slate-800 text-[11px] md:text-sm truncate">{game.team2}</span>
+                                          <span className="font-medium text-slate-800 dark:text-white text-[11px] md:text-sm truncate">{game.team2}</span>
                                           <TeamLogo teamName={game.team2} leagueId={league?.league_id || ""} size="sm" />
                                         </div>
                                       </div>
@@ -3766,7 +3961,7 @@ export default function LeaguePage() {
                                 gamesToShow.map((game, index) => (
                                   <div 
                                     key={`past-${game.game_id}-${index}`} 
-                                    className={`py-2 md:py-3 transition-colors ${game.numeric_id ? 'cursor-pointer hover:bg-orange-50' : 'cursor-default'}`}
+                                    className={`py-2 md:py-3 transition-colors ${game.numeric_id ? 'cursor-pointer hover:bg-orange-50 dark:hover:bg-neutral-800' : 'cursor-default'}`}
                                     onClick={() => {
                                       if (game.numeric_id) {
                                         handleGameClick(game.numeric_id);
@@ -3778,19 +3973,19 @@ export default function LeaguePage() {
                                     <div className="flex flex-col gap-2">
                                       {/* Date and Status Row */}
                                       <div className="flex items-center justify-between">
-                                        <div className="text-[11px] md:text-xs text-slate-600 font-medium">
+                                        <div className="text-[11px] md:text-xs text-slate-600 dark:text-slate-300 font-medium">
                                           {new Date(game.game_date).toLocaleDateString('en-US', { 
                                             month: 'short', 
                                             day: 'numeric'
                                           })}
                                           {game.status && (
-                                            <span className="ml-2 text-[10px] md:text-xs text-green-600 font-semibold">
+                                            <span className="ml-2 text-[10px] md:text-xs text-green-600 dark:text-green-400 font-semibold">
                                               {game.status}
                                             </span>
                                           )}
                                         </div>
                                         {game.venue && (
-                                          <div className="text-[10px] md:text-xs text-slate-400 truncate max-w-[100px] md:max-w-none">
+                                          <div className="text-[10px] md:text-xs text-slate-400 dark:text-slate-500 truncate max-w-[100px] md:max-w-none">
                                             {game.venue}
                                           </div>
                                         )}
@@ -3799,23 +3994,23 @@ export default function LeaguePage() {
                                       <div className="flex items-center gap-2 md:gap-3">
                                         <div className="flex items-center gap-1 md:gap-1.5 flex-1 min-w-0">
                                           <TeamLogo teamName={game.team1} leagueId={league?.league_id || ""} size="sm" />
-                                          <span className="font-medium text-slate-800 text-[11px] md:text-sm truncate">{game.team1}</span>
+                                          <span className="font-medium text-slate-800 dark:text-white text-[11px] md:text-sm truncate">{game.team1}</span>
                                         </div>
                                         {game.team1_score !== undefined && game.team2_score !== undefined ? (
                                           <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0">
-                                            <span className={`text-base md:text-lg font-bold ${game.team1_score > game.team2_score ? 'text-green-600' : 'text-slate-600'}`}>
+                                            <span className={`text-base md:text-lg font-bold ${game.team1_score > game.team2_score ? 'text-green-600 dark:text-green-400' : 'text-slate-600 dark:text-slate-300'}`}>
                                               {game.team1_score}
                                             </span>
-                                            <span className="text-slate-400 text-[11px] md:text-sm">-</span>
-                                            <span className={`text-base md:text-lg font-bold ${game.team2_score > game.team1_score ? 'text-green-600' : 'text-slate-600'}`}>
+                                            <span className="text-slate-400 dark:text-slate-500 text-[11px] md:text-sm">-</span>
+                                            <span className={`text-base md:text-lg font-bold ${game.team2_score > game.team1_score ? 'text-green-600 dark:text-green-400' : 'text-slate-600 dark:text-slate-300'}`}>
                                               {game.team2_score}
                                             </span>
                                           </div>
                                         ) : (
-                                          <span className="text-slate-400 text-[11px] md:text-xs flex-shrink-0">vs</span>
+                                          <span className="text-slate-400 dark:text-slate-500 text-[11px] md:text-xs flex-shrink-0">vs</span>
                                         )}
                                         <div className="flex items-center gap-1 md:gap-1.5 flex-1 justify-end min-w-0">
-                                          <span className="font-medium text-slate-800 text-[11px] md:text-sm truncate">{game.team2}</span>
+                                          <span className="font-medium text-slate-800 dark:text-white text-[11px] md:text-sm truncate">{game.team2}</span>
                                           <TeamLogo teamName={game.team2} leagueId={league?.league_id || ""} size="sm" />
                                         </div>
                                       </div>
@@ -3825,7 +4020,7 @@ export default function LeaguePage() {
                               )}
                             </div>
                           ) : (
-                            <div className="text-center py-8 text-gray-500">
+                            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                               <p className="text-xs md:text-sm">
                                 {scheduleView === 'upcoming' ? 'No upcoming games' : 'No results available'}
                               </p>
@@ -3841,7 +4036,7 @@ export default function LeaguePage() {
                     })()}
                   </>
                 ) : (
-                  <div className="text-center py-8 text-gray-500">
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                     <p className="text-xs md:text-sm">No games scheduled</p>
                     <p className="text-[10px] md:text-xs mt-1">Games will appear when scheduled</p>
                   </div>
@@ -3853,14 +4048,14 @@ export default function LeaguePage() {
             {activeSection === 'comparison' && (
               <div className="space-y-4 md:space-y-6">
                 {/* Toggle between Player and Team Comparison */}
-                <div className="bg-white rounded-xl shadow p-3 md:p-4">
+                <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-3 md:p-4">
                   <div className="flex items-center justify-center gap-2">
                     <button
                       onClick={() => setComparisonMode('player')}
                       className={`px-4 md:px-6 py-1.5 md:py-2 rounded-lg text-sm md:text-base font-semibold transition-all ${
                         comparisonMode === 'player'
                           ? 'bg-orange-500 text-white shadow-md'
-                          : 'bg-gray-100 text-slate-600 hover:bg-gray-200'
+                          : 'bg-gray-100 dark:bg-neutral-800 text-slate-600 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-neutral-700'
                       }`}
                       data-testid="button-player-comparison"
                     >
@@ -3871,7 +4066,7 @@ export default function LeaguePage() {
                       className={`px-4 md:px-6 py-1.5 md:py-2 rounded-lg text-sm md:text-base font-semibold transition-all ${
                         comparisonMode === 'team'
                           ? 'bg-orange-500 text-white shadow-md'
-                          : 'bg-gray-100 text-slate-600 hover:bg-gray-200'
+                          : 'bg-gray-100 dark:bg-neutral-800 text-slate-600 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-neutral-700'
                       }`}
                       data-testid="button-team-comparison"
                     >
@@ -3899,18 +4094,18 @@ export default function LeaguePage() {
             {activeSection === 'overview' && (
               <>
                 {/* League Leaders */}
-                <div className="bg-white rounded-xl shadow p-4 md:p-6">
+                <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-4 md:mb-6">
-                <h2 className="text-base md:text-lg font-semibold text-slate-800">League Leaders</h2>
+                <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">League Leaders</h2>
                 <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
                   {/* Toggle between Averages and Totals */}
-                  <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1">
+                  <div className="inline-flex rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 p-1">
                     <button
                       onClick={() => setLeagueLeadersView('averages')}
                       className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                         leagueLeadersView === 'averages'
-                          ? 'bg-white text-orange-600 shadow-sm'
-                          : 'text-slate-600 hover:text-slate-800'
+                          ? 'bg-white dark:bg-neutral-700 text-orange-600 shadow-sm'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
                       }`}
                       data-testid="button-league-leaders-averages"
                     >
@@ -3920,8 +4115,8 @@ export default function LeaguePage() {
                       onClick={() => setLeagueLeadersView('totals')}
                       className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                         leagueLeadersView === 'totals'
-                          ? 'bg-white text-orange-600 shadow-sm'
-                          : 'text-slate-600 hover:text-slate-800'
+                          ? 'bg-white dark:bg-neutral-700 text-orange-600 shadow-sm'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
                       }`}
                       data-testid="button-league-leaders-totals"
                     >
@@ -3962,9 +4157,9 @@ export default function LeaguePage() {
                       totalLabel: "AST",
                     },
                   ] as const).map(({ title, list, avgLabel, totalLabel }) => (
-                    <div key={title} className="bg-gray-50 rounded-lg p-3 md:p-4 shadow-inner">
-                      <h3 className="text-xs md:text-sm font-semibold text-slate-700 mb-2 md:mb-3 text-center">{title}</h3>
-                      <ul className="space-y-1 text-xs md:text-sm text-slate-800">
+                    <div key={title} className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4 shadow-inner">
+                      <h3 className="text-xs md:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 md:mb-3 text-center">{title}</h3>
+                      <ul className="space-y-1 text-xs md:text-sm text-slate-800 dark:text-white">
                         {Array.isArray(list) &&
                           list.map((p, i) => (
                             <li key={`${title}-${p.name}-${i}`} className="flex justify-between">
@@ -3982,9 +4177,9 @@ export default function LeaguePage() {
                 </div>
 
                 {/* Team League Leaders */}
-                <div className="bg-white rounded-xl shadow p-4 md:p-6">
+                <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
                   <div className="flex justify-between items-center mb-4 md:mb-6">
-                    <h2 className="text-base md:text-lg font-semibold text-slate-800">Team Leaders</h2>
+                    <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">Team Leaders</h2>
                     <button
                       onClick={() => setActiveSection('teamstats')}
                       className="text-xs md:text-sm text-orange-500 hover:text-orange-600 font-medium hover:underline"
@@ -4001,9 +4196,9 @@ export default function LeaguePage() {
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
                       {/* Top Scoring Teams */}
-                      <div className="bg-gray-50 rounded-lg p-3 md:p-4 shadow-inner">
-                        <h3 className="text-xs md:text-sm font-semibold text-slate-700 mb-2 md:mb-3 text-center">Top Scoring</h3>
-                        <ul className="space-y-1 text-xs md:text-sm text-slate-800">
+                      <div className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4 shadow-inner">
+                        <h3 className="text-xs md:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 md:mb-3 text-center">Top Scoring</h3>
+                        <ul className="space-y-1 text-xs md:text-sm text-slate-800 dark:text-white">
                           {teamStatsData
                             .slice()
                             .sort((a, b) => parseFloat(b.ppg || '0') - parseFloat(a.ppg || '0'))
@@ -4023,9 +4218,9 @@ export default function LeaguePage() {
                       </div>
 
                       {/* Top Rebounding Teams */}
-                      <div className="bg-gray-50 rounded-lg p-3 md:p-4 shadow-inner">
-                        <h3 className="text-xs md:text-sm font-semibold text-slate-700 mb-2 md:mb-3 text-center">Top Rebounding</h3>
-                        <ul className="space-y-1 text-xs md:text-sm text-slate-800">
+                      <div className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4 shadow-inner">
+                        <h3 className="text-xs md:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 md:mb-3 text-center">Top Rebounding</h3>
+                        <ul className="space-y-1 text-xs md:text-sm text-slate-800 dark:text-white">
                           {teamStatsData
                             .slice()
                             .sort((a, b) => parseFloat(b.rpg || '0') - parseFloat(a.rpg || '0'))
@@ -4045,9 +4240,9 @@ export default function LeaguePage() {
                       </div>
 
                       {/* Top Assists Teams */}
-                      <div className="bg-gray-50 rounded-lg p-3 md:p-4 shadow-inner">
-                        <h3 className="text-xs md:text-sm font-semibold text-slate-700 mb-2 md:mb-3 text-center">Top Playmaking</h3>
-                        <ul className="space-y-1 text-xs md:text-sm text-slate-800">
+                      <div className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4 shadow-inner">
+                        <h3 className="text-xs md:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 md:mb-3 text-center">Top Playmaking</h3>
+                        <ul className="space-y-1 text-xs md:text-sm text-slate-800 dark:text-white">
                           {teamStatsData
                             .slice()
                             .sort((a, b) => parseFloat(b.apg || '0') - parseFloat(a.apg || '0'))
@@ -4071,8 +4266,8 @@ export default function LeaguePage() {
 
             {/* Tournament Bracket - Only for BCB Trophy */}
             {slug === 'british-championship-basketball' && league?.league_id && (
-              <div className="bg-white rounded-xl shadow p-4 md:p-6">
-                <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-4 md:mb-6">Tournament Bracket</h2>
+              <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
+                <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-4 md:mb-6">Tournament Bracket</h2>
                 <TournamentBracket 
                   leagueId={league.league_id} 
                   onGameClick={handleGameClick}
@@ -4081,20 +4276,20 @@ export default function LeaguePage() {
             )}
 
             {/* League Standings */}
-            <div className="bg-white rounded-xl shadow p-4 md:p-6">
-              <h2 className="text-base md:text-lg font-semibold text-slate-800 mb-4">League Standings</h2>
+            <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
+              <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-4">League Standings</h2>
               {isLoadingStandings ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-gray-200">
-                        <th className="text-left py-3 px-2 font-semibold text-slate-700">#</th>
-                        <th className="text-left py-3 px-2 font-semibold text-slate-700">Team</th>
-                        <th className="text-center py-3 px-2 font-semibold text-slate-700">Record</th>
-                        <th className="text-center py-3 px-2 font-semibold text-slate-700">Win%</th>
-                        <th className="text-right py-3 px-2 font-semibold text-slate-700">PF</th>
-                        <th className="text-right py-3 px-2 font-semibold text-slate-700">PA</th>
-                        <th className="text-right py-3 px-2 font-semibold text-slate-700">Diff</th>
+                      <tr className="border-b border-gray-200 dark:border-neutral-700">
+                        <th className="text-left py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">#</th>
+                        <th className="text-left py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">Team</th>
+                        <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">Record</th>
+                        <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">Win%</th>
+                        <th className="text-right py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">PF</th>
+                        <th className="text-right py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">PA</th>
+                        <th className="text-right py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">Diff</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -4108,43 +4303,43 @@ export default function LeaguePage() {
                 <div className="overflow-x-auto -mx-4 md:mx-0">
                   <table className="w-full text-sm min-w-[600px]">
                     <thead>
-                      <tr className="border-b-2 border-gray-200">
-                        <th className="text-left py-3 px-3 font-semibold text-slate-700 w-12 sticky left-0 bg-white z-10">#</th>
-                        <th className="text-left py-3 px-3 font-semibold text-slate-700 max-w-[180px] sticky left-12 md:static bg-white z-10">Team</th>
-                        <th className="text-center py-3 px-3 font-semibold text-slate-700 w-20">W</th>
-                        <th className="text-center py-3 px-3 font-semibold text-slate-700 w-20">L</th>
-                        <th className="text-center py-3 px-3 font-semibold text-slate-700 w-20">Win%</th>
-                        <th className="text-right py-3 px-3 font-semibold text-slate-700 w-20">PF</th>
-                        <th className="text-right py-3 px-3 font-semibold text-slate-700 w-20">PA</th>
-                        <th className="text-right py-3 px-3 font-semibold text-slate-700 w-20">Diff</th>
+                      <tr className="border-b-2 border-gray-200 dark:border-neutral-700">
+                        <th className="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-12 sticky left-0 bg-white dark:bg-neutral-900 z-10">#</th>
+                        <th className="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 max-w-[180px] sticky left-12 md:static bg-white dark:bg-neutral-900 z-10">Team</th>
+                        <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">W</th>
+                        <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">L</th>
+                        <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">Win%</th>
+                        <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">PF</th>
+                        <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">PA</th>
+                        <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">Diff</th>
                       </tr>
                     </thead>
                     <tbody>
                       {standings.map((team, index) => (
                         <tr 
                           key={team.team} 
-                          className={`border-b border-gray-100 hover:bg-orange-50 transition-colors ${
-                            index < 3 ? 'bg-green-50' : index >= standings.length - 2 ? 'bg-red-50' : ''
+                          className={`border-b border-gray-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors ${
+                            index < 3 ? 'bg-green-50 dark:bg-green-900/20' : index >= standings.length - 2 ? 'bg-red-50 dark:bg-red-900/20' : ''
                           }`}
                         >
-                          <td className="py-3 px-3 font-medium text-slate-600 sticky left-0 bg-inherit z-10">{index + 1}</td>
-                          <td className="py-3 px-3 font-medium text-slate-800 max-w-[180px] sticky left-12 md:static bg-inherit z-10">
+                          <td className="py-3 px-3 font-medium text-slate-600 dark:text-slate-400 sticky left-0 bg-inherit z-10">{index + 1}</td>
+                          <td className="py-3 px-3 font-medium text-slate-800 dark:text-slate-200 max-w-[180px] sticky left-12 md:static bg-inherit z-10">
                             <div className="flex items-center gap-2">
                               <TeamLogo teamName={team.team} leagueId={league?.league_id} size="sm" />
                               <span className="truncate">{team.team}</span>
                             </div>
                           </td>
-                          <td className="py-3 px-3 text-center font-semibold text-slate-700">{team.wins}</td>
-                          <td className="py-3 px-3 text-center font-semibold text-slate-700">{team.losses}</td>
-                          <td className="py-3 px-3 text-center font-medium text-slate-600">{(team.winPct * 100).toFixed(1)}%</td>
-                          <td className="py-3 px-3 text-right font-medium text-slate-700">{team.pointsFor}</td>
-                          <td className="py-3 px-3 text-right font-medium text-slate-700">{team.pointsAgainst}</td>
-                          <td className={`py-3 px-3 text-right font-semibold ${team.pointsDiff > 0 ? 'text-green-600' : team.pointsDiff < 0 ? 'text-red-600' : 'text-slate-600'}`}>{team.pointsDiff > 0 ? '+' : ''}{team.pointsDiff}</td>
+                          <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.wins}</td>
+                          <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.losses}</td>
+                          <td className="py-3 px-3 text-center font-medium text-slate-600 dark:text-slate-400">{(team.winPct * 100).toFixed(1)}%</td>
+                          <td className="py-3 px-3 text-right font-medium text-slate-700 dark:text-slate-300">{team.pointsFor}</td>
+                          <td className="py-3 px-3 text-right font-medium text-slate-700 dark:text-slate-300">{team.pointsAgainst}</td>
+                          <td className={`py-3 px-3 text-right font-semibold ${team.pointsDiff > 0 ? 'text-green-600 dark:text-green-400' : team.pointsDiff < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-400'}`}>{team.pointsDiff > 0 ? '+' : ''}{team.pointsDiff}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                  <div className="mt-4 pt-3 border-t border-gray-100 text-xs text-slate-500">
+                  <div className="mt-4 pt-3 border-t border-gray-100 dark:border-neutral-700 text-xs text-slate-500 dark:text-slate-400">
                     <div className="flex gap-4 flex-wrap">
                       <span><span className="font-semibold">W</span> = Wins</span>
                       <span><span className="font-semibold">L</span> = Losses</span>
@@ -4156,7 +4351,7 @@ export default function LeaguePage() {
                   </div>
                 </div>
               ) : (
-                <div className="text-center py-8 text-gray-500">
+                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                   <p className="text-sm">No standings available</p>
                   <p className="text-xs mt-1">Standings will appear once games are played</p>
                 </div>
@@ -4170,8 +4365,8 @@ export default function LeaguePage() {
           <aside className="space-y-6">
             {/* League Admin Panel */}
             {isOwner && league?.league_id && (
-              <div className="bg-white rounded-xl shadow p-6 border-l-4 border-blue-500">
-                <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+              <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-6 border-l-4 border-blue-500">
+                <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
                   <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.5 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -4180,7 +4375,7 @@ export default function LeaguePage() {
                 </h3>
                 
                 <div className="space-y-4">
-                  <p className="text-sm text-slate-600 mb-4">
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
                     Manage all aspects of your league from the dedicated admin area.
                   </p>
                   
@@ -4195,7 +4390,7 @@ export default function LeaguePage() {
                     Open League Admin
                   </button>
                   
-                  <div className="text-xs text-slate-500 space-y-1">
+                  <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1">
                     <p>• Team Logo Management</p>
                     <p>• Banner & Media Settings</p>
                     <p>• Social Media Integration</p>
@@ -4213,9 +4408,9 @@ export default function LeaguePage() {
             )}
 
             {/* Instagram Embed */}
-            <div className="bg-white rounded-xl shadow p-4">
+            <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4">
               <div className="flex justify-between items-center mb-3">
-                <h3 className="text-sm font-semibold text-slate-700">Instagram Feed</h3>
+                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Instagram Feed</h3>
                 {isOwner && (
                   <button
                     onClick={() => setIsEditingInstagram(!isEditingInstagram)}
@@ -4232,10 +4427,10 @@ export default function LeaguePage() {
                   {/* List of existing URLs */}
                   {instagramUrls.length > 0 && (
                     <div className="space-y-2">
-                      <p className="text-xs font-medium text-slate-600">Current Posts ({instagramUrls.length})</p>
+                      <p className="text-xs font-medium text-slate-600 dark:text-slate-400">Current Posts ({instagramUrls.length})</p>
                       {instagramUrls.map((url, index) => (
-                        <div key={index} className="flex items-center gap-2 p-2 bg-gray-50 rounded border border-gray-200">
-                          <span className="text-xs text-slate-700 flex-1 truncate">{url}</span>
+                        <div key={index} className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-neutral-800 rounded border border-gray-200 dark:border-neutral-700">
+                          <span className="text-xs text-slate-700 dark:text-slate-300 flex-1 truncate">{url}</span>
                           <button
                             onClick={() => handleRemoveInstagramUrl(index)}
                             className="text-xs text-red-500 hover:text-red-600 font-medium shrink-0"
@@ -4250,7 +4445,7 @@ export default function LeaguePage() {
 
                   {/* Add new URL */}
                   <div className="space-y-2">
-                    <p className="text-xs font-medium text-slate-600">Add New Post</p>
+                    <p className="text-xs font-medium text-slate-600 dark:text-slate-400">Add New Post</p>
                     <div className="flex gap-2">
                       <input
                         type="text"
@@ -4258,18 +4453,18 @@ export default function LeaguePage() {
                         value={newInstagramUrl}
                         onChange={(e) => setNewInstagramUrl(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleAddInstagramUrl()}
-                        className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md"
+                        className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-neutral-600 dark:bg-neutral-800 dark:text-white rounded-md"
                         data-testid="new-instagram-url-input"
                       />
                       <button
                         onClick={handleAddInstagramUrl}
-                        className="px-3 py-2 text-xs font-medium bg-gray-200 text-gray-700 rounded hover:bg-gray-300 shrink-0"
+                        className="px-3 py-2 text-xs font-medium bg-gray-200 dark:bg-neutral-700 text-gray-700 dark:text-gray-200 rounded hover:bg-gray-300 dark:hover:bg-neutral-600 shrink-0"
                         data-testid="add-instagram-url-button"
                       >
                         Add
                       </button>
                     </div>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
                       💡 Add profile URLs or specific post/reel URLs. Videos will auto-play in the carousel.
                     </p>
                   </div>
@@ -4323,9 +4518,9 @@ export default function LeaguePage() {
             </div>
 
             {/* YouTube Embed */}
-            <div className="bg-white rounded-xl shadow p-4">
+            <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4">
               <div className="flex justify-between items-center mb-3">
-                <h3 className="text-sm font-semibold text-slate-700">Latest Highlights</h3>
+                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Latest Highlights</h3>
                 {isOwner && (
                   <button
                     onClick={() => setIsEditingYoutube(!isEditingYoutube)}
