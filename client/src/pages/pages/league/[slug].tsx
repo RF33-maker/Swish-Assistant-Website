@@ -209,9 +209,6 @@ const TEAM_STAT_COLUMNS: Record<string, TeamStatColumn[]> = {
   ],
   Misc: [
     { key: 'OPP PTS', label: 'OPP PTS', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppPoints', 'avgOppPoints') },
-    { key: 'OPP FGM', label: 'OPP FGM', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppFGM', 'avgOppFGM') },
-    { key: 'OPP FGA', label: 'OPP FGA', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppFGA', 'avgOppFGA') },
-    { key: 'OPP 3PM', label: 'OPP 3PM', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOpp3PM', 'avgOpp3PM') },
     { key: 'OPP TO', label: 'OPP TO', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppTurnovers', 'avgOppTurnovers') },
   ],
 };
@@ -280,9 +277,6 @@ const TEAM_STAT_LEGENDS: Record<string, string[]> = {
   ],
   Misc: [
     'OPP PTS = Opponent Points',
-    'OPP FGM = Opponent Field Goals Made',
-    'OPP FGA = Opponent Field Goals Attempted',
-    'OPP 3PM = Opponent 3-Pointers Made',
     'OPP TO = Opponent Turnovers'
   ]
 };
