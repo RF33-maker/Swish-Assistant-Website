@@ -283,19 +283,17 @@ export default function PlayerStatsPage() {
           
           if (gameKeys.length > 0) {
             const { data: gamesData, error: gamesError } = await supabase
-              .from('games')
-              .select('game_key, home_team, away_team')
+              .from('game_schedule')
+              .select('game_key, hometeam, awayteam')
               .in('game_key', gameKeys);
             
-            if (!gamesError && gamesData) {
-              console.log('🏀 Games fetched:', gamesData.length, 'records');
-              
-              const gameKeyMap = new Map<string, { home_team: string; away_team: string }>();
+            if (!gamesError && gamesData && gamesData.length > 0) {
+              const gameKeyMap = new Map<string, { hometeam: string; awayteam: string }>();
               gamesData.forEach(game => {
                 if (game.game_key) {
                   gameKeyMap.set(game.game_key, {
-                    home_team: game.home_team,
-                    away_team: game.away_team
+                    hometeam: game.hometeam,
+                    awayteam: game.awayteam
                   });
                 }
               });
@@ -309,13 +307,13 @@ export default function PlayerStatsPage() {
                     const playerTeamRaw = stat.team_name || '';
                     const playerTeamNorm = playerTeamRaw.trim().toLowerCase();
                     
-                    const homeTeamNorm = (gameInfo.home_team || '').trim().toLowerCase();
-                    const awayTeamNorm = (gameInfo.away_team || '').trim().toLowerCase();
+                    const homeTeamNorm = (gameInfo.hometeam || '').trim().toLowerCase();
+                    const awayTeamNorm = (gameInfo.awayteam || '').trim().toLowerCase();
                     
                     if (playerTeamNorm === homeTeamNorm) {
-                      derivedOpponent = gameInfo.away_team;
+                      derivedOpponent = gameInfo.awayteam;
                     } else if (playerTeamNorm === awayTeamNorm) {
-                      derivedOpponent = gameInfo.home_team;
+                      derivedOpponent = gameInfo.hometeam;
                     }
                   }
                 }
