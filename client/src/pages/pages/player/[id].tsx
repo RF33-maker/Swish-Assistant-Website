@@ -75,6 +75,17 @@ interface SeasonAverages {
   ft_percentage: number;
 }
 
+interface PlayerRankings {
+  points: number;
+  rebounds: number;
+  assists: number;
+  steals: number;
+  blocks: number;
+  fg_percentage: number;
+  three_point_percentage: number;
+  ft_percentage: number;
+}
+
 export default function PlayerStatsPage() {
   const [match, params] = useRoute("/player/:slug");
   const [, setLocation] = useLocation();
@@ -87,6 +98,7 @@ export default function PlayerStatsPage() {
   console.log('🎯 ROUTE DEBUG - Player Slug/ID:', playerSlugOrId);
   const [playerStats, setPlayerStats] = useState<PlayerStat[]>([]);
   const [seasonAverages, setSeasonAverages] = useState<SeasonAverages | null>(null);
+  const [playerRankings, setPlayerRankings] = useState<PlayerRankings | null>(null);
   const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string; position?: string; number?: number; leagueId?: string } | null>(null);
   const [playerLeagues, setPlayerLeagues] = useState<{ id: string; name: string; slug: string }[]>([]);
   const [playerMatches, setPlayerMatches] = useState<PlayerMatch[]>([]);
@@ -98,6 +110,117 @@ export default function PlayerStatsPage() {
   const [aiAnalysis, setAiAnalysis] = useState<string>("");
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [leagueNames, setLeagueNames] = useState<Map<string, string>>(new Map());
+
+  // Helper function to get ordinal suffix
+  const getOrdinalSuffix = (num: number): string => {
+    const j = num % 10;
+    const k = num % 100;
+    if (j === 1 && k !== 11) return num + "st";
+    if (j === 2 && k !== 12) return num + "nd";
+    if (j === 3 && k !== 13) return num + "rd";
+    return num + "th";
+  };
+
+  // Function to calculate player rankings in the league
+  const calculateRankings = async (leagueId: string, currentAverages: SeasonAverages): Promise<PlayerRankings | null> => {
+    try {
+      const { data: allStats } = await supabase
+        .from('player_stats')
+        .select('*')
+        .eq('league_id', leagueId)
+        .eq('is_public', true);
+
+      if (!allStats || allStats.length === 0) return null;
+
+      // Group stats by player and calculate their averages
+      const playerAverages = new Map<string, SeasonAverages>();
+      const playerIds = new Set(allStats.map(s => s.id || Math.random().toString()));
+
+      allStats.forEach(stat => {
+        const key = `${stat.firstname || ''}_${stat.familyname || ''}`.trim();
+        if (!playerAverages.has(key)) {
+          playerAverages.set(key, {
+            games_played: 0,
+            avg_points: 0,
+            avg_rebounds: 0,
+            avg_assists: 0,
+            avg_steals: 0,
+            avg_blocks: 0,
+            fg_percentage: 0,
+            three_point_percentage: 0,
+            ft_percentage: 0
+          });
+        }
+      });
+
+      // Calculate totals for each player
+      const playerTotals = new Map<string, any>();
+      allStats.forEach(stat => {
+        const key = `${stat.firstname || ''}_${stat.familyname || ''}`.trim();
+        if (!playerTotals.has(key)) {
+          playerTotals.set(key, {
+            points: 0, rebounds: 0, assists: 0, steals: 0, blocks: 0,
+            fg_made: 0, fg_attempted: 0, three_made: 0, three_attempted: 0,
+            ft_made: 0, ft_attempted: 0, games: 0
+          });
+        }
+        const totals = playerTotals.get(key);
+        totals.points += stat.spoints || 0;
+        totals.rebounds += stat.sreboundstotal || 0;
+        totals.assists += stat.sassists || 0;
+        totals.steals += stat.ssteals || 0;
+        totals.blocks += stat.sblocks || 0;
+        totals.fg_made += stat.sfieldgoalsmade || 0;
+        totals.fg_attempted += stat.sfieldgoalsattempted || 0;
+        totals.three_made += stat.sthreepointersmade || 0;
+        totals.three_attempted += stat.sthreepointersattempted || 0;
+        totals.ft_made += stat.sfreethrowsmade || 0;
+        totals.ft_attempted += stat.sfreethrowsattempted || 0;
+        totals.games += 1;
+      });
+
+      // Convert totals to averages and rank
+      const rankings: { [key: string]: number[] } = {
+        points: [],
+        rebounds: [],
+        assists: [],
+        steals: [],
+        blocks: [],
+        fg_percentage: [],
+        three_point_percentage: [],
+        ft_percentage: []
+      };
+
+      playerTotals.forEach((totals, playerKey) => {
+        const games = totals.games || 1;
+        rankings.points.push(totals.points / games);
+        rankings.rebounds.push(totals.rebounds / games);
+        rankings.assists.push(totals.assists / games);
+        rankings.steals.push(totals.steals / games);
+        rankings.blocks.push(totals.blocks / games);
+        rankings.fg_percentage.push(totals.fg_attempted > 0 ? (totals.fg_made / totals.fg_attempted) * 100 : 0);
+        rankings.three_point_percentage.push(totals.three_attempted > 0 ? (totals.three_made / totals.three_attempted) * 100 : 0);
+        rankings.ft_percentage.push(totals.ft_attempted > 0 ? (totals.ft_made / totals.ft_attempted) * 100 : 0);
+      });
+
+      // Sort and find ranks
+      const ranks: PlayerRankings = {
+        points: rankings.points.sort((a, b) => b - a).indexOf(currentAverages.avg_points) + 1,
+        rebounds: rankings.rebounds.sort((a, b) => b - a).indexOf(currentAverages.avg_rebounds) + 1,
+        assists: rankings.assists.sort((a, b) => b - a).indexOf(currentAverages.avg_assists) + 1,
+        steals: rankings.steals.sort((a, b) => b - a).indexOf(currentAverages.avg_steals) + 1,
+        blocks: rankings.blocks.sort((a, b) => b - a).indexOf(currentAverages.avg_blocks) + 1,
+        fg_percentage: rankings.fg_percentage.sort((a, b) => b - a).indexOf(currentAverages.fg_percentage) + 1,
+        three_point_percentage: rankings.three_point_percentage.sort((a, b) => b - a).indexOf(currentAverages.three_point_percentage) + 1,
+        ft_percentage: rankings.ft_percentage.sort((a, b) => b - a).indexOf(currentAverages.ft_percentage) + 1
+      };
+
+      return ranks;
+    } catch (error) {
+      console.error("❌ Error calculating rankings:", error);
+      return null;
+    }
+  };
 
   useEffect(() => {
     if (!playerSlugOrId) {
@@ -432,6 +555,14 @@ export default function PlayerStatsPage() {
           };
           console.log('📊 Step 6: Calculated averages:', averages);
           setSeasonAverages(averages);
+
+          // Calculate player rankings
+          if (stats[0].league_id) {
+            const ranks = await calculateRankings(stats[0].league_id, averages);
+            if (ranks) {
+              setPlayerRankings(ranks);
+            }
+          }
 
           // Generate AI analysis
           if (playerInfo && averages) {
@@ -1009,6 +1140,9 @@ export default function PlayerStatsPage() {
                       {filteredSeasonAverages.avg_points.toFixed(1)}
                     </div>
                     <div className="text-xs md:text-sm text-orange-700 dark:text-orange-500 group-hover:text-orange-800 dark:group-hover:text-orange-400 transition-colors duration-300 mt-1">PPG</div>
+                    {playerRankings && (
+                      <div className="text-xs text-orange-600 dark:text-orange-500 mt-1">({getOrdinalSuffix(playerRankings.points)})</div>
+                    )}
                     <div className="max-w-[120px] mx-auto bg-orange-50 dark:bg-neutral-700 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
@@ -1025,6 +1159,9 @@ export default function PlayerStatsPage() {
                       {filteredSeasonAverages.avg_rebounds.toFixed(1)}
                     </div>
                     <div className="text-xs md:text-sm text-orange-700 dark:text-orange-500 group-hover:text-orange-800 dark:group-hover:text-orange-400 transition-colors duration-300 mt-1">RPG</div>
+                    {playerRankings && (
+                      <div className="text-xs text-orange-600 dark:text-orange-500 mt-1">({getOrdinalSuffix(playerRankings.rebounds)})</div>
+                    )}
                     <div className="max-w-[120px] mx-auto bg-orange-50 dark:bg-neutral-700 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
@@ -1041,6 +1178,9 @@ export default function PlayerStatsPage() {
                       {filteredSeasonAverages.avg_assists.toFixed(1)}
                     </div>
                     <div className="text-xs md:text-sm text-orange-700 dark:text-orange-500 group-hover:text-orange-800 dark:group-hover:text-orange-400 transition-colors duration-300 mt-1">APG</div>
+                    {playerRankings && (
+                      <div className="text-xs text-orange-600 dark:text-orange-500 mt-1">({getOrdinalSuffix(playerRankings.assists)})</div>
+                    )}
                     <div className="max-w-[120px] mx-auto bg-orange-50 dark:bg-neutral-700 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
@@ -1057,6 +1197,9 @@ export default function PlayerStatsPage() {
                       {filteredSeasonAverages.avg_steals.toFixed(1)}
                     </div>
                     <div className="text-xs md:text-sm text-orange-700 dark:text-orange-500 group-hover:text-orange-800 dark:group-hover:text-orange-400 transition-colors duration-300 mt-1">SPG</div>
+                    {playerRankings && (
+                      <div className="text-xs text-orange-600 dark:text-orange-500 mt-1">({getOrdinalSuffix(playerRankings.steals)})</div>
+                    )}
                     <div className="max-w-[120px] mx-auto bg-orange-50 dark:bg-neutral-700 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
@@ -1073,6 +1216,9 @@ export default function PlayerStatsPage() {
                       {filteredSeasonAverages.avg_blocks.toFixed(1)}
                     </div>
                     <div className="text-xs md:text-sm text-orange-700 dark:text-orange-500 group-hover:text-orange-800 dark:group-hover:text-orange-400 transition-colors duration-300 mt-1">BPG</div>
+                    {playerRankings && (
+                      <div className="text-xs text-orange-600 dark:text-orange-500 mt-1">({getOrdinalSuffix(playerRankings.blocks)})</div>
+                    )}
                     <div className="max-w-[120px] mx-auto bg-orange-50 dark:bg-neutral-700 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
@@ -1089,6 +1235,9 @@ export default function PlayerStatsPage() {
                       {formatPercentage(filteredSeasonAverages.fg_percentage)}
                     </div>
                     <div className="text-xs md:text-sm text-orange-700 dark:text-orange-500 group-hover:text-orange-800 dark:group-hover:text-orange-400 transition-colors duration-300 mt-1">FG%</div>
+                    {playerRankings && (
+                      <div className="text-xs text-orange-600 dark:text-orange-500 mt-1">({getOrdinalSuffix(playerRankings.fg_percentage)})</div>
+                    )}
                     <div className="max-w-[120px] mx-auto bg-orange-50 dark:bg-neutral-700 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
@@ -1105,6 +1254,9 @@ export default function PlayerStatsPage() {
                       {formatPercentage(filteredSeasonAverages.three_point_percentage)}
                     </div>
                     <div className="text-xs md:text-sm text-orange-700 dark:text-orange-500 group-hover:text-orange-800 dark:group-hover:text-orange-400 transition-colors duration-300 mt-1">3P%</div>
+                    {playerRankings && (
+                      <div className="text-xs text-orange-600 dark:text-orange-500 mt-1">({getOrdinalSuffix(playerRankings.three_point_percentage)})</div>
+                    )}
                     <div className="max-w-[120px] mx-auto bg-orange-50 dark:bg-neutral-700 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
                       <div 
                         className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
@@ -1120,6 +1272,9 @@ export default function PlayerStatsPage() {
                     <div className="text-lg font-semibold md:text-3xl lg:text-4xl md:font-bold text-orange-700 dark:text-orange-400 group-hover:text-orange-800 dark:group-hover:text-orange-300 transition-colors duration-300 group-hover:animate-pulse">
                       {formatPercentage(filteredSeasonAverages.ft_percentage)}
                     </div>
+                    {playerRankings && (
+                      <div className="text-xs text-orange-600 dark:text-orange-500 mt-1">({getOrdinalSuffix(playerRankings.ft_percentage)})</div>
+                    )}
                     <div className="text-xs md:text-sm text-orange-700 dark:text-orange-500 group-hover:text-orange-800 dark:group-hover:text-orange-400 transition-colors duration-300 mt-1">FT%</div>
                     <div className="max-w-[120px] mx-auto bg-orange-50 dark:bg-neutral-700 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
                       <div 
