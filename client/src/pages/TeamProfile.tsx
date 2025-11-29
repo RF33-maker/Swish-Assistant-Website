@@ -11,6 +11,7 @@ import { normalizeTeamName } from "@/lib/teamUtils";
 import { useTeamBranding } from "@/hooks/useTeamBranding";
 import { adjustOpacity } from "@/lib/colorExtractor";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import GameDetailModal from "@/components/GameDetailModal";
 
 interface League {
   league_id: string;
@@ -43,6 +44,7 @@ interface Game {
   opponentScore?: number;
   isWin?: boolean;
   isHome?: boolean;
+  game_key?: string;
 }
 
 interface UpcomingGame {
@@ -82,6 +84,8 @@ export default function TeamProfile() {
   const [teamDescription, setTeamDescription] = useState<string | null>(null);
   const [isOwner, setIsOwner] = useState(false);
   const { user } = useAuth();
+  const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
+  const [isGameModalOpen, setIsGameModalOpen] = useState(false);
 
   // Extract team branding colors
   const { colors: teamBranding, primaryColor, secondaryColor } = useTeamBranding({
@@ -312,7 +316,8 @@ export default function TeamProfile() {
               opponent: opponent,
               opponentScore: opponentScore,
               isWin: isWin,
-              isHome: isHome
+              isHome: isHome,
+              game_key: gameData.game_key
             };
           });
           
@@ -945,7 +950,17 @@ export default function TeamProfile() {
               </h2>
               <div className="space-y-2 md:space-y-3">
                 {team.recentGames.slice(0, 8).map((game: Game, index: number) => (
-                  <div key={index} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-neutral-800 rounded-lg">
+                  <div 
+                    key={index} 
+                    onClick={() => {
+                      if (game.game_key) {
+                        setSelectedGameId(game.game_key);
+                        setIsGameModalOpen(true);
+                      }
+                    }}
+                    data-testid={`recent-game-${index}`}
+                    className="flex justify-between items-center p-3 bg-gray-50 dark:bg-neutral-800 rounded-lg cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700 transition-colors"
+                  >
                     <div className="flex-1">
                       <div className="font-medium text-slate-800 dark:text-white text-sm md:text-base">
                         {game.isHome ? 'vs' : '@'} {game.opponent}
@@ -1014,6 +1029,18 @@ export default function TeamProfile() {
           </div>
         </div>
       </main>
+
+      {/* Game Detail Modal */}
+      {selectedGameId && (
+        <GameDetailModal 
+          gameId={selectedGameId} 
+          isOpen={isGameModalOpen} 
+          onClose={() => {
+            setIsGameModalOpen(false);
+            setSelectedGameId(null);
+          }} 
+        />
+      )}
       </div>
     </>
   );
