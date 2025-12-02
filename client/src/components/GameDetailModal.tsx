@@ -1095,7 +1095,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                       <table className="w-full text-[10px] md:text-sm min-w-[900px] md:min-w-[800px]">
                         <thead className="bg-gray-50 dark:bg-neutral-700 border-b border-gray-200 dark:border-neutral-600">
                           <tr>
-                            <th className="text-left py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 sticky left-0 bg-gray-50 dark:bg-neutral-700 z-10 w-32 md:w-36 pl-3 pr-2">Player</th>
+                            <th className="text-left py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 sticky left-0 z-20 bg-gray-50 dark:bg-neutral-700 w-40 md:w-44 pl-3 pr-2 border-r border-gray-200 dark:border-neutral-700">Player</th>
                             <th className="text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1.5 md:px-2">MIN</th>
                             <th className="text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1.5 md:px-2">PTS</th>
                             <th className="text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1.5 md:px-2">FG</th>
@@ -1126,21 +1126,37 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                               onMouseEnter={(e) => {
                                 if (playerTeamColor) {
                                   e.currentTarget.style.backgroundColor = adjustOpacity(playerTeamColor.primaryRgb, 0.15);
+                                  const stickyCell = e.currentTarget.querySelector('td[data-sticky="true"]') as HTMLElement;
+                                  if (stickyCell) stickyCell.style.backgroundColor = adjustOpacity(playerTeamColor.primaryRgb, 0.15);
                                 } else {
                                   e.currentTarget.style.backgroundColor = 'rgba(251, 146, 60, 0.15)';
+                                  const stickyCell = e.currentTarget.querySelector('td[data-sticky="true"]') as HTMLElement;
+                                  if (stickyCell) stickyCell.style.backgroundColor = 'rgba(251, 146, 60, 0.15)';
                                 }
                               }}
                               onMouseLeave={(e) => {
                                 if (playerTeamColor) {
                                   e.currentTarget.style.backgroundColor = index % 2 === 0 ? adjustOpacity(playerTeamColor.primaryRgb, 0.04) : adjustOpacity(playerTeamColor.primaryRgb, 0.08);
+                                  const stickyCell = e.currentTarget.querySelector('td[data-sticky="true"]') as HTMLElement;
+                                  if (stickyCell) stickyCell.style.backgroundColor = index % 2 === 0 ? adjustOpacity(playerTeamColor.primaryRgb, 0.04) : adjustOpacity(playerTeamColor.primaryRgb, 0.08);
                                 } else {
                                   e.currentTarget.style.backgroundColor = index % 2 === 0 ? 'rgba(251, 146, 60, 0.04)' : 'rgba(251, 146, 60, 0.08)';
+                                  const stickyCell = e.currentTarget.querySelector('td[data-sticky="true"]') as HTMLElement;
+                                  if (stickyCell) stickyCell.style.backgroundColor = index % 2 === 0 ? 'rgba(251, 146, 60, 0.04)' : 'rgba(251, 146, 60, 0.08)';
                                 }
                               }}
                             >
-                              <td className="py-2 md:p-3 sticky left-0 bg-inherit z-10 w-32 md:w-36 pl-3 pr-2">
-                                <div className="max-w-none whitespace-normal">
-                                  <div className="font-medium text-slate-800 dark:text-white text-[10px] md:text-sm">{player.firstname} {player.familyname}</div>
+                              <td 
+                                data-sticky="true"
+                                className="py-2 md:p-3 sticky left-0 z-20 w-40 md:w-44 pl-3 pr-2 border-r border-gray-200 dark:border-neutral-700"
+                                style={playerTeamColor ? {
+                                  backgroundColor: index % 2 === 0 ? adjustOpacity(playerTeamColor.primaryRgb, 0.04) : adjustOpacity(playerTeamColor.primaryRgb, 0.08),
+                                } : {
+                                  backgroundColor: index % 2 === 0 ? 'rgba(251, 146, 60, 0.04)' : 'rgba(251, 146, 60, 0.08)',
+                                }}
+                              >
+                                <div className="truncate">
+                                  <div className="font-medium text-slate-800 dark:text-white text-[10px] md:text-sm truncate">{player.firstname} {player.familyname}</div>
                                   {player.number && (
                                     <div className="text-[9px] md:text-xs text-slate-500 dark:text-slate-400">#{player.number}</div>
                                   )}
@@ -1213,7 +1229,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                         {selectedTeamStats && (
                           <tfoot className="bg-orange-50 dark:bg-neutral-700 border-t-2 border-orange-200 dark:border-neutral-600">
                             <tr className="font-semibold text-slate-800 dark:text-white text-[10px] md:text-sm">
-                              <td className="py-2 md:p-3 sticky left-0 bg-orange-50 dark:bg-neutral-700 z-10 w-32 md:w-36 pl-3 pr-2">TEAM TOTALS</td>
+                              <td className="py-2 md:p-3 sticky left-0 z-20 bg-orange-50 dark:bg-neutral-700 w-40 md:w-44 pl-3 pr-2 border-r border-gray-200 dark:border-neutral-700">TEAM TOTALS</td>
                               <td className="py-2 md:p-3 text-center px-1.5 md:px-2">-</td>
                               <td className="py-2 md:p-3 text-center text-orange-600 dark:text-orange-400 px-1.5 md:px-2">{selectedTeamStats.score}</td>
                               <td className="py-2 md:p-3 text-center px-1.5 md:px-2">
