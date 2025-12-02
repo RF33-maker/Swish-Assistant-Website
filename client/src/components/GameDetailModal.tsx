@@ -1084,29 +1084,29 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                   )}
 
                   {/* Box Score Table for Selected Team */}
-                  <div className="bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg">
+                  <div className="bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 rounded-lg overflow-hidden">
                     <div className="p-3 md:p-4 bg-gray-50 dark:bg-neutral-700 border-b border-gray-200 dark:border-neutral-600">
                       <h3 className="text-sm md:text-lg font-semibold text-slate-800 dark:text-white flex items-center gap-2">
                         <Users className="w-4 h-4 md:w-5 md:h-5" />
                         {selectedTeam} Box Score
                       </h3>
                     </div>
-                    <div className="w-full overflow-x-auto">
-                      <table className="text-[10px] md:text-sm" style={{ width: '100%', minWidth: '480px' }}>
-                        <thead className="bg-gray-50 dark:bg-neutral-700 border-b border-gray-200 dark:border-neutral-600">
+                    <div className="overflow-x-auto">
+                      <table className="text-[10px] md:text-sm border-collapse" style={{ width: '100%', minWidth: 'fit-content' }}>
+                        <thead className="bg-gray-50 dark:bg-neutral-700 border-b border-gray-200 dark:border-neutral-600 sticky top-0 z-10">
                           <tr>
-                            <th className="text-left py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 sticky left-0 z-20 bg-gray-50 dark:bg-neutral-700 w-28 md:w-44 pl-2 md:pl-3 pr-2 border-r border-gray-200 dark:border-neutral-700">Player</th>
-                            <th className="text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1 md:px-2">MIN</th>
-                            <th className="text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1 md:px-2">PTS</th>
-                            <th className="text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1 md:px-2">FG</th>
-                            <th className="hidden md:table-cell text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1 md:px-2">3P</th>
-                            <th className="hidden md:table-cell text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1 md:px-2">FT</th>
-                            <th className="text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1 md:px-2">REB</th>
-                            <th className="text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1 md:px-2">AST</th>
-                            <th className="hidden md:table-cell text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1 md:px-2">STL</th>
-                            <th className="hidden md:table-cell text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1 md:px-2">BLK</th>
-                            <th className="hidden md:table-cell text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1 md:px-2">TO</th>
-                            <th className="hidden md:table-cell text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1 md:px-2">+/-</th>
+                            <th className="text-left py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 sticky left-0 z-30 bg-gray-50 dark:bg-neutral-700 w-28 md:w-44 pl-2 md:pl-3 pr-2 border-r border-gray-200 dark:border-neutral-700">Player</th>
+                            <th className="text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1 md:px-2 whitespace-nowrap">MIN</th>
+                            <th className="text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1 md:px-2 whitespace-nowrap">PTS</th>
+                            <th className="text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1 md:px-2 whitespace-nowrap">FG</th>
+                            <th className="hidden md:table-cell text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1 md:px-2 whitespace-nowrap">3P</th>
+                            <th className="hidden md:table-cell text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1 md:px-2 whitespace-nowrap">FT</th>
+                            <th className="text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1 md:px-2 whitespace-nowrap">REB</th>
+                            <th className="text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1 md:px-2 whitespace-nowrap">AST</th>
+                            <th className="hidden md:table-cell text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1 md:px-2 whitespace-nowrap">STL</th>
+                            <th className="hidden md:table-cell text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1 md:px-2 whitespace-nowrap">BLK</th>
+                            <th className="hidden md:table-cell text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1 md:px-2 whitespace-nowrap">TO</th>
+                            <th className="hidden md:table-cell text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1 md:px-2 whitespace-nowrap">+/-</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1148,7 +1148,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                             >
                               <td 
                                 data-sticky="true"
-                                className="py-2 md:p-3 sticky left-0 z-20 w-28 md:w-44 pl-2 md:pl-3 pr-2 border-r border-gray-200 dark:border-neutral-700"
+                                className="py-2 md:p-3 sticky left-0 z-20 w-28 md:w-44 pl-2 md:pl-3 pr-2 border-r border-gray-200 dark:border-neutral-700 relative"
                                 style={playerTeamColor ? {
                                   backgroundColor: index % 2 === 0 ? adjustOpacity(playerTeamColor.primaryRgb, 0.04) : adjustOpacity(playerTeamColor.primaryRgb, 0.08),
                                 } : {
@@ -1229,7 +1229,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                         {selectedTeamStats && (
                           <tfoot className="bg-orange-50 dark:bg-neutral-700 border-t-2 border-orange-200 dark:border-neutral-600">
                             <tr className="font-semibold text-slate-800 dark:text-white text-[10px] md:text-sm">
-                              <td className="py-2 md:p-3 sticky left-0 z-20 bg-orange-50 dark:bg-neutral-700 w-28 md:w-44 pl-2 md:pl-3 pr-2 border-r border-gray-200 dark:border-neutral-700">TEAM TOTALS</td>
+                              <td className="py-2 md:p-3 sticky left-0 z-20 bg-orange-50 dark:bg-neutral-700 w-28 md:w-44 pl-2 md:pl-3 pr-2 border-r border-gray-200 dark:border-neutral-700 relative">TEAM TOTALS</td>
                               <td className="py-2 md:p-3 text-center px-1 md:px-2">-</td>
                               <td className="py-2 md:p-3 text-center text-orange-600 dark:text-orange-400 px-1 md:px-2">{selectedTeamStats.score}</td>
                               <td className="py-2 md:p-3 text-center px-1 md:px-2">
