@@ -140,7 +140,7 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
         });
 
         // Convert to array and process each game
-        const processedGames = Array.from(gameMap.values()).map(game => {
+        const processedGames = Array.from(gameMap.values()).map((game) => {
           // Calculate team scores (sum of all player points per team)
           const teamScores = game.players.reduce((acc: any, player: any) => {
             if (!acc[player.team]) acc[player.team] = 0;
@@ -148,9 +148,41 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
             return acc;
           }, {});
 
-          // Swap home_team and away_team as the data has them reversed
-          const homeTeam = game.away_team;
-          const awayTeam = game.home_team;
+          // Get the unique teams from player data
+          const uniqueTeams = Object.keys(teamScores);
+          
+          if (uniqueTeams.length !== 2) {
+            // Skip invalid games
+            return null;
+          }
+
+          // Try to match teams to home/away based on player team data
+          const team1 = uniqueTeams[0];
+          const team2 = uniqueTeams[1];
+          
+          // Check which team is home by looking at player.is_home or player.team_type
+          const team1IsHome = game.players.find((p: any) => p.team === team1)?.is_home;
+          const team2IsHome = game.players.find((p: any) => p.team === team2)?.is_home;
+          
+          let homeTeam, awayTeam;
+          
+          // If we have is_home data, use it
+          if (team1IsHome === true) {
+            homeTeam = team1;
+            awayTeam = team2;
+          } else if (team2IsHome === true) {
+            homeTeam = team2;
+            awayTeam = team1;
+          } else {
+            // Fallback: use the order from game.home_team/away_team if available
+            if (game.home_team && game.away_team) {
+              homeTeam = game.home_team;
+              awayTeam = game.away_team;
+            } else {
+              homeTeam = team1;
+              awayTeam = team2;
+            }
+          }
           
           return {
             game_id: game.game_id,
@@ -161,7 +193,7 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
             away_score: teamScores[awayTeam] || 0,
             status: "FINAL"
           };
-        });
+        }).filter((game): game is GameResult => game !== null);
 
         setGames(processedGames.slice(0, 10)); // Show recent 10 games
       } catch (error) {
