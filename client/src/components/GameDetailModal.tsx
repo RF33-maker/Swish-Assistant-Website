@@ -1091,22 +1091,22 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                         {selectedTeam} Box Score
                       </h3>
                     </div>
-                    <div className="w-full overflow-x-auto">
-                      <table className="min-w-[640px] border-collapse text-sm">
-                        <thead className="bg-slate-100 dark:bg-neutral-700">
+                    <div className="overflow-x-auto -mx-4 md:mx-0">
+                      <table className="w-full text-xs md:text-sm min-w-[800px]">
+                        <thead className="bg-gray-50 dark:bg-neutral-700 border-b border-gray-200 dark:border-neutral-600">
                           <tr>
-                            <th className="sticky left-0 z-20 bg-slate-100 dark:bg-neutral-700 px-3 py-2 text-left font-medium text-slate-700 dark:text-slate-200">Player</th>
-                            <th className="px-3 py-2 text-center whitespace-nowrap min-w-[60px] font-medium text-slate-700 dark:text-slate-200">MIN</th>
-                            <th className="px-3 py-2 text-center whitespace-nowrap min-w-[60px] font-medium text-slate-700 dark:text-slate-200">PTS</th>
-                            <th className="px-3 py-2 text-center whitespace-nowrap min-w-[60px] font-medium text-slate-700 dark:text-slate-200">FG</th>
-                            <th className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px] font-medium text-slate-700 dark:text-slate-200">3P</th>
-                            <th className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px] font-medium text-slate-700 dark:text-slate-200">FT</th>
-                            <th className="px-3 py-2 text-center whitespace-nowrap min-w-[60px] font-medium text-slate-700 dark:text-slate-200">REB</th>
-                            <th className="px-3 py-2 text-center whitespace-nowrap min-w-[60px] font-medium text-slate-700 dark:text-slate-200">AST</th>
-                            <th className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px] font-medium text-slate-700 dark:text-slate-200">STL</th>
-                            <th className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px] font-medium text-slate-700 dark:text-slate-200">BLK</th>
-                            <th className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px] font-medium text-slate-700 dark:text-slate-200">TO</th>
-                            <th className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px] font-medium text-slate-700 dark:text-slate-200">+/-</th>
+                            <th className="text-left py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200 sticky left-4 md:left-0 bg-gray-50 dark:bg-neutral-700 z-10 w-8 md:w-16 pl-2 pr-1">Player</th>
+                            <th className="text-center py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200 pl-1 pr-1.5">MIN</th>
+                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">PTS</th>
+                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">FG</th>
+                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">3P</th>
+                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">FT</th>
+                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">REB</th>
+                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">AST</th>
+                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">STL</th>
+                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">BLK</th>
+                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">TO</th>
+                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">+/-</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1126,52 +1126,36 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                               onMouseEnter={(e) => {
                                 if (playerTeamColor) {
                                   e.currentTarget.style.backgroundColor = adjustOpacity(playerTeamColor.primaryRgb, 0.15);
-                                  const stickyCell = e.currentTarget.querySelector('td[data-sticky="true"]') as HTMLElement;
-                                  if (stickyCell) stickyCell.style.backgroundColor = adjustOpacity(playerTeamColor.primaryRgb, 0.15);
                                 } else {
                                   e.currentTarget.style.backgroundColor = 'rgba(251, 146, 60, 0.15)';
-                                  const stickyCell = e.currentTarget.querySelector('td[data-sticky="true"]') as HTMLElement;
-                                  if (stickyCell) stickyCell.style.backgroundColor = 'rgba(251, 146, 60, 0.15)';
                                 }
                               }}
                               onMouseLeave={(e) => {
                                 if (playerTeamColor) {
                                   e.currentTarget.style.backgroundColor = index % 2 === 0 ? adjustOpacity(playerTeamColor.primaryRgb, 0.04) : adjustOpacity(playerTeamColor.primaryRgb, 0.08);
-                                  const stickyCell = e.currentTarget.querySelector('td[data-sticky="true"]') as HTMLElement;
-                                  if (stickyCell) stickyCell.style.backgroundColor = index % 2 === 0 ? adjustOpacity(playerTeamColor.primaryRgb, 0.04) : adjustOpacity(playerTeamColor.primaryRgb, 0.08);
                                 } else {
                                   e.currentTarget.style.backgroundColor = index % 2 === 0 ? 'rgba(251, 146, 60, 0.04)' : 'rgba(251, 146, 60, 0.08)';
-                                  const stickyCell = e.currentTarget.querySelector('td[data-sticky="true"]') as HTMLElement;
-                                  if (stickyCell) stickyCell.style.backgroundColor = index % 2 === 0 ? 'rgba(251, 146, 60, 0.04)' : 'rgba(251, 146, 60, 0.08)';
                                 }
                               }}
                             >
-                              <td 
-                                data-sticky="true"
-                                className="sticky left-0 z-10 bg-inherit px-3 py-2 text-left font-medium whitespace-nowrap"
-                                style={playerTeamColor ? {
-                                  backgroundColor: index % 2 === 0 ? adjustOpacity(playerTeamColor.primaryRgb, 0.04) : adjustOpacity(playerTeamColor.primaryRgb, 0.08),
-                                } : {
-                                  backgroundColor: index % 2 === 0 ? 'rgba(251, 146, 60, 0.04)' : 'rgba(251, 146, 60, 0.08)',
-                                }}
-                              >
-                                <div className="truncate">
-                                  <div className="text-slate-800 dark:text-white truncate">{player.firstname} {player.familyname}</div>
+                              <td className="py-1.5 md:p-3 sticky left-4 md:left-0 bg-inherit z-10 w-28 md:w-32 pl-2 pr-1">
+                                <div className="max-w-none whitespace-normal">
+                                  <div className="font-medium text-slate-800 dark:text-white">{player.firstname} {player.familyname}</div>
                                   {player.number && (
                                     <div className="text-xs text-slate-500 dark:text-slate-400">#{player.number}</div>
                                   )}
                                 </div>
                               </td>
-                              <td className="px-3 py-2 text-center whitespace-nowrap min-w-[60px] text-slate-800 dark:text-slate-200">
+                              <td className="py-1.5 md:p-3 text-center text-slate-800 dark:text-slate-200 pl-1 pr-1.5">
                                 {player.sminutes ? (
-                                  <div className="flex items-center justify-center gap-0.5">
+                                  <div className="flex items-center justify-center gap-1">
                                     <Clock className="w-3 h-3 text-slate-400" />
-                                    <span>{player.sminutes}</span>
+                                    <span className="text-slate-800 dark:text-slate-200">{player.sminutes}</span>
                                   </div>
                                 ) : <span className="text-slate-400">-</span>}
                               </td>
-                              <td className="px-3 py-2 text-center whitespace-nowrap min-w-[60px] font-semibold text-orange-600 dark:text-orange-400">{player.spoints}</td>
-                              <td className="px-3 py-2 text-center whitespace-nowrap min-w-[60px] text-slate-800 dark:text-slate-200">
+                              <td className="px-1.5 py-1.5 md:p-3 text-center font-semibold text-orange-600 dark:text-orange-400">{player.spoints}</td>
+                              <td className="px-1.5 py-1.5 md:p-3 text-center text-slate-800 dark:text-slate-200">
                                 {player.sfieldgoalsmade !== undefined && player.sfieldgoalsattempted !== undefined ? (
                                   <div>
                                     <div className="font-medium">{player.sfieldgoalsmade}/{player.sfieldgoalsattempted}</div>
@@ -1181,7 +1165,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                   </div>
                                 ) : <span className="text-slate-400">-</span>}
                               </td>
-                              <td className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px] text-slate-800 dark:text-slate-200">
+                              <td className="px-1.5 py-1.5 md:p-3 text-center text-slate-800 dark:text-slate-200">
                                 {player.sthreepointersmade !== undefined && player.sthreepointersattempted !== undefined ? (
                                   <div>
                                     <div className="font-medium">{player.sthreepointersmade}/{player.sthreepointersattempted}</div>
@@ -1191,7 +1175,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                   </div>
                                 ) : <span className="text-slate-400">-</span>}
                               </td>
-                              <td className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px] text-slate-800 dark:text-slate-200">
+                              <td className="px-1.5 py-1.5 md:p-3 text-center text-slate-800 dark:text-slate-200">
                                 {player.sfreethrowsmade !== undefined && player.sfreethrowsattempted !== undefined ? (
                                   <div>
                                     <div className="font-medium">{player.sfreethrowsmade}/{player.sfreethrowsattempted}</div>
@@ -1201,7 +1185,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                   </div>
                                 ) : <span className="text-slate-400">-</span>}
                               </td>
-                              <td className="px-3 py-2 text-center whitespace-nowrap min-w-[60px] text-slate-800 dark:text-slate-200">
+                              <td className="px-1.5 py-1.5 md:p-3 text-center text-slate-800 dark:text-slate-200">
                                 <div className="font-medium">{player.sreboundstotal}</div>
                                 {(player.rebounds_o || player.rebounds_d) && (
                                   <div className="text-xs text-slate-500 dark:text-slate-400">
@@ -1209,11 +1193,11 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                   </div>
                                 )}
                               </td>
-                              <td className="px-3 py-2 text-center whitespace-nowrap min-w-[60px] font-medium text-slate-800 dark:text-slate-200">{player.sassists}</td>
-                              <td className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px] font-medium text-slate-800 dark:text-slate-200">{player.ssteals || 0}</td>
-                              <td className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px] font-medium text-slate-800 dark:text-slate-200">{player.sblocks || 0}</td>
-                              <td className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px] font-medium text-red-600 dark:text-red-400">{player.sturnovers || 0}</td>
-                              <td className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px]">
+                              <td className="px-1.5 py-1.5 md:p-3 text-center font-medium text-slate-800 dark:text-slate-200">{player.sassists}</td>
+                              <td className="px-1.5 py-1.5 md:p-3 text-center font-medium text-slate-800 dark:text-slate-200">{player.ssteals || 0}</td>
+                              <td className="px-1.5 py-1.5 md:p-3 text-center font-medium text-slate-800 dark:text-slate-200">{player.sblocks || 0}</td>
+                              <td className="px-1.5 py-1.5 md:p-3 text-center font-medium text-red-600 dark:text-red-400">{player.sturnovers || 0}</td>
+                              <td className="px-1.5 py-1.5 md:p-3 text-center">
                                 {player.splusminuspoints !== undefined && player.splusminuspoints !== null ? (
                                   <span className={`font-medium ${player.splusminuspoints >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                     {player.splusminuspoints >= 0 ? '+' : ''}{player.splusminuspoints}
@@ -1229,18 +1213,18 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                         {selectedTeamStats && (
                           <tfoot className="bg-orange-50 dark:bg-neutral-700 border-t-2 border-orange-200 dark:border-neutral-600">
                             <tr className="font-semibold text-slate-800 dark:text-white">
-                              <td className="sticky left-0 z-10 bg-orange-50 dark:bg-neutral-700 px-3 py-2 text-left whitespace-nowrap">TEAM TOTALS</td>
-                              <td className="px-3 py-2 text-center whitespace-nowrap min-w-[60px]">-</td>
-                              <td className="px-3 py-2 text-center whitespace-nowrap min-w-[60px] text-orange-600 dark:text-orange-400">{selectedTeamStats.score}</td>
-                              <td className="px-3 py-2 text-center whitespace-nowrap min-w-[60px]">
-                                <div>{selectedTeamStats.totalFgMade}/{selectedTeamStats.totalFgAttempted}</div>
+                              <td className="py-1.5 md:p-3 sticky left-4 md:left-0 bg-orange-50 dark:bg-neutral-700 z-10 w-48 md:w-52 pl-2 pr-1">TEAM TOTALS</td>
+                              <td className="py-1.5 md:p-3 text-center pl-1 pr-1.5">-</td>
+                              <td className="px-1.5 py-1.5 md:p-3 text-center text-orange-600 dark:text-orange-400">{selectedTeamStats.score}</td>
+                              <td className="px-1.5 py-1.5 md:p-3 text-center">
+                                {selectedTeamStats.totalFgMade}/{selectedTeamStats.totalFgAttempted}
                                 {selectedTeamStats.totalFgAttempted > 0 && (
                                   <div className="text-xs text-slate-500 dark:text-slate-400">
                                     {((selectedTeamStats.totalFgMade / selectedTeamStats.totalFgAttempted) * 100).toFixed(1)}%
                                   </div>
                                 )}
                               </td>
-                              <td className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px]">
+                              <td className="px-1.5 py-1.5 md:p-3 text-center">
                                 {selectedTeamStats.totalThreeMade}/{selectedTeamStats.totalThreeAttempted}
                                 {selectedTeamStats.totalThreeAttempted > 0 && (
                                   <div className="text-xs text-slate-500 dark:text-slate-400">
@@ -1248,13 +1232,13 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                   </div>
                                 )}
                               </td>
-                              <td className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px]">-</td>
-                              <td className="px-3 py-2 text-center whitespace-nowrap min-w-[60px]">{selectedTeamStats.totalRebounds}</td>
-                              <td className="px-3 py-2 text-center whitespace-nowrap min-w-[60px]">{selectedTeamStats.totalAssists}</td>
-                              <td className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px]">-</td>
-                              <td className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px]">-</td>
-                              <td className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px]">-</td>
-                              <td className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px]">-</td>
+                              <td className="px-1.5 py-1.5 md:p-3 text-center">-</td>
+                              <td className="px-1.5 py-1.5 md:p-3 text-center">{selectedTeamStats.totalRebounds}</td>
+                              <td className="px-1.5 py-1.5 md:p-3 text-center">{selectedTeamStats.totalAssists}</td>
+                              <td className="px-1.5 py-1.5 md:p-3 text-center">-</td>
+                              <td className="px-1.5 py-1.5 md:p-3 text-center">-</td>
+                              <td className="px-1.5 py-1.5 md:p-3 text-center">-</td>
+                              <td className="px-1.5 py-1.5 md:p-3 text-center">-</td>
                             </tr>
                           </tfoot>
                         )}
