@@ -123,24 +123,52 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
           return;
         }
 
+        if (!playerStats || playerStats.length === 0) {
+          console.log("No player stats available");
+          return;
+        }
+
+        // Get game_id or numeric_id values to match against game_schedule
+        const gameIds = new Set<string>();
+        playerStats.forEach(stat => {
+          if (stat.game_id) gameIds.add(stat.game_id);
+        });
+
+        // Fetch game schedule to get correct home/away team mapping
+        const { data: gameSchedule } = await supabase
+          .from("game_schedule")
+          .select("*")
+          .eq("league_id", leagueId);
+
+        // Create a map of game_id -> {hometeam, awayteam}
+        const gameScheduleMap = new Map<string, any>();
+        gameSchedule?.forEach(game => {
+          if (game.game_id) {
+            gameScheduleMap.set(game.game_id, game);
+          }
+          // Also try numeric_id as fallback
+          if (game.numeric_id) {
+            gameScheduleMap.set(game.numeric_id?.toString(), game);
+          }
+        });
+
         // Group stats by game_id and process
         const gameMap = new Map<string, any>();
         
-        playerStats?.forEach(stat => {
+        playerStats.forEach(stat => {
           if (!gameMap.has(stat.game_id)) {
             gameMap.set(stat.game_id, {
               game_id: stat.game_id,
               game_date: stat.game_date,
-              home_team: stat.home_team || "Home",
-              away_team: stat.away_team || "Away", 
-              players: []
+              players: [],
+              scheduleData: gameScheduleMap.get(stat.game_id)
             });
           }
           gameMap.get(stat.game_id).players.push(stat);
         });
 
         // Convert to array and process each game
-        const processedGames = Array.from(gameMap.values()).map(game => {
+        const processedGames = Array.from(gameMap.values()).map((game) => {
           // Calculate team scores (sum of all player points per team)
           const teamScores = game.players.reduce((acc: any, player: any) => {
             if (!acc[player.team]) acc[player.team] = 0;
@@ -148,8 +176,27 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
             return acc;
           }, {});
 
-          const teams = Object.keys(teamScores);
-          const [homeTeam, awayTeam] = teams.length >= 2 ? teams : [game.home_team, game.away_team];
+          // Get the unique teams from player data
+          const uniqueTeams = Object.keys(teamScores);
+          
+          if (uniqueTeams.length !== 2) {
+            // Skip invalid games
+            return null;
+          }
+
+          let homeTeam, awayTeam;
+
+          // First, try to use game_schedule data (most reliable)
+          if (game.scheduleData?.hometeam && game.scheduleData?.awayteam) {
+            homeTeam = game.scheduleData.hometeam;
+            awayTeam = game.scheduleData.awayteam;
+          } else {
+            // Fallback: use the teams from player data
+            const team1 = uniqueTeams[0];
+            const team2 = uniqueTeams[1];
+            homeTeam = team1;
+            awayTeam = team2;
+          }
           
           return {
             game_id: game.game_id,
@@ -160,7 +207,7 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
             away_score: teamScores[awayTeam] || 0,
             status: "FINAL"
           };
-        });
+        }).filter((game): game is GameResult => game !== null);
 
         setGames(processedGames.slice(0, 10)); // Show recent 10 games
       } catch (error) {

@@ -1411,15 +1411,26 @@ export default function LeaguePage() {
                   // Create keys based on NORMALIZED team name combinations (both orders)
                   const key1 = `${team1Normalized}-vs-${team2Normalized}`;
                   const key2 = `${team2Normalized}-vs-${team1Normalized}`;
-                  const scoreData = {
+                  
+                  // Store both orderings separately so we can match correctly
+                  const scoreData1 = {
                     team1: team1.name,
                     team2: team2.name,
                     team1_score: team1.tot_spoints || 0,
                     team2_score: team2.tot_spoints || 0,
                     numeric_id: numericId
                   };
-                  gameScoresMap.set(key1, scoreData);
-                  gameScoresMap.set(key2, scoreData);
+                  
+                  const scoreData2 = {
+                    team1: team2.name,
+                    team2: team1.name,
+                    team1_score: team2.tot_spoints || 0,
+                    team2_score: team1.tot_spoints || 0,
+                    numeric_id: numericId
+                  };
+                  
+                  gameScoresMap.set(key1, scoreData1);
+                  gameScoresMap.set(key2, scoreData2);
                 }
               });
             }

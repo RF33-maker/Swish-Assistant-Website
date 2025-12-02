@@ -443,7 +443,7 @@ export default function LeagueLeadersPage() {
         <div className="text-center space-y-3 md:space-y-4">
           <div className="flex flex-col md:flex-row items-center justify-center gap-2 md:gap-3">
             <Trophy className="h-6 w-6 md:h-8 md:w-8 text-orange-500" />
-            <h1 className="text-2xl md:text-4xl font-bold text-orange-600 dark:text-orange-400">League Leaders</h1>
+            <h1 className="sr-only">League Leaders</h1>
           </div>
           <h2 className="text-xl md:text-2xl font-semibold text-orange-800 dark:text-orange-300">{league?.name}</h2>
           {league?.description && (
