@@ -148,8 +148,9 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
             return acc;
           }, {});
 
-          const teams = Object.keys(teamScores);
-          const [homeTeam, awayTeam] = teams.length >= 2 ? teams : [game.home_team, game.away_team];
+          // Use the actual home_team and away_team from the game data
+          const homeTeam = game.home_team;
+          const awayTeam = game.away_team;
           
           return {
             game_id: game.game_id,
