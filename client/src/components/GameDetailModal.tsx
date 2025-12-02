@@ -1092,21 +1092,21 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                       </h3>
                     </div>
                     <div className="overflow-x-auto -mx-4 md:mx-0">
-                      <table className="w-full text-xs md:text-sm min-w-[800px]">
+                      <table className="w-full text-[10px] md:text-sm min-w-[900px] md:min-w-[800px]">
                         <thead className="bg-gray-50 dark:bg-neutral-700 border-b border-gray-200 dark:border-neutral-600">
                           <tr>
-                            <th className="text-left py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200 sticky left-4 md:left-0 bg-gray-50 dark:bg-neutral-700 z-10 w-8 md:w-16 pl-2 pr-1">Player</th>
-                            <th className="text-center py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200 pl-1 pr-1.5">MIN</th>
-                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">PTS</th>
-                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">FG</th>
-                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">3P</th>
-                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">FT</th>
-                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">REB</th>
-                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">AST</th>
-                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">STL</th>
-                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">BLK</th>
-                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">TO</th>
-                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">+/-</th>
+                            <th className="text-left py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 sticky left-0 bg-gray-50 dark:bg-neutral-700 z-10 w-32 md:w-36 pl-3 pr-2">Player</th>
+                            <th className="text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1.5 md:px-2">MIN</th>
+                            <th className="text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1.5 md:px-2">PTS</th>
+                            <th className="text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1.5 md:px-2">FG</th>
+                            <th className="text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1.5 md:px-2">3P</th>
+                            <th className="text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1.5 md:px-2">FT</th>
+                            <th className="text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1.5 md:px-2">REB</th>
+                            <th className="text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1.5 md:px-2">AST</th>
+                            <th className="text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1.5 md:px-2">STL</th>
+                            <th className="text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1.5 md:px-2">BLK</th>
+                            <th className="text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1.5 md:px-2">TO</th>
+                            <th className="text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1.5 md:px-2">+/-</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1138,15 +1138,15 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                 }
                               }}
                             >
-                              <td className="py-1.5 md:p-3 sticky left-4 md:left-0 bg-inherit z-10 w-28 md:w-32 pl-2 pr-1">
+                              <td className="py-2 md:p-3 sticky left-0 bg-inherit z-10 w-32 md:w-36 pl-3 pr-2">
                                 <div className="max-w-none whitespace-normal">
-                                  <div className="font-medium text-slate-800 dark:text-white">{player.firstname} {player.familyname}</div>
+                                  <div className="font-medium text-slate-800 dark:text-white text-[10px] md:text-sm">{player.firstname} {player.familyname}</div>
                                   {player.number && (
-                                    <div className="text-xs text-slate-500 dark:text-slate-400">#{player.number}</div>
+                                    <div className="text-[9px] md:text-xs text-slate-500 dark:text-slate-400">#{player.number}</div>
                                   )}
                                 </div>
                               </td>
-                              <td className="py-1.5 md:p-3 text-center text-slate-800 dark:text-slate-200 pl-1 pr-1.5">
+                              <td className="py-2 md:p-3 text-center text-slate-800 dark:text-slate-200 px-1.5 md:px-2">
                                 {player.sminutes ? (
                                   <div className="flex items-center justify-center gap-1">
                                     <Clock className="w-3 h-3 text-slate-400" />
@@ -1154,50 +1154,50 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                   </div>
                                 ) : <span className="text-slate-400">-</span>}
                               </td>
-                              <td className="px-1.5 py-1.5 md:p-3 text-center font-semibold text-orange-600 dark:text-orange-400">{player.spoints}</td>
-                              <td className="px-1.5 py-1.5 md:p-3 text-center text-slate-800 dark:text-slate-200">
+                              <td className="py-2 md:p-3 text-center font-semibold text-orange-600 dark:text-orange-400 px-1.5 md:px-2">{player.spoints}</td>
+                              <td className="py-2 md:p-3 text-center text-slate-800 dark:text-slate-200 px-1.5 md:px-2">
                                 {player.sfieldgoalsmade !== undefined && player.sfieldgoalsattempted !== undefined ? (
                                   <div>
                                     <div className="font-medium">{player.sfieldgoalsmade}/{player.sfieldgoalsattempted}</div>
                                     {player.sfieldgoalspercentage && (
-                                      <div className="text-xs text-slate-500 dark:text-slate-400">{player.sfieldgoalspercentage}%</div>
+                                      <div className="text-[9px] md:text-xs text-slate-500 dark:text-slate-400">{player.sfieldgoalspercentage}%</div>
                                     )}
                                   </div>
                                 ) : <span className="text-slate-400">-</span>}
                               </td>
-                              <td className="px-1.5 py-1.5 md:p-3 text-center text-slate-800 dark:text-slate-200">
+                              <td className="py-2 md:p-3 text-center text-slate-800 dark:text-slate-200 px-1.5 md:px-2">
                                 {player.sthreepointersmade !== undefined && player.sthreepointersattempted !== undefined ? (
                                   <div>
                                     <div className="font-medium">{player.sthreepointersmade}/{player.sthreepointersattempted}</div>
                                     {player.sthreepointerspercentage && (
-                                      <div className="text-xs text-slate-500 dark:text-slate-400">{player.sthreepointerspercentage}%</div>
+                                      <div className="text-[9px] md:text-xs text-slate-500 dark:text-slate-400">{player.sthreepointerspercentage}%</div>
                                     )}
                                   </div>
                                 ) : <span className="text-slate-400">-</span>}
                               </td>
-                              <td className="px-1.5 py-1.5 md:p-3 text-center text-slate-800 dark:text-slate-200">
+                              <td className="py-2 md:p-3 text-center text-slate-800 dark:text-slate-200 px-1.5 md:px-2">
                                 {player.sfreethrowsmade !== undefined && player.sfreethrowsattempted !== undefined ? (
                                   <div>
                                     <div className="font-medium">{player.sfreethrowsmade}/{player.sfreethrowsattempted}</div>
                                     {player.sfreethrowspercentage && (
-                                      <div className="text-xs text-slate-500 dark:text-slate-400">{player.sfreethrowspercentage}%</div>
+                                      <div className="text-[9px] md:text-xs text-slate-500 dark:text-slate-400">{player.sfreethrowspercentage}%</div>
                                     )}
                                   </div>
                                 ) : <span className="text-slate-400">-</span>}
                               </td>
-                              <td className="px-1.5 py-1.5 md:p-3 text-center text-slate-800 dark:text-slate-200">
+                              <td className="py-2 md:p-3 text-center text-slate-800 dark:text-slate-200 px-1.5 md:px-2">
                                 <div className="font-medium">{player.sreboundstotal}</div>
                                 {(player.rebounds_o || player.rebounds_d) && (
-                                  <div className="text-xs text-slate-500 dark:text-slate-400">
+                                  <div className="text-[9px] md:text-xs text-slate-500 dark:text-slate-400">
                                     {player.rebounds_o || 0}O {player.rebounds_d || 0}D
                                   </div>
                                 )}
                               </td>
-                              <td className="px-1.5 py-1.5 md:p-3 text-center font-medium text-slate-800 dark:text-slate-200">{player.sassists}</td>
-                              <td className="px-1.5 py-1.5 md:p-3 text-center font-medium text-slate-800 dark:text-slate-200">{player.ssteals || 0}</td>
-                              <td className="px-1.5 py-1.5 md:p-3 text-center font-medium text-slate-800 dark:text-slate-200">{player.sblocks || 0}</td>
-                              <td className="px-1.5 py-1.5 md:p-3 text-center font-medium text-red-600 dark:text-red-400">{player.sturnovers || 0}</td>
-                              <td className="px-1.5 py-1.5 md:p-3 text-center">
+                              <td className="py-2 md:p-3 text-center font-medium text-slate-800 dark:text-slate-200 px-1.5 md:px-2">{player.sassists}</td>
+                              <td className="py-2 md:p-3 text-center font-medium text-slate-800 dark:text-slate-200 px-1.5 md:px-2">{player.ssteals || 0}</td>
+                              <td className="py-2 md:p-3 text-center font-medium text-slate-800 dark:text-slate-200 px-1.5 md:px-2">{player.sblocks || 0}</td>
+                              <td className="py-2 md:p-3 text-center font-medium text-red-600 dark:text-red-400 px-1.5 md:px-2">{player.sturnovers || 0}</td>
+                              <td className="py-2 md:p-3 text-center px-1.5 md:px-2">
                                 {player.splusminuspoints !== undefined && player.splusminuspoints !== null ? (
                                   <span className={`font-medium ${player.splusminuspoints >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                     {player.splusminuspoints >= 0 ? '+' : ''}{player.splusminuspoints}
@@ -1212,33 +1212,33 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                         {/* Team Totals Row */}
                         {selectedTeamStats && (
                           <tfoot className="bg-orange-50 dark:bg-neutral-700 border-t-2 border-orange-200 dark:border-neutral-600">
-                            <tr className="font-semibold text-slate-800 dark:text-white">
-                              <td className="py-1.5 md:p-3 sticky left-4 md:left-0 bg-orange-50 dark:bg-neutral-700 z-10 w-48 md:w-52 pl-2 pr-1">TEAM TOTALS</td>
-                              <td className="py-1.5 md:p-3 text-center pl-1 pr-1.5">-</td>
-                              <td className="px-1.5 py-1.5 md:p-3 text-center text-orange-600 dark:text-orange-400">{selectedTeamStats.score}</td>
-                              <td className="px-1.5 py-1.5 md:p-3 text-center">
+                            <tr className="font-semibold text-slate-800 dark:text-white text-[10px] md:text-sm">
+                              <td className="py-2 md:p-3 sticky left-0 bg-orange-50 dark:bg-neutral-700 z-10 w-32 md:w-36 pl-3 pr-2">TEAM TOTALS</td>
+                              <td className="py-2 md:p-3 text-center px-1.5 md:px-2">-</td>
+                              <td className="py-2 md:p-3 text-center text-orange-600 dark:text-orange-400 px-1.5 md:px-2">{selectedTeamStats.score}</td>
+                              <td className="py-2 md:p-3 text-center px-1.5 md:px-2">
                                 {selectedTeamStats.totalFgMade}/{selectedTeamStats.totalFgAttempted}
                                 {selectedTeamStats.totalFgAttempted > 0 && (
-                                  <div className="text-xs text-slate-500 dark:text-slate-400">
+                                  <div className="text-[9px] md:text-xs text-slate-500 dark:text-slate-400">
                                     {((selectedTeamStats.totalFgMade / selectedTeamStats.totalFgAttempted) * 100).toFixed(1)}%
                                   </div>
                                 )}
                               </td>
-                              <td className="px-1.5 py-1.5 md:p-3 text-center">
+                              <td className="py-2 md:p-3 text-center px-1.5 md:px-2">
                                 {selectedTeamStats.totalThreeMade}/{selectedTeamStats.totalThreeAttempted}
                                 {selectedTeamStats.totalThreeAttempted > 0 && (
-                                  <div className="text-xs text-slate-500 dark:text-slate-400">
+                                  <div className="text-[9px] md:text-xs text-slate-500 dark:text-slate-400">
                                     {((selectedTeamStats.totalThreeMade / selectedTeamStats.totalThreeAttempted) * 100).toFixed(1)}%
                                   </div>
                                 )}
                               </td>
-                              <td className="px-1.5 py-1.5 md:p-3 text-center">-</td>
-                              <td className="px-1.5 py-1.5 md:p-3 text-center">{selectedTeamStats.totalRebounds}</td>
-                              <td className="px-1.5 py-1.5 md:p-3 text-center">{selectedTeamStats.totalAssists}</td>
-                              <td className="px-1.5 py-1.5 md:p-3 text-center">-</td>
-                              <td className="px-1.5 py-1.5 md:p-3 text-center">-</td>
-                              <td className="px-1.5 py-1.5 md:p-3 text-center">-</td>
-                              <td className="px-1.5 py-1.5 md:p-3 text-center">-</td>
+                              <td className="py-2 md:p-3 text-center px-1.5 md:px-2">-</td>
+                              <td className="py-2 md:p-3 text-center px-1.5 md:px-2">{selectedTeamStats.totalRebounds}</td>
+                              <td className="py-2 md:p-3 text-center px-1.5 md:px-2">{selectedTeamStats.totalAssists}</td>
+                              <td className="py-2 md:p-3 text-center px-1.5 md:px-2">-</td>
+                              <td className="py-2 md:p-3 text-center px-1.5 md:px-2">-</td>
+                              <td className="py-2 md:p-3 text-center px-1.5 md:px-2">-</td>
+                              <td className="py-2 md:p-3 text-center px-1.5 md:px-2">-</td>
                             </tr>
                           </tfoot>
                         )}
