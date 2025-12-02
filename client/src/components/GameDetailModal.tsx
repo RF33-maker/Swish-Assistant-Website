@@ -1091,22 +1091,22 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                         {selectedTeam} Box Score
                       </h3>
                     </div>
-                    <div className="overflow-x-auto">
-                      <table className="text-[10px] md:text-sm border-collapse" style={{ width: '100%', minWidth: 'fit-content' }}>
-                        <thead className="bg-gray-50 dark:bg-neutral-700 border-b border-gray-200 dark:border-neutral-600 sticky top-0 z-10">
+                    <div className="w-full overflow-x-auto">
+                      <table className="min-w-[640px] border-collapse text-sm">
+                        <thead className="bg-slate-100 dark:bg-neutral-700">
                           <tr>
-                            <th className="text-left py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 sticky left-0 z-30 bg-gray-50 dark:bg-neutral-700 w-28 md:w-44 pl-2 md:pl-3 pr-2 border-r border-gray-200 dark:border-neutral-700">Player</th>
-                            <th className="text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1 md:px-2 whitespace-nowrap">MIN</th>
-                            <th className="text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1 md:px-2 whitespace-nowrap">PTS</th>
-                            <th className="text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1 md:px-2 whitespace-nowrap">FG</th>
-                            <th className="hidden md:table-cell text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1 md:px-2 whitespace-nowrap">3P</th>
-                            <th className="hidden md:table-cell text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1 md:px-2 whitespace-nowrap">FT</th>
-                            <th className="text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1 md:px-2 whitespace-nowrap">REB</th>
-                            <th className="text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1 md:px-2 whitespace-nowrap">AST</th>
-                            <th className="hidden md:table-cell text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1 md:px-2 whitespace-nowrap">STL</th>
-                            <th className="hidden md:table-cell text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1 md:px-2 whitespace-nowrap">BLK</th>
-                            <th className="hidden md:table-cell text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1 md:px-2 whitespace-nowrap">TO</th>
-                            <th className="hidden md:table-cell text-center py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 px-1 md:px-2 whitespace-nowrap">+/-</th>
+                            <th className="sticky left-0 z-20 bg-slate-100 dark:bg-neutral-700 px-3 py-2 text-left font-medium text-slate-700 dark:text-slate-200">Player</th>
+                            <th className="px-3 py-2 text-center whitespace-nowrap min-w-[60px] font-medium text-slate-700 dark:text-slate-200">MIN</th>
+                            <th className="px-3 py-2 text-center whitespace-nowrap min-w-[60px] font-medium text-slate-700 dark:text-slate-200">PTS</th>
+                            <th className="px-3 py-2 text-center whitespace-nowrap min-w-[60px] font-medium text-slate-700 dark:text-slate-200">FG</th>
+                            <th className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px] font-medium text-slate-700 dark:text-slate-200">3P</th>
+                            <th className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px] font-medium text-slate-700 dark:text-slate-200">FT</th>
+                            <th className="px-3 py-2 text-center whitespace-nowrap min-w-[60px] font-medium text-slate-700 dark:text-slate-200">REB</th>
+                            <th className="px-3 py-2 text-center whitespace-nowrap min-w-[60px] font-medium text-slate-700 dark:text-slate-200">AST</th>
+                            <th className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px] font-medium text-slate-700 dark:text-slate-200">STL</th>
+                            <th className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px] font-medium text-slate-700 dark:text-slate-200">BLK</th>
+                            <th className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px] font-medium text-slate-700 dark:text-slate-200">TO</th>
+                            <th className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px] font-medium text-slate-700 dark:text-slate-200">+/-</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1148,7 +1148,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                             >
                               <td 
                                 data-sticky="true"
-                                className="py-2 md:p-3 sticky left-0 z-20 w-28 md:w-44 pl-2 md:pl-3 pr-2 border-r border-gray-200 dark:border-neutral-700 relative"
+                                className="sticky left-0 z-10 bg-inherit px-3 py-2 text-left font-medium whitespace-nowrap"
                                 style={playerTeamColor ? {
                                   backgroundColor: index % 2 === 0 ? adjustOpacity(playerTeamColor.primaryRgb, 0.04) : adjustOpacity(playerTeamColor.primaryRgb, 0.08),
                                 } : {
@@ -1156,64 +1156,64 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                 }}
                               >
                                 <div className="truncate">
-                                  <div className="font-medium text-slate-800 dark:text-white text-[10px] md:text-sm truncate">{player.firstname} {player.familyname}</div>
+                                  <div className="text-slate-800 dark:text-white truncate">{player.firstname} {player.familyname}</div>
                                   {player.number && (
-                                    <div className="text-[9px] md:text-xs text-slate-500 dark:text-slate-400">#{player.number}</div>
+                                    <div className="text-xs text-slate-500 dark:text-slate-400">#{player.number}</div>
                                   )}
                                 </div>
                               </td>
-                              <td className="py-2 md:p-3 text-center text-slate-800 dark:text-slate-200 px-1 md:px-2">
+                              <td className="px-3 py-2 text-center whitespace-nowrap min-w-[60px] text-slate-800 dark:text-slate-200">
                                 {player.sminutes ? (
-                                  <div className="flex items-center justify-center gap-0.5 md:gap-1">
-                                    <Clock className="w-2.5 md:w-3 h-2.5 md:h-3 text-slate-400" />
-                                    <span className="text-slate-800 dark:text-slate-200">{player.sminutes}</span>
+                                  <div className="flex items-center justify-center gap-0.5">
+                                    <Clock className="w-3 h-3 text-slate-400" />
+                                    <span>{player.sminutes}</span>
                                   </div>
                                 ) : <span className="text-slate-400">-</span>}
                               </td>
-                              <td className="py-2 md:p-3 text-center font-semibold text-orange-600 dark:text-orange-400 px-1 md:px-2">{player.spoints}</td>
-                              <td className="py-2 md:p-3 text-center text-slate-800 dark:text-slate-200 px-1 md:px-2">
+                              <td className="px-3 py-2 text-center whitespace-nowrap min-w-[60px] font-semibold text-orange-600 dark:text-orange-400">{player.spoints}</td>
+                              <td className="px-3 py-2 text-center whitespace-nowrap min-w-[60px] text-slate-800 dark:text-slate-200">
                                 {player.sfieldgoalsmade !== undefined && player.sfieldgoalsattempted !== undefined ? (
                                   <div>
-                                    <div className="font-medium text-[10px] md:text-sm">{player.sfieldgoalsmade}/{player.sfieldgoalsattempted}</div>
+                                    <div className="font-medium">{player.sfieldgoalsmade}/{player.sfieldgoalsattempted}</div>
                                     {player.sfieldgoalspercentage && (
-                                      <div className="text-[8px] md:text-xs text-slate-500 dark:text-slate-400">{player.sfieldgoalspercentage}%</div>
+                                      <div className="text-xs text-slate-500 dark:text-slate-400">{player.sfieldgoalspercentage}%</div>
                                     )}
                                   </div>
                                 ) : <span className="text-slate-400">-</span>}
                               </td>
-                              <td className="hidden md:table-cell py-2 md:p-3 text-center text-slate-800 dark:text-slate-200 px-1 md:px-2">
+                              <td className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px] text-slate-800 dark:text-slate-200">
                                 {player.sthreepointersmade !== undefined && player.sthreepointersattempted !== undefined ? (
                                   <div>
                                     <div className="font-medium">{player.sthreepointersmade}/{player.sthreepointersattempted}</div>
                                     {player.sthreepointerspercentage && (
-                                      <div className="text-[9px] md:text-xs text-slate-500 dark:text-slate-400">{player.sthreepointerspercentage}%</div>
+                                      <div className="text-xs text-slate-500 dark:text-slate-400">{player.sthreepointerspercentage}%</div>
                                     )}
                                   </div>
                                 ) : <span className="text-slate-400">-</span>}
                               </td>
-                              <td className="hidden md:table-cell py-2 md:p-3 text-center text-slate-800 dark:text-slate-200 px-1 md:px-2">
+                              <td className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px] text-slate-800 dark:text-slate-200">
                                 {player.sfreethrowsmade !== undefined && player.sfreethrowsattempted !== undefined ? (
                                   <div>
                                     <div className="font-medium">{player.sfreethrowsmade}/{player.sfreethrowsattempted}</div>
                                     {player.sfreethrowspercentage && (
-                                      <div className="text-[9px] md:text-xs text-slate-500 dark:text-slate-400">{player.sfreethrowspercentage}%</div>
+                                      <div className="text-xs text-slate-500 dark:text-slate-400">{player.sfreethrowspercentage}%</div>
                                     )}
                                   </div>
                                 ) : <span className="text-slate-400">-</span>}
                               </td>
-                              <td className="py-2 md:p-3 text-center text-slate-800 dark:text-slate-200 px-1 md:px-2">
-                                <div className="font-medium text-[10px] md:text-sm">{player.sreboundstotal}</div>
+                              <td className="px-3 py-2 text-center whitespace-nowrap min-w-[60px] text-slate-800 dark:text-slate-200">
+                                <div className="font-medium">{player.sreboundstotal}</div>
                                 {(player.rebounds_o || player.rebounds_d) && (
-                                  <div className="text-[8px] md:text-xs text-slate-500 dark:text-slate-400">
+                                  <div className="text-xs text-slate-500 dark:text-slate-400">
                                     {player.rebounds_o || 0}O {player.rebounds_d || 0}D
                                   </div>
                                 )}
                               </td>
-                              <td className="py-2 md:p-3 text-center font-medium text-slate-800 dark:text-slate-200 px-1 md:px-2">{player.sassists}</td>
-                              <td className="hidden md:table-cell py-2 md:p-3 text-center font-medium text-slate-800 dark:text-slate-200 px-1 md:px-2">{player.ssteals || 0}</td>
-                              <td className="hidden md:table-cell py-2 md:p-3 text-center font-medium text-slate-800 dark:text-slate-200 px-1 md:px-2">{player.sblocks || 0}</td>
-                              <td className="hidden md:table-cell py-2 md:p-3 text-center font-medium text-red-600 dark:text-red-400 px-1 md:px-2">{player.sturnovers || 0}</td>
-                              <td className="hidden md:table-cell py-2 md:p-3 text-center px-1 md:px-2">
+                              <td className="px-3 py-2 text-center whitespace-nowrap min-w-[60px] font-medium text-slate-800 dark:text-slate-200">{player.sassists}</td>
+                              <td className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px] font-medium text-slate-800 dark:text-slate-200">{player.ssteals || 0}</td>
+                              <td className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px] font-medium text-slate-800 dark:text-slate-200">{player.sblocks || 0}</td>
+                              <td className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px] font-medium text-red-600 dark:text-red-400">{player.sturnovers || 0}</td>
+                              <td className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px]">
                                 {player.splusminuspoints !== undefined && player.splusminuspoints !== null ? (
                                   <span className={`font-medium ${player.splusminuspoints >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                     {player.splusminuspoints >= 0 ? '+' : ''}{player.splusminuspoints}
@@ -1228,33 +1228,33 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                         {/* Team Totals Row */}
                         {selectedTeamStats && (
                           <tfoot className="bg-orange-50 dark:bg-neutral-700 border-t-2 border-orange-200 dark:border-neutral-600">
-                            <tr className="font-semibold text-slate-800 dark:text-white text-[10px] md:text-sm">
-                              <td className="py-2 md:p-3 sticky left-0 z-20 bg-orange-50 dark:bg-neutral-700 w-28 md:w-44 pl-2 md:pl-3 pr-2 border-r border-gray-200 dark:border-neutral-700 relative">TEAM TOTALS</td>
-                              <td className="py-2 md:p-3 text-center px-1 md:px-2">-</td>
-                              <td className="py-2 md:p-3 text-center text-orange-600 dark:text-orange-400 px-1 md:px-2">{selectedTeamStats.score}</td>
-                              <td className="py-2 md:p-3 text-center px-1 md:px-2">
-                                <div className="text-[10px] md:text-sm">{selectedTeamStats.totalFgMade}/{selectedTeamStats.totalFgAttempted}</div>
+                            <tr className="font-semibold text-slate-800 dark:text-white">
+                              <td className="sticky left-0 z-10 bg-orange-50 dark:bg-neutral-700 px-3 py-2 text-left whitespace-nowrap">TEAM TOTALS</td>
+                              <td className="px-3 py-2 text-center whitespace-nowrap min-w-[60px]">-</td>
+                              <td className="px-3 py-2 text-center whitespace-nowrap min-w-[60px] text-orange-600 dark:text-orange-400">{selectedTeamStats.score}</td>
+                              <td className="px-3 py-2 text-center whitespace-nowrap min-w-[60px]">
+                                <div>{selectedTeamStats.totalFgMade}/{selectedTeamStats.totalFgAttempted}</div>
                                 {selectedTeamStats.totalFgAttempted > 0 && (
-                                  <div className="text-[8px] md:text-xs text-slate-500 dark:text-slate-400">
+                                  <div className="text-xs text-slate-500 dark:text-slate-400">
                                     {((selectedTeamStats.totalFgMade / selectedTeamStats.totalFgAttempted) * 100).toFixed(1)}%
                                   </div>
                                 )}
                               </td>
-                              <td className="hidden md:table-cell py-2 md:p-3 text-center px-1 md:px-2">
+                              <td className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px]">
                                 {selectedTeamStats.totalThreeMade}/{selectedTeamStats.totalThreeAttempted}
                                 {selectedTeamStats.totalThreeAttempted > 0 && (
-                                  <div className="text-[9px] md:text-xs text-slate-500 dark:text-slate-400">
+                                  <div className="text-xs text-slate-500 dark:text-slate-400">
                                     {((selectedTeamStats.totalThreeMade / selectedTeamStats.totalThreeAttempted) * 100).toFixed(1)}%
                                   </div>
                                 )}
                               </td>
-                              <td className="hidden md:table-cell py-2 md:p-3 text-center px-1 md:px-2">-</td>
-                              <td className="py-2 md:p-3 text-center px-1 md:px-2">{selectedTeamStats.totalRebounds}</td>
-                              <td className="py-2 md:p-3 text-center px-1 md:px-2">{selectedTeamStats.totalAssists}</td>
-                              <td className="hidden md:table-cell py-2 md:p-3 text-center px-1 md:px-2">-</td>
-                              <td className="hidden md:table-cell py-2 md:p-3 text-center px-1 md:px-2">-</td>
-                              <td className="hidden md:table-cell py-2 md:p-3 text-center px-1 md:px-2">-</td>
-                              <td className="hidden md:table-cell py-2 md:p-3 text-center px-1 md:px-2">-</td>
+                              <td className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px]">-</td>
+                              <td className="px-3 py-2 text-center whitespace-nowrap min-w-[60px]">{selectedTeamStats.totalRebounds}</td>
+                              <td className="px-3 py-2 text-center whitespace-nowrap min-w-[60px]">{selectedTeamStats.totalAssists}</td>
+                              <td className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px]">-</td>
+                              <td className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px]">-</td>
+                              <td className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px]">-</td>
+                              <td className="hidden md:table-cell px-3 py-2 text-center whitespace-nowrap min-w-[60px]">-</td>
                             </tr>
                           </tfoot>
                         )}
