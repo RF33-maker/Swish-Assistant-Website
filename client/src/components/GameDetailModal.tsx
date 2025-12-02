@@ -1091,7 +1091,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                         {selectedTeam} Box Score
                       </h3>
                     </div>
-                    <div className="overflow-x-auto -mx-4 md:mx-0">
+                    <div className="overflow-x-auto -mx-4 md:mx-0 pr-4 md:pr-0">
                       <table className="w-full text-xs md:text-sm min-w-[800px]">
                         <thead className="bg-gray-50 dark:bg-neutral-700 border-b border-gray-200 dark:border-neutral-600">
                           <tr>
