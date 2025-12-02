@@ -1091,8 +1091,8 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                         {selectedTeam} Box Score
                       </h3>
                     </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-[10px] md:text-sm min-w-full md:min-w-[800px]">
+                    <div className="overflow-x-auto touch-pan-x">
+                      <table className="w-full text-[10px] md:text-sm" style={{ minWidth: 'max-content' }}>
                         <thead className="bg-gray-50 dark:bg-neutral-700 border-b border-gray-200 dark:border-neutral-600">
                           <tr>
                             <th className="text-left py-2 md:p-3 font-medium text-slate-700 dark:text-slate-200 sticky left-0 z-20 bg-gray-50 dark:bg-neutral-700 w-28 md:w-44 pl-2 md:pl-3 pr-2 border-r border-gray-200 dark:border-neutral-700">Player</th>
