@@ -1138,7 +1138,21 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                 }
                               }}
                             >
-                              <td className="py-1.5 md:p-3 sticky left-4 md:left-0 bg-inherit z-10 w-28 md:w-32 pl-2 pr-1">
+                              <td 
+                                className="py-1.5 md:p-3 sticky left-4 md:left-0 z-20 w-28 md:w-32 pl-2 pr-1"
+                                style={(() => {
+                                  // Use solid colors for the sticky column to prevent text showing through
+                                  const isDark = document.documentElement.classList.contains('dark');
+                                  const baseColor = isDark ? { r: 38, g: 38, b: 38 } : { r: 255, g: 255, b: 255 }; // neutral-800 or white
+                                  const teamRgb = playerTeamColor?.primaryRgb || { r: 251, g: 146, b: 60 };
+                                  const opacity = index % 2 === 0 ? 0.06 : 0.12;
+                                  // Blend team color with base
+                                  const blendedR = Math.round(baseColor.r * (1 - opacity) + teamRgb.r * opacity);
+                                  const blendedG = Math.round(baseColor.g * (1 - opacity) + teamRgb.g * opacity);
+                                  const blendedB = Math.round(baseColor.b * (1 - opacity) + teamRgb.b * opacity);
+                                  return { backgroundColor: `rgb(${blendedR}, ${blendedG}, ${blendedB})` };
+                                })()}
+                              >
                                 <div className="max-w-none whitespace-normal">
                                   <div className="font-medium text-slate-800 dark:text-white">{player.firstname} {player.familyname}</div>
                                   {player.number && (
