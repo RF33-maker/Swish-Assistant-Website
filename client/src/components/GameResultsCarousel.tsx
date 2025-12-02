@@ -123,17 +123,45 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
           return;
         }
 
+        if (!playerStats || playerStats.length === 0) {
+          console.log("No player stats available");
+          return;
+        }
+
+        // Get game_id or numeric_id values to match against game_schedule
+        const gameIds = new Set<string>();
+        playerStats.forEach(stat => {
+          if (stat.game_id) gameIds.add(stat.game_id);
+        });
+
+        // Fetch game schedule to get correct home/away team mapping
+        const { data: gameSchedule } = await supabase
+          .from("game_schedule")
+          .select("*")
+          .eq("league_id", leagueId);
+
+        // Create a map of game_id -> {hometeam, awayteam}
+        const gameScheduleMap = new Map<string, any>();
+        gameSchedule?.forEach(game => {
+          if (game.game_id) {
+            gameScheduleMap.set(game.game_id, game);
+          }
+          // Also try numeric_id as fallback
+          if (game.numeric_id) {
+            gameScheduleMap.set(game.numeric_id?.toString(), game);
+          }
+        });
+
         // Group stats by game_id and process
         const gameMap = new Map<string, any>();
         
-        playerStats?.forEach(stat => {
+        playerStats.forEach(stat => {
           if (!gameMap.has(stat.game_id)) {
             gameMap.set(stat.game_id, {
               game_id: stat.game_id,
               game_date: stat.game_date,
-              home_team: stat.home_team || "Home",
-              away_team: stat.away_team || "Away", 
-              players: []
+              players: [],
+              scheduleData: gameScheduleMap.get(stat.game_id)
             });
           }
           gameMap.get(stat.game_id).players.push(stat);
@@ -156,32 +184,18 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
             return null;
           }
 
-          // Try to match teams to home/away based on player team data
-          const team1 = uniqueTeams[0];
-          const team2 = uniqueTeams[1];
-          
-          // Check which team is home by looking at player.is_home or player.team_type
-          const team1IsHome = game.players.find((p: any) => p.team === team1)?.is_home;
-          const team2IsHome = game.players.find((p: any) => p.team === team2)?.is_home;
-          
           let homeTeam, awayTeam;
-          
-          // If we have is_home data, use it
-          if (team1IsHome === true) {
+
+          // First, try to use game_schedule data (most reliable)
+          if (game.scheduleData?.hometeam && game.scheduleData?.awayteam) {
+            homeTeam = game.scheduleData.hometeam;
+            awayTeam = game.scheduleData.awayteam;
+          } else {
+            // Fallback: use the teams from player data
+            const team1 = uniqueTeams[0];
+            const team2 = uniqueTeams[1];
             homeTeam = team1;
             awayTeam = team2;
-          } else if (team2IsHome === true) {
-            homeTeam = team2;
-            awayTeam = team1;
-          } else {
-            // Fallback: use the order from game.home_team/away_team if available
-            if (game.home_team && game.away_team) {
-              homeTeam = game.home_team;
-              awayTeam = game.away_team;
-            } else {
-              homeTeam = team1;
-              awayTeam = team2;
-            }
           }
           
           return {
