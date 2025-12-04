@@ -658,6 +658,7 @@ export default function LeaguePage() {
             valueA = getStatValueByMode(a, teamStatsMode, 'totalDRB', 'avgDRB');
             valueB = getStatValueByMode(b, teamStatsMode, 'totalDRB', 'avgDRB');
             break;
+          case 'REB':
           case 'TRB':
             valueA = getStatValueByMode(a, teamStatsMode, 'totalRebounds', 'rpg');
             valueB = getStatValueByMode(b, teamStatsMode, 'totalRebounds', 'rpg');
