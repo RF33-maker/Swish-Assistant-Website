@@ -1417,8 +1417,9 @@ export default function LeaguePage() {
               .select("*")
               .eq("league_id", data.league_id);
 
-            // Create a map of game scores and numeric_ids from team_stats, using NORMALIZED team names + date as key
-            const gameScoresMap = new Map<string, { team1: string, team2: string, team1_score: number, team2_score: number, numeric_id: string }>();
+            // Create a map of game scores and numeric_ids from team_stats, storing ALL games for each team matchup
+            // Key: team pairing, Value: array of all games between those teams (sorted by date, newest first)
+            const gameScoresMap = new Map<string, Array<{ team1: string, team2: string, team1_score: number, team2_score: number, numeric_id: string, game_date: Date }>>();
             if (teamStatsForScores && !teamStatsError) {
               const gameMap = new Map<string, any[]>();
               
@@ -1439,13 +1440,13 @@ export default function LeaguePage() {
                   const team1Normalized = normalizeAndMapTeamName(team1.name);
                   const team2Normalized = normalizeAndMapTeamName(team2.name);
                   
-                  // Get the game date and normalize it to just the date portion (YYYY-MM-DD)
+                  // Get the game date
                   const gameDate = team1.game_date || team2.game_date;
-                  const normalizedDate = gameDate ? new Date(gameDate).toISOString().split('T')[0] : '';
+                  const gameDateObj = gameDate ? new Date(gameDate) : new Date(0);
                   
-                  // Create keys based on NORMALIZED team name combinations + date (both orders)
-                  const key1 = `${team1Normalized}-vs-${team2Normalized}-${normalizedDate}`;
-                  const key2 = `${team2Normalized}-vs-${team1Normalized}-${normalizedDate}`;
+                  // Create keys based on NORMALIZED team name combinations (both orders)
+                  const key1 = `${team1Normalized}-vs-${team2Normalized}`;
+                  const key2 = `${team2Normalized}-vs-${team1Normalized}`;
                   
                   // Store both orderings separately so we can match correctly
                   const scoreData1 = {
@@ -1453,7 +1454,8 @@ export default function LeaguePage() {
                     team2: team2.name,
                     team1_score: team1.tot_spoints || 0,
                     team2_score: team2.tot_spoints || 0,
-                    numeric_id: numericId
+                    numeric_id: numericId,
+                    game_date: gameDateObj
                   };
                   
                   const scoreData2 = {
@@ -1461,12 +1463,26 @@ export default function LeaguePage() {
                     team2: team1.name,
                     team1_score: team2.tot_spoints || 0,
                     team2_score: team1.tot_spoints || 0,
-                    numeric_id: numericId
+                    numeric_id: numericId,
+                    game_date: gameDateObj
                   };
                   
-                  gameScoresMap.set(key1, scoreData1);
-                  gameScoresMap.set(key2, scoreData2);
+                  // Add to array of games for this matchup (instead of overwriting)
+                  if (!gameScoresMap.has(key1)) {
+                    gameScoresMap.set(key1, []);
+                  }
+                  gameScoresMap.get(key1)!.push(scoreData1);
+                  
+                  if (!gameScoresMap.has(key2)) {
+                    gameScoresMap.set(key2, []);
+                  }
+                  gameScoresMap.get(key2)!.push(scoreData2);
                 }
+              });
+              
+              // Sort all game arrays by date (newest first) so we can pick the closest match
+              gameScoresMap.forEach((games, key) => {
+                games.sort((a, b) => b.game_date.getTime() - a.game_date.getTime());
               });
             }
 
@@ -1487,10 +1503,20 @@ export default function LeaguePage() {
                 // NORMALIZE team names before looking up scores
                 const homeTeamNormalized = normalizeAndMapTeamName(game.hometeam);
                 const awayTeamNormalized = normalizeAndMapTeamName(game.awayteam);
-                // Normalize the matchtime date to YYYY-MM-DD for lookup
-                const scheduledDate = game.matchtime ? new Date(game.matchtime).toISOString().split('T')[0] : '';
-                const teamKey = `${homeTeamNormalized}-vs-${awayTeamNormalized}-${scheduledDate}`;
-                const scoreData = gameScoresMap.get(teamKey);
+                const teamKey = `${homeTeamNormalized}-vs-${awayTeamNormalized}`;
+                const matchingGames = gameScoresMap.get(teamKey) || [];
+                
+                // Find the game with the closest date to the scheduled matchtime
+                const scheduledDate = game.matchtime ? new Date(game.matchtime) : new Date();
+                let scoreData = null;
+                if (matchingGames.length > 0) {
+                  // Find the game closest to the scheduled date (within 1 day tolerance)
+                  const closestGame = matchingGames.find(g => {
+                    const daysDiff = Math.abs(g.game_date.getTime() - scheduledDate.getTime()) / (1000 * 60 * 60 * 24);
+                    return daysDiff <= 1; // Within 1 day
+                  });
+                  scoreData = closestGame || null;
+                }
                 
                 return {
                   game_id: gameKey,
