@@ -1417,7 +1417,7 @@ export default function LeaguePage() {
               .select("*")
               .eq("league_id", data.league_id);
 
-            // Create a map of game scores and numeric_ids from team_stats, using NORMALIZED team names as key
+            // Create a map of game scores and numeric_ids from team_stats, using NORMALIZED team names + date as key
             const gameScoresMap = new Map<string, { team1: string, team2: string, team1_score: number, team2_score: number, numeric_id: string }>();
             if (teamStatsForScores && !teamStatsError) {
               const gameMap = new Map<string, any[]>();
@@ -1439,9 +1439,13 @@ export default function LeaguePage() {
                   const team1Normalized = normalizeAndMapTeamName(team1.name);
                   const team2Normalized = normalizeAndMapTeamName(team2.name);
                   
-                  // Create keys based on NORMALIZED team name combinations (both orders)
-                  const key1 = `${team1Normalized}-vs-${team2Normalized}`;
-                  const key2 = `${team2Normalized}-vs-${team1Normalized}`;
+                  // Get the game date and normalize it to just the date portion (YYYY-MM-DD)
+                  const gameDate = team1.game_date || team2.game_date;
+                  const normalizedDate = gameDate ? new Date(gameDate).toISOString().split('T')[0] : '';
+                  
+                  // Create keys based on NORMALIZED team name combinations + date (both orders)
+                  const key1 = `${team1Normalized}-vs-${team2Normalized}-${normalizedDate}`;
+                  const key2 = `${team2Normalized}-vs-${team1Normalized}-${normalizedDate}`;
                   
                   // Store both orderings separately so we can match correctly
                   const scoreData1 = {
@@ -1483,7 +1487,9 @@ export default function LeaguePage() {
                 // NORMALIZE team names before looking up scores
                 const homeTeamNormalized = normalizeAndMapTeamName(game.hometeam);
                 const awayTeamNormalized = normalizeAndMapTeamName(game.awayteam);
-                const teamKey = `${homeTeamNormalized}-vs-${awayTeamNormalized}`;
+                // Normalize the matchtime date to YYYY-MM-DD for lookup
+                const scheduledDate = game.matchtime ? new Date(game.matchtime).toISOString().split('T')[0] : '';
+                const teamKey = `${homeTeamNormalized}-vs-${awayTeamNormalized}-${scheduledDate}`;
                 const scoreData = gameScoresMap.get(teamKey);
                 
                 return {
