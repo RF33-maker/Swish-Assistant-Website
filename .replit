@@ -106,4 +106,4 @@ task = "shell.exec"
 args = "cd python_backend && python main.py"
 
 [agent]
-integrations = ["javascript_supabase==1.0.0", "javascript_openai==1.0.0"]
+integrations = ["javascript_supabase:1.0.0", "javascript_openai:1.0.0"]
