@@ -1590,7 +1590,7 @@ export default function LeaguePage() {
       "Top Playmakers": "sassists",
     };
 
-    const getTopList = (statKey: string) => {
+    const getTopList = useMemo(() => (statKey: string) => {
       // Map stat keys to both average and total field names
       const statToFields: Record<string, { avgField: string; totalField: string }> = {
         'spoints': { avgField: 'avgPoints', totalField: 'totalPoints' },
@@ -1604,8 +1604,10 @@ export default function LeaguePage() {
       // Choose field based on leagueLeadersView state
       const fieldToUse = leagueLeadersView === 'averages' ? fields.avgField : fields.totalField;
       
+      console.log(`📊 getTopList(${statKey}): mode=${leagueLeadersView}, fieldToUse=${fieldToUse}`);
+      
       // Sort by the selected field and take top 5
-      return [...allPlayerAverages]
+      const result = [...allPlayerAverages]
         .sort((a, b) => {
           const aVal = parseFloat(a[fieldToUse]) || 0;
           const bVal = parseFloat(b[fieldToUse]) || 0;
@@ -1618,7 +1620,10 @@ export default function LeaguePage() {
             ? player[fields.avgField] 
             : Math.round(player[fields.totalField]) // Round totals to whole numbers
         }));
-    };
+      
+      console.log(`📊 getTopList(${statKey}) result:`, result.map(p => ({ name: p.name, value: p.value })));
+      return result;
+    }, [allPlayerAverages, leagueLeadersView]);
 
     const topScorers = getTopList("spoints");
     const topRebounders = getTopList("sreboundstotal");
