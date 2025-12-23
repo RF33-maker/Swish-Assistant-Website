@@ -63,17 +63,35 @@ export default function LeagueLeadersPage() {
           return;
         }
 
-        // Fetch all player stats for the league with full names and slugs from players table
-        const { data: allPlayerStats, error: statsError } = await supabase
-          .from("player_stats")
-          .select("*, players:player_id(full_name, slug)")
-          .eq("league_id", leagueData.league_id);
-
-        if (statsError) {
-          console.error("Error fetching player stats:", statsError);
-          setError("Failed to load player statistics");
-          return;
+        // Fetch ALL player stats for the league with pagination to bypass 1000 row limit
+        let allPlayerStats: any[] = [];
+        let page = 0;
+        const pageSize = 1000;
+        let hasMore = true;
+        
+        while (hasMore) {
+          const { data: pageData, error: pageError } = await supabase
+            .from("player_stats")
+            .select("*, players:player_id(full_name, slug)")
+            .eq("league_id", leagueData.league_id)
+            .range(page * pageSize, (page + 1) * pageSize - 1);
+          
+          if (pageError) {
+            console.error("Error fetching player stats page", page, ":", pageError);
+            break;
+          }
+          
+          if (pageData && pageData.length > 0) {
+            allPlayerStats = [...allPlayerStats, ...pageData];
+            console.log("📊 League Leaders: Fetched page", page, "with", pageData.length, "records, total:", allPlayerStats.length);
+            hasMore = pageData.length === pageSize;
+            page++;
+          } else {
+            hasMore = false;
+          }
         }
+        
+        console.log("📊 League Leaders: Fetched", allPlayerStats.length, "total stat records");
 
         if (!allPlayerStats || allPlayerStats.length === 0) {
           setError("No player statistics found for this league");

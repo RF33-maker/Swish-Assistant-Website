@@ -1621,7 +1621,13 @@ export default function LeaguePage() {
             : Math.round(player[fields.totalField]) // Round totals to whole numbers
         }));
       
-      console.log(`📊 getTopList(${statKey}) result:`, result.map(p => ({ name: p.name, value: p.value })));
+      console.log(`📊 getTopList(${statKey}) result:`, result.map(p => ({ 
+        name: p.name, 
+        value: p.value, 
+        games: p.games,
+        totalPoints: p.totalPoints,
+        avgPoints: p.avgPoints
+      })));
       return result;
     }, [allPlayerAverages, leagueLeadersView]);
 
