@@ -258,20 +258,28 @@ export function namesMatch(name1: string, name2: string, threshold: number = 0.8
     const first2 = parts2[0];
     
     // If first parts match (including initials or nicknames) and last names are similar
+    // Use high threshold (0.9) for first names to prevent false merges like "Mahamud" vs "Hamza"
     const firstMatch = first1 === first2 || 
       (first1.length === 1 && first2.startsWith(first1)) ||
       (first2.length === 1 && first1.startsWith(first2)) ||
       areNicknameVariants(first1, first2) ||
-      jaroWinklerSimilarity(first1, first2) >= 0.8;
+      jaroWinklerSimilarity(first1, first2) >= 0.9;
     
     if (firstMatch && jaroWinklerSimilarity(last1, last2) >= 0.85) {
       return true;
     }
   }
 
-  // Fuzzy match using Jaro-Winkler
-  const similarity = jaroWinklerSimilarity(n1, n2);
-  return similarity >= threshold;
+  // Fuzzy match using Jaro-Winkler - ONLY for single-word names
+  // For multi-word names, we require the structured checks above to pass
+  // This prevents false positives like "Mahamud Ibrahim" matching "Hamza Ibrahim"
+  // when they share the same common last name but are different people
+  if (parts1.length <= 1 && parts2.length <= 1) {
+    const similarity = jaroWinklerSimilarity(n1, n2);
+    return similarity >= threshold;
+  }
+  
+  return false;
 }
 
 /**
