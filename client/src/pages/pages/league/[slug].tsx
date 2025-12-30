@@ -2170,6 +2170,18 @@ export default function LeaguePage() {
         // Step 3: Merge player_id groups that have similar names (same player, different IDs)
         const mergedPlayers: PlayerAggregate[] = [];
         const processedIds = new Set<string>();
+        
+        // Debug: Check for Hamza players before merge
+        const hamzasBefore = Array.from(byPlayerId.values()).filter(p => 
+          p.name.toLowerCase().includes('hamza')
+        );
+        if (hamzasBefore.length > 0) {
+          console.log("📊 DEBUG: Hamza players BEFORE merge:", hamzasBefore.map(p => ({
+            name: p.name,
+            team: p.team,
+            games: p.games
+          })));
+        }
 
         for (const [playerId, player] of byPlayerId.entries()) {
           if (processedIds.has(playerId)) continue;
@@ -2183,6 +2195,11 @@ export default function LeaguePage() {
               const otherTeamNormalized = normalizeTeamName(otherPlayer.team);
               const sameTeam = playerTeamNormalized === otherTeamNormalized;
               if (sameTeam && areSimilarNames(player.name, otherPlayer.name)) {
+                // Debug: Log when Hamza players are about to be merged
+                if (player.name.toLowerCase().includes('hamza') || otherPlayer.name.toLowerCase().includes('hamza')) {
+                  console.log("📊 DEBUG: Merging Hamza:", player.name, "with", otherPlayer.name, 
+                    "| Teams:", player.team, "vs", otherPlayer.team);
+                }
                 similarPlayers.push([otherId, otherPlayer]);
               }
             }
@@ -2226,6 +2243,16 @@ export default function LeaguePage() {
         }
 
         console.log("📊 Step 3: After merging:", mergedPlayers.length, "unique players");
+        
+        // Debug: Check for Hamza players after merge
+        const hamzasAfter = mergedPlayers.filter(p => p.name.toLowerCase().includes('hamza'));
+        if (hamzasAfter.length > 0) {
+          console.log("📊 DEBUG: Hamza players AFTER merge:", hamzasAfter.map(p => ({
+            name: p.name,
+            team: p.team,
+            games: p.games
+          })));
+        }
 
         // Step 4: Handle stats without player_id by grouping by name
         console.log("📊 Step 4: Processing", noPlayerId.length, "stats without player_id");
