@@ -3986,7 +3986,7 @@ export default function LeaguePage() {
                         .filter(game => new Date(game.game_date) >= now)
                         .sort((a, b) => new Date(a.game_date).getTime() - new Date(b.game_date).getTime());
                       const pastGames = schedule
-                        .filter(game => new Date(game.game_date) < now && (game.team1_score != null || game.team2_score != null))
+                        .filter(game => new Date(game.game_date) < now)
                         .sort((a, b) => new Date(b.game_date).getTime() - new Date(a.game_date).getTime());
 
                       const gamesToShow = scheduleView === 'upcoming' ? upcomingGames : pastGames;
