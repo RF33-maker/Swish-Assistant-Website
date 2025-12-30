@@ -37,6 +37,7 @@ import { PlayerComparison } from "@/components/PlayerComparison";
 import { TeamComparison } from "@/components/TeamComparison";
 import { TournamentBracket } from "@/components/TournamentBracket";
 import { normalizeTeamName } from "@/lib/teamUtils";
+import { namesMatch, getMostCompleteName } from "@/lib/fuzzyMatch";
 
 type GameSchedule = {
   game_id: string;
@@ -2011,66 +2012,12 @@ export default function LeaguePage() {
 
       setIsLoadingStats(true);
       try {
-        // Helper function to check if two names are similar (fuzzy match)
+        // Use shared fuzzy matching from fuzzyMatch.ts
+        // namesMatch handles: number stripping, initial matching (R Farrell vs Rhys Farrell), 
+        // Jaro-Winkler similarity at 0.85 threshold for typo tolerance
         const areSimilarNames = (name1: string, name2: string): boolean => {
           if (!name1 || !name2) return false;
-          const n1 = name1.toLowerCase().trim();
-          const n2 = name2.toLowerCase().trim();
-          
-          if (n1 === n2) return true;
-          
-          const parts1 = n1.split(/[\s-]+/);
-          const parts2 = n2.split(/[\s-]+/);
-          
-          // Check if one name is abbreviation of the other (e.g., "R Farrell" vs "Rhys Farrell")
-          if (parts1.length !== parts2.length) {
-            const shorter = parts1.length < parts2.length ? parts1 : parts2;
-            const longer = parts1.length < parts2.length ? parts2 : parts1;
-            
-            let matchCount = 0;
-            for (const shortPart of shorter) {
-              for (const longPart of longer) {
-                if (longPart === shortPart || 
-                    longPart.startsWith(shortPart) || 
-                    (shortPart.length === 1 && longPart.startsWith(shortPart))) {
-                  matchCount++;
-                  break;
-                }
-              }
-            }
-            if (matchCount === shorter.length) return true;
-          }
-          
-          // Same number of parts - check if similar
-          if (parts1.length === parts2.length && parts1.length >= 2) {
-            const lastName1 = parts1[parts1.length - 1];
-            const lastName2 = parts2[parts2.length - 1];
-            
-            if (lastName1 === lastName2) {
-              const firstName1 = parts1[0];
-              const firstName2 = parts2[0];
-              
-              if (firstName1.startsWith(firstName2.substring(0, 3)) || 
-                  firstName2.startsWith(firstName1.substring(0, 3)) ||
-                  firstName1.includes(firstName2) || 
-                  firstName2.includes(firstName1)) {
-                return true;
-              }
-            }
-          }
-          
-          // Check for typos (1-2 character differences)
-          const maxLength = Math.max(n1.length, n2.length);
-          if (Math.abs(n1.length - n2.length) <= 2 && maxLength > 5) {
-            let differences = 0;
-            for (let i = 0; i < Math.min(n1.length, n2.length); i++) {
-              if (n1[i] !== n2[i]) differences++;
-              if (differences > 2) return false;
-            }
-            return true;
-          }
-          
-          return false;
+          return namesMatch(name1, name2);
         };
 
         // ========== STATS-FIRST APPROACH ==========
@@ -2266,10 +2213,8 @@ export default function LeaguePage() {
               player.totalPlusMinus += other.totalPlusMinus;
               player.rawStats.push(...other.rawStats);
               
-              // Use longer name
-              if (other.name.length > player.name.length) {
-                player.name = other.name;
-              }
+              // Use the most complete name (prefers full names over initials)
+              player.name = getMostCompleteName([player.name, other.name]);
               
               processedIds.add(otherId);
             }
