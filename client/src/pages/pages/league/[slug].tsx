@@ -1417,9 +1417,19 @@ export default function LeaguePage() {
               .select("*")
               .eq("league_id", data.league_id);
 
-            // Create a map of game scores and numeric_ids from team_stats, storing ALL games for each team matchup
-            // Key: team pairing, Value: array of all games between those teams (sorted by date, newest first)
+            console.log("📊 Team stats for scores:", teamStatsForScores?.length, "records");
+            if (teamStatsForScores && teamStatsForScores.length > 0) {
+              console.log("📊 Sample team_stats record:", JSON.stringify(teamStatsForScores[0], null, 2));
+              console.log("📊 Available columns:", Object.keys(teamStatsForScores[0]));
+            }
+
+            // Create a map of game scores using game_key as primary identifier
+            // Key: game_key, Value: game score data
+            const gameScoresByKey = new Map<string, { team1: string, team2: string, team1_score: number, team2_score: number, numeric_id: string, game_date: Date }>();
+            
+            // Also keep the team pairing map for fallback matching
             const gameScoresMap = new Map<string, Array<{ team1: string, team2: string, team1_score: number, team2_score: number, numeric_id: string, game_date: Date }>>();
+            
             if (teamStatsForScores && !teamStatsError) {
               const gameMap = new Map<string, any[]>();
               
@@ -1433,6 +1443,8 @@ export default function LeaguePage() {
                 }
               });
 
+              console.log("📊 Unique games by numeric_id:", gameMap.size);
+
               gameMap.forEach((gameTeams, numericId) => {
                 if (gameTeams.length === 2) {
                   const [team1, team2] = gameTeams;
@@ -1444,11 +1456,10 @@ export default function LeaguePage() {
                   const gameDate = team1.game_date || team2.game_date;
                   const gameDateObj = gameDate ? new Date(gameDate) : new Date(0);
                   
-                  // Create keys based on NORMALIZED team name combinations (both orders)
-                  const key1 = `${team1Normalized}-vs-${team2Normalized}`;
-                  const key2 = `${team2Normalized}-vs-${team1Normalized}`;
+                  // If team_stats has game_key, use that as primary key
+                  const gameKey = team1.game_key || team2.game_key;
                   
-                  // Store both orderings separately so we can match correctly
+                  // Create base score data
                   const scoreData1 = {
                     team1: team1.name,
                     team2: team2.name,
@@ -1467,6 +1478,15 @@ export default function LeaguePage() {
                     game_date: gameDateObj
                   };
                   
+                  // Store by game_key if available (for primary lookup)
+                  if (gameKey) {
+                    gameScoresByKey.set(gameKey, scoreData1);
+                  }
+                  
+                  // ALWAYS store by team pairing for fallback (regardless of game_key)
+                  const key1 = `${team1Normalized}-vs-${team2Normalized}`;
+                  const key2 = `${team2Normalized}-vs-${team1Normalized}`;
+                  
                   // Add to array of games for this matchup (instead of overwriting)
                   if (!gameScoresMap.has(key1)) {
                     gameScoresMap.set(key1, []);
@@ -1477,8 +1497,13 @@ export default function LeaguePage() {
                     gameScoresMap.set(key2, []);
                   }
                   gameScoresMap.get(key2)!.push(scoreData2);
+                } else if (gameTeams.length !== 2) {
+                  console.log("📊 Game with", gameTeams.length, "teams:", numericId, gameTeams.map(t => t.name));
                 }
               });
+              
+              console.log("📊 Games stored by game_key:", gameScoresByKey.size);
+              console.log("📊 Team pairings stored:", gameScoresMap.size);
               
               // Sort all game arrays by date (newest first) so we can pick the closest match
               gameScoresMap.forEach((games, key) => {
@@ -1498,24 +1523,45 @@ export default function LeaguePage() {
                 console.log('📅 Available columns in game_schedule:', Object.keys(scheduleData[0]));
               }
               
+              let matchedByKey = 0;
+              let matchedByTeamDate = 0;
+              let notMatched = 0;
+              
               const games: GameSchedule[] = scheduleData.map((game: any) => {
                 const gameKey = game.game_key || `${game.hometeam}-vs-${game.awayteam}`;
-                // NORMALIZE team names before looking up scores
-                const homeTeamNormalized = normalizeAndMapTeamName(game.hometeam);
-                const awayTeamNormalized = normalizeAndMapTeamName(game.awayteam);
-                const teamKey = `${homeTeamNormalized}-vs-${awayTeamNormalized}`;
-                const matchingGames = gameScoresMap.get(teamKey) || [];
                 
-                // Find the game with the closest date to the scheduled matchtime
-                const scheduledDate = game.matchtime ? new Date(game.matchtime) : new Date();
                 let scoreData = null;
-                if (matchingGames.length > 0) {
-                  // Find the game closest to the scheduled date (within 1 day tolerance)
-                  const closestGame = matchingGames.find(g => {
-                    const daysDiff = Math.abs(g.game_date.getTime() - scheduledDate.getTime()) / (1000 * 60 * 60 * 24);
-                    return daysDiff <= 1; // Within 1 day
-                  });
-                  scoreData = closestGame || null;
+                
+                // Strategy 1: Try direct game_key match first
+                if (game.game_key && gameScoresByKey.has(game.game_key)) {
+                  scoreData = gameScoresByKey.get(game.game_key)!;
+                  matchedByKey++;
+                }
+                
+                // Strategy 2: Fallback to team name + date matching
+                if (!scoreData) {
+                  const homeTeamNormalized = normalizeAndMapTeamName(game.hometeam);
+                  const awayTeamNormalized = normalizeAndMapTeamName(game.awayteam);
+                  const teamKey = `${homeTeamNormalized}-vs-${awayTeamNormalized}`;
+                  const matchingGames = gameScoresMap.get(teamKey) || [];
+                  
+                  // Find the game with the closest date to the scheduled matchtime
+                  const scheduledDate = game.matchtime ? new Date(game.matchtime) : new Date();
+                  if (matchingGames.length > 0) {
+                    // Find the game closest to the scheduled date (within 2 days tolerance for timezone issues)
+                    const closestGame = matchingGames.find(g => {
+                      const daysDiff = Math.abs(g.game_date.getTime() - scheduledDate.getTime()) / (1000 * 60 * 60 * 24);
+                      return daysDiff <= 2; // Within 2 days
+                    });
+                    if (closestGame) {
+                      scoreData = closestGame;
+                      matchedByTeamDate++;
+                    }
+                  }
+                }
+                
+                if (!scoreData) {
+                  notMatched++;
                 }
                 
                 return {
@@ -1534,16 +1580,21 @@ export default function LeaguePage() {
                   status: scoreData ? "FINAL" : undefined,
                   numeric_id: scoreData?.numeric_id
                 };
-              }).filter((game) => game.team1 && game.team2)
-              .sort((a, b) => {
+              }).filter((game) => game.team1 && game.team2);
+              
+              console.log("📅 Matching summary - By game_key:", matchedByKey, "By team+date:", matchedByTeamDate, "Not matched:", notMatched);
+              
+              // Sort games by date (most recent first)
+              const sortedGames = games.sort((a, b) => {
                 if (!a.game_date || !b.game_date) return 0;
                 const dateA = new Date(a.game_date).getTime();
                 const dateB = new Date(b.game_date).getTime();
                 return dateB - dateA; // Most recent first
               });
               
-              console.log("📅 Processed schedule from game_schedule:", games);
-              setSchedule(games);
+              console.log("📅 Processed schedule from game_schedule:", sortedGames.length, "games");
+              console.log("📅 Games with scores:", sortedGames.filter(g => g.team1_score !== undefined).length);
+              setSchedule(sortedGames);
             } else if (scheduleError) {
               console.error("📅 Error fetching from game_schedule:", scheduleError);
               // Fallback to empty schedule
@@ -4043,12 +4094,17 @@ export default function LeaguePage() {
                                 ))
                               ) : (
                                 /* Results View */
-                                gamesToShow.map((game, index) => (
+                                gamesToShow.map((game, index) => {
+                                  // Use numeric_id for game detail lookup (required for box score modal)
+                                  // Game is clickable only if we have numeric_id (for box score) and scores are matched
+                                  const isClickable = game.numeric_id && game.team1_score !== undefined;
+                                  
+                                  return (
                                   <div 
                                     key={`past-${game.game_id}-${index}`} 
-                                    className={`py-2 md:py-3 transition-colors ${game.numeric_id ? 'cursor-pointer hover:bg-orange-50 dark:hover:bg-neutral-800' : 'cursor-default'}`}
+                                    className={`py-2 md:py-3 transition-colors ${isClickable ? 'cursor-pointer hover:bg-orange-50 dark:hover:bg-neutral-800' : 'cursor-default'}`}
                                     onClick={() => {
-                                      if (game.numeric_id) {
+                                      if (isClickable && game.numeric_id) {
                                         handleGameClick(game.numeric_id);
                                       }
                                     }}
@@ -4101,7 +4157,8 @@ export default function LeaguePage() {
                                       </div>
                                     </div>
                                   </div>
-                                ))
+                                );
+                                })
                               )}
                             </div>
                           ) : (
