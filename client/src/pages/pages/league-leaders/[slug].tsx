@@ -6,6 +6,8 @@ import Footer from "@/components/layout/footer";
 import { Trophy, TrendingUp, Users, Target, Shield, Zap, ArrowLeft } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { namesMatch, getMostCompleteName } from "@/lib/fuzzyMatch";
+import { normalizeTeamName } from "@/lib/teamUtils";
 
 interface LeaderboardStats {
   points: any[];
@@ -63,17 +65,35 @@ export default function LeagueLeadersPage() {
           return;
         }
 
-        // Fetch all player stats for the league with full names and slugs from players table
-        const { data: allPlayerStats, error: statsError } = await supabase
-          .from("player_stats")
-          .select("*, players:player_id(full_name, slug)")
-          .eq("league_id", leagueData.league_id);
-
-        if (statsError) {
-          console.error("Error fetching player stats:", statsError);
-          setError("Failed to load player statistics");
-          return;
+        // Fetch ALL player stats for the league with pagination to bypass 1000 row limit
+        let allPlayerStats: any[] = [];
+        let page = 0;
+        const pageSize = 1000;
+        let hasMore = true;
+        
+        while (hasMore) {
+          const { data: pageData, error: pageError } = await supabase
+            .from("player_stats")
+            .select("*, players:player_id(full_name, slug)")
+            .eq("league_id", leagueData.league_id)
+            .range(page * pageSize, (page + 1) * pageSize - 1);
+          
+          if (pageError) {
+            console.error("Error fetching player stats page", page, ":", pageError);
+            break;
+          }
+          
+          if (pageData && pageData.length > 0) {
+            allPlayerStats = [...allPlayerStats, ...pageData];
+            console.log("📊 League Leaders: Fetched page", page, "with", pageData.length, "records, total:", allPlayerStats.length);
+            hasMore = pageData.length === pageSize;
+            page++;
+          } else {
+            hasMore = false;
+          }
         }
+        
+        console.log("📊 League Leaders: Fetched", allPlayerStats.length, "total stat records");
 
         if (!allPlayerStats || allPlayerStats.length === 0) {
           setError("No player statistics found for this league");
@@ -93,28 +113,9 @@ export default function LeagueLeadersPage() {
           games_played: []
         };
 
-        // Helper function to check if two names are similar (fuzzy match)
-        const areSimilarNames = (name1: string, name2: string): boolean => {
-          const n1 = name1.toLowerCase().trim();
-          const n2 = name2.toLowerCase().trim();
-          
-          // Exact match
-          if (n1 === n2) return true;
-          
-          // Check if names differ by only 1-2 characters (handles "Murray Henry" vs "Murray Hendry")
-          const maxLength = Math.max(n1.length, n2.length);
-          if (Math.abs(n1.length - n2.length) <= 2 && maxLength > 5) {
-            // Simple edit distance check
-            let differences = 0;
-            for (let i = 0; i < Math.min(n1.length, n2.length); i++) {
-              if (n1[i] !== n2[i]) differences++;
-              if (differences > 2) return false;
-            }
-            return true;
-          }
-          
-          return false;
-        };
+        // Use shared fuzzy matching from fuzzyMatch.ts
+        // namesMatch handles: number stripping, initial matching (R Farrell vs Rhys Farrell), 
+        // Jaro-Winkler similarity at 0.85 threshold for typo tolerance
 
         // First pass: Group stats by player_id
         const playerStatsMap = new Map();
@@ -167,15 +168,28 @@ export default function LeagueLeadersPage() {
         });
 
         // Second pass: Merge duplicates by name (handles data quality issues where same player has multiple IDs)
+        // Uses shared namesMatch which handles: numbers in names, initials, typos via Jaro-Winkler
         const playersByIdArray = Array.from(playerStatsMap.values());
-        const mergedByName = new Map<string, typeof playersByIdArray[0]>();
+        
+        // Sort by games_played DESC so players with more games become the anchor
+        playersByIdArray.sort((a, b) => b.games_played - a.games_played);
+        
+        const mergedPlayers: typeof playersByIdArray = [];
         
         playersByIdArray.forEach((player) => {
-          // Check if we already have a similar name
+          // Normalize team name for comparison (handles "Senior Men I" vs base name)
+          const playerTeamNormalized = normalizeTeamName(player.team_name);
+          
+          // Check if we already have a similar name on the SAME TEAM (prevents false positives)
           let foundMatch = false;
-          for (const [existingName, existingPlayer] of mergedByName.entries()) {
-            if (areSimilarNames(player.name, existingName)) {
-              // Merge with existing player
+          for (const existingPlayer of mergedPlayers) {
+            // Normalize existing player's team for comparison
+            const existingTeamNormalized = normalizeTeamName(existingPlayer.team_name);
+            
+            // Only merge if normalized teams match AND names match (handles typos, initials, numbers)
+            const sameTeam = existingTeamNormalized === playerTeamNormalized;
+            if (sameTeam && namesMatch(player.name, existingPlayer.name)) {
+              // Merge stats with existing player (which has more games since we sorted)
               existingPlayer.games_played += player.games_played;
               existingPlayer.total_points += player.total_points;
               existingPlayer.total_rebounds += player.total_rebounds;
@@ -188,18 +202,24 @@ export default function LeagueLeadersPage() {
               existingPlayer.total_three_points_attempted += player.total_three_points_attempted;
               existingPlayer.total_free_throws_made += player.total_free_throws_made;
               existingPlayer.total_free_throws_attempted += player.total_free_throws_attempted;
+              // Keep the most complete name (prefers full names over initials)
+              existingPlayer.name = getMostCompleteName([existingPlayer.name, player.name]);
+              // Keep player_slug if one exists
+              if (!existingPlayer.player_slug && player.player_slug) {
+                existingPlayer.player_slug = player.player_slug;
+              }
               foundMatch = true;
               break;
             }
           }
           
           if (!foundMatch) {
-            // First time seeing this name - add it
-            mergedByName.set(player.name, { ...player });
+            // First time seeing this player - add them
+            mergedPlayers.push({ ...player });
           }
         });
 
-        const playersArray = Array.from(mergedByName.values());
+        const playersArray = mergedPlayers;
 
         // Data processing complete
 

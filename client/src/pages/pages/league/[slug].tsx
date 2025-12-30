@@ -37,6 +37,7 @@ import { PlayerComparison } from "@/components/PlayerComparison";
 import { TeamComparison } from "@/components/TeamComparison";
 import { TournamentBracket } from "@/components/TournamentBracket";
 import { normalizeTeamName } from "@/lib/teamUtils";
+import { namesMatch, getMostCompleteName } from "@/lib/fuzzyMatch";
 
 type GameSchedule = {
   game_id: string;
@@ -116,6 +117,32 @@ const TEAM_STAT_COLUMNS: Record<string, TeamStatColumn[]> = {
       label: 'FGA',
       sortable: true,
       getValue: (team, mode) => getStatValueByMode(team, mode, 'totalFGA', 'avgFGA'),
+    },
+    {
+      key: 'FG%',
+      label: 'FG%',
+      sortable: true,
+      getValue: (team) => parseFloat(team.fgPercentage) || 0,
+      format: (value) => value.toFixed(1),
+    },
+    {
+      key: '3PM',
+      label: '3PM',
+      sortable: true,
+      getValue: (team, mode) => getStatValueByMode(team, mode, 'total3PM', 'avg3PM'),
+    },
+    {
+      key: '3PA',
+      label: '3PA',
+      sortable: true,
+      getValue: (team, mode) => getStatValueByMode(team, mode, 'total3PA', 'avg3PA'),
+    },
+    {
+      key: '3P%',
+      label: '3P%',
+      sortable: true,
+      getValue: (team) => parseFloat(team.threePtPercentage) || 0,
+      format: (value) => value.toFixed(1),
     },
     {
       key: 'REB',
@@ -220,6 +247,10 @@ const TEAM_STAT_LEGENDS: Record<string, string[]> = {
     'PTS = Points',
     'FGM = Field Goals Made',
     'FGA = Field Goals Attempted',
+    'FG% = Field Goal Percentage',
+    '3PM = 3-Pointers Made',
+    '3PA = 3-Pointers Attempted',
+    '3P% = 3-Point Percentage',
     'REB = Rebounds',
     'AST = Assists',
     'STL = Steals',
@@ -628,6 +659,7 @@ export default function LeaguePage() {
             valueA = getStatValueByMode(a, teamStatsMode, 'totalDRB', 'avgDRB');
             valueB = getStatValueByMode(b, teamStatsMode, 'totalDRB', 'avgDRB');
             break;
+          case 'REB':
           case 'TRB':
             valueA = getStatValueByMode(a, teamStatsMode, 'totalRebounds', 'rpg');
             valueB = getStatValueByMode(b, teamStatsMode, 'totalRebounds', 'rpg');
@@ -1386,8 +1418,19 @@ export default function LeaguePage() {
               .select("*")
               .eq("league_id", data.league_id);
 
-            // Create a map of game scores and numeric_ids from team_stats, using NORMALIZED team names as key
-            const gameScoresMap = new Map<string, { team1: string, team2: string, team1_score: number, team2_score: number, numeric_id: string }>();
+            console.log("📊 Team stats for scores:", teamStatsForScores?.length, "records");
+            if (teamStatsForScores && teamStatsForScores.length > 0) {
+              console.log("📊 Sample team_stats record:", JSON.stringify(teamStatsForScores[0], null, 2));
+              console.log("📊 Available columns:", Object.keys(teamStatsForScores[0]));
+            }
+
+            // Create a map of game scores using game_key as primary identifier
+            // Key: game_key, Value: game score data
+            const gameScoresByKey = new Map<string, { team1: string, team2: string, team1_score: number, team2_score: number, numeric_id: string, game_date: Date }>();
+            
+            // Also keep the team pairing map for fallback matching
+            const gameScoresMap = new Map<string, Array<{ team1: string, team2: string, team1_score: number, team2_score: number, numeric_id: string, game_date: Date }>>();
+            
             if (teamStatsForScores && !teamStatsError) {
               const gameMap = new Map<string, any[]>();
               
@@ -1401,6 +1444,8 @@ export default function LeaguePage() {
                 }
               });
 
+              console.log("📊 Unique games by numeric_id:", gameMap.size);
+
               gameMap.forEach((gameTeams, numericId) => {
                 if (gameTeams.length === 2) {
                   const [team1, team2] = gameTeams;
@@ -1408,17 +1453,21 @@ export default function LeaguePage() {
                   const team1Normalized = normalizeAndMapTeamName(team1.name);
                   const team2Normalized = normalizeAndMapTeamName(team2.name);
                   
-                  // Create keys based on NORMALIZED team name combinations (both orders)
-                  const key1 = `${team1Normalized}-vs-${team2Normalized}`;
-                  const key2 = `${team2Normalized}-vs-${team1Normalized}`;
+                  // Get the game date
+                  const gameDate = team1.game_date || team2.game_date;
+                  const gameDateObj = gameDate ? new Date(gameDate) : new Date(0);
                   
-                  // Store both orderings separately so we can match correctly
+                  // If team_stats has game_key, use that as primary key
+                  const gameKey = team1.game_key || team2.game_key;
+                  
+                  // Create base score data
                   const scoreData1 = {
                     team1: team1.name,
                     team2: team2.name,
                     team1_score: team1.tot_spoints || 0,
                     team2_score: team2.tot_spoints || 0,
-                    numeric_id: numericId
+                    numeric_id: numericId,
+                    game_date: gameDateObj
                   };
                   
                   const scoreData2 = {
@@ -1426,12 +1475,40 @@ export default function LeaguePage() {
                     team2: team1.name,
                     team1_score: team2.tot_spoints || 0,
                     team2_score: team1.tot_spoints || 0,
-                    numeric_id: numericId
+                    numeric_id: numericId,
+                    game_date: gameDateObj
                   };
                   
-                  gameScoresMap.set(key1, scoreData1);
-                  gameScoresMap.set(key2, scoreData2);
+                  // Store by game_key if available (for primary lookup)
+                  if (gameKey) {
+                    gameScoresByKey.set(gameKey, scoreData1);
+                  }
+                  
+                  // ALWAYS store by team pairing for fallback (regardless of game_key)
+                  const key1 = `${team1Normalized}-vs-${team2Normalized}`;
+                  const key2 = `${team2Normalized}-vs-${team1Normalized}`;
+                  
+                  // Add to array of games for this matchup (instead of overwriting)
+                  if (!gameScoresMap.has(key1)) {
+                    gameScoresMap.set(key1, []);
+                  }
+                  gameScoresMap.get(key1)!.push(scoreData1);
+                  
+                  if (!gameScoresMap.has(key2)) {
+                    gameScoresMap.set(key2, []);
+                  }
+                  gameScoresMap.get(key2)!.push(scoreData2);
+                } else if (gameTeams.length !== 2) {
+                  console.log("📊 Game with", gameTeams.length, "teams:", numericId, gameTeams.map(t => t.name));
                 }
+              });
+              
+              console.log("📊 Games stored by game_key:", gameScoresByKey.size);
+              console.log("📊 Team pairings stored:", gameScoresMap.size);
+              
+              // Sort all game arrays by date (newest first) so we can pick the closest match
+              gameScoresMap.forEach((games, key) => {
+                games.sort((a, b) => b.game_date.getTime() - a.game_date.getTime());
               });
             }
 
@@ -1447,13 +1524,46 @@ export default function LeaguePage() {
                 console.log('📅 Available columns in game_schedule:', Object.keys(scheduleData[0]));
               }
               
+              let matchedByKey = 0;
+              let matchedByTeamDate = 0;
+              let notMatched = 0;
+              
               const games: GameSchedule[] = scheduleData.map((game: any) => {
                 const gameKey = game.game_key || `${game.hometeam}-vs-${game.awayteam}`;
-                // NORMALIZE team names before looking up scores
-                const homeTeamNormalized = normalizeAndMapTeamName(game.hometeam);
-                const awayTeamNormalized = normalizeAndMapTeamName(game.awayteam);
-                const teamKey = `${homeTeamNormalized}-vs-${awayTeamNormalized}`;
-                const scoreData = gameScoresMap.get(teamKey);
+                
+                let scoreData = null;
+                
+                // Strategy 1: Try direct game_key match first
+                if (game.game_key && gameScoresByKey.has(game.game_key)) {
+                  scoreData = gameScoresByKey.get(game.game_key)!;
+                  matchedByKey++;
+                }
+                
+                // Strategy 2: Fallback to team name + date matching
+                if (!scoreData) {
+                  const homeTeamNormalized = normalizeAndMapTeamName(game.hometeam);
+                  const awayTeamNormalized = normalizeAndMapTeamName(game.awayteam);
+                  const teamKey = `${homeTeamNormalized}-vs-${awayTeamNormalized}`;
+                  const matchingGames = gameScoresMap.get(teamKey) || [];
+                  
+                  // Find the game with the closest date to the scheduled matchtime
+                  const scheduledDate = game.matchtime ? new Date(game.matchtime) : new Date();
+                  if (matchingGames.length > 0) {
+                    // Find the game closest to the scheduled date (within 2 days tolerance for timezone issues)
+                    const closestGame = matchingGames.find(g => {
+                      const daysDiff = Math.abs(g.game_date.getTime() - scheduledDate.getTime()) / (1000 * 60 * 60 * 24);
+                      return daysDiff <= 2; // Within 2 days
+                    });
+                    if (closestGame) {
+                      scoreData = closestGame;
+                      matchedByTeamDate++;
+                    }
+                  }
+                }
+                
+                if (!scoreData) {
+                  notMatched++;
+                }
                 
                 return {
                   game_id: gameKey,
@@ -1471,16 +1581,21 @@ export default function LeaguePage() {
                   status: scoreData ? "FINAL" : undefined,
                   numeric_id: scoreData?.numeric_id
                 };
-              }).filter((game) => game.team1 && game.team2)
-              .sort((a, b) => {
+              }).filter((game) => game.team1 && game.team2);
+              
+              console.log("📅 Matching summary - By game_key:", matchedByKey, "By team+date:", matchedByTeamDate, "Not matched:", notMatched);
+              
+              // Sort games by date (most recent first)
+              const sortedGames = games.sort((a, b) => {
                 if (!a.game_date || !b.game_date) return 0;
                 const dateA = new Date(a.game_date).getTime();
                 const dateB = new Date(b.game_date).getTime();
                 return dateB - dateA; // Most recent first
               });
               
-              console.log("📅 Processed schedule from game_schedule:", games);
-              setSchedule(games);
+              console.log("📅 Processed schedule from game_schedule:", sortedGames.length, "games");
+              console.log("📅 Games with scores:", sortedGames.filter(g => g.team1_score !== undefined).length);
+              setSchedule(sortedGames);
             } else if (scheduleError) {
               console.error("📅 Error fetching from game_schedule:", scheduleError);
               // Fallback to empty schedule
@@ -1527,7 +1642,7 @@ export default function LeaguePage() {
       "Top Playmakers": "sassists",
     };
 
-    const getTopList = (statKey: string) => {
+    const getTopList = useMemo(() => (statKey: string) => {
       // Map stat keys to both average and total field names
       const statToFields: Record<string, { avgField: string; totalField: string }> = {
         'spoints': { avgField: 'avgPoints', totalField: 'totalPoints' },
@@ -1541,8 +1656,10 @@ export default function LeaguePage() {
       // Choose field based on leagueLeadersView state
       const fieldToUse = leagueLeadersView === 'averages' ? fields.avgField : fields.totalField;
       
+      console.log(`📊 getTopList(${statKey}): mode=${leagueLeadersView}, fieldToUse=${fieldToUse}`);
+      
       // Sort by the selected field and take top 5
-      return [...allPlayerAverages]
+      const result = [...allPlayerAverages]
         .sort((a, b) => {
           const aVal = parseFloat(a[fieldToUse]) || 0;
           const bVal = parseFloat(b[fieldToUse]) || 0;
@@ -1555,7 +1672,16 @@ export default function LeaguePage() {
             ? player[fields.avgField] 
             : Math.round(player[fields.totalField]) // Round totals to whole numbers
         }));
-    };
+      
+      console.log(`📊 getTopList(${statKey}) result:`, result.map(p => ({ 
+        name: p.name, 
+        value: p.value, 
+        games: p.games,
+        totalPoints: p.totalPoints,
+        avgPoints: p.avgPoints
+      })));
+      return result;
+    }, [allPlayerAverages, leagueLeadersView]);
 
     const topScorers = getTopList("spoints");
     const topRebounders = getTopList("sreboundstotal");
@@ -1886,66 +2012,12 @@ export default function LeaguePage() {
 
       setIsLoadingStats(true);
       try {
-        // Helper function to check if two names are similar (fuzzy match)
+        // Use shared fuzzy matching from fuzzyMatch.ts
+        // namesMatch handles: number stripping, initial matching (R Farrell vs Rhys Farrell), 
+        // Jaro-Winkler similarity at 0.85 threshold for typo tolerance
         const areSimilarNames = (name1: string, name2: string): boolean => {
           if (!name1 || !name2) return false;
-          const n1 = name1.toLowerCase().trim();
-          const n2 = name2.toLowerCase().trim();
-          
-          if (n1 === n2) return true;
-          
-          const parts1 = n1.split(/[\s-]+/);
-          const parts2 = n2.split(/[\s-]+/);
-          
-          // Check if one name is abbreviation of the other (e.g., "R Farrell" vs "Rhys Farrell")
-          if (parts1.length !== parts2.length) {
-            const shorter = parts1.length < parts2.length ? parts1 : parts2;
-            const longer = parts1.length < parts2.length ? parts2 : parts1;
-            
-            let matchCount = 0;
-            for (const shortPart of shorter) {
-              for (const longPart of longer) {
-                if (longPart === shortPart || 
-                    longPart.startsWith(shortPart) || 
-                    (shortPart.length === 1 && longPart.startsWith(shortPart))) {
-                  matchCount++;
-                  break;
-                }
-              }
-            }
-            if (matchCount === shorter.length) return true;
-          }
-          
-          // Same number of parts - check if similar
-          if (parts1.length === parts2.length && parts1.length >= 2) {
-            const lastName1 = parts1[parts1.length - 1];
-            const lastName2 = parts2[parts2.length - 1];
-            
-            if (lastName1 === lastName2) {
-              const firstName1 = parts1[0];
-              const firstName2 = parts2[0];
-              
-              if (firstName1.startsWith(firstName2.substring(0, 3)) || 
-                  firstName2.startsWith(firstName1.substring(0, 3)) ||
-                  firstName1.includes(firstName2) || 
-                  firstName2.includes(firstName1)) {
-                return true;
-              }
-            }
-          }
-          
-          // Check for typos (1-2 character differences)
-          const maxLength = Math.max(n1.length, n2.length);
-          if (Math.abs(n1.length - n2.length) <= 2 && maxLength > 5) {
-            let differences = 0;
-            for (let i = 0; i < Math.min(n1.length, n2.length); i++) {
-              if (n1[i] !== n2[i]) differences++;
-              if (differences > 2) return false;
-            }
-            return true;
-          }
-          
-          return false;
+          return namesMatch(name1, name2);
         };
 
         // ========== STATS-FIRST APPROACH ==========
@@ -2096,19 +2168,38 @@ export default function LeaguePage() {
         console.log("📊 Step 2: Grouped into", byPlayerId.size, "players by ID,", noPlayerId.length, "without ID");
 
         // Step 3: Merge player_id groups that have similar names (same player, different IDs)
-        console.log("📊 Step 3: Merging similar-named players");
-        
         const mergedPlayers: PlayerAggregate[] = [];
         const processedIds = new Set<string>();
+        
+        // Debug: Check for Hamza players before merge
+        const hamzasBefore = Array.from(byPlayerId.values()).filter(p => 
+          p.name.toLowerCase().includes('hamza')
+        );
+        if (hamzasBefore.length > 0) {
+          console.log("📊 DEBUG: Hamza players BEFORE merge:", hamzasBefore.map(p => ({
+            name: p.name,
+            team: p.team,
+            games: p.games
+          })));
+        }
 
         for (const [playerId, player] of byPlayerId.entries()) {
           if (processedIds.has(playerId)) continue;
           
-          // Find all other players with similar names
+          // Find all other players with similar names (with team normalization)
+          const playerTeamNormalized = normalizeTeamName(player.team);
           const similarPlayers: [string, PlayerAggregate][] = [];
           for (const [otherId, otherPlayer] of byPlayerId.entries()) {
             if (otherId !== playerId && !processedIds.has(otherId)) {
-              if (areSimilarNames(player.name, otherPlayer.name)) {
+              // Check if names match AND teams match (after normalization)
+              const otherTeamNormalized = normalizeTeamName(otherPlayer.team);
+              const sameTeam = playerTeamNormalized === otherTeamNormalized;
+              if (sameTeam && areSimilarNames(player.name, otherPlayer.name)) {
+                // Debug: Log when Hamza players are about to be merged
+                if (player.name.toLowerCase().includes('hamza') || otherPlayer.name.toLowerCase().includes('hamza')) {
+                  console.log("📊 DEBUG: Merging Hamza:", player.name, "with", otherPlayer.name, 
+                    "| Teams:", player.team, "vs", otherPlayer.team);
+                }
                 similarPlayers.push([otherId, otherPlayer]);
               }
             }
@@ -2116,7 +2207,6 @@ export default function LeaguePage() {
           
           // Merge all similar players into this one
           if (similarPlayers.length > 0) {
-            console.log("📊 Merging", player.name, "with", similarPlayers.length, "similar entries");
             for (const [otherId, other] of similarPlayers) {
               player.playerIds.add(otherId);
               player.games += other.games;
@@ -2141,10 +2231,8 @@ export default function LeaguePage() {
               player.totalPlusMinus += other.totalPlusMinus;
               player.rawStats.push(...other.rawStats);
               
-              // Use longer name
-              if (other.name.length > player.name.length) {
-                player.name = other.name;
-              }
+              // Use the most complete name (prefers full names over initials)
+              player.name = getMostCompleteName([player.name, other.name]);
               
               processedIds.add(otherId);
             }
@@ -2155,6 +2243,16 @@ export default function LeaguePage() {
         }
 
         console.log("📊 Step 3: After merging:", mergedPlayers.length, "unique players");
+        
+        // Debug: Check for Hamza players after merge
+        const hamzasAfter = mergedPlayers.filter(p => p.name.toLowerCase().includes('hamza'));
+        if (hamzasAfter.length > 0) {
+          console.log("📊 DEBUG: Hamza players AFTER merge:", hamzasAfter.map(p => ({
+            name: p.name,
+            team: p.team,
+            games: p.games
+          })));
+        }
 
         // Step 4: Handle stats without player_id by grouping by name
         console.log("📊 Step 4: Processing", noPlayerId.length, "stats without player_id");
@@ -3912,7 +4010,7 @@ export default function LeaguePage() {
                         .filter(game => new Date(game.game_date) >= now)
                         .sort((a, b) => new Date(a.game_date).getTime() - new Date(b.game_date).getTime());
                       const pastGames = schedule
-                        .filter(game => new Date(game.game_date) < now && (game.team1_score != null || game.team2_score != null))
+                        .filter(game => new Date(game.game_date) < now)
                         .sort((a, b) => new Date(b.game_date).getTime() - new Date(a.game_date).getTime());
 
                       const gamesToShow = scheduleView === 'upcoming' ? upcomingGames : pastGames;
@@ -3969,12 +4067,17 @@ export default function LeaguePage() {
                                 ))
                               ) : (
                                 /* Results View */
-                                gamesToShow.map((game, index) => (
+                                gamesToShow.map((game, index) => {
+                                  // Use numeric_id for game detail lookup (required for box score modal)
+                                  // Game is clickable only if we have numeric_id (for box score) and scores are matched
+                                  const isClickable = game.numeric_id && game.team1_score !== undefined;
+                                  
+                                  return (
                                   <div 
                                     key={`past-${game.game_id}-${index}`} 
-                                    className={`py-2 md:py-3 transition-colors ${game.numeric_id ? 'cursor-pointer hover:bg-orange-50 dark:hover:bg-neutral-800' : 'cursor-default'}`}
+                                    className={`py-2 md:py-3 transition-colors ${isClickable ? 'cursor-pointer hover:bg-orange-50 dark:hover:bg-neutral-800' : 'cursor-default'}`}
                                     onClick={() => {
-                                      if (game.numeric_id) {
+                                      if (isClickable && game.numeric_id) {
                                         handleGameClick(game.numeric_id);
                                       }
                                     }}
@@ -4027,7 +4130,8 @@ export default function LeaguePage() {
                                       </div>
                                     </div>
                                   </div>
-                                ))
+                                );
+                                })
                               )}
                             </div>
                           ) : (
