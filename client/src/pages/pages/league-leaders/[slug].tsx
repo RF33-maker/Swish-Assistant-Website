@@ -7,6 +7,7 @@ import { Trophy, TrendingUp, Users, Target, Shield, Zap, ArrowLeft } from "lucid
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { namesMatch, getMostCompleteName } from "@/lib/fuzzyMatch";
+import { normalizeTeamName } from "@/lib/teamUtils";
 
 interface LeaderboardStats {
   points: any[];
@@ -169,16 +170,26 @@ export default function LeagueLeadersPage() {
         // Second pass: Merge duplicates by name (handles data quality issues where same player has multiple IDs)
         // Uses shared namesMatch which handles: numbers in names, initials, typos via Jaro-Winkler
         const playersByIdArray = Array.from(playerStatsMap.values());
+        
+        // Sort by games_played DESC so players with more games become the anchor
+        playersByIdArray.sort((a, b) => b.games_played - a.games_played);
+        
         const mergedPlayers: typeof playersByIdArray = [];
         
         playersByIdArray.forEach((player) => {
+          // Normalize team name for comparison (handles "Senior Men I" vs base name)
+          const playerTeamNormalized = normalizeTeamName(player.team_name);
+          
           // Check if we already have a similar name on the SAME TEAM (prevents false positives)
           let foundMatch = false;
           for (const existingPlayer of mergedPlayers) {
-            // Only merge if same team AND names match (handles typos, initials, numbers)
-            const sameTeam = existingPlayer.team_name === player.team_name;
+            // Normalize existing player's team for comparison
+            const existingTeamNormalized = normalizeTeamName(existingPlayer.team_name);
+            
+            // Only merge if normalized teams match AND names match (handles typos, initials, numbers)
+            const sameTeam = existingTeamNormalized === playerTeamNormalized;
             if (sameTeam && namesMatch(player.name, existingPlayer.name)) {
-              // Merge stats with existing player
+              // Merge stats with existing player (which has more games since we sorted)
               existingPlayer.games_played += player.games_played;
               existingPlayer.total_points += player.total_points;
               existingPlayer.total_rebounds += player.total_rebounds;

@@ -3,6 +3,106 @@
  * Handles name variations, typos, and initial-based names
  */
 
+// Common basketball player nickname mappings
+const NICKNAME_MAP: Record<string, string[]> = {
+  'chuck': ['chukwuma', 'charles'],
+  'chukwuma': ['chuck'],
+  'charles': ['chuck', 'charlie'],
+  'charlie': ['charles'],
+  'mike': ['michael'],
+  'michael': ['mike'],
+  'chris': ['christopher'],
+  'christopher': ['chris'],
+  'nick': ['nicholas', 'nicolas'],
+  'nicholas': ['nick'],
+  'nicolas': ['nick'],
+  'will': ['william', 'wilfrid'],
+  'william': ['will', 'bill', 'billy'],
+  'wilfrid': ['will'],
+  'bill': ['william'],
+  'billy': ['william', 'bill'],
+  'alex': ['alexander', 'alejandro'],
+  'alexander': ['alex'],
+  'alejandro': ['alex'],
+  'dan': ['daniel'],
+  'daniel': ['dan', 'danny'],
+  'danny': ['daniel'],
+  'joe': ['joseph', 'jose'],
+  'joseph': ['joe', 'joey'],
+  'jose': ['joe'],
+  'joey': ['joseph'],
+  'matt': ['matthew', 'mathew'],
+  'matthew': ['matt'],
+  'mathew': ['matt'],
+  'ben': ['benjamin'],
+  'benjamin': ['ben', 'benny'],
+  'benny': ['benjamin'],
+  'rob': ['robert', 'roberto'],
+  'robert': ['rob', 'bob', 'bobby'],
+  'roberto': ['rob'],
+  'bob': ['robert'],
+  'bobby': ['robert', 'bob'],
+  'ed': ['edward', 'eduardo'],
+  'edward': ['ed', 'eddie'],
+  'eduardo': ['ed'],
+  'eddie': ['edward'],
+  'tom': ['thomas', 'tommy'],
+  'thomas': ['tom', 'tommy'],
+  'tommy': ['thomas', 'tom'],
+  'jim': ['james', 'jimmy'],
+  'james': ['jim', 'jimmy', 'jamie'],
+  'jimmy': ['james', 'jim'],
+  'jamie': ['james'],
+  'dave': ['david'],
+  'david': ['dave'],
+  'steve': ['steven', 'stephen'],
+  'steven': ['steve'],
+  'stephen': ['steve'],
+  'tony': ['anthony', 'antonio'],
+  'anthony': ['tony'],
+  'antonio': ['tony'],
+  'sam': ['samuel', 'sammy'],
+  'samuel': ['sam', 'sammy'],
+  'sammy': ['sam', 'samuel'],
+  'max': ['maxwell', 'maximilian'],
+  'maxwell': ['max'],
+  'maximilian': ['max'],
+  'josh': ['joshua'],
+  'joshua': ['josh'],
+  'jack': ['jackson', 'john'],
+  'jackson': ['jack'],
+  'john': ['jack', 'johnny', 'jon'],
+  'johnny': ['john'],
+  'jon': ['john', 'jonathan'],
+  'jonathan': ['jon'],
+  'pete': ['peter'],
+  'peter': ['pete'],
+  'andy': ['andrew', 'andre'],
+  'andrew': ['andy', 'drew'],
+  'andre': ['andy'],
+  'drew': ['andrew'],
+  'zach': ['zachary', 'zachariah', 'zakariah'],
+  'zachary': ['zach'],
+  'zachariah': ['zach'],
+  'zakariah': ['zach'],
+};
+
+/**
+ * Check if two first names are nickname variants of each other
+ */
+function areNicknameVariants(name1: string, name2: string): boolean {
+  const n1 = name1.toLowerCase().trim();
+  const n2 = name2.toLowerCase().trim();
+  
+  if (n1 === n2) return true;
+  
+  // Check if n1 is a nickname for n2 or vice versa
+  const n1Variants = NICKNAME_MAP[n1] || [];
+  const n2Variants = NICKNAME_MAP[n2] || [];
+  
+  return n1Variants.includes(n2) || n2Variants.includes(n1);
+}
+
 /**
  * Normalize a player name for matching
  * - Converts to lowercase
@@ -77,6 +177,8 @@ function jaroWinklerSimilarity(s1: string, s2: string): number {
  * Examples:
  * - "Rhys Farrell" matches "R Farrell" (initial match)
  * - "R Farrell" matches "R Farell" (typo, high similarity)
+ * - "7 Temilola" matches "Isaac Temilola" (jersey number stripped, last name match)
+ * - "H Omitowotjo" matches "Henry Omitowotjo" (initial match)
  */
 export function namesMatch(name1: string, name2: string, threshold: number = 0.85): boolean {
   const n1 = normalizeName(name1);
@@ -86,8 +188,19 @@ export function namesMatch(name1: string, name2: string, threshold: number = 0.8
   if (n1 === n2) return true;
 
   // Check for initial matches (e.g., "R Farrell" vs "Rhys Farrell")
-  const parts1 = n1.split(' ');
-  const parts2 = n2.split(' ');
+  const parts1 = n1.split(' ').filter(p => p.length > 0);
+  const parts2 = n2.split(' ').filter(p => p.length > 0);
+
+  // Handle case where one name is just a last name (e.g., "temilola" vs "isaac temilola")
+  // This happens when jersey numbers are stripped (e.g., "7 Temilola" -> "temilola")
+  if (parts1.length === 1 && parts2.length >= 2) {
+    const lastName2 = parts2[parts2.length - 1];
+    if (jaroWinklerSimilarity(parts1[0], lastName2) >= 0.9) return true;
+  }
+  if (parts2.length === 1 && parts1.length >= 2) {
+    const lastName1 = parts1[parts1.length - 1];
+    if (jaroWinklerSimilarity(parts2[0], lastName1) >= 0.9) return true;
+  }
 
   if (parts1.length === parts2.length) {
     let allMatch = true;
@@ -95,11 +208,12 @@ export function namesMatch(name1: string, name2: string, threshold: number = 0.8
       const p1 = parts1[i];
       const p2 = parts2[i];
 
-      // Either exact match, or one is an initial of the other
+      // Either exact match, one is an initial of the other, or nickname variants
       const isMatch = 
         p1 === p2 || 
         (p1.length === 1 && p2.startsWith(p1)) ||
-        (p2.length === 1 && p1.startsWith(p2));
+        (p2.length === 1 && p1.startsWith(p2)) ||
+        areNicknameVariants(p1, p2);
 
       if (!isMatch) {
         allMatch = false;
@@ -107,6 +221,52 @@ export function namesMatch(name1: string, name2: string, threshold: number = 0.8
       }
     }
     if (allMatch) return true;
+  }
+
+  // Handle different part counts with initial matching (e.g., "H Omitowotjo" vs "Henry Omitowotjo")
+  if (parts1.length !== parts2.length && parts1.length >= 1 && parts2.length >= 1) {
+    const shorter = parts1.length < parts2.length ? parts1 : parts2;
+    const longer = parts1.length < parts2.length ? parts2 : parts1;
+    
+    // Check if last names match closely and first part is initial or similar
+    const shortLast = shorter[shorter.length - 1];
+    const longLast = longer[longer.length - 1];
+    
+    // More lenient last name matching (0.85 instead of 0.9) for typo tolerance
+    if (jaroWinklerSimilarity(shortLast, longLast) >= 0.85) {
+      // Last names match, check if first parts are compatible
+      const shortFirst = shorter[0];
+      const longFirst = longer[0];
+      
+      // Initial match (e.g., "H" matches "Henry")
+      if (shortFirst.length === 1 && longFirst.startsWith(shortFirst)) return true;
+      if (longFirst.length === 1 && shortFirst.startsWith(longFirst)) return true;
+      
+      // Nickname matching (e.g., "Chuck" matches "Chukwuma")
+      if (areNicknameVariants(shortFirst, longFirst)) return true;
+      
+      // High first name similarity (0.8 threshold to reduce false positives)
+      if (jaroWinklerSimilarity(shortFirst, longFirst) >= 0.8) return true;
+    }
+  }
+  
+  // Same part count but with potential typos (e.g., "H Omitowotjo" vs "H Omitowoju")
+  if (parts1.length === parts2.length && parts1.length >= 2) {
+    const last1 = parts1[parts1.length - 1];
+    const last2 = parts2[parts2.length - 1];
+    const first1 = parts1[0];
+    const first2 = parts2[0];
+    
+    // If first parts match (including initials or nicknames) and last names are similar
+    const firstMatch = first1 === first2 || 
+      (first1.length === 1 && first2.startsWith(first1)) ||
+      (first2.length === 1 && first1.startsWith(first2)) ||
+      areNicknameVariants(first1, first2) ||
+      jaroWinklerSimilarity(first1, first2) >= 0.8;
+    
+    if (firstMatch && jaroWinklerSimilarity(last1, last2) >= 0.85) {
+      return true;
+    }
   }
 
   // Fuzzy match using Jaro-Winkler

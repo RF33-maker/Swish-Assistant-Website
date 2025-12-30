@@ -2168,19 +2168,21 @@ export default function LeaguePage() {
         console.log("📊 Step 2: Grouped into", byPlayerId.size, "players by ID,", noPlayerId.length, "without ID");
 
         // Step 3: Merge player_id groups that have similar names (same player, different IDs)
-        console.log("📊 Step 3: Merging similar-named players");
-        
         const mergedPlayers: PlayerAggregate[] = [];
         const processedIds = new Set<string>();
 
         for (const [playerId, player] of byPlayerId.entries()) {
           if (processedIds.has(playerId)) continue;
           
-          // Find all other players with similar names
+          // Find all other players with similar names (with team normalization)
+          const playerTeamNormalized = normalizeTeamName(player.team);
           const similarPlayers: [string, PlayerAggregate][] = [];
           for (const [otherId, otherPlayer] of byPlayerId.entries()) {
             if (otherId !== playerId && !processedIds.has(otherId)) {
-              if (areSimilarNames(player.name, otherPlayer.name)) {
+              // Check if names match AND teams match (after normalization)
+              const otherTeamNormalized = normalizeTeamName(otherPlayer.team);
+              const sameTeam = playerTeamNormalized === otherTeamNormalized;
+              if (sameTeam && areSimilarNames(player.name, otherPlayer.name)) {
                 similarPlayers.push([otherId, otherPlayer]);
               }
             }
@@ -2188,7 +2190,6 @@ export default function LeaguePage() {
           
           // Merge all similar players into this one
           if (similarPlayers.length > 0) {
-            console.log("📊 Merging", player.name, "with", similarPlayers.length, "similar entries");
             for (const [otherId, other] of similarPlayers) {
               player.playerIds.add(otherId);
               player.games += other.games;
