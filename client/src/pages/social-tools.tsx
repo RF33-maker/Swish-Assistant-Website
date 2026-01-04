@@ -8,7 +8,39 @@ import { useRef, useState, useEffect } from "react";
 import html2canvas from "html2canvas";
 import { supabase } from "@/lib/supabase";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { normalizeTeamName } from "@/lib/teamUtils";
+import { normalizeTeamName, normalizeTeamNameForFile } from "@/lib/teamUtils";
+
+async function getTeamLogoUrl(teamName: string, leagueId: string): Promise<string> {
+  const extensions = ['png', 'jpg', 'jpeg'];
+  const normalizedFileName = normalizeTeamNameForFile(teamName);
+  const originalFileName = teamName.replace(/\s+/g, '_');
+  
+  const filenamesToTry = [
+    normalizedFileName,
+    originalFileName,
+    `${normalizedFileName}_Senior_Men`,
+    `${normalizedFileName}_Senior_Men_I`,
+  ];
+  
+  const uniqueFilenames = Array.from(new Set(filenamesToTry));
+  
+  for (const baseFileName of uniqueFilenames) {
+    for (const ext of extensions) {
+      const fileName = `${leagueId}_${baseFileName}.${ext}`;
+      const { data } = supabase.storage.from('team-logos').getPublicUrl(fileName);
+      
+      try {
+        const response = await fetch(data.publicUrl, { method: 'HEAD' });
+        if (response.ok) {
+          return data.publicUrl;
+        }
+      } catch {
+        continue;
+      }
+    }
+  }
+  return '';
+}
 
 interface TopPerformance {
   id: string;
@@ -149,7 +181,7 @@ export default function SocialToolsPage() {
     }
   };
 
-  const handleSelectPerformance = (perf: TopPerformance) => {
+  const handleSelectPerformance = async (perf: TopPerformance) => {
     setSelectedId(perf.id);
     
     const fgMade = perf.sfieldgoalsmade ?? 0;
@@ -167,6 +199,12 @@ export default function SocialToolsPage() {
       : "0";
 
     const minutes = perf.sminutes ? parseInt(perf.sminutes.split(':')[0]) || 0 : 0;
+
+    const leagueId = perf.league_id || '';
+    const [playerTeamLogo, opponentLogo] = await Promise.all([
+      getTeamLogoUrl(perf.team, leagueId),
+      getTeamLogoUrl(perf.opponent, leagueId),
+    ]);
 
     setSelectedData({
       player_name: perf.player_name,
@@ -186,8 +224,8 @@ export default function SocialToolsPage() {
       plus_minus: plusMinus,
       home_score: perf.player_team_score,
       away_score: perf.opponent_score,
-      home_logo_url: "",
-      away_logo_url: "",
+      home_logo_url: playerTeamLogo,
+      away_logo_url: opponentLogo,
       photo_url: "",
     });
   };
