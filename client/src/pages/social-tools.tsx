@@ -76,33 +76,7 @@ export default function SocialToolsPage() {
     try {
       const { data: playerStats, error: playerError } = await supabase
         .from("player_stats")
-        .select(`
-          id,
-          firstname,
-          familyname,
-          team,
-          home_team,
-          away_team,
-          is_home_player,
-          sminutes,
-          spoints,
-          sreboundstotal,
-          sassists,
-          ssteals,
-          sblocks,
-          sfieldgoalsmade,
-          sfieldgoalsattempted,
-          sthreepointersmade,
-          sthreepointersattempted,
-          sfreethrowsmade,
-          sfreethrowsattempted,
-          sturnovers,
-          splusminuspoints,
-          game_key,
-          numeric_id,
-          league_id,
-          players:player_id(full_name)
-        `)
+        .select("*, players:player_id(full_name)")
         .order("spoints", { ascending: false })
         .limit(50);
 
@@ -130,28 +104,21 @@ export default function SocialToolsPage() {
 
       const mapped: TopPerformance[] = (playerStats || []).map((stat: any) => {
         const gameTeams = teamStatsMap[stat.numeric_id] || [];
-        const isHome = stat.is_home_player === true;
+        const playerTeamName = stat.team_name || stat.team || '';
+        const normalizedPlayerTeam = normalizeTeamName(playerTeamName);
         
-        const homeTeamStats = gameTeams.find((t: any) => t.is_home === true);
-        const awayTeamStats = gameTeams.find((t: any) => t.is_home === false);
-        
-        const opponentName = isHome 
-          ? (stat.away_team || awayTeamStats?.name || 'Unknown')
-          : (stat.home_team || homeTeamStats?.name || 'Unknown');
-        
-        const playerTeamScore = isHome 
-          ? (homeTeamStats?.tot_spoints ?? 0)
-          : (awayTeamStats?.tot_spoints ?? 0);
-        
-        const opponentScoreVal = isHome 
-          ? (awayTeamStats?.tot_spoints ?? 0)
-          : (homeTeamStats?.tot_spoints ?? 0);
+        const playerTeamStats = gameTeams.find((t: any) => 
+          normalizeTeamName(t.name || '') === normalizedPlayerTeam
+        );
+        const opponentStats = gameTeams.find((t: any) => 
+          normalizeTeamName(t.name || '') !== normalizedPlayerTeam
+        );
         
         return {
           id: stat.id,
           player_name: stat.players?.full_name || `${stat.firstname || ''} ${stat.familyname || ''}`.trim() || 'Unknown',
-          team: stat.team || 'Unknown',
-          opponent: opponentName,
+          team: playerTeamName || 'Unknown',
+          opponent: opponentStats?.name || 'Unknown',
           sminutes: stat.sminutes,
           spoints: stat.spoints || 0,
           sreboundstotal: stat.sreboundstotal || 0,
@@ -168,8 +135,8 @@ export default function SocialToolsPage() {
           splusminuspoints: stat.splusminuspoints,
           game_key: stat.game_key,
           numeric_id: stat.numeric_id,
-          player_team_score: playerTeamScore,
-          opponent_score: opponentScoreVal,
+          player_team_score: playerTeamStats?.tot_spoints ?? 0,
+          opponent_score: opponentStats?.tot_spoints ?? 0,
           league_id: stat.league_id,
         };
       });
