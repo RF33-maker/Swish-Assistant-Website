@@ -118,39 +118,80 @@ export default function SocialToolsPage() {
       }
 
       const numericIds = Array.from(new Set((playerStats || []).map((s: any) => s.numeric_id).filter(Boolean)));
+      const gameKeys = Array.from(new Set((playerStats || []).map((s: any) => s.game_key).filter(Boolean)));
+      
+      console.log('[SocialTools] numericIds:', numericIds.slice(0, 5));
+      console.log('[SocialTools] gameKeys:', gameKeys.slice(0, 5));
       
       let teamStatsMap: Record<string, any[]> = {};
+      
       if (numericIds.length > 0) {
-        const { data: teamStats } = await supabase
+        const { data: teamStats, error: teamError } = await supabase
           .from("team_stats")
-          .select("numeric_id, name, tot_spoints, is_home, league_id")
+          .select("numeric_id, game_key, name, tot_spoints, league_id")
           .in("numeric_id", numericIds);
+        console.log('[SocialTools] teamStats by numericId:', teamStats?.length, 'error:', teamError);
         
         (teamStats || []).forEach((ts: any) => {
-          if (!teamStatsMap[ts.numeric_id]) {
-            teamStatsMap[ts.numeric_id] = [];
+          if (ts.numeric_id) {
+            if (!teamStatsMap[ts.numeric_id]) {
+              teamStatsMap[ts.numeric_id] = [];
+            }
+            teamStatsMap[ts.numeric_id].push(ts);
           }
-          teamStatsMap[ts.numeric_id].push(ts);
+          if (ts.game_key) {
+            if (!teamStatsMap[ts.game_key]) {
+              teamStatsMap[ts.game_key] = [];
+            }
+            teamStatsMap[ts.game_key].push(ts);
+          }
+        });
+      }
+      
+      if (gameKeys.length > 0) {
+        const { data: teamStats } = await supabase
+          .from("team_stats")
+          .select("numeric_id, game_key, name, tot_spoints, league_id")
+          .in("game_key", gameKeys);
+        
+        (teamStats || []).forEach((ts: any) => {
+          if (ts.game_key && !teamStatsMap[ts.game_key]) {
+            teamStatsMap[ts.game_key] = [];
+          }
+          if (ts.game_key) {
+            const exists = teamStatsMap[ts.game_key].some((existing: any) => existing.name === ts.name);
+            if (!exists) {
+              teamStatsMap[ts.game_key].push(ts);
+            }
+          }
         });
       }
 
       const mapped: TopPerformance[] = (playerStats || []).map((stat: any) => {
-        const gameTeams = teamStatsMap[stat.numeric_id] || [];
+        const gameTeams = teamStatsMap[stat.numeric_id] || teamStatsMap[stat.game_key] || [];
         const playerTeamName = stat.team_name || stat.team || '';
         const normalizedPlayerTeam = normalizeTeamName(playerTeamName);
         
         const playerTeamStats = gameTeams.find((t: any) => 
           normalizeTeamName(t.name || '') === normalizedPlayerTeam
         );
-        const opponentStats = gameTeams.find((t: any) => 
-          normalizeTeamName(t.name || '') !== normalizedPlayerTeam
-        );
+        
+        const opponentStats = gameTeams.find((t: any) => {
+          const normalizedName = normalizeTeamName(t.name || '');
+          return normalizedName !== normalizedPlayerTeam && normalizedName !== '';
+        });
+        
+        const opponentName = opponentStats?.name || 
+          (gameTeams.length === 2 ? gameTeams.find((t: any) => t !== playerTeamStats)?.name : null) || 
+          'Unknown';
+        
+        console.log(`[SocialTools] Player: ${stat.players?.full_name}, Team: ${playerTeamName}, GameTeams:`, gameTeams.map((t: any) => t.name), 'Opponent:', opponentName);
         
         return {
           id: stat.id,
           player_name: stat.players?.full_name || `${stat.firstname || ''} ${stat.familyname || ''}`.trim() || 'Unknown',
           team: playerTeamName || 'Unknown',
-          opponent: opponentStats?.name || 'Unknown',
+          opponent: opponentName,
           sminutes: stat.sminutes,
           spoints: stat.spoints || 0,
           sreboundstotal: stat.sreboundstotal || 0,
@@ -167,9 +208,9 @@ export default function SocialToolsPage() {
           splusminuspoints: stat.splusminuspoints,
           game_key: stat.game_key,
           numeric_id: stat.numeric_id,
-          player_team_score: playerTeamStats?.tot_spoints ?? 0,
+          player_team_score: playerTeamStats?.tot_spoints ?? opponentStats?.tot_spoints ?? 0,
           opponent_score: opponentStats?.tot_spoints ?? 0,
-          league_id: stat.league_id,
+          league_id: stat.league_id || playerTeamStats?.league_id || opponentStats?.league_id,
         };
       });
 
