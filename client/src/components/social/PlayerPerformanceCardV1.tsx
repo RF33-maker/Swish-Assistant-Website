@@ -55,7 +55,7 @@ export function PlayerPerformanceCardV1({ data }: Props) {
           {data.points}
         </span>
         {/* Top Label - Points */}
-        <span className="absolute right-[100px] top-[200px] text-[28px] uppercase tracking-[0.2em] text-white">
+        <span className="absolute right-[210px] top-[180px] text-[28px] uppercase tracking-[0.2em] text-white">
           Points
         </span>
 
@@ -67,7 +67,7 @@ export function PlayerPerformanceCardV1({ data }: Props) {
           {data.rebounds}
         </span>
         {/* Middle Label - Rebounds */}
-        <span className="absolute right-[100px] top-[390px] text-[28px] uppercase tracking-[0.2em] text-white">
+        <span className="absolute right-[110px] top-[370px] text-[28px] uppercase tracking-[0.2em] text-white">
           Rebounds
         </span>
 
@@ -79,7 +79,7 @@ export function PlayerPerformanceCardV1({ data }: Props) {
           {data.assists}
         </span>
         {/* Bottom Label - Assists */}
-        <span className="absolute right-[100px] top-[580px] text-[28px] uppercase tracking-[0.2em] text-white">
+        <span className="absolute right-[80px] top-[560px] text-[28px] uppercase tracking-[0.2em] text-white">
           Assists
         </span>
       </div>
@@ -128,54 +128,54 @@ export function PlayerPerformanceCardV1({ data }: Props) {
       </div>
 
       {/* === Main stat numbers row (PTS / REB / AST / STL / BLK) === */}
-      <div className="absolute left-[100px] top-[950px] flex text-center font-semibold">
+      <div className="absolute left-1/2 -translate-x-1/2 top-[950px] flex text-center font-semibold">
         <div className="w-[125px]" data-testid="text-points">
-          <div className="text-[46px]">{data.points}</div>
-          <div className="text-[22px] uppercase tracking-[0.15em]">PTS</div>
+          <div className="text-[46px] text-white">{data.points}</div>
+          <div className="text-[22px] uppercase tracking-[0.15em] text-[#e85a24]">PTS</div>
         </div>
         <div className="w-[125px]" data-testid="text-rebounds">
-          <div className="text-[46px]">{data.rebounds}</div>
-          <div className="text-[22px] uppercase tracking-[0.15em]">REB</div>
+          <div className="text-[46px] text-white">{data.rebounds}</div>
+          <div className="text-[22px] uppercase tracking-[0.15em] text-[#e85a24]">REB</div>
         </div>
         <div className="w-[125px]" data-testid="text-assists">
-          <div className="text-[46px]">{data.assists}</div>
-          <div className="text-[22px] uppercase tracking-[0.15em]">AST</div>
+          <div className="text-[46px] text-white">{data.assists}</div>
+          <div className="text-[22px] uppercase tracking-[0.15em] text-[#e85a24]">AST</div>
         </div>
         <div className="w-[125px]" data-testid="text-steals">
-          <div className="text-[46px]">{data.steals}</div>
-          <div className="text-[22px] uppercase tracking-[0.15em]">STL</div>
+          <div className="text-[46px] text-white">{data.steals}</div>
+          <div className="text-[22px] uppercase tracking-[0.15em] text-[#e85a24]">STL</div>
         </div>
         <div className="w-[125px]" data-testid="text-blocks">
-          <div className="text-[46px]">{data.blocks}</div>
-          <div className="text-[22px] uppercase tracking-[0.15em]">BLK</div>
+          <div className="text-[46px] text-white">{data.blocks}</div>
+          <div className="text-[22px] uppercase tracking-[0.15em] text-[#e85a24]">BLK</div>
         </div>
       </div>
 
       {/* === Shooting / advanced stat numbers row (FG / 3PT / FT / TO / TS% / +/-) === */}
-      <div className="absolute left-[130px] top-[1070px] flex text-center font-semibold text-[#e85a24]">
+      <div className="absolute left-1/2 -translate-x-1/2 top-[1070px] flex text-center font-semibold">
         <div className="w-[115px]" data-testid="text-fg">
-          <div className="text-[40px]">{data.fg}</div>
-          <div className="text-[18px] uppercase tracking-[0.15em]">FG</div>
+          <div className="text-[40px] text-white">{data.fg}</div>
+          <div className="text-[18px] uppercase tracking-[0.15em] text-[#e85a24]">FG</div>
         </div>
         <div className="w-[115px]" data-testid="text-three-pt">
-          <div className="text-[40px]">{data.three_pt}</div>
-          <div className="text-[18px] uppercase tracking-[0.15em]">3PT</div>
+          <div className="text-[40px] text-white">{data.three_pt}</div>
+          <div className="text-[18px] uppercase tracking-[0.15em] text-[#e85a24]">3PT</div>
         </div>
         <div className="w-[115px]" data-testid="text-ft">
-          <div className="text-[40px]">{data.ft}</div>
-          <div className="text-[18px] uppercase tracking-[0.15em]">FT</div>
+          <div className="text-[40px] text-white">{data.ft}</div>
+          <div className="text-[18px] uppercase tracking-[0.15em] text-[#e85a24]">FT</div>
         </div>
         <div className="w-[115px]" data-testid="text-turnovers">
-          <div className="text-[40px]">{data.turnovers}</div>
-          <div className="text-[18px] uppercase tracking-[0.15em]">TO</div>
+          <div className="text-[40px] text-white">{data.turnovers}</div>
+          <div className="text-[18px] uppercase tracking-[0.15em] text-[#e85a24]">TO</div>
         </div>
         <div className="w-[115px]" data-testid="text-ts-percent">
-          <div className="text-[40px]">{data.ts_percent}</div>
-          <div className="text-[18px] uppercase tracking-[0.15em]">TS%</div>
+          <div className="text-[40px] text-white">{data.ts_percent}</div>
+          <div className="text-[18px] uppercase tracking-[0.15em] text-[#e85a24]">TS%</div>
         </div>
         <div className="w-[115px]" data-testid="text-plus-minus">
           <div className="text-[40px] text-[#41ff41]">{data.plus_minus}</div>
-          <div className="text-[18px] uppercase tracking-[0.15em]">+/-</div>
+          <div className="text-[18px] uppercase tracking-[0.15em] text-[#e85a24]">+/-</div>
         </div>
       </div>
     </div>
