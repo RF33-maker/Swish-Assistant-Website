@@ -47,38 +47,41 @@ export function PlayerPerformanceCardV1({ data }: Props) {
         className="absolute right-0 top-0"
         style={{ fontFamily: "Impact, Arial Black, sans-serif" }}
       >
-        {/* Top Number - Points */}
-        <div className="absolute right-[250px] top-[70px] text-right">
-          <span
-            className="text-[170px] leading-[0.9] font-black italic text-[#e85a24]"
-            data-testid="text-points-top"
-          >
-            {data.points}
-          </span>
-          <div className="text-[28px] uppercase tracking-[0.2em] text-white mt-1">Points</div>
-        </div>
+        {/* Top Number */}
+        <span
+          className="absolute right-[350px] top-[70px] text-[170px] leading-[0.9] font-black italic text-[#e85a24]"
+          data-testid="text-points-top"
+        >
+          {data.points}
+        </span>
+        {/* Top Label - Points */}
+        <span className="absolute right-[100px] top-[200px] text-[28px] uppercase tracking-[0.2em] text-white">
+          Points
+        </span>
 
-        {/* Middle Number - Rebounds */}
-        <div className="absolute right-[190px] top-[260px] text-right">
-          <span
-            className="text-[170px] leading-[0.9] font-black italic text-[#e85a24]"
-            data-testid="text-points-middle"
-          >
-            {data.rebounds}
-          </span>
-          <div className="text-[28px] uppercase tracking-[0.2em] text-white mt-1">Rebounds</div>
-        </div>
+        {/* Middle Number */}
+        <span
+          className="absolute right-[290px] top-[260px] text-[170px] leading-[0.9] font-black italic text-[#e85a24]"
+          data-testid="text-points-middle"
+        >
+          {data.rebounds}
+        </span>
+        {/* Middle Label - Rebounds */}
+        <span className="absolute right-[100px] top-[390px] text-[28px] uppercase tracking-[0.2em] text-white">
+          Rebounds
+        </span>
 
-        {/* Bottom Number - Assists */}
-        <div className="absolute right-[130px] top-[450px] text-right">
-          <span
-            className="text-[170px] leading-[0.9] font-black italic text-[#e85a24]"
-            data-testid="text-points-bottom"
-          >
-            {data.assists}
-          </span>
-          <div className="text-[28px] uppercase tracking-[0.2em] text-white mt-1">Assists</div>
-        </div>
+        {/* Bottom Number */}
+        <span
+          className="absolute right-[230px] top-[450px] text-[170px] leading-[0.9] font-black italic text-[#e85a24]"
+          data-testid="text-points-bottom"
+        >
+          {data.assists}
+        </span>
+        {/* Bottom Label - Assists */}
+        <span className="absolute right-[100px] top-[580px] text-[28px] uppercase tracking-[0.2em] text-white">
+          Assists
+        </span>
       </div>
 
 
