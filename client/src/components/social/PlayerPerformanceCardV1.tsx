@@ -42,58 +42,43 @@ export function PlayerPerformanceCardV1({ data }: Props) {
         )}
       </div>
 
-      {/* === Big stacked points numbers on the right (individually positioned) === */}
+      {/* === Big stacked numbers on the right (individually positioned) === */}
       <div
         className="absolute right-0 top-0"
         style={{ fontFamily: "Impact, Arial Black, sans-serif" }}
       >
-        {/* Top Number */}
-        <span
-          className="
-            absolute
-            right-[350px] top-[70px]
-            text-[170px]
-            leading-[0.9]
-            font-black
-            italic
-            text-[#e85a24]
-          "
-          data-testid="text-points-top"
-        >
-          {data.points}
-        </span>
+        {/* Top Number - Points */}
+        <div className="absolute right-[350px] top-[70px] text-right">
+          <span
+            className="text-[170px] leading-[0.9] font-black italic text-[#e85a24]"
+            data-testid="text-points-top"
+          >
+            {data.points}
+          </span>
+          <div className="text-[28px] uppercase tracking-[0.2em] text-white mt-1">Points</div>
+        </div>
 
-        {/* Middle Number */}
-        <span
-          className="
-            absolute
-            right-[290px] top-[260px]
-            text-[170px]
-            leading-[0.9]
-            font-black
-            italic
-            text-[#e85a24]
-          "
-          data-testid="text-points-middle"
-        >
-          {data.points}
-        </span>
+        {/* Middle Number - Rebounds */}
+        <div className="absolute right-[290px] top-[260px] text-right">
+          <span
+            className="text-[170px] leading-[0.9] font-black italic text-[#e85a24]"
+            data-testid="text-points-middle"
+          >
+            {data.rebounds}
+          </span>
+          <div className="text-[28px] uppercase tracking-[0.2em] text-white mt-1">Rebounds</div>
+        </div>
 
-        {/* Bottom Number */}
-        <span
-          className="
-            absolute
-            right-[230px] top-[450px]
-            text-[170px]
-            leading-[0.9]
-            font-black
-            italic
-            text-[#e85a24]
-          "
-          data-testid="text-points-bottom"
-        >
-          {data.points}
-        </span>
+        {/* Bottom Number - Assists */}
+        <div className="absolute right-[230px] top-[450px] text-right">
+          <span
+            className="text-[170px] leading-[0.9] font-black italic text-[#e85a24]"
+            data-testid="text-points-bottom"
+          >
+            {data.assists}
+          </span>
+          <div className="text-[28px] uppercase tracking-[0.2em] text-white mt-1">Assists</div>
+        </div>
       </div>
 
 
