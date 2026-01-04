@@ -40,48 +40,62 @@ export function PlayerPerformanceCardV1({ data }: Props) {
         )}
       </div>
 
-      {/* Score + team logos */}
-      <div className="absolute left-[200px] top-[780px] flex items-center gap-6">
+      {/* Big stacked points numbers on the right */}
+      <div 
+        className="absolute right-[130px] top-[80px] flex flex-col items-end font-extrabold italic text-[#e85a24]"
+        style={{ fontFamily: "Impact, sans-serif" }}
+      >
+        <span className="text-[140px] leading-[1.1]" data-testid="text-points-stack-1">{data.points}</span>
+        <span className="text-[140px] leading-[1.1]" data-testid="text-points-stack-2">{data.points}</span>
+        <span className="text-[140px] leading-[1.1]" data-testid="text-points-stack-3">{data.points}</span>
+      </div>
+
+      {/* Score + team logos below the photo */}
+      <div className="absolute left-[130px] top-[740px] flex items-center gap-4">
         {data.home_logo_url && (
           <img
             src={data.home_logo_url}
             alt={data.team_name}
-            className="w-[80px] h-[80px] object-contain"
+            className="w-[70px] h-[70px] object-contain"
             data-testid="img-home-logo"
           />
         )}
 
-        <span className="text-4xl font-bold tracking-[0.15em]" data-testid="text-score">
-          {data.home_score} - {data.away_score}
+        <span 
+          className="text-[40px] font-bold text-[#e85a24] tracking-wide"
+          style={{ fontFamily: "Impact, sans-serif" }}
+          data-testid="text-score"
+        >
+          {data.home_score} -{data.away_score}
         </span>
 
         {data.away_logo_url && (
           <img
             src={data.away_logo_url}
             alt={data.opponent_name}
-            className="w-[80px] h-[80px] object-contain"
+            className="w-[70px] h-[70px] object-contain"
             data-testid="img-away-logo"
           />
         )}
       </div>
 
-      {/* Main stats values row (above PTS / REB / AST / STL / BLK labels on template) */}
-      <div className="absolute left-[62px] bottom-[255px] flex gap-[72px] text-center font-bold">
-        <div className="w-[85px] text-[36px]" data-testid="text-points">{data.points}</div>
-        <div className="w-[85px] text-[36px]" data-testid="text-rebounds">{data.rebounds}</div>
-        <div className="w-[85px] text-[36px]" data-testid="text-assists">{data.assists}</div>
-        <div className="w-[85px] text-[36px]" data-testid="text-steals">{data.steals}</div>
-        <div className="w-[85px] text-[36px]" data-testid="text-blocks">{data.blocks}</div>
+      {/* Main stats values row (PTS / REB / AST / STL / BLK) */}
+      <div className="absolute left-[75px] top-[880px] flex gap-[85px] text-center font-bold">
+        <div className="w-[80px] text-[44px]" data-testid="text-points">{data.points}</div>
+        <div className="w-[80px] text-[44px]" data-testid="text-rebounds">{data.rebounds}</div>
+        <div className="w-[80px] text-[44px]" data-testid="text-assists">{data.assists}</div>
+        <div className="w-[80px] text-[44px]" data-testid="text-steals">{data.steals}</div>
+        <div className="w-[80px] text-[44px]" data-testid="text-blocks">{data.blocks}</div>
       </div>
 
-      {/* Shooting stats values row (above FG / 3PT / FT / TO / TS% / +/- labels on template) */}
-      <div className="absolute left-[62px] bottom-[135px] flex gap-[52px] text-center font-semibold">
-        <div className="w-[75px] text-[28px]" data-testid="text-fg">{data.fg}</div>
-        <div className="w-[75px] text-[28px]" data-testid="text-three-pt">{data.three_pt}</div>
-        <div className="w-[75px] text-[28px]" data-testid="text-ft">{data.ft}</div>
-        <div className="w-[75px] text-[28px]" data-testid="text-turnovers">{data.turnovers}</div>
-        <div className="w-[75px] text-[28px]" data-testid="text-ts-percent">{data.ts_percent}</div>
-        <div className="w-[75px] text-[28px] text-[#41ff41]" data-testid="text-plus-minus">{data.plus_minus}</div>
+      {/* Shooting stats values row (FG / 3PT / FT / TO / TS% / +/-) - orange color */}
+      <div className="absolute left-[75px] top-[1040px] flex gap-[60px] text-center font-bold text-[#e85a24]">
+        <div className="w-[80px] text-[38px]" data-testid="text-fg">{data.fg}</div>
+        <div className="w-[80px] text-[38px]" data-testid="text-three-pt">{data.three_pt}</div>
+        <div className="w-[80px] text-[38px]" data-testid="text-ft">{data.ft}</div>
+        <div className="w-[80px] text-[38px]" data-testid="text-turnovers">{data.turnovers}</div>
+        <div className="w-[80px] text-[38px]" data-testid="text-ts-percent">{data.ts_percent}</div>
+        <div className="w-[80px] text-[38px] text-[#41ff41]" data-testid="text-plus-minus">{data.plus_minus}</div>
       </div>
     </div>
   );
