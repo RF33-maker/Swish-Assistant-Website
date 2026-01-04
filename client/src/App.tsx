@@ -24,6 +24,7 @@ import LeagueTeams from "@/pages/LeagueTeams";
 import TeamLogoManager from "@/pages/TeamLogoManager";
 import LeagueAdmin from "@/pages/LeagueAdmin";
 import LeagueManagement from "@/pages/LeagueManagement";
+import SocialToolsPage from "@/pages/social-tools";
 import { AuthProvider } from "./hooks/use-auth";
 import { ProtectedRoute } from "./lib/protected-route";
 import ResetPassword from "./pages/reset-password";
@@ -70,6 +71,7 @@ function Router() {
       <ProtectedRoute path="/profile" component={ProfilePage} />
       <ProtectedRoute path="/settings" component={SettingsPage} />
       <ProtectedRoute path="/payment" component={PaymentPage} />
+      <ProtectedRoute path="/social-tools" component={SocialToolsPage} />
 
 
       {/* Fallback */}
