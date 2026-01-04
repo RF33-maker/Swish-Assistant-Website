@@ -178,7 +178,7 @@ export function PlayerPerformanceCardV1({ data }: Props) {
           <div className="text-[18px] uppercase tracking-[0.15em] text-[#e85a24]">TS%</div>
         </div>
         <div className="w-[115px]" data-testid="text-plus-minus">
-          <div className="text-[40px] text-[#41ff41]">{data.plus_minus}</div>
+          <div className={`text-[40px] ${data.plus_minus.startsWith('-') ? 'text-[#ff5c5c]' : 'text-[#41ff41]'}`}>{data.plus_minus}</div>
           <div className="text-[18px] uppercase tracking-[0.15em] text-[#e85a24]">+/-</div>
         </div>
       </div>
