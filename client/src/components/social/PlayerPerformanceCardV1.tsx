@@ -22,43 +22,36 @@ export function PlayerPerformanceCardV1({ data }: Props) {
       <div
         className="
           absolute
-          left-[80px] top-[120px]
-          w-[420px] h-[520px]
+          left-[55px] top-[38px]
+          w-[520px] h-[680px]
           overflow-hidden
-          rounded-[40px]
-          [transform:skewY(-6deg)]
-          [clip-path:polygon(0%_5%,100%_0%,100%_95%,0%_100%)]
         "
+        style={{
+          clipPath: "polygon(8% 0%, 100% 5%, 100% 100%, 0% 93%)",
+        }}
       >
         {data.photo_url && (
           <img
             src={data.photo_url}
             alt={data.player_name}
-            className="w-full h-full object-cover [transform:skewY(6deg)]"
+            className="w-full h-full object-cover"
             data-testid="img-player-photo"
           />
         )}
       </div>
 
-      {/* Big stacked points numbers */}
-      <div className="absolute right-[210px] top-[260px] flex flex-col gap-10 text-[120px] font-extrabold leading-none tracking-tight">
-        <span data-testid="text-points-stack-1">{data.points}</span>
-        <span data-testid="text-points-stack-2">{data.points}</span>
-        <span data-testid="text-points-stack-3">{data.points}</span>
-      </div>
-
-      {/* Score + team logos under the image */}
-      <div className="absolute left-[330px] top-[680px] flex items-center gap-4">
+      {/* Score + team logos */}
+      <div className="absolute left-[200px] top-[780px] flex items-center gap-6">
         {data.home_logo_url && (
           <img
             src={data.home_logo_url}
             alt={data.team_name}
-            className="w-[70px] h-[70px] object-contain"
+            className="w-[80px] h-[80px] object-contain"
             data-testid="img-home-logo"
           />
         )}
 
-        <span className="text-3xl font-semibold tracking-[0.2em]" data-testid="text-score">
+        <span className="text-4xl font-bold tracking-[0.15em]" data-testid="text-score">
           {data.home_score} - {data.away_score}
         </span>
 
@@ -66,65 +59,30 @@ export function PlayerPerformanceCardV1({ data }: Props) {
           <img
             src={data.away_logo_url}
             alt={data.opponent_name}
-            className="w-[70px] h-[70px] object-contain"
+            className="w-[80px] h-[80px] object-contain"
             data-testid="img-away-logo"
           />
         )}
       </div>
 
-      {/* Stat labels row: PTS / REB / AST / STL / BLK */}
-      <div className="absolute left-1/2 -translate-x-1/2 bottom-[250px] flex gap-20 text-center text-[22px] font-semibold">
-        <div>
-          <div className="text-[28px] mb-1" data-testid="text-points">{data.points}</div>
-          <div className="text-[16px] uppercase tracking-[0.2em]">PTS</div>
-        </div>
-        <div>
-          <div className="text-[28px] mb-1" data-testid="text-rebounds">{data.rebounds}</div>
-          <div className="text-[16px] uppercase tracking-[0.2em]">REB</div>
-        </div>
-        <div>
-          <div className="text-[28px] mb-1" data-testid="text-assists">{data.assists}</div>
-          <div className="text-[16px] uppercase tracking-[0.2em]">AST</div>
-        </div>
-        <div>
-          <div className="text-[28px] mb-1" data-testid="text-steals">{data.steals}</div>
-          <div className="text-[16px] uppercase tracking-[0.2em]">STL</div>
-        </div>
-        <div>
-          <div className="text-[28px] mb-1" data-testid="text-blocks">{data.blocks}</div>
-          <div className="text-[16px] uppercase tracking-[0.2em]">BLK</div>
-        </div>
+      {/* Main stats values row (above PTS / REB / AST / STL / BLK labels on template) */}
+      <div className="absolute left-[62px] bottom-[255px] flex gap-[72px] text-center font-bold">
+        <div className="w-[85px] text-[36px]" data-testid="text-points">{data.points}</div>
+        <div className="w-[85px] text-[36px]" data-testid="text-rebounds">{data.rebounds}</div>
+        <div className="w-[85px] text-[36px]" data-testid="text-assists">{data.assists}</div>
+        <div className="w-[85px] text-[36px]" data-testid="text-steals">{data.steals}</div>
+        <div className="w-[85px] text-[36px]" data-testid="text-blocks">{data.blocks}</div>
       </div>
 
-      {/* Shooting + advanced stats row: FG / 3PT / FT / TO / TS% / +/- */}
-      <div className="absolute left-1/2 -translate-x-1/2 bottom-[170px] flex gap-16 text-center text-[20px] font-semibold">
-        <div>
-          <div className="text-[26px] mb-1" data-testid="text-fg">{data.fg}</div>
-          <div className="text-[14px] uppercase tracking-[0.2em]">FG</div>
-        </div>
-        <div>
-          <div className="text-[26px] mb-1" data-testid="text-three-pt">{data.three_pt}</div>
-          <div className="text-[14px] uppercase tracking-[0.2em]">3PT</div>
-        </div>
-        <div>
-          <div className="text-[26px] mb-1" data-testid="text-ft">{data.ft}</div>
-          <div className="text-[14px] uppercase tracking-[0.2em]">FT</div>
-        </div>
-        <div>
-          <div className="text-[26px] mb-1" data-testid="text-turnovers">{data.turnovers}</div>
-          <div className="text-[14px] uppercase tracking-[0.2em]">TO</div>
-        </div>
-        <div>
-          <div className="text-[26px] mb-1" data-testid="text-ts-percent">{data.ts_percent}</div>
-          <div className="text-[14px] uppercase tracking-[0.2em]">TS%</div>
-        </div>
-        <div>
-          <div className="text-[26px] mb-1 text-[#41ff41]" data-testid="text-plus-minus">
-            {data.plus_minus}
-          </div>
-          <div className="text-[14px] uppercase tracking-[0.2em]">+/-</div>
-        </div>
+      {/* Shooting stats values row (above FG / 3PT / FT / TO / TS% / +/- labels on template) */}
+      <div className="absolute left-[62px] bottom-[135px] flex gap-[52px] text-center font-semibold">
+        <div className="w-[75px] text-[28px]" data-testid="text-fg">{data.fg}</div>
+        <div className="w-[75px] text-[28px]" data-testid="text-three-pt">{data.three_pt}</div>
+        <div className="w-[75px] text-[28px]" data-testid="text-ft">{data.ft}</div>
+        <div className="w-[75px] text-[28px]" data-testid="text-turnovers">{data.turnovers}</div>
+        <div className="w-[75px] text-[28px]" data-testid="text-ts-percent">{data.ts_percent}</div>
+        <div className="w-[75px] text-[28px] text-[#41ff41]" data-testid="text-plus-minus">{data.plus_minus}</div>
       </div>
     </div>
   );
-};
+}
