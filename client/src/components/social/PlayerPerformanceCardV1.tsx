@@ -48,7 +48,7 @@ export function PlayerPerformanceCardV1({ data }: Props) {
         style={{ fontFamily: "Impact, Arial Black, sans-serif" }}
       >
         {/* Top Number - Points */}
-        <div className="absolute right-[350px] top-[70px] text-right">
+        <div className="absolute right-[250px] top-[70px] text-right">
           <span
             className="text-[170px] leading-[0.9] font-black italic text-[#e85a24]"
             data-testid="text-points-top"
@@ -59,7 +59,7 @@ export function PlayerPerformanceCardV1({ data }: Props) {
         </div>
 
         {/* Middle Number - Rebounds */}
-        <div className="absolute right-[290px] top-[260px] text-right">
+        <div className="absolute right-[190px] top-[260px] text-right">
           <span
             className="text-[170px] leading-[0.9] font-black italic text-[#e85a24]"
             data-testid="text-points-middle"
@@ -70,7 +70,7 @@ export function PlayerPerformanceCardV1({ data }: Props) {
         </div>
 
         {/* Bottom Number - Assists */}
-        <div className="absolute right-[230px] top-[450px] text-right">
+        <div className="absolute right-[130px] top-[450px] text-right">
           <span
             className="text-[170px] leading-[0.9] font-black italic text-[#e85a24]"
             data-testid="text-points-bottom"
