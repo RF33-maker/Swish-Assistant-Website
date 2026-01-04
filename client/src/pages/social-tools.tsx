@@ -1,30 +1,59 @@
 import { useLocation } from "wouter";
-import { ArrowLeft, Download } from "lucide-react";
+import { ArrowLeft, Download, Trophy, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { PlayerPerformanceCardV1 } from "@/components/social/PlayerPerformanceCardV1";
 import type { PlayerPerformanceV1Data } from "@/types/socialCards";
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react";
 import html2canvas from "html2canvas";
+import { supabase } from "@/lib/supabase";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { normalizeTeamName } from "@/lib/teamUtils";
 
-const sampleData: PlayerPerformanceV1Data = {
-  player_name: "Sample Player",
-  team_name: "London Cavaliers",
-  opponent_name: "Bristol Flyers",
-  minutes: 32,
-  points: 41,
-  rebounds: 41,
-  assists: 41,
-  steals: 41,
-  blocks: 41,
-  fg: "10/20",
-  three_pt: "1/1",
-  ft: "1/1",
-  turnovers: 41,
-  ts_percent: "41.1",
-  plus_minus: "41.1",
-  home_score: 100,
-  away_score: 100,
+interface TopPerformance {
+  id: string;
+  player_name: string;
+  team: string;
+  opponent: string;
+  sminutes?: string;
+  spoints: number;
+  sreboundstotal: number;
+  sassists: number;
+  ssteals?: number;
+  sblocks?: number;
+  sfieldgoalsmade?: number;
+  sfieldgoalsattempted?: number;
+  sthreepointersmade?: number;
+  sthreepointersattempted?: number;
+  sfreethrowsmade?: number;
+  sfreethrowsattempted?: number;
+  sturnovers?: number;
+  splusminuspoints?: number;
+  game_key?: string;
+  numeric_id?: string;
+  player_team_score: number;
+  opponent_score: number;
+  league_id?: string;
+}
+
+const defaultData: PlayerPerformanceV1Data = {
+  player_name: "Select a Performance",
+  team_name: "Team Name",
+  opponent_name: "Opponent",
+  minutes: 0,
+  points: 0,
+  rebounds: 0,
+  assists: 0,
+  steals: 0,
+  blocks: 0,
+  fg: "0/0",
+  three_pt: "0/0",
+  ft: "0/0",
+  turnovers: 0,
+  ts_percent: "0.0",
+  plus_minus: "0",
+  home_score: 0,
+  away_score: 0,
   home_logo_url: "",
   away_logo_url: "",
   photo_url: "",
@@ -33,6 +62,168 @@ const sampleData: PlayerPerformanceV1Data = {
 export default function SocialToolsPage() {
   const [, navigate] = useLocation();
   const cardRef = useRef<HTMLDivElement>(null);
+  const [performances, setPerformances] = useState<TopPerformance[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedData, setSelectedData] = useState<PlayerPerformanceV1Data>(defaultData);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchTopPerformances();
+  }, []);
+
+  const fetchTopPerformances = async () => {
+    setLoading(true);
+    try {
+      const { data: playerStats, error: playerError } = await supabase
+        .from("player_stats")
+        .select(`
+          id,
+          firstname,
+          familyname,
+          team,
+          home_team,
+          away_team,
+          is_home_player,
+          sminutes,
+          spoints,
+          sreboundstotal,
+          sassists,
+          ssteals,
+          sblocks,
+          sfieldgoalsmade,
+          sfieldgoalsattempted,
+          sthreepointersmade,
+          sthreepointersattempted,
+          sfreethrowsmade,
+          sfreethrowsattempted,
+          sturnovers,
+          splusminuspoints,
+          game_key,
+          numeric_id,
+          league_id,
+          players:player_id(full_name)
+        `)
+        .order("spoints", { ascending: false })
+        .limit(50);
+
+      if (playerError) {
+        console.error("Error fetching performances:", playerError);
+        return;
+      }
+
+      const numericIds = Array.from(new Set((playerStats || []).map((s: any) => s.numeric_id).filter(Boolean)));
+      
+      let teamStatsMap: Record<string, any[]> = {};
+      if (numericIds.length > 0) {
+        const { data: teamStats } = await supabase
+          .from("team_stats")
+          .select("numeric_id, name, tot_spoints, is_home, league_id")
+          .in("numeric_id", numericIds);
+        
+        (teamStats || []).forEach((ts: any) => {
+          if (!teamStatsMap[ts.numeric_id]) {
+            teamStatsMap[ts.numeric_id] = [];
+          }
+          teamStatsMap[ts.numeric_id].push(ts);
+        });
+      }
+
+      const mapped: TopPerformance[] = (playerStats || []).map((stat: any) => {
+        const gameTeams = teamStatsMap[stat.numeric_id] || [];
+        const isHome = stat.is_home_player === true;
+        
+        const homeTeamStats = gameTeams.find((t: any) => t.is_home === true);
+        const awayTeamStats = gameTeams.find((t: any) => t.is_home === false);
+        
+        const opponentName = isHome 
+          ? (stat.away_team || awayTeamStats?.name || 'Unknown')
+          : (stat.home_team || homeTeamStats?.name || 'Unknown');
+        
+        const playerTeamScore = isHome 
+          ? (homeTeamStats?.tot_spoints ?? 0)
+          : (awayTeamStats?.tot_spoints ?? 0);
+        
+        const opponentScoreVal = isHome 
+          ? (awayTeamStats?.tot_spoints ?? 0)
+          : (homeTeamStats?.tot_spoints ?? 0);
+        
+        return {
+          id: stat.id,
+          player_name: stat.players?.full_name || `${stat.firstname || ''} ${stat.familyname || ''}`.trim() || 'Unknown',
+          team: stat.team || 'Unknown',
+          opponent: opponentName,
+          sminutes: stat.sminutes,
+          spoints: stat.spoints || 0,
+          sreboundstotal: stat.sreboundstotal || 0,
+          sassists: stat.sassists || 0,
+          ssteals: stat.ssteals || 0,
+          sblocks: stat.sblocks || 0,
+          sfieldgoalsmade: stat.sfieldgoalsmade,
+          sfieldgoalsattempted: stat.sfieldgoalsattempted,
+          sthreepointersmade: stat.sthreepointersmade,
+          sthreepointersattempted: stat.sthreepointersattempted,
+          sfreethrowsmade: stat.sfreethrowsmade,
+          sfreethrowsattempted: stat.sfreethrowsattempted,
+          sturnovers: stat.sturnovers,
+          splusminuspoints: stat.splusminuspoints,
+          game_key: stat.game_key,
+          numeric_id: stat.numeric_id,
+          player_team_score: playerTeamScore,
+          opponent_score: opponentScoreVal,
+          league_id: stat.league_id,
+        };
+      });
+
+      setPerformances(mapped);
+    } catch (err) {
+      console.error("Failed to fetch performances:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSelectPerformance = (perf: TopPerformance) => {
+    setSelectedId(perf.id);
+    
+    const fgMade = perf.sfieldgoalsmade ?? 0;
+    const fgAtt = perf.sfieldgoalsattempted ?? 0;
+    const threeMade = perf.sthreepointersmade ?? 0;
+    const threeAtt = perf.sthreepointersattempted ?? 0;
+    const ftMade = perf.sfreethrowsmade ?? 0;
+    const ftAtt = perf.sfreethrowsattempted ?? 0;
+    
+    const tsa = fgAtt + 0.44 * ftAtt;
+    const tsPercent = tsa > 0 ? ((perf.spoints / (2 * tsa)) * 100).toFixed(1) : "0.0";
+    
+    const plusMinus = perf.splusminuspoints !== undefined && perf.splusminuspoints !== null
+      ? (perf.splusminuspoints >= 0 ? `+${perf.splusminuspoints}` : `${perf.splusminuspoints}`)
+      : "0";
+
+    const minutes = perf.sminutes ? parseInt(perf.sminutes.split(':')[0]) || 0 : 0;
+
+    setSelectedData({
+      player_name: perf.player_name,
+      team_name: perf.team,
+      opponent_name: perf.opponent,
+      minutes: minutes,
+      points: perf.spoints,
+      rebounds: perf.sreboundstotal,
+      assists: perf.sassists,
+      steals: perf.ssteals ?? 0,
+      blocks: perf.sblocks ?? 0,
+      fg: `${fgMade}/${fgAtt}`,
+      three_pt: `${threeMade}/${threeAtt}`,
+      ft: `${ftMade}/${ftAtt}`,
+      turnovers: perf.sturnovers ?? 0,
+      ts_percent: tsPercent,
+      plus_minus: plusMinus,
+      home_score: perf.player_team_score,
+      away_score: perf.opponent_score,
+      home_logo_url: "",
+      away_logo_url: "",
+      photo_url: "",
+    });
+  };
 
   const handleDownload = async () => {
     if (!cardRef.current) return;
@@ -46,7 +237,7 @@ export default function SocialToolsPage() {
       });
       
       const link = document.createElement("a");
-      link.download = "player-performance-card.png";
+      link.download = `${selectedData.player_name.replace(/\s+/g, '-')}-performance.png`;
       link.href = canvas.toDataURL("image/png");
       link.click();
     } catch (error) {
@@ -56,76 +247,132 @@ export default function SocialToolsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-8">
-      <div className="mx-auto max-w-7xl px-6">
-        <div className="flex items-center gap-4 mb-8">
+      <div className="mx-auto max-w-[1600px] px-6">
+        <div className="flex items-center gap-4 mb-6">
           <Button
             variant="outline"
             onClick={() => navigate("/dashboard")}
             className="border-orange-200 text-orange-700 hover:bg-orange-50 hover:border-orange-300 dark:border-orange-700 dark:text-orange-400 dark:hover:bg-orange-900/20"
+            data-testid="button-back"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Dashboard
           </Button>
         </div>
 
-        <div className="mb-8">
+        <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
             Swish Social Tool
           </h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
-            Generate social media graphics from your stats database
+          <p className="mt-1 text-gray-600 dark:text-gray-400">
+            Select a top performance to generate a social media graphic
           </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <Card className="bg-white dark:bg-gray-800 border-orange-200 dark:border-orange-700">
-            <CardHeader>
-              <CardTitle className="text-orange-900 dark:text-orange-400">
-                Player Performance Card V1
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-600 dark:text-gray-400 mb-4">
-                Preview the player performance card template with sample data. 
-                The card is sized at 1080×1350px (Instagram portrait).
-              </p>
-              <Button
-                onClick={handleDownload}
-                className="bg-orange-600 hover:bg-orange-700 text-white"
-              >
-                <Download className="h-4 w-4 mr-2" />
-                Download as PNG
-              </Button>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+          {/* Left side - Performance selector */}
+          <div className="lg:col-span-3">
+            <Card className="bg-white dark:bg-gray-800 border-orange-200 dark:border-orange-700">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-orange-900 dark:text-orange-400 flex items-center gap-2">
+                  <Trophy className="h-5 w-5" />
+                  Top Performances
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
+                  </div>
+                ) : (
+                  <ScrollArea className="h-[600px]">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pr-4">
+                      {performances.map((perf) => (
+                        <div
+                          key={perf.id}
+                          onClick={() => handleSelectPerformance(perf)}
+                          className={`p-4 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
+                            selectedId === perf.id
+                              ? "border-orange-500 bg-orange-50 dark:bg-orange-900/20"
+                              : "border-gray-200 dark:border-gray-600 hover:border-orange-300 dark:hover:border-orange-600"
+                          }`}
+                          data-testid={`card-performance-${perf.id}`}
+                        >
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-semibold text-gray-900 dark:text-white truncate">
+                                {perf.player_name}
+                              </h3>
+                              <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
+                                {perf.team}
+                              </p>
+                              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                                vs {perf.opponent} ({perf.player_team_score}-{perf.opponent_score})
+                              </p>
+                            </div>
+                            <div className="text-right ml-3">
+                              <span className="text-2xl font-bold text-orange-600 dark:text-orange-400">
+                                {perf.spoints}
+                              </span>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">PTS</p>
+                            </div>
+                          </div>
+                          <div className="flex gap-4 text-sm text-gray-600 dark:text-gray-300">
+                            <span>{perf.sreboundstotal} REB</span>
+                            <span>{perf.sassists} AST</span>
+                            {perf.ssteals ? <span>{perf.ssteals} STL</span> : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                )}
+              </CardContent>
+            </Card>
+          </div>
 
-          <Card className="bg-white dark:bg-gray-800 border-orange-200 dark:border-orange-700">
-            <CardHeader>
-              <CardTitle className="text-orange-900 dark:text-orange-400">
-                Sample Data
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <pre className="text-xs text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 p-4 rounded-lg overflow-auto max-h-[300px]">
-                {JSON.stringify(sampleData, null, 2)}
-              </pre>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="mt-8">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-            Card Preview (scaled to fit)
-          </h2>
-          <div className="bg-gray-200 dark:bg-gray-700 p-4 rounded-lg overflow-auto">
-            <div 
-              className="origin-top-left"
-              style={{ transform: "scale(0.5)", transformOrigin: "top left" }}
-            >
-              <div ref={cardRef}>
-                <PlayerPerformanceCardV1 data={sampleData} />
-              </div>
-            </div>
+          {/* Right side - Card preview */}
+          <div className="lg:col-span-2">
+            <Card className="bg-white dark:bg-gray-800 border-orange-200 dark:border-orange-700">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-orange-900 dark:text-orange-400">
+                  Card Preview
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="mb-4">
+                  <Button
+                    onClick={handleDownload}
+                    className="w-full bg-orange-600 hover:bg-orange-700 text-white"
+                    disabled={selectedId === null}
+                    data-testid="button-download"
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Download as PNG
+                  </Button>
+                </div>
+                
+                <div className="bg-gray-200 dark:bg-gray-700 p-3 rounded-lg overflow-hidden">
+                  <div 
+                    className="origin-top-left"
+                    style={{ 
+                      transform: "scale(0.35)", 
+                      transformOrigin: "top left",
+                      width: "1080px",
+                      height: "472px"
+                    }}
+                  >
+                    <div ref={cardRef}>
+                      <PlayerPerformanceCardV1 data={selectedData} />
+                    </div>
+                  </div>
+                </div>
+                
+                <p className="mt-3 text-xs text-gray-500 dark:text-gray-400 text-center">
+                  Card size: 1080×1350px (Instagram portrait)
+                </p>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>
