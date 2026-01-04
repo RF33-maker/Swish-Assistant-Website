@@ -11,6 +11,7 @@ const sampleData: PlayerPerformanceV1Data = {
   player_name: "Sample Player",
   team_name: "London Cavaliers",
   opponent_name: "Bristol Flyers",
+  minutes: 32,
   points: 41,
   rebounds: 41,
   assists: 41,

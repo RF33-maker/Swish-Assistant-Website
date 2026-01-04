@@ -127,8 +127,12 @@ export function PlayerPerformanceCardV1({ data }: Props) {
         )}
       </div>
 
-      {/* === Main stat numbers row (PTS / REB / AST / STL / BLK) === */}
+      {/* === Main stat numbers row (MIN / PTS / REB / AST / STL / BLK) === */}
       <div className="absolute left-1/2 -translate-x-1/2 top-[950px] flex text-center font-semibold">
+        <div className="w-[125px]" data-testid="text-minutes">
+          <div className="text-[46px] text-white">{data.minutes}</div>
+          <div className="text-[22px] uppercase tracking-[0.15em] text-[#e85a24]">MIN</div>
+        </div>
         <div className="w-[125px]" data-testid="text-points">
           <div className="text-[46px] text-white">{data.points}</div>
           <div className="text-[22px] uppercase tracking-[0.15em] text-[#e85a24]">PTS</div>

@@ -3,6 +3,7 @@ export type PlayerPerformanceV1Data = {
   team_name: string;
   opponent_name: string;
 
+  minutes: number;
   points: number;
   rebounds: number;
   assists: number;
