@@ -105,12 +105,12 @@ export function PlayerPerformanceCardV1({ data }: Props) {
         )}
 
         <span
-          className="
+          className={`
             text-[44px]
             font-black
-            text-[#90ff5c]
             tracking-[0.2em]
-          "
+            ${data.didWin ? 'text-[#90ff5c]' : 'text-[#ff5c5c]'}
+          `}
           style={{ fontFamily: "Impact, Arial Black, sans-serif" }}
           data-testid="text-score"
         >

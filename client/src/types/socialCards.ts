@@ -19,6 +19,7 @@ export type PlayerPerformanceV1Data = {
 
   home_score: number;
   away_score: number;
+  didWin: boolean;
 
   home_logo_url?: string;
   away_logo_url?: string;
