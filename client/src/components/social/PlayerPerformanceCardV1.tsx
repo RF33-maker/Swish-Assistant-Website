@@ -139,48 +139,55 @@ export function PlayerPerformanceCardV1({ data }: Props) {
         )}
       </div>
 
-      {/* === Main stat numbers row (above PTS / REB / AST / STL / BLK labels) === */}
-      {/* Labels are baked into the PNG; we just align the numbers on top */}
+      {/* === Main stat numbers row (PTS / REB / AST / STL / BLK) === */}
       <div className="absolute left-[100px] top-[950px] flex text-center font-semibold">
-        <div className="w-[100px] text-[46px]" data-testid="text-points">
-          {data.points}
+        <div className="w-[125px]" data-testid="text-points">
+          <div className="text-[46px]">{data.points}</div>
+          <div className="text-[22px] uppercase tracking-[0.15em]">PTS</div>
         </div>
-        <div className="w-[100px] text-[46px]" data-testid="text-rebounds">
-          {data.rebounds}
+        <div className="w-[125px]" data-testid="text-rebounds">
+          <div className="text-[46px]">{data.rebounds}</div>
+          <div className="text-[22px] uppercase tracking-[0.15em]">REB</div>
         </div>
-        <div className="w-[100px] text-[46px]" data-testid="text-assists">
-          {data.assists}
+        <div className="w-[125px]" data-testid="text-assists">
+          <div className="text-[46px]">{data.assists}</div>
+          <div className="text-[22px] uppercase tracking-[0.15em]">AST</div>
         </div>
-        <div className="w-[100px] text-[46px]" data-testid="text-steals">
-          {data.steals}
+        <div className="w-[125px]" data-testid="text-steals">
+          <div className="text-[46px]">{data.steals}</div>
+          <div className="text-[22px] uppercase tracking-[0.15em]">STL</div>
         </div>
-        <div className="w-[100px] text-[46px]" data-testid="text-blocks">
-          {data.blocks}
+        <div className="w-[125px]" data-testid="text-blocks">
+          <div className="text-[46px]">{data.blocks}</div>
+          <div className="text-[22px] uppercase tracking-[0.15em]">BLK</div>
         </div>
       </div>
 
-      {/* === Shooting / advanced stat numbers row (above FG / 3PT / FT / TO / TS% / +/-) === */}
-      <div className="absolute left-[120px] top-[1070px] flex text-center font-semibold text-[#e85a24]">
-        <div className="w-[115px] text-[40px]" data-testid="text-fg">
-          {data.fg}
+      {/* === Shooting / advanced stat numbers row (FG / 3PT / FT / TO / TS% / +/-) === */}
+      <div className="absolute left-[130px] top-[1070px] flex text-center font-semibold text-[#e85a24]">
+        <div className="w-[115px]" data-testid="text-fg">
+          <div className="text-[40px]">{data.fg}</div>
+          <div className="text-[18px] uppercase tracking-[0.15em]">FG</div>
         </div>
-        <div className="w-[115px] text-[40px]" data-testid="text-three-pt">
-          {data.three_pt}
+        <div className="w-[115px]" data-testid="text-three-pt">
+          <div className="text-[40px]">{data.three_pt}</div>
+          <div className="text-[18px] uppercase tracking-[0.15em]">3PT</div>
         </div>
-        <div className="w-[115px] text-[40px]" data-testid="text-ft">
-          {data.ft}
+        <div className="w-[115px]" data-testid="text-ft">
+          <div className="text-[40px]">{data.ft}</div>
+          <div className="text-[18px] uppercase tracking-[0.15em]">FT</div>
         </div>
-        <div className="w-[115px] text-[40px]" data-testid="text-turnovers">
-          {data.turnovers}
+        <div className="w-[115px]" data-testid="text-turnovers">
+          <div className="text-[40px]">{data.turnovers}</div>
+          <div className="text-[18px] uppercase tracking-[0.15em]">TO</div>
         </div>
-        <div className="w-[115px] text-[40px]" data-testid="text-ts-percent">
-          {data.ts_percent}
+        <div className="w-[115px]" data-testid="text-ts-percent">
+          <div className="text-[40px]">{data.ts_percent}</div>
+          <div className="text-[18px] uppercase tracking-[0.15em]">TS%</div>
         </div>
-        <div
-          className="w-[115px] text-[40px] text-[#41ff41]"
-          data-testid="text-plus-minus"
-        >
-          {data.plus_minus}
+        <div className="w-[115px]" data-testid="text-plus-minus">
+          <div className="text-[40px] text-[#41ff41]">{data.plus_minus}</div>
+          <div className="text-[18px] uppercase tracking-[0.15em]">+/-</div>
         </div>
       </div>
     </div>
