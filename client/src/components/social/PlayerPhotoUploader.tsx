@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Upload, User, Loader2, Search } from "lucide-react";
 
 type PlayerOption = {
+  id: string;
   name: string;
-  team: string;
+  team: string | null;
 };
 
 export function PlayerPhotoUploader() {
@@ -25,18 +26,20 @@ export function PlayerPhotoUploader() {
       setLoadingPlayers(true);
       
       const { data, error } = await supabase
-        .from("player_stats")
-        .select("name, team")
-        .order("name", { ascending: true });
+        .from("players")
+        .select("*")
+        .order("full_name", { ascending: true });
 
       if (!error && data) {
-        const uniquePlayers = new Map<string, PlayerOption>();
-        data.forEach((row: { name: string; team: string }) => {
-          if (row.name && !uniquePlayers.has(row.name)) {
-            uniquePlayers.set(row.name, { name: row.name, team: row.team });
-          }
-        });
-        setPlayers(Array.from(uniquePlayers.values()));
+        const mapped = data.map((row: any) => ({
+          id: row.id,
+          name: row.full_name || row.name || "Unknown",
+          team: row.team_name || row.team || null,
+        }));
+        setPlayers(mapped);
+        console.log("[PlayerPhotoUploader] Loaded players:", mapped.length, "Sample:", data[0]);
+      } else {
+        console.error("Error loading players:", error);
       }
       setLoadingPlayers(false);
     };
@@ -50,7 +53,7 @@ export function PlayerPhotoUploader() {
     return players.filter(
       (p) =>
         p.name.toLowerCase().includes(query) ||
-        p.team.toLowerCase().includes(query)
+        (p.team && p.team.toLowerCase().includes(query))
     ).slice(0, 20);
   }, [players, searchQuery]);
 
@@ -60,12 +63,12 @@ export function PlayerPhotoUploader() {
     
     const { data: existingPhoto } = await supabase.storage
       .from("player-photos")
-      .list(encodeURIComponent(player.name));
+      .list(player.id);
     
     if (existingPhoto && existingPhoto.length > 0) {
       const { data } = supabase.storage
         .from("player-photos")
-        .getPublicUrl(`${encodeURIComponent(player.name)}/${existingPhoto[0].name}`);
+        .getPublicUrl(`${player.id}/${existingPhoto[0].name}`);
       setCurrentPhotoUrl(data.publicUrl);
     } else {
       setCurrentPhotoUrl(null);
@@ -83,7 +86,7 @@ export function PlayerPhotoUploader() {
 
     try {
       const ext = file.name.split(".").pop() || "jpg";
-      const filePath = `${encodeURIComponent(selectedPlayer.name)}/primary.${ext}`;
+      const filePath = `${selectedPlayer.id}/primary.${ext}`;
 
       const { error: uploadError } = await supabase.storage
         .from("player-photos")
@@ -118,11 +121,15 @@ export function PlayerPhotoUploader() {
           <div className="flex items-center justify-center py-6">
             <Loader2 className="h-6 w-6 animate-spin text-orange-500" />
           </div>
+        ) : players.length === 0 ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+            No players found in database
+          </p>
         ) : (
           <>
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Search Player
+                Search Player ({players.length} available)
               </label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -146,13 +153,13 @@ export function PlayerPhotoUploader() {
                 <div className="border border-gray-200 dark:border-gray-600 rounded-md max-h-48 overflow-y-auto bg-white dark:bg-gray-800">
                   {filteredPlayers.map((p, idx) => (
                     <button
-                      key={`${p.name}-${idx}`}
+                      key={p.id}
                       onClick={() => handleSelectPlayer(p)}
                       className="w-full text-left px-3 py-2 hover:bg-orange-50 dark:hover:bg-orange-900/20 border-b border-gray-100 dark:border-gray-700 last:border-b-0"
                       data-testid={`option-player-${idx}`}
                     >
                       <div className="font-medium text-gray-900 dark:text-white">{p.name}</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">{p.team}</div>
+                      {p.team && <div className="text-xs text-gray-500 dark:text-gray-400">{p.team}</div>}
                     </button>
                   ))}
                 </div>
@@ -165,7 +172,7 @@ export function PlayerPhotoUploader() {
               {selectedPlayer && (
                 <div className="bg-orange-50 dark:bg-orange-900/20 rounded-md px-3 py-2">
                   <div className="font-medium text-orange-900 dark:text-orange-300">{selectedPlayer.name}</div>
-                  <div className="text-xs text-orange-700 dark:text-orange-400">{selectedPlayer.team}</div>
+                  {selectedPlayer.team && <div className="text-xs text-orange-700 dark:text-orange-400">{selectedPlayer.team}</div>}
                 </div>
               )}
             </div>
