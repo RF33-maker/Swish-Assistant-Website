@@ -20,23 +20,23 @@ export function PlayerPerformanceCardV1({ data }: Props) {
     >
       {/* === Player photo clipped into the angled frame === */}
       <div
-        className="absolute overflow-hidden"
+        className="
+          absolute
+          left-[95px] top-[45px]
+          w-[650px] h-[770px]
+          overflow-hidden
+          rounded-[46px]
+        "
         style={{
-          left: "42px",
-          top: "42px",
-          width: "540px",
-          height: "720px",
-          transform: "rotate(-2deg)",
-          borderRadius: "32px",
-          clipPath: "polygon(8% 0%, 100% 5%, 100% 100%, 0% 95%)",
+          // rough match to your trapezoid
+          clipPath: "polygon(0% 1%, 73% 1%, 100% 82%, 0% 100%)",
         }}
       >
         {data.photo_url && (
           <img
             src={data.photo_url}
             alt={data.player_name}
-            className="w-full h-full object-cover object-top"
-            style={{ transform: "rotate(2deg) scale(1.1)" }}
+            className="w-full h-full object-cover"
             data-testid="img-player-photo"
           />
         )}
@@ -89,7 +89,7 @@ export function PlayerPerformanceCardV1({ data }: Props) {
       <div
         className="
           absolute
-          left-[350px] top-[710px]
+          left-[350px] top-[720px]
           origin-center
           [transform:rotate(-12deg)]
         "

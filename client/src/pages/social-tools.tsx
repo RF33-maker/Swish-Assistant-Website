@@ -1,5 +1,5 @@
 import { useLocation } from "wouter";
-import { ArrowLeft, Download, Trophy, Loader2 } from "lucide-react";
+import { ArrowLeft, Download, Trophy, Loader2, Filter } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { PlayerPerformanceCardV1 } from "@/components/social/PlayerPerformanceCardV1";
@@ -10,6 +10,19 @@ import html2canvas from "html2canvas";
 import { supabase } from "@/lib/supabase";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { normalizeTeamName, normalizeTeamNameForFile } from "@/lib/teamUtils";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+interface League {
+  id: string;
+  name: string;
+  slug: string;
+}
 
 async function getTeamLogoUrl(teamName: string, leagueId: string): Promise<string> {
   const extensions = ['png', 'jpg', 'jpeg'];
@@ -103,19 +116,50 @@ export default function SocialToolsPage() {
   const [loading, setLoading] = useState(true);
   const [selectedData, setSelectedData] = useState<PlayerPerformanceV1Data>(defaultData);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [leagues, setLeagues] = useState<League[]>([]);
+  const [selectedLeague, setSelectedLeague] = useState<string>("all");
+  const [timeFilter, setTimeFilter] = useState<string>("all-time");
+
+  useEffect(() => {
+    fetchLeagues();
+  }, []);
 
   useEffect(() => {
     fetchTopPerformances();
-  }, []);
+  }, [selectedLeague, timeFilter]);
+
+  const fetchLeagues = async () => {
+    const { data, error } = await supabase
+      .from("leagues")
+      .select("id, name, slug")
+      .order("name");
+    
+    if (!error && data) {
+      setLeagues(data);
+    }
+  };
 
   const fetchTopPerformances = async () => {
     setLoading(true);
     try {
-      const { data: playerStats, error: playerError } = await supabase
+      let query = supabase
         .from("player_stats")
         .select("*, players:player_id(id, full_name, photo_path)")
-        .order("spoints", { ascending: false })
-        .limit(50);
+        .order("spoints", { ascending: false });
+      
+      // Apply league filter
+      if (selectedLeague !== "all") {
+        query = query.eq("league_id", selectedLeague);
+      }
+      
+      // Apply time filter - "latest" shows games from last 7 days
+      if (timeFilter === "latest") {
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        query = query.gte("created_at", sevenDaysAgo.toISOString());
+      }
+      
+      const { data: playerStats, error: playerError } = await query.limit(50);
 
       if (playerError) {
         console.error("Error fetching performances:", playerError);
@@ -377,10 +421,37 @@ export default function SocialToolsPage() {
           <div className="lg:col-span-3">
             <Card className="bg-white dark:bg-gray-800 border-orange-200 dark:border-orange-700">
               <CardHeader className="pb-3">
-                <CardTitle className="text-orange-900 dark:text-orange-400 flex items-center gap-2">
-                  <Trophy className="h-5 w-5" />
-                  Top Performances
-                </CardTitle>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <CardTitle className="text-orange-900 dark:text-orange-400 flex items-center gap-2">
+                    <Trophy className="h-5 w-5" />
+                    Top Performances
+                  </CardTitle>
+                  <div className="flex items-center gap-3">
+                    <Select value={selectedLeague} onValueChange={setSelectedLeague}>
+                      <SelectTrigger className="w-[180px] border-orange-200 dark:border-orange-700" data-testid="select-league">
+                        <Filter className="h-4 w-4 mr-2 text-orange-500" />
+                        <SelectValue placeholder="All Leagues" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Leagues</SelectItem>
+                        {leagues.map((league) => (
+                          <SelectItem key={league.id} value={league.id}>
+                            {league.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select value={timeFilter} onValueChange={setTimeFilter}>
+                      <SelectTrigger className="w-[140px] border-orange-200 dark:border-orange-700" data-testid="select-time">
+                        <SelectValue placeholder="All Time" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all-time">All Time</SelectItem>
+                        <SelectItem value="latest">Latest (7 days)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
                 {loading ? (
