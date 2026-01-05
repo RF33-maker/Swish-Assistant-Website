@@ -3,6 +3,7 @@ import { ArrowLeft, Download, Trophy, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { PlayerPerformanceCardV1 } from "@/components/social/PlayerPerformanceCardV1";
+import { PlayerPhotoUploader } from "@/components/social/PlayerPhotoUploader";
 import type { PlayerPerformanceV1Data } from "@/types/socialCards";
 import { useRef, useState, useEffect } from "react";
 import html2canvas from "html2canvas";
@@ -249,6 +250,22 @@ export default function SocialToolsPage() {
       getTeamLogoUrl(perf.opponent, leagueId),
     ]);
 
+    // Try to get player photo from players table
+    let playerPhotoUrl = "";
+    const { data: playerData } = await supabase
+      .from("players")
+      .select("photo_path")
+      .ilike("name", perf.player_name)
+      .limit(1)
+      .single();
+    
+    if (playerData?.photo_path) {
+      const { data: photoData } = supabase.storage
+        .from("player-photos")
+        .getPublicUrl(playerData.photo_path);
+      playerPhotoUrl = photoData.publicUrl;
+    }
+
     setSelectedData({
       player_name: perf.player_name,
       team_name: perf.team,
@@ -270,7 +287,7 @@ export default function SocialToolsPage() {
       didWin: perf.player_team_score > perf.opponent_score,
       home_logo_url: playerTeamLogo,
       away_logo_url: opponentLogo,
-      photo_url: "",
+      photo_url: playerPhotoUrl,
     });
   };
 
@@ -401,8 +418,8 @@ export default function SocialToolsPage() {
             </Card>
           </div>
 
-          {/* Right side - Card preview */}
-          <div className="lg:col-span-2">
+          {/* Right side - Card preview and Photo uploader */}
+          <div className="lg:col-span-2 space-y-6">
             <Card className="bg-white dark:bg-gray-800 border-orange-200 dark:border-orange-700">
               <CardHeader className="pb-3">
                 <CardTitle className="text-orange-900 dark:text-orange-400">
@@ -443,6 +460,8 @@ export default function SocialToolsPage() {
                 </p>
               </CardContent>
             </Card>
+            
+            <PlayerPhotoUploader />
           </div>
         </div>
       </div>
