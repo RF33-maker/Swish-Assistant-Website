@@ -26,9 +26,9 @@ export function PlayerPerformanceCardV1({ data }: Props) {
           top: "42px",
           width: "540px",
           height: "720px",
-          clipPath: "polygon(8% 0%, 100% 5%, 100% 100%, 0% 95%)",
           transform: "rotate(-2deg)",
-          borderRadius: "24px",
+          borderRadius: "32px",
+          clipPath: "polygon(8% 0%, 100% 5%, 100% 100%, 0% 95%)",
         }}
       >
         {data.photo_url && (
@@ -36,7 +36,7 @@ export function PlayerPerformanceCardV1({ data }: Props) {
             src={data.photo_url}
             alt={data.player_name}
             className="w-full h-full object-cover object-top"
-            style={{ transform: "rotate(2deg) scale(1.05)" }}
+            style={{ transform: "rotate(2deg) scale(1.1)" }}
             data-testid="img-player-photo"
           />
         )}
