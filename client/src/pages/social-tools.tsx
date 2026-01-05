@@ -95,6 +95,7 @@ const defaultData: PlayerPerformanceV1Data = {
 export default function SocialToolsPage() {
   const [, navigate] = useLocation();
   const cardRef = useRef<HTMLDivElement>(null);
+  const hiddenCardRef = useRef<HTMLDivElement>(null);
   const [performances, setPerformances] = useState<TopPerformance[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedData, setSelectedData] = useState<PlayerPerformanceV1Data>(defaultData);
@@ -274,14 +275,35 @@ export default function SocialToolsPage() {
   };
 
   const handleDownload = async () => {
-    if (!cardRef.current) return;
+    if (!hiddenCardRef.current) return;
     
     try {
-      const canvas = await html2canvas(cardRef.current, {
+      // Wait for images to load in the hidden card
+      const images = hiddenCardRef.current.querySelectorAll("img");
+      await Promise.all(
+        Array.from(images).map(
+          (img) =>
+            new Promise((resolve) => {
+              if (img.complete) {
+                resolve(true);
+              } else {
+                img.onload = () => resolve(true);
+                img.onerror = () => resolve(false);
+              }
+            })
+        )
+      );
+      
+      // Small delay to ensure rendering is complete
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      
+      const canvas = await html2canvas(hiddenCardRef.current, {
         scale: 1,
         useCORS: true,
         allowTaint: true,
         backgroundColor: null,
+        width: 1080,
+        height: 1350,
       });
       
       const link = document.createElement("a");
@@ -422,6 +444,21 @@ export default function SocialToolsPage() {
               </CardContent>
             </Card>
           </div>
+        </div>
+      </div>
+      
+      {/* Hidden full-size card for download rendering */}
+      <div 
+        style={{ 
+          position: "fixed", 
+          left: "-9999px", 
+          top: 0,
+          width: "1080px",
+          height: "1350px",
+        }}
+      >
+        <div ref={hiddenCardRef}>
+          <PlayerPerformanceCardV1 data={selectedData} />
         </div>
       </div>
     </div>
