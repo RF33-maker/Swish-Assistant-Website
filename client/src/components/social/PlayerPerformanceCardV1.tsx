@@ -23,7 +23,7 @@ export function PlayerPerformanceCardV1({ data }: Props) {
         className="
           absolute
           left-[95px] top-[45px]
-          w-[650px] h-[770px]
+          w-[640px] h-[770px]
           overflow-hidden
           rounded-[46px]
         "
