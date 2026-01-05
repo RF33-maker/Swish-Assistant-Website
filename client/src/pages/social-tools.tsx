@@ -45,7 +45,9 @@ async function getTeamLogoUrl(teamName: string, leagueId: string): Promise<strin
 
 interface TopPerformance {
   id: string;
+  player_id?: string;
   player_name: string;
+  player_photo_path?: string | null;
   team: string;
   opponent: string;
   sminutes?: string;
@@ -111,7 +113,7 @@ export default function SocialToolsPage() {
     try {
       const { data: playerStats, error: playerError } = await supabase
         .from("player_stats")
-        .select("*, players:player_id(full_name)")
+        .select("*, players:player_id(id, full_name, photo_path)")
         .order("spoints", { ascending: false })
         .limit(50);
 
@@ -192,7 +194,9 @@ export default function SocialToolsPage() {
         
         return {
           id: stat.id,
+          player_id: stat.players?.id || stat.player_id,
           player_name: stat.players?.full_name || `${stat.firstname || ''} ${stat.familyname || ''}`.trim() || 'Unknown',
+          player_photo_path: stat.players?.photo_path,
           team: playerTeamName || 'Unknown',
           opponent: opponentName,
           sminutes: stat.sminutes,
@@ -250,31 +254,30 @@ export default function SocialToolsPage() {
       getTeamLogoUrl(perf.opponent, leagueId),
     ]);
 
-    // Try to get player photo from players table using photo_path
+    // Get player photo from the already-joined data
     let playerPhotoUrl = "";
-    const { data: playerData } = await supabase
-      .from("players")
-      .select("id, full_name, photo_path")
-      .ilike("full_name", perf.player_name)
-      .limit(1)
-      .single();
     
-    if (playerData?.photo_path) {
-      // Use the photo_path stored in the database
+    console.log("[SocialTools] Photo lookup for:", perf.player_name, "player_id:", perf.player_id, "photo_path:", perf.player_photo_path);
+    
+    if (perf.player_photo_path) {
+      // Use the photo_path from the joined player data
       const { data: photoData } = supabase.storage
         .from("player-photos")
-        .getPublicUrl(playerData.photo_path);
+        .getPublicUrl(perf.player_photo_path);
       playerPhotoUrl = photoData.publicUrl;
-    } else if (playerData?.id) {
+      console.log("[SocialTools] Using photo_path:", perf.player_photo_path, "URL:", playerPhotoUrl);
+    } else if (perf.player_id) {
       // Fallback: check storage directly by player ID
       const { data: photoList } = await supabase.storage
         .from("player-photos")
-        .list(playerData.id);
+        .list(perf.player_id);
+      
+      console.log("[SocialTools] Fallback storage check for ID:", perf.player_id, "Found:", photoList);
       
       if (photoList && photoList.length > 0) {
         const { data: photoData } = supabase.storage
           .from("player-photos")
-          .getPublicUrl(`${playerData.id}/${photoList[0].name}`);
+          .getPublicUrl(`${perf.player_id}/${photoList[0].name}`);
         playerPhotoUrl = photoData.publicUrl;
       }
     }
