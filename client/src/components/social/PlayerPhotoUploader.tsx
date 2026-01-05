@@ -94,7 +94,18 @@ export function PlayerPhotoUploader() {
 
       if (uploadError) throw uploadError;
 
-      setMessage({ type: "success", text: "Photo uploaded successfully!" });
+      // Update the player's photo_path in the database
+      const { error: updateError } = await supabase
+        .from("players")
+        .update({ photo_path: filePath })
+        .eq("id", selectedPlayer.id);
+
+      if (updateError) {
+        console.error("Failed to update photo_path:", updateError);
+        throw updateError;
+      }
+
+      setMessage({ type: "success", text: "Photo uploaded and linked!" });
 
       const { data } = supabase.storage
         .from("player-photos")
