@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/select";
 
 interface League {
-  id: string;
+  league_id: string;
   name: string;
   slug: string;
 }
@@ -131,7 +131,7 @@ export default function SocialToolsPage() {
   const fetchLeagues = async () => {
     const { data, error } = await supabase
       .from("leagues")
-      .select("id, name, slug")
+      .select("league_id, name, slug")
       .order("name");
     
     if (!error && data) {
@@ -438,7 +438,7 @@ export default function SocialToolsPage() {
                       <SelectContent>
                         <SelectItem value="all">All Leagues</SelectItem>
                         {leagues.map((league) => (
-                          <SelectItem key={league.id} value={league.id}>
+                          <SelectItem key={league.league_id} value={league.league_id}>
                             {league.name}
                           </SelectItem>
                         ))}
