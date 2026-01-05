@@ -85,50 +85,32 @@ export function PlayerPerformanceCardV1({ data }: Props) {
       </div>
 
 
-      {/* === Score + team logos along the slanted base of the photo === */}
+      {/* === Player name along the slanted base of the photo === */}
       <div
         className="
           absolute
           left-[410px] top-[730px]
-          flex items-center gap-5
           origin-center
           [transform:rotate(-11deg)]
         "
       >
-        {data.home_logo_url && (
-          <img
-            src={data.home_logo_url}
-            alt={data.team_name}
-            className="w-[70px] h-[70px] object-contain"
-            data-testid="img-home-logo"
-          />
-        )}
-
         <span
-          className={`
-            text-[44px]
+          className="
+            text-[52px]
             font-black
-            tracking-[0.2em]
-            ${data.didWin ? 'text-[#90ff5c]' : 'text-[#ff5c5c]'}
-          `}
+            uppercase
+            tracking-[0.1em]
+            text-white
+          "
           style={{ fontFamily: "Impact, Arial Black, sans-serif" }}
-          data-testid="text-score"
+          data-testid="text-player-name"
         >
-          {data.home_score} - {data.away_score}
+          {data.player_name}
         </span>
-
-        {data.away_logo_url && (
-          <img
-            src={data.away_logo_url}
-            alt={data.opponent_name}
-            className="w-[70px] h-[70px] object-contain"
-            data-testid="img-away-logo"
-          />
-        )}
       </div>
 
       {/* === Main stat numbers row (MIN / PTS / REB / AST / STL / BLK) === */}
-      <div className="absolute left-1/2 -translate-x-1/2 top-[950px] flex text-center font-semibold">
+      <div className="absolute left-1/2 -translate-x-1/2 top-[870px] flex text-center font-semibold">
         <div className="w-[125px]" data-testid="text-minutes">
           <div className="text-[46px] text-white">{data.minutes}</div>
           <div className="text-[22px] uppercase tracking-[0.15em] text-[#e85a24]">MIN</div>
@@ -156,7 +138,7 @@ export function PlayerPerformanceCardV1({ data }: Props) {
       </div>
 
       {/* === Shooting / advanced stat numbers row (FG / 3PT / FT / TO / TS% / +/-) === */}
-      <div className="absolute left-1/2 -translate-x-1/2 top-[1070px] flex text-center font-semibold">
+      <div className="absolute left-1/2 -translate-x-1/2 top-[990px] flex text-center font-semibold">
         <div className="w-[115px]" data-testid="text-fg">
           <div className="text-[40px] text-white">{data.fg}</div>
           <div className="text-[18px] uppercase tracking-[0.15em] text-[#e85a24]">FG</div>
@@ -181,6 +163,46 @@ export function PlayerPerformanceCardV1({ data }: Props) {
           <div className={`text-[40px] ${data.plus_minus.startsWith('-') ? 'text-[#ff5c5c]' : 'text-[#41ff41]'}`}>{data.plus_minus}</div>
           <div className="text-[18px] uppercase tracking-[0.15em] text-[#e85a24]">+/-</div>
         </div>
+      </div>
+
+      {/* === Score + team logos at the bottom === */}
+      <div
+        className="
+          absolute
+          left-1/2 -translate-x-1/2 top-[1180px]
+          flex items-center justify-center gap-6
+        "
+      >
+        {data.home_logo_url && (
+          <img
+            src={data.home_logo_url}
+            alt={data.team_name}
+            className="w-[90px] h-[90px] object-contain"
+            data-testid="img-home-logo"
+          />
+        )}
+
+        <span
+          className={`
+            text-[56px]
+            font-black
+            tracking-[0.15em]
+            ${data.didWin ? 'text-[#90ff5c]' : 'text-[#ff5c5c]'}
+          `}
+          style={{ fontFamily: "Impact, Arial Black, sans-serif" }}
+          data-testid="text-score"
+        >
+          {data.home_score} - {data.away_score}
+        </span>
+
+        {data.away_logo_url && (
+          <img
+            src={data.away_logo_url}
+            alt={data.opponent_name}
+            className="w-[90px] h-[90px] object-contain"
+            data-testid="img-away-logo"
+          />
+        )}
       </div>
     </div>
   );
