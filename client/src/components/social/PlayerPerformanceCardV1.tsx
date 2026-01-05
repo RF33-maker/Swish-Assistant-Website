@@ -89,9 +89,9 @@ export function PlayerPerformanceCardV1({ data }: Props) {
       <div
         className="
           absolute
-          left-[410px] top-[730px]
+          left-[350px] top-[710px]
           origin-center
-          [transform:rotate(-11deg)]
+          [transform:rotate(-12deg)]
         "
       >
         <span
@@ -169,7 +169,7 @@ export function PlayerPerformanceCardV1({ data }: Props) {
       <div
         className="
           absolute
-          left-1/2 -translate-x-1/2 top-[1180px]
+          left-1/2 -translate-x-1/2 top-[1130px]
           flex items-center justify-center gap-6
         "
       >
