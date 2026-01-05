@@ -9,6 +9,7 @@ type PlayerOption = {
   id: string;
   name: string;
   team: string | null;
+  photo_path: string | null;
 };
 
 export function PlayerPhotoUploader() {
@@ -35,6 +36,7 @@ export function PlayerPhotoUploader() {
           id: row.id,
           name: row.full_name || row.name || "Unknown",
           team: row.team_name || row.team || null,
+          photo_path: row.photo_path || null,
         }));
         setPlayers(mapped);
         console.log("[PlayerPhotoUploader] Loaded players:", mapped.length, "Sample:", data[0]);
@@ -61,17 +63,31 @@ export function PlayerPhotoUploader() {
     setSelectedPlayer(player);
     setSearchQuery(player.name);
     
-    const { data: existingPhoto } = await supabase.storage
-      .from("player-photos")
-      .list(player.id);
+    console.log("[PlayerPhotoUploader] Selected player:", player.name, "photo_path:", player.photo_path);
     
-    if (existingPhoto && existingPhoto.length > 0) {
+    // If player has a photo_path stored, use it directly
+    if (player.photo_path) {
       const { data } = supabase.storage
         .from("player-photos")
-        .getPublicUrl(`${player.id}/${existingPhoto[0].name}`);
+        .getPublicUrl(player.photo_path);
+      console.log("[PlayerPhotoUploader] Using stored photo_path:", player.photo_path, "URL:", data.publicUrl);
       setCurrentPhotoUrl(data.publicUrl);
     } else {
-      setCurrentPhotoUrl(null);
+      // Fallback: check storage directly
+      const { data: existingPhoto } = await supabase.storage
+        .from("player-photos")
+        .list(player.id);
+      
+      console.log("[PlayerPhotoUploader] Checking storage for folder:", player.id, "Found:", existingPhoto);
+      
+      if (existingPhoto && existingPhoto.length > 0) {
+        const { data } = supabase.storage
+          .from("player-photos")
+          .getPublicUrl(`${player.id}/${existingPhoto[0].name}`);
+        setCurrentPhotoUrl(data.publicUrl);
+      } else {
+        setCurrentPhotoUrl(null);
+      }
     }
   };
 
@@ -237,7 +253,12 @@ export function PlayerPhotoUploader() {
                   alt="Current player"
                   className="h-32 w-32 rounded-lg object-cover border border-gray-200 dark:border-gray-600"
                   data-testid="img-current-photo"
+                  onError={(e) => {
+                    console.error("[PlayerPhotoUploader] Image failed to load:", currentPhotoUrl);
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
                 />
+                <p className="text-xs text-gray-400 break-all">{currentPhotoUrl}</p>
               </div>
             )}
 
