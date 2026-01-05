@@ -250,19 +250,17 @@ export default function SocialToolsPage() {
       getTeamLogoUrl(perf.opponent, leagueId),
     ]);
 
-    // Try to get player photo from players table
+    // Try to get player photo from storage (organized by player name)
     let playerPhotoUrl = "";
-    const { data: playerData } = await supabase
-      .from("players")
-      .select("photo_path")
-      .ilike("name", perf.player_name)
-      .limit(1)
-      .single();
+    const encodedName = encodeURIComponent(perf.player_name);
+    const { data: photoList } = await supabase.storage
+      .from("player-photos")
+      .list(encodedName);
     
-    if (playerData?.photo_path) {
+    if (photoList && photoList.length > 0) {
       const { data: photoData } = supabase.storage
         .from("player-photos")
-        .getPublicUrl(playerData.photo_path);
+        .getPublicUrl(`${encodedName}/${photoList[0].name}`);
       playerPhotoUrl = photoData.publicUrl;
     }
 

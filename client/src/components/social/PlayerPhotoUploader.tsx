@@ -1,19 +1,19 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Upload, User, Loader2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Upload, User, Loader2, Search } from "lucide-react";
 
-type Player = {
-  id: string;
+type PlayerOption = {
   name: string;
-  photo_path: string | null;
+  team: string;
 };
 
 export function PlayerPhotoUploader() {
-  const [players, setPlayers] = useState<Player[]>([]);
-  const [selectedPlayerId, setSelectedPlayerId] = useState("");
+  const [players, setPlayers] = useState<PlayerOption[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedPlayer, setSelectedPlayer] = useState<PlayerOption | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadingPlayers, setLoadingPlayers] = useState(true);
@@ -23,13 +23,20 @@ export function PlayerPhotoUploader() {
   useEffect(() => {
     const loadPlayers = async () => {
       setLoadingPlayers(true);
+      
       const { data, error } = await supabase
-        .from("players")
-        .select("id, name, photo_path")
+        .from("player_stats")
+        .select("name, team")
         .order("name", { ascending: true });
 
       if (!error && data) {
-        setPlayers(data as Player[]);
+        const uniquePlayers = new Map<string, PlayerOption>();
+        data.forEach((row: { name: string; team: string }) => {
+          if (row.name && !uniquePlayers.has(row.name)) {
+            uniquePlayers.set(row.name, { name: row.name, team: row.team });
+          }
+        });
+        setPlayers(Array.from(uniquePlayers.values()));
       }
       setLoadingPlayers(false);
     };
@@ -37,20 +44,36 @@ export function PlayerPhotoUploader() {
     loadPlayers();
   }, []);
 
-  useEffect(() => {
-    const player = players.find((p) => p.id === selectedPlayerId);
-    if (player?.photo_path) {
+  const filteredPlayers = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const query = searchQuery.toLowerCase();
+    return players.filter(
+      (p) =>
+        p.name.toLowerCase().includes(query) ||
+        p.team.toLowerCase().includes(query)
+    ).slice(0, 20);
+  }, [players, searchQuery]);
+
+  const handleSelectPlayer = async (player: PlayerOption) => {
+    setSelectedPlayer(player);
+    setSearchQuery(player.name);
+    
+    const { data: existingPhoto } = await supabase.storage
+      .from("player-photos")
+      .list(encodeURIComponent(player.name));
+    
+    if (existingPhoto && existingPhoto.length > 0) {
       const { data } = supabase.storage
         .from("player-photos")
-        .getPublicUrl(player.photo_path);
+        .getPublicUrl(`${encodeURIComponent(player.name)}/${existingPhoto[0].name}`);
       setCurrentPhotoUrl(data.publicUrl);
     } else {
       setCurrentPhotoUrl(null);
     }
-  }, [selectedPlayerId, players]);
+  };
 
   const handleUpload = async () => {
-    if (!selectedPlayerId || !file) {
+    if (!selectedPlayer || !file) {
       setMessage({ type: "error", text: "Select a player and a file first." });
       return;
     }
@@ -60,7 +83,7 @@ export function PlayerPhotoUploader() {
 
     try {
       const ext = file.name.split(".").pop() || "jpg";
-      const filePath = `${selectedPlayerId}/primary.${ext}`;
+      const filePath = `${encodeURIComponent(selectedPlayer.name)}/primary.${ext}`;
 
       const { error: uploadError } = await supabase.storage
         .from("player-photos")
@@ -68,25 +91,12 @@ export function PlayerPhotoUploader() {
 
       if (uploadError) throw uploadError;
 
-      const { error: updateError } = await supabase
-        .from("players")
-        .update({ photo_path: filePath })
-        .eq("id", selectedPlayerId);
-
-      if (updateError) throw updateError;
-
-      setMessage({ type: "success", text: "Photo uploaded and linked!" });
+      setMessage({ type: "success", text: "Photo uploaded successfully!" });
 
       const { data } = supabase.storage
         .from("player-photos")
         .getPublicUrl(filePath);
       setCurrentPhotoUrl(data.publicUrl);
-
-      setPlayers((prev) =>
-        prev.map((p) =>
-          p.id === selectedPlayerId ? { ...p, photo_path: filePath } : p
-        )
-      );
     } catch (err: any) {
       console.error(err);
       setMessage({ type: "error", text: `Upload failed: ${err.message ?? "unknown error"}` });
@@ -112,23 +122,52 @@ export function PlayerPhotoUploader() {
           <>
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Select Player
+                Search Player
               </label>
-              <Select value={selectedPlayerId} onValueChange={setSelectedPlayerId}>
-                <SelectTrigger 
-                  className="w-full border-gray-200 dark:border-gray-600"
-                  data-testid="select-player-photo"
-                >
-                  <SelectValue placeholder="Choose a player..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {players.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name}
-                    </SelectItem>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  type="text"
+                  placeholder="Type player name..."
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    if (selectedPlayer && e.target.value !== selectedPlayer.name) {
+                      setSelectedPlayer(null);
+                      setCurrentPhotoUrl(null);
+                    }
+                  }}
+                  className="pl-10 border-gray-200 dark:border-gray-600"
+                  data-testid="input-player-search"
+                />
+              </div>
+              
+              {searchQuery && !selectedPlayer && filteredPlayers.length > 0 && (
+                <div className="border border-gray-200 dark:border-gray-600 rounded-md max-h-48 overflow-y-auto bg-white dark:bg-gray-800">
+                  {filteredPlayers.map((p, idx) => (
+                    <button
+                      key={`${p.name}-${idx}`}
+                      onClick={() => handleSelectPlayer(p)}
+                      className="w-full text-left px-3 py-2 hover:bg-orange-50 dark:hover:bg-orange-900/20 border-b border-gray-100 dark:border-gray-700 last:border-b-0"
+                      data-testid={`option-player-${idx}`}
+                    >
+                      <div className="font-medium text-gray-900 dark:text-white">{p.name}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">{p.team}</div>
+                    </button>
                   ))}
-                </SelectContent>
-              </Select>
+                </div>
+              )}
+              
+              {searchQuery && !selectedPlayer && filteredPlayers.length === 0 && (
+                <p className="text-sm text-gray-500 dark:text-gray-400">No players found</p>
+              )}
+              
+              {selectedPlayer && (
+                <div className="bg-orange-50 dark:bg-orange-900/20 rounded-md px-3 py-2">
+                  <div className="font-medium text-orange-900 dark:text-orange-300">{selectedPlayer.name}</div>
+                  <div className="text-xs text-orange-700 dark:text-orange-400">{selectedPlayer.team}</div>
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -153,7 +192,7 @@ export function PlayerPhotoUploader() {
 
             <Button
               onClick={handleUpload}
-              disabled={loading || !selectedPlayerId || !file}
+              disabled={loading || !selectedPlayer || !file}
               className="w-full bg-orange-600 hover:bg-orange-700 text-white"
               data-testid="button-upload-photo"
             >
