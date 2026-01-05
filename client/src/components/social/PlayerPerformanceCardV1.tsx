@@ -49,25 +49,25 @@ export function PlayerPerformanceCardV1({ data }: Props) {
       >
         {/* Top Number */}
         <span
-          className="absolute right-[350px] top-[70px] text-[170px] leading-[0.9] font-black italic text-[#e85a24]"
+          className="absolute right-[310px] top-[70px] text-[170px] leading-[0.9] font-black italic text-[#e85a24]"
           data-testid="text-points-top"
         >
           {data.points}
         </span>
         {/* Top Label - Points */}
-        <span className="absolute right-[210px] top-[180px] text-[28px] uppercase tracking-[0.2em] text-white">
+        <span className="absolute right-[180px] top-[180px] text-[28px] uppercase tracking-[0.2em] text-white">
           Points
         </span>
 
         {/* Middle Number */}
         <span
-          className="absolute right-[290px] top-[260px] text-[170px] leading-[0.9] font-black italic text-[#e85a24]"
+          className="absolute right-[270px] top-[260px] text-[170px] leading-[0.9] font-black italic text-[#e85a24]"
           data-testid="text-points-middle"
         >
           {data.rebounds}
         </span>
         {/* Middle Label - Rebounds */}
-        <span className="absolute right-[110px] top-[370px] text-[28px] uppercase tracking-[0.2em] text-white">
+        <span className="absolute right-[100px] top-[370px] text-[28px] uppercase tracking-[0.2em] text-white">
           Rebounds
         </span>
 

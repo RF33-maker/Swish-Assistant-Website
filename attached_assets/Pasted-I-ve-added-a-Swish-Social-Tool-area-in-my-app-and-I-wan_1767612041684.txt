@@ -1,0 +1,171 @@
+I’ve added a “Swish Social Tool” area in my app and I want to extend it so I can upload and assign player photos there.
+
+Context:
+- Tech: React + TypeScript + Tailwind, using Supabase as the backend.
+- I have a `players` table in Supabase with at least: `id`, `name`, `team`, etc.
+- I am adding a Supabase Storage bucket called `player-photos`.
+- In the `players` table I want to link each player to a photo stored in that bucket.
+
+Please do the following inside the existing Swish Social Tool code (wherever that page/component currently lives):
+
+1. **DB field assumption**
+   - Assume the `players` table now has a `photo_path text` column that will store the storage path, e.g. `player_id/primary.jpg`.
+   - Don’t try to create the column via code, but code as if it exists.
+
+2. **Create a React component inside the Swish Social Tool for assigning player photos**
+   - Put it in a sensible place within the Swish Social Tool file hierarchy (for example `src/components/social/PlayerPhotoUploader.tsx` or directly inside the Swish Social Tool component if that’s simpler).
+   - The UI should:
+     - Load all players from Supabase (`players` table: `id`, `name`, `photo_path`).
+     - Show a dropdown to pick a player by name.
+     - Show a file input to choose an image (`accept="image/*"`).
+     - Have a button: “Upload & Link”.
+     - On upload:
+       1. Upload the file to the `player-photos` bucket at a path based on the player id, e.g. `${playerId}/primary.<ext>` (use `upsert: true` so it overwrites if already present).
+       2. Update that player’s `photo_path` in the `players` table with the path you used.
+       3. Show a short success or error message.
+     - Show a small “Current photo” preview if `photo_path` is already set for the selected player (derive a public URL from Supabase Storage).
+
+   Use this as a starting point for the component (adjust imports and paths to match the project):
+
+   ```tsx
+   import React from "react";
+   import { supabase } from "@/supabaseClient"; // adjust path
+
+   type Player = {
+     id: string;
+     name: string;
+     photo_path: string | null;
+   };
+
+   export const PlayerPhotoUploader: React.FC = () => {
+     const [players, setPlayers] = React.useState<Player[]>([]);
+     const [selectedPlayerId, setSelectedPlayerId] = React.useState("");
+     const [file, setFile] = React.useState<File | null>(null);
+     const [loading, setLoading] = React.useState(false);
+     const [message, setMessage] = React.useState<string | null>(null);
+     const [currentPhotoUrl, setCurrentPhotoUrl] = React.useState<string | null>(null);
+
+     React.useEffect(() => {
+       const loadPlayers = async () => {
+         const { data, error } = await supabase
+           .from("players")
+           .select("id, name, photo_path")
+           .order("name", { ascending: true });
+
+         if (!error && data) {
+           setPlayers(data as Player[]);
+         }
+       };
+
+       loadPlayers();
+     }, []);
+
+     // whenever we change player, derive their current photo URL (if any)
+     React.useEffect(() => {
+       const player = players.find((p) => p.id === selectedPlayerId);
+       if (player?.photo_path) {
+         const { data } = supabase.storage
+           .from("player-photos")
+           .getPublicUrl(player.photo_path);
+         setCurrentPhotoUrl(data.publicUrl);
+       } else {
+         setCurrentPhotoUrl(null);
+       }
+     }, [selectedPlayerId, players]);
+
+     const handleUpload = async () => {
+       if (!selectedPlayerId || !file) {
+         setMessage("Select a player and a file first.");
+         return;
+       }
+
+       setLoading(true);
+       setMessage(null);
+
+       try {
+         const ext = file.name.split(".").pop() || "jpg";
+         const filePath = `${selectedPlayerId}/primary.${ext}`;
+
+         // 1) Upload to storage
+         const { error: uploadError } = await supabase.storage
+           .from("player-photos")
+           .upload(filePath, file, { upsert: true });
+
+         if (uploadError) throw uploadError;
+
+         // 2) Update players table
+         const { error: updateError } = await supabase
+           .from("players")
+           .update({ photo_path: filePath })
+           .eq("id", selectedPlayerId);
+
+         if (updateError) throw updateError;
+
+         setMessage("Photo uploaded and linked to player ✅");
+
+         // refresh current photo preview
+         const { data } = supabase.storage
+           .from("player-photos")
+           .getPublicUrl(filePath);
+         setCurrentPhotoUrl(data.publicUrl);
+       } catch (err: any) {
+         console.error(err);
+         setMessage(`Upload failed: ${err.message ?? "unknown error"}`);
+       } finally {
+         setLoading(false);
+       }
+     };
+
+     return (
+       <div className="space-y-4 p-4 rounded-xl border border-slate-800 bg-slate-950">
+         <h2 className="text-lg font-semibold">Assign Player Photo</h2>
+
+         <div className="space-y-2">
+           <label className="block text-sm text-slate-300">Player</label>
+           <select
+             value={selectedPlayerId}
+             onChange={(e) => setSelectedPlayerId(e.target.value)}
+             className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-sm"
+           >
+             <option value="">Select player…</option>
+             {players.map((p) => (
+               <option key={p.id} value={p.id}>
+                 {p.name}
+               </option>
+             ))}
+           </select>
+         </div>
+
+         <div className="space-y-2">
+           <label className="block text-sm text-slate-300">Photo</label>
+           <input
+             type="file"
+             accept="image/*"
+             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+             className="text-sm"
+           />
+         </div>
+
+         <button
+           onClick={handleUpload}
+           disabled={loading}
+           className="rounded-md bg-orange-500 px-4 py-2 text-sm font-semibold text-black disabled:opacity-60"
+         >
+           {loading ? "Uploading..." : "Upload & Link"}
+         </button>
+
+         {currentPhotoUrl && (
+           <div className="space-y-2">
+             <p className="text-sm text-slate-300">Current photo:</p>
+             <img
+               src={currentPhotoUrl}
+               alt="Current player"
+               className="h-32 w-32 rounded-lg object-cover border border-slate-700"
+             />
+           </div>
+         )}
+
+         {message && <p className="text-sm text-slate-200">{message}</p>}
+       </div>
+     );
+   };
