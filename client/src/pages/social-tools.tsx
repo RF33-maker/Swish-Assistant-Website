@@ -129,13 +129,27 @@ export default function SocialToolsPage() {
   }, [selectedLeague, timeFilter]);
 
   const fetchLeagues = async () => {
-    const { data, error } = await supabase
+    // Get unique league IDs from player_stats
+    const { data: statsData } = await supabase
+      .from("player_stats")
+      .select("league_id")
+      .not("league_id", "is", null);
+    
+    if (!statsData) return;
+    
+    const uniqueLeagueIds = Array.from(new Set(statsData.map((s: any) => s.league_id).filter(Boolean)));
+    
+    if (uniqueLeagueIds.length === 0) return;
+    
+    // Fetch league details for these IDs
+    const { data: leaguesData, error } = await supabase
       .from("leagues")
       .select("id, name, slug")
+      .in("id", uniqueLeagueIds)
       .order("name");
     
-    if (!error && data) {
-      setLeagues(data);
+    if (!error && leaguesData) {
+      setLeagues(leaguesData);
     }
   };
 
