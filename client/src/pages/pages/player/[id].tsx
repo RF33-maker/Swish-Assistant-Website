@@ -951,11 +951,28 @@ export default function PlayerStatsPage() {
                 <div className="flex flex-col lg:flex-row">
                   {/* Left Side - Player Info + Season Averages */}
                   <div className="flex-1 p-4 md:p-6 lg:pr-0 z-10">
-                    {/* Player Name and Team */}
+                    {/* Player Name and Team with Logo */}
                     <div className="mb-4">
-                      <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-orange-900 dark:text-white mb-2 break-words" data-testid="text-player-name">
-                        {playerInfo.name}
-                      </h1>
+                      <div className="flex items-start gap-4 mb-3">
+                        {/* Team Logo - Left Side */}
+                        {playerInfo.team && playerInfo.leagueId && (
+                          <TeamLogo 
+                            teamName={playerInfo.team} 
+                            leagueId={playerInfo.leagueId}
+                            size="xl"
+                            className="flex-shrink-0"
+                          />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-orange-900 dark:text-white mb-1 break-words" data-testid="text-player-name">
+                            {playerInfo.name}
+                          </h1>
+                          <p className="text-orange-700 dark:text-orange-400 flex items-center gap-2 text-base md:text-lg" data-testid="text-player-team">
+                            <Trophy className="h-5 w-5 flex-shrink-0" />
+                            <span className="break-words font-medium">{playerInfo.team}</span>
+                          </p>
+                        </div>
+                      </div>
                       
                       {/* Name Variations Indicator */}
                       {nameVariationsWithLeagues.length > 0 && (
@@ -972,10 +989,6 @@ export default function PlayerStatsPage() {
                         </div>
                       )}
                       
-                      <p className="text-orange-700 dark:text-orange-400 flex items-center gap-2 text-base md:text-lg mb-2" data-testid="text-player-team">
-                        <Trophy className="h-5 w-5 flex-shrink-0" />
-                        <span className="break-words font-medium">{playerInfo.team}</span>
-                      </p>
                       <div className="flex flex-wrap items-center gap-3 text-xs md:text-sm text-orange-600 dark:text-orange-500">
                         <span className="flex items-center gap-1 whitespace-nowrap">
                           <div className="h-2 w-2 bg-green-400 rounded-full animate-pulse"></div>
@@ -990,7 +1003,12 @@ export default function PlayerStatsPage() {
                       </div>
                     </div>
                     
-                    {/* Integrated Season Averages */}
+                    {/* Placeholder for future content (bio, etc.) */}
+                    <div className="mt-4 pt-4 border-t border-orange-100 dark:border-neutral-700">
+                      {/* Future content area - can be used for bio, highlights, etc. */}
+                    </div>
+                    
+                    {/* Season Averages */}
                     {filteredSeasonAverages && (
                       <div className="mt-4 pt-4 border-t border-orange-100 dark:border-neutral-700">
                         <div className="flex items-center gap-2 mb-3">
@@ -1060,8 +1078,8 @@ export default function PlayerStatsPage() {
                     )}
                   </div>
                   
-                  {/* Right Side - Player Photo with Fade + Team Logo */}
-                  <div className="relative lg:w-80 xl:w-96 h-48 lg:h-auto min-h-[200px] lg:min-h-[280px]">
+                  {/* Right Side - Player Photo with Fade (larger) */}
+                  <div className="relative lg:w-96 xl:w-[28rem] h-64 lg:h-auto min-h-[280px] lg:min-h-[400px]">
                     {/* Player Photo */}
                     {playerInfo.playerId && playerInfo.photoPath ? (
                       <>
@@ -1074,30 +1092,17 @@ export default function PlayerStatsPage() {
                           }}
                         />
                         {/* Gradient fade from left */}
-                        <div className="absolute inset-0 bg-gradient-to-r from-white via-white/80 to-transparent dark:from-neutral-900 dark:via-neutral-900/80 lg:block hidden" />
+                        <div className="absolute inset-0 bg-gradient-to-r from-white via-white/60 to-transparent dark:from-neutral-900 dark:via-neutral-900/60 lg:block hidden" />
                         {/* Gradient fade from top on mobile */}
-                        <div className="absolute inset-0 bg-gradient-to-b from-white via-white/60 to-transparent dark:from-neutral-900 dark:via-neutral-900/60 lg:hidden" />
+                        <div className="absolute inset-0 bg-gradient-to-b from-white via-white/40 to-transparent dark:from-neutral-900 dark:via-neutral-900/40 lg:hidden" />
                       </>
                     ) : (
                       <div className="absolute inset-0 bg-gradient-to-br from-orange-100 to-orange-200 dark:from-neutral-800 dark:to-neutral-700 flex items-center justify-center">
-                        <User className="w-20 h-20 text-orange-300 dark:text-neutral-600" />
+                        <User className="w-24 h-24 text-orange-300 dark:text-neutral-600" />
                         {/* Gradient fade from left */}
-                        <div className="absolute inset-0 bg-gradient-to-r from-white via-white/80 to-transparent dark:from-neutral-900 dark:via-neutral-900/80 lg:block hidden" />
+                        <div className="absolute inset-0 bg-gradient-to-r from-white via-white/60 to-transparent dark:from-neutral-900 dark:via-neutral-900/60 lg:block hidden" />
                         {/* Gradient fade from top on mobile */}
-                        <div className="absolute inset-0 bg-gradient-to-b from-white via-white/60 to-transparent dark:from-neutral-900 dark:via-neutral-900/60 lg:hidden" />
-                      </div>
-                    )}
-                    
-                    {/* Team Logo - Far Right Corner */}
-                    {playerInfo.team && playerInfo.leagueId && (
-                      <div className="absolute top-3 right-3 z-20">
-                        <div className="bg-white/90 dark:bg-neutral-800/90 backdrop-blur-sm rounded-full p-1 shadow-lg">
-                          <TeamLogo 
-                            teamName={playerInfo.team} 
-                            leagueId={playerInfo.leagueId}
-                            size="lg"
-                          />
-                        </div>
+                        <div className="absolute inset-0 bg-gradient-to-b from-white via-white/40 to-transparent dark:from-neutral-900 dark:via-neutral-900/40 lg:hidden" />
                       </div>
                     )}
                   </div>
@@ -1106,35 +1111,6 @@ export default function PlayerStatsPage() {
             </Card>
           </div>
         )}
-
-        {/* Player Bio - AI Generated */}
-        <Card className="mb-6 md:mb-8 border-orange-200 dark:border-orange-500/30 shadow-md animate-slide-in-up bg-gradient-to-br from-white to-orange-50 dark:from-neutral-900 dark:to-neutral-800">
-          <CardHeader className="bg-white dark:bg-neutral-900 text-orange-900 dark:text-white rounded-t-lg border-b border-orange-200 dark:border-neutral-700">
-            <CardTitle className="flex items-center gap-2">
-              {analysisLoading ? (
-                <Brain className="h-5 w-5 animate-pulse text-orange-600 dark:text-orange-400" />
-              ) : (
-                <Sparkles className="h-5 w-5 text-orange-600 dark:text-orange-400 animate-float" />
-              )}
-              Player Bio
-            </CardTitle>
-            <CardDescription className="text-orange-700 dark:text-orange-400">
-              {aiAnalysis ? "AI-powered analysis of playing style and strengths" : "AI generation coming soon"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-4 md:p-6">
-            {analysisLoading ? (
-              <div className="flex items-center gap-3 text-orange-700 dark:text-orange-400">
-                <Brain className="h-5 w-5 animate-pulse" />
-                <span className="animate-pulse">Generating player bio...</span>
-              </div>
-            ) : (
-              <div className="text-sm md:text-base text-orange-600 dark:text-orange-400 leading-relaxed italic">
-                Coming soon
-              </div>
-            )}
-          </CardContent>
-        </Card>
 
         {/* Player Leagues */}
         {playerLeagues.length > 0 && (
