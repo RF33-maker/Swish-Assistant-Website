@@ -3885,7 +3885,7 @@ export default function LeaguePage() {
                           <tr
                             key={`team-stats-${team.teamName}-${index}`}
                             className="hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors cursor-pointer group"
-                            onClick={() => navigate(`/team/${encodeURIComponent(team.teamName)}`)}
+                            onClick={() => navigate(`/league/${slug}/team/${encodeURIComponent(team.teamName)}`)}
                             data-testid={`row-team-${team.teamName}`}
                           >
                             <td className="py-2 md:py-3 px-2 md:px-3 sticky left-0 bg-white dark:bg-neutral-900 group-hover:bg-orange-50 dark:group-hover:bg-neutral-800 z-10 transition-colors">
@@ -3951,7 +3951,7 @@ export default function LeaguePage() {
                 {standings.length > 0 ? (
                   <div className="divide-y divide-gray-200 dark:divide-neutral-700">
                     {standings.map((teamData, index) => (
-                      <Link key={`team-${teamData.team}-${index}`} to={`/team/${encodeURIComponent(teamData.team)}`}>
+                      <Link key={`team-${teamData.team}-${index}`} to={`/league/${slug}/team/${encodeURIComponent(teamData.team)}`}>
                         <div className="p-3 md:p-4 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors flex items-center justify-between group cursor-pointer">
                           <div className="flex items-center gap-2 md:gap-4">
                             <TeamLogo teamName={teamData.team} leagueId={league?.league_id || ""} size="md" />
@@ -4519,6 +4519,7 @@ export default function LeaguePage() {
               <LeagueChatbot 
                 leagueId={league.league_id} 
                 leagueName={league.name || 'League'} 
+                leagueSlug={slug}
               />
             )}
 

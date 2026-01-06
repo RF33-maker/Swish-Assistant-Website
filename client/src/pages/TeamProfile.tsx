@@ -73,7 +73,7 @@ interface Suggestion {
 }
 
 export default function TeamProfile() {
-  const { teamName } = useParams();
+  const { teamName, leagueSlug } = useParams();
   const [location, navigate] = useLocation();
   const [team, setTeam] = useState<Team | null>(null);
   const [playerStats, setPlayerStats] = useState<any[]>([]);
@@ -86,6 +86,7 @@ export default function TeamProfile() {
   const { user } = useAuth();
   const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
   const [isGameModalOpen, setIsGameModalOpen] = useState(false);
+  const [currentLeagueId, setCurrentLeagueId] = useState<string | null>(null);
 
   // Extract team branding colors
   const { colors: teamBranding, primaryColor, secondaryColor } = useTeamBranding({
@@ -153,38 +154,72 @@ export default function TeamProfile() {
         const decodedTeamName = decodeURIComponent(teamName);
         const normalizedTeamName = normalizeTeamName(decodedTeamName);
         
-        console.log("🏀 Looking for team:", decodedTeamName, "→ normalized:", normalizedTeamName);
+        console.log("🏀 Looking for team:", decodedTeamName, "→ normalized:", normalizedTeamName, "leagueSlug:", leagueSlug);
+        
+        // If leagueSlug is provided, fetch the league_id first
+        let leagueId: string | null = null;
+        if (leagueSlug) {
+          const { data: leagueData } = await supabase
+            .from("leagues")
+            .select("league_id")
+            .eq("slug", leagueSlug)
+            .single();
+          
+          if (leagueData) {
+            leagueId = leagueData.league_id;
+            setCurrentLeagueId(leagueId);
+            console.log("📋 Found league_id:", leagueId, "for slug:", leagueSlug);
+          }
+        }
         
         // Fetch all stats with team names that match when normalized
-        const { data: allTeamStats, error: allStatsError } = await supabase
+        let statsQuery = supabase
           .from("player_stats")
           .select("*, players:player_id(slug)")
           .ilike("team_name", `%${normalizedTeamName}%`);
+        
+        // Filter by league_id if available
+        if (leagueId) {
+          statsQuery = statsQuery.eq("league_id", leagueId);
+        }
+        
+        const { data: allTeamStats, error: allStatsError } = await statsQuery;
         
         // Filter to exact normalized match
         const allStats = (allTeamStats || []).filter(stat => 
           normalizeTeamName(stat.team_name || stat.team || '') === normalizedTeamName
         );
         
-        console.log("📊 Found", allStats?.length, "player stats for", normalizedTeamName);
+        console.log("📊 Found", allStats?.length, "player stats for", normalizedTeamName, leagueId ? `(filtered by league ${leagueId})` : "(all leagues)");
+        
+        // Build teams query with optional league filter
+        let teamsQuery = supabase
+          .from("teams")
+          .select("description, league_id")
+          .eq("name", normalizedTeamName);
+        
+        if (leagueId) {
+          teamsQuery = teamsQuery.eq("league_id", leagueId);
+        }
+        
+        // Build game schedule query with optional league filter
+        let scheduleQuery = supabase
+          .from("game_schedule")
+          .select("*")
+          .gte("matchtime", new Date().toISOString())
+          .order("matchtime", { ascending: true });
+        
+        if (leagueId) {
+          scheduleQuery = scheduleQuery.eq("league_id", leagueId);
+        }
         
         // Fetch all data in parallel
         const [
           { data: teamData },
           { data: upcomingGamesData, error: scheduleError }
         ] = await Promise.all([
-          // Get team description
-          supabase
-            .from("teams")
-            .select("description")
-            .eq("name", normalizedTeamName)
-            .single(),
-          // Get upcoming games - search for games where normalized team names match
-          supabase
-            .from("game_schedule")
-            .select("*")
-            .gte("matchtime", new Date().toISOString())
-            .order("matchtime", { ascending: true })
+          teamsQuery.single(),
+          scheduleQuery
         ]);
 
         if (allStatsError) {
@@ -540,7 +575,7 @@ export default function TeamProfile() {
     };
 
     fetchTeamData();
-  }, [teamName]);
+  }, [teamName, leagueSlug]);
 
   if (loading) {
     return (
@@ -595,7 +630,9 @@ export default function TeamProfile() {
         <meta property="og:type" content="website" />
         <meta
           property="og:url"
-          content={`https://www.swishassistant.com/team/${encodeURIComponent(team.name.toLowerCase().replace(/\s+/g, '-'))}`}
+          content={leagueSlug 
+            ? `https://www.swishassistant.com/league/${leagueSlug}/team/${encodeURIComponent(team.name.toLowerCase().replace(/\s+/g, '-'))}`
+            : `https://www.swishassistant.com/team/${encodeURIComponent(team.name.toLowerCase().replace(/\s+/g, '-'))}`}
         />
         <meta
           property="og:image"
@@ -610,7 +647,9 @@ export default function TeamProfile() {
             `View ${team.name} team profile, roster, stats, and recent games${team.league ? ` in ${team.league.name}` : ''} on Swish Assistant.`
           }
         />
-        <link rel="canonical" href={`https://www.swishassistant.com/team/${encodeURIComponent(team.name.toLowerCase().replace(/\s+/g, '-'))}`} />
+        <link rel="canonical" href={leagueSlug 
+          ? `https://www.swishassistant.com/league/${leagueSlug}/team/${encodeURIComponent(team.name.toLowerCase().replace(/\s+/g, '-'))}`
+          : `https://www.swishassistant.com/team/${encodeURIComponent(team.name.toLowerCase().replace(/\s+/g, '-'))}`} />
       </Helmet>
       
       <div className="min-h-screen bg-[#fffaf1] dark:bg-neutral-950">

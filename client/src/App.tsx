@@ -53,6 +53,7 @@ function Router() {
       <Route path="/player/:slug" component={PlayerStatsPage} />
       <Route path="/teams" component={TeamsList} />
       <Route path="/team/:teamName" component={TeamProfile} />
+      <Route path="/league/:leagueSlug/team/:teamName" component={TeamProfile} />
       <Route path="/reset-password" component={ResetPassword} />
       <Route path="/privacy" component={PrivacyPolicyPage} />
       <Route path="/terms" component={TermsOfServicePage} />
@@ -65,7 +66,6 @@ function Router() {
       <ProtectedRoute path="/league-management" component={LeagueManagement} />
       <ProtectedRoute path="/league-admin/:slug" component={LeagueAdmin} />
       <ProtectedRoute path="/teams/:slug" component={TeamsList} />
-      <ProtectedRoute path="/team/:teamName/:slug" component={TeamProfile} />
       <ProtectedRoute path="/league-teams/:slug" component={LeagueTeams} />
       <ProtectedRoute path="/team-logos/:slug" component={TeamLogoManager} />
       <ProtectedRoute path="/profile" component={ProfilePage} />
