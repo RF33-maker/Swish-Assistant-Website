@@ -56,7 +56,8 @@ The application is structured into a React frontend and integrates with external
   - Requires `description` column (text, nullable) in both `leagues` and `teams` tables in Supabase
 - **URL Structure**: 
   - Leagues: `/league/[slug]` (e.g., `/league/british-championship-basketball-20252026`)
-  - Teams: `/team/[slug]` (e.g., `/team/reading-rockets`)
+  - Teams: `/league/[leagueSlug]/team/[teamName]` (e.g., `/league/super-league-basketball-20252026/team/caledonia-gladiators`) - league-aware routing to separate men's/women's teams with same names
+  - Teams (legacy): `/team/[teamName]` - backward compatible, shows first matching team
   - Players: `/player/[slug]` (e.g., `/player/john-doe`) - includes backward compatibility for UUID-based URLs
 
 ## External Dependencies
