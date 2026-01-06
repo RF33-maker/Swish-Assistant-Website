@@ -26,23 +26,61 @@ export function PlayerPhotoUploader() {
     const loadPlayers = async () => {
       setLoadingPlayers(true);
       
-      const { data, error } = await supabase
-        .from("players")
-        .select("*")
-        .order("full_name", { ascending: true });
-
-      if (!error && data) {
-        const mapped = data.map((row: any) => ({
-          id: row.id,
-          name: row.full_name || row.name || "Unknown",
-          team: row.team_name || row.team || null,
-          photo_path: row.photo_path || null,
-        }));
-        setPlayers(mapped);
-        console.log("[PlayerPhotoUploader] Loaded players:", mapped.length, "Sample:", data[0]);
-      } else {
-        console.error("Error loading players:", error);
+      // Fetch all players using pagination to bypass the 1000 row limit
+      let allPlayers: any[] = [];
+      let page = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+      
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from("players")
+          .select("*")
+          .order("full_name", { ascending: true })
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+        
+        if (error) {
+          console.error("Error loading players:", error);
+          break;
+        }
+        
+        if (data && data.length > 0) {
+          allPlayers = [...allPlayers, ...data];
+          hasMore = data.length === pageSize;
+          page++;
+        } else {
+          hasMore = false;
+        }
       }
+
+      // Deduplicate by full_name - keep the first occurrence (which has photo_path if any)
+      const seenNames = new Map<string, any>();
+      allPlayers.forEach((row: any) => {
+        const name = (row.full_name || row.name || "").toLowerCase().trim();
+        if (name && !seenNames.has(name)) {
+          seenNames.set(name, row);
+        } else if (name && seenNames.has(name)) {
+          // If existing entry has no photo but this one does, use this one
+          const existing = seenNames.get(name);
+          if (!existing.photo_path && row.photo_path) {
+            seenNames.set(name, row);
+          }
+        }
+      });
+      
+      const uniquePlayers = Array.from(seenNames.values());
+      const mapped = uniquePlayers.map((row: any) => ({
+        id: row.id,
+        name: row.full_name || row.name || "Unknown",
+        team: row.team_name || row.team || null,
+        photo_path: row.photo_path || null,
+      }));
+      
+      // Sort by name
+      mapped.sort((a, b) => a.name.localeCompare(b.name));
+      
+      setPlayers(mapped);
+      console.log("[PlayerPhotoUploader] Loaded players:", mapped.length, "(deduplicated from", allPlayers.length, "total)", "Sample:", allPlayers[0]);
       setLoadingPlayers(false);
     };
 
