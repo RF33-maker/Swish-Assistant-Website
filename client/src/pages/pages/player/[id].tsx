@@ -265,19 +265,39 @@ export default function PlayerStatsPage() {
             const searchName = slugToName(playerSlugOrId);
             console.log('📋 Searching for name:', searchName);
             
-            const { data: allPlayers, error: allPlayersError } = await supabase
+            // First try a direct ilike search for efficiency
+            const { data: directMatch, error: directError } = await supabase
               .from('players')
-              .select('*');
+              .select('*')
+              .ilike('full_name', `%${searchName}%`)
+              .limit(10);
             
-            if (allPlayers && !allPlayersError) {
-              // Find first player whose name fuzzy matches
-              const matchedPlayer = allPlayers.find(player => 
+            if (directMatch && directMatch.length > 0 && !directError) {
+              // Find best match using fuzzy matching
+              const matchedPlayer = directMatch.find(player => 
                 namesMatch(player.full_name, searchName)
-              );
+              ) || directMatch[0];
               
-              if (matchedPlayer) {
-                console.log('✅ Found player via name matching:', matchedPlayer.full_name);
-                initialPlayer = matchedPlayer;
+              console.log('✅ Found player via direct name search:', matchedPlayer.full_name);
+              initialPlayer = matchedPlayer;
+            } else {
+              // Fallback: fetch all players with higher limit for fuzzy matching
+              console.log('📋 Direct search failed, trying full fuzzy search...');
+              const { data: allPlayers, error: allPlayersError } = await supabase
+                .from('players')
+                .select('*')
+                .limit(10000);
+              
+              if (allPlayers && !allPlayersError) {
+                // Find first player whose name fuzzy matches
+                const matchedPlayer = allPlayers.find(player => 
+                  namesMatch(player.full_name, searchName)
+                );
+                
+                if (matchedPlayer) {
+                  console.log('✅ Found player via fuzzy matching:', matchedPlayer.full_name);
+                  initialPlayer = matchedPlayer;
+                }
               }
             }
           }
