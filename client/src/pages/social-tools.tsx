@@ -1,11 +1,12 @@
 import { useLocation } from "wouter";
-import { ArrowLeft, Download, Trophy, Loader2, Filter } from "lucide-react";
+import { ArrowLeft, Download, Trophy, Loader2, Filter, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { PlayerPerformanceCardV1 } from "@/components/social/PlayerPerformanceCardV1";
 import { PlayerPhotoUploader } from "@/components/social/PlayerPhotoUploader";
 import type { PlayerPerformanceV1Data } from "@/types/socialCards";
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useMemo } from "react";
 import html2canvas from "html2canvas";
 import { supabase } from "@/lib/supabase";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -119,6 +120,19 @@ export default function SocialToolsPage() {
   const [leagues, setLeagues] = useState<League[]>([]);
   const [selectedLeague, setSelectedLeague] = useState<string>("all");
   const [timeFilter, setTimeFilter] = useState<string>("all-time");
+  const [performanceSearch, setPerformanceSearch] = useState<string>("");
+
+  // Filter performances by search query
+  const filteredPerformances = useMemo(() => {
+    if (!performanceSearch.trim()) return performances;
+    const query = performanceSearch.toLowerCase();
+    return performances.filter(
+      (p) =>
+        p.player_name.toLowerCase().includes(query) ||
+        p.team.toLowerCase().includes(query) ||
+        p.opponent.toLowerCase().includes(query)
+    );
+  }, [performances, performanceSearch]);
 
   useEffect(() => {
     fetchLeagues();
@@ -457,14 +471,31 @@ export default function SocialToolsPage() {
                 </div>
               </CardHeader>
               <CardContent>
+                {/* Search bar for performances */}
+                <div className="relative mb-4">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input
+                    type="text"
+                    placeholder="Search by player, team, or opponent..."
+                    value={performanceSearch}
+                    onChange={(e) => setPerformanceSearch(e.target.value)}
+                    className="pl-10 border-gray-200 dark:border-gray-600"
+                    data-testid="input-performance-search"
+                  />
+                </div>
                 {loading ? (
                   <div className="flex items-center justify-center py-12">
                     <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
                   </div>
+                ) : filteredPerformances.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-gray-500 dark:text-gray-400">
+                    <Search className="h-8 w-8 mb-2 opacity-50" />
+                    <p>No performances found matching "{performanceSearch}"</p>
+                  </div>
                 ) : (
-                  <ScrollArea className="h-[600px]">
+                  <ScrollArea className="h-[550px]">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pr-4">
-                      {performances.map((perf) => (
+                      {filteredPerformances.map((perf) => (
                         <div
                           key={perf.id}
                           onClick={() => handleSelectPerformance(perf)}
