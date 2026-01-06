@@ -1086,7 +1086,7 @@ export default function PlayerStatsPage() {
                         <img
                           src={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/player-photos/${playerInfo.playerId}/primary.${playerInfo.photoPath.split('.').pop() || 'png'}`}
                           alt={playerInfo.name}
-                          className="absolute inset-0 w-full h-full object-cover object-top"
+                          className="absolute inset-0 w-full h-full object-cover object-center"
                           onError={(e) => {
                             (e.target as HTMLImageElement).style.display = 'none';
                           }}
