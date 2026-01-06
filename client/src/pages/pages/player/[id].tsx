@@ -99,7 +99,7 @@ export default function PlayerStatsPage() {
   const [playerStats, setPlayerStats] = useState<PlayerStat[]>([]);
   const [seasonAverages, setSeasonAverages] = useState<SeasonAverages | null>(null);
   const [playerRankings, setPlayerRankings] = useState<PlayerRankings | null>(null);
-  const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string; position?: string; number?: number; leagueId?: string } | null>(null);
+  const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string; position?: string; number?: number; leagueId?: string; playerId?: string; photoPath?: string | null } | null>(null);
   const [playerLeagues, setPlayerLeagues] = useState<{ id: string; name: string; slug: string }[]>([]);
   const [playerMatches, setPlayerMatches] = useState<PlayerMatch[]>([]);
   const [nameVariations, setNameVariations] = useState<string[]>([]);
@@ -355,7 +355,9 @@ export default function PlayerStatsPage() {
           team: initialPlayer.team,
           position: initialPlayer.position,
           number: initialPlayer.number,
-          leagueId: initialPlayer.league_id
+          leagueId: initialPlayer.league_id,
+          playerId: initialPlayer.id,
+          photoPath: initialPlayer.photo_path
         };
 
         // Step 3: Get ALL stats for ALL matching player IDs
@@ -497,7 +499,9 @@ export default function PlayerStatsPage() {
             team: statsWithOpponents[0].team_name || statsWithOpponents[0].team || 'Unknown Team',
             position: statsWithOpponents[0].position,
             number: statsWithOpponents[0].number,
-            leagueId: statsWithOpponents[0].league_id
+            leagueId: statsWithOpponents[0].league_id,
+            playerId: playerInfo.playerId,
+            photoPath: playerInfo.photoPath
           };
         }
         
@@ -522,7 +526,9 @@ export default function PlayerStatsPage() {
               team: fallbackTeam,
               position: stats[0].position,
               number: stats[0].number,
-              leagueId: stats[0].league_id
+              leagueId: stats[0].league_id,
+              playerId: playerInfo.playerId,
+              photoPath: playerInfo.photoPath
             });
           }
 
@@ -937,57 +943,163 @@ export default function PlayerStatsPage() {
           </div>
         </div>
 
-        {/* Player Info Section */}
+        {/* Player Hero Section - Combined Info + Stats + Photo */}
         {playerInfo && (
           <div className="mb-6 md:mb-8">
-            <Card className="border-orange-200 dark:border-orange-500/30 shadow-md animate-slide-in-up bg-white dark:bg-neutral-900">
-              <CardContent className="p-4 md:p-6">
-                <div className="flex items-center gap-4">
-                  {/* Team Logo */}
-                  {playerInfo.team && playerInfo.leagueId && (
-                    <TeamLogo 
-                      teamName={playerInfo.team} 
-                      leagueId={playerInfo.leagueId}
-                      size="xl"
-                      className="flex-shrink-0"
-                    />
-                  )}
-                  
-                  {/* Player Info */}
-                  <div className="flex-1 min-w-0">
-                    <h1 className="text-xl md:text-2xl font-bold text-orange-900 dark:text-white mb-1 break-words" data-testid="text-player-name">{playerInfo.name}</h1>
+            <Card className="border-orange-200 dark:border-orange-500/30 shadow-lg animate-slide-in-up bg-white dark:bg-neutral-900 overflow-hidden">
+              <CardContent className="p-0 relative">
+                <div className="flex flex-col lg:flex-row">
+                  {/* Left Side - Player Info + Season Averages */}
+                  <div className="flex-1 p-4 md:p-6 lg:pr-0 z-10">
+                    {/* Player Name and Team */}
+                    <div className="mb-4">
+                      <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-orange-900 dark:text-white mb-2 break-words" data-testid="text-player-name">
+                        {playerInfo.name}
+                      </h1>
+                      
+                      {/* Name Variations Indicator */}
+                      {nameVariationsWithLeagues.length > 0 && (
+                        <div className="mb-2">
+                          <p className="text-xs md:text-sm text-orange-600 dark:text-orange-400 italic">
+                            <span className="font-semibold">Also known as: </span>
+                            {nameVariationsWithLeagues.map((variation, index) => (
+                              <span key={index}>
+                                {variation.name} ({variation.leagueName})
+                                {index < nameVariationsWithLeagues.length - 1 ? ', ' : ''}
+                              </span>
+                            ))}
+                          </p>
+                        </div>
+                      )}
+                      
+                      <p className="text-orange-700 dark:text-orange-400 flex items-center gap-2 text-base md:text-lg mb-2" data-testid="text-player-team">
+                        <Trophy className="h-5 w-5 flex-shrink-0" />
+                        <span className="break-words font-medium">{playerInfo.team}</span>
+                      </p>
+                      <div className="flex flex-wrap items-center gap-3 text-xs md:text-sm text-orange-600 dark:text-orange-500">
+                        <span className="flex items-center gap-1 whitespace-nowrap">
+                          <div className="h-2 w-2 bg-green-400 rounded-full animate-pulse"></div>
+                          Active Player
+                        </span>
+                        {playerInfo.position && (
+                          <span className="whitespace-nowrap">• {playerInfo.position}</span>
+                        )}
+                        {playerInfo.number && (
+                          <span className="whitespace-nowrap">• #{playerInfo.number}</span>
+                        )}
+                      </div>
+                    </div>
                     
-                    {/* Name Variations Indicator */}
-                    {nameVariationsWithLeagues.length > 0 && (
-                      <div className="mb-2">
-                        <p className="text-xs md:text-sm text-orange-600 dark:text-orange-400 italic">
-                          <span className="font-semibold">Also known as: </span>
-                          {nameVariationsWithLeagues.map((variation, index) => (
-                            <span key={index}>
-                              {variation.name} ({variation.leagueName})
-                              {index < nameVariationsWithLeagues.length - 1 ? ', ' : ''}
-                            </span>
-                          ))}
-                        </p>
+                    {/* Integrated Season Averages */}
+                    {filteredSeasonAverages && (
+                      <div className="mt-4 pt-4 border-t border-orange-100 dark:border-neutral-700">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Trophy className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                          <span className="text-sm font-semibold text-orange-800 dark:text-orange-300">
+                            Season Averages ({filteredSeasonAverages.games_played} GP)
+                          </span>
+                          {selectedLeagueFilter !== "all" && (
+                            <Badge variant="outline" className="text-xs bg-orange-50 dark:bg-orange-900/50 text-orange-700 dark:text-orange-400 border-orange-300 dark:border-orange-500/50">
+                              {leagueNames.get(selectedLeagueFilter) || 'Filtered'}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-3 md:grid-cols-5 gap-3 md:gap-4">
+                          {/* Points */}
+                          <div className="text-center group">
+                            <div className="text-xl md:text-2xl lg:text-3xl font-bold text-orange-700 dark:text-orange-400 group-hover:scale-110 transition-transform">
+                              {filteredSeasonAverages.avg_points.toFixed(1)}
+                            </div>
+                            <div className="text-xs text-orange-600 dark:text-orange-500">PPG</div>
+                            {playerRankings && (
+                              <div className="text-[10px] text-orange-500 dark:text-orange-600">({getOrdinalSuffix(playerRankings.points)})</div>
+                            )}
+                          </div>
+                          {/* Rebounds */}
+                          <div className="text-center group">
+                            <div className="text-xl md:text-2xl lg:text-3xl font-bold text-orange-700 dark:text-orange-400 group-hover:scale-110 transition-transform">
+                              {filteredSeasonAverages.avg_rebounds.toFixed(1)}
+                            </div>
+                            <div className="text-xs text-orange-600 dark:text-orange-500">RPG</div>
+                            {playerRankings && (
+                              <div className="text-[10px] text-orange-500 dark:text-orange-600">({getOrdinalSuffix(playerRankings.rebounds)})</div>
+                            )}
+                          </div>
+                          {/* Assists */}
+                          <div className="text-center group">
+                            <div className="text-xl md:text-2xl lg:text-3xl font-bold text-orange-700 dark:text-orange-400 group-hover:scale-110 transition-transform">
+                              {filteredSeasonAverages.avg_assists.toFixed(1)}
+                            </div>
+                            <div className="text-xs text-orange-600 dark:text-orange-500">APG</div>
+                            {playerRankings && (
+                              <div className="text-[10px] text-orange-500 dark:text-orange-600">({getOrdinalSuffix(playerRankings.assists)})</div>
+                            )}
+                          </div>
+                          {/* Steals - hidden on mobile */}
+                          <div className="text-center group hidden md:block">
+                            <div className="text-xl md:text-2xl lg:text-3xl font-bold text-orange-700 dark:text-orange-400 group-hover:scale-110 transition-transform">
+                              {filteredSeasonAverages.avg_steals.toFixed(1)}
+                            </div>
+                            <div className="text-xs text-orange-600 dark:text-orange-500">SPG</div>
+                            {playerRankings && (
+                              <div className="text-[10px] text-orange-500 dark:text-orange-600">({getOrdinalSuffix(playerRankings.steals)})</div>
+                            )}
+                          </div>
+                          {/* Blocks - hidden on mobile */}
+                          <div className="text-center group hidden md:block">
+                            <div className="text-xl md:text-2xl lg:text-3xl font-bold text-orange-700 dark:text-orange-400 group-hover:scale-110 transition-transform">
+                              {filteredSeasonAverages.avg_blocks.toFixed(1)}
+                            </div>
+                            <div className="text-xs text-orange-600 dark:text-orange-500">BPG</div>
+                            {playerRankings && (
+                              <div className="text-[10px] text-orange-500 dark:text-orange-600">({getOrdinalSuffix(playerRankings.blocks)})</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Right Side - Player Photo with Fade + Team Logo */}
+                  <div className="relative lg:w-80 xl:w-96 h-48 lg:h-auto min-h-[200px] lg:min-h-[280px]">
+                    {/* Player Photo */}
+                    {playerInfo.playerId && playerInfo.photoPath ? (
+                      <>
+                        <img
+                          src={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/player-photos/${playerInfo.playerId}/primary.${playerInfo.photoPath.split('.').pop() || 'png'}`}
+                          alt={playerInfo.name}
+                          className="absolute inset-0 w-full h-full object-cover object-top"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                          }}
+                        />
+                        {/* Gradient fade from left */}
+                        <div className="absolute inset-0 bg-gradient-to-r from-white via-white/80 to-transparent dark:from-neutral-900 dark:via-neutral-900/80 lg:block hidden" />
+                        {/* Gradient fade from top on mobile */}
+                        <div className="absolute inset-0 bg-gradient-to-b from-white via-white/60 to-transparent dark:from-neutral-900 dark:via-neutral-900/60 lg:hidden" />
+                      </>
+                    ) : (
+                      <div className="absolute inset-0 bg-gradient-to-br from-orange-100 to-orange-200 dark:from-neutral-800 dark:to-neutral-700 flex items-center justify-center">
+                        <User className="w-20 h-20 text-orange-300 dark:text-neutral-600" />
+                        {/* Gradient fade from left */}
+                        <div className="absolute inset-0 bg-gradient-to-r from-white via-white/80 to-transparent dark:from-neutral-900 dark:via-neutral-900/80 lg:block hidden" />
+                        {/* Gradient fade from top on mobile */}
+                        <div className="absolute inset-0 bg-gradient-to-b from-white via-white/60 to-transparent dark:from-neutral-900 dark:via-neutral-900/60 lg:hidden" />
                       </div>
                     )}
                     
-                    <p className="text-orange-700 dark:text-orange-400 flex items-center gap-2 text-sm md:text-base mb-2" data-testid="text-player-team">
-                      <Trophy className="h-4 w-4 flex-shrink-0" />
-                      <span className="break-words">{playerInfo.team}</span>
-                    </p>
-                    <div className="flex flex-wrap items-center gap-3 text-xs md:text-sm text-orange-600 dark:text-orange-500">
-                      <span className="flex items-center gap-1 whitespace-nowrap">
-                        <div className="h-2 w-2 bg-green-400 rounded-full"></div>
-                        Active Player
-                      </span>
-                      {playerInfo.position && (
-                        <span className="whitespace-nowrap">• {playerInfo.position}</span>
-                      )}
-                      {playerInfo.number && (
-                        <span className="whitespace-nowrap">• #{playerInfo.number}</span>
-                      )}
-                    </div>
+                    {/* Team Logo - Far Right Corner */}
+                    {playerInfo.team && playerInfo.leagueId && (
+                      <div className="absolute top-3 right-3 z-20">
+                        <div className="bg-white/90 dark:bg-neutral-800/90 backdrop-blur-sm rounded-full p-1 shadow-lg">
+                          <TeamLogo 
+                            teamName={playerInfo.team} 
+                            leagueId={playerInfo.leagueId}
+                            size="lg"
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </CardContent>
@@ -1121,171 +1233,52 @@ export default function PlayerStatsPage() {
           </Card>
         )}
 
-        {/* Season Averages */}
+        {/* Shooting Splits - Compact Display */}
         {filteredSeasonAverages && (
-          <Card className="mb-8 border-orange-200 dark:border-orange-500/30 shadow-md animate-slide-in-up hover:animate-glow bg-white dark:bg-neutral-900">
-            <CardHeader className="bg-white dark:bg-neutral-900 text-orange-900 dark:text-white rounded-t-lg border-b border-orange-200 dark:border-neutral-700">
-              <CardTitle className="flex items-center gap-2">
-                <Trophy className="h-5 w-5 animate-float text-orange-700 dark:text-orange-400" />
-                Season Averages ({filteredSeasonAverages.games_played} games)
-                {selectedLeagueFilter !== "all" && (
-                  <Badge variant="outline" className="ml-2 bg-orange-50 dark:bg-orange-900/50 text-orange-700 dark:text-orange-400 border-orange-300 dark:border-orange-500/50">
-                    {leagueNames.get(selectedLeagueFilter) || 'Filtered'}
-                  </Badge>
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 md:pt-6">
-              <div className="grid [grid-template-columns:repeat(auto-fit,minmax(120px,1fr))] justify-center gap-3 sm:gap-4 lg:gap-6">
-                {/* Points */}
-                <div className="mx-auto max-w-[140px] w-full text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
-                  <div className="relative p-2 sm:p-3">
-                    <div className="text-lg font-semibold md:text-3xl lg:text-4xl md:font-bold text-orange-700 dark:text-orange-400 group-hover:text-orange-800 dark:group-hover:text-orange-300 transition-colors duration-300 group-hover:animate-pulse">
-                      {filteredSeasonAverages.avg_points.toFixed(1)}
-                    </div>
-                    <div className="text-xs md:text-sm text-orange-700 dark:text-orange-500 group-hover:text-orange-800 dark:group-hover:text-orange-400 transition-colors duration-300 mt-1">PPG</div>
-                    {playerRankings && (
-                      <div className="text-xs text-orange-600 dark:text-orange-500 mt-1">({getOrdinalSuffix(playerRankings.points)})</div>
-                    )}
-                    <div className="max-w-[120px] mx-auto bg-orange-50 dark:bg-neutral-700 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
-                        style={{ width: `${Math.min((filteredSeasonAverages.avg_points / 30) * 100, 100)}%` }}
-                      ></div>
-                    </div>
+          <Card className="mb-6 border-orange-200 dark:border-orange-500/30 shadow-md animate-slide-in-up bg-white dark:bg-neutral-900">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <TrendingUp className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                <span className="text-sm font-semibold text-orange-800 dark:text-orange-300">Shooting Splits</span>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                {/* FG% */}
+                <div className="text-center">
+                  <div className="text-lg md:text-xl font-bold text-orange-700 dark:text-orange-400">
+                    {formatPercentage(filteredSeasonAverages.fg_percentage)}
+                  </div>
+                  <div className="text-xs text-orange-600 dark:text-orange-500">FG%</div>
+                  <div className="mt-1 bg-orange-100 dark:bg-neutral-700 h-1.5 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-orange-400 to-orange-500 rounded-full"
+                      style={{ width: `${filteredSeasonAverages.fg_percentage}%` }}
+                    />
                   </div>
                 </div>
-
-                {/* Rebounds */}
-                <div className="mx-auto max-w-[140px] w-full text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
-                  <div className="relative p-2 sm:p-3">
-                    <div className="text-lg font-semibold md:text-3xl lg:text-4xl md:font-bold text-orange-700 dark:text-orange-400 group-hover:text-orange-800 dark:group-hover:text-orange-300 transition-colors duration-300 group-hover:animate-bounce">
-                      {filteredSeasonAverages.avg_rebounds.toFixed(1)}
-                    </div>
-                    <div className="text-xs md:text-sm text-orange-700 dark:text-orange-500 group-hover:text-orange-800 dark:group-hover:text-orange-400 transition-colors duration-300 mt-1">RPG</div>
-                    {playerRankings && (
-                      <div className="text-xs text-orange-600 dark:text-orange-500 mt-1">({getOrdinalSuffix(playerRankings.rebounds)})</div>
-                    )}
-                    <div className="max-w-[120px] mx-auto bg-orange-50 dark:bg-neutral-700 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
-                        style={{ width: `${Math.min((filteredSeasonAverages.avg_rebounds / 15) * 100, 100)}%` }}
-                      ></div>
-                    </div>
+                {/* 3P% */}
+                <div className="text-center">
+                  <div className="text-lg md:text-xl font-bold text-orange-700 dark:text-orange-400">
+                    {formatPercentage(filteredSeasonAverages.three_point_percentage)}
+                  </div>
+                  <div className="text-xs text-orange-600 dark:text-orange-500">3P%</div>
+                  <div className="mt-1 bg-orange-100 dark:bg-neutral-700 h-1.5 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-orange-400 to-orange-500 rounded-full"
+                      style={{ width: `${filteredSeasonAverages.three_point_percentage}%` }}
+                    />
                   </div>
                 </div>
-
-                {/* Assists */}
-                <div className="mx-auto max-w-[140px] w-full text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
-                  <div className="relative p-2 sm:p-3">
-                    <div className="text-lg font-semibold md:text-3xl lg:text-4xl md:font-bold text-orange-700 dark:text-orange-400 group-hover:text-orange-800 dark:group-hover:text-orange-300 transition-colors duration-300 group-hover:animate-pulse">
-                      {filteredSeasonAverages.avg_assists.toFixed(1)}
-                    </div>
-                    <div className="text-xs md:text-sm text-orange-700 dark:text-orange-500 group-hover:text-orange-800 dark:group-hover:text-orange-400 transition-colors duration-300 mt-1">APG</div>
-                    {playerRankings && (
-                      <div className="text-xs text-orange-600 dark:text-orange-500 mt-1">({getOrdinalSuffix(playerRankings.assists)})</div>
-                    )}
-                    <div className="max-w-[120px] mx-auto bg-orange-50 dark:bg-neutral-700 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
-                        style={{ width: `${Math.min((filteredSeasonAverages.avg_assists / 12) * 100, 100)}%` }}
-                      ></div>
-                    </div>
+                {/* FT% */}
+                <div className="text-center">
+                  <div className="text-lg md:text-xl font-bold text-orange-700 dark:text-orange-400">
+                    {formatPercentage(filteredSeasonAverages.ft_percentage)}
                   </div>
-                </div>
-
-                {/* Steals */}
-                <div className="mx-auto max-w-[140px] w-full text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
-                  <div className="relative p-2 sm:p-3">
-                    <div className="text-lg font-semibold md:text-3xl lg:text-4xl md:font-bold text-orange-700 dark:text-orange-400 group-hover:text-orange-800 dark:group-hover:text-orange-300 transition-colors duration-300 group-hover:animate-pulse">
-                      {filteredSeasonAverages.avg_steals.toFixed(1)}
-                    </div>
-                    <div className="text-xs md:text-sm text-orange-700 dark:text-orange-500 group-hover:text-orange-800 dark:group-hover:text-orange-400 transition-colors duration-300 mt-1">SPG</div>
-                    {playerRankings && (
-                      <div className="text-xs text-orange-600 dark:text-orange-500 mt-1">({getOrdinalSuffix(playerRankings.steals)})</div>
-                    )}
-                    <div className="max-w-[120px] mx-auto bg-orange-50 dark:bg-neutral-700 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
-                        style={{ width: `${Math.min((filteredSeasonAverages.avg_steals / 5) * 100, 100)}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Blocks */}
-                <div className="mx-auto max-w-[140px] w-full text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
-                  <div className="relative p-2 sm:p-3">
-                    <div className="text-lg font-semibold md:text-3xl lg:text-4xl md:font-bold text-orange-700 dark:text-orange-400 group-hover:text-orange-800 dark:group-hover:text-orange-300 transition-colors duration-300 group-hover:animate-pulse">
-                      {filteredSeasonAverages.avg_blocks.toFixed(1)}
-                    </div>
-                    <div className="text-xs md:text-sm text-orange-700 dark:text-orange-500 group-hover:text-orange-800 dark:group-hover:text-orange-400 transition-colors duration-300 mt-1">BPG</div>
-                    {playerRankings && (
-                      <div className="text-xs text-orange-600 dark:text-orange-500 mt-1">({getOrdinalSuffix(playerRankings.blocks)})</div>
-                    )}
-                    <div className="max-w-[120px] mx-auto bg-orange-50 dark:bg-neutral-700 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
-                        style={{ width: `${Math.min((filteredSeasonAverages.avg_blocks / 5) * 100, 100)}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Field Goal % */}
-                <div className="mx-auto max-w-[140px] w-full text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
-                  <div className="relative p-2 sm:p-3">
-                    <div className="text-lg font-semibold md:text-3xl lg:text-4xl md:font-bold text-orange-700 dark:text-orange-400 group-hover:text-orange-800 dark:group-hover:text-orange-300 transition-colors duration-300 group-hover:animate-pulse">
-                      {formatPercentage(filteredSeasonAverages.fg_percentage)}
-                    </div>
-                    <div className="text-xs md:text-sm text-orange-700 dark:text-orange-500 group-hover:text-orange-800 dark:group-hover:text-orange-400 transition-colors duration-300 mt-1">FG%</div>
-                    {playerRankings && (
-                      <div className="text-xs text-orange-600 dark:text-orange-500 mt-1">({getOrdinalSuffix(playerRankings.fg_percentage)})</div>
-                    )}
-                    <div className="max-w-[120px] mx-auto bg-orange-50 dark:bg-neutral-700 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
-                        style={{ width: `${filteredSeasonAverages.fg_percentage}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 3-Point % */}
-                <div className="mx-auto max-w-[140px] w-full text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
-                  <div className="relative p-2 sm:p-3">
-                    <div className="text-lg font-semibold md:text-3xl lg:text-4xl md:font-bold text-orange-700 dark:text-orange-400 group-hover:text-orange-800 dark:group-hover:text-orange-300 transition-colors duration-300 group-hover:animate-pulse">
-                      {formatPercentage(filteredSeasonAverages.three_point_percentage)}
-                    </div>
-                    <div className="text-xs md:text-sm text-orange-700 dark:text-orange-500 group-hover:text-orange-800 dark:group-hover:text-orange-400 transition-colors duration-300 mt-1">3P%</div>
-                    {playerRankings && (
-                      <div className="text-xs text-orange-600 dark:text-orange-500 mt-1">({getOrdinalSuffix(playerRankings.three_point_percentage)})</div>
-                    )}
-                    <div className="max-w-[120px] mx-auto bg-orange-50 dark:bg-neutral-700 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
-                        style={{ width: `${filteredSeasonAverages.three_point_percentage}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Free Throw % */}
-                <div className="mx-auto max-w-[140px] w-full text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
-                  <div className="relative p-2 sm:p-3">
-                    <div className="text-lg font-semibold md:text-3xl lg:text-4xl md:font-bold text-orange-700 dark:text-orange-400 group-hover:text-orange-800 dark:group-hover:text-orange-300 transition-colors duration-300 group-hover:animate-pulse">
-                      {formatPercentage(filteredSeasonAverages.ft_percentage)}
-                    </div>
-                    {playerRankings && (
-                      <div className="text-xs text-orange-600 dark:text-orange-500 mt-1">({getOrdinalSuffix(playerRankings.ft_percentage)})</div>
-                    )}
-                    <div className="text-xs md:text-sm text-orange-700 dark:text-orange-500 group-hover:text-orange-800 dark:group-hover:text-orange-400 transition-colors duration-300 mt-1">FT%</div>
-                    <div className="max-w-[120px] mx-auto bg-orange-50 dark:bg-neutral-700 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
-                        style={{ width: `${filteredSeasonAverages.ft_percentage}%` }}
-                      ></div>
-                    </div>
+                  <div className="text-xs text-orange-600 dark:text-orange-500">FT%</div>
+                  <div className="mt-1 bg-orange-100 dark:bg-neutral-700 h-1.5 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-orange-400 to-orange-500 rounded-full"
+                      style={{ width: `${filteredSeasonAverages.ft_percentage}%` }}
+                    />
                   </div>
                 </div>
               </div>
