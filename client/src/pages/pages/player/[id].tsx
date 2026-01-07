@@ -101,7 +101,7 @@ export default function PlayerStatsPage() {
   const [playerStats, setPlayerStats] = useState<PlayerStat[]>([]);
   const [seasonAverages, setSeasonAverages] = useState<SeasonAverages | null>(null);
   const [playerRankings, setPlayerRankings] = useState<PlayerRankings | null>(null);
-  const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string; position?: string; number?: number; leagueId?: string; playerId?: string; photoPath?: string | null } | null>(null);
+  const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string; position?: string; number?: number; leagueId?: string; playerId?: string; photoPath?: string | null; photoFocusY?: number | null } | null>(null);
   const [playerLeagues, setPlayerLeagues] = useState<{ id: string; name: string; slug: string }[]>([]);
   const [playerMatches, setPlayerMatches] = useState<PlayerMatch[]>([]);
   const [nameVariations, setNameVariations] = useState<string[]>([]);
@@ -428,7 +428,8 @@ export default function PlayerStatsPage() {
           number: initialPlayer.number,
           leagueId: initialPlayer.league_id,
           playerId: initialPlayer.id,
-          photoPath: initialPlayer.photo_path
+          photoPath: initialPlayer.photo_path,
+          photoFocusY: initialPlayer.photo_focus_y
         };
 
         // Step 3: Get ALL stats for ALL matching player IDs
@@ -1157,7 +1158,8 @@ export default function PlayerStatsPage() {
                         <img
                           src={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/player-photos/${playerInfo.photoPath}`}
                           alt={playerInfo.name}
-                          className="absolute inset-0 w-full h-full object-cover object-center"
+                          className="absolute inset-0 w-full h-full object-cover"
+                          style={{ objectPosition: `50% ${playerInfo.photoFocusY ?? 50}%` }}
                           onError={(e) => {
                             (e.target as HTMLImageElement).style.display = 'none';
                           }}
