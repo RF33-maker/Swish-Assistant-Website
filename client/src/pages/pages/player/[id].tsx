@@ -1,10 +1,11 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Calendar, Trophy, User, TrendingUp, Camera, Brain, Sparkles, Filter } from "lucide-react";
+import { ArrowLeft, Calendar, Trophy, User, TrendingUp, Camera, Brain, Sparkles, Filter, Upload, Loader2 } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { generatePlayerAnalysis, type PlayerAnalysisData } from "@/lib/ai-analysis";
 import SwishLogoImg from "@/assets/Swish Assistant Logo.png";
@@ -90,6 +91,7 @@ export default function PlayerStatsPage() {
   const [match, params] = useRoute("/player/:slug");
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { user } = useAuth();
   
   const playerSlugOrId = params?.slug;
   
@@ -110,6 +112,55 @@ export default function PlayerStatsPage() {
   const [aiAnalysis, setAiAnalysis] = useState<string>("");
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [leagueNames, setLeagueNames] = useState<Map<string, string>>(new Map());
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !playerInfo?.playerId) return;
+
+    setPhotoUploading(true);
+    try {
+      const fileExtension = file.name.split('.').pop()?.toLowerCase() || 'png';
+      const filePath = `public/players/${playerInfo.playerId}/profile.${fileExtension}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('player_photos')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { error: updateError } = await supabase
+        .from('players')
+        .update({ photo_path: filePath })
+        .eq('id', playerInfo.playerId);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      setPlayerInfo(prev => prev ? { ...prev, photoPath: filePath } : null);
+
+      toast({
+        title: "Photo uploaded",
+        description: "Player photo has been updated successfully",
+      });
+    } catch (error: any) {
+      console.error('Photo upload error:', error);
+      toast({
+        title: "Upload failed",
+        description: error.message || "Failed to upload photo",
+        variant: "destructive",
+      });
+    } finally {
+      setPhotoUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
 
   // Helper function to get ordinal suffix
   const getOrdinalSuffix = (num: number): string => {
@@ -1104,7 +1155,7 @@ export default function PlayerStatsPage() {
                     {playerInfo.playerId && playerInfo.photoPath ? (
                       <>
                         <img
-                          src={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/player-photos/${playerInfo.playerId}/primary.${playerInfo.photoPath.split('.').pop() || 'png'}`}
+                          src={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/player_photos/${playerInfo.photoPath}`}
                           alt={playerInfo.name}
                           className="absolute inset-0 w-full h-full object-cover object-center"
                           onError={(e) => {
@@ -1124,6 +1175,34 @@ export default function PlayerStatsPage() {
                         {/* Gradient fade from top on mobile */}
                         <div className="absolute inset-0 bg-gradient-to-b from-white via-white/40 to-transparent dark:from-neutral-900 dark:via-neutral-900/40 lg:hidden" />
                       </div>
+                    )}
+                    
+                    {/* Upload button - only visible to authenticated users */}
+                    {user && playerInfo.playerId && (
+                      <>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handlePhotoUpload}
+                          className="hidden"
+                          data-testid="input-player-photo"
+                        />
+                        <Button
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={photoUploading}
+                          size="sm"
+                          className="absolute bottom-4 right-4 z-10 bg-orange-600 hover:bg-orange-700 text-white shadow-lg"
+                          data-testid="button-upload-player-photo"
+                        >
+                          {photoUploading ? (
+                            <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                          ) : (
+                            <Upload className="w-4 h-4 mr-2" />
+                          )}
+                          {photoUploading ? 'Uploading...' : playerInfo.photoPath ? 'Change Photo' : 'Add Photo'}
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>
