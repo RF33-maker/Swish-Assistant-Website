@@ -122,10 +122,10 @@ export default function PlayerStatsPage() {
     setPhotoUploading(true);
     try {
       const fileExtension = file.name.split('.').pop()?.toLowerCase() || 'png';
-      const filePath = `public/players/${playerInfo.playerId}/profile.${fileExtension}`;
+      const filePath = `${playerInfo.playerId}/primary.${fileExtension}`;
 
       const { error: uploadError } = await supabase.storage
-        .from('player_photos')
+        .from('player-photos')
         .upload(filePath, file, { upsert: true });
 
       if (uploadError) {
@@ -1155,7 +1155,7 @@ export default function PlayerStatsPage() {
                     {playerInfo.playerId && playerInfo.photoPath ? (
                       <>
                         <img
-                          src={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/player_photos/${playerInfo.photoPath}`}
+                          src={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/player-photos/${playerInfo.photoPath}`}
                           alt={playerInfo.name}
                           className="absolute inset-0 w-full h-full object-cover object-center"
                           onError={(e) => {
