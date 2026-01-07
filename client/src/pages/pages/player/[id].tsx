@@ -4,7 +4,8 @@ import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Calendar, Trophy, User, TrendingUp, Camera, Brain, Sparkles, Filter, Upload, Loader2 } from "lucide-react";
+import { ArrowLeft, Calendar, Trophy, User, TrendingUp, Camera, Brain, Sparkles, Filter, Upload, Loader2, Move, Check, X } from "lucide-react";
+import { Slider } from "@/components/ui/slider";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { generatePlayerAnalysis, type PlayerAnalysisData } from "@/lib/ai-analysis";
@@ -113,6 +114,9 @@ export default function PlayerStatsPage() {
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [leagueNames, setLeagueNames] = useState<Map<string, string>>(new Map());
   const [photoUploading, setPhotoUploading] = useState(false);
+  const [showFocusAdjuster, setShowFocusAdjuster] = useState(false);
+  const [tempFocusY, setTempFocusY] = useState<number>(50);
+  const [savingFocus, setSavingFocus] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -142,10 +146,12 @@ export default function PlayerStatsPage() {
       }
 
       setPlayerInfo(prev => prev ? { ...prev, photoPath: filePath } : null);
+      setShowFocusAdjuster(true);
+      setTempFocusY(50);
 
       toast({
         title: "Photo uploaded",
-        description: "Player photo has been updated successfully",
+        description: "Adjust the focus point to ensure the face is visible",
       });
     } catch (error: any) {
       console.error('Photo upload error:', error);
@@ -159,6 +165,36 @@ export default function PlayerStatsPage() {
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
+    }
+  };
+
+  const handleSaveFocus = async () => {
+    if (!playerInfo?.playerId) return;
+    
+    setSavingFocus(true);
+    try {
+      const { error } = await supabase
+        .from('players')
+        .update({ photo_focus_y: tempFocusY })
+        .eq('id', playerInfo.playerId);
+
+      if (error) throw error;
+
+      setPlayerInfo(prev => prev ? { ...prev, photoFocusY: tempFocusY } : null);
+      setShowFocusAdjuster(false);
+
+      toast({
+        title: "Focus saved",
+        description: "Photo positioning has been updated",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Save failed",
+        description: error.message || "Failed to save focus position",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingFocus(false);
     }
   };
 
@@ -573,7 +609,8 @@ export default function PlayerStatsPage() {
             number: statsWithOpponents[0].number,
             leagueId: statsWithOpponents[0].league_id,
             playerId: playerInfo.playerId,
-            photoPath: playerInfo.photoPath
+            photoPath: playerInfo.photoPath,
+            photoFocusY: playerInfo.photoFocusY
           };
         }
         
@@ -600,7 +637,8 @@ export default function PlayerStatsPage() {
               number: stats[0].number,
               leagueId: stats[0].league_id,
               playerId: playerInfo.playerId,
-              photoPath: playerInfo.photoPath
+              photoPath: playerInfo.photoPath,
+              photoFocusY: playerInfo.photoFocusY
             });
           }
 
@@ -1159,7 +1197,7 @@ export default function PlayerStatsPage() {
                           src={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/player-photos/${playerInfo.photoPath}`}
                           alt={playerInfo.name}
                           className="absolute inset-0 w-full h-full object-cover"
-                          style={{ objectPosition: `50% ${playerInfo.photoFocusY ?? 50}%` }}
+                          style={{ objectPosition: `50% ${showFocusAdjuster ? tempFocusY : (playerInfo.photoFocusY ?? 50)}%` }}
                           onError={(e) => {
                             (e.target as HTMLImageElement).style.display = 'none';
                           }}
@@ -1179,8 +1217,48 @@ export default function PlayerStatsPage() {
                       </div>
                     )}
                     
-                    {/* Upload button - only visible to authenticated users */}
-                    {user && playerInfo.playerId && (
+                    {/* Focus Adjuster UI - only visible when adjusting */}
+                    {showFocusAdjuster && playerInfo.photoPath && (
+                      <div className="absolute bottom-16 left-4 right-4 z-20 bg-white/95 dark:bg-neutral-800/95 rounded-lg p-3 shadow-lg">
+                        <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Adjust vertical focus (drag to show face)
+                        </div>
+                        <Slider
+                          value={[tempFocusY]}
+                          onValueChange={(value) => setTempFocusY(value[0])}
+                          min={0}
+                          max={100}
+                          step={1}
+                          className="mb-3"
+                          data-testid="slider-photo-focus"
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={handleSaveFocus}
+                            disabled={savingFocus}
+                            size="sm"
+                            className="flex-1 bg-green-600 hover:bg-green-700"
+                            data-testid="button-save-focus"
+                          >
+                            {savingFocus ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Check className="w-4 h-4 mr-1" />}
+                            Save
+                          </Button>
+                          <Button
+                            onClick={() => setShowFocusAdjuster(false)}
+                            variant="outline"
+                            size="sm"
+                            className="flex-1"
+                            data-testid="button-cancel-focus"
+                          >
+                            <X className="w-4 h-4 mr-1" />
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Upload and Adjust buttons - only visible to authenticated users */}
+                    {user && playerInfo.playerId && !showFocusAdjuster && (
                       <>
                         <input
                           ref={fileInputRef}
@@ -1190,20 +1268,37 @@ export default function PlayerStatsPage() {
                           className="hidden"
                           data-testid="input-player-photo"
                         />
-                        <Button
-                          onClick={() => fileInputRef.current?.click()}
-                          disabled={photoUploading}
-                          size="sm"
-                          className="absolute bottom-4 right-4 z-10 bg-orange-600 hover:bg-orange-700 text-white shadow-lg"
-                          data-testid="button-upload-player-photo"
-                        >
-                          {photoUploading ? (
-                            <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                          ) : (
-                            <Upload className="w-4 h-4 mr-2" />
+                        <div className="absolute bottom-4 right-4 z-10 flex gap-2">
+                          {playerInfo.photoPath && (
+                            <Button
+                              onClick={() => {
+                                setTempFocusY(playerInfo.photoFocusY ?? 50);
+                                setShowFocusAdjuster(true);
+                              }}
+                              size="sm"
+                              variant="outline"
+                              className="bg-white/90 dark:bg-neutral-800/90 shadow-lg"
+                              data-testid="button-adjust-photo-focus"
+                            >
+                              <Move className="w-4 h-4 mr-2" />
+                              Adjust
+                            </Button>
                           )}
-                          {photoUploading ? 'Uploading...' : playerInfo.photoPath ? 'Change Photo' : 'Add Photo'}
-                        </Button>
+                          <Button
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={photoUploading}
+                            size="sm"
+                            className="bg-orange-600 hover:bg-orange-700 text-white shadow-lg"
+                            data-testid="button-upload-player-photo"
+                          >
+                            {photoUploading ? (
+                              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                            ) : (
+                              <Upload className="w-4 h-4 mr-2" />
+                            )}
+                            {photoUploading ? 'Uploading...' : playerInfo.photoPath ? 'Change' : 'Add Photo'}
+                          </Button>
+                        </div>
                       </>
                     )}
                   </div>
