@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -13,6 +13,15 @@ type Props = {
 export function PostQueueSection({ cards, loading = false }: Props) {
   const [currentIndex, setCurrentIndex] = useState(0);
 
+  // Clamp currentIndex when cards array shrinks
+  useEffect(() => {
+    if (cards.length > 0 && currentIndex >= cards.length) {
+      setCurrentIndex(cards.length - 1);
+    } else if (cards.length === 0) {
+      setCurrentIndex(0);
+    }
+  }, [cards.length, currentIndex]);
+
   const goToPrevious = () => {
     setCurrentIndex((prev) => (prev > 0 ? prev - 1 : cards.length - 1));
   };
@@ -22,6 +31,11 @@ export function PostQueueSection({ cards, loading = false }: Props) {
   };
 
   const currentCard = cards[currentIndex];
+
+  // Guard: if no valid card, show empty state
+  if (!loading && cards.length > 0 && !currentCard) {
+    return null;
+  }
 
   return (
     <Card className="bg-white dark:bg-gray-800 border-orange-200 dark:border-orange-700 mt-8">
