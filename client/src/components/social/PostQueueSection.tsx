@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
-import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { ChevronLeft, ChevronRight, Calendar, Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { PlayerPerformanceCardV1 } from "./PlayerPerformanceCardV1";
 import type { PlayerPerformanceV1Data } from "@/types/socialCards";
 import useEmblaCarousel from "embla-carousel-react";
+import html2canvas from "html2canvas";
 
 type Props = {
   cards: PlayerPerformanceV1Data[];
@@ -13,6 +14,9 @@ type Props = {
 
 export function PostQueueSection({ cards, loading = false }: Props) {
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  const renderContainerRef = useRef<HTMLDivElement>(null);
   
   const [emblaRef, emblaApi] = useEmblaCarousel({
     loop: true,
@@ -20,6 +24,45 @@ export function PostQueueSection({ cards, loading = false }: Props) {
     skipSnaps: false,
     dragFree: false,
   });
+
+  const downloadAllCards = async () => {
+    if (cards.length === 0 || isDownloading) return;
+    
+    setIsDownloading(true);
+    setDownloadProgress(0);
+    
+    try {
+      for (let i = 0; i < cards.length; i++) {
+        const card = cards[i];
+        setDownloadProgress(i + 1);
+        
+        const cardElement = document.getElementById(`download-card-${i}`);
+        if (!cardElement) continue;
+        
+        const canvas = await html2canvas(cardElement, {
+          scale: 1,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: null,
+          width: 1080,
+          height: 1350,
+        });
+        
+        const link = document.createElement("a");
+        const safeName = card.player_name.replace(/[^a-zA-Z0-9]/g, "_");
+        link.download = `${safeName}_${card.points}pts_${i + 1}.png`;
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+        
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    } catch (error) {
+      console.error("Error downloading cards:", error);
+    } finally {
+      setIsDownloading(false);
+      setDownloadProgress(0);
+    }
+  };
 
   const scrollPrev = useCallback(() => {
     if (emblaApi) emblaApi.scrollPrev();
@@ -59,10 +102,32 @@ export function PostQueueSection({ cards, loading = false }: Props) {
   return (
     <Card className="bg-white dark:bg-gray-800 border-orange-200 dark:border-orange-700 mt-8">
       <CardHeader className="pb-3">
-        <CardTitle className="text-orange-900 dark:text-orange-400 flex items-center gap-2">
-          <Calendar className="h-5 w-5" />
-          Post Queue ({cards.length} cards ready)
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-orange-900 dark:text-orange-400 flex items-center gap-2">
+            <Calendar className="h-5 w-5" />
+            Post Queue ({cards.length} cards ready)
+          </CardTitle>
+          {cards.length > 0 && (
+            <Button
+              onClick={downloadAllCards}
+              disabled={isDownloading}
+              className="bg-orange-500 hover:bg-orange-600 text-white"
+              size="sm"
+            >
+              {isDownloading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  {downloadProgress}/{cards.length}
+                </>
+              ) : (
+                <>
+                  <Download className="h-4 w-4 mr-2" />
+                  Download All
+                </>
+              )}
+            </Button>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         {loading ? (
@@ -181,6 +246,23 @@ export function PostQueueSection({ cards, loading = false }: Props) {
           </div>
         )}
       </CardContent>
+      
+      {/* Hidden container for full-size card rendering (for download) */}
+      <div
+        ref={renderContainerRef}
+        className="fixed left-[-9999px] top-0"
+        style={{ zIndex: -1 }}
+      >
+        {cards.map((card, index) => (
+          <div
+            key={index}
+            id={`download-card-${index}`}
+            style={{ width: 1080, height: 1350 }}
+          >
+            <PlayerPerformanceCardV1 data={card} />
+          </div>
+        ))}
+      </div>
     </Card>
   );
 }
