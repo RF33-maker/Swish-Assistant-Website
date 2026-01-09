@@ -481,13 +481,13 @@ export default function PlayerStatsPage() {
         if (uniqueLeagueIds.length > 0) {
           const { data: leaguesData } = await supabase
             .from('leagues')
-            .select('id, name')
-            .in('id', uniqueLeagueIds);
+            .select('league_id, name')
+            .in('league_id', uniqueLeagueIds);
           
           if (leaguesData) {
             const leagueMap = new Map<string, string>();
             leaguesData.forEach(league => {
-              leagueMap.set(league.id, league.name);
+              leagueMap.set(league.league_id, league.name);
             });
             setLeagueNames(leagueMap);
             console.log('🏆 Fetched league names:', leagueMap);
