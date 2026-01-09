@@ -11,6 +11,7 @@ interface Team {
   name: string;
   league_id: string;
   league_name?: string;
+  league_slug?: string;
   player_count: number;
   avg_points?: number;
 }
@@ -47,7 +48,7 @@ export default function TeamsList() {
           spoints,
           full_name,
           name,
-          leagues!inner(name)
+          leagues!inner(name, slug)
         `);
 
       if (error) {
@@ -68,6 +69,7 @@ export default function TeamsList() {
             name: teamName,
             league_id: stat.league_id,
             league_name: stat.leagues?.[0]?.name,
+            league_slug: stat.leagues?.[0]?.slug,
             players: new Set(),
             total_points: 0,
             games: 0
@@ -85,6 +87,7 @@ export default function TeamsList() {
         name: team.name,
         league_id: team.league_id,
         league_name: team.league_name,
+        league_slug: team.league_slug,
         player_count: team.players.size,
         avg_points: team.games > 0 ? Math.round((team.total_points / team.games) * 10) / 10 : 0
       }));
@@ -156,7 +159,7 @@ export default function TeamsList() {
         {filteredTeams.length > 0 ? (
           <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-200">
             {filteredTeams.map((team) => (
-              <Link key={`${team.name}-${team.league_id}`} to={`/team/${encodeURIComponent(team.name)}`}>
+              <Link key={`${team.name}-${team.league_id}`} to={team.league_slug ? `/league/${team.league_slug}/team/${encodeURIComponent(team.name)}` : `/team/${encodeURIComponent(team.name)}`}>
                 <div className="p-4 hover:bg-gray-50 transition-colors flex items-center justify-between group">
                   <div className="flex items-center gap-4">
                     <TeamLogo teamName={team.name} leagueId={team.league_id} size="md" />

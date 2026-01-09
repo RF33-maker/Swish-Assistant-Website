@@ -450,7 +450,7 @@ export default function LeagueTeams() {
                     {/* View Full Profile Button */}
                     <div className="pt-4 border-t border-gray-100">
                       <button 
-                        onClick={() => navigate(`/team/${encodeURIComponent(team.name)}`)}
+                        onClick={() => navigate(`/league/${slug}/team/${encodeURIComponent(team.name)}`)}
                         className="w-full bg-orange-500 hover:bg-orange-600 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

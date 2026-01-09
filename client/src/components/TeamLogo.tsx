@@ -144,7 +144,7 @@ export function TeamLogo({ teamName, leagueId, size = "md", className = "", logo
         <img
           src={logoUrl}
           alt={`${teamName} logo`}
-          className="w-full h-full object-cover"
+          className="max-w-full max-h-full object-contain"
           onError={handleImageError}
         />
       </div>

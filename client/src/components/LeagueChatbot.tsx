@@ -18,17 +18,12 @@ interface Message {
 interface LeagueChatbotProps {
   leagueId: string;
   leagueName: string;
+  leagueSlug?: string;
   onResponseReceived?: (response: string) => void;
+  isPanelMode?: boolean;
 }
 
-interface LeagueChatbotProps {
-  leagueId: string;
-  leagueName: string;
-  onResponseReceived?: (response: string) => void;
-  isPanelMode?: boolean; // New prop to indicate it's in a side panel
-}
-
-export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived, isPanelMode = false }: LeagueChatbotProps) {
+export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResponseReceived, isPanelMode = false }: LeagueChatbotProps) {
   const { user, isLoading: authLoading } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
@@ -602,7 +597,7 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
                               if (button.type === 'player') {
                                 setLocation(`/player/${button.id}`);
                               } else if (button.type === 'team') {
-                                setLocation(`/team/${button.id}`);
+                                setLocation(leagueSlug ? `/league/${leagueSlug}/team/${button.id}` : `/team/${button.id}`);
                               }
                             }}
                             className="px-2 py-1 text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 rounded transition-colors border border-blue-200 flex items-center gap-1"
@@ -817,7 +812,7 @@ export default function LeagueChatbot({ leagueId, leagueName, onResponseReceived
                                   if (button.type === 'player') {
                                     setLocation(`/player/${button.id}`);
                                   } else if (button.type === 'team') {
-                                    setLocation(`/team/${button.id}`);
+                                    setLocation(leagueSlug ? `/league/${leagueSlug}/team/${button.id}` : `/team/${button.id}`);
                                   }
                                 }}
                                 variant="outline"

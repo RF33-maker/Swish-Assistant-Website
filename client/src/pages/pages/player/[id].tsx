@@ -1,10 +1,12 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Calendar, Trophy, User, TrendingUp, Camera, Brain, Sparkles, Filter } from "lucide-react";
+import { ArrowLeft, Calendar, Trophy, User, TrendingUp, Camera, Brain, Sparkles, Filter, Upload, Loader2, Move, Check, X } from "lucide-react";
+import { Slider } from "@/components/ui/slider";
+import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { generatePlayerAnalysis, type PlayerAnalysisData } from "@/lib/ai-analysis";
 import SwishLogoImg from "@/assets/Swish Assistant Logo.png";
@@ -90,6 +92,7 @@ export default function PlayerStatsPage() {
   const [match, params] = useRoute("/player/:slug");
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { user } = useAuth();
   
   const playerSlugOrId = params?.slug;
   
@@ -99,7 +102,7 @@ export default function PlayerStatsPage() {
   const [playerStats, setPlayerStats] = useState<PlayerStat[]>([]);
   const [seasonAverages, setSeasonAverages] = useState<SeasonAverages | null>(null);
   const [playerRankings, setPlayerRankings] = useState<PlayerRankings | null>(null);
-  const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string; position?: string; number?: number; leagueId?: string } | null>(null);
+  const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string; position?: string; number?: number; leagueId?: string; playerId?: string; photoPath?: string | null; photoFocusY?: number | null; previousTeams?: string[] } | null>(null);
   const [playerLeagues, setPlayerLeagues] = useState<{ id: string; name: string; slug: string }[]>([]);
   const [playerMatches, setPlayerMatches] = useState<PlayerMatch[]>([]);
   const [nameVariations, setNameVariations] = useState<string[]>([]);
@@ -110,6 +113,90 @@ export default function PlayerStatsPage() {
   const [aiAnalysis, setAiAnalysis] = useState<string>("");
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [leagueNames, setLeagueNames] = useState<Map<string, string>>(new Map());
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [showFocusAdjuster, setShowFocusAdjuster] = useState(false);
+  const [tempFocusY, setTempFocusY] = useState<number>(50);
+  const [savingFocus, setSavingFocus] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !playerInfo?.playerId) return;
+
+    setPhotoUploading(true);
+    try {
+      const fileExtension = file.name.split('.').pop()?.toLowerCase() || 'png';
+      const filePath = `${playerInfo.playerId}/primary.${fileExtension}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('player-photos')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { error: updateError } = await supabase
+        .from('players')
+        .update({ photo_path: filePath })
+        .eq('id', playerInfo.playerId);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      setPlayerInfo(prev => prev ? { ...prev, photoPath: filePath } : null);
+      setShowFocusAdjuster(true);
+      setTempFocusY(50);
+
+      toast({
+        title: "Photo uploaded",
+        description: "Adjust the focus point to ensure the face is visible",
+      });
+    } catch (error: any) {
+      console.error('Photo upload error:', error);
+      toast({
+        title: "Upload failed",
+        description: error.message || "Failed to upload photo",
+        variant: "destructive",
+      });
+    } finally {
+      setPhotoUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleSaveFocus = async () => {
+    if (!playerInfo?.playerId) return;
+    
+    setSavingFocus(true);
+    try {
+      const { error } = await supabase
+        .from('players')
+        .update({ photo_focus_y: tempFocusY })
+        .eq('id', playerInfo.playerId);
+
+      if (error) throw error;
+
+      setPlayerInfo(prev => prev ? { ...prev, photoFocusY: tempFocusY } : null);
+      setShowFocusAdjuster(false);
+
+      toast({
+        title: "Focus saved",
+        description: "Photo positioning has been updated",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Save failed",
+        description: error.message || "Failed to save focus position",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingFocus(false);
+    }
+  };
 
   // Helper function to get ordinal suffix
   const getOrdinalSuffix = (num: number): string => {
@@ -265,19 +352,39 @@ export default function PlayerStatsPage() {
             const searchName = slugToName(playerSlugOrId);
             console.log('📋 Searching for name:', searchName);
             
-            const { data: allPlayers, error: allPlayersError } = await supabase
+            // First try a direct ilike search for efficiency
+            const { data: directMatch, error: directError } = await supabase
               .from('players')
-              .select('*');
+              .select('*')
+              .ilike('full_name', `%${searchName}%`)
+              .limit(10);
             
-            if (allPlayers && !allPlayersError) {
-              // Find first player whose name fuzzy matches
-              const matchedPlayer = allPlayers.find(player => 
+            if (directMatch && directMatch.length > 0 && !directError) {
+              // Find best match using fuzzy matching
+              const matchedPlayer = directMatch.find(player => 
                 namesMatch(player.full_name, searchName)
-              );
+              ) || directMatch[0];
               
-              if (matchedPlayer) {
-                console.log('✅ Found player via name matching:', matchedPlayer.full_name);
-                initialPlayer = matchedPlayer;
+              console.log('✅ Found player via direct name search:', matchedPlayer.full_name);
+              initialPlayer = matchedPlayer;
+            } else {
+              // Fallback: fetch all players with higher limit for fuzzy matching
+              console.log('📋 Direct search failed, trying full fuzzy search...');
+              const { data: allPlayers, error: allPlayersError } = await supabase
+                .from('players')
+                .select('*')
+                .limit(10000);
+              
+              if (allPlayers && !allPlayersError) {
+                // Find first player whose name fuzzy matches
+                const matchedPlayer = allPlayers.find(player => 
+                  namesMatch(player.full_name, searchName)
+                );
+                
+                if (matchedPlayer) {
+                  console.log('✅ Found player via fuzzy matching:', matchedPlayer.full_name);
+                  initialPlayer = matchedPlayer;
+                }
               }
             }
           }
@@ -296,35 +403,34 @@ export default function PlayerStatsPage() {
 
         console.log('✅ Found initial player:', initialPlayer.full_name);
 
-        // Step 2: Find ALL matching player records using fuzzy matching
+        // Step 2: Find ALL matching player records using fuzzy matching across ALL teams
+        // This catches players who have transferred between teams
         console.log('🔍 Step 2: Finding all matching player records via fuzzy matching...');
         
-        let allPlayers = [initialPlayer];
+        // Search for ALL players with similar names (not just same team) to catch transfers
+        const searchTerms = initialPlayer.full_name.split(' ').filter((t: string) => t.length > 2);
+        const searchQuery = searchTerms[searchTerms.length - 1] || initialPlayer.full_name; // Use last name for broader search
         
-        // Only query by team if the player has a team
-        if (initialPlayer.team) {
-          const { data: allPlayersData, error: allPlayersError } = await supabase
-            .from('players')
-            .select('*')
-            .eq('team', initialPlayer.team);
+        const { data: allPlayersData, error: allPlayersError } = await supabase
+          .from('players')
+          .select('*')
+          .ilike('full_name', `%${searchQuery}%`)
+          .limit(100);
 
-          if (!allPlayersError && allPlayersData) {
-            allPlayers = allPlayersData;
-          } else if (allPlayersError) {
-            console.error('❌ Error fetching team players:', allPlayersError);
-          }
-        } else {
-          console.log('⚠️ Player has no team, skipping team-based search');
+        let allPlayers = [initialPlayer];
+        if (!allPlayersError && allPlayersData) {
+          allPlayers = allPlayersData;
+          console.log('📋 Found', allPlayers.length, 'players matching search:', searchQuery);
+        } else if (allPlayersError) {
+          console.error('❌ Error fetching players by name:', allPlayersError);
         }
 
-        console.log('📋 Found', allPlayers.length, 'players on team:', initialPlayer.team);
-
-        // Fuzzy match by name + team
+        // Fuzzy match by name to find the same person across different teams
         const matchingPlayers = allPlayers.filter(player => 
           namesMatch(player.full_name, initialPlayer.full_name)
         );
-
-        console.log('🎯 Fuzzy matched', matchingPlayers.length, 'player records');
+        
+        console.log('🎯 Fuzzy matched', matchingPlayers.length, 'player records across teams');
         
         const matches: PlayerMatch[] = matchingPlayers.map(p => ({
           id: p.id,
@@ -355,7 +461,10 @@ export default function PlayerStatsPage() {
           team: initialPlayer.team,
           position: initialPlayer.position,
           number: initialPlayer.number,
-          leagueId: initialPlayer.league_id
+          leagueId: initialPlayer.league_id,
+          playerId: initialPlayer.id,
+          photoPath: initialPlayer.photo_path,
+          photoFocusY: initialPlayer.photo_focus_y
         };
 
         // Step 3: Get ALL stats for ALL matching player IDs
@@ -372,13 +481,13 @@ export default function PlayerStatsPage() {
         if (uniqueLeagueIds.length > 0) {
           const { data: leaguesData } = await supabase
             .from('leagues')
-            .select('id, name')
-            .in('id', uniqueLeagueIds);
+            .select('league_id, name')
+            .in('league_id', uniqueLeagueIds);
           
           if (leaguesData) {
             const leagueMap = new Map<string, string>();
             leaguesData.forEach(league => {
-              leagueMap.set(league.id, league.name);
+              leagueMap.set(league.league_id, league.name);
             });
             setLeagueNames(leagueMap);
             console.log('🏆 Fetched league names:', leagueMap);
@@ -492,12 +601,50 @@ export default function PlayerStatsPage() {
         // If we have stats with joined players data, use that for player info
         if (statsWithOpponents && statsWithOpponents.length > 0 && statsWithOpponents[0].players) {
           console.log('📋 Using joined players data:', statsWithOpponents[0].players);
+          
+          // Sort by game_date to find the most recent game (handles cases where created_at order differs)
+          const sortedByGameDate = [...statsWithOpponents].sort((a, b) => {
+            const dateA = a.game_date ? new Date(a.game_date).getTime() : 0;
+            const dateB = b.game_date ? new Date(b.game_date).getTime() : 0;
+            return dateB - dateA; // Descending
+          });
+          const mostRecentStat = sortedByGameDate[0] || statsWithOpponents[0];
+          
+          // Extract all unique teams from stats to detect transfers (normalize for comparison)
+          const normalizeTeam = (t: string) => t.trim().toLowerCase();
+          const allTeams = statsWithOpponents
+            .map(s => s.team_name || s.team)
+            .filter((team): team is string => Boolean(team));
+          
+          // Dedupe by normalized name, keeping first occurrence (display name)
+          const teamMap = new Map<string, string>();
+          allTeams.forEach(team => {
+            const norm = normalizeTeam(team);
+            if (!teamMap.has(norm)) {
+              teamMap.set(norm, team);
+            }
+          });
+          const uniqueTeams = Array.from(teamMap.values());
+          
+          // Current team is from the most recent game by game_date
+          const currentTeam = mostRecentStat.team_name || mostRecentStat.team || 'Unknown Team';
+          const currentTeamNorm = normalizeTeam(currentTeam);
+          
+          // Previous teams are any teams that are NOT the current team (compare normalized)
+          const previousTeams = uniqueTeams.filter(t => normalizeTeam(t) !== currentTeamNorm);
+          
+          console.log('🔄 Team history - Current:', currentTeam, 'Previous:', previousTeams);
+          
           playerInfo = {
-            name: statsWithOpponents[0].players.full_name || statsWithOpponents[0].full_name || statsWithOpponents[0].name || `${statsWithOpponents[0].firstname || ''} ${statsWithOpponents[0].familyname || ''}`.trim() || 'Unknown Player',
-            team: statsWithOpponents[0].team_name || statsWithOpponents[0].team || 'Unknown Team',
-            position: statsWithOpponents[0].position,
-            number: statsWithOpponents[0].number,
-            leagueId: statsWithOpponents[0].league_id
+            name: mostRecentStat.players?.full_name || mostRecentStat.full_name || mostRecentStat.name || `${mostRecentStat.firstname || ''} ${mostRecentStat.familyname || ''}`.trim() || 'Unknown Player',
+            team: currentTeam,
+            position: mostRecentStat.position,
+            number: mostRecentStat.number,
+            leagueId: mostRecentStat.league_id,
+            playerId: playerInfo.playerId,
+            photoPath: playerInfo.photoPath,
+            photoFocusY: playerInfo.photoFocusY,
+            previousTeams: previousTeams.length > 0 ? previousTeams : undefined
           };
         }
         
@@ -517,12 +664,33 @@ export default function PlayerStatsPage() {
             const fallbackTeam = stats[0].team_name || 
                                 stats[0].team || 
                                 'Unknown Team';
+            
+            // Also detect transfers in fallback (with normalization)
+            const normalizeTeamFallback = (t: string) => t.trim().toLowerCase();
+            const allTeamsFallback = stats
+              .map(s => s.team_name || s.team)
+              .filter((team): team is string => Boolean(team));
+            const teamMapFallback = new Map<string, string>();
+            allTeamsFallback.forEach(team => {
+              const norm = normalizeTeamFallback(team);
+              if (!teamMapFallback.has(norm)) {
+                teamMapFallback.set(norm, team);
+              }
+            });
+            const uniqueTeamsFallback = Array.from(teamMapFallback.values());
+            const fallbackTeamNorm = normalizeTeamFallback(fallbackTeam);
+            const previousTeamsFallback = uniqueTeamsFallback.filter(t => normalizeTeamFallback(t) !== fallbackTeamNorm);
+            
             setPlayerInfo({
               name: fallbackName,
               team: fallbackTeam,
               position: stats[0].position,
               number: stats[0].number,
-              leagueId: stats[0].league_id
+              leagueId: stats[0].league_id,
+              playerId: playerInfo.playerId,
+              photoPath: playerInfo.photoPath,
+              photoFocusY: playerInfo.photoFocusY,
+              previousTeams: previousTeamsFallback.length > 0 ? previousTeamsFallback : undefined
             });
           }
 
@@ -937,92 +1105,269 @@ export default function PlayerStatsPage() {
           </div>
         </div>
 
-        {/* Player Info Section */}
+        {/* Player Hero Section - Combined Info + Stats + Photo */}
         {playerInfo && (
           <div className="mb-6 md:mb-8">
-            <Card className="border-orange-200 dark:border-orange-500/30 shadow-md animate-slide-in-up bg-white dark:bg-neutral-900">
-              <CardContent className="p-4 md:p-6">
-                <div className="flex items-center gap-4">
-                  {/* Team Logo */}
-                  {playerInfo.team && playerInfo.leagueId && (
-                    <TeamLogo 
-                      teamName={playerInfo.team} 
-                      leagueId={playerInfo.leagueId}
-                      size="xl"
-                      className="flex-shrink-0"
-                    />
-                  )}
-                  
-                  {/* Player Info */}
-                  <div className="flex-1 min-w-0">
-                    <h1 className="text-xl md:text-2xl font-bold text-orange-900 dark:text-white mb-1 break-words" data-testid="text-player-name">{playerInfo.name}</h1>
+            <Card className="border-orange-200 dark:border-orange-500/30 shadow-lg animate-slide-in-up bg-white dark:bg-neutral-900 overflow-hidden">
+              <CardContent className="p-0 relative">
+                <div className="flex flex-col lg:flex-row">
+                  {/* Left Side - Player Info + Season Averages */}
+                  <div className="flex-1 p-4 md:p-6 lg:pr-0 z-10">
+                    {/* Player Name and Team with Logo */}
+                    <div className="mb-4">
+                      <div className="flex items-start gap-4 mb-3">
+                        {/* Team Logo - Left Side */}
+                        {playerInfo.team && playerInfo.leagueId && (
+                          <TeamLogo 
+                            teamName={playerInfo.team} 
+                            leagueId={playerInfo.leagueId}
+                            size="xl"
+                            className="flex-shrink-0"
+                          />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-orange-900 dark:text-white mb-1 break-words" data-testid="text-player-name">
+                            {playerInfo.name}
+                          </h1>
+                          <p className="text-orange-700 dark:text-orange-400 flex items-center gap-2 text-base md:text-lg" data-testid="text-player-team">
+                            <Trophy className="h-5 w-5 flex-shrink-0" />
+                            <span className="break-words font-medium">{playerInfo.team}</span>
+                          </p>
+                          {playerInfo.previousTeams && playerInfo.previousTeams.length > 0 && (
+                            <p className="text-orange-600/80 dark:text-orange-500/70 text-sm mt-1 flex items-center gap-1.5">
+                              <span className="text-xs">↩</span>
+                              <span className="italic">Previously: {playerInfo.previousTeams.join(', ')}</span>
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* Name Variations Indicator */}
+                      {nameVariationsWithLeagues.length > 0 && (
+                        <div className="mb-2">
+                          <p className="text-xs md:text-sm text-orange-600 dark:text-orange-400 italic">
+                            <span className="font-semibold">Also known as: </span>
+                            {nameVariationsWithLeagues.map((variation, index) => (
+                              <span key={index}>
+                                {variation.name} ({variation.leagueName})
+                                {index < nameVariationsWithLeagues.length - 1 ? ', ' : ''}
+                              </span>
+                            ))}
+                          </p>
+                        </div>
+                      )}
+                      
+                      <div className="flex flex-wrap items-center gap-3 text-xs md:text-sm text-orange-600 dark:text-orange-500">
+                        <span className="flex items-center gap-1 whitespace-nowrap">
+                          <div className="h-2 w-2 bg-green-400 rounded-full animate-pulse"></div>
+                          Active Player
+                        </span>
+                        {playerInfo.position && (
+                          <span className="whitespace-nowrap">• {playerInfo.position}</span>
+                        )}
+                        {playerInfo.number && (
+                          <span className="whitespace-nowrap">• #{playerInfo.number}</span>
+                        )}
+                      </div>
+                    </div>
                     
-                    {/* Name Variations Indicator */}
-                    {nameVariationsWithLeagues.length > 0 && (
-                      <div className="mb-2">
-                        <p className="text-xs md:text-sm text-orange-600 dark:text-orange-400 italic">
-                          <span className="font-semibold">Also known as: </span>
-                          {nameVariationsWithLeagues.map((variation, index) => (
-                            <span key={index}>
-                              {variation.name} ({variation.leagueName})
-                              {index < nameVariationsWithLeagues.length - 1 ? ', ' : ''}
-                            </span>
-                          ))}
-                        </p>
+                    {/* Placeholder for future content (bio, etc.) */}
+                    <div className="mt-4 pt-4 border-t border-orange-100 dark:border-neutral-700">
+                      {/* Future content area - can be used for bio, highlights, etc. */}
+                    </div>
+                    
+                    {/* Season Averages */}
+                    {filteredSeasonAverages && (
+                      <div className="mt-4 pt-4 border-t border-orange-100 dark:border-neutral-700">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Trophy className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                          <span className="text-sm font-semibold text-orange-800 dark:text-orange-300">
+                            Season Averages ({filteredSeasonAverages.games_played} GP)
+                          </span>
+                          {selectedLeagueFilter !== "all" && (
+                            <Badge variant="outline" className="text-xs bg-orange-50 dark:bg-orange-900/50 text-orange-700 dark:text-orange-400 border-orange-300 dark:border-orange-500/50">
+                              {leagueNames.get(selectedLeagueFilter) || 'Filtered'}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-3 md:grid-cols-5 gap-3 md:gap-4">
+                          {/* Points */}
+                          <div className="text-center group">
+                            <div className="text-xl md:text-2xl lg:text-3xl font-bold text-orange-700 dark:text-orange-400 group-hover:scale-110 transition-transform">
+                              {filteredSeasonAverages.avg_points.toFixed(1)}
+                            </div>
+                            <div className="text-xs text-orange-600 dark:text-orange-500">PPG</div>
+                            {playerRankings && (
+                              <div className="text-[10px] text-orange-500 dark:text-orange-600">({getOrdinalSuffix(playerRankings.points)})</div>
+                            )}
+                          </div>
+                          {/* Rebounds */}
+                          <div className="text-center group">
+                            <div className="text-xl md:text-2xl lg:text-3xl font-bold text-orange-700 dark:text-orange-400 group-hover:scale-110 transition-transform">
+                              {filteredSeasonAverages.avg_rebounds.toFixed(1)}
+                            </div>
+                            <div className="text-xs text-orange-600 dark:text-orange-500">RPG</div>
+                            {playerRankings && (
+                              <div className="text-[10px] text-orange-500 dark:text-orange-600">({getOrdinalSuffix(playerRankings.rebounds)})</div>
+                            )}
+                          </div>
+                          {/* Assists */}
+                          <div className="text-center group">
+                            <div className="text-xl md:text-2xl lg:text-3xl font-bold text-orange-700 dark:text-orange-400 group-hover:scale-110 transition-transform">
+                              {filteredSeasonAverages.avg_assists.toFixed(1)}
+                            </div>
+                            <div className="text-xs text-orange-600 dark:text-orange-500">APG</div>
+                            {playerRankings && (
+                              <div className="text-[10px] text-orange-500 dark:text-orange-600">({getOrdinalSuffix(playerRankings.assists)})</div>
+                            )}
+                          </div>
+                          {/* Steals - hidden on mobile */}
+                          <div className="text-center group hidden md:block">
+                            <div className="text-xl md:text-2xl lg:text-3xl font-bold text-orange-700 dark:text-orange-400 group-hover:scale-110 transition-transform">
+                              {filteredSeasonAverages.avg_steals.toFixed(1)}
+                            </div>
+                            <div className="text-xs text-orange-600 dark:text-orange-500">SPG</div>
+                            {playerRankings && (
+                              <div className="text-[10px] text-orange-500 dark:text-orange-600">({getOrdinalSuffix(playerRankings.steals)})</div>
+                            )}
+                          </div>
+                          {/* Blocks - hidden on mobile */}
+                          <div className="text-center group hidden md:block">
+                            <div className="text-xl md:text-2xl lg:text-3xl font-bold text-orange-700 dark:text-orange-400 group-hover:scale-110 transition-transform">
+                              {filteredSeasonAverages.avg_blocks.toFixed(1)}
+                            </div>
+                            <div className="text-xs text-orange-600 dark:text-orange-500">BPG</div>
+                            {playerRankings && (
+                              <div className="text-[10px] text-orange-500 dark:text-orange-600">({getOrdinalSuffix(playerRankings.blocks)})</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Right Side - Player Photo with Fade (larger) */}
+                  <div className="relative lg:w-96 xl:w-[28rem] h-64 lg:h-auto min-h-[280px] lg:min-h-[400px]">
+                    {/* Top edge cover - extends above container to hide seam on mobile */}
+                    <div className="absolute -top-4 left-0 right-0 h-8 bg-gradient-to-b from-white via-white to-white/80 dark:from-neutral-900 dark:via-neutral-900 dark:to-neutral-900/80 z-10 lg:hidden" />
+                    
+                    {/* Player Photo */}
+                    {playerInfo.playerId && playerInfo.photoPath ? (
+                      <>
+                        <img
+                          src={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/player-photos/${playerInfo.photoPath}`}
+                          alt={playerInfo.name}
+                          className="absolute inset-0 w-full h-full object-cover"
+                          style={{ objectPosition: `50% ${showFocusAdjuster ? tempFocusY : (playerInfo.photoFocusY ?? 50)}%` }}
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                          }}
+                        />
+                        {/* Gradient fade from left */}
+                        <div className="absolute inset-0 bg-gradient-to-r from-white via-white/60 to-transparent dark:from-neutral-900 dark:via-neutral-900/60 lg:block hidden" />
+                        {/* Gradient fade from top on mobile - extended for seamless blend */}
+                        <div className="absolute inset-0 bg-gradient-to-b from-white from-0% via-white/70 via-20% to-transparent to-60% dark:from-neutral-900 dark:from-0% dark:via-neutral-900/70 dark:via-20% dark:to-transparent lg:hidden z-[5]" />
+                      </>
+                    ) : (
+                      <div className="absolute inset-0 bg-gradient-to-br from-orange-100 to-orange-200 dark:from-neutral-800 dark:to-neutral-700 flex items-center justify-center">
+                        <User className="w-24 h-24 text-orange-300 dark:text-neutral-600" />
+                        {/* Gradient fade from left */}
+                        <div className="absolute inset-0 bg-gradient-to-r from-white via-white/60 to-transparent dark:from-neutral-900 dark:via-neutral-900/60 lg:block hidden" />
+                        {/* Gradient fade from top on mobile - extended for seamless blend */}
+                        <div className="absolute inset-0 bg-gradient-to-b from-white from-0% via-white/70 via-20% to-transparent to-60% dark:from-neutral-900 dark:from-0% dark:via-neutral-900/70 dark:via-20% dark:to-transparent lg:hidden z-[5]" />
                       </div>
                     )}
                     
-                    <p className="text-orange-700 dark:text-orange-400 flex items-center gap-2 text-sm md:text-base mb-2" data-testid="text-player-team">
-                      <Trophy className="h-4 w-4 flex-shrink-0" />
-                      <span className="break-words">{playerInfo.team}</span>
-                    </p>
-                    <div className="flex flex-wrap items-center gap-3 text-xs md:text-sm text-orange-600 dark:text-orange-500">
-                      <span className="flex items-center gap-1 whitespace-nowrap">
-                        <div className="h-2 w-2 bg-green-400 rounded-full"></div>
-                        Active Player
-                      </span>
-                      {playerInfo.position && (
-                        <span className="whitespace-nowrap">• {playerInfo.position}</span>
-                      )}
-                      {playerInfo.number && (
-                        <span className="whitespace-nowrap">• #{playerInfo.number}</span>
-                      )}
-                    </div>
+                    {/* Focus Adjuster UI - only visible when adjusting */}
+                    {showFocusAdjuster && playerInfo.photoPath && (
+                      <div className="absolute bottom-16 left-4 right-4 z-20 bg-white/95 dark:bg-neutral-800/95 rounded-lg p-3 shadow-lg">
+                        <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Adjust vertical focus (drag to show face)
+                        </div>
+                        <Slider
+                          value={[tempFocusY]}
+                          onValueChange={(value) => setTempFocusY(value[0])}
+                          min={0}
+                          max={100}
+                          step={1}
+                          className="mb-3"
+                          data-testid="slider-photo-focus"
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={handleSaveFocus}
+                            disabled={savingFocus}
+                            size="sm"
+                            className="flex-1 bg-green-600 hover:bg-green-700"
+                            data-testid="button-save-focus"
+                          >
+                            {savingFocus ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Check className="w-4 h-4 mr-1" />}
+                            Save
+                          </Button>
+                          <Button
+                            onClick={() => setShowFocusAdjuster(false)}
+                            variant="outline"
+                            size="sm"
+                            className="flex-1"
+                            data-testid="button-cancel-focus"
+                          >
+                            <X className="w-4 h-4 mr-1" />
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Upload and Adjust buttons - only visible to authenticated users */}
+                    {user && playerInfo.playerId && !showFocusAdjuster && (
+                      <>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handlePhotoUpload}
+                          className="hidden"
+                          data-testid="input-player-photo"
+                        />
+                        <div className="absolute bottom-4 right-4 z-10 flex gap-2">
+                          {playerInfo.photoPath && (
+                            <Button
+                              onClick={() => {
+                                setTempFocusY(playerInfo.photoFocusY ?? 50);
+                                setShowFocusAdjuster(true);
+                              }}
+                              size="sm"
+                              variant="outline"
+                              className="bg-white/90 dark:bg-neutral-800/90 shadow-lg"
+                              data-testid="button-adjust-photo-focus"
+                            >
+                              <Move className="w-4 h-4 mr-2" />
+                              Adjust
+                            </Button>
+                          )}
+                          <Button
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={photoUploading}
+                            size="sm"
+                            className="bg-orange-600 hover:bg-orange-700 text-white shadow-lg"
+                            data-testid="button-upload-player-photo"
+                          >
+                            {photoUploading ? (
+                              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                            ) : (
+                              <Upload className="w-4 h-4 mr-2" />
+                            )}
+                            {photoUploading ? 'Uploading...' : playerInfo.photoPath ? 'Change' : 'Add Photo'}
+                          </Button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </CardContent>
             </Card>
           </div>
         )}
-
-        {/* Player Bio - AI Generated */}
-        <Card className="mb-6 md:mb-8 border-orange-200 dark:border-orange-500/30 shadow-md animate-slide-in-up bg-gradient-to-br from-white to-orange-50 dark:from-neutral-900 dark:to-neutral-800">
-          <CardHeader className="bg-white dark:bg-neutral-900 text-orange-900 dark:text-white rounded-t-lg border-b border-orange-200 dark:border-neutral-700">
-            <CardTitle className="flex items-center gap-2">
-              {analysisLoading ? (
-                <Brain className="h-5 w-5 animate-pulse text-orange-600 dark:text-orange-400" />
-              ) : (
-                <Sparkles className="h-5 w-5 text-orange-600 dark:text-orange-400 animate-float" />
-              )}
-              Player Bio
-            </CardTitle>
-            <CardDescription className="text-orange-700 dark:text-orange-400">
-              {aiAnalysis ? "AI-powered analysis of playing style and strengths" : "AI generation coming soon"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-4 md:p-6">
-            {analysisLoading ? (
-              <div className="flex items-center gap-3 text-orange-700 dark:text-orange-400">
-                <Brain className="h-5 w-5 animate-pulse" />
-                <span className="animate-pulse">Generating player bio...</span>
-              </div>
-            ) : (
-              <div className="text-sm md:text-base text-orange-600 dark:text-orange-400 leading-relaxed italic">
-                Coming soon
-              </div>
-            )}
-          </CardContent>
-        </Card>
 
         {/* Player Leagues */}
         {playerLeagues.length > 0 && (
@@ -1073,224 +1418,100 @@ export default function PlayerStatsPage() {
           </Card>
         )}
 
-        {/* League Filter Dropdown */}
-        {playerMatches.length > 1 && (
-          <Card className="mb-6 border-orange-200 dark:border-orange-500/30 shadow-md animate-slide-in-up bg-white dark:bg-neutral-900">
-            <CardHeader className="bg-white dark:bg-neutral-900 text-orange-900 dark:text-white rounded-t-lg border-b border-orange-200 dark:border-neutral-700">
-              <CardTitle className="flex items-center gap-2">
-                <Filter className="h-5 w-5 text-orange-700 dark:text-orange-400" />
-                Filter by Competition
-              </CardTitle>
-              <CardDescription className="text-orange-700 dark:text-orange-400">
-                View stats from specific competitions or all combined
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <Select 
-                value={selectedLeagueFilter} 
-                onValueChange={setSelectedLeagueFilter}
-              >
-                <SelectTrigger className="w-full md:w-80 border-orange-200 dark:border-neutral-600 focus:ring-orange-500 dark:bg-neutral-800 dark:text-white" data-testid="select-league-filter">
-                  <SelectValue placeholder="Select a competition" />
-                </SelectTrigger>
-                <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
-                  <SelectItem value="all" data-testid="select-league-all" className="dark:text-white dark:focus:bg-neutral-700">
-                    All Competitions
-                  </SelectItem>
-                  {Array.from(new Set(playerMatches.map(m => m.league_id)))
-                    .filter(Boolean)
-                    .map(leagueId => (
-                      <SelectItem 
-                        key={leagueId} 
-                        value={leagueId}
-                        data-testid={`select-league-${leagueId}`}
-                        className="dark:text-white dark:focus:bg-neutral-700"
-                      >
-                        {leagueNames.get(leagueId) || leagueId}
-                      </SelectItem>
-                    ))
-                  }
-                </SelectContent>
-              </Select>
-              {selectedLeagueFilter !== "all" && (
-                <p className="mt-3 text-sm text-orange-600 dark:text-orange-400">
-                  Showing stats from: <span className="font-semibold">{leagueNames.get(selectedLeagueFilter) || selectedLeagueFilter}</span>
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Season Averages */}
+        {/* Shooting Splits - Compact Display with Rankings */}
         {filteredSeasonAverages && (
-          <Card className="mb-8 border-orange-200 dark:border-orange-500/30 shadow-md animate-slide-in-up hover:animate-glow bg-white dark:bg-neutral-900">
-            <CardHeader className="bg-white dark:bg-neutral-900 text-orange-900 dark:text-white rounded-t-lg border-b border-orange-200 dark:border-neutral-700">
-              <CardTitle className="flex items-center gap-2">
-                <Trophy className="h-5 w-5 animate-float text-orange-700 dark:text-orange-400" />
-                Season Averages ({filteredSeasonAverages.games_played} games)
-                {selectedLeagueFilter !== "all" && (
-                  <Badge variant="outline" className="ml-2 bg-orange-50 dark:bg-orange-900/50 text-orange-700 dark:text-orange-400 border-orange-300 dark:border-orange-500/50">
-                    {leagueNames.get(selectedLeagueFilter) || 'Filtered'}
-                  </Badge>
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 md:pt-6">
-              <div className="grid [grid-template-columns:repeat(auto-fit,minmax(120px,1fr))] justify-center gap-3 sm:gap-4 lg:gap-6">
-                {/* Points */}
-                <div className="mx-auto max-w-[140px] w-full text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
-                  <div className="relative p-2 sm:p-3">
-                    <div className="text-lg font-semibold md:text-3xl lg:text-4xl md:font-bold text-orange-700 dark:text-orange-400 group-hover:text-orange-800 dark:group-hover:text-orange-300 transition-colors duration-300 group-hover:animate-pulse">
-                      {filteredSeasonAverages.avg_points.toFixed(1)}
-                    </div>
-                    <div className="text-xs md:text-sm text-orange-700 dark:text-orange-500 group-hover:text-orange-800 dark:group-hover:text-orange-400 transition-colors duration-300 mt-1">PPG</div>
-                    {playerRankings && (
-                      <div className="text-xs text-orange-600 dark:text-orange-500 mt-1">({getOrdinalSuffix(playerRankings.points)})</div>
-                    )}
-                    <div className="max-w-[120px] mx-auto bg-orange-50 dark:bg-neutral-700 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
-                        style={{ width: `${Math.min((filteredSeasonAverages.avg_points / 30) * 100, 100)}%` }}
-                      ></div>
-                    </div>
+          <Card className="mb-4 border-orange-200 dark:border-orange-500/30 shadow-md animate-slide-in-up bg-white dark:bg-neutral-900">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <TrendingUp className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                <span className="text-sm font-semibold text-orange-800 dark:text-orange-300">Shooting Splits</span>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                {/* FG% */}
+                <div className="text-center">
+                  <div className="text-lg md:text-xl font-bold text-orange-700 dark:text-orange-400">
+                    {formatPercentage(filteredSeasonAverages.fg_percentage)}
+                  </div>
+                  <div className="text-xs text-orange-600 dark:text-orange-500">FG%</div>
+                  {playerRankings && (
+                    <div className="text-[10px] text-orange-500 dark:text-orange-600">({getOrdinalSuffix(playerRankings.fg_percentage)})</div>
+                  )}
+                  <div className="mt-1 bg-orange-100 dark:bg-neutral-700 h-1.5 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-orange-400 to-orange-500 rounded-full"
+                      style={{ width: `${filteredSeasonAverages.fg_percentage}%` }}
+                    />
                   </div>
                 </div>
-
-                {/* Rebounds */}
-                <div className="mx-auto max-w-[140px] w-full text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
-                  <div className="relative p-2 sm:p-3">
-                    <div className="text-lg font-semibold md:text-3xl lg:text-4xl md:font-bold text-orange-700 dark:text-orange-400 group-hover:text-orange-800 dark:group-hover:text-orange-300 transition-colors duration-300 group-hover:animate-bounce">
-                      {filteredSeasonAverages.avg_rebounds.toFixed(1)}
-                    </div>
-                    <div className="text-xs md:text-sm text-orange-700 dark:text-orange-500 group-hover:text-orange-800 dark:group-hover:text-orange-400 transition-colors duration-300 mt-1">RPG</div>
-                    {playerRankings && (
-                      <div className="text-xs text-orange-600 dark:text-orange-500 mt-1">({getOrdinalSuffix(playerRankings.rebounds)})</div>
-                    )}
-                    <div className="max-w-[120px] mx-auto bg-orange-50 dark:bg-neutral-700 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
-                        style={{ width: `${Math.min((filteredSeasonAverages.avg_rebounds / 15) * 100, 100)}%` }}
-                      ></div>
-                    </div>
+                {/* 3P% */}
+                <div className="text-center">
+                  <div className="text-lg md:text-xl font-bold text-orange-700 dark:text-orange-400">
+                    {formatPercentage(filteredSeasonAverages.three_point_percentage)}
+                  </div>
+                  <div className="text-xs text-orange-600 dark:text-orange-500">3P%</div>
+                  {playerRankings && (
+                    <div className="text-[10px] text-orange-500 dark:text-orange-600">({getOrdinalSuffix(playerRankings.three_point_percentage)})</div>
+                  )}
+                  <div className="mt-1 bg-orange-100 dark:bg-neutral-700 h-1.5 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-orange-400 to-orange-500 rounded-full"
+                      style={{ width: `${filteredSeasonAverages.three_point_percentage}%` }}
+                    />
                   </div>
                 </div>
-
-                {/* Assists */}
-                <div className="mx-auto max-w-[140px] w-full text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
-                  <div className="relative p-2 sm:p-3">
-                    <div className="text-lg font-semibold md:text-3xl lg:text-4xl md:font-bold text-orange-700 dark:text-orange-400 group-hover:text-orange-800 dark:group-hover:text-orange-300 transition-colors duration-300 group-hover:animate-pulse">
-                      {filteredSeasonAverages.avg_assists.toFixed(1)}
-                    </div>
-                    <div className="text-xs md:text-sm text-orange-700 dark:text-orange-500 group-hover:text-orange-800 dark:group-hover:text-orange-400 transition-colors duration-300 mt-1">APG</div>
-                    {playerRankings && (
-                      <div className="text-xs text-orange-600 dark:text-orange-500 mt-1">({getOrdinalSuffix(playerRankings.assists)})</div>
-                    )}
-                    <div className="max-w-[120px] mx-auto bg-orange-50 dark:bg-neutral-700 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
-                        style={{ width: `${Math.min((filteredSeasonAverages.avg_assists / 12) * 100, 100)}%` }}
-                      ></div>
-                    </div>
+                {/* FT% */}
+                <div className="text-center">
+                  <div className="text-lg md:text-xl font-bold text-orange-700 dark:text-orange-400">
+                    {formatPercentage(filteredSeasonAverages.ft_percentage)}
                   </div>
-                </div>
-
-                {/* Steals */}
-                <div className="mx-auto max-w-[140px] w-full text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
-                  <div className="relative p-2 sm:p-3">
-                    <div className="text-lg font-semibold md:text-3xl lg:text-4xl md:font-bold text-orange-700 dark:text-orange-400 group-hover:text-orange-800 dark:group-hover:text-orange-300 transition-colors duration-300 group-hover:animate-pulse">
-                      {filteredSeasonAverages.avg_steals.toFixed(1)}
-                    </div>
-                    <div className="text-xs md:text-sm text-orange-700 dark:text-orange-500 group-hover:text-orange-800 dark:group-hover:text-orange-400 transition-colors duration-300 mt-1">SPG</div>
-                    {playerRankings && (
-                      <div className="text-xs text-orange-600 dark:text-orange-500 mt-1">({getOrdinalSuffix(playerRankings.steals)})</div>
-                    )}
-                    <div className="max-w-[120px] mx-auto bg-orange-50 dark:bg-neutral-700 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
-                        style={{ width: `${Math.min((filteredSeasonAverages.avg_steals / 5) * 100, 100)}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Blocks */}
-                <div className="mx-auto max-w-[140px] w-full text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
-                  <div className="relative p-2 sm:p-3">
-                    <div className="text-lg font-semibold md:text-3xl lg:text-4xl md:font-bold text-orange-700 dark:text-orange-400 group-hover:text-orange-800 dark:group-hover:text-orange-300 transition-colors duration-300 group-hover:animate-pulse">
-                      {filteredSeasonAverages.avg_blocks.toFixed(1)}
-                    </div>
-                    <div className="text-xs md:text-sm text-orange-700 dark:text-orange-500 group-hover:text-orange-800 dark:group-hover:text-orange-400 transition-colors duration-300 mt-1">BPG</div>
-                    {playerRankings && (
-                      <div className="text-xs text-orange-600 dark:text-orange-500 mt-1">({getOrdinalSuffix(playerRankings.blocks)})</div>
-                    )}
-                    <div className="max-w-[120px] mx-auto bg-orange-50 dark:bg-neutral-700 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
-                        style={{ width: `${Math.min((filteredSeasonAverages.avg_blocks / 5) * 100, 100)}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Field Goal % */}
-                <div className="mx-auto max-w-[140px] w-full text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
-                  <div className="relative p-2 sm:p-3">
-                    <div className="text-lg font-semibold md:text-3xl lg:text-4xl md:font-bold text-orange-700 dark:text-orange-400 group-hover:text-orange-800 dark:group-hover:text-orange-300 transition-colors duration-300 group-hover:animate-pulse">
-                      {formatPercentage(filteredSeasonAverages.fg_percentage)}
-                    </div>
-                    <div className="text-xs md:text-sm text-orange-700 dark:text-orange-500 group-hover:text-orange-800 dark:group-hover:text-orange-400 transition-colors duration-300 mt-1">FG%</div>
-                    {playerRankings && (
-                      <div className="text-xs text-orange-600 dark:text-orange-500 mt-1">({getOrdinalSuffix(playerRankings.fg_percentage)})</div>
-                    )}
-                    <div className="max-w-[120px] mx-auto bg-orange-50 dark:bg-neutral-700 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
-                        style={{ width: `${filteredSeasonAverages.fg_percentage}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 3-Point % */}
-                <div className="mx-auto max-w-[140px] w-full text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
-                  <div className="relative p-2 sm:p-3">
-                    <div className="text-lg font-semibold md:text-3xl lg:text-4xl md:font-bold text-orange-700 dark:text-orange-400 group-hover:text-orange-800 dark:group-hover:text-orange-300 transition-colors duration-300 group-hover:animate-pulse">
-                      {formatPercentage(filteredSeasonAverages.three_point_percentage)}
-                    </div>
-                    <div className="text-xs md:text-sm text-orange-700 dark:text-orange-500 group-hover:text-orange-800 dark:group-hover:text-orange-400 transition-colors duration-300 mt-1">3P%</div>
-                    {playerRankings && (
-                      <div className="text-xs text-orange-600 dark:text-orange-500 mt-1">({getOrdinalSuffix(playerRankings.three_point_percentage)})</div>
-                    )}
-                    <div className="max-w-[120px] mx-auto bg-orange-50 dark:bg-neutral-700 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
-                        style={{ width: `${filteredSeasonAverages.three_point_percentage}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Free Throw % */}
-                <div className="mx-auto max-w-[140px] w-full text-center group cursor-pointer transform hover:scale-110 transition-all duration-300">
-                  <div className="relative p-2 sm:p-3">
-                    <div className="text-lg font-semibold md:text-3xl lg:text-4xl md:font-bold text-orange-700 dark:text-orange-400 group-hover:text-orange-800 dark:group-hover:text-orange-300 transition-colors duration-300 group-hover:animate-pulse">
-                      {formatPercentage(filteredSeasonAverages.ft_percentage)}
-                    </div>
-                    {playerRankings && (
-                      <div className="text-xs text-orange-600 dark:text-orange-500 mt-1">({getOrdinalSuffix(playerRankings.ft_percentage)})</div>
-                    )}
-                    <div className="text-xs md:text-sm text-orange-700 dark:text-orange-500 group-hover:text-orange-800 dark:group-hover:text-orange-400 transition-colors duration-300 mt-1">FT%</div>
-                    <div className="max-w-[120px] mx-auto bg-orange-50 dark:bg-neutral-700 h-2 rounded-full mt-2 md:mt-3 overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-all duration-1000 group-hover:scale-x-110 group-hover:shadow-lg"
-                        style={{ width: `${filteredSeasonAverages.ft_percentage}%` }}
-                      ></div>
-                    </div>
+                  <div className="text-xs text-orange-600 dark:text-orange-500">FT%</div>
+                  {playerRankings && (
+                    <div className="text-[10px] text-orange-500 dark:text-orange-600">({getOrdinalSuffix(playerRankings.ft_percentage)})</div>
+                  )}
+                  <div className="mt-1 bg-orange-100 dark:bg-neutral-700 h-1.5 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-gradient-to-r from-orange-400 to-orange-500 rounded-full"
+                      style={{ width: `${filteredSeasonAverages.ft_percentage}%` }}
+                    />
                   </div>
                 </div>
               </div>
             </CardContent>
           </Card>
+        )}
+
+        {/* Competition Filter - Compact */}
+        {playerMatches.length > 1 && (
+          <div className="mb-4 flex flex-wrap items-center gap-2 animate-slide-in-up">
+            <Filter className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+            <span className="text-sm text-orange-700 dark:text-orange-400">Competition:</span>
+            <Select 
+              value={selectedLeagueFilter} 
+              onValueChange={setSelectedLeagueFilter}
+            >
+              <SelectTrigger className="w-auto min-w-[160px] h-8 text-sm border-orange-200 dark:border-neutral-600 focus:ring-orange-500 dark:bg-neutral-800 dark:text-white" data-testid="select-league-filter">
+                <SelectValue placeholder="Select" />
+              </SelectTrigger>
+              <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
+                <SelectItem value="all" data-testid="select-league-all" className="dark:text-white dark:focus:bg-neutral-700">
+                  All Competitions
+                </SelectItem>
+                {Array.from(new Set(playerMatches.map(m => m.league_id)))
+                  .filter(Boolean)
+                  .map(leagueId => (
+                    <SelectItem 
+                      key={leagueId} 
+                      value={leagueId}
+                      data-testid={`select-league-${leagueId}`}
+                      className="dark:text-white dark:focus:bg-neutral-700"
+                    >
+                      {leagueNames.get(leagueId) || leagueId}
+                    </SelectItem>
+                  ))
+                }
+              </SelectContent>
+            </Select>
+          </div>
         )}
 
         {/* Game Log */}
