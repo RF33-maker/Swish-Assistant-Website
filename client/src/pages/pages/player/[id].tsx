@@ -854,6 +854,13 @@ export default function PlayerStatsPage() {
     return uniqueVariations;
   }, [playerMatches, leagueNames]);
 
+  // Compute player photo URL using Supabase storage getPublicUrl for production compatibility
+  const playerPhotoUrl = useMemo(() => {
+    if (!playerInfo?.photoPath) return null;
+    const { data } = supabase.storage.from('player-photos').getPublicUrl(playerInfo.photoPath);
+    return data.publicUrl || null;
+  }, [playerInfo?.photoPath]);
+
   // Search functionality
   useEffect(() => {
     if (!searchQuery.trim()) {
@@ -1252,10 +1259,10 @@ export default function PlayerStatsPage() {
                     <div className="absolute -top-4 left-0 right-0 h-8 bg-gradient-to-b from-white via-white to-white/80 dark:from-neutral-900 dark:via-neutral-900 dark:to-neutral-900/80 z-10 lg:hidden" />
                     
                     {/* Player Photo */}
-                    {playerInfo.playerId && playerInfo.photoPath ? (
+                    {playerInfo.playerId && playerPhotoUrl ? (
                       <>
                         <img
-                          src={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/player-photos/${playerInfo.photoPath}`}
+                          src={playerPhotoUrl}
                           alt={playerInfo.name}
                           className="absolute inset-0 w-full h-full object-cover"
                           style={{ objectPosition: `50% ${showFocusAdjuster ? tempFocusY : (playerInfo.photoFocusY ?? 50)}%` }}
