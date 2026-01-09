@@ -475,7 +475,7 @@ export default function PlayerStatsPage() {
           .from('player_stats')
           .select('*, players:player_id(full_name, league_id)')
           .in('player_id', playerIds)
-          .order('game_date', { ascending: false });
+          .order('created_at', { ascending: false });
 
         // Fetch league names for all unique league_ids from playerMatches
         const uniqueLeagueIds = Array.from(new Set(matches.map(m => m.league_id).filter(Boolean)));
@@ -603,6 +603,14 @@ export default function PlayerStatsPage() {
         if (statsWithOpponents && statsWithOpponents.length > 0 && statsWithOpponents[0].players) {
           console.log('📋 Using joined players data:', statsWithOpponents[0].players);
           
+          // Sort by game_date to find the most recent game (handles cases where created_at order differs)
+          const sortedByGameDate = [...statsWithOpponents].sort((a, b) => {
+            const dateA = a.game_date ? new Date(a.game_date).getTime() : 0;
+            const dateB = b.game_date ? new Date(b.game_date).getTime() : 0;
+            return dateB - dateA; // Descending
+          });
+          const mostRecentStat = sortedByGameDate[0] || statsWithOpponents[0];
+          
           // Extract all unique teams from stats to detect transfers (normalize for comparison)
           const normalizeTeam = (t: string) => t.trim().toLowerCase();
           const allTeams = statsWithOpponents
@@ -619,8 +627,8 @@ export default function PlayerStatsPage() {
           });
           const uniqueTeams = Array.from(teamMap.values());
           
-          // Current team is from the most recent game (stats are sorted by game_date desc)
-          const currentTeam = statsWithOpponents[0].team_name || statsWithOpponents[0].team || 'Unknown Team';
+          // Current team is from the most recent game by game_date
+          const currentTeam = mostRecentStat.team_name || mostRecentStat.team || 'Unknown Team';
           const currentTeamNorm = normalizeTeam(currentTeam);
           
           // Previous teams are any teams that are NOT the current team (compare normalized)
@@ -629,11 +637,11 @@ export default function PlayerStatsPage() {
           console.log('🔄 Team history - Current:', currentTeam, 'Previous:', previousTeams);
           
           playerInfo = {
-            name: statsWithOpponents[0].players.full_name || statsWithOpponents[0].full_name || statsWithOpponents[0].name || `${statsWithOpponents[0].firstname || ''} ${statsWithOpponents[0].familyname || ''}`.trim() || 'Unknown Player',
+            name: mostRecentStat.players?.full_name || mostRecentStat.full_name || mostRecentStat.name || `${mostRecentStat.firstname || ''} ${mostRecentStat.familyname || ''}`.trim() || 'Unknown Player',
             team: currentTeam,
-            position: statsWithOpponents[0].position,
-            number: statsWithOpponents[0].number,
-            leagueId: statsWithOpponents[0].league_id,
+            position: mostRecentStat.position,
+            number: mostRecentStat.number,
+            leagueId: mostRecentStat.league_id,
             playerId: playerInfo.playerId,
             photoPath: playerInfo.photoPath,
             photoFocusY: playerInfo.photoFocusY,
