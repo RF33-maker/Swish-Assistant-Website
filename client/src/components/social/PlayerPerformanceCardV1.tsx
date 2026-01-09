@@ -192,12 +192,14 @@ export function PlayerPerformanceCardV1({ data }: Props) {
         "
       >
         {data.home_logo_url && (
-          <img
-            src={data.home_logo_url}
-            alt={data.team_name}
-            className="w-[90px] h-[90px] object-contain"
-            data-testid="img-home-logo"
-          />
+          <div className="w-[100px] h-[100px] flex items-center justify-center">
+            <img
+              src={data.home_logo_url}
+              alt={data.team_name}
+              className="max-w-full max-h-full object-contain"
+              data-testid="img-home-logo"
+            />
+          </div>
         )}
 
         <span
@@ -214,12 +216,14 @@ export function PlayerPerformanceCardV1({ data }: Props) {
         </span>
 
         {data.away_logo_url && (
-          <img
-            src={data.away_logo_url}
-            alt={data.opponent_name}
-            className="w-[90px] h-[90px] object-contain"
-            data-testid="img-away-logo"
-          />
+          <div className="w-[100px] h-[100px] flex items-center justify-center">
+            <img
+              src={data.away_logo_url}
+              alt={data.opponent_name}
+              className="max-w-full max-h-full object-contain"
+              data-testid="img-away-logo"
+            />
+          </div>
         )}
       </div>
     </div>
