@@ -2,7 +2,19 @@ import type { PlayerPerformanceV1Data } from "@/types/socialCards";
 
 type Props = { data: PlayerPerformanceV1Data };
 
+// Calculate font size based on name length - longer names get smaller text
+function getNameFontSize(name: string): number {
+  const len = name.length;
+  if (len <= 12) return 52;
+  if (len <= 16) return 46;
+  if (len <= 20) return 40;
+  if (len <= 24) return 36;
+  return 32; // Very long names
+}
+
 export function PlayerPerformanceCardV1({ data }: Props) {
+  const nameFontSize = getNameFontSize(data.player_name);
+  
   return (
     <div
       className="
@@ -89,20 +101,26 @@ export function PlayerPerformanceCardV1({ data }: Props) {
       <div
         className="
           absolute
-          left-[350px] top-[720px]
-          origin-center
+          left-[95px] top-[720px]
+          w-[640px]
+          origin-left
           [transform:rotate(-12deg)]
+          flex justify-center
         "
       >
         <span
           className="
-            text-[52px]
             font-black
             uppercase
             tracking-[0.1em]
             text-white
+            text-center
+            whitespace-nowrap
           "
-          style={{ fontFamily: "Impact, Arial Black, sans-serif" }}
+          style={{ 
+            fontFamily: "Impact, Arial Black, sans-serif",
+            fontSize: `${nameFontSize}px`
+          }}
           data-testid="text-player-name"
         >
           {data.player_name}
