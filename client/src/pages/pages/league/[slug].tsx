@@ -4430,15 +4430,24 @@ export default function LeaguePage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {standings.map((team, index) => (
+                      {standings.map((team, index) => {
+                        const rowBg = index < 3 
+                          ? 'bg-green-50 dark:bg-green-900/20' 
+                          : index >= standings.length - 2 
+                            ? 'bg-red-50 dark:bg-red-900/20' 
+                            : 'bg-white dark:bg-neutral-900';
+                        const stickyBg = index < 3 
+                          ? 'bg-green-50 dark:bg-[#0d2818]' 
+                          : index >= standings.length - 2 
+                            ? 'bg-red-50 dark:bg-[#2a1215]' 
+                            : 'bg-white dark:bg-neutral-900';
+                        return (
                         <tr 
                           key={team.team} 
-                          className={`border-b border-gray-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors ${
-                            index < 3 ? 'bg-green-50 dark:bg-green-900/20' : index >= standings.length - 2 ? 'bg-red-50 dark:bg-red-900/20' : ''
-                          }`}
+                          className={`border-b border-gray-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors ${rowBg}`}
                         >
-                          <td className="py-3 px-3 font-medium text-slate-600 dark:text-slate-400 sticky left-0 bg-inherit z-10">{index + 1}</td>
-                          <td className="py-3 px-3 font-medium text-slate-800 dark:text-slate-200 max-w-[180px] sticky left-12 md:static bg-inherit z-10">
+                          <td className={`py-3 px-3 font-medium text-slate-600 dark:text-slate-400 sticky left-0 z-10 ${stickyBg}`}>{index + 1}</td>
+                          <td className={`py-3 px-3 font-medium text-slate-800 dark:text-slate-200 max-w-[180px] sticky left-12 md:static z-10 ${stickyBg}`}>
                             <div className="flex items-center gap-2">
                               <TeamLogo teamName={team.team} leagueId={league?.league_id} size="sm" />
                               <span className="truncate">{team.team}</span>
@@ -4451,7 +4460,7 @@ export default function LeaguePage() {
                           <td className="py-3 px-3 text-right font-medium text-slate-700 dark:text-slate-300">{team.pointsAgainst}</td>
                           <td className={`py-3 px-3 text-right font-semibold ${team.pointsDiff > 0 ? 'text-green-600 dark:text-green-400' : team.pointsDiff < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-400'}`}>{team.pointsDiff > 0 ? '+' : ''}{team.pointsDiff}</td>
                         </tr>
-                      ))}
+                      );})}
                     </tbody>
                   </table>
                   <div className="mt-4 pt-3 border-t border-gray-100 dark:border-neutral-700 text-xs text-slate-500 dark:text-slate-400">
