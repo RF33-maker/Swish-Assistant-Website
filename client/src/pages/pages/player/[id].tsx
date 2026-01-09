@@ -1247,7 +1247,7 @@ export default function PlayerStatsPage() {
                   </div>
                   
                   {/* Right Side - Player Photo with Fade (larger) */}
-                  <div className="relative lg:w-96 xl:w-[28rem] h-64 lg:h-auto min-h-[280px] lg:min-h-[400px]">
+                  <div className="relative lg:w-96 xl:w-[28rem] h-64 lg:h-auto min-h-[280px] lg:min-h-[400px] overflow-hidden">
                     {/* Player Photo */}
                     {playerInfo.playerId && playerInfo.photoPath ? (
                       <>
@@ -1262,16 +1262,16 @@ export default function PlayerStatsPage() {
                         />
                         {/* Gradient fade from left */}
                         <div className="absolute inset-0 bg-gradient-to-r from-white via-white/60 to-transparent dark:from-neutral-900 dark:via-neutral-900/60 lg:block hidden" />
-                        {/* Gradient fade from top on mobile */}
-                        <div className="absolute inset-0 bg-gradient-to-b from-white via-white/40 to-transparent dark:from-neutral-900 dark:via-neutral-900/40 lg:hidden" />
+                        {/* Gradient fade from top on mobile - extended for seamless blend */}
+                        <div className="absolute inset-0 bg-gradient-to-b from-white from-5% via-white/50 via-30% to-transparent to-70% dark:from-neutral-900 dark:from-5% dark:via-neutral-900/50 dark:via-30% dark:to-transparent lg:hidden" />
                       </>
                     ) : (
                       <div className="absolute inset-0 bg-gradient-to-br from-orange-100 to-orange-200 dark:from-neutral-800 dark:to-neutral-700 flex items-center justify-center">
                         <User className="w-24 h-24 text-orange-300 dark:text-neutral-600" />
                         {/* Gradient fade from left */}
                         <div className="absolute inset-0 bg-gradient-to-r from-white via-white/60 to-transparent dark:from-neutral-900 dark:via-neutral-900/60 lg:block hidden" />
-                        {/* Gradient fade from top on mobile */}
-                        <div className="absolute inset-0 bg-gradient-to-b from-white via-white/40 to-transparent dark:from-neutral-900 dark:via-neutral-900/40 lg:hidden" />
+                        {/* Gradient fade from top on mobile - extended for seamless blend */}
+                        <div className="absolute inset-0 bg-gradient-to-b from-white from-5% via-white/50 via-30% to-transparent to-70% dark:from-neutral-900 dark:from-5% dark:via-neutral-900/50 dark:via-30% dark:to-transparent lg:hidden" />
                       </div>
                     )}
                     
