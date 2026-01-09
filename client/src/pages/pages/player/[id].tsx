@@ -403,35 +403,34 @@ export default function PlayerStatsPage() {
 
         console.log('✅ Found initial player:', initialPlayer.full_name);
 
-        // Step 2: Find ALL matching player records using fuzzy matching
+        // Step 2: Find ALL matching player records using fuzzy matching across ALL teams
+        // This catches players who have transferred between teams
         console.log('🔍 Step 2: Finding all matching player records via fuzzy matching...');
         
-        let allPlayers = [initialPlayer];
+        // Search for ALL players with similar names (not just same team) to catch transfers
+        const searchTerms = initialPlayer.full_name.split(' ').filter((t: string) => t.length > 2);
+        const searchQuery = searchTerms[searchTerms.length - 1] || initialPlayer.full_name; // Use last name for broader search
         
-        // Only query by team if the player has a team
-        if (initialPlayer.team) {
-          const { data: allPlayersData, error: allPlayersError } = await supabase
-            .from('players')
-            .select('*')
-            .eq('team', initialPlayer.team);
+        const { data: allPlayersData, error: allPlayersError } = await supabase
+          .from('players')
+          .select('*')
+          .ilike('full_name', `%${searchQuery}%`)
+          .limit(100);
 
-          if (!allPlayersError && allPlayersData) {
-            allPlayers = allPlayersData;
-          } else if (allPlayersError) {
-            console.error('❌ Error fetching team players:', allPlayersError);
-          }
-        } else {
-          console.log('⚠️ Player has no team, skipping team-based search');
+        let allPlayers = [initialPlayer];
+        if (!allPlayersError && allPlayersData) {
+          allPlayers = allPlayersData;
+          console.log('📋 Found', allPlayers.length, 'players matching search:', searchQuery);
+        } else if (allPlayersError) {
+          console.error('❌ Error fetching players by name:', allPlayersError);
         }
 
-        console.log('📋 Found', allPlayers.length, 'players on team:', initialPlayer.team);
-
-        // Fuzzy match by name + team
+        // Fuzzy match by name to find the same person across different teams
         const matchingPlayers = allPlayers.filter(player => 
           namesMatch(player.full_name, initialPlayer.full_name)
         );
-
-        console.log('🎯 Fuzzy matched', matchingPlayers.length, 'player records');
+        
+        console.log('🎯 Fuzzy matched', matchingPlayers.length, 'player records across teams');
         
         const matches: PlayerMatch[] = matchingPlayers.map(p => ({
           id: p.id,
