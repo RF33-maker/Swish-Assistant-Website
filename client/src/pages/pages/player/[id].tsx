@@ -1415,57 +1415,9 @@ export default function PlayerStatsPage() {
           </Card>
         )}
 
-        {/* League Filter Dropdown */}
-        {playerMatches.length > 1 && (
-          <Card className="mb-6 border-orange-200 dark:border-orange-500/30 shadow-md animate-slide-in-up bg-white dark:bg-neutral-900">
-            <CardHeader className="bg-white dark:bg-neutral-900 text-orange-900 dark:text-white rounded-t-lg border-b border-orange-200 dark:border-neutral-700">
-              <CardTitle className="flex items-center gap-2">
-                <Filter className="h-5 w-5 text-orange-700 dark:text-orange-400" />
-                Filter by Competition
-              </CardTitle>
-              <CardDescription className="text-orange-700 dark:text-orange-400">
-                View stats from specific competitions or all combined
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <Select 
-                value={selectedLeagueFilter} 
-                onValueChange={setSelectedLeagueFilter}
-              >
-                <SelectTrigger className="w-full md:w-80 border-orange-200 dark:border-neutral-600 focus:ring-orange-500 dark:bg-neutral-800 dark:text-white" data-testid="select-league-filter">
-                  <SelectValue placeholder="Select a competition" />
-                </SelectTrigger>
-                <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
-                  <SelectItem value="all" data-testid="select-league-all" className="dark:text-white dark:focus:bg-neutral-700">
-                    All Competitions
-                  </SelectItem>
-                  {Array.from(new Set(playerMatches.map(m => m.league_id)))
-                    .filter(Boolean)
-                    .map(leagueId => (
-                      <SelectItem 
-                        key={leagueId} 
-                        value={leagueId}
-                        data-testid={`select-league-${leagueId}`}
-                        className="dark:text-white dark:focus:bg-neutral-700"
-                      >
-                        {leagueNames.get(leagueId) || leagueId}
-                      </SelectItem>
-                    ))
-                  }
-                </SelectContent>
-              </Select>
-              {selectedLeagueFilter !== "all" && (
-                <p className="mt-3 text-sm text-orange-600 dark:text-orange-400">
-                  Showing stats from: <span className="font-semibold">{leagueNames.get(selectedLeagueFilter) || selectedLeagueFilter}</span>
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Shooting Splits - Compact Display */}
+        {/* Shooting Splits - Compact Display with Rankings */}
         {filteredSeasonAverages && (
-          <Card className="mb-6 border-orange-200 dark:border-orange-500/30 shadow-md animate-slide-in-up bg-white dark:bg-neutral-900">
+          <Card className="mb-4 border-orange-200 dark:border-orange-500/30 shadow-md animate-slide-in-up bg-white dark:bg-neutral-900">
             <CardContent className="p-4">
               <div className="flex items-center gap-2 mb-3">
                 <TrendingUp className="h-4 w-4 text-orange-600 dark:text-orange-400" />
@@ -1478,6 +1430,9 @@ export default function PlayerStatsPage() {
                     {formatPercentage(filteredSeasonAverages.fg_percentage)}
                   </div>
                   <div className="text-xs text-orange-600 dark:text-orange-500">FG%</div>
+                  {playerRankings && (
+                    <div className="text-[10px] text-orange-500 dark:text-orange-600">({getOrdinalSuffix(playerRankings.fg_percentage)})</div>
+                  )}
                   <div className="mt-1 bg-orange-100 dark:bg-neutral-700 h-1.5 rounded-full overflow-hidden">
                     <div 
                       className="h-full bg-gradient-to-r from-orange-400 to-orange-500 rounded-full"
@@ -1491,6 +1446,9 @@ export default function PlayerStatsPage() {
                     {formatPercentage(filteredSeasonAverages.three_point_percentage)}
                   </div>
                   <div className="text-xs text-orange-600 dark:text-orange-500">3P%</div>
+                  {playerRankings && (
+                    <div className="text-[10px] text-orange-500 dark:text-orange-600">({getOrdinalSuffix(playerRankings.three_point_percentage)})</div>
+                  )}
                   <div className="mt-1 bg-orange-100 dark:bg-neutral-700 h-1.5 rounded-full overflow-hidden">
                     <div 
                       className="h-full bg-gradient-to-r from-orange-400 to-orange-500 rounded-full"
@@ -1504,6 +1462,9 @@ export default function PlayerStatsPage() {
                     {formatPercentage(filteredSeasonAverages.ft_percentage)}
                   </div>
                   <div className="text-xs text-orange-600 dark:text-orange-500">FT%</div>
+                  {playerRankings && (
+                    <div className="text-[10px] text-orange-500 dark:text-orange-600">({getOrdinalSuffix(playerRankings.ft_percentage)})</div>
+                  )}
                   <div className="mt-1 bg-orange-100 dark:bg-neutral-700 h-1.5 rounded-full overflow-hidden">
                     <div 
                       className="h-full bg-gradient-to-r from-orange-400 to-orange-500 rounded-full"
@@ -1514,6 +1475,40 @@ export default function PlayerStatsPage() {
               </div>
             </CardContent>
           </Card>
+        )}
+
+        {/* Competition Filter - Compact */}
+        {playerMatches.length > 1 && (
+          <div className="mb-4 flex flex-wrap items-center gap-2 animate-slide-in-up">
+            <Filter className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+            <span className="text-sm text-orange-700 dark:text-orange-400">Competition:</span>
+            <Select 
+              value={selectedLeagueFilter} 
+              onValueChange={setSelectedLeagueFilter}
+            >
+              <SelectTrigger className="w-auto min-w-[160px] h-8 text-sm border-orange-200 dark:border-neutral-600 focus:ring-orange-500 dark:bg-neutral-800 dark:text-white" data-testid="select-league-filter">
+                <SelectValue placeholder="Select" />
+              </SelectTrigger>
+              <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
+                <SelectItem value="all" data-testid="select-league-all" className="dark:text-white dark:focus:bg-neutral-700">
+                  All Competitions
+                </SelectItem>
+                {Array.from(new Set(playerMatches.map(m => m.league_id)))
+                  .filter(Boolean)
+                  .map(leagueId => (
+                    <SelectItem 
+                      key={leagueId} 
+                      value={leagueId}
+                      data-testid={`select-league-${leagueId}`}
+                      className="dark:text-white dark:focus:bg-neutral-700"
+                    >
+                      {leagueNames.get(leagueId) || leagueId}
+                    </SelectItem>
+                  ))
+                }
+              </SelectContent>
+            </Select>
+          </div>
         )}
 
         {/* Game Log */}
