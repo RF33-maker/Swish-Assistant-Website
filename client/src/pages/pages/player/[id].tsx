@@ -1247,7 +1247,10 @@ export default function PlayerStatsPage() {
                   </div>
                   
                   {/* Right Side - Player Photo with Fade (larger) */}
-                  <div className="relative lg:w-96 xl:w-[28rem] h-64 lg:h-auto min-h-[280px] lg:min-h-[400px] overflow-hidden">
+                  <div className="relative lg:w-96 xl:w-[28rem] h-64 lg:h-auto min-h-[280px] lg:min-h-[400px]">
+                    {/* Top edge cover - extends above container to hide seam on mobile */}
+                    <div className="absolute -top-4 left-0 right-0 h-8 bg-gradient-to-b from-white via-white to-white/80 dark:from-neutral-900 dark:via-neutral-900 dark:to-neutral-900/80 z-10 lg:hidden" />
+                    
                     {/* Player Photo */}
                     {playerInfo.playerId && playerInfo.photoPath ? (
                       <>
@@ -1263,7 +1266,7 @@ export default function PlayerStatsPage() {
                         {/* Gradient fade from left */}
                         <div className="absolute inset-0 bg-gradient-to-r from-white via-white/60 to-transparent dark:from-neutral-900 dark:via-neutral-900/60 lg:block hidden" />
                         {/* Gradient fade from top on mobile - extended for seamless blend */}
-                        <div className="absolute inset-0 bg-gradient-to-b from-white from-5% via-white/50 via-30% to-transparent to-70% dark:from-neutral-900 dark:from-5% dark:via-neutral-900/50 dark:via-30% dark:to-transparent lg:hidden" />
+                        <div className="absolute inset-0 bg-gradient-to-b from-white from-0% via-white/70 via-20% to-transparent to-60% dark:from-neutral-900 dark:from-0% dark:via-neutral-900/70 dark:via-20% dark:to-transparent lg:hidden z-[5]" />
                       </>
                     ) : (
                       <div className="absolute inset-0 bg-gradient-to-br from-orange-100 to-orange-200 dark:from-neutral-800 dark:to-neutral-700 flex items-center justify-center">
@@ -1271,7 +1274,7 @@ export default function PlayerStatsPage() {
                         {/* Gradient fade from left */}
                         <div className="absolute inset-0 bg-gradient-to-r from-white via-white/60 to-transparent dark:from-neutral-900 dark:via-neutral-900/60 lg:block hidden" />
                         {/* Gradient fade from top on mobile - extended for seamless blend */}
-                        <div className="absolute inset-0 bg-gradient-to-b from-white from-5% via-white/50 via-30% to-transparent to-70% dark:from-neutral-900 dark:from-5% dark:via-neutral-900/50 dark:via-30% dark:to-transparent lg:hidden" />
+                        <div className="absolute inset-0 bg-gradient-to-b from-white from-0% via-white/70 via-20% to-transparent to-60% dark:from-neutral-900 dark:from-0% dark:via-neutral-900/70 dark:via-20% dark:to-transparent lg:hidden z-[5]" />
                       </div>
                     )}
                     
