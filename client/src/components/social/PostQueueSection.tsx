@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { PlayerPerformanceCardV1 } from "./PlayerPerformanceCardV1";
 import type { PlayerPerformanceV1Data } from "@/types/socialCards";
+import useEmblaCarousel from "embla-carousel-react";
 
 type Props = {
   cards: PlayerPerformanceV1Data[];
@@ -11,31 +12,49 @@ type Props = {
 };
 
 export function PostQueueSection({ cards, loading = false }: Props) {
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  
+  const [emblaRef, emblaApi] = useEmblaCarousel({
+    loop: true,
+    align: "center",
+    skipSnaps: false,
+    dragFree: false,
+  });
 
-  // Clamp currentIndex when cards array shrinks
+  const scrollPrev = useCallback(() => {
+    if (emblaApi) emblaApi.scrollPrev();
+  }, [emblaApi]);
+
+  const scrollNext = useCallback(() => {
+    if (emblaApi) emblaApi.scrollNext();
+  }, [emblaApi]);
+
+  const onSelect = useCallback(() => {
+    if (!emblaApi) return;
+    setSelectedIndex(emblaApi.selectedScrollSnap());
+  }, [emblaApi]);
+
   useEffect(() => {
-    if (cards.length > 0 && currentIndex >= cards.length) {
-      setCurrentIndex(cards.length - 1);
-    } else if (cards.length === 0) {
-      setCurrentIndex(0);
+    if (!emblaApi) return;
+    
+    onSelect();
+    emblaApi.on("select", onSelect);
+    emblaApi.on("reInit", onSelect);
+    
+    return () => {
+      emblaApi.off("select", onSelect);
+      emblaApi.off("reInit", onSelect);
+    };
+  }, [emblaApi, onSelect]);
+
+  // Reinitialize when cards change
+  useEffect(() => {
+    if (emblaApi) {
+      emblaApi.reInit();
     }
-  }, [cards.length, currentIndex]);
+  }, [emblaApi, cards.length]);
 
-  const goToPrevious = () => {
-    setCurrentIndex((prev) => (prev > 0 ? prev - 1 : cards.length - 1));
-  };
-
-  const goToNext = () => {
-    setCurrentIndex((prev) => (prev < cards.length - 1 ? prev + 1 : 0));
-  };
-
-  const currentCard = cards[currentIndex];
-
-  // Guard: if no valid card, show empty state
-  if (!loading && cards.length > 0 && !currentCard) {
-    return null;
-  }
+  const currentCard = cards[selectedIndex];
 
   return (
     <Card className="bg-white dark:bg-gray-800 border-orange-200 dark:border-orange-700 mt-8">
@@ -57,66 +76,108 @@ export function PostQueueSection({ cards, loading = false }: Props) {
             <p className="text-sm mt-1">Top performances will appear here</p>
           </div>
         ) : (
-          <div className="flex items-center gap-4">
+          <div className="relative">
+            {/* Navigation Arrows - Desktop */}
             <Button
               variant="outline"
               size="icon"
-              onClick={goToPrevious}
-              className="shrink-0 h-12 w-12 border-orange-200 dark:border-orange-700"
+              onClick={scrollPrev}
+              className="absolute left-0 top-1/2 -translate-y-1/2 z-10 h-10 w-10 md:h-12 md:w-12 border-orange-200 dark:border-orange-700 bg-white/90 dark:bg-gray-800/90 shadow-lg hidden sm:flex"
               data-testid="button-queue-prev"
             >
-              <ChevronLeft className="h-6 w-6" />
+              <ChevronLeft className="h-5 w-5 md:h-6 md:w-6" />
             </Button>
 
-            <div className="flex-1 overflow-hidden">
-              <div className="bg-gray-200 dark:bg-gray-700 p-4 rounded-lg">
-                <div 
-                  className="mx-auto origin-top"
-                  style={{ 
-                    transform: "scale(0.4)", 
-                    transformOrigin: "top center",
-                    width: "1080px",
-                    height: "540px",
-                    position: "relative",
-                    left: "50%",
-                    marginLeft: "-540px"
-                  }}
-                >
-                  <PlayerPerformanceCardV1 data={currentCard} />
-                </div>
-              </div>
-              
-              <div className="flex items-center justify-center gap-2 mt-4">
-                {cards.map((_, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setCurrentIndex(idx)}
-                    className={`w-2.5 h-2.5 rounded-full transition-colors ${
-                      idx === currentIndex
-                        ? "bg-orange-500"
-                        : "bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500"
-                    }`}
-                    data-testid={`button-queue-dot-${idx}`}
-                  />
-                ))}
-              </div>
-              
-              <div className="mt-4 text-center text-sm text-gray-600 dark:text-gray-300">
-                <span className="font-semibold">{currentCard.player_name}</span>
-                <span className="mx-2">•</span>
-                <span>{currentCard.points} PTS, {currentCard.rebounds} REB, {currentCard.assists} AST</span>
+            {/* Embla Carousel */}
+            <div className="overflow-hidden mx-0 sm:mx-14" ref={emblaRef}>
+              <div className="flex touch-pan-y">
+                {cards.map((card, index) => {
+                  const isSelected = index === selectedIndex;
+                  const distance = Math.abs(index - selectedIndex);
+                  // Handle loop wrapping
+                  const wrappedDistance = Math.min(distance, cards.length - distance);
+                  
+                  return (
+                    <div
+                      key={index}
+                      className="flex-none px-1 sm:px-2 md:px-3 transition-all duration-300 ease-out flex justify-center"
+                      style={{
+                        width: "320px",
+                      }}
+                    >
+                      <div
+                        className={`
+                          transition-all duration-300 ease-out
+                          ${isSelected 
+                            ? "scale-100 opacity-100" 
+                            : wrappedDistance === 1 
+                              ? "scale-90 opacity-70" 
+                              : "scale-80 opacity-50"
+                          }
+                        `}
+                      >
+                        <div 
+                          className="bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden shadow-lg"
+                          style={{ width: "302px", height: "378px" }}
+                        >
+                          <div 
+                            className="origin-top-left"
+                            style={{ 
+                              transform: "scale(0.28)",
+                              transformOrigin: "top left",
+                            }}
+                          >
+                            <PlayerPerformanceCardV1 data={card} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
+            {/* Navigation Arrows - Desktop */}
             <Button
               variant="outline"
               size="icon"
-              onClick={goToNext}
-              className="shrink-0 h-12 w-12 border-orange-200 dark:border-orange-700"
+              onClick={scrollNext}
+              className="absolute right-0 top-1/2 -translate-y-1/2 z-10 h-10 w-10 md:h-12 md:w-12 border-orange-200 dark:border-orange-700 bg-white/90 dark:bg-gray-800/90 shadow-lg hidden sm:flex"
               data-testid="button-queue-next"
             >
-              <ChevronRight className="h-6 w-6" />
+              <ChevronRight className="h-5 w-5 md:h-6 md:w-6" />
             </Button>
+            
+            {/* Dot Indicators */}
+            <div className="flex items-center justify-center gap-2 mt-4">
+              {cards.map((_, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => emblaApi?.scrollTo(idx)}
+                  className={`w-2 h-2 md:w-2.5 md:h-2.5 rounded-full transition-colors ${
+                    idx === selectedIndex
+                      ? "bg-orange-500"
+                      : "bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500"
+                  }`}
+                  data-testid={`button-queue-dot-${idx}`}
+                />
+              ))}
+            </div>
+            
+            {/* Current Card Info */}
+            {currentCard && (
+              <div className="mt-4 text-center text-sm text-gray-600 dark:text-gray-300">
+                <span className="font-semibold">{currentCard.player_name}</span>
+                <span className="mx-2 hidden sm:inline">•</span>
+                <br className="sm:hidden" />
+                <span>{currentCard.points} PTS, {currentCard.rebounds} REB, {currentCard.assists} AST</span>
+              </div>
+            )}
+            
+            {/* Mobile swipe hint */}
+            <p className="text-center text-xs text-gray-400 dark:text-gray-500 mt-2 sm:hidden">
+              Swipe to browse cards
+            </p>
           </div>
         )}
       </CardContent>
