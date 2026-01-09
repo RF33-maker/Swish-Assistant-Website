@@ -102,7 +102,7 @@ export default function PlayerStatsPage() {
   const [playerStats, setPlayerStats] = useState<PlayerStat[]>([]);
   const [seasonAverages, setSeasonAverages] = useState<SeasonAverages | null>(null);
   const [playerRankings, setPlayerRankings] = useState<PlayerRankings | null>(null);
-  const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string; position?: string; number?: number; leagueId?: string; playerId?: string; photoPath?: string | null; photoFocusY?: number | null } | null>(null);
+  const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string; position?: string; number?: number; leagueId?: string; playerId?: string; photoPath?: string | null; photoFocusY?: number | null; previousTeams?: string[] } | null>(null);
   const [playerLeagues, setPlayerLeagues] = useState<{ id: string; name: string; slug: string }[]>([]);
   const [playerMatches, setPlayerMatches] = useState<PlayerMatch[]>([]);
   const [nameVariations, setNameVariations] = useState<string[]>([]);
@@ -475,7 +475,7 @@ export default function PlayerStatsPage() {
           .from('player_stats')
           .select('*, players:player_id(full_name, league_id)')
           .in('player_id', playerIds)
-          .order('created_at', { ascending: false });
+          .order('game_date', { ascending: false });
 
         // Fetch league names for all unique league_ids from playerMatches
         const uniqueLeagueIds = Array.from(new Set(matches.map(m => m.league_id).filter(Boolean)));
@@ -602,15 +602,42 @@ export default function PlayerStatsPage() {
         // If we have stats with joined players data, use that for player info
         if (statsWithOpponents && statsWithOpponents.length > 0 && statsWithOpponents[0].players) {
           console.log('📋 Using joined players data:', statsWithOpponents[0].players);
+          
+          // Extract all unique teams from stats to detect transfers (normalize for comparison)
+          const normalizeTeam = (t: string) => t.trim().toLowerCase();
+          const allTeams = statsWithOpponents
+            .map(s => s.team_name || s.team)
+            .filter((team): team is string => Boolean(team));
+          
+          // Dedupe by normalized name, keeping first occurrence (display name)
+          const teamMap = new Map<string, string>();
+          allTeams.forEach(team => {
+            const norm = normalizeTeam(team);
+            if (!teamMap.has(norm)) {
+              teamMap.set(norm, team);
+            }
+          });
+          const uniqueTeams = Array.from(teamMap.values());
+          
+          // Current team is from the most recent game (stats are sorted by game_date desc)
+          const currentTeam = statsWithOpponents[0].team_name || statsWithOpponents[0].team || 'Unknown Team';
+          const currentTeamNorm = normalizeTeam(currentTeam);
+          
+          // Previous teams are any teams that are NOT the current team (compare normalized)
+          const previousTeams = uniqueTeams.filter(t => normalizeTeam(t) !== currentTeamNorm);
+          
+          console.log('🔄 Team history - Current:', currentTeam, 'Previous:', previousTeams);
+          
           playerInfo = {
             name: statsWithOpponents[0].players.full_name || statsWithOpponents[0].full_name || statsWithOpponents[0].name || `${statsWithOpponents[0].firstname || ''} ${statsWithOpponents[0].familyname || ''}`.trim() || 'Unknown Player',
-            team: statsWithOpponents[0].team_name || statsWithOpponents[0].team || 'Unknown Team',
+            team: currentTeam,
             position: statsWithOpponents[0].position,
             number: statsWithOpponents[0].number,
             leagueId: statsWithOpponents[0].league_id,
             playerId: playerInfo.playerId,
             photoPath: playerInfo.photoPath,
-            photoFocusY: playerInfo.photoFocusY
+            photoFocusY: playerInfo.photoFocusY,
+            previousTeams: previousTeams.length > 0 ? previousTeams : undefined
           };
         }
         
@@ -630,6 +657,23 @@ export default function PlayerStatsPage() {
             const fallbackTeam = stats[0].team_name || 
                                 stats[0].team || 
                                 'Unknown Team';
+            
+            // Also detect transfers in fallback (with normalization)
+            const normalizeTeamFallback = (t: string) => t.trim().toLowerCase();
+            const allTeamsFallback = stats
+              .map(s => s.team_name || s.team)
+              .filter((team): team is string => Boolean(team));
+            const teamMapFallback = new Map<string, string>();
+            allTeamsFallback.forEach(team => {
+              const norm = normalizeTeamFallback(team);
+              if (!teamMapFallback.has(norm)) {
+                teamMapFallback.set(norm, team);
+              }
+            });
+            const uniqueTeamsFallback = Array.from(teamMapFallback.values());
+            const fallbackTeamNorm = normalizeTeamFallback(fallbackTeam);
+            const previousTeamsFallback = uniqueTeamsFallback.filter(t => normalizeTeamFallback(t) !== fallbackTeamNorm);
+            
             setPlayerInfo({
               name: fallbackName,
               team: fallbackTeam,
@@ -638,7 +682,8 @@ export default function PlayerStatsPage() {
               leagueId: stats[0].league_id,
               playerId: playerInfo.playerId,
               photoPath: playerInfo.photoPath,
-              photoFocusY: playerInfo.photoFocusY
+              photoFocusY: playerInfo.photoFocusY,
+              previousTeams: previousTeamsFallback.length > 0 ? previousTeamsFallback : undefined
             });
           }
 
@@ -1081,6 +1126,12 @@ export default function PlayerStatsPage() {
                             <Trophy className="h-5 w-5 flex-shrink-0" />
                             <span className="break-words font-medium">{playerInfo.team}</span>
                           </p>
+                          {playerInfo.previousTeams && playerInfo.previousTeams.length > 0 && (
+                            <p className="text-orange-600/80 dark:text-orange-500/70 text-sm mt-1 flex items-center gap-1.5">
+                              <span className="text-xs">↩</span>
+                              <span className="italic">Previously: {playerInfo.previousTeams.join(', ')}</span>
+                            </p>
+                          )}
                         </div>
                       </div>
                       
