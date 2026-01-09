@@ -110,6 +110,74 @@ const defaultData: PlayerPerformanceV1Data = {
   photo_url: "",
 };
 
+async function buildPlayerPerformanceCardData(perf: TopPerformance): Promise<PlayerPerformanceV1Data> {
+  const fgMade = perf.sfieldgoalsmade ?? 0;
+  const fgAtt = perf.sfieldgoalsattempted ?? 0;
+  const threeMade = perf.sthreepointersmade ?? 0;
+  const threeAtt = perf.sthreepointersattempted ?? 0;
+  const ftMade = perf.sfreethrowsmade ?? 0;
+  const ftAtt = perf.sfreethrowsattempted ?? 0;
+  
+  const tsa = fgAtt + 0.44 * ftAtt;
+  const tsPercent = tsa > 0 ? ((perf.spoints / (2 * tsa)) * 100).toFixed(1) : "0.0";
+  
+  const plusMinus = perf.splusminuspoints !== undefined && perf.splusminuspoints !== null
+    ? (perf.splusminuspoints >= 0 ? `+${perf.splusminuspoints}` : `${perf.splusminuspoints}`)
+    : "0";
+
+  const minutes = perf.sminutes ? parseInt(perf.sminutes.split(':')[0]) || 0 : 0;
+
+  const leagueId = perf.league_id || '';
+  const [playerTeamLogo, opponentLogo] = await Promise.all([
+    getTeamLogoUrl(perf.team, leagueId),
+    getTeamLogoUrl(perf.opponent, leagueId),
+  ]);
+
+  let playerPhotoUrl = "";
+  
+  if (perf.player_photo_path) {
+    const { data: photoData } = supabase.storage
+      .from("player-photos")
+      .getPublicUrl(perf.player_photo_path);
+    playerPhotoUrl = photoData.publicUrl;
+  } else if (perf.player_id) {
+    const { data: photoList } = await supabase.storage
+      .from("player-photos")
+      .list(perf.player_id);
+    
+    if (photoList && photoList.length > 0) {
+      const { data: photoData } = supabase.storage
+        .from("player-photos")
+        .getPublicUrl(`${perf.player_id}/${photoList[0].name}`);
+      playerPhotoUrl = photoData.publicUrl;
+    }
+  }
+
+  return {
+    player_name: perf.player_name,
+    team_name: perf.team,
+    opponent_name: perf.opponent,
+    minutes: minutes,
+    points: perf.spoints,
+    rebounds: perf.sreboundstotal,
+    assists: perf.sassists,
+    steals: perf.ssteals ?? 0,
+    blocks: perf.sblocks ?? 0,
+    fg: `${fgMade}/${fgAtt}`,
+    three_pt: `${threeMade}/${threeAtt}`,
+    ft: `${ftMade}/${ftAtt}`,
+    turnovers: perf.sturnovers ?? 0,
+    ts_percent: tsPercent,
+    plus_minus: plusMinus,
+    home_score: perf.player_team_score,
+    away_score: perf.opponent_score,
+    didWin: perf.player_team_score > perf.opponent_score,
+    home_logo_url: playerTeamLogo,
+    away_logo_url: opponentLogo,
+    photo_url: playerPhotoUrl,
+  };
+}
+
 export default function SocialToolsPage() {
   const [, navigate] = useLocation();
   const cardRef = useRef<HTMLDivElement>(null);
@@ -122,6 +190,8 @@ export default function SocialToolsPage() {
   const [selectedLeague, setSelectedLeague] = useState<string>("all");
   const [timeFilter, setTimeFilter] = useState<string>("all-time");
   const [performanceSearch, setPerformanceSearch] = useState<string>("");
+  const [queueCards, setQueueCards] = useState<PlayerPerformanceV1Data[]>([]);
+  const [queueLoading, setQueueLoading] = useState(false);
 
   // Filter performances by search query
   const filteredPerformances = useMemo(() => {
@@ -284,6 +354,19 @@ export default function SocialToolsPage() {
       });
 
       setPerformances(mapped);
+      
+      // Build queue cards for the first 8 performances
+      setQueueLoading(true);
+      try {
+        const top8 = mapped.slice(0, 8);
+        const cardPromises = top8.map(p => buildPlayerPerformanceCardData(p));
+        const cards = await Promise.all(cardPromises);
+        setQueueCards(cards);
+      } catch (err) {
+        console.error("Failed to build queue cards:", err);
+      } finally {
+        setQueueLoading(false);
+      }
     } catch (err) {
       console.error("Failed to fetch performances:", err);
     } finally {
@@ -293,80 +376,8 @@ export default function SocialToolsPage() {
 
   const handleSelectPerformance = async (perf: TopPerformance) => {
     setSelectedId(perf.id);
-    
-    const fgMade = perf.sfieldgoalsmade ?? 0;
-    const fgAtt = perf.sfieldgoalsattempted ?? 0;
-    const threeMade = perf.sthreepointersmade ?? 0;
-    const threeAtt = perf.sthreepointersattempted ?? 0;
-    const ftMade = perf.sfreethrowsmade ?? 0;
-    const ftAtt = perf.sfreethrowsattempted ?? 0;
-    
-    const tsa = fgAtt + 0.44 * ftAtt;
-    const tsPercent = tsa > 0 ? ((perf.spoints / (2 * tsa)) * 100).toFixed(1) : "0.0";
-    
-    const plusMinus = perf.splusminuspoints !== undefined && perf.splusminuspoints !== null
-      ? (perf.splusminuspoints >= 0 ? `+${perf.splusminuspoints}` : `${perf.splusminuspoints}`)
-      : "0";
-
-    const minutes = perf.sminutes ? parseInt(perf.sminutes.split(':')[0]) || 0 : 0;
-
-    const leagueId = perf.league_id || '';
-    const [playerTeamLogo, opponentLogo] = await Promise.all([
-      getTeamLogoUrl(perf.team, leagueId),
-      getTeamLogoUrl(perf.opponent, leagueId),
-    ]);
-
-    // Get player photo from the already-joined data
-    let playerPhotoUrl = "";
-    
-    console.log("[SocialTools] Photo lookup for:", perf.player_name, "player_id:", perf.player_id, "photo_path:", perf.player_photo_path);
-    
-    if (perf.player_photo_path) {
-      // Use the photo_path from the joined player data
-      const { data: photoData } = supabase.storage
-        .from("player-photos")
-        .getPublicUrl(perf.player_photo_path);
-      playerPhotoUrl = photoData.publicUrl;
-      console.log("[SocialTools] Using photo_path:", perf.player_photo_path, "URL:", playerPhotoUrl);
-    } else if (perf.player_id) {
-      // Fallback: check storage directly by player ID
-      const { data: photoList } = await supabase.storage
-        .from("player-photos")
-        .list(perf.player_id);
-      
-      console.log("[SocialTools] Fallback storage check for ID:", perf.player_id, "Found:", photoList);
-      
-      if (photoList && photoList.length > 0) {
-        const { data: photoData } = supabase.storage
-          .from("player-photos")
-          .getPublicUrl(`${perf.player_id}/${photoList[0].name}`);
-        playerPhotoUrl = photoData.publicUrl;
-      }
-    }
-
-    setSelectedData({
-      player_name: perf.player_name,
-      team_name: perf.team,
-      opponent_name: perf.opponent,
-      minutes: minutes,
-      points: perf.spoints,
-      rebounds: perf.sreboundstotal,
-      assists: perf.sassists,
-      steals: perf.ssteals ?? 0,
-      blocks: perf.sblocks ?? 0,
-      fg: `${fgMade}/${fgAtt}`,
-      three_pt: `${threeMade}/${threeAtt}`,
-      ft: `${ftMade}/${ftAtt}`,
-      turnovers: perf.sturnovers ?? 0,
-      ts_percent: tsPercent,
-      plus_minus: plusMinus,
-      home_score: perf.player_team_score,
-      away_score: perf.opponent_score,
-      didWin: perf.player_team_score > perf.opponent_score,
-      home_logo_url: playerTeamLogo,
-      away_logo_url: opponentLogo,
-      photo_url: playerPhotoUrl,
-    });
+    const cardData = await buildPlayerPerformanceCardData(perf);
+    setSelectedData(cardData);
   };
 
   const handleDownload = async () => {
@@ -588,7 +599,7 @@ export default function SocialToolsPage() {
         </div>
         
         {/* Post Queue Section */}
-        <PostQueueSection />
+        <PostQueueSection cards={queueCards} loading={queueLoading} />
       </div>
       
       {/* Hidden full-size card for download rendering */}

@@ -1,79 +1,17 @@
-import { useState, useEffect } from "react";
-import { ChevronLeft, ChevronRight, Loader2, Filter, Calendar } from "lucide-react";
+import { useState } from "react";
+import { ChevronLeft, ChevronRight, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { SocialCardRenderer } from "./SocialCardRenderer";
-import { supabase } from "@/lib/supabase";
-import type { SocialCardRow } from "@/types/socialCards";
+import { PlayerPerformanceCardV1 } from "./PlayerPerformanceCardV1";
+import type { PlayerPerformanceV1Data } from "@/types/socialCards";
 
-interface League {
-  league_id: string;
-  name: string;
-}
+type Props = {
+  cards: PlayerPerformanceV1Data[];
+  loading?: boolean;
+};
 
-export function PostQueueSection() {
-  const [cards, setCards] = useState<SocialCardRow[]>([]);
-  const [loading, setLoading] = useState(true);
+export function PostQueueSection({ cards, loading = false }: Props) {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [leagues, setLeagues] = useState<League[]>([]);
-  const [selectedLeague, setSelectedLeague] = useState<string>("all");
-
-  useEffect(() => {
-    fetchLeagues();
-  }, []);
-
-  useEffect(() => {
-    fetchQueuedCards();
-  }, [selectedLeague]);
-
-  const fetchLeagues = async () => {
-    const { data, error } = await supabase
-      .from("leagues")
-      .select("league_id, name")
-      .order("name");
-    
-    if (!error && data) {
-      setLeagues(data);
-    }
-  };
-
-  const fetchQueuedCards = async () => {
-    setLoading(true);
-    try {
-      let query = supabase
-        .from("social_cards")
-        .select("*")
-        .eq("ready_to_post", true)
-        .eq("posted", false)
-        .order("created_at", { ascending: false })
-        .limit(8);
-      
-      if (selectedLeague !== "all") {
-        query = query.eq("league_id", selectedLeague);
-      }
-
-      const { data, error } = await query;
-
-      if (error) {
-        console.error("[PostQueue] Error fetching cards:", error);
-        return;
-      }
-
-      setCards(data || []);
-      setCurrentIndex(0);
-    } catch (err) {
-      console.error("[PostQueue] Failed to fetch queued cards:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const goToPrevious = () => {
     setCurrentIndex((prev) => (prev > 0 ? prev - 1 : cards.length - 1));
@@ -88,37 +26,21 @@ export function PostQueueSection() {
   return (
     <Card className="bg-white dark:bg-gray-800 border-orange-200 dark:border-orange-700 mt-8">
       <CardHeader className="pb-3">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <CardTitle className="text-orange-900 dark:text-orange-400 flex items-center gap-2">
-            <Calendar className="h-5 w-5" />
-            Post Queue ({cards.length} cards ready)
-          </CardTitle>
-          <Select value={selectedLeague} onValueChange={setSelectedLeague}>
-            <SelectTrigger className="w-[180px] border-orange-200 dark:border-orange-700" data-testid="select-queue-league">
-              <Filter className="h-4 w-4 mr-2 text-orange-500" />
-              <SelectValue placeholder="All Leagues" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Leagues</SelectItem>
-              {leagues.map((league) => (
-                <SelectItem key={league.league_id} value={league.league_id}>
-                  {league.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <CardTitle className="text-orange-900 dark:text-orange-400 flex items-center gap-2">
+          <Calendar className="h-5 w-5" />
+          Post Queue ({cards.length} cards ready)
+        </CardTitle>
       </CardHeader>
       <CardContent>
         {loading ? (
           <div className="flex items-center justify-center py-16">
-            <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-orange-500 border-t-transparent" />
           </div>
         ) : cards.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-gray-500 dark:text-gray-400">
             <Calendar className="h-12 w-12 mb-3 opacity-50" />
             <p className="text-lg font-medium">No cards in the queue</p>
-            <p className="text-sm mt-1">Cards marked as "ready to post" will appear here</p>
+            <p className="text-sm mt-1">Top performances will appear here</p>
           </div>
         ) : (
           <div className="flex items-center gap-4">
@@ -146,10 +68,7 @@ export function PostQueueSection() {
                     marginLeft: "-540px"
                   }}
                 >
-                  <SocialCardRenderer 
-                    template={currentCard.template} 
-                    data={currentCard.data} 
-                  />
+                  <PlayerPerformanceCardV1 data={currentCard} />
                 </div>
               </div>
               
@@ -168,12 +87,11 @@ export function PostQueueSection() {
                 ))}
               </div>
               
-              {currentCard.caption && (
-                <div className="mt-4 p-3 bg-gray-100 dark:bg-gray-700 rounded-lg">
-                  <p className="text-sm text-gray-600 dark:text-gray-300 font-medium mb-1">Caption:</p>
-                  <p className="text-sm text-gray-800 dark:text-gray-200">{currentCard.caption}</p>
-                </div>
-              )}
+              <div className="mt-4 text-center text-sm text-gray-600 dark:text-gray-300">
+                <span className="font-semibold">{currentCard.player_name}</span>
+                <span className="mx-2">•</span>
+                <span>{currentCard.points} PTS, {currentCard.rebounds} REB, {currentCard.assists} AST</span>
+              </div>
             </div>
 
             <Button
