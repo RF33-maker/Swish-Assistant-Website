@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { PlayerPerformanceCardV1 } from "@/components/social/PlayerPerformanceCardV1";
 import { PlayerPhotoUploader } from "@/components/social/PlayerPhotoUploader";
+import { PostQueueSection } from "@/components/social/PostQueueSection";
 import type { PlayerPerformanceV1Data } from "@/types/socialCards";
 import { useRef, useState, useEffect, useMemo } from "react";
 import html2canvas from "html2canvas";
@@ -585,6 +586,9 @@ export default function SocialToolsPage() {
             <PlayerPhotoUploader />
           </div>
         </div>
+        
+        {/* Post Queue Section */}
+        <PostQueueSection />
       </div>
       
       {/* Hidden full-size card for download rendering */}

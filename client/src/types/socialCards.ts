@@ -40,3 +40,15 @@ export type PlayerPerformanceCard = SocialCardBase<PlayerPerformanceV1Data> & {
 };
 
 export type SocialCard = PlayerPerformanceCard;
+
+export type SocialCardRow = {
+  id: string;
+  league_id: string | null;
+  template: string;
+  data: any;
+  image_url: string | null;
+  caption: string | null;
+  ready_to_post: boolean;
+  posted: boolean;
+  created_at: string;
+};

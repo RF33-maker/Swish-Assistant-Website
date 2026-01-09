@@ -101,7 +101,7 @@ export function PlayerPerformanceCardV1({ data }: Props) {
       <div
         className="
           absolute
-          left-[95px] top-[720px]
+          left-[105px] top-[800px]
           w-[640px]
           origin-left
           [transform:rotate(-12deg)]
