@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { normalizeTeamNameForFile } from "@/lib/teamUtils";
 
@@ -8,6 +8,15 @@ interface TeamLogoProps {
   size?: "xs" | "sm" | "md" | "lg" | "xl" | number;
   className?: string;
   logoUrl?: string;  // Optional logo URL from teams table
+}
+
+// Custom event for logo cache invalidation
+export const LOGO_CACHE_INVALIDATE_EVENT = 'teamLogoCacheInvalidate';
+
+export function invalidateLogoCache(teamName?: string, leagueId?: string) {
+  window.dispatchEvent(new CustomEvent(LOGO_CACHE_INVALIDATE_EVENT, { 
+    detail: { teamName, leagueId } 
+  }));
 }
 
 const sizeClasses = {
@@ -31,6 +40,28 @@ export function TeamLogo({ teamName, leagueId, size = "md", className = "", logo
   const [logoUrl, setLogoUrl] = useState<string | null>(providedLogoUrl || null);
   const [isLoading, setIsLoading] = useState(!providedLogoUrl);
   const [hasError, setHasError] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // Listen for cache invalidation events
+  useEffect(() => {
+    const handleInvalidate = (event: CustomEvent<{ teamName?: string; leagueId?: string }>) => {
+      const { teamName: eventTeam, leagueId: eventLeague } = event.detail || {};
+      // Invalidate if no specific team/league specified, or if this component matches
+      if (!eventTeam || eventTeam === teamName) {
+        if (!eventLeague || eventLeague === leagueId) {
+          console.log(`[TeamLogo] Cache invalidated for ${teamName}, refetching...`);
+          setLogoUrl(null);
+          setHasError(false);
+          setRefreshKey(prev => prev + 1);
+        }
+      }
+    };
+
+    window.addEventListener(LOGO_CACHE_INVALIDATE_EVENT, handleInvalidate as EventListener);
+    return () => {
+      window.removeEventListener(LOGO_CACHE_INVALIDATE_EVENT, handleInvalidate as EventListener);
+    };
+  }, [teamName, leagueId]);
 
   useEffect(() => {
     // If logo URL is provided, use it directly and skip fetching
@@ -120,7 +151,7 @@ export function TeamLogo({ teamName, leagueId, size = "md", className = "", logo
     if (leagueId && teamName) {
       fetchTeamLogo();
     }
-  }, [leagueId, teamName]);
+  }, [leagueId, teamName, refreshKey]);
 
   const handleImageError = () => {
     setHasError(true);

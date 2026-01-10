@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation, useParams } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { TeamLogoUploader } from "@/components/TeamLogoUploader";
-import { TeamLogo } from "@/components/TeamLogo";
+import { TeamLogo, invalidateLogoCache } from "@/components/TeamLogo";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import UploadSection from "@/components/LeagueAdmin/upload-section-la";
 
@@ -378,6 +378,9 @@ export default function LeagueAdmin() {
         delete updated[teamName];
         return updated;
       });
+
+      // Invalidate cache so all TeamLogo components refetch
+      invalidateLogoCache(teamName, league.league_id);
       
       alert('Team logo removed successfully!');
     } catch (error) {

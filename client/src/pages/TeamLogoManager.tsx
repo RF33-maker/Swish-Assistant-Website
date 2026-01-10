@@ -3,7 +3,7 @@ import { useLocation, useParams } from "wouter";
 import { supabase } from "@/lib/supabase";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import { TeamLogoUploader } from "@/components/TeamLogoUploader";
-import { TeamLogo } from "@/components/TeamLogo";
+import { TeamLogo, invalidateLogoCache } from "@/components/TeamLogo";
 import React from "react";
 
 interface League {
@@ -217,6 +217,9 @@ export default function TeamLogoManager() {
       setTeams(prev => prev.map(team => 
         team.name === teamName ? { ...team, hasLogo: false } : team
       ));
+
+      // Invalidate cache so all TeamLogo components refetch
+      invalidateLogoCache(teamName, league.league_id);
     } catch (error) {
       console.error("Error removing logo:", error);
     }
