@@ -27,12 +27,31 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
       setLoading(true);
       
       try {
-        // First try to get game results from team_stats table
-        const { data: teamStatsData, error: teamStatsError } = await supabase
-          .from("team_stats")
-          .select("*")
-          .eq("league_id", leagueId)
-          .order("created_at", { ascending: false });
+        // Fetch both team_stats and game_schedule in parallel
+        const [teamStatsResult, scheduleResult] = await Promise.all([
+          supabase
+            .from("team_stats")
+            .select("*")
+            .eq("league_id", leagueId)
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("game_schedule")
+            .select("game_key, matchtime")
+            .eq("league_id", leagueId)
+        ]);
+
+        const { data: teamStatsData, error: teamStatsError } = teamStatsResult;
+        const { data: scheduleData } = scheduleResult;
+
+        // Create a map of game_key -> matchtime for date lookups
+        const scheduleDateMap = new Map<string, string>();
+        if (scheduleData) {
+          scheduleData.forEach((game: any) => {
+            if (game.game_key && game.matchtime) {
+              scheduleDateMap.set(game.game_key, game.matchtime);
+            }
+          });
+        }
 
         if (teamStatsData && teamStatsData.length > 0 && !teamStatsError) {
           // Group team stats by numeric_id to create game results
@@ -86,10 +105,14 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
                 console.warn(`⚠️ Invalid team data for game ${numericId}, skipping`);
                 return;
               }
+
+              // Get game_key from team_stats to look up matchtime from game_schedule
+              const gameKey = finalHomeTeam.game_key || finalAwayTeam.game_key;
+              const matchtime = gameKey ? scheduleDateMap.get(gameKey) : null;
               
               gamesFromTeamStats.push({
                 game_id: numericId,
-                game_date: finalHomeTeam.created_at || new Date().toISOString(),
+                game_date: matchtime || finalHomeTeam.game_date || finalAwayTeam.game_date || new Date().toISOString(),
                 home_team: finalHomeTeam.name,
                 away_team: finalAwayTeam.name,
                 home_score: finalHomeTeam.tot_spoints || 0,

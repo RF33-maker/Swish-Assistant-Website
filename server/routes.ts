@@ -146,6 +146,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Delete team logo endpoint - uses service role to bypass RLS
+  app.delete("/api/team-logos/delete", async (req, res) => {
+    try {
+      const { leagueId, teamName } = req.body;
+      
+      if (!leagueId || !teamName) {
+        return res.status(400).json({ error: "Missing required fields: leagueId, teamName" });
+      }
+
+      console.log("Deleting logo for team:", teamName, "in league:", leagueId);
+
+      const baseFileName = `${leagueId}_${teamName.replace(/\s+/g, '_')}`;
+      const extensions = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
+      let deletedFiles: string[] = [];
+      let errors: string[] = [];
+
+      // Try to delete files with all extensions
+      for (const ext of extensions) {
+        const fileName = `${baseFileName}.${ext}`;
+        const { error } = await supabase.storage
+          .from('team-logos')
+          .remove([fileName]);
+        
+        if (error) {
+          console.log(`Could not delete ${fileName}:`, error.message);
+          errors.push(`${fileName}: ${error.message}`);
+        } else {
+          console.log(`Deleted ${fileName}`);
+          deletedFiles.push(fileName);
+        }
+      }
+
+      res.json({
+        success: true,
+        deletedFiles,
+        errors: errors.length > 0 ? errors : undefined
+      });
+    } catch (error) {
+      console.error("Delete logo error:", error);
+      res.status(500).json({ error: "Failed to delete logo" });
+    }
+  });
+
   // API endpoint for TeamLogo component to get team logos for a league
   app.get("/api/leagues/:leagueId/team-logos", async (req, res) => {
     try {

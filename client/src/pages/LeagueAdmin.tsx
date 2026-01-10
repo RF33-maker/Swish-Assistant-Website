@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation, useParams } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { TeamLogoUploader } from "@/components/TeamLogoUploader";
-import { TeamLogo } from "@/components/TeamLogo";
+import { TeamLogo, invalidateLogoCache } from "@/components/TeamLogo";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import UploadSection from "@/components/LeagueAdmin/upload-section-la";
 
@@ -352,13 +352,23 @@ export default function LeagueAdmin() {
     if (!league || !currentUser) return;
 
     try {
-      // Remove from Supabase storage
-      const fileName = `${league.league_id}_${teamName.replace(/\s+/g, '_')}.png`;
-      const { error } = await supabase.storage
-        .from('team-logos')
-        .remove([fileName]);
+      // Use server-side endpoint to delete (bypasses RLS)
+      const response = await fetch('/api/team-logos/delete', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          leagueId: league.league_id,
+          teamName: teamName
+        })
+      });
 
-      if (error) throw error;
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to delete logo');
+      }
+
+      console.log("Logo deletion result:", result);
 
       // Update local state
       setTeamLogos(prev => {
@@ -366,6 +376,9 @@ export default function LeagueAdmin() {
         delete updated[teamName];
         return updated;
       });
+
+      // Invalidate cache so all TeamLogo components refetch
+      invalidateLogoCache(teamName, league.league_id);
       
       alert('Team logo removed successfully!');
     } catch (error) {

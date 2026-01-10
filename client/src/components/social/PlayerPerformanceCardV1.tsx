@@ -24,7 +24,7 @@ export function PlayerPerformanceCardV1({ data }: Props) {
         overflow-hidden
       "
       style={{
-        backgroundImage: "url('/card-templates/player-performance-v1.png')",
+        backgroundImage: "url('/card-templates/playerpeformancetemplateV1.3.png')",
         backgroundSize: "cover",
         backgroundPosition: "center",
       }}
@@ -61,37 +61,37 @@ export function PlayerPerformanceCardV1({ data }: Props) {
       >
         {/* Top Number */}
         <span
-          className="absolute right-[310px] top-[70px] text-[170px] leading-[0.9] font-black italic text-[#e85a24]"
+          className="absolute right-[270px] top-[70px] text-[170px] leading-[0.9] font-black italic text-[#e85a24]"
           data-testid="text-points-top"
         >
           {data.points}
         </span>
         {/* Top Label - Points */}
-        <span className="absolute right-[180px] top-[180px] text-[28px] uppercase tracking-[0.2em] text-white">
+        <span className="absolute right-[140px] top-[180px] text-[28px] uppercase tracking-[0.2em] text-white">
           Points
         </span>
 
         {/* Middle Number */}
         <span
-          className="absolute right-[270px] top-[260px] text-[170px] leading-[0.9] font-black italic text-[#e85a24]"
+          className="absolute right-[225px] top-[260px] text-[170px] leading-[0.9] font-black italic text-[#e85a24]"
           data-testid="text-points-middle"
         >
           {data.rebounds}
         </span>
         {/* Middle Label - Rebounds */}
-        <span className="absolute right-[100px] top-[370px] text-[28px] uppercase tracking-[0.2em] text-white">
+        <span className="absolute right-[40px] top-[370px] text-[28px] uppercase tracking-[0.2em] text-white">
           Rebounds
         </span>
 
         {/* Bottom Number */}
         <span
-          className="absolute right-[230px] top-[450px] text-[170px] leading-[0.9] font-black italic text-[#e85a24]"
+          className="absolute right-[180px] top-[450px] text-[170px] leading-[0.9] font-black italic text-[#e85a24]"
           data-testid="text-points-bottom"
         >
           {data.assists}
         </span>
         {/* Bottom Label - Assists */}
-        <span className="absolute right-[80px] top-[560px] text-[28px] uppercase tracking-[0.2em] text-white">
+        <span className="absolute right-[30px] top-[560px] text-[28px] uppercase tracking-[0.2em] text-white">
           Assists
         </span>
       </div>
@@ -187,7 +187,7 @@ export function PlayerPerformanceCardV1({ data }: Props) {
       <div
         className="
           absolute
-          left-1/2 -translate-x-1/2 top-[1130px]
+          left-[555px] -translate-x-1/2 top-[1130px]
           flex items-center justify-center gap-6
         "
       >
