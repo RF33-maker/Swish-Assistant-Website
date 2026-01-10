@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { ChevronLeft, ChevronRight, Calendar, Download, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar, Download, Loader2, X, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { PlayerPerformanceCardV1 } from "./PlayerPerformanceCardV1";
@@ -10,9 +10,11 @@ import html2canvas from "html2canvas";
 type Props = {
   cards: PlayerPerformanceV1Data[];
   loading?: boolean;
+  onRemove?: (index: number) => void;
+  onClear?: () => void;
 };
 
-export function PostQueueSection({ cards, loading = false }: Props) {
+export function PostQueueSection({ cards, loading = false, onRemove, onClear }: Props) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
@@ -108,24 +110,37 @@ export function PostQueueSection({ cards, loading = false }: Props) {
             Post Queue ({cards.length} cards ready)
           </CardTitle>
           {cards.length > 0 && (
-            <Button
-              onClick={downloadAllCards}
-              disabled={isDownloading}
-              className="bg-orange-500 hover:bg-orange-600 text-white"
-              size="sm"
-            >
-              {isDownloading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  {downloadProgress}/{cards.length}
-                </>
-              ) : (
-                <>
-                  <Download className="h-4 w-4 mr-2" />
-                  Download All
-                </>
+            <div className="flex items-center gap-2">
+              {onClear && (
+                <Button
+                  onClick={onClear}
+                  variant="outline"
+                  className="border-red-200 text-red-600 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
+                  size="sm"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Clear
+                </Button>
               )}
-            </Button>
+              <Button
+                onClick={downloadAllCards}
+                disabled={isDownloading}
+                className="bg-orange-500 hover:bg-orange-600 text-white"
+                size="sm"
+              >
+                {isDownloading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    {downloadProgress}/{cards.length}
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-4 w-4 mr-2" />
+                    Download All
+                  </>
+                )}
+              </Button>
+            </div>
           )}
         </div>
       </CardHeader>
@@ -138,7 +153,7 @@ export function PostQueueSection({ cards, loading = false }: Props) {
           <div className="flex flex-col items-center justify-center py-16 text-gray-500 dark:text-gray-400">
             <Calendar className="h-12 w-12 mb-3 opacity-50" />
             <p className="text-lg font-medium">No cards in the queue</p>
-            <p className="text-sm mt-1">Top performances will appear here</p>
+            <p className="text-sm mt-1">Click performances above to add them here</p>
           </div>
         ) : (
           <div className="relative">
@@ -182,9 +197,21 @@ export function PostQueueSection({ cards, loading = false }: Props) {
                         `}
                       >
                         <div 
-                          className="bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden shadow-lg"
+                          className="bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden shadow-lg relative group"
                           style={{ width: "302px", height: "378px" }}
                         >
+                          {onRemove && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onRemove(index);
+                              }}
+                              className="absolute top-2 right-2 z-20 p-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                              title="Remove from queue"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          )}
                           <div 
                             className="origin-top-left"
                             style={{ 
