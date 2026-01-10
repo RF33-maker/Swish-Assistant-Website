@@ -89,7 +89,7 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
               
               gamesFromTeamStats.push({
                 game_id: numericId,
-                game_date: finalHomeTeam.created_at || new Date().toISOString(),
+                game_date: finalHomeTeam.game_date || finalAwayTeam.game_date || new Date().toISOString(),
                 home_team: finalHomeTeam.name,
                 away_team: finalAwayTeam.name,
                 home_score: finalHomeTeam.tot_spoints || 0,
