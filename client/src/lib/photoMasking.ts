@@ -87,16 +87,44 @@ function createPolygonPath(): Path2D {
 }
 
 /**
- * Loads an image with CORS enabled
+ * Loads an image via fetch + Blob to bypass CORS canvas tainting issues.
+ * Supabase public URLs don't have proper CORS headers, so we need to
+ * fetch the image data first and create an object URL.
  */
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => resolve(img);
-    img.onerror = (e) => reject(e);
-    img.src = src;
-  });
+async function loadImage(src: string): Promise<HTMLImageElement> {
+  // First, try to fetch the image as a blob to bypass CORS tainting
+  try {
+    const response = await fetch(src);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image: ${response.status}`);
+    }
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        // Clean up object URL after image loads
+        URL.revokeObjectURL(objectUrl);
+        resolve(img);
+      };
+      img.onerror = (e) => {
+        URL.revokeObjectURL(objectUrl);
+        reject(e);
+      };
+      img.src = objectUrl;
+    });
+  } catch (fetchError) {
+    console.warn("[PhotoMasking] Fetch failed, trying direct load:", fetchError);
+    // Fallback to direct image load (may still work for same-origin images)
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => resolve(img);
+      img.onerror = (e) => reject(e);
+      img.src = src;
+    });
+  }
 }
 
 /**
