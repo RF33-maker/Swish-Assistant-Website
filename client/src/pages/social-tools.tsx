@@ -190,8 +190,14 @@ export default function SocialToolsPage() {
   const [selectedLeague, setSelectedLeague] = useState<string>("all");
   const [timeFilter, setTimeFilter] = useState<string>("all-time");
   const [performanceSearch, setPerformanceSearch] = useState<string>("");
-  const [queueCards, setQueueCards] = useState<PlayerPerformanceV1Data[]>([]);
+  const [queueIds, setQueueIds] = useState<string[]>([]);
+  const [queueCardCache, setQueueCardCache] = useState<Record<string, PlayerPerformanceV1Data>>({});
   const [queueLoading, setQueueLoading] = useState(false);
+  
+  // Compute queue cards from IDs and cache
+  const queueCards = useMemo(() => {
+    return queueIds.map(id => queueCardCache[id]).filter(Boolean);
+  }, [queueIds, queueCardCache]);
 
   // Filter performances by search query
   const filteredPerformances = useMemo(() => {
@@ -361,19 +367,6 @@ export default function SocialToolsPage() {
       });
 
       setPerformances(mapped);
-      
-      // Build queue cards for the first 8 performances
-      setQueueLoading(true);
-      try {
-        const top8 = mapped.slice(0, 8);
-        const cardPromises = top8.map(p => buildPlayerPerformanceCardData(p));
-        const cards = await Promise.all(cardPromises);
-        setQueueCards(cards);
-      } catch (err) {
-        console.error("Failed to build queue cards:", err);
-      } finally {
-        setQueueLoading(false);
-      }
     } catch (err) {
       console.error("Failed to fetch performances:", err);
     } finally {
@@ -385,6 +378,20 @@ export default function SocialToolsPage() {
     setSelectedId(perf.id);
     const cardData = await buildPlayerPerformanceCardData(perf);
     setSelectedData(cardData);
+    
+    // Add to queue if not already present
+    if (!queueIds.includes(perf.id)) {
+      setQueueIds(prev => [...prev, perf.id]);
+      setQueueCardCache(prev => ({ ...prev, [perf.id]: cardData }));
+    }
+  };
+  
+  const handleRemoveFromQueue = (index: number) => {
+    setQueueIds(prev => prev.filter((_, i) => i !== index));
+  };
+  
+  const handleClearQueue = () => {
+    setQueueIds([]);
   };
 
   const handleDownload = async () => {
@@ -519,9 +526,11 @@ export default function SocialToolsPage() {
                         <div
                           key={perf.id}
                           onClick={() => handleSelectPerformance(perf)}
-                          className={`p-4 rounded-lg border cursor-pointer transition-all hover:shadow-md ${
+                          className={`p-4 rounded-lg border cursor-pointer transition-all hover:shadow-md relative ${
                             selectedId === perf.id
                               ? "border-orange-500 bg-orange-50 dark:bg-orange-900/20"
+                              : queueIds.includes(perf.id)
+                              ? "border-green-400 bg-green-50 dark:bg-green-900/20"
                               : "border-gray-200 dark:border-gray-600 hover:border-orange-300 dark:hover:border-orange-600"
                           }`}
                           data-testid={`card-performance-${perf.id}`}
@@ -550,6 +559,11 @@ export default function SocialToolsPage() {
                             <span>{perf.sassists} AST</span>
                             {perf.ssteals ? <span>{perf.ssteals} STL</span> : null}
                           </div>
+                          {queueIds.includes(perf.id) && (
+                            <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-0.5 rounded-full font-medium">
+                              Queued
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -607,7 +621,12 @@ export default function SocialToolsPage() {
         </div>
         
         {/* Post Queue Section */}
-        <PostQueueSection cards={queueCards} loading={queueLoading} />
+        <PostQueueSection 
+          cards={queueCards} 
+          loading={queueLoading} 
+          onRemove={handleRemoveFromQueue}
+          onClear={handleClearQueue}
+        />
       </div>
       
       {/* Hidden full-size card for download rendering */}
