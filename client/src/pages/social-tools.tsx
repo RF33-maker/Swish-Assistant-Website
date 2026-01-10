@@ -421,7 +421,8 @@ export default function SocialToolsPage() {
     if (!selectedData) return;
     
     try {
-      // Create a hidden container for rendering at full size
+      // Create an off-screen container for rendering at full size
+      // Note: Do NOT use visibility:hidden as html2canvas won't render hidden elements
       const hiddenContainer = document.createElement("div");
       hiddenContainer.style.cssText = `
         position: fixed;
@@ -430,7 +431,7 @@ export default function SocialToolsPage() {
         width: 1080px;
         height: 1350px;
         z-index: -9999;
-        visibility: hidden;
+        pointer-events: none;
       `;
       document.body.appendChild(hiddenContainer);
       
