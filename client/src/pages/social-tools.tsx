@@ -192,6 +192,7 @@ export default function SocialToolsPage() {
   const [performanceSearch, setPerformanceSearch] = useState<string>("");
   const [queueCards, setQueueCards] = useState<PlayerPerformanceV1Data[]>([]);
   const [queueLoading, setQueueLoading] = useState(false);
+  const [queueSize, setQueueSize] = useState(8);
 
   // Filter performances by search query
   const filteredPerformances = useMemo(() => {
@@ -362,11 +363,11 @@ export default function SocialToolsPage() {
 
       setPerformances(mapped);
       
-      // Build queue cards for the first 8 performances
+      // Build queue cards for the first N performances
       setQueueLoading(true);
       try {
-        const top8 = mapped.slice(0, 8);
-        const cardPromises = top8.map(p => buildPlayerPerformanceCardData(p));
+        const topN = mapped.slice(0, queueSize);
+        const cardPromises = topN.map(p => buildPlayerPerformanceCardData(p));
         const cards = await Promise.all(cardPromises);
         setQueueCards(cards);
       } catch (err) {
