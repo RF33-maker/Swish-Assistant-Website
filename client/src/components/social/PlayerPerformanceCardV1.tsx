@@ -24,7 +24,7 @@ export function PlayerPerformanceCardV1({ data }: Props) {
         overflow-hidden
       "
       style={{
-        backgroundImage: "url('/card-templates/playerperformancetemplateV1.2.png')",
+        backgroundImage: "url('/card-templates/playerperformancetemplateV1.3.png')",
         backgroundSize: "cover",
         backgroundPosition: "center",
       }}
