@@ -30,37 +30,15 @@ export function PlayerPerformanceCardV1({ data }: Props) {
       }}
       data-testid="card-player-performance-v1"
     >
-      {/* === Player photo clipped into the angled frame using SVG for html2canvas compatibility === */}
-      <svg
-        className="absolute left-[95px] top-[45px]"
-        width="640"
-        height="770"
-        viewBox="0 0 640 770"
-        style={{ overflow: "hidden" }}
-      >
-        <defs>
-          <clipPath id={`player-photo-polygon-${data.player_name.replace(/\s+/g, '-')}`}>
-            {/* polygon(0% 1%, 73% 1%, 100% 82%, 0% 100%) converted to SVG coordinates */}
-            <polygon points="0,7.7 467.2,7.7 640,631.4 0,770" />
-          </clipPath>
-        </defs>
-        {data.photo_url && (
-          <image
-            href={data.photo_url}
-            x="0"
-            y="0"
-            width="640"
-            height="770"
-            preserveAspectRatio={
-              (data.photo_focus_y ?? 50) < 33 ? "xMidYMin slice" :
-              (data.photo_focus_y ?? 50) > 66 ? "xMidYMax slice" :
-              "xMidYMid slice"
-            }
-            clipPath={`url(#player-photo-polygon-${data.player_name.replace(/\s+/g, '-')})`}
-            data-testid="img-player-photo"
-          />
-        )}
-      </svg>
+      {/* === Player photo - already pre-processed with polygon mask and rounded corners === */}
+      {data.photo_url && (
+        <img
+          src={data.photo_url}
+          alt={data.player_name}
+          className="absolute left-[95px] top-[45px] w-[640px] h-[770px]"
+          data-testid="img-player-photo"
+        />
+      )}
 
       {/* === Big stacked numbers on the right (individually positioned) === */}
       <div

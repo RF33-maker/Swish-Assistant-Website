@@ -9,10 +9,10 @@ const CORNER_RADIUS = 46;
 
 // Original polygon: polygon(0% 1%, 73% 1%, 100% 82%, 0% 100%)
 // Converted to pixel coordinates for 640x770:
-// - Top left: (0, 7.7)
-// - Top right: (467.2, 7.7)
-// - Bottom right: (640, 631.4)
-// - Bottom left: (0, 770)
+// - P0 (top-left): (0, 7.7)
+// - P1 (top-right): (467.2, 7.7)
+// - P2 (bottom-right): (640, 631.4)
+// - P3 (bottom-left): (0, 770)
 const POLYGON_POINTS = [
   { x: 0, y: 7.7 },
   { x: 467.2, y: 7.7 },
@@ -20,40 +20,67 @@ const POLYGON_POINTS = [
   { x: 0, y: 770 },
 ];
 
+interface Point { x: number; y: number; }
+
 /**
- * Creates a Path2D with the polygon shape and rounded corners
+ * Normalizes a vector to unit length
+ */
+function normalize(v: Point): Point {
+  const len = Math.sqrt(v.x * v.x + v.y * v.y);
+  return len > 0 ? { x: v.x / len, y: v.y / len } : { x: 0, y: 0 };
+}
+
+/**
+ * Calculates the offset point for a corner with given radius.
+ * Returns the point where the arc should start/end along the edge.
+ */
+function offsetAlongEdge(corner: Point, nextOrPrev: Point, radius: number): Point {
+  const dir = normalize({ x: nextOrPrev.x - corner.x, y: nextOrPrev.y - corner.y });
+  return { x: corner.x + dir.x * radius, y: corner.y + dir.y * radius };
+}
+
+/**
+ * Creates a Path2D with the polygon shape and rounded corners using proper vector math.
+ * For each corner, we offset along both adjacent edges by the radius,
+ * then draw an arc between those offset points.
  */
 function createPolygonPath(): Path2D {
   const path = new Path2D();
   const p = POLYGON_POINTS;
   const r = CORNER_RADIUS;
+  const n = p.length;
   
-  // Start near the first corner (top-left)
-  path.moveTo(p[0].x, p[0].y + r);
+  // For each corner, calculate where the arc starts and ends
+  for (let i = 0; i < n; i++) {
+    const prev = p[(i - 1 + n) % n];
+    const curr = p[i];
+    const next = p[(i + 1) % n];
+    
+    // Point where arc ends (going toward next vertex)
+    const arcEnd = offsetAlongEdge(curr, next, r);
+    // Point where arc starts (coming from previous vertex)  
+    const arcStart = offsetAlongEdge(curr, prev, r);
+    
+    if (i === 0) {
+      // Move to the start of the first arc
+      path.moveTo(arcEnd.x, arcEnd.y);
+    } else {
+      // Line from previous arc end to this arc start
+      path.lineTo(arcStart.x, arcStart.y);
+      // Arc through the corner to arcEnd
+      path.arcTo(curr.x, curr.y, arcEnd.x, arcEnd.y, r);
+    }
+  }
   
-  // Top-left corner with arc
-  path.arcTo(p[0].x, p[0].y, p[0].x + r, p[0].y, r);
+  // Close: line to first corner's arc start, then arc through corner
+  const firstPrev = p[n - 1];
+  const firstCurr = p[0];
+  const firstNext = p[1];
+  const firstArcStart = offsetAlongEdge(firstCurr, firstPrev, r);
+  const firstArcEnd = offsetAlongEdge(firstCurr, firstNext, r);
   
-  // Line to top-right area
-  path.lineTo(p[1].x - r, p[1].y);
-  
-  // Top-right corner with arc
-  path.arcTo(p[1].x, p[1].y, p[1].x + (p[2].x - p[1].x) * 0.1, p[1].y + (p[2].y - p[1].y) * 0.1, r);
-  
-  // Line to bottom-right
-  path.lineTo(p[2].x - r * 0.3, p[2].y - r * 0.5);
-  
-  // Bottom-right corner with arc
-  path.arcTo(p[2].x, p[2].y, p[2].x - (p[2].x - p[3].x) * 0.1, p[2].y + (p[3].y - p[2].y) * 0.1, r);
-  
-  // Line to bottom-left
-  path.lineTo(p[3].x, p[3].y - r);
-  
-  // Bottom-left corner with arc
-  path.arcTo(p[3].x, p[3].y, p[3].x + r, p[3].y, r);
-  
-  // Close path back to start
-  path.lineTo(p[0].x, p[0].y + r);
+  path.lineTo(firstArcStart.x, firstArcStart.y);
+  path.arcTo(firstCurr.x, firstCurr.y, firstArcEnd.x, firstArcEnd.y, r);
   
   path.closePath();
   return path;
