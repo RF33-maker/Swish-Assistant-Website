@@ -85,8 +85,14 @@ export function TeamLogo({ teamName, leagueId, size = "md", className = "", logo
               // Check if the file exists by attempting to fetch it
               const response = await fetch(data.publicUrl, { method: 'HEAD' });
               if (response.ok) {
-                console.log(`[TeamLogo] ✓ Found logo: ${fileName} → ${data.publicUrl}`);
-                setLogoUrl(data.publicUrl);
+                // Add cache-busting timestamp from Last-Modified header or current time
+                const lastModified = response.headers.get('last-modified');
+                const cacheBuster = lastModified 
+                  ? new Date(lastModified).getTime() 
+                  : Date.now();
+                const urlWithCacheBuster = `${data.publicUrl}?t=${cacheBuster}`;
+                console.log(`[TeamLogo] ✓ Found logo: ${fileName} → ${urlWithCacheBuster}`);
+                setLogoUrl(urlWithCacheBuster);
                 foundLogo = true;
                 break;
               }
