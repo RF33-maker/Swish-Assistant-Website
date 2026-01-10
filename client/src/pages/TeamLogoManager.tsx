@@ -187,6 +187,7 @@ export default function TeamLogoManager() {
     if (!league) return;
 
     try {
+      // Remove from team_logos database table
       const { error } = await supabase
         .from("team_logos")
         .delete()
@@ -194,8 +195,16 @@ export default function TeamLogoManager() {
         .eq("team_name", teamName);
 
       if (error) {
-        console.error("Error removing logo:", error);
-        return;
+        console.error("Error removing logo from database:", error);
+      }
+
+      // Try to remove from Supabase storage (try multiple extensions)
+      const baseFileName = `${league.league_id}_${teamName.replace(/\s+/g, '_')}`;
+      const extensions = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
+      
+      for (const ext of extensions) {
+        const fileName = `${baseFileName}.${ext}`;
+        await supabase.storage.from('team-logos').remove([fileName]);
       }
 
       // Update local state

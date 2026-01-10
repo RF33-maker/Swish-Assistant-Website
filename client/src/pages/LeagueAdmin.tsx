@@ -352,13 +352,25 @@ export default function LeagueAdmin() {
     if (!league || !currentUser) return;
 
     try {
-      // Remove from Supabase storage
-      const fileName = `${league.league_id}_${teamName.replace(/\s+/g, '_')}.png`;
-      const { error } = await supabase.storage
-        .from('team-logos')
-        .remove([fileName]);
+      // Remove from team_logos database table first
+      const { error: dbError } = await supabase
+        .from("team_logos")
+        .delete()
+        .eq("league_id", league.league_id)
+        .eq("team_name", teamName);
 
-      if (error) throw error;
+      if (dbError) {
+        console.error("Error removing logo from database:", dbError);
+      }
+
+      // Try to remove from Supabase storage (try multiple extensions)
+      const baseFileName = `${league.league_id}_${teamName.replace(/\s+/g, '_')}`;
+      const extensions = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
+      
+      for (const ext of extensions) {
+        const fileName = `${baseFileName}.${ext}`;
+        await supabase.storage.from('team-logos').remove([fileName]);
+      }
 
       // Update local state
       setTeamLogos(prev => {
