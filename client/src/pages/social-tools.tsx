@@ -418,23 +418,44 @@ export default function SocialToolsPage() {
   };
 
   const handleDownload = async () => {
-    if (!cardRef.current) return;
+    if (!selectedData) return;
     
     try {
-      // Get the parent container that has the scale transform
-      const scaleContainer = cardRef.current.parentElement;
-      if (!scaleContainer) return;
+      // Create a hidden container for rendering at full size
+      const hiddenContainer = document.createElement("div");
+      hiddenContainer.style.cssText = `
+        position: fixed;
+        left: -9999px;
+        top: 0;
+        width: 1080px;
+        height: 1350px;
+        z-index: -9999;
+        visibility: hidden;
+      `;
+      document.body.appendChild(hiddenContainer);
       
-      // Store original transform
-      const originalTransform = scaleContainer.style.transform;
-      const originalHeight = scaleContainer.style.height;
+      // Import ReactDOM to render the card
+      const { createRoot } = await import("react-dom/client");
       
-      // Remove scale transform temporarily for accurate capture
-      scaleContainer.style.transform = "none";
-      scaleContainer.style.height = "1350px";
+      // Create a wrapper div for the card
+      const cardWrapper = document.createElement("div");
+      cardWrapper.style.cssText = "width: 1080px; height: 1350px;";
+      hiddenContainer.appendChild(cardWrapper);
       
-      // Wait for images to load
-      const images = cardRef.current.querySelectorAll("img");
+      // Render the card into the hidden container
+      const root = createRoot(cardWrapper);
+      
+      // Create a promise that resolves when card is rendered
+      await new Promise<void>((resolve) => {
+        root.render(
+          <PlayerPerformanceCardV1 data={selectedData} />
+        );
+        // Give React time to render
+        setTimeout(resolve, 200);
+      });
+      
+      // Wait for all images to load
+      const images = cardWrapper.querySelectorAll("img");
       await Promise.all(
         Array.from(images).map(
           (img) =>
@@ -449,10 +470,11 @@ export default function SocialToolsPage() {
         )
       );
       
-      // Small delay to ensure rendering is complete
+      // Additional delay to ensure fonts and styles are applied
       await new Promise((resolve) => setTimeout(resolve, 100));
       
-      const canvas = await html2canvas(cardRef.current, {
+      // Capture the hidden card
+      const canvas = await html2canvas(cardWrapper.firstElementChild as HTMLElement, {
         scale: 1,
         useCORS: true,
         allowTaint: true,
@@ -461,22 +483,17 @@ export default function SocialToolsPage() {
         height: 1350,
       });
       
-      // Restore original transform
-      scaleContainer.style.transform = originalTransform;
-      scaleContainer.style.height = originalHeight;
+      // Clean up
+      root.unmount();
+      document.body.removeChild(hiddenContainer);
       
+      // Download
       const link = document.createElement("a");
       link.download = `${selectedData.player_name.replace(/\s+/g, '-')}-performance.png`;
       link.href = canvas.toDataURL("image/png");
       link.click();
     } catch (error) {
       console.error("Failed to generate image:", error);
-      // Attempt to restore transform in case of error
-      const scaleContainer = cardRef.current?.parentElement;
-      if (scaleContainer) {
-        scaleContainer.style.transform = "scale(0.35)";
-        scaleContainer.style.height = "472px";
-      }
     }
   };
 
