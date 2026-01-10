@@ -240,8 +240,15 @@ export default function SocialToolsPage() {
         query = query.eq("league_id", selectedLeague);
       }
       
-      // Apply time filter - "latest" shows games from last 7 days
-      if (timeFilter === "latest") {
+      // Filter out 0-point performances
+      query = query.gt("spoints", 0);
+      
+      // Apply time filter
+      if (timeFilter === "last-3-days") {
+        const threeDaysAgo = new Date();
+        threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+        query = query.gte("created_at", threeDaysAgo.toISOString());
+      } else if (timeFilter === "latest") {
         const sevenDaysAgo = new Date();
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
         query = query.gte("created_at", sevenDaysAgo.toISOString());
@@ -476,7 +483,8 @@ export default function SocialToolsPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all-time">All Time</SelectItem>
-                        <SelectItem value="latest">Latest (7 days)</SelectItem>
+                        <SelectItem value="last-3-days">Last 3 Days</SelectItem>
+                        <SelectItem value="latest">Last 7 Days</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
