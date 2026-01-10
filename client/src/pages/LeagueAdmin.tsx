@@ -352,25 +352,23 @@ export default function LeagueAdmin() {
     if (!league || !currentUser) return;
 
     try {
-      // Remove from team_logos database table first
-      const { error: dbError } = await supabase
-        .from("team_logos")
-        .delete()
-        .eq("league_id", league.league_id)
-        .eq("team_name", teamName);
+      // Use server-side endpoint to delete (bypasses RLS)
+      const response = await fetch('/api/team-logos/delete', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          leagueId: league.league_id,
+          teamName: teamName
+        })
+      });
 
-      if (dbError) {
-        console.error("Error removing logo from database:", dbError);
-      }
-
-      // Try to remove from Supabase storage (try multiple extensions)
-      const baseFileName = `${league.league_id}_${teamName.replace(/\s+/g, '_')}`;
-      const extensions = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
+      const result = await response.json();
       
-      for (const ext of extensions) {
-        const fileName = `${baseFileName}.${ext}`;
-        await supabase.storage.from('team-logos').remove([fileName]);
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to delete logo');
       }
+
+      console.log("Logo deletion result:", result);
 
       // Update local state
       setTeamLogos(prev => {
