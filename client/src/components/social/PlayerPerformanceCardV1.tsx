@@ -114,7 +114,7 @@ export function PlayerPerformanceCardV1({ data }: Props) {
       </div>
 
       {/* === Main stat numbers row (MIN / PTS / REB / AST / STL / BLK) === */}
-      <div className="absolute left-1/2 -translate-x-1/2 top-[870px] flex text-center font-semibold">
+      <div className="absolute left-0 right-0 top-[870px] flex justify-center text-center font-semibold">
         <div className="w-[125px]" data-testid="text-minutes">
           <div className="text-[46px] text-white">{data.minutes}</div>
           <div className="text-[22px] uppercase tracking-[0.15em] text-[#e85a24]">MIN</div>
@@ -142,7 +142,7 @@ export function PlayerPerformanceCardV1({ data }: Props) {
       </div>
 
       {/* === Shooting / advanced stat numbers row (FG / 3PT / FT / TO / TS% / +/-) === */}
-      <div className="absolute left-1/2 -translate-x-1/2 top-[990px] flex text-center font-semibold">
+      <div className="absolute left-0 right-0 top-[990px] flex justify-center text-center font-semibold">
         <div className="w-[115px]" data-testid="text-fg">
           <div className="text-[40px] text-white">{data.fg}</div>
           <div className="text-[18px] uppercase tracking-[0.15em] text-[#e85a24]">FG</div>
@@ -173,7 +173,7 @@ export function PlayerPerformanceCardV1({ data }: Props) {
       <div
         className="
           absolute
-          left-[555px] -translate-x-1/2 top-[1130px]
+          left-0 right-0 top-[1130px]
           flex items-center justify-center gap-6
         "
       >
