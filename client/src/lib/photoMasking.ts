@@ -107,8 +107,12 @@ export async function generateMaskedPhoto(
   photoUrl: string,
   focusY: number = 50
 ): Promise<string> {
+  console.log("[PhotoMasking] Starting mask generation for:", photoUrl.substring(0, 80) + "...");
+  console.log("[PhotoMasking] Focus Y:", focusY);
+  
   try {
     const img = await loadImage(photoUrl);
+    console.log("[PhotoMasking] Image loaded:", img.width, "x", img.height);
     
     const canvas = document.createElement("canvas");
     canvas.width = PHOTO_WIDTH;
@@ -157,10 +161,13 @@ export async function generateMaskedPhoto(
     ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
     
     // Return as data URL
-    return canvas.toDataURL("image/png");
+    const dataUrl = canvas.toDataURL("image/png");
+    console.log("[PhotoMasking] Successfully generated masked photo, data URL length:", dataUrl.length);
+    return dataUrl;
   } catch (error) {
-    console.error("Failed to generate masked photo:", error);
+    console.error("[PhotoMasking] Failed to generate masked photo:", error);
     // Return original URL as fallback
+    console.log("[PhotoMasking] Returning original URL as fallback");
     return photoUrl;
   }
 }
