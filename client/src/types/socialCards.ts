@@ -24,6 +24,7 @@ export type PlayerPerformanceV1Data = {
   home_logo_url?: string;
   away_logo_url?: string;
   photo_url?: string;
+  photo_focus_y?: number;
 };
 
 export type SocialCardBase<T = unknown> = {

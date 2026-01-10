@@ -134,6 +134,7 @@ async function buildPlayerPerformanceCardData(perf: TopPerformance): Promise<Pla
   ]);
 
   let playerPhotoUrl = "";
+  let photoFocusY = 50;
   
   if (perf.player_photo_path) {
     const { data: photoData } = supabase.storage
@@ -150,6 +151,17 @@ async function buildPlayerPerformanceCardData(perf: TopPerformance): Promise<Pla
         .from("player-photos")
         .getPublicUrl(`${perf.player_id}/${photoList[0].name}`);
       playerPhotoUrl = photoData.publicUrl;
+    }
+  }
+
+  if (perf.player_id) {
+    const { data: playerData } = await supabase
+      .from("players")
+      .select("photo_focus_y")
+      .eq("id", perf.player_id)
+      .single();
+    if (playerData?.photo_focus_y !== undefined && playerData?.photo_focus_y !== null) {
+      photoFocusY = playerData.photo_focus_y;
     }
   }
 
@@ -175,6 +187,7 @@ async function buildPlayerPerformanceCardData(perf: TopPerformance): Promise<Pla
     home_logo_url: playerTeamLogo,
     away_logo_url: opponentLogo,
     photo_url: playerPhotoUrl,
+    photo_focus_y: photoFocusY,
   };
 }
 
