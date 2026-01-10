@@ -205,7 +205,6 @@ async function buildPlayerPerformanceCardData(perf: TopPerformance): Promise<Pla
 export default function SocialToolsPage() {
   const [, navigate] = useLocation();
   const cardRef = useRef<HTMLDivElement>(null);
-  const hiddenCardRef = useRef<HTMLDivElement>(null);
   const [performances, setPerformances] = useState<TopPerformance[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedData, setSelectedData] = useState<PlayerPerformanceV1Data>(defaultData);
@@ -419,11 +418,23 @@ export default function SocialToolsPage() {
   };
 
   const handleDownload = async () => {
-    if (!hiddenCardRef.current) return;
+    if (!cardRef.current) return;
     
     try {
-      // Wait for images to load in the hidden card
-      const images = hiddenCardRef.current.querySelectorAll("img");
+      // Get the parent container that has the scale transform
+      const scaleContainer = cardRef.current.parentElement;
+      if (!scaleContainer) return;
+      
+      // Store original transform
+      const originalTransform = scaleContainer.style.transform;
+      const originalHeight = scaleContainer.style.height;
+      
+      // Remove scale transform temporarily for accurate capture
+      scaleContainer.style.transform = "none";
+      scaleContainer.style.height = "1350px";
+      
+      // Wait for images to load
+      const images = cardRef.current.querySelectorAll("img");
       await Promise.all(
         Array.from(images).map(
           (img) =>
@@ -441,7 +452,7 @@ export default function SocialToolsPage() {
       // Small delay to ensure rendering is complete
       await new Promise((resolve) => setTimeout(resolve, 100));
       
-      const canvas = await html2canvas(hiddenCardRef.current, {
+      const canvas = await html2canvas(cardRef.current, {
         scale: 1,
         useCORS: true,
         allowTaint: true,
@@ -450,12 +461,22 @@ export default function SocialToolsPage() {
         height: 1350,
       });
       
+      // Restore original transform
+      scaleContainer.style.transform = originalTransform;
+      scaleContainer.style.height = originalHeight;
+      
       const link = document.createElement("a");
       link.download = `${selectedData.player_name.replace(/\s+/g, '-')}-performance.png`;
       link.href = canvas.toDataURL("image/png");
       link.click();
     } catch (error) {
       console.error("Failed to generate image:", error);
+      // Attempt to restore transform in case of error
+      const scaleContainer = cardRef.current?.parentElement;
+      if (scaleContainer) {
+        scaleContainer.style.transform = "scale(0.35)";
+        scaleContainer.style.height = "472px";
+      }
     }
   };
 
@@ -651,21 +672,6 @@ export default function SocialToolsPage() {
           onRemove={handleRemoveFromQueue}
           onClear={handleClearQueue}
         />
-      </div>
-      
-      {/* Hidden full-size card for download rendering */}
-      <div 
-        style={{ 
-          position: "fixed", 
-          left: "-9999px", 
-          top: 0,
-          width: "1080px",
-          height: "1350px",
-        }}
-      >
-        <div ref={hiddenCardRef}>
-          <PlayerPerformanceCardV1 data={selectedData} />
-        </div>
       </div>
     </div>
   );
