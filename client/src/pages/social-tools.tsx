@@ -12,6 +12,7 @@ import html2canvas from "html2canvas";
 import { supabase } from "@/lib/supabase";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { normalizeTeamName, normalizeTeamNameForFile } from "@/lib/teamUtils";
+import { generateMaskedPhoto } from "@/lib/photoMasking";
 import {
   Select,
   SelectContent,
@@ -165,6 +166,16 @@ async function buildPlayerPerformanceCardData(perf: TopPerformance): Promise<Pla
     }
   }
 
+  // Pre-process the photo with the polygon mask and rounded corners
+  let maskedPhotoUrl = playerPhotoUrl;
+  if (playerPhotoUrl) {
+    try {
+      maskedPhotoUrl = await generateMaskedPhoto(playerPhotoUrl, photoFocusY);
+    } catch (error) {
+      console.error("Failed to mask photo, using original:", error);
+    }
+  }
+
   return {
     player_name: perf.player_name,
     team_name: perf.team,
@@ -186,7 +197,7 @@ async function buildPlayerPerformanceCardData(perf: TopPerformance): Promise<Pla
     didWin: perf.player_team_score > perf.opponent_score,
     home_logo_url: playerTeamLogo,
     away_logo_url: opponentLogo,
-    photo_url: playerPhotoUrl,
+    photo_url: maskedPhotoUrl,
     photo_focus_y: photoFocusY,
   };
 }
