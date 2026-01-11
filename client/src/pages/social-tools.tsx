@@ -12,6 +12,7 @@ import html2canvas from "html2canvas";
 import { supabase } from "@/lib/supabase";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { normalizeTeamName, normalizeTeamNameForFile } from "@/lib/teamUtils";
+import { generateMaskedPhoto } from "@/lib/photoMasking";
 import {
   Select,
   SelectContent,
@@ -134,6 +135,7 @@ async function buildPlayerPerformanceCardData(perf: TopPerformance): Promise<Pla
   ]);
 
   let playerPhotoUrl = "";
+  let photoFocusY = 50;
   
   if (perf.player_photo_path) {
     const { data: photoData } = supabase.storage
@@ -150,6 +152,27 @@ async function buildPlayerPerformanceCardData(perf: TopPerformance): Promise<Pla
         .from("player-photos")
         .getPublicUrl(`${perf.player_id}/${photoList[0].name}`);
       playerPhotoUrl = photoData.publicUrl;
+    }
+  }
+
+  if (perf.player_id) {
+    const { data: playerData } = await supabase
+      .from("players")
+      .select("photo_focus_y")
+      .eq("id", perf.player_id)
+      .single();
+    if (playerData?.photo_focus_y !== undefined && playerData?.photo_focus_y !== null) {
+      photoFocusY = playerData.photo_focus_y;
+    }
+  }
+
+  // Pre-process the photo with the polygon mask and rounded corners
+  let maskedPhotoUrl = playerPhotoUrl;
+  if (playerPhotoUrl) {
+    try {
+      maskedPhotoUrl = await generateMaskedPhoto(playerPhotoUrl, photoFocusY);
+    } catch (error) {
+      console.error("Failed to mask photo, using original:", error);
     }
   }
 
@@ -174,14 +197,14 @@ async function buildPlayerPerformanceCardData(perf: TopPerformance): Promise<Pla
     didWin: perf.player_team_score > perf.opponent_score,
     home_logo_url: playerTeamLogo,
     away_logo_url: opponentLogo,
-    photo_url: playerPhotoUrl,
+    photo_url: maskedPhotoUrl,
+    photo_focus_y: photoFocusY,
   };
 }
 
 export default function SocialToolsPage() {
   const [, navigate] = useLocation();
   const cardRef = useRef<HTMLDivElement>(null);
-  const hiddenCardRef = useRef<HTMLDivElement>(null);
   const [performances, setPerformances] = useState<TopPerformance[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedData, setSelectedData] = useState<PlayerPerformanceV1Data>(defaultData);
@@ -395,11 +418,45 @@ export default function SocialToolsPage() {
   };
 
   const handleDownload = async () => {
-    if (!hiddenCardRef.current) return;
+    if (!selectedData) return;
     
     try {
-      // Wait for images to load in the hidden card
-      const images = hiddenCardRef.current.querySelectorAll("img");
+      // Create an off-screen container for rendering at full size
+      // Note: Do NOT use visibility:hidden as html2canvas won't render hidden elements
+      const hiddenContainer = document.createElement("div");
+      hiddenContainer.style.cssText = `
+        position: fixed;
+        left: -9999px;
+        top: 0;
+        width: 1080px;
+        height: 1350px;
+        z-index: -9999;
+        pointer-events: none;
+      `;
+      document.body.appendChild(hiddenContainer);
+      
+      // Import ReactDOM to render the card
+      const { createRoot } = await import("react-dom/client");
+      
+      // Create a wrapper div for the card
+      const cardWrapper = document.createElement("div");
+      cardWrapper.style.cssText = "width: 1080px; height: 1350px;";
+      hiddenContainer.appendChild(cardWrapper);
+      
+      // Render the card into the hidden container
+      const root = createRoot(cardWrapper);
+      
+      // Create a promise that resolves when card is rendered
+      await new Promise<void>((resolve) => {
+        root.render(
+          <PlayerPerformanceCardV1 data={selectedData} />
+        );
+        // Give React time to render
+        setTimeout(resolve, 200);
+      });
+      
+      // Wait for all images to load
+      const images = cardWrapper.querySelectorAll("img");
       await Promise.all(
         Array.from(images).map(
           (img) =>
@@ -414,10 +471,11 @@ export default function SocialToolsPage() {
         )
       );
       
-      // Small delay to ensure rendering is complete
+      // Additional delay to ensure fonts and styles are applied
       await new Promise((resolve) => setTimeout(resolve, 100));
       
-      const canvas = await html2canvas(hiddenCardRef.current, {
+      // Capture the hidden card
+      const canvas = await html2canvas(cardWrapper.firstElementChild as HTMLElement, {
         scale: 1,
         useCORS: true,
         allowTaint: true,
@@ -426,6 +484,11 @@ export default function SocialToolsPage() {
         height: 1350,
       });
       
+      // Clean up
+      root.unmount();
+      document.body.removeChild(hiddenContainer);
+      
+      // Download
       const link = document.createElement("a");
       link.download = `${selectedData.player_name.replace(/\s+/g, '-')}-performance.png`;
       link.href = canvas.toDataURL("image/png");
@@ -627,21 +690,6 @@ export default function SocialToolsPage() {
           onRemove={handleRemoveFromQueue}
           onClear={handleClearQueue}
         />
-      </div>
-      
-      {/* Hidden full-size card for download rendering */}
-      <div 
-        style={{ 
-          position: "fixed", 
-          left: "-9999px", 
-          top: 0,
-          width: "1080px",
-          height: "1350px",
-        }}
-      >
-        <div ref={hiddenCardRef}>
-          <PlayerPerformanceCardV1 data={selectedData} />
-        </div>
       </div>
     </div>
   );
