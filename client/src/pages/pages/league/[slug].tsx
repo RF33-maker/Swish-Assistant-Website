@@ -1692,6 +1692,10 @@ export default function LeaguePage() {
       setIsGameModalOpen(true);
     };
 
+    const handleCarouselGameClick = (gameKey: string) => {
+      navigate(`/game/${encodeURIComponent(gameKey)}`);
+    };
+
     const handleCloseGameModal = () => {
       setIsGameModalOpen(false);
       setSelectedGameId(null);
@@ -3146,7 +3150,7 @@ export default function LeaguePage() {
           <section className="bg-gray-900 text-white py-4 overflow-hidden">
             <GameResultsCarousel 
               leagueId={league.league_id} 
-              onGameClick={handleGameClick}
+              onGameClick={handleCarouselGameClick}
             />
           </section>
         )}
@@ -4775,6 +4779,7 @@ export default function LeaguePage() {
             leagueId={league.league_id}
             isOpen={isPreviewModalOpen}
             onClose={() => setIsPreviewModalOpen(false)}
+            gameKey={selectedPreviewGame.game_id}
           />
         )}
       </div>

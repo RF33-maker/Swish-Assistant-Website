@@ -1,8 +1,10 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { X } from "lucide-react";
+import { X, ExternalLink } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { TeamLogo } from "@/components/TeamLogo";
+import { Link } from "wouter";
+import { Button } from "@/components/ui/button";
 
 interface GamePreviewModalProps {
   isOpen: boolean;
@@ -15,6 +17,7 @@ interface GamePreviewModalProps {
     venue?: string;
   };
   leagueId: number;
+  gameKey?: string;
 }
 
 interface GameResult {
@@ -36,7 +39,7 @@ function parseMinutes(minutesStr: string | null | undefined): number {
   return 0;
 }
 
-export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: GamePreviewModalProps) {
+export default function GamePreviewModal({ isOpen, onClose, game, leagueId, gameKey }: GamePreviewModalProps) {
   // First, fetch team IDs from teams table
   const { data: team1Data } = useQuery({
     queryKey: ['team-lookup', leagueId, game.team1],
@@ -666,6 +669,17 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
             </div>
           </div>
           </div>
+
+          {gameKey && (
+            <div className="mt-4 pt-4 border-t border-orange-200 dark:border-neutral-700 flex justify-center">
+              <Link href={`/game/${encodeURIComponent(gameKey)}`}>
+                <Button className="bg-orange-600 hover:bg-orange-700 text-white flex items-center gap-2">
+                  <ExternalLink className="w-4 h-4" />
+                  Open Game Page
+                </Button>
+              </Link>
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>
