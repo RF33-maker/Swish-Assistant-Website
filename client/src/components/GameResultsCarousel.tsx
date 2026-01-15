@@ -13,9 +13,19 @@ interface GameItem {
   status: 'LIVE' | 'FINAL' | 'SCHEDULED';
 }
 
+interface GameClickData {
+  gameKey: string;
+  status: 'LIVE' | 'FINAL' | 'SCHEDULED';
+  homeTeam: string;
+  awayTeam: string;
+  gameDate: string;
+  homeScore: number | null;
+  awayScore: number | null;
+}
+
 interface GameResultsCarouselProps {
   leagueId: string;
-  onGameClick: (gameKey: string) => void;
+  onGameClick: (data: GameClickData) => void;
 }
 
 function formatDateUK(dateStr: string): string {
@@ -253,7 +263,15 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
             key={`carousel-game-${index}`}
             className="bg-gray-800 rounded-lg p-3 md:p-4 flex-shrink-0 cursor-pointer hover:bg-gray-700 transition-colors border border-gray-700 min-w-[280px] md:min-w-[320px]"
             style={{ width: '280px' }}
-            onClick={() => onGameClick(game.game_key)}
+            onClick={() => onGameClick({
+              gameKey: game.game_key,
+              status: game.status,
+              homeTeam: game.home_team,
+              awayTeam: game.away_team,
+              gameDate: game.game_date,
+              homeScore: game.home_score,
+              awayScore: game.away_score
+            })}
             onMouseDown={(e) => e.preventDefault()}
           >
             <div className="flex justify-between items-center mb-2 md:mb-3">

@@ -1692,6 +1692,33 @@ export default function LeaguePage() {
       setIsGameModalOpen(true);
     };
 
+    const handleCarouselGameClick = (data: {
+      gameKey: string;
+      status: 'LIVE' | 'FINAL' | 'SCHEDULED';
+      homeTeam: string;
+      awayTeam: string;
+      gameDate: string;
+      homeScore: number | null;
+      awayScore: number | null;
+    }) => {
+      if (data.status === 'SCHEDULED') {
+        // For scheduled games, open the preview modal
+        const previewGame: GameSchedule = {
+          game_id: data.gameKey,
+          game_date: data.gameDate,
+          team1: data.homeTeam,
+          team2: data.awayTeam,
+          status: 'scheduled'
+        };
+        setSelectedPreviewGame(previewGame);
+        setIsPreviewModalOpen(true);
+      } else {
+        // For completed/live games, open the detail modal
+        setSelectedGameId(data.gameKey);
+        setIsGameModalOpen(true);
+      }
+    };
+
     const handleCloseGameModal = () => {
       setIsGameModalOpen(false);
       setSelectedGameId(null);
@@ -3146,7 +3173,7 @@ export default function LeaguePage() {
           <section className="bg-gray-900 text-white py-4 overflow-hidden">
             <GameResultsCarousel 
               leagueId={league.league_id} 
-              onGameClick={handleGameClick}
+              onGameClick={handleCarouselGameClick}
             />
           </section>
         )}
