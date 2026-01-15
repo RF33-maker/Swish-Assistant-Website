@@ -48,7 +48,7 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
       
       try {
         const now = new Date();
-        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
         const sevenDaysAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
         const [scheduleResult, teamStatsResult] = await Promise.all([
@@ -56,7 +56,7 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
             .from("game_schedule")
             .select("game_key, matchtime, hometeam, awayteam, status")
             .eq("league_id", leagueId)
-            .gte("matchtime", sevenDaysAgo.toISOString())
+            .gte("matchtime", thirtyDaysAgo.toISOString())
             .lte("matchtime", sevenDaysAhead.toISOString())
             .order("matchtime", { ascending: true }),
           supabase
