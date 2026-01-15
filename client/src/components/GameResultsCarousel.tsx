@@ -121,7 +121,8 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
             } else if (matchTime > now) {
               gameStatus = 'SCHEDULED';
             } else {
-              gameStatus = hasScores ? 'FINAL' : 'SCHEDULED';
+              // Game time has passed - treat as FINAL even without scores
+              gameStatus = 'FINAL';
             }
 
             const gameItem: GameItem = {
