@@ -48,118 +48,131 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
       
       try {
         const now = new Date();
+        
+        // Fetch completed games from team_stats (these have actual scores)
+        // Get recent games - last 30 days by created_at
         const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        const sevenDaysAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+        
+        const { data: teamStatsData, error: teamStatsError } = await supabase
+          .from("team_stats")
+          .select("game_key, name, tot_spoints, is_home, created_at, numeric_id")
+          .eq("league_id", leagueId)
+          .gte("created_at", thirtyDaysAgo.toISOString())
+          .order("created_at", { ascending: false });
+        
+        if (teamStatsError) {
+          console.error("Error fetching team stats:", teamStatsError);
+        }
 
-        const [scheduleResult, teamStatsResult] = await Promise.all([
-          supabase
-            .from("game_schedule")
-            .select("game_key, matchtime, hometeam, awayteam, status")
-            .eq("league_id", leagueId)
-            .gte("matchtime", thirtyDaysAgo.toISOString())
-            .lte("matchtime", sevenDaysAhead.toISOString())
-            .order("matchtime", { ascending: true }),
-          supabase
-            .from("team_stats")
-            .select("game_key, name, tot_spoints, is_home, game_date")
-            .eq("league_id", leagueId)
-        ]);
-
-        const { data: scheduleData } = scheduleResult;
-        const { data: teamStatsData } = teamStatsResult;
-
-        const scoresByGameKey = new Map<string, { home_score: number; away_score: number }>();
-        if (teamStatsData) {
+        // Build completed games from team_stats
+        const completedGames: GameItem[] = [];
+        const processedGameKeys = new Set<string>();
+        
+        if (teamStatsData && teamStatsData.length > 0) {
+          // Group by game_key
           const gameMap = new Map<string, any[]>();
           teamStatsData.forEach(stat => {
-            if (stat.game_key) {
-              if (!gameMap.has(stat.game_key)) {
-                gameMap.set(stat.game_key, []);
+            const key = stat.game_key || stat.numeric_id;
+            if (key) {
+              if (!gameMap.has(key)) {
+                gameMap.set(key, []);
               }
-              gameMap.get(stat.game_key)!.push(stat);
+              gameMap.get(key)!.push(stat);
             }
           });
 
           gameMap.forEach((teams, gameKey) => {
             if (teams.length === 2) {
+              processedGameKeys.add(gameKey);
+              
               const homeTeam = teams.find(t => t.is_home === true);
               const awayTeam = teams.find(t => t.is_home === false);
+              
+              let home_team: string, away_team: string, home_score: number, away_score: number;
+              
               if (homeTeam && awayTeam) {
-                scoresByGameKey.set(gameKey, {
-                  home_score: homeTeam.tot_spoints || 0,
-                  away_score: awayTeam.tot_spoints || 0
-                });
+                home_team = homeTeam.name;
+                away_team = awayTeam.name;
+                home_score = homeTeam.tot_spoints || 0;
+                away_score = awayTeam.tot_spoints || 0;
               } else {
-                scoresByGameKey.set(gameKey, {
-                  home_score: teams[0].tot_spoints || 0,
-                  away_score: teams[1].tot_spoints || 0
-                });
+                // Fallback if is_home not set - use first as home, second as away
+                home_team = teams[0].name;
+                away_team = teams[1].name;
+                home_score = teams[0].tot_spoints || 0;
+                away_score = teams[1].tot_spoints || 0;
               }
+              
+              completedGames.push({
+                game_key: gameKey,
+                game_id: gameKey,
+                game_date: teams[0].created_at,
+                home_team,
+                away_team,
+                home_score,
+                away_score,
+                status: 'FINAL'
+              });
             }
           });
         }
 
-        const liveGames: GameItem[] = [];
-        const resultGames: GameItem[] = [];
-        const upcomingGames: GameItem[] = [];
+        // Sort completed games by date (most recent first)
+        completedGames.sort((a, b) => new Date(b.game_date).getTime() - new Date(a.game_date).getTime());
 
+        // Fetch upcoming games from game_schedule
+        const sevenDaysAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+        
+        const { data: scheduleData, error: scheduleError } = await supabase
+          .from("game_schedule")
+          .select("game_key, matchtime, hometeam, awayteam, status")
+          .eq("league_id", leagueId)
+          .gte("matchtime", now.toISOString())
+          .lte("matchtime", sevenDaysAhead.toISOString())
+          .order("matchtime", { ascending: true });
+
+        if (scheduleError) {
+          console.error("Error fetching schedule:", scheduleError);
+        }
+
+        const upcomingGames: GameItem[] = [];
+        const liveGames: GameItem[] = [];
+        
         if (scheduleData) {
           scheduleData.forEach(game => {
             if (!game.hometeam || !game.awayteam || !game.game_key) return;
+            // Skip if we already have this game as completed
+            if (processedGameKeys.has(game.game_key)) return;
 
-            const matchTime = new Date(game.matchtime);
             const statusLower = (game.status || '').toLowerCase();
-            const scores = scoresByGameKey.get(game.game_key);
-            const hasScores = scores !== undefined;
-
-            let gameStatus: 'LIVE' | 'FINAL' | 'SCHEDULED';
+            const isLive = statusLower === 'live' || statusLower === 'in_progress';
             
-            if (statusLower === 'live' || statusLower === 'in_progress') {
-              gameStatus = 'LIVE';
-            } else if (statusLower === 'final' || statusLower === 'finished' || hasScores) {
-              gameStatus = 'FINAL';
-            } else if (matchTime > now) {
-              gameStatus = 'SCHEDULED';
-            } else {
-              // Game time has passed - treat as FINAL even without scores
-              gameStatus = 'FINAL';
-            }
-
             const gameItem: GameItem = {
               game_key: game.game_key,
               game_id: game.game_key,
               game_date: game.matchtime,
               home_team: game.hometeam,
               away_team: game.awayteam,
-              home_score: scores?.home_score ?? null,
-              away_score: scores?.away_score ?? null,
-              status: gameStatus
+              home_score: null,
+              away_score: null,
+              status: isLive ? 'LIVE' : 'SCHEDULED'
             };
 
-            if (gameStatus === 'LIVE') {
+            if (isLive) {
               liveGames.push(gameItem);
-            } else if (gameStatus === 'FINAL') {
-              resultGames.push(gameItem);
             } else {
               upcomingGames.push(gameItem);
             }
           });
         }
 
-        resultGames.sort((a, b) => new Date(b.game_date).getTime() - new Date(a.game_date).getTime());
-        upcomingGames.sort((a, b) => new Date(a.game_date).getTime() - new Date(b.game_date).getTime());
-
+        // Determine what to display: LIVE > Results > Upcoming
         if (liveGames.length > 0) {
           setGames(liveGames.slice(0, 10));
           setDisplayMode('live');
-        } else if (resultGames.length > 0) {
-          const last48h = new Date(now.getTime() - 48 * 60 * 60 * 1000);
-          const recentResults = resultGames.filter(g => new Date(g.game_date) >= last48h);
-          if (recentResults.length > 0) {
-            setGames(recentResults.slice(0, 10));
-          } else {
-            setGames(resultGames.slice(0, 10));
-          }
+        } else if (completedGames.length > 0) {
+          // Show most recent 10 completed games
+          setGames(completedGames.slice(0, 10));
           setDisplayMode('results');
         } else if (upcomingGames.length > 0) {
           setGames(upcomingGames.slice(0, 10));
