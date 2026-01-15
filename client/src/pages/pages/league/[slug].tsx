@@ -2096,9 +2096,30 @@ export default function LeaguePage() {
         const byPlayerId = new Map<string, PlayerAggregate>();
         const noPlayerId: any[] = [];
 
+        // Helper function to parse minutes from various formats
+        const parseMinutesPlayed = (stat: any): number => {
+          const minutes = stat.sminutes || stat.minutes_played;
+          if (!minutes) return 0;
+          if (typeof minutes === 'number') return minutes;
+          if (typeof minutes === 'string') {
+            const parts = minutes.split(':');
+            if (parts.length === 2) {
+              return parseInt(parts[0]) + parseInt(parts[1]) / 60;
+            }
+            return parseFloat(minutes) || 0;
+          }
+          return 0;
+        };
+
         playerStats.forEach(stat => {
           const playerName = stat.full_name || stat.name || 'Unknown Player';
           const team = stat.team || stat.team_name || 'Unknown';
+          
+          // Parse minutes to check if player actually played
+          const minutesPlayed = parseMinutesPlayed(stat);
+          
+          // Skip stats where player didn't play (0 minutes)
+          const didPlay = minutesPlayed > 0;
           
           if (stat.player_id) {
             if (!byPlayerId.has(stat.player_id)) {
@@ -2130,38 +2151,43 @@ export default function LeaguePage() {
               });
             }
             const agg = byPlayerId.get(stat.player_id)!;
-            agg.games += 1;
-            agg.totalPoints += stat.spoints || 0;
-            agg.totalRebounds += stat.sreboundstotal || 0;
-            agg.totalAssists += stat.sassists || 0;
-            agg.totalSteals += stat.ssteals || 0;
-            agg.totalBlocks += stat.sblocks || 0;
-            agg.totalTurnovers += stat.sturnovers || 0;
-            agg.totalFGM += stat.sfieldgoalsmade || 0;
-            agg.totalFGA += stat.sfieldgoalsattempted || 0;
-            agg.total2PM += stat.stwopointersmade || 0;
-            agg.total2PA += stat.stwopointersattempted || 0;
-            agg.total3PM += stat.sthreepointersmade || 0;
-            agg.total3PA += stat.sthreepointersattempted || 0;
-            agg.totalFTM += stat.sfreethrowsmade || 0;
-            agg.totalFTA += stat.sfreethrowsattempted || 0;
-            agg.totalORB += stat.sreboundsoffensive || 0;
-            agg.totalDRB += stat.sreboundsdefensive || 0;
-            agg.totalPersonalFouls += stat.sfoulspersonal || 0;
-            agg.totalPlusMinus += stat.splusminuspoints || 0;
-            agg.rawStats.push(stat);
+            // Only count as a game played if they had minutes
+            if (didPlay) {
+              agg.games += 1;
+            }
+            // Only add stats if player actually played
+            if (didPlay) {
+              agg.totalPoints += stat.spoints || 0;
+              agg.totalRebounds += stat.sreboundstotal || 0;
+              agg.totalAssists += stat.sassists || 0;
+              agg.totalSteals += stat.ssteals || 0;
+              agg.totalBlocks += stat.sblocks || 0;
+              agg.totalTurnovers += stat.sturnovers || 0;
+              agg.totalFGM += stat.sfieldgoalsmade || 0;
+              agg.totalFGA += stat.sfieldgoalsattempted || 0;
+              agg.total2PM += stat.stwopointersmade || 0;
+              agg.total2PA += stat.stwopointersattempted || 0;
+              agg.total3PM += stat.sthreepointersmade || 0;
+              agg.total3PA += stat.sthreepointersattempted || 0;
+              agg.totalFTM += stat.sfreethrowsmade || 0;
+              agg.totalFTA += stat.sfreethrowsattempted || 0;
+              agg.totalORB += stat.sreboundsoffensive || 0;
+              agg.totalDRB += stat.sreboundsdefensive || 0;
+              agg.totalPersonalFouls += stat.sfoulspersonal || 0;
+              agg.totalPlusMinus += stat.splusminuspoints || 0;
+              agg.totalMinutes += minutesPlayed;
+              agg.rawStats.push(stat);
+            }
             
             // Use longer name if available
             if (playerName.length > agg.name.length) {
               agg.name = playerName;
             }
-            
-            const minutesParts = stat.sminutes?.split(':');
-            if (minutesParts && minutesParts.length === 2) {
-              agg.totalMinutes += parseInt(minutesParts[0]) + parseInt(minutesParts[1]) / 60;
-            }
           } else {
-            noPlayerId.push(stat);
+            // Only add to noPlayerId if they actually played
+            if (didPlay) {
+              noPlayerId.push(stat);
+            }
           }
         });
 
@@ -2355,7 +2381,10 @@ export default function LeaguePage() {
         // Step 6: Calculate averages and build final list
         console.log("📊 Step 6: Calculating averages");
         
-        const averagesList = mergedPlayers.map((player) => {
+        // Filter out players with 0 games played (never actually played)
+        const playersWithGames = mergedPlayers.filter(player => player.games > 0);
+        
+        const averagesList = playersWithGames.map((player) => {
           // Try to find slug by player_id first, then by name
           let slug: string | null = null;
           for (const pid of player.playerIds) {

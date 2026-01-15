@@ -208,6 +208,21 @@ export default function PlayerStatsPage() {
     return num + "th";
   };
 
+  // Helper function to parse minutes from various formats and check if > 0
+  const parseMinutesPlayed = (stat: any): number => {
+    const minutes = stat.sminutes || stat.minutes_played;
+    if (!minutes) return 0;
+    if (typeof minutes === 'number') return minutes;
+    if (typeof minutes === 'string') {
+      const parts = minutes.split(':');
+      if (parts.length === 2) {
+        return parseInt(parts[0]) + parseInt(parts[1]) / 60;
+      }
+      return parseFloat(minutes) || 0;
+    }
+    return 0;
+  };
+
   // Function to calculate player rankings in the league
   const calculateRankings = async (leagueId: string, currentAverages: SeasonAverages): Promise<PlayerRankings | null> => {
     try {
@@ -219,30 +234,14 @@ export default function PlayerStatsPage() {
 
       if (!allStats || allStats.length === 0) return null;
 
-      // Group stats by player and calculate their averages
-      const playerAverages = new Map<string, SeasonAverages>();
-      const playerIds = new Set(allStats.map(s => s.id || Math.random().toString()));
+      // Filter out games where players didn't play (0 minutes)
+      const playedStats = allStats.filter(stat => parseMinutesPlayed(stat) > 0);
 
-      allStats.forEach(stat => {
-        const key = `${stat.firstname || ''}_${stat.familyname || ''}`.trim();
-        if (!playerAverages.has(key)) {
-          playerAverages.set(key, {
-            games_played: 0,
-            avg_points: 0,
-            avg_rebounds: 0,
-            avg_assists: 0,
-            avg_steals: 0,
-            avg_blocks: 0,
-            fg_percentage: 0,
-            three_point_percentage: 0,
-            ft_percentage: 0
-          });
-        }
-      });
+      if (playedStats.length === 0) return null;
 
-      // Calculate totals for each player
+      // Calculate totals for each player (only counting games they played)
       const playerTotals = new Map<string, any>();
-      allStats.forEach(stat => {
+      playedStats.forEach(stat => {
         const key = `${stat.firstname || ''}_${stat.familyname || ''}`.trim();
         if (!playerTotals.has(key)) {
           playerTotals.set(key, {
@@ -650,24 +649,27 @@ export default function PlayerStatsPage() {
         
         setPlayerInfo(playerInfo);
 
+        // Filter out games where player didn't actually play (0 minutes)
+        const gamesPlayed = stats.filter(stat => parseMinutesPlayed(stat) > 0);
+        
         // Calculate season averages if we have stats
-        if (stats && stats.length > 0) {
-          console.log('📈 Step 5: Calculating averages for', stats.length, 'games');
+        if (gamesPlayed && gamesPlayed.length > 0) {
+          console.log('📈 Step 5: Calculating averages for', gamesPlayed.length, 'games played (filtered from', stats.length, 'total stats)');
           // This section is now redundant since we set playerInfo above with joined data
           // but keep as extra fallback safety
           if (!playerInfo || !playerInfo.name || playerInfo.name === 'Unknown Player') {
-            const fallbackName = stats[0].players?.full_name || 
-                                stats[0].full_name || 
-                                stats[0].name || 
-                                `${stats[0].firstname || ''} ${stats[0].familyname || ''}`.trim() || 
+            const fallbackName = gamesPlayed[0].players?.full_name || 
+                                gamesPlayed[0].full_name || 
+                                gamesPlayed[0].name || 
+                                `${gamesPlayed[0].firstname || ''} ${gamesPlayed[0].familyname || ''}`.trim() || 
                                 'Unknown Player';
-            const fallbackTeam = stats[0].team_name || 
-                                stats[0].team || 
+            const fallbackTeam = gamesPlayed[0].team_name || 
+                                gamesPlayed[0].team || 
                                 'Unknown Team';
             
             // Also detect transfers in fallback (with normalization)
             const normalizeTeamFallback = (t: string) => t.trim().toLowerCase();
-            const allTeamsFallback = stats
+            const allTeamsFallback = gamesPlayed
               .map(s => s.team_name || s.team)
               .filter((team): team is string => Boolean(team));
             const teamMapFallback = new Map<string, string>();
@@ -684,9 +686,9 @@ export default function PlayerStatsPage() {
             setPlayerInfo({
               name: fallbackName,
               team: fallbackTeam,
-              position: stats[0].position,
-              number: stats[0].number,
-              leagueId: stats[0].league_id,
+              position: gamesPlayed[0].position,
+              number: gamesPlayed[0].number,
+              leagueId: gamesPlayed[0].league_id,
               playerId: playerInfo.playerId,
               photoPath: playerInfo.photoPath,
               photoFocusY: playerInfo.photoFocusY,
@@ -694,7 +696,7 @@ export default function PlayerStatsPage() {
             });
           }
 
-          const totals = stats.reduce((acc, game) => ({
+          const totals = gamesPlayed.reduce((acc, game) => ({
             points: acc.points + (game.spoints || game.points || 0),
             rebounds: acc.rebounds + (game.sreboundstotal || game.rebounds_total || 0),
             assists: acc.assists + (game.sassists || game.assists || 0),
@@ -713,7 +715,7 @@ export default function PlayerStatsPage() {
             free_throws_made: 0, free_throws_attempted: 0
           });
 
-          const games = stats.length;
+          const games = gamesPlayed.length;
           const averages = {
             games_played: games,
             avg_points: totals.points / games,
@@ -729,8 +731,8 @@ export default function PlayerStatsPage() {
           setSeasonAverages(averages);
 
           // Calculate player rankings
-          if (stats[0].league_id) {
-            const ranks = await calculateRankings(stats[0].league_id, averages);
+          if (gamesPlayed[0].league_id) {
+            const ranks = await calculateRankings(gamesPlayed[0].league_id, averages);
             if (ranks) {
               setPlayerRankings(ranks);
             }
@@ -784,17 +786,19 @@ export default function PlayerStatsPage() {
     fetchPlayerData();
   }, [playerSlugOrId, toast, setLocation]);
 
-  // Filter stats based on selected league
+  // Filter stats based on selected league AND only games where player actually played
   const filteredStats = useMemo(() => {
-    if (selectedLeagueFilter === "all") {
-      return playerStats;
+    // First filter by league if needed
+    let stats = playerStats;
+    if (selectedLeagueFilter !== "all") {
+      stats = playerStats.filter(stat => {
+        const statLeagueId = stat.players?.league_id || stat.league_id;
+        return statLeagueId === selectedLeagueFilter;
+      });
     }
     
-    // Filter stats by league_id
-    return playerStats.filter(stat => {
-      const statLeagueId = stat.players?.league_id || stat.league_id;
-      return statLeagueId === selectedLeagueFilter;
-    });
+    // Then filter out games where player didn't play (0 minutes)
+    return stats.filter(stat => parseMinutesPlayed(stat) > 0);
   }, [playerStats, selectedLeagueFilter]);
 
   // Calculate season averages based on filtered stats
