@@ -608,7 +608,7 @@ export default function GamePage() {
         </button>
 
         <div className="bg-white dark:bg-neutral-900 rounded-xl overflow-hidden shadow-lg border border-orange-100 dark:border-neutral-800">
-          <div className="bg-gradient-to-r from-orange-500 via-orange-600 to-orange-500 p-6 md:p-8">
+          <div className="bg-gradient-to-r from-orange-100 via-orange-50 to-orange-100 dark:from-neutral-800 dark:via-neutral-850 dark:to-neutral-800 p-6 md:p-8 border-b border-orange-200 dark:border-neutral-700">
             <div className="flex justify-center mb-4">
               {getStatusBadge(gameData.status, gameData.matchtime)}
             </div>
@@ -618,21 +618,21 @@ export default function GamePage() {
                 <div className="flex justify-center mb-2 md:mb-3">
                   <TeamLogo teamName={gameData.awayteam} leagueId={gameData.league_id} size="md" className="md:w-20 md:h-20" />
                 </div>
-                <h2 className="text-sm md:text-xl font-bold text-white md:truncate hidden md:block">{gameData.awayteam}</h2>
-                <h2 className="text-base font-bold text-white md:hidden">{getTeamAbbr(gameData.awayteam)}</h2>
-                <span className="text-xs text-orange-100">AWAY</span>
+                <h2 className="text-sm md:text-xl font-bold text-slate-800 dark:text-white md:truncate hidden md:block">{gameData.awayteam}</h2>
+                <h2 className="text-base font-bold text-slate-800 dark:text-white md:hidden">{getTeamAbbr(gameData.awayteam)}</h2>
+                <span className="text-xs text-orange-600 dark:text-orange-400">AWAY</span>
               </div>
 
               <div className="flex flex-col items-center flex-shrink-0">
                 {isGamePlayed && homeScore !== null && awayScore !== null ? (
                   <div className="flex items-center gap-2 md:gap-4">
-                    <span className="text-3xl md:text-6xl font-bold text-white">{awayScore}</span>
-                    <span className="text-xl md:text-2xl text-orange-200">-</span>
-                    <span className="text-3xl md:text-6xl font-bold text-white">{homeScore}</span>
+                    <span className="text-3xl md:text-6xl font-bold text-slate-800 dark:text-white">{awayScore}</span>
+                    <span className="text-xl md:text-2xl text-orange-400">-</span>
+                    <span className="text-3xl md:text-6xl font-bold text-slate-800 dark:text-white">{homeScore}</span>
                   </div>
                 ) : (
                   <div className="text-center">
-                    <div className="text-xl md:text-3xl font-bold text-orange-200">VS</div>
+                    <div className="text-xl md:text-3xl font-bold text-orange-500">VS</div>
                   </div>
                 )}
               </div>
@@ -641,13 +641,13 @@ export default function GamePage() {
                 <div className="flex justify-center mb-2 md:mb-3">
                   <TeamLogo teamName={gameData.hometeam} leagueId={gameData.league_id} size="md" className="md:w-20 md:h-20" />
                 </div>
-                <h2 className="text-sm md:text-xl font-bold text-white md:truncate hidden md:block">{gameData.hometeam}</h2>
-                <h2 className="text-base font-bold text-white md:hidden">{getTeamAbbr(gameData.hometeam)}</h2>
-                <span className="text-xs text-orange-100">HOME</span>
+                <h2 className="text-sm md:text-xl font-bold text-slate-800 dark:text-white md:truncate hidden md:block">{gameData.hometeam}</h2>
+                <h2 className="text-base font-bold text-slate-800 dark:text-white md:hidden">{getTeamAbbr(gameData.hometeam)}</h2>
+                <span className="text-xs text-orange-600 dark:text-orange-400">HOME</span>
               </div>
             </div>
 
-            <div className="flex flex-wrap justify-center gap-4 mt-6 text-sm text-orange-100">
+            <div className="flex flex-wrap justify-center gap-4 mt-6 text-sm text-slate-600 dark:text-slate-400">
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4" />
                 <span>{formatDate(gameData.matchtime)}</span>
