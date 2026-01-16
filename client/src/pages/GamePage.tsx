@@ -1,4 +1,4 @@
-import { useParams, Link } from "wouter";
+import { useParams, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
@@ -157,6 +157,7 @@ function parseMinutes(minutesStr: string | null | undefined): string {
 export default function GamePage() {
   const params = useParams<{ gameKey: string }>();
   const gameKey = params.gameKey ? decodeURIComponent(params.gameKey) : '';
+  const [, navigate] = useLocation();
 
   const { data: gameData, isLoading: gameLoading, error: gameError } = useQuery({
     queryKey: ['game-schedule', gameKey],
@@ -553,10 +554,13 @@ export default function GamePage() {
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-4">Game Not Found</h1>
           <p className="text-gray-400 mb-6">The game you're looking for doesn't exist or has been removed.</p>
-          <Link href="/" className="text-orange-500 hover:text-orange-400 flex items-center justify-center gap-2">
+          <button 
+            onClick={() => navigate('/')} 
+            className="text-orange-500 hover:text-orange-400 flex items-center justify-center gap-2 cursor-pointer"
+          >
             <ArrowLeft className="w-4 h-4" />
             Back to Home
-          </Link>
+          </button>
         </div>
       </div>
     );
@@ -585,17 +589,13 @@ export default function GamePage() {
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       <div className="max-w-6xl mx-auto px-4 py-6">
-        {leagueData?.slug ? (
-          <Link href={`/league/${leagueData.slug}`} className="inline-flex items-center gap-2 text-gray-400 hover:text-white mb-6 transition-colors">
-            <ArrowLeft className="w-4 h-4" />
-            Back to League
-          </Link>
-        ) : (
-          <Link href="/" className="inline-flex items-center gap-2 text-gray-400 hover:text-white mb-6 transition-colors">
-            <ArrowLeft className="w-4 h-4" />
-            Back to Home
-          </Link>
-        )}
+        <button 
+          onClick={() => navigate(leagueData?.slug ? `/league/${leagueData.slug}` : '/')}
+          className="inline-flex items-center gap-2 text-gray-400 hover:text-white mb-6 transition-colors cursor-pointer"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          {leagueData?.slug ? 'Back to League' : 'Back to Home'}
+        </button>
 
         <div className="bg-gray-800 rounded-xl overflow-hidden">
           <div className="bg-gradient-to-r from-gray-800 via-gray-700 to-gray-800 p-6 md:p-8">
