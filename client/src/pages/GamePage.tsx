@@ -1,8 +1,9 @@
 import { useParams, Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { TeamLogo } from "@/components/TeamLogo";
-import { ArrowLeft, Clock, MapPin, Calendar } from "lucide-react";
+import { ArrowLeft, Clock, MapPin, Calendar, Users, TrendingUp } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -50,6 +51,48 @@ interface TeamStat {
   tot_sfreethrowsmade: number;
   tot_sfreethrowsattempted: number;
   is_home: boolean;
+}
+
+interface GameResult {
+  numericId: string;
+  won: boolean;
+  teamScore: number;
+  opponentScore: number;
+}
+
+interface TimeLeft {
+  days: number;
+  hours: number;
+  minutes: number;
+  seconds: number;
+}
+
+function parseMinutesToDecimal(minutesStr: string | null | undefined): number {
+  if (!minutesStr) return 0;
+  const parts = minutesStr.split(':');
+  if (parts.length === 2) {
+    const minutes = parseInt(parts[0]) || 0;
+    const seconds = parseInt(parts[1]) || 0;
+    return minutes + seconds / 60;
+  }
+  return 0;
+}
+
+function calculateTimeLeft(matchtime: string): TimeLeft | null {
+  const gameTime = new Date(matchtime).getTime();
+  const now = new Date().getTime();
+  const difference = gameTime - now;
+
+  if (difference <= 0) {
+    return null;
+  }
+
+  return {
+    days: Math.floor(difference / (1000 * 60 * 60 * 24)),
+    hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
+    minutes: Math.floor((difference / 1000 / 60) % 60),
+    seconds: Math.floor((difference / 1000) % 60)
+  };
 }
 
 function formatMatchTime(matchtime: string): string {
@@ -156,6 +199,265 @@ export default function GamePage() {
       return data as TeamStat[];
     },
     enabled: !!gameKey && !!gameData
+  });
+
+  // Countdown timer state
+  const [timeLeft, setTimeLeft] = useState<TimeLeft | null>(null);
+
+  useEffect(() => {
+    if (!gameData?.matchtime) return;
+    
+    const updateCountdown = () => {
+      setTimeLeft(calculateTimeLeft(gameData.matchtime));
+    };
+    
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    
+    return () => clearInterval(interval);
+  }, [gameData?.matchtime]);
+
+  // Check if game is scheduled (for preview mode features)
+  const isScheduled = gameData ? (
+    new Date(gameData.matchtime) > new Date() && 
+    gameData.status?.toLowerCase() !== 'live' && 
+    gameData.status?.toLowerCase() !== 'final' &&
+    gameData.status?.toLowerCase() !== 'finished'
+  ) : false;
+
+  // Fetch home team ID
+  const { data: homeTeamData } = useQuery({
+    queryKey: ['team-lookup-game', gameData?.league_id, gameData?.hometeam],
+    queryFn: async () => {
+      if (!gameData) return null;
+      let { data, error } = await supabase
+        .from('teams')
+        .select('team_id, name')
+        .eq('league_id', gameData.league_id)
+        .eq('name', gameData.hometeam)
+        .single();
+      
+      if (error || !data) {
+        const baseTeamName = gameData.hometeam.split(' Senior ')[0].split(' Men')[0];
+        const { data: partialData } = await supabase
+          .from('teams')
+          .select('team_id, name')
+          .eq('league_id', gameData.league_id)
+          .ilike('name', `%${baseTeamName}%`)
+          .limit(1)
+          .single();
+        data = partialData;
+      }
+      return data;
+    },
+    enabled: !!gameData && isScheduled
+  });
+
+  // Fetch away team ID
+  const { data: awayTeamData } = useQuery({
+    queryKey: ['team-lookup-game', gameData?.league_id, gameData?.awayteam],
+    queryFn: async () => {
+      if (!gameData) return null;
+      let { data, error } = await supabase
+        .from('teams')
+        .select('team_id, name')
+        .eq('league_id', gameData.league_id)
+        .eq('name', gameData.awayteam)
+        .single();
+      
+      if (error || !data) {
+        const baseTeamName = gameData.awayteam.split(' Senior ')[0].split(' Men')[0];
+        const { data: partialData } = await supabase
+          .from('teams')
+          .select('team_id, name')
+          .eq('league_id', gameData.league_id)
+          .ilike('name', `%${baseTeamName}%`)
+          .limit(1)
+          .single();
+        data = partialData;
+      }
+      return data;
+    },
+    enabled: !!gameData && isScheduled
+  });
+
+  const homeTeamId = homeTeamData?.team_id;
+  const awayTeamId = awayTeamData?.team_id;
+
+  // Fetch home team roster for top players
+  const { data: homeTeamRoster } = useQuery({
+    queryKey: ['roster-game', gameData?.league_id, homeTeamId],
+    queryFn: async () => {
+      if (!homeTeamId || !gameData) return [];
+      const { data, error } = await supabase
+        .from('player_stats')
+        .select('firstname, familyname, spoints, sreboundstotal, sassists, sminutes')
+        .eq('league_id', gameData.league_id)
+        .eq('team_id', homeTeamId);
+      
+      if (error) throw error;
+      
+      const playerMap = new Map();
+      data?.forEach(stat => {
+        const name = `${stat.firstname || ''} ${stat.familyname || ''}`.trim();
+        if (!playerMap.has(name)) {
+          playerMap.set(name, { name, games: 0, points: 0, rebounds: 0, assists: 0, minutes: 0 });
+        }
+        const player = playerMap.get(name);
+        const mins = parseMinutesToDecimal(stat.sminutes);
+        if (mins > 0) {
+          player.games += 1;
+          player.points += stat.spoints || 0;
+          player.rebounds += stat.sreboundstotal || 0;
+          player.assists += stat.sassists || 0;
+          player.minutes += mins;
+        }
+      });
+
+      return Array.from(playerMap.values())
+        .filter(p => p.games > 0)
+        .map(p => ({
+          ...p,
+          ppg: (p.points / p.games).toFixed(1),
+          rpg: (p.rebounds / p.games).toFixed(1),
+          apg: (p.assists / p.games).toFixed(1),
+        }))
+        .sort((a, b) => parseFloat(b.ppg) - parseFloat(a.ppg))
+        .slice(0, 3);
+    },
+    enabled: !!homeTeamId && isScheduled
+  });
+
+  // Fetch away team roster for top players
+  const { data: awayTeamRoster } = useQuery({
+    queryKey: ['roster-game', gameData?.league_id, awayTeamId],
+    queryFn: async () => {
+      if (!awayTeamId || !gameData) return [];
+      const { data, error } = await supabase
+        .from('player_stats')
+        .select('firstname, familyname, spoints, sreboundstotal, sassists, sminutes')
+        .eq('league_id', gameData.league_id)
+        .eq('team_id', awayTeamId);
+      
+      if (error) throw error;
+      
+      const playerMap = new Map();
+      data?.forEach(stat => {
+        const name = `${stat.firstname || ''} ${stat.familyname || ''}`.trim();
+        if (!playerMap.has(name)) {
+          playerMap.set(name, { name, games: 0, points: 0, rebounds: 0, assists: 0, minutes: 0 });
+        }
+        const player = playerMap.get(name);
+        const mins = parseMinutesToDecimal(stat.sminutes);
+        if (mins > 0) {
+          player.games += 1;
+          player.points += stat.spoints || 0;
+          player.rebounds += stat.sreboundstotal || 0;
+          player.assists += stat.sassists || 0;
+          player.minutes += mins;
+        }
+      });
+
+      return Array.from(playerMap.values())
+        .filter(p => p.games > 0)
+        .map(p => ({
+          ...p,
+          ppg: (p.points / p.games).toFixed(1),
+          rpg: (p.rebounds / p.games).toFixed(1),
+          apg: (p.assists / p.games).toFixed(1),
+        }))
+        .sort((a, b) => parseFloat(b.ppg) - parseFloat(a.ppg))
+        .slice(0, 3);
+    },
+    enabled: !!awayTeamId && isScheduled
+  });
+
+  // Fetch home team last 5 games
+  const { data: homeTeamForm } = useQuery({
+    queryKey: ['team-form-game', gameData?.league_id, homeTeamId],
+    queryFn: async () => {
+      if (!homeTeamId || !gameData) return [];
+      const { data: teamGames, error } = await supabase
+        .from('team_stats')
+        .select('numeric_id, tot_spoints, team_id')
+        .eq('league_id', gameData.league_id)
+        .eq('team_id', homeTeamId)
+        .order('numeric_id', { ascending: false });
+      
+      if (error || !teamGames) return [];
+
+      const results: GameResult[] = [];
+      const processedGames = new Set<string>();
+
+      for (const teamGame of teamGames) {
+        if (!teamGame.numeric_id || processedGames.has(teamGame.numeric_id)) continue;
+        
+        const { data: opponentData } = await supabase
+          .from('team_stats')
+          .select('tot_spoints, team_id')
+          .eq('league_id', gameData.league_id)
+          .eq('numeric_id', teamGame.numeric_id)
+          .neq('team_id', homeTeamId)
+          .single();
+
+        if (opponentData) {
+          results.push({
+            numericId: teamGame.numeric_id,
+            won: (teamGame.tot_spoints || 0) > (opponentData.tot_spoints || 0),
+            teamScore: teamGame.tot_spoints || 0,
+            opponentScore: opponentData.tot_spoints || 0
+          });
+          processedGames.add(teamGame.numeric_id);
+        }
+        if (results.length >= 5) break;
+      }
+      return results;
+    },
+    enabled: !!homeTeamId && isScheduled
+  });
+
+  // Fetch away team last 5 games
+  const { data: awayTeamForm } = useQuery({
+    queryKey: ['team-form-game', gameData?.league_id, awayTeamId],
+    queryFn: async () => {
+      if (!awayTeamId || !gameData) return [];
+      const { data: teamGames, error } = await supabase
+        .from('team_stats')
+        .select('numeric_id, tot_spoints, team_id')
+        .eq('league_id', gameData.league_id)
+        .eq('team_id', awayTeamId)
+        .order('numeric_id', { ascending: false });
+      
+      if (error || !teamGames) return [];
+
+      const results: GameResult[] = [];
+      const processedGames = new Set<string>();
+
+      for (const teamGame of teamGames) {
+        if (!teamGame.numeric_id || processedGames.has(teamGame.numeric_id)) continue;
+        
+        const { data: opponentData } = await supabase
+          .from('team_stats')
+          .select('tot_spoints, team_id')
+          .eq('league_id', gameData.league_id)
+          .eq('numeric_id', teamGame.numeric_id)
+          .neq('team_id', awayTeamId)
+          .single();
+
+        if (opponentData) {
+          results.push({
+            numericId: teamGame.numeric_id,
+            won: (teamGame.tot_spoints || 0) > (opponentData.tot_spoints || 0),
+            teamScore: teamGame.tot_spoints || 0,
+            opponentScore: opponentData.tot_spoints || 0
+          });
+          processedGames.add(teamGame.numeric_id);
+        }
+        if (results.length >= 5) break;
+      }
+      return results;
+    },
+    enabled: !!awayTeamId && isScheduled
   });
 
   if (gameLoading) {
@@ -277,19 +579,185 @@ export default function GamePage() {
 
           <div className="p-4 md:p-6">
             {!isGamePlayed ? (
-              <div className="bg-gray-700/50 rounded-lg p-6 text-center">
-                <h3 className="text-xl font-semibold mb-2">Match Preview</h3>
-                <p className="text-gray-400 mb-4">
-                  Tip-off: {formatMatchTime(gameData.matchtime)}
-                </p>
-                {gameData.competitionname && (
-                  <p className="text-gray-500 text-sm mb-4">
-                    Competition: {gameData.competitionname}
-                  </p>
+              <div className="space-y-4 md:space-y-6">
+                {/* Countdown Timer */}
+                {timeLeft && (
+                  <div className="bg-gradient-to-r from-orange-600 to-orange-500 rounded-xl p-4 md:p-6">
+                    <h3 className="text-base md:text-lg font-semibold text-white text-center mb-3 md:mb-4">
+                      <Clock className="w-4 h-4 md:w-5 md:h-5 inline mr-2" />
+                      Countdown to Tip-Off
+                    </h3>
+                    <div className="grid grid-cols-4 gap-2 md:gap-4 max-w-md mx-auto">
+                      <div className="bg-gray-900/40 rounded-lg p-2 md:p-3 text-center">
+                        <div className="text-2xl md:text-4xl font-bold text-white">{timeLeft.days}</div>
+                        <div className="text-xs md:text-sm text-orange-100">Days</div>
+                      </div>
+                      <div className="bg-gray-900/40 rounded-lg p-2 md:p-3 text-center">
+                        <div className="text-2xl md:text-4xl font-bold text-white">{timeLeft.hours.toString().padStart(2, '0')}</div>
+                        <div className="text-xs md:text-sm text-orange-100">Hours</div>
+                      </div>
+                      <div className="bg-gray-900/40 rounded-lg p-2 md:p-3 text-center">
+                        <div className="text-2xl md:text-4xl font-bold text-white">{timeLeft.minutes.toString().padStart(2, '0')}</div>
+                        <div className="text-xs md:text-sm text-orange-100">Mins</div>
+                      </div>
+                      <div className="bg-gray-900/40 rounded-lg p-2 md:p-3 text-center">
+                        <div className="text-2xl md:text-4xl font-bold text-white">{timeLeft.seconds.toString().padStart(2, '0')}</div>
+                        <div className="text-xs md:text-sm text-orange-100">Secs</div>
+                      </div>
+                    </div>
+                  </div>
                 )}
-                <p className="text-gray-500 text-sm italic">
-                  Live stats and play-by-play data will appear when the game starts.
-                </p>
+
+                {/* Team Form - Last 5 Games */}
+                <div className="bg-gray-700/50 rounded-xl p-4 md:p-6">
+                  <h3 className="text-base md:text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 md:w-5 md:h-5 text-orange-400" />
+                    Recent Form
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                    {/* Away Team Form */}
+                    <div className="bg-gray-800/50 rounded-lg p-3 md:p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <TeamLogo teamName={gameData.awayteam} leagueId={gameData.league_id} size="sm" />
+                        <span className="font-medium text-sm md:text-base text-white truncate">{gameData.awayteam}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 md:gap-2">
+                        <span className="text-xs text-gray-400 mr-1 md:mr-2">Last 5:</span>
+                        {awayTeamForm && awayTeamForm.length > 0 ? (
+                          awayTeamForm.map((result, idx) => (
+                            <div
+                              key={idx}
+                              className={`w-7 h-7 md:w-8 md:h-8 rounded-md flex items-center justify-center font-bold text-xs md:text-sm ${
+                                result.won
+                                  ? 'bg-green-500 text-white'
+                                  : 'bg-red-500 text-white'
+                              }`}
+                            >
+                              {result.won ? 'W' : 'L'}
+                            </div>
+                          ))
+                        ) : (
+                          <span className="text-xs text-gray-500 italic">No games yet</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Home Team Form */}
+                    <div className="bg-gray-800/50 rounded-lg p-3 md:p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <TeamLogo teamName={gameData.hometeam} leagueId={gameData.league_id} size="sm" />
+                        <span className="font-medium text-sm md:text-base text-white truncate">{gameData.hometeam}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 md:gap-2">
+                        <span className="text-xs text-gray-400 mr-1 md:mr-2">Last 5:</span>
+                        {homeTeamForm && homeTeamForm.length > 0 ? (
+                          homeTeamForm.map((result, idx) => (
+                            <div
+                              key={idx}
+                              className={`w-7 h-7 md:w-8 md:h-8 rounded-md flex items-center justify-center font-bold text-xs md:text-sm ${
+                                result.won
+                                  ? 'bg-green-500 text-white'
+                                  : 'bg-red-500 text-white'
+                              }`}
+                            >
+                              {result.won ? 'W' : 'L'}
+                            </div>
+                          ))
+                        ) : (
+                          <span className="text-xs text-gray-500 italic">No games yet</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Players to Watch */}
+                <div className="bg-gray-700/50 rounded-xl p-4 md:p-6">
+                  <h3 className="text-base md:text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                    <Users className="w-4 h-4 md:w-5 md:h-5 text-orange-400" />
+                    Players to Watch
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                    {/* Away Team Top Players */}
+                    <div className="space-y-2 md:space-y-3">
+                      <div className="flex items-center gap-2 mb-2 pb-2 border-b border-gray-600">
+                        <TeamLogo teamName={gameData.awayteam} leagueId={gameData.league_id} size="sm" />
+                        <span className="font-medium text-sm md:text-base text-white truncate">{gameData.awayteam}</span>
+                      </div>
+                      {awayTeamRoster && awayTeamRoster.length > 0 ? (
+                        awayTeamRoster.map((player, idx) => (
+                          <div key={idx} className="bg-gray-800/50 rounded-lg p-2.5 md:p-3 flex items-center justify-between">
+                            <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
+                              <div className="w-7 h-7 md:w-8 md:h-8 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold text-xs md:text-sm flex-shrink-0">
+                                {idx + 1}
+                              </div>
+                              <span className="font-medium text-sm md:text-base text-white truncate">{player.name}</span>
+                            </div>
+                            <div className="flex gap-2 md:gap-3 text-xs md:text-sm flex-shrink-0">
+                              <div className="text-center">
+                                <div className="font-bold text-orange-400">{player.ppg}</div>
+                                <div className="text-gray-500">PPG</div>
+                              </div>
+                              <div className="text-center hidden sm:block">
+                                <div className="font-bold text-gray-300">{player.rpg}</div>
+                                <div className="text-gray-500">RPG</div>
+                              </div>
+                              <div className="text-center hidden sm:block">
+                                <div className="font-bold text-gray-300">{player.apg}</div>
+                                <div className="text-gray-500">APG</div>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-gray-500 text-sm italic">No player data available</p>
+                      )}
+                    </div>
+
+                    {/* Home Team Top Players */}
+                    <div className="space-y-2 md:space-y-3">
+                      <div className="flex items-center gap-2 mb-2 pb-2 border-b border-gray-600">
+                        <TeamLogo teamName={gameData.hometeam} leagueId={gameData.league_id} size="sm" />
+                        <span className="font-medium text-sm md:text-base text-white truncate">{gameData.hometeam}</span>
+                      </div>
+                      {homeTeamRoster && homeTeamRoster.length > 0 ? (
+                        homeTeamRoster.map((player, idx) => (
+                          <div key={idx} className="bg-gray-800/50 rounded-lg p-2.5 md:p-3 flex items-center justify-between">
+                            <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
+                              <div className="w-7 h-7 md:w-8 md:h-8 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold text-xs md:text-sm flex-shrink-0">
+                                {idx + 1}
+                              </div>
+                              <span className="font-medium text-sm md:text-base text-white truncate">{player.name}</span>
+                            </div>
+                            <div className="flex gap-2 md:gap-3 text-xs md:text-sm flex-shrink-0">
+                              <div className="text-center">
+                                <div className="font-bold text-orange-400">{player.ppg}</div>
+                                <div className="text-gray-500">PPG</div>
+                              </div>
+                              <div className="text-center hidden sm:block">
+                                <div className="font-bold text-gray-300">{player.rpg}</div>
+                                <div className="text-gray-500">RPG</div>
+                              </div>
+                              <div className="text-center hidden sm:block">
+                                <div className="font-bold text-gray-300">{player.apg}</div>
+                                <div className="text-gray-500">APG</div>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-gray-500 text-sm italic">No player data available</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Coming Soon Notice */}
+                <div className="bg-gray-700/30 rounded-lg p-4 text-center">
+                  <p className="text-gray-400 text-sm">
+                    Live stats and play-by-play data will appear when the game starts.
+                  </p>
+                </div>
               </div>
             ) : (
               <Tabs defaultValue="boxscore" className="w-full">
