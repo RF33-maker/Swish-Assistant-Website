@@ -134,15 +134,15 @@ function getStatusBadge(status: string | null, matchtime: string) {
   const gameTime = new Date(matchtime);
   
   if (normalizedStatus === 'final' || normalizedStatus === 'finished') {
-    return <span className="px-3 py-1 bg-gray-600 text-white text-sm font-semibold rounded-full">FINAL</span>;
+    return <span className="px-3 py-1 bg-green-600 text-white text-sm font-semibold rounded-full">FINAL</span>;
   }
   if (normalizedStatus === 'live' || normalizedStatus === 'in_progress') {
-    return <span className="px-3 py-1 bg-red-600 text-white text-sm font-semibold rounded-full animate-pulse">LIVE</span>;
+    return <span className="px-3 py-1 bg-red-500 text-white text-sm font-semibold rounded-full animate-pulse">LIVE</span>;
   }
   if (gameTime > now) {
     return <span className="px-3 py-1 bg-orange-500 text-white text-sm font-semibold rounded-full">SCHEDULED</span>;
   }
-  return <span className="px-3 py-1 bg-gray-500 text-white text-sm font-semibold rounded-full">PENDING</span>;
+  return <span className="px-3 py-1 bg-slate-500 text-white text-sm font-semibold rounded-full">PENDING</span>;
 }
 
 function parseMinutes(minutesStr: string | null | undefined): string {
@@ -542,16 +542,16 @@ export default function GamePage() {
 
   if (gameLoading) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white">
+      <div className="min-h-screen bg-[#fffaf1] dark:bg-neutral-950">
         <div className="max-w-6xl mx-auto px-4 py-8">
-          <Skeleton className="h-8 w-32 mb-6 bg-gray-700" />
-          <div className="bg-gray-800 rounded-xl p-6">
+          <Skeleton className="h-8 w-32 mb-6 bg-orange-100 dark:bg-neutral-700" />
+          <div className="bg-white dark:bg-neutral-900 rounded-xl p-6 border border-orange-100 dark:border-neutral-800">
             <div className="flex justify-between items-center mb-8">
-              <Skeleton className="h-24 w-24 rounded-full bg-gray-700" />
-              <Skeleton className="h-12 w-24 bg-gray-700" />
-              <Skeleton className="h-24 w-24 rounded-full bg-gray-700" />
+              <Skeleton className="h-24 w-24 rounded-full bg-orange-100 dark:bg-neutral-700" />
+              <Skeleton className="h-12 w-24 bg-orange-100 dark:bg-neutral-700" />
+              <Skeleton className="h-24 w-24 rounded-full bg-orange-100 dark:bg-neutral-700" />
             </div>
-            <Skeleton className="h-64 w-full bg-gray-700" />
+            <Skeleton className="h-64 w-full bg-orange-100 dark:bg-neutral-700" />
           </div>
         </div>
       </div>
@@ -560,13 +560,13 @@ export default function GamePage() {
 
   if (gameError || !gameData) {
     return (
-      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+      <div className="min-h-screen bg-[#fffaf1] dark:bg-neutral-950 text-slate-800 dark:text-white flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-4">Game Not Found</h1>
-          <p className="text-gray-400 mb-6">The game you're looking for doesn't exist or has been removed.</p>
+          <p className="text-slate-500 mb-6">The game you're looking for doesn't exist or has been removed.</p>
           <button 
             onClick={() => navigate('/')} 
-            className="text-orange-500 hover:text-orange-400 flex items-center justify-center gap-2 cursor-pointer"
+            className="text-orange-500 hover:text-orange-600 flex items-center justify-center gap-2 cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
             Back to Home
@@ -597,18 +597,18 @@ export default function GamePage() {
   ).sort((a, b) => (b.spoints || 0) - (a.spoints || 0)).slice(0, 10) || [];
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
+    <div className="min-h-screen bg-[#fffaf1] dark:bg-neutral-950 text-slate-800 dark:text-white transition-colors">
       <div className="max-w-6xl mx-auto px-4 py-6">
         <button 
           onClick={() => navigate(leagueData?.slug ? `/league/${leagueData.slug}` : '/')}
-          className="inline-flex items-center gap-2 text-gray-400 hover:text-white mb-6 transition-colors cursor-pointer"
+          className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-orange-600 dark:hover:text-orange-400 mb-6 transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
           {leagueData?.slug ? 'Back to League' : 'Back to Home'}
         </button>
 
-        <div className="bg-gray-800 rounded-xl overflow-hidden">
-          <div className="bg-gradient-to-r from-gray-800 via-gray-700 to-gray-800 p-6 md:p-8">
+        <div className="bg-white dark:bg-neutral-900 rounded-xl overflow-hidden shadow-lg border border-orange-100 dark:border-neutral-800">
+          <div className="bg-gradient-to-r from-orange-500 via-orange-600 to-orange-500 p-6 md:p-8">
             <div className="flex justify-center mb-4">
               {getStatusBadge(gameData.status, gameData.matchtime)}
             </div>
@@ -620,19 +620,19 @@ export default function GamePage() {
                 </div>
                 <h2 className="text-sm md:text-xl font-bold text-white md:truncate hidden md:block">{gameData.awayteam}</h2>
                 <h2 className="text-base font-bold text-white md:hidden">{getTeamAbbr(gameData.awayteam)}</h2>
-                <span className="text-xs text-gray-400">AWAY</span>
+                <span className="text-xs text-orange-100">AWAY</span>
               </div>
 
               <div className="flex flex-col items-center flex-shrink-0">
                 {isGamePlayed && homeScore !== null && awayScore !== null ? (
                   <div className="flex items-center gap-2 md:gap-4">
                     <span className="text-3xl md:text-6xl font-bold text-white">{awayScore}</span>
-                    <span className="text-xl md:text-2xl text-gray-500">-</span>
+                    <span className="text-xl md:text-2xl text-orange-200">-</span>
                     <span className="text-3xl md:text-6xl font-bold text-white">{homeScore}</span>
                   </div>
                 ) : (
                   <div className="text-center">
-                    <div className="text-xl md:text-3xl font-bold text-gray-500">VS</div>
+                    <div className="text-xl md:text-3xl font-bold text-orange-200">VS</div>
                   </div>
                 )}
               </div>
@@ -643,11 +643,11 @@ export default function GamePage() {
                 </div>
                 <h2 className="text-sm md:text-xl font-bold text-white md:truncate hidden md:block">{gameData.hometeam}</h2>
                 <h2 className="text-base font-bold text-white md:hidden">{getTeamAbbr(gameData.hometeam)}</h2>
-                <span className="text-xs text-gray-400">HOME</span>
+                <span className="text-xs text-orange-100">HOME</span>
               </div>
             </div>
 
-            <div className="flex flex-wrap justify-center gap-4 mt-6 text-sm text-gray-400">
+            <div className="flex flex-wrap justify-center gap-4 mt-6 text-sm text-orange-100">
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4" />
                 <span>{formatDate(gameData.matchtime)}</span>
@@ -670,25 +670,25 @@ export default function GamePage() {
               <div className="space-y-4 md:space-y-6">
                 {/* Countdown Timer */}
                 {timeLeft && (
-                  <div className="bg-gradient-to-r from-orange-600 to-orange-500 rounded-xl p-4 md:p-6">
+                  <div className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl p-4 md:p-6 shadow-md">
                     <h3 className="text-base md:text-lg font-semibold text-white text-center mb-3 md:mb-4">
                       <Clock className="w-4 h-4 md:w-5 md:h-5 inline mr-2" />
                       Countdown to Tip-Off
                     </h3>
                     <div className="grid grid-cols-4 gap-2 md:gap-4 max-w-md mx-auto">
-                      <div className="bg-gray-900/40 rounded-lg p-2 md:p-3 text-center">
+                      <div className="bg-white/20 rounded-lg p-2 md:p-3 text-center">
                         <div className="text-2xl md:text-4xl font-bold text-white">{timeLeft.days}</div>
                         <div className="text-xs md:text-sm text-orange-100">Days</div>
                       </div>
-                      <div className="bg-gray-900/40 rounded-lg p-2 md:p-3 text-center">
+                      <div className="bg-white/20 rounded-lg p-2 md:p-3 text-center">
                         <div className="text-2xl md:text-4xl font-bold text-white">{timeLeft.hours.toString().padStart(2, '0')}</div>
                         <div className="text-xs md:text-sm text-orange-100">Hours</div>
                       </div>
-                      <div className="bg-gray-900/40 rounded-lg p-2 md:p-3 text-center">
+                      <div className="bg-white/20 rounded-lg p-2 md:p-3 text-center">
                         <div className="text-2xl md:text-4xl font-bold text-white">{timeLeft.minutes.toString().padStart(2, '0')}</div>
                         <div className="text-xs md:text-sm text-orange-100">Mins</div>
                       </div>
-                      <div className="bg-gray-900/40 rounded-lg p-2 md:p-3 text-center">
+                      <div className="bg-white/20 rounded-lg p-2 md:p-3 text-center">
                         <div className="text-2xl md:text-4xl font-bold text-white">{timeLeft.seconds.toString().padStart(2, '0')}</div>
                         <div className="text-xs md:text-sm text-orange-100">Secs</div>
                       </div>
@@ -697,20 +697,20 @@ export default function GamePage() {
                 )}
 
                 {/* Team Form - Last 5 Games */}
-                <div className="bg-gray-700/50 rounded-xl p-4 md:p-6">
-                  <h3 className="text-base md:text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 md:w-5 md:h-5 text-orange-400" />
+                <div className="bg-orange-50 dark:bg-neutral-800 rounded-xl p-4 md:p-6 border border-orange-100 dark:border-neutral-700">
+                  <h3 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
+                    <TrendingUp className="w-4 h-4 md:w-5 md:h-5 text-orange-500" />
                     Recent Form
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                     {/* Away Team Form */}
-                    <div className="bg-gray-800/50 rounded-lg p-3 md:p-4">
+                    <div className="bg-white dark:bg-neutral-900 rounded-lg p-3 md:p-4 border border-orange-100 dark:border-neutral-700">
                       <div className="flex items-center gap-2 mb-3">
                         <TeamLogo teamName={gameData.awayteam} leagueId={gameData.league_id} size="sm" />
-                        <span className="font-medium text-sm md:text-base text-white truncate">{gameData.awayteam}</span>
+                        <span className="font-medium text-sm md:text-base text-slate-800 dark:text-white truncate">{gameData.awayteam}</span>
                       </div>
                       <div className="flex items-center gap-1.5 md:gap-2">
-                        <span className="text-xs text-gray-400 mr-1 md:mr-2">Last 5:</span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400 mr-1 md:mr-2">Last 5:</span>
                         {awayTeamForm && awayTeamForm.length > 0 ? (
                           awayTeamForm.map((result, idx) => (
                             <div
@@ -725,19 +725,19 @@ export default function GamePage() {
                             </div>
                           ))
                         ) : (
-                          <span className="text-xs text-gray-500 italic">No games yet</span>
+                          <span className="text-xs text-slate-400 italic">No games yet</span>
                         )}
                       </div>
                     </div>
 
                     {/* Home Team Form */}
-                    <div className="bg-gray-800/50 rounded-lg p-3 md:p-4">
+                    <div className="bg-white dark:bg-neutral-900 rounded-lg p-3 md:p-4 border border-orange-100 dark:border-neutral-700">
                       <div className="flex items-center gap-2 mb-3">
                         <TeamLogo teamName={gameData.hometeam} leagueId={gameData.league_id} size="sm" />
-                        <span className="font-medium text-sm md:text-base text-white truncate">{gameData.hometeam}</span>
+                        <span className="font-medium text-sm md:text-base text-slate-800 dark:text-white truncate">{gameData.hometeam}</span>
                       </div>
                       <div className="flex items-center gap-1.5 md:gap-2">
-                        <span className="text-xs text-gray-400 mr-1 md:mr-2">Last 5:</span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400 mr-1 md:mr-2">Last 5:</span>
                         {homeTeamForm && homeTeamForm.length > 0 ? (
                           homeTeamForm.map((result, idx) => (
                             <div
@@ -752,7 +752,7 @@ export default function GamePage() {
                             </div>
                           ))
                         ) : (
-                          <span className="text-xs text-gray-500 italic">No games yet</span>
+                          <span className="text-xs text-slate-400 italic">No games yet</span>
                         )}
                       </div>
                     </div>
@@ -760,21 +760,21 @@ export default function GamePage() {
                 </div>
 
                 {/* Players to Watch */}
-                <div className="bg-gray-700/50 rounded-xl p-4 md:p-6">
-                  <h3 className="text-base md:text-lg font-semibold text-white mb-4 flex items-center gap-2">
-                    <Users className="w-4 h-4 md:w-5 md:h-5 text-orange-400" />
+                <div className="bg-orange-50 dark:bg-neutral-800 rounded-xl p-4 md:p-6 border border-orange-100 dark:border-neutral-700">
+                  <h3 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
+                    <Users className="w-4 h-4 md:w-5 md:h-5 text-orange-500" />
                     Players to Watch
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                     {/* Away Team Top Players */}
                     <div className="space-y-2 md:space-y-3">
-                      <div className="flex items-center gap-2 mb-2 pb-2 border-b border-gray-600">
+                      <div className="flex items-center gap-2 mb-2 pb-2 border-b border-orange-200 dark:border-neutral-600">
                         <TeamLogo teamName={gameData.awayteam} leagueId={gameData.league_id} size="sm" />
-                        <span className="font-medium text-sm md:text-base text-white truncate">{gameData.awayteam}</span>
+                        <span className="font-medium text-sm md:text-base text-slate-800 dark:text-white truncate">{gameData.awayteam}</span>
                       </div>
                       {awayTeamRoster && awayTeamRoster.length > 0 ? (
                         awayTeamRoster.map((player, idx) => (
-                          <div key={idx} className="bg-gray-800/50 rounded-lg p-2.5 md:p-3 flex items-center justify-between">
+                          <div key={idx} className="bg-white dark:bg-neutral-900 rounded-lg p-2.5 md:p-3 flex items-center justify-between border border-orange-100 dark:border-neutral-700">
                             <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                               {player.photoUrl ? (
                                 <div className="w-8 h-8 md:w-10 md:h-10 rounded-full overflow-hidden flex-shrink-0 border-2 border-orange-500">
@@ -790,38 +790,38 @@ export default function GamePage() {
                                   {idx + 1}
                                 </div>
                               )}
-                              <span className="font-medium text-sm md:text-base text-white truncate">{player.name}</span>
+                              <span className="font-medium text-sm md:text-base text-slate-800 dark:text-white truncate">{player.name}</span>
                             </div>
                             <div className="flex gap-2 md:gap-3 text-xs md:text-sm flex-shrink-0">
                               <div className="text-center">
-                                <div className="font-bold text-orange-400">{player.ppg}</div>
-                                <div className="text-gray-500">PPG</div>
+                                <div className="font-bold text-orange-500">{player.ppg}</div>
+                                <div className="text-slate-500">PPG</div>
                               </div>
                               <div className="text-center hidden sm:block">
-                                <div className="font-bold text-gray-300">{player.rpg}</div>
-                                <div className="text-gray-500">RPG</div>
+                                <div className="font-bold text-slate-700 dark:text-slate-300">{player.rpg}</div>
+                                <div className="text-slate-500">RPG</div>
                               </div>
                               <div className="text-center hidden sm:block">
-                                <div className="font-bold text-gray-300">{player.apg}</div>
-                                <div className="text-gray-500">APG</div>
+                                <div className="font-bold text-slate-700 dark:text-slate-300">{player.apg}</div>
+                                <div className="text-slate-500">APG</div>
                               </div>
                             </div>
                           </div>
                         ))
                       ) : (
-                        <p className="text-gray-500 text-sm italic">No player data available</p>
+                        <p className="text-slate-500 text-sm italic">No player data available</p>
                       )}
                     </div>
 
                     {/* Home Team Top Players */}
                     <div className="space-y-2 md:space-y-3">
-                      <div className="flex items-center gap-2 mb-2 pb-2 border-b border-gray-600">
+                      <div className="flex items-center gap-2 mb-2 pb-2 border-b border-orange-200 dark:border-neutral-600">
                         <TeamLogo teamName={gameData.hometeam} leagueId={gameData.league_id} size="sm" />
-                        <span className="font-medium text-sm md:text-base text-white truncate">{gameData.hometeam}</span>
+                        <span className="font-medium text-sm md:text-base text-slate-800 dark:text-white truncate">{gameData.hometeam}</span>
                       </div>
                       {homeTeamRoster && homeTeamRoster.length > 0 ? (
                         homeTeamRoster.map((player, idx) => (
-                          <div key={idx} className="bg-gray-800/50 rounded-lg p-2.5 md:p-3 flex items-center justify-between">
+                          <div key={idx} className="bg-white dark:bg-neutral-900 rounded-lg p-2.5 md:p-3 flex items-center justify-between border border-orange-100 dark:border-neutral-700">
                             <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                               {player.photoUrl ? (
                                 <div className="w-8 h-8 md:w-10 md:h-10 rounded-full overflow-hidden flex-shrink-0 border-2 border-orange-500">
@@ -837,56 +837,56 @@ export default function GamePage() {
                                   {idx + 1}
                                 </div>
                               )}
-                              <span className="font-medium text-sm md:text-base text-white truncate">{player.name}</span>
+                              <span className="font-medium text-sm md:text-base text-slate-800 dark:text-white truncate">{player.name}</span>
                             </div>
                             <div className="flex gap-2 md:gap-3 text-xs md:text-sm flex-shrink-0">
                               <div className="text-center">
-                                <div className="font-bold text-orange-400">{player.ppg}</div>
-                                <div className="text-gray-500">PPG</div>
+                                <div className="font-bold text-orange-500">{player.ppg}</div>
+                                <div className="text-slate-500">PPG</div>
                               </div>
                               <div className="text-center hidden sm:block">
-                                <div className="font-bold text-gray-300">{player.rpg}</div>
-                                <div className="text-gray-500">RPG</div>
+                                <div className="font-bold text-slate-700 dark:text-slate-300">{player.rpg}</div>
+                                <div className="text-slate-500">RPG</div>
                               </div>
                               <div className="text-center hidden sm:block">
-                                <div className="font-bold text-gray-300">{player.apg}</div>
-                                <div className="text-gray-500">APG</div>
+                                <div className="font-bold text-slate-700 dark:text-slate-300">{player.apg}</div>
+                                <div className="text-slate-500">APG</div>
                               </div>
                             </div>
                           </div>
                         ))
                       ) : (
-                        <p className="text-gray-500 text-sm italic">No player data available</p>
+                        <p className="text-slate-500 text-sm italic">No player data available</p>
                       )}
                     </div>
                   </div>
                 </div>
 
                 {/* Coming Soon Notice */}
-                <div className="bg-gray-700/30 rounded-lg p-4 text-center">
-                  <p className="text-gray-400 text-sm">
+                <div className="bg-orange-50 dark:bg-neutral-800/50 rounded-lg p-4 text-center border border-orange-100 dark:border-neutral-700">
+                  <p className="text-slate-600 dark:text-slate-400 text-sm">
                     Live stats and play-by-play data will appear when the game starts.
                   </p>
                 </div>
               </div>
             ) : (
               <Tabs defaultValue="boxscore" className="w-full">
-                <TabsList className="grid w-full grid-cols-3 bg-gray-700 mb-4">
-                  <TabsTrigger value="boxscore" className="data-[state=active]:bg-orange-600">Box Score</TabsTrigger>
-                  <TabsTrigger value="teamstats" className="data-[state=active]:bg-orange-600">Team Stats</TabsTrigger>
-                  <TabsTrigger value="playbyplay" className="data-[state=active]:bg-orange-600">Play-by-Play</TabsTrigger>
+                <TabsList className="grid w-full grid-cols-3 bg-orange-100 dark:bg-neutral-800 mb-4">
+                  <TabsTrigger value="boxscore" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">Box Score</TabsTrigger>
+                  <TabsTrigger value="teamstats" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">Team Stats</TabsTrigger>
+                  <TabsTrigger value="playbyplay" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">Play-by-Play</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="boxscore" className="space-y-6">
                   {statsLoading ? (
                     <div className="space-y-4">
-                      <Skeleton className="h-48 w-full bg-gray-700" />
-                      <Skeleton className="h-48 w-full bg-gray-700" />
+                      <Skeleton className="h-48 w-full bg-orange-100 dark:bg-neutral-700" />
+                      <Skeleton className="h-48 w-full bg-orange-100 dark:bg-neutral-700" />
                     </div>
                   ) : (
                     <>
-                      <div className="bg-gray-700/50 rounded-lg overflow-hidden">
-                        <div className="bg-gray-700 px-4 py-3 flex items-center gap-3">
+                      <div className="bg-white dark:bg-neutral-800 rounded-lg overflow-hidden border border-orange-100 dark:border-neutral-700">
+                        <div className="bg-orange-500 px-4 py-3 flex items-center gap-3 text-white">
                           <TeamLogo teamName={gameData.awayteam} leagueId={gameData.league_id} size="sm" />
                           <h4 className="font-semibold">{gameData.awayteam}</h4>
                           {awayScore !== null && <span className="ml-auto text-2xl font-bold">{awayScore}</span>}
@@ -894,9 +894,9 @@ export default function GamePage() {
                         {awayPlayerStats.length > 0 ? (
                           <div className="overflow-x-auto">
                             <table className="w-full text-sm">
-                              <thead className="bg-gray-800/50 text-gray-400">
+                              <thead className="bg-orange-50 dark:bg-neutral-900 text-slate-600 dark:text-slate-400">
                                 <tr>
-                                  <th className="text-left py-2 px-3 sticky left-0 bg-gray-800/50">Player</th>
+                                  <th className="text-left py-2 px-3 sticky left-0 bg-orange-50 dark:bg-neutral-900">Player</th>
                                   <th className="text-center py-2 px-2">MIN</th>
                                   <th className="text-center py-2 px-2">PTS</th>
                                   <th className="text-center py-2 px-2">REB</th>
@@ -909,26 +909,26 @@ export default function GamePage() {
                                   <th className="text-center py-2 px-2">FT</th>
                                 </tr>
                               </thead>
-                              <tbody>
+                              <tbody className="text-slate-800 dark:text-slate-200">
                                 {awayPlayerStats.map((player, idx) => (
-                                  <tr key={idx} className="border-t border-gray-700/50 hover:bg-gray-700/30">
-                                    <td className="py-2 px-3 sticky left-0 bg-gray-800/80 font-medium whitespace-nowrap">
+                                  <tr key={idx} className="border-t border-orange-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800">
+                                    <td className="py-2 px-3 sticky left-0 bg-white dark:bg-neutral-800 font-medium whitespace-nowrap">
                                       {player.firstname} {player.familyname}
                                     </td>
-                                    <td className="text-center py-2 px-2 text-gray-400">{parseMinutes(player.sminutes)}</td>
-                                    <td className="text-center py-2 px-2 font-semibold text-orange-400">{player.spoints || 0}</td>
+                                    <td className="text-center py-2 px-2 text-slate-500">{parseMinutes(player.sminutes)}</td>
+                                    <td className="text-center py-2 px-2 font-semibold text-orange-500">{player.spoints || 0}</td>
                                     <td className="text-center py-2 px-2">{player.sreboundstotal || 0}</td>
                                     <td className="text-center py-2 px-2">{player.sassists || 0}</td>
-                                    <td className="text-center py-2 px-2 text-gray-400">{player.ssteals || 0}</td>
-                                    <td className="text-center py-2 px-2 text-gray-400">{player.sblocks || 0}</td>
-                                    <td className="text-center py-2 px-2 text-gray-400">{player.sturnovers || 0}</td>
-                                    <td className="text-center py-2 px-2 text-gray-400 whitespace-nowrap">
+                                    <td className="text-center py-2 px-2 text-slate-500">{player.ssteals || 0}</td>
+                                    <td className="text-center py-2 px-2 text-slate-500">{player.sblocks || 0}</td>
+                                    <td className="text-center py-2 px-2 text-slate-500">{player.sturnovers || 0}</td>
+                                    <td className="text-center py-2 px-2 text-slate-500 whitespace-nowrap">
                                       {player.sfieldgoalsmade || 0}/{player.sfieldgoalsattempted || 0}
                                     </td>
-                                    <td className="text-center py-2 px-2 text-gray-400 whitespace-nowrap">
+                                    <td className="text-center py-2 px-2 text-slate-500 whitespace-nowrap">
                                       {player.sthreepointersmade || 0}/{player.sthreepointersattempted || 0}
                                     </td>
-                                    <td className="text-center py-2 px-2 text-gray-400 whitespace-nowrap">
+                                    <td className="text-center py-2 px-2 text-slate-500 whitespace-nowrap">
                                       {player.sfreethrowsmade || 0}/{player.sfreethrowsattempted || 0}
                                     </td>
                                   </tr>
@@ -937,12 +937,12 @@ export default function GamePage() {
                             </table>
                           </div>
                         ) : (
-                          <p className="p-4 text-gray-500 text-center italic">No player stats available</p>
+                          <p className="p-4 text-slate-500 text-center italic">No player stats available</p>
                         )}
                       </div>
 
-                      <div className="bg-gray-700/50 rounded-lg overflow-hidden">
-                        <div className="bg-gray-700 px-4 py-3 flex items-center gap-3">
+                      <div className="bg-white dark:bg-neutral-800 rounded-lg overflow-hidden border border-orange-100 dark:border-neutral-700">
+                        <div className="bg-orange-500 px-4 py-3 flex items-center gap-3 text-white">
                           <TeamLogo teamName={gameData.hometeam} leagueId={gameData.league_id} size="sm" />
                           <h4 className="font-semibold">{gameData.hometeam}</h4>
                           {homeScore !== null && <span className="ml-auto text-2xl font-bold">{homeScore}</span>}
@@ -950,9 +950,9 @@ export default function GamePage() {
                         {homePlayerStats.length > 0 ? (
                           <div className="overflow-x-auto">
                             <table className="w-full text-sm">
-                              <thead className="bg-gray-800/50 text-gray-400">
+                              <thead className="bg-orange-50 dark:bg-neutral-900 text-slate-600 dark:text-slate-400">
                                 <tr>
-                                  <th className="text-left py-2 px-3 sticky left-0 bg-gray-800/50">Player</th>
+                                  <th className="text-left py-2 px-3 sticky left-0 bg-orange-50 dark:bg-neutral-900">Player</th>
                                   <th className="text-center py-2 px-2">MIN</th>
                                   <th className="text-center py-2 px-2">PTS</th>
                                   <th className="text-center py-2 px-2">REB</th>
@@ -965,26 +965,26 @@ export default function GamePage() {
                                   <th className="text-center py-2 px-2">FT</th>
                                 </tr>
                               </thead>
-                              <tbody>
+                              <tbody className="text-slate-800 dark:text-slate-200">
                                 {homePlayerStats.map((player, idx) => (
-                                  <tr key={idx} className="border-t border-gray-700/50 hover:bg-gray-700/30">
-                                    <td className="py-2 px-3 sticky left-0 bg-gray-800/80 font-medium whitespace-nowrap">
+                                  <tr key={idx} className="border-t border-orange-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800">
+                                    <td className="py-2 px-3 sticky left-0 bg-white dark:bg-neutral-800 font-medium whitespace-nowrap">
                                       {player.firstname} {player.familyname}
                                     </td>
-                                    <td className="text-center py-2 px-2 text-gray-400">{parseMinutes(player.sminutes)}</td>
-                                    <td className="text-center py-2 px-2 font-semibold text-orange-400">{player.spoints || 0}</td>
+                                    <td className="text-center py-2 px-2 text-slate-500">{parseMinutes(player.sminutes)}</td>
+                                    <td className="text-center py-2 px-2 font-semibold text-orange-500">{player.spoints || 0}</td>
                                     <td className="text-center py-2 px-2">{player.sreboundstotal || 0}</td>
                                     <td className="text-center py-2 px-2">{player.sassists || 0}</td>
-                                    <td className="text-center py-2 px-2 text-gray-400">{player.ssteals || 0}</td>
-                                    <td className="text-center py-2 px-2 text-gray-400">{player.sblocks || 0}</td>
-                                    <td className="text-center py-2 px-2 text-gray-400">{player.sturnovers || 0}</td>
-                                    <td className="text-center py-2 px-2 text-gray-400 whitespace-nowrap">
+                                    <td className="text-center py-2 px-2 text-slate-500">{player.ssteals || 0}</td>
+                                    <td className="text-center py-2 px-2 text-slate-500">{player.sblocks || 0}</td>
+                                    <td className="text-center py-2 px-2 text-slate-500">{player.sturnovers || 0}</td>
+                                    <td className="text-center py-2 px-2 text-slate-500 whitespace-nowrap">
                                       {player.sfieldgoalsmade || 0}/{player.sfieldgoalsattempted || 0}
                                     </td>
-                                    <td className="text-center py-2 px-2 text-gray-400 whitespace-nowrap">
+                                    <td className="text-center py-2 px-2 text-slate-500 whitespace-nowrap">
                                       {player.sthreepointersmade || 0}/{player.sthreepointersattempted || 0}
                                     </td>
-                                    <td className="text-center py-2 px-2 text-gray-400 whitespace-nowrap">
+                                    <td className="text-center py-2 px-2 text-slate-500 whitespace-nowrap">
                                       {player.sfreethrowsmade || 0}/{player.sfreethrowsattempted || 0}
                                     </td>
                                   </tr>
@@ -993,7 +993,7 @@ export default function GamePage() {
                             </table>
                           </div>
                         ) : (
-                          <p className="p-4 text-gray-500 text-center italic">No player stats available</p>
+                          <p className="p-4 text-slate-500 text-center italic">No player stats available</p>
                         )}
                       </div>
                     </>
@@ -1001,45 +1001,45 @@ export default function GamePage() {
                 </TabsContent>
 
                 <TabsContent value="teamstats">
-                  <div className="bg-gray-700/50 rounded-lg p-4">
+                  <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
                     {teamStats && teamStats.length >= 2 ? (
-                      <div className="grid grid-cols-3 gap-4 text-center">
-                        <div className="font-semibold text-gray-400">
+                      <div className="grid grid-cols-3 gap-4 text-center text-slate-800 dark:text-slate-200">
+                        <div className="font-semibold text-orange-600 dark:text-orange-400">
                           {gameData.awayteam?.split(' ').slice(-1)[0]}
                         </div>
-                        <div className="text-gray-500">Stat</div>
-                        <div className="font-semibold text-gray-400">
+                        <div className="text-slate-500">Stat</div>
+                        <div className="font-semibold text-orange-600 dark:text-orange-400">
                           {gameData.hometeam?.split(' ').slice(-1)[0]}
                         </div>
 
                         <div className="text-2xl font-bold">{awayTeamStats?.tot_spoints || 0}</div>
-                        <div className="text-gray-500">Points</div>
+                        <div className="text-slate-500">Points</div>
                         <div className="text-2xl font-bold">{homeTeamStats?.tot_spoints || 0}</div>
 
                         <div>{awayTeamStats?.tot_sreboundstotal || 0}</div>
-                        <div className="text-gray-500">Rebounds</div>
+                        <div className="text-slate-500">Rebounds</div>
                         <div>{homeTeamStats?.tot_sreboundstotal || 0}</div>
 
                         <div>{awayTeamStats?.tot_sassists || 0}</div>
-                        <div className="text-gray-500">Assists</div>
+                        <div className="text-slate-500">Assists</div>
                         <div>{homeTeamStats?.tot_sassists || 0}</div>
 
                         <div>{awayTeamStats?.tot_ssteals || 0}</div>
-                        <div className="text-gray-500">Steals</div>
+                        <div className="text-slate-500">Steals</div>
                         <div>{homeTeamStats?.tot_ssteals || 0}</div>
 
                         <div>{awayTeamStats?.tot_sblocks || 0}</div>
-                        <div className="text-gray-500">Blocks</div>
+                        <div className="text-slate-500">Blocks</div>
                         <div>{homeTeamStats?.tot_sblocks || 0}</div>
 
                         <div>{awayTeamStats?.tot_sturnovers || 0}</div>
-                        <div className="text-gray-500">Turnovers</div>
+                        <div className="text-slate-500">Turnovers</div>
                         <div>{homeTeamStats?.tot_sturnovers || 0}</div>
 
                         <div className="whitespace-nowrap">
                           {awayTeamStats?.tot_sfieldgoalsmade || 0}/{awayTeamStats?.tot_sfieldgoalsattempted || 0}
                         </div>
-                        <div className="text-gray-500">FG</div>
+                        <div className="text-slate-500">FG</div>
                         <div className="whitespace-nowrap">
                           {homeTeamStats?.tot_sfieldgoalsmade || 0}/{homeTeamStats?.tot_sfieldgoalsattempted || 0}
                         </div>
@@ -1047,7 +1047,7 @@ export default function GamePage() {
                         <div className="whitespace-nowrap">
                           {awayTeamStats?.tot_sthreepointersmade || 0}/{awayTeamStats?.tot_sthreepointersattempted || 0}
                         </div>
-                        <div className="text-gray-500">3PT</div>
+                        <div className="text-slate-500">3PT</div>
                         <div className="whitespace-nowrap">
                           {homeTeamStats?.tot_sthreepointersmade || 0}/{homeTeamStats?.tot_sthreepointersattempted || 0}
                         </div>
@@ -1055,20 +1055,20 @@ export default function GamePage() {
                         <div className="whitespace-nowrap">
                           {awayTeamStats?.tot_sfreethrowsmade || 0}/{awayTeamStats?.tot_sfreethrowsattempted || 0}
                         </div>
-                        <div className="text-gray-500">FT</div>
+                        <div className="text-slate-500">FT</div>
                         <div className="whitespace-nowrap">
                           {homeTeamStats?.tot_sfreethrowsmade || 0}/{homeTeamStats?.tot_sfreethrowsattempted || 0}
                         </div>
                       </div>
                     ) : (
-                      <p className="text-gray-500 text-center italic">Team stats will appear when available</p>
+                      <p className="text-slate-500 text-center italic">Team stats will appear when available</p>
                     )}
                   </div>
                 </TabsContent>
 
                 <TabsContent value="playbyplay">
-                  <div className="bg-gray-700/50 rounded-lg p-6 text-center">
-                    <p className="text-gray-500 italic">Play-by-play data coming soon</p>
+                  <div className="bg-white dark:bg-neutral-800 rounded-lg p-6 text-center border border-orange-100 dark:border-neutral-700">
+                    <p className="text-slate-500 italic">Play-by-play data coming soon</p>
                   </div>
                 </TabsContent>
               </Tabs>
