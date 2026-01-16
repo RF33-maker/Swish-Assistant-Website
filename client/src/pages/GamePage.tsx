@@ -314,16 +314,42 @@ export default function GamePage() {
         }
       });
 
-      return Array.from(playerMap.values())
+      const top3 = Array.from(playerMap.values())
         .filter(p => p.games > 0)
         .map(p => ({
           ...p,
           ppg: (p.points / p.games).toFixed(1),
           rpg: (p.rebounds / p.games).toFixed(1),
           apg: (p.assists / p.games).toFixed(1),
+          photoUrl: null as string | null,
+          photoFocusY: 30 as number,
         }))
         .sort((a, b) => parseFloat(b.ppg) - parseFloat(a.ppg))
         .slice(0, 3);
+
+      // Look up player photos
+      for (const player of top3) {
+        try {
+          const { data: playerData } = await supabase
+            .from('players')
+            .select('photo_path, photo_focus_y')
+            .ilike('full_name', `%${player.name}%`)
+            .not('photo_path', 'is', null)
+            .limit(1);
+          
+          if (playerData && playerData.length > 0 && playerData[0].photo_path) {
+            const { data: urlData } = supabase.storage
+              .from('player-photos')
+              .getPublicUrl(playerData[0].photo_path);
+            player.photoUrl = urlData.publicUrl;
+            player.photoFocusY = playerData[0].photo_focus_y ?? 30;
+          }
+        } catch (err) {
+          // Silently fail - fallback to numbered circle
+        }
+      }
+
+      return top3;
     },
     enabled: !!homeTeamId && isScheduled
   });
@@ -358,16 +384,42 @@ export default function GamePage() {
         }
       });
 
-      return Array.from(playerMap.values())
+      const top3 = Array.from(playerMap.values())
         .filter(p => p.games > 0)
         .map(p => ({
           ...p,
           ppg: (p.points / p.games).toFixed(1),
           rpg: (p.rebounds / p.games).toFixed(1),
           apg: (p.assists / p.games).toFixed(1),
+          photoUrl: null as string | null,
+          photoFocusY: 30 as number,
         }))
         .sort((a, b) => parseFloat(b.ppg) - parseFloat(a.ppg))
         .slice(0, 3);
+
+      // Look up player photos
+      for (const player of top3) {
+        try {
+          const { data: playerData } = await supabase
+            .from('players')
+            .select('photo_path, photo_focus_y')
+            .ilike('full_name', `%${player.name}%`)
+            .not('photo_path', 'is', null)
+            .limit(1);
+          
+          if (playerData && playerData.length > 0 && playerData[0].photo_path) {
+            const { data: urlData } = supabase.storage
+              .from('player-photos')
+              .getPublicUrl(playerData[0].photo_path);
+            player.photoUrl = urlData.publicUrl;
+            player.photoFocusY = playerData[0].photo_focus_y ?? 30;
+          }
+        } catch (err) {
+          // Silently fail - fallback to numbered circle
+        }
+      }
+
+      return top3;
     },
     enabled: !!awayTeamId && isScheduled
   });
@@ -688,9 +740,20 @@ export default function GamePage() {
                         awayTeamRoster.map((player, idx) => (
                           <div key={idx} className="bg-gray-800/50 rounded-lg p-2.5 md:p-3 flex items-center justify-between">
                             <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
-                              <div className="w-7 h-7 md:w-8 md:h-8 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold text-xs md:text-sm flex-shrink-0">
-                                {idx + 1}
-                              </div>
+                              {player.photoUrl ? (
+                                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full overflow-hidden flex-shrink-0 border-2 border-orange-500">
+                                  <img 
+                                    src={player.photoUrl} 
+                                    alt={player.name}
+                                    className="w-full h-full object-cover"
+                                    style={{ objectPosition: `center ${player.photoFocusY}%` }}
+                                  />
+                                </div>
+                              ) : (
+                                <div className="w-8 h-8 md:w-10 md:h-10 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold text-xs md:text-sm flex-shrink-0">
+                                  {idx + 1}
+                                </div>
+                              )}
                               <span className="font-medium text-sm md:text-base text-white truncate">{player.name}</span>
                             </div>
                             <div className="flex gap-2 md:gap-3 text-xs md:text-sm flex-shrink-0">
@@ -724,9 +787,20 @@ export default function GamePage() {
                         homeTeamRoster.map((player, idx) => (
                           <div key={idx} className="bg-gray-800/50 rounded-lg p-2.5 md:p-3 flex items-center justify-between">
                             <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
-                              <div className="w-7 h-7 md:w-8 md:h-8 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold text-xs md:text-sm flex-shrink-0">
-                                {idx + 1}
-                              </div>
+                              {player.photoUrl ? (
+                                <div className="w-8 h-8 md:w-10 md:h-10 rounded-full overflow-hidden flex-shrink-0 border-2 border-orange-500">
+                                  <img 
+                                    src={player.photoUrl} 
+                                    alt={player.name}
+                                    className="w-full h-full object-cover"
+                                    style={{ objectPosition: `center ${player.photoFocusY}%` }}
+                                  />
+                                </div>
+                              ) : (
+                                <div className="w-8 h-8 md:w-10 md:h-10 bg-orange-500 rounded-full flex items-center justify-center text-white font-bold text-xs md:text-sm flex-shrink-0">
+                                  {idx + 1}
+                                </div>
+                              )}
                               <span className="font-medium text-sm md:text-base text-white truncate">{player.name}</span>
                             </div>
                             <div className="flex gap-2 md:gap-3 text-xs md:text-sm flex-shrink-0">
