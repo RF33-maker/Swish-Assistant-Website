@@ -173,6 +173,23 @@ export default function GamePage() {
     enabled: !!gameKey
   });
 
+  // Fetch league slug for back navigation
+  const { data: leagueData } = useQuery({
+    queryKey: ['league-slug', gameData?.league_id],
+    queryFn: async () => {
+      if (!gameData?.league_id) return null;
+      const { data, error } = await supabase
+        .from('leagues')
+        .select('slug')
+        .eq('league_id', gameData.league_id)
+        .single();
+      
+      if (error) return null;
+      return data;
+    },
+    enabled: !!gameData?.league_id
+  });
+
   const { data: playerStats, isLoading: statsLoading } = useQuery({
     queryKey: ['game-player-stats', gameKey],
     queryFn: async () => {
@@ -568,10 +585,17 @@ export default function GamePage() {
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       <div className="max-w-6xl mx-auto px-4 py-6">
-        <Link href={`/league/${gameData.league_id}`} className="inline-flex items-center gap-2 text-gray-400 hover:text-white mb-6 transition-colors">
-          <ArrowLeft className="w-4 h-4" />
-          Back to League
-        </Link>
+        {leagueData?.slug ? (
+          <Link href={`/league/${leagueData.slug}`} className="inline-flex items-center gap-2 text-gray-400 hover:text-white mb-6 transition-colors">
+            <ArrowLeft className="w-4 h-4" />
+            Back to League
+          </Link>
+        ) : (
+          <Link href="/" className="inline-flex items-center gap-2 text-gray-400 hover:text-white mb-6 transition-colors">
+            <ArrowLeft className="w-4 h-4" />
+            Back to Home
+          </Link>
+        )}
 
         <div className="bg-gray-800 rounded-xl overflow-hidden">
           <div className="bg-gradient-to-r from-gray-800 via-gray-700 to-gray-800 p-6 md:p-8">
