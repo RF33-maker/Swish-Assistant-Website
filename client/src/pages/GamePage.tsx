@@ -154,6 +154,16 @@ function parseMinutes(minutesStr: string | null | undefined): string {
   return `${wholeMins}:${secs.toString().padStart(2, '0')}`;
 }
 
+function getTeamAbbr(teamName: string): string {
+  if (!teamName) return '';
+  const words = teamName.trim().split(/\s+/);
+  if (words.length === 1) {
+    return teamName.substring(0, 3).toUpperCase();
+  }
+  // Use first letter of each word, max 3 letters
+  return words.slice(0, 3).map(w => w[0]).join('').toUpperCase();
+}
+
 export default function GamePage() {
   const params = useParams<{ gameKey: string }>();
   const gameKey = params.gameKey ? decodeURIComponent(params.gameKey) : '';
@@ -603,34 +613,36 @@ export default function GamePage() {
               {getStatusBadge(gameData.status, gameData.matchtime)}
             </div>
 
-            <div className="flex items-center justify-between gap-4 md:gap-8">
-              <div className="flex-1 text-center">
-                <div className="flex justify-center mb-3">
-                  <TeamLogo teamName={gameData.awayteam} leagueId={gameData.league_id} size="lg" />
+            <div className="flex items-center justify-between gap-2 md:gap-8">
+              <div className="flex-1 text-center min-w-0">
+                <div className="flex justify-center mb-2 md:mb-3">
+                  <TeamLogo teamName={gameData.awayteam} leagueId={gameData.league_id} size="md" className="md:w-20 md:h-20" />
                 </div>
-                <h2 className="text-lg md:text-xl font-bold text-white truncate">{gameData.awayteam}</h2>
+                <h2 className="text-sm md:text-xl font-bold text-white md:truncate hidden md:block">{gameData.awayteam}</h2>
+                <h2 className="text-base font-bold text-white md:hidden">{getTeamAbbr(gameData.awayteam)}</h2>
                 <span className="text-xs text-gray-400">AWAY</span>
               </div>
 
-              <div className="flex flex-col items-center">
+              <div className="flex flex-col items-center flex-shrink-0">
                 {isGamePlayed && homeScore !== null && awayScore !== null ? (
-                  <div className="flex items-center gap-4">
-                    <span className="text-4xl md:text-6xl font-bold text-white">{awayScore}</span>
-                    <span className="text-2xl text-gray-500">-</span>
-                    <span className="text-4xl md:text-6xl font-bold text-white">{homeScore}</span>
+                  <div className="flex items-center gap-2 md:gap-4">
+                    <span className="text-3xl md:text-6xl font-bold text-white">{awayScore}</span>
+                    <span className="text-xl md:text-2xl text-gray-500">-</span>
+                    <span className="text-3xl md:text-6xl font-bold text-white">{homeScore}</span>
                   </div>
                 ) : (
                   <div className="text-center">
-                    <div className="text-2xl md:text-3xl font-bold text-gray-500">VS</div>
+                    <div className="text-xl md:text-3xl font-bold text-gray-500">VS</div>
                   </div>
                 )}
               </div>
 
-              <div className="flex-1 text-center">
-                <div className="flex justify-center mb-3">
-                  <TeamLogo teamName={gameData.hometeam} leagueId={gameData.league_id} size="lg" />
+              <div className="flex-1 text-center min-w-0">
+                <div className="flex justify-center mb-2 md:mb-3">
+                  <TeamLogo teamName={gameData.hometeam} leagueId={gameData.league_id} size="md" className="md:w-20 md:h-20" />
                 </div>
-                <h2 className="text-lg md:text-xl font-bold text-white truncate">{gameData.hometeam}</h2>
+                <h2 className="text-sm md:text-xl font-bold text-white md:truncate hidden md:block">{gameData.hometeam}</h2>
+                <h2 className="text-base font-bold text-white md:hidden">{getTeamAbbr(gameData.hometeam)}</h2>
                 <span className="text-xs text-gray-400">HOME</span>
               </div>
             </div>
