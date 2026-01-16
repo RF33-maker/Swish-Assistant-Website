@@ -1565,6 +1565,38 @@ export default function LeaguePage() {
                   notMatched++;
                 }
                 
+                // Match team names to get correct scores
+                // scoreData has team1/team2 in arbitrary order from team_stats
+                // We need to match against game_schedule's hometeam/awayteam
+                let homeScore: number | undefined = undefined;
+                let awayScore: number | undefined = undefined;
+                
+                if (scoreData) {
+                  const homeNorm = normalizeAndMapTeamName(game.hometeam);
+                  const awayNorm = normalizeAndMapTeamName(game.awayteam);
+                  const scoreTeam1Norm = normalizeAndMapTeamName(scoreData.team1);
+                  const scoreTeam2Norm = normalizeAndMapTeamName(scoreData.team2);
+                  
+                  // Check if scoreData.team1 matches hometeam
+                  if (scoreTeam1Norm === homeNorm) {
+                    homeScore = scoreData.team1_score;
+                    awayScore = scoreData.team2_score;
+                  } else if (scoreTeam2Norm === homeNorm) {
+                    homeScore = scoreData.team2_score;
+                    awayScore = scoreData.team1_score;
+                  } else if (scoreTeam1Norm === awayNorm) {
+                    homeScore = scoreData.team2_score;
+                    awayScore = scoreData.team1_score;
+                  } else if (scoreTeam2Norm === awayNorm) {
+                    homeScore = scoreData.team1_score;
+                    awayScore = scoreData.team2_score;
+                  } else {
+                    // Fallback: use as-is (shouldn't happen if matching worked)
+                    homeScore = scoreData.team1_score;
+                    awayScore = scoreData.team2_score;
+                  }
+                }
+                
                 return {
                   game_id: gameKey,
                   game_date: game.matchtime,
@@ -1576,8 +1608,8 @@ export default function LeaguePage() {
                     hour12: true
                   }),
                   venue: game.competitionname,
-                  team1_score: scoreData?.team1_score,
-                  team2_score: scoreData?.team2_score,
+                  team1_score: homeScore,
+                  team2_score: awayScore,
                   status: scoreData ? "FINAL" : undefined,
                   numeric_id: scoreData?.numeric_id
                 };
