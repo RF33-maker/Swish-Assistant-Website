@@ -60,6 +60,20 @@ interface GameResult {
   opponentScore: number;
 }
 
+interface LiveEvent {
+  id: string;
+  game_key: string;
+  event_type: string;
+  period: number;
+  clock: string;
+  team: string;
+  player_name: string | null;
+  description: string;
+  home_score: number;
+  away_score: number;
+  created_at: string;
+}
+
 interface TimeLeft {
   days: number;
   hours: number;
@@ -213,11 +227,13 @@ export default function GamePage() {
   const { data: playerStats, isLoading: statsLoading } = useQuery({
     queryKey: ['game-player-stats', gameKey, isTestMode],
     queryFn: async () => {
+      console.log(`[GamePage] Fetching player_stats for game_key: ${gameKey}, testMode: ${isTestMode}`);
       const { data, error } = await db
         .from('player_stats')
         .select('*')
         .eq('game_key', gameKey);
       
+      console.log(`[GamePage] player_stats result:`, { count: data?.length, error });
       if (error) throw error;
       return data as PlayerStat[];
     },
@@ -229,16 +245,41 @@ export default function GamePage() {
   const { data: teamStats } = useQuery({
     queryKey: ['game-team-stats', gameKey, isTestMode],
     queryFn: async () => {
+      console.log(`[GamePage] Fetching team_stats for game_key: ${gameKey}, testMode: ${isTestMode}`);
       const { data, error } = await db
         .from('team_stats')
         .select('*')
         .eq('game_key', gameKey);
       
+      console.log(`[GamePage] team_stats result:`, { data, error });
       if (error) throw error;
       return data as TeamStat[];
     },
     enabled: !!gameKey && !!gameData,
     refetchInterval: 15000,
+    refetchIntervalInBackground: false,
+  });
+
+  // Fetch live events for play-by-play
+  const { data: liveEvents } = useQuery({
+    queryKey: ['game-live-events', gameKey, isTestMode],
+    queryFn: async () => {
+      console.log(`[GamePage] Fetching live_events for game_key: ${gameKey}, testMode: ${isTestMode}`);
+      const { data, error } = await db
+        .from('live_events')
+        .select('*')
+        .eq('game_key', gameKey)
+        .order('created_at', { ascending: false });
+      
+      console.log(`[GamePage] live_events result:`, { count: data?.length, error });
+      if (error) {
+        console.error('[GamePage] live_events error:', error);
+        return [];
+      }
+      return data as LiveEvent[];
+    },
+    enabled: !!gameKey && !!gameData,
+    refetchInterval: 5000,
     refetchIntervalInBackground: false,
   });
 
@@ -1085,8 +1126,53 @@ export default function GamePage() {
                 </TabsContent>
 
                 <TabsContent value="playbyplay">
-                  <div className="bg-white dark:bg-neutral-800 rounded-lg p-6 text-center border border-orange-100 dark:border-neutral-700">
-                    <p className="text-slate-500 italic">Play-by-play data coming soon</p>
+                  <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
+                    {liveEvents && liveEvents.length > 0 ? (
+                      <div className="space-y-2 max-h-96 overflow-y-auto">
+                        {liveEvents.map((event) => (
+                          <div 
+                            key={event.id} 
+                            className={`flex items-start gap-3 p-3 rounded-lg ${
+                              event.team === gameData?.hometeam 
+                                ? 'bg-orange-50 dark:bg-orange-900/20 border-l-4 border-orange-500' 
+                                : 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500'
+                            }`}
+                          >
+                            <div className="flex-shrink-0 text-xs text-slate-500 dark:text-slate-400 w-16">
+                              <div className="font-semibold">Q{event.period}</div>
+                              <div>{event.clock}</div>
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className={`text-xs font-semibold px-2 py-0.5 rounded ${
+                                  event.event_type?.toLowerCase() === 'score' ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' :
+                                  event.event_type?.toLowerCase() === 'foul' ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' :
+                                  event.event_type?.toLowerCase() === 'substitution' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300' :
+                                  'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                                }`}>
+                                  {(event.event_type || 'EVENT').toUpperCase()}
+                                </span>
+                                {event.player_name && (
+                                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                    {event.player_name}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-sm text-slate-600 dark:text-slate-400">{event.description}</p>
+                            </div>
+                            <div className="flex-shrink-0 text-right">
+                              <div className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                                {event.away_score} - {event.home_score}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-slate-500 italic text-center py-8">
+                        {isTestMode ? 'No play-by-play events yet. Events will appear here as the game progresses.' : 'Play-by-play data coming soon'}
+                      </p>
+                    )}
                   </div>
                 </TabsContent>
               </Tabs>
