@@ -10,8 +10,6 @@ interface LiveGame {
   awayteam: string;
   matchtime: string;
   status: string;
-  home_score: number | null;
-  away_score: number | null;
   competitionname: string | null;
 }
 
@@ -28,7 +26,7 @@ export default function LiveGamesSection({ leagueId }: LiveGamesSectionProps) {
     try {
       const { data, error } = await supabase
         .from("game_schedule")
-        .select("game_key, hometeam, awayteam, matchtime, status, home_score, away_score, competitionname")
+        .select("game_key, hometeam, awayteam, matchtime, status, competitionname")
         .eq("league_id", leagueId)
         .order("matchtime", { ascending: true });
 
@@ -108,24 +106,16 @@ export default function LiveGamesSection({ leagueId }: LiveGamesSectionProps) {
               </div>
 
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <TeamLogo teamName={game.awayteam} leagueId={leagueId} size="sm" />
-                    <span className="font-medium text-sm truncate">{game.awayteam}</span>
-                  </div>
-                  <span className="text-2xl font-bold ml-2">
-                    {game.away_score ?? '-'}
-                  </span>
+                <div className="flex items-center gap-2">
+                  <TeamLogo teamName={game.awayteam} leagueId={leagueId} size="sm" />
+                  <span className="font-medium text-sm truncate">{game.awayteam}</span>
                 </div>
                 
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <TeamLogo teamName={game.hometeam} leagueId={leagueId} size="sm" />
-                    <span className="font-medium text-sm truncate">{game.hometeam}</span>
-                  </div>
-                  <span className="text-2xl font-bold ml-2">
-                    {game.home_score ?? '-'}
-                  </span>
+                <div className="text-xs text-white/60 text-center">vs</div>
+                
+                <div className="flex items-center gap-2">
+                  <TeamLogo teamName={game.hometeam} leagueId={leagueId} size="sm" />
+                  <span className="font-medium text-sm truncate">{game.hometeam}</span>
                 </div>
               </div>
 

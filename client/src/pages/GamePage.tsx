@@ -188,7 +188,9 @@ export default function GamePage() {
       if (error) throw error;
       return data as GameSchedule;
     },
-    enabled: !!gameKey
+    enabled: !!gameKey,
+    refetchInterval: 15000,
+    refetchIntervalInBackground: false,
   });
 
   // Fetch league slug for back navigation
@@ -219,7 +221,9 @@ export default function GamePage() {
       if (error) throw error;
       return data as PlayerStat[];
     },
-    enabled: !!gameKey && !!gameData
+    enabled: !!gameKey && !!gameData,
+    refetchInterval: 15000,
+    refetchIntervalInBackground: false,
   });
 
   const { data: teamStats } = useQuery({
@@ -233,7 +237,9 @@ export default function GamePage() {
       if (error) throw error;
       return data as TeamStat[];
     },
-    enabled: !!gameKey && !!gameData
+    enabled: !!gameKey && !!gameData,
+    refetchInterval: 15000,
+    refetchIntervalInBackground: false,
   });
 
   // Countdown timer state
