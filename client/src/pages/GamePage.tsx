@@ -20,7 +20,8 @@ interface GameSchedule {
 interface PlayerStat {
   firstname: string;
   familyname: string;
-  team: string;
+  team_name: string;
+  side: string;
   spoints: number;
   sreboundstotal: number;
   sassists: number;
@@ -38,6 +39,7 @@ interface PlayerStat {
 
 interface TeamStat {
   name: string;
+  side: string;
   tot_spoints: number;
   tot_sreboundstotal: number;
   tot_sassists: number;
@@ -50,7 +52,6 @@ interface TeamStat {
   tot_sthreepointersattempted: number;
   tot_sfreethrowsmade: number;
   tot_sfreethrowsattempted: number;
-  is_home: boolean;
 }
 
 interface GameResult {
@@ -61,16 +62,19 @@ interface GameResult {
 }
 
 interface LiveEvent {
-  id: string;
+  id: number;
   game_key: string;
-  event_type: string;
+  action_type: string;
+  sub_type: string | null;
   period: number;
   clock: string;
-  team: string;
+  team_no: number;
   player_name: string | null;
-  description: string;
-  home_score: number;
-  away_score: number;
+  description: string | null;
+  score: string;
+  success: boolean;
+  scoring: boolean;
+  points: number | null;
   created_at: string;
 }
 
@@ -176,6 +180,47 @@ function getTeamAbbr(teamName: string): string {
   }
   // Use first letter of each word, max 3 letters
   return words.slice(0, 3).map(w => w[0]).join('').toUpperCase();
+}
+
+function buildEventDescription(actionType: string, subType: string | null, success: boolean, points: number | null): string {
+  const action = actionType?.toLowerCase() || '';
+  const sub = subType?.toLowerCase() || '';
+  
+  switch (action) {
+    case '2pt':
+    case '3pt':
+    case 'freethrow':
+      const shotType = action === '2pt' ? '2-pointer' : action === '3pt' ? '3-pointer' : 'free throw';
+      if (success) {
+        return `Made ${shotType}${points ? ` (+${points})` : ''}`;
+      } else {
+        return `Missed ${shotType}`;
+      }
+    case 'rebound':
+      return sub === 'defensive' ? 'Defensive rebound' : sub === 'offensive' ? 'Offensive rebound' : 'Rebound';
+    case 'assist':
+      return 'Assist on the basket';
+    case 'steal':
+      return 'Steal';
+    case 'block':
+      return 'Block';
+    case 'turnover':
+      return sub ? `Turnover (${sub})` : 'Turnover';
+    case 'foul':
+      return sub ? `${sub.charAt(0).toUpperCase() + sub.slice(1)} foul` : 'Foul';
+    case 'substitution':
+      return sub === 'in' ? 'Checked in' : sub === 'out' ? 'Checked out' : 'Substitution';
+    case 'timeout':
+      return sub ? `${sub.charAt(0).toUpperCase() + sub.slice(1)} timeout` : 'Timeout';
+    case 'jumpball':
+      return sub === 'won' ? 'Won jump ball' : sub === 'lost' ? 'Lost jump ball' : 'Jump ball';
+    case 'period':
+      return sub === 'start' ? 'Period started' : sub === 'end' ? 'Period ended' : 'Period event';
+    case 'game':
+      return sub === 'start' ? 'Game started' : sub === 'end' ? 'Game ended' : 'Game event';
+    default:
+      return sub ? `${action} - ${sub}` : action;
+  }
 }
 
 export default function GamePage() {
@@ -649,21 +694,17 @@ export default function GamePage() {
                        gameData.status?.toLowerCase() === 'finished' ||
                        gameData.status?.toLowerCase() === 'live';
   
-  const homeTeamStats = teamStats?.find(t => t.is_home === true);
-  const awayTeamStats = teamStats?.find(t => t.is_home === false);
+  const homeTeamStats = teamStats?.find(t => t.side === "1");
+  const awayTeamStats = teamStats?.find(t => t.side === "2");
   
   const homeScore = homeTeamStats?.tot_spoints ?? null;
   const awayScore = awayTeamStats?.tot_spoints ?? null;
 
-  const homePlayerStats = playerStats?.filter(p => 
-    p.team?.toLowerCase().includes(gameData.hometeam?.toLowerCase().split(' ')[0]) ||
-    gameData.hometeam?.toLowerCase().includes(p.team?.toLowerCase().split(' ')[0])
-  ).sort((a, b) => (b.spoints || 0) - (a.spoints || 0)).slice(0, 10) || [];
+  const homePlayerStats = playerStats?.filter(p => p.side === "1")
+    .sort((a, b) => (b.spoints || 0) - (a.spoints || 0)) || [];
 
-  const awayPlayerStats = playerStats?.filter(p => 
-    p.team?.toLowerCase().includes(gameData.awayteam?.toLowerCase().split(' ')[0]) ||
-    gameData.awayteam?.toLowerCase().includes(p.team?.toLowerCase().split(' ')[0])
-  ).sort((a, b) => (b.spoints || 0) - (a.spoints || 0)).slice(0, 10) || [];
+  const awayPlayerStats = playerStats?.filter(p => p.side === "2")
+    .sort((a, b) => (b.spoints || 0) - (a.spoints || 0)) || [];
 
   return (
     <div className="min-h-screen bg-[#fffaf1] dark:bg-neutral-950 text-slate-800 dark:text-white transition-colors">
@@ -1144,44 +1185,53 @@ export default function GamePage() {
                   <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
                     {liveEvents && liveEvents.length > 0 ? (
                       <div className="space-y-2 max-h-96 overflow-y-auto">
-                        {liveEvents.map((event) => (
-                          <div 
-                            key={event.id} 
-                            className={`flex items-start gap-3 p-3 rounded-lg ${
-                              event.team === gameData?.hometeam 
-                                ? 'bg-orange-50 dark:bg-orange-900/20 border-l-4 border-orange-500' 
-                                : 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500'
-                            }`}
-                          >
-                            <div className="flex-shrink-0 text-xs text-slate-500 dark:text-slate-400 w-16">
-                              <div className="font-semibold">Q{event.period}</div>
-                              <div>{event.clock}</div>
-                            </div>
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className={`text-xs font-semibold px-2 py-0.5 rounded ${
-                                  event.event_type?.toLowerCase() === 'score' ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' :
-                                  event.event_type?.toLowerCase() === 'foul' ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' :
-                                  event.event_type?.toLowerCase() === 'substitution' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300' :
-                                  'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-                                }`}>
-                                  {(event.event_type || 'EVENT').toUpperCase()}
-                                </span>
-                                {event.player_name && (
-                                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                                    {event.player_name}
+                        {liveEvents.map((event) => {
+                          const actionType = event.action_type || 'event';
+                          const subType = event.sub_type;
+                          const eventDescription = event.description || buildEventDescription(actionType, subType, event.success, event.points);
+                          const clockDisplay = event.clock?.split(':').slice(0, 2).join(':') || '';
+                          
+                          return (
+                            <div 
+                              key={event.id} 
+                              className={`flex items-start gap-3 p-3 rounded-lg ${
+                                event.team_no === 1 
+                                  ? 'bg-orange-50 dark:bg-orange-900/20 border-l-4 border-orange-500' 
+                                  : 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500'
+                              }`}
+                            >
+                              <div className="flex-shrink-0 text-xs text-slate-500 dark:text-slate-400 w-16">
+                                <div className="font-semibold">Q{event.period}</div>
+                                <div>{clockDisplay}</div>
+                              </div>
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className={`text-xs font-semibold px-2 py-0.5 rounded ${
+                                    event.scoring ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' :
+                                    actionType === 'foul' ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' :
+                                    actionType === 'substitution' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300' :
+                                    actionType === 'turnover' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300' :
+                                    actionType === 'rebound' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' :
+                                    'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                                  }`}>
+                                    {actionType.toUpperCase()}
                                   </span>
-                                )}
+                                  {event.player_name && (
+                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                      {event.player_name}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-sm text-slate-600 dark:text-slate-400">{eventDescription}</p>
                               </div>
-                              <p className="text-sm text-slate-600 dark:text-slate-400">{event.description}</p>
-                            </div>
-                            <div className="flex-shrink-0 text-right">
-                              <div className="text-sm font-bold text-slate-700 dark:text-slate-300">
-                                {event.away_score} - {event.home_score}
+                              <div className="flex-shrink-0 text-right">
+                                <div className="text-sm font-bold text-slate-700 dark:text-slate-300">
+                                  {event.score || '0-0'}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     ) : (
                       <p className="text-slate-500 italic text-center py-8">
