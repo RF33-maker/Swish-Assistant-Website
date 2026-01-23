@@ -10,6 +10,7 @@ import { GameSummaryRow } from "./GameSummaryRow";
 import GameResultsCarousel from "@/components/GameResultsCarousel";
 import GameDetailModal from "@/components/GameDetailModal";
 import GamePreviewModal from "@/components/GamePreviewModal";
+import LiveGamesSection from "@/components/LiveGamesSection";
 import LeagueChatbot from "@/components/LeagueChatbot";
 import { TeamLogo } from "@/components/TeamLogo";
 import { TeamLogoUploader } from "@/components/TeamLogoUploader";
@@ -3201,6 +3202,11 @@ export default function LeaguePage() {
               </p>
             </div>
           </div>
+        )}
+
+        {/* Live Games Section - Shows prominently when games are in progress */}
+        {league?.league_id && (
+          <LiveGamesSection leagueId={league.league_id} />
         )}
 
         {/* Horizontal Game Results Ticker */}
