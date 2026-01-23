@@ -234,6 +234,11 @@ export default function GamePage() {
         .eq('game_key', gameKey);
       
       console.log(`[GamePage] player_stats result:`, { count: data?.length, error });
+      // Log first record to see actual field structure
+      if (data && data.length > 0) {
+        console.log(`[GamePage] player_stats sample record:`, JSON.stringify(data[0]));
+        console.log(`[GamePage] player_stats all field names:`, Object.keys(data[0]));
+      }
       if (error) throw error;
       return data as PlayerStat[];
     },
@@ -251,7 +256,12 @@ export default function GamePage() {
         .select('*')
         .eq('game_key', gameKey);
       
-      console.log(`[GamePage] team_stats result:`, { data, error });
+      console.log(`[GamePage] team_stats result:`, { count: data?.length, error });
+      // Log first record to see actual field structure
+      if (data && data.length > 0) {
+        console.log(`[GamePage] team_stats sample record:`, JSON.stringify(data[0]));
+        console.log(`[GamePage] team_stats all field names:`, Object.keys(data[0]));
+      }
       if (error) throw error;
       return data as TeamStat[];
     },
@@ -272,6 +282,11 @@ export default function GamePage() {
         .order('created_at', { ascending: false });
       
       console.log(`[GamePage] live_events result:`, { count: data?.length, error });
+      // Log first record to see actual field structure
+      if (data && data.length > 0) {
+        console.log(`[GamePage] live_events sample record:`, JSON.stringify(data[0]));
+        console.log(`[GamePage] live_events all field names:`, Object.keys(data[0]));
+      }
       if (error) {
         console.error('[GamePage] live_events error:', error);
         return [];
