@@ -169,10 +169,17 @@ export default function GamePage() {
   const gameKey = params.gameKey ? decodeURIComponent(params.gameKey) : '';
   const [, navigate] = useLocation();
 
+  // Read mode query param for test schema support
+  const searchParams = new URLSearchParams(window.location.search);
+  const isTestMode = searchParams.get("mode") === "test";
+  
+  // Create schema-scoped Supabase client (test schema when mode=test, otherwise public)
+  const db = isTestMode ? supabase.schema("test") : supabase;
+
   const { data: gameData, isLoading: gameLoading, error: gameError } = useQuery({
-    queryKey: ['game-schedule', gameKey],
+    queryKey: ['game-schedule', gameKey, isTestMode],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('game_schedule')
         .select('game_key, league_id, matchtime, hometeam, awayteam, status, competitionname')
         .eq('game_key', gameKey)
@@ -186,10 +193,10 @@ export default function GamePage() {
 
   // Fetch league slug for back navigation
   const { data: leagueData } = useQuery({
-    queryKey: ['league-slug', gameData?.league_id],
+    queryKey: ['league-slug', gameData?.league_id, isTestMode],
     queryFn: async () => {
       if (!gameData?.league_id) return null;
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('leagues')
         .select('slug')
         .eq('league_id', gameData.league_id)
@@ -202,9 +209,9 @@ export default function GamePage() {
   });
 
   const { data: playerStats, isLoading: statsLoading } = useQuery({
-    queryKey: ['game-player-stats', gameKey],
+    queryKey: ['game-player-stats', gameKey, isTestMode],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('player_stats')
         .select('*')
         .eq('game_key', gameKey);
@@ -216,9 +223,9 @@ export default function GamePage() {
   });
 
   const { data: teamStats } = useQuery({
-    queryKey: ['game-team-stats', gameKey],
+    queryKey: ['game-team-stats', gameKey, isTestMode],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('team_stats')
         .select('*')
         .eq('game_key', gameKey);
@@ -255,10 +262,10 @@ export default function GamePage() {
 
   // Fetch home team ID
   const { data: homeTeamData } = useQuery({
-    queryKey: ['team-lookup-game', gameData?.league_id, gameData?.hometeam],
+    queryKey: ['team-lookup-game', gameData?.league_id, gameData?.hometeam, isTestMode],
     queryFn: async () => {
       if (!gameData) return null;
-      let { data, error } = await supabase
+      let { data, error } = await db
         .from('teams')
         .select('team_id, name')
         .eq('league_id', gameData.league_id)
@@ -267,7 +274,7 @@ export default function GamePage() {
       
       if (error || !data) {
         const baseTeamName = gameData.hometeam.split(' Senior ')[0].split(' Men')[0];
-        const { data: partialData } = await supabase
+        const { data: partialData } = await db
           .from('teams')
           .select('team_id, name')
           .eq('league_id', gameData.league_id)
@@ -283,10 +290,10 @@ export default function GamePage() {
 
   // Fetch away team ID
   const { data: awayTeamData } = useQuery({
-    queryKey: ['team-lookup-game', gameData?.league_id, gameData?.awayteam],
+    queryKey: ['team-lookup-game', gameData?.league_id, gameData?.awayteam, isTestMode],
     queryFn: async () => {
       if (!gameData) return null;
-      let { data, error } = await supabase
+      let { data, error } = await db
         .from('teams')
         .select('team_id, name')
         .eq('league_id', gameData.league_id)
@@ -295,7 +302,7 @@ export default function GamePage() {
       
       if (error || !data) {
         const baseTeamName = gameData.awayteam.split(' Senior ')[0].split(' Men')[0];
-        const { data: partialData } = await supabase
+        const { data: partialData } = await db
           .from('teams')
           .select('team_id, name')
           .eq('league_id', gameData.league_id)
@@ -314,10 +321,10 @@ export default function GamePage() {
 
   // Fetch home team roster for top players
   const { data: homeTeamRoster } = useQuery({
-    queryKey: ['roster-game', gameData?.league_id, homeTeamId],
+    queryKey: ['roster-game', gameData?.league_id, homeTeamId, isTestMode],
     queryFn: async () => {
       if (!homeTeamId || !gameData) return [];
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('player_stats')
         .select('firstname, familyname, spoints, sreboundstotal, sassists, sminutes')
         .eq('league_id', gameData.league_id)
@@ -358,7 +365,7 @@ export default function GamePage() {
       // Look up player photos
       for (const player of top3) {
         try {
-          const { data: playerData } = await supabase
+          const { data: playerData } = await db
             .from('players')
             .select('photo_path, photo_focus_y')
             .ilike('full_name', `%${player.name}%`)
@@ -384,10 +391,10 @@ export default function GamePage() {
 
   // Fetch away team roster for top players
   const { data: awayTeamRoster } = useQuery({
-    queryKey: ['roster-game', gameData?.league_id, awayTeamId],
+    queryKey: ['roster-game', gameData?.league_id, awayTeamId, isTestMode],
     queryFn: async () => {
       if (!awayTeamId || !gameData) return [];
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from('player_stats')
         .select('firstname, familyname, spoints, sreboundstotal, sassists, sminutes')
         .eq('league_id', gameData.league_id)
@@ -428,7 +435,7 @@ export default function GamePage() {
       // Look up player photos
       for (const player of top3) {
         try {
-          const { data: playerData } = await supabase
+          const { data: playerData } = await db
             .from('players')
             .select('photo_path, photo_focus_y')
             .ilike('full_name', `%${player.name}%`)
@@ -454,10 +461,10 @@ export default function GamePage() {
 
   // Fetch home team last 5 games
   const { data: homeTeamForm } = useQuery({
-    queryKey: ['team-form-game', gameData?.league_id, homeTeamId],
+    queryKey: ['team-form-game', gameData?.league_id, homeTeamId, isTestMode],
     queryFn: async () => {
       if (!homeTeamId || !gameData) return [];
-      const { data: teamGames, error } = await supabase
+      const { data: teamGames, error } = await db
         .from('team_stats')
         .select('numeric_id, tot_spoints, team_id')
         .eq('league_id', gameData.league_id)
@@ -472,7 +479,7 @@ export default function GamePage() {
       for (const teamGame of teamGames) {
         if (!teamGame.numeric_id || processedGames.has(teamGame.numeric_id)) continue;
         
-        const { data: opponentData } = await supabase
+        const { data: opponentData } = await db
           .from('team_stats')
           .select('tot_spoints, team_id')
           .eq('league_id', gameData.league_id)
@@ -498,10 +505,10 @@ export default function GamePage() {
 
   // Fetch away team last 5 games
   const { data: awayTeamForm } = useQuery({
-    queryKey: ['team-form-game', gameData?.league_id, awayTeamId],
+    queryKey: ['team-form-game', gameData?.league_id, awayTeamId, isTestMode],
     queryFn: async () => {
       if (!awayTeamId || !gameData) return [];
-      const { data: teamGames, error } = await supabase
+      const { data: teamGames, error } = await db
         .from('team_stats')
         .select('numeric_id, tot_spoints, team_id')
         .eq('league_id', gameData.league_id)
@@ -516,7 +523,7 @@ export default function GamePage() {
       for (const teamGame of teamGames) {
         if (!teamGame.numeric_id || processedGames.has(teamGame.numeric_id)) continue;
         
-        const { data: opponentData } = await supabase
+        const { data: opponentData } = await db
           .from('team_stats')
           .select('tot_spoints, team_id')
           .eq('league_id', gameData.league_id)
@@ -609,8 +616,13 @@ export default function GamePage() {
 
         <div className="bg-white dark:bg-neutral-900 rounded-xl overflow-hidden shadow-lg border border-orange-100 dark:border-neutral-800">
           <div className="bg-gradient-to-r from-orange-100 via-orange-50 to-orange-100 dark:from-neutral-800 dark:via-neutral-850 dark:to-neutral-800 p-6 md:p-8 border-b border-orange-200 dark:border-neutral-700">
-            <div className="flex justify-center mb-4">
+            <div className="flex justify-center items-center gap-2 mb-4">
               {getStatusBadge(gameData.status, gameData.matchtime)}
+              {isTestMode && (
+                <span className="px-2 py-0.5 bg-purple-600 text-white text-xs font-medium rounded-full">
+                  TEST MODE
+                </span>
+              )}
             </div>
 
             <div className="flex items-center justify-between gap-2 md:gap-8">
