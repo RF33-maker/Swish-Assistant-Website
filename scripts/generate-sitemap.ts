@@ -73,16 +73,36 @@ async function generateSitemap() {
       teams = teamsData || [];
     }
 
-    // Fetch all distinct players with slugs
-    const { data: players, error: playersError } = await supabase
-      .from("players")
-      .select("id, full_name, slug")
-      .not("slug", "is", null);
+    // Fetch all distinct players with slugs (paginated to handle >1000 players)
+    let players: any[] = [];
+    const BATCH_SIZE = 1000;
+    let offset = 0;
+    let hasMore = true;
+    
+    console.log("   Fetching players in batches...");
+    
+    while (hasMore) {
+      const { data: batch, error: playersError } = await supabase
+        .from("players")
+        .select("id, full_name, slug")
+        .not("slug", "is", null)
+        .range(offset, offset + BATCH_SIZE - 1);
 
-    if (playersError) {
-      console.error("❌ Error fetching players:", playersError);
-      console.log("   Continuing without players...");
+      if (playersError) {
+        console.error("❌ Error fetching players:", playersError);
+        console.log("   Continuing without remaining players...");
+        hasMore = false;
+      } else if (batch && batch.length > 0) {
+        players = players.concat(batch);
+        console.log(`   Fetched ${players.length} players so far...`);
+        offset += BATCH_SIZE;
+        hasMore = batch.length === BATCH_SIZE;
+      } else {
+        hasMore = false;
+      }
     }
+    
+    console.log(`   Total players fetched: ${players.length}`);
 
     // Build XML sitemap
     let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
