@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useLocation, useParams } from "wouter";
 import { supabase } from "@/lib/supabase";
 import type { League } from "@shared/schema";
@@ -39,6 +39,7 @@ import { TeamComparison } from "@/components/TeamComparison";
 import { TournamentBracket } from "@/components/TournamentBracket";
 import { normalizeTeamName } from "@/lib/teamUtils";
 import { namesMatch, getMostCompleteName } from "@/lib/fuzzyMatch";
+import { DEBUG, debugLog } from "@/utils/debug";
 
 type GameSchedule = {
   game_id: string;
@@ -894,8 +895,8 @@ export default function LeaguePage() {
 
     // Filter and sort players based on search and sort settings in stats section
     useEffect(() => {
-      console.log("🔍 Filtering players. Search term:", statsSearch);
-      console.log("📊 All players:", allPlayerAverages.length);
+      debugLog("🔍 Filtering players. Search term:", statsSearch);
+      debugLog("📊 All players:", allPlayerAverages.length);
       
       let filtered = allPlayerAverages;
       
@@ -1419,10 +1420,10 @@ export default function LeaguePage() {
               .select("*")
               .eq("league_id", data.league_id);
 
-            console.log("📊 Team stats for scores:", teamStatsForScores?.length, "records");
+            debugLog("📊 Team stats for scores:", teamStatsForScores?.length, "records");
             if (teamStatsForScores && teamStatsForScores.length > 0) {
-              console.log("📊 Sample team_stats record:", JSON.stringify(teamStatsForScores[0], null, 2));
-              console.log("📊 Available columns:", Object.keys(teamStatsForScores[0]));
+              debugLog("📊 Sample team_stats record:", JSON.stringify(teamStatsForScores[0], null, 2));
+              debugLog("📊 Available columns:", Object.keys(teamStatsForScores[0]));
             }
 
             // Create a map of game scores using game_key as primary identifier
@@ -1445,7 +1446,7 @@ export default function LeaguePage() {
                 }
               });
 
-              console.log("📊 Unique games by numeric_id:", gameMap.size);
+              debugLog("📊 Unique games by numeric_id:", gameMap.size);
 
               gameMap.forEach((gameTeams, numericId) => {
                 if (gameTeams.length === 2) {
@@ -1500,12 +1501,12 @@ export default function LeaguePage() {
                   }
                   gameScoresMap.get(key2)!.push(scoreData2);
                 } else if (gameTeams.length !== 2) {
-                  console.log("📊 Game with", gameTeams.length, "teams:", numericId, gameTeams.map(t => t.name));
+                  debugLog("📊 Game with", gameTeams.length, "teams:", numericId, gameTeams.map(t => t.name));
                 }
               });
               
-              console.log("📊 Games stored by game_key:", gameScoresByKey.size);
-              console.log("📊 Team pairings stored:", gameScoresMap.size);
+              debugLog("📊 Games stored by game_key:", gameScoresByKey.size);
+              debugLog("📊 Team pairings stored:", gameScoresMap.size);
               
               // Sort all game arrays by date (newest first) so we can pick the closest match
               gameScoresMap.forEach((games, key) => {
@@ -1647,13 +1648,29 @@ export default function LeaguePage() {
       fetchUserAndLeague();
     }, [slug]);
 
+    // Ref to track last fetched league_id for deduplication
+    const lastFetchedLeagueRef = useRef<string | null>(null);
+    // Ref for cancellation across async operations
+    const playerAveragesCancelledRef = useRef(false);
+
     // Fetch player averages when league is available
     useEffect(() => {
-      console.log("🔄 Player averages useEffect triggered, league_id:", league?.league_id);
-      if (league?.league_id) {
-        console.log("🔄 Calling fetchAllPlayerAverages...");
-        fetchAllPlayerAverages();
-      }
+      const leagueId = league?.league_id;
+      
+      if (!leagueId) return;
+      
+      if (lastFetchedLeagueRef.current === leagueId) return;
+      
+      playerAveragesCancelledRef.current = false;
+      lastFetchedLeagueRef.current = leagueId;
+      
+      debugLog("🔄 Player averages useEffect triggered, league_id:", leagueId);
+      
+      fetchAllPlayerAverages();
+      
+      return () => {
+        playerAveragesCancelledRef.current = true;
+      };
     }, [league?.league_id]);
 
     // Fetch team stats when league is available
@@ -1689,7 +1706,7 @@ export default function LeaguePage() {
       // Choose field based on leagueLeadersView state
       const fieldToUse = leagueLeadersView === 'averages' ? fields.avgField : fields.totalField;
       
-      console.log(`📊 getTopList(${statKey}): mode=${leagueLeadersView}, fieldToUse=${fieldToUse}`);
+      debugLog(`📊 getTopList(${statKey}): mode=${leagueLeadersView}, fieldToUse=${fieldToUse}`);
       
       // Sort by the selected field and take top 5
       const result = [...allPlayerAverages]
@@ -1706,7 +1723,7 @@ export default function LeaguePage() {
             : Math.round(player[fields.totalField]) // Round totals to whole numbers
         }));
       
-      console.log(`📊 getTopList(${statKey}) result:`, result.map(p => ({ 
+      debugLog(`📊 getTopList(${statKey}) result:`, result.map(p => ({ 
         name: p.name, 
         value: p.value, 
         games: p.games,
@@ -1990,91 +2007,78 @@ export default function LeaguePage() {
       return null;
     };
 
-    // Convert YouTube URL to embed format
-    const getYoutubeEmbedUrl = (url: string) => {
+    // Convert YouTube URL to embed format - memoized to prevent repeated processing
+    const getYoutubeEmbedUrl = useCallback((url: string): string | null => {
       if (!url) return null;
       
-      console.log('Processing YouTube URL:', url);
+      debugLog('Processing YouTube URL:', url);
       
       // If it's already an embed URL, ensure parameters are added
       if (url.includes('/embed/')) {
-        console.log('Already an embed URL:', url);
-        
-        // Check which parameters are missing
         const hasRel = url.includes('rel=0');
         const hasModestBranding = url.includes('modestbranding=1');
         
-        // If both parameters exist, return as-is
         if (hasRel && hasModestBranding) {
           return url;
         }
         
-        // Build missing parameters string
         const missingParams = [];
         if (!hasRel) missingParams.push('rel=0');
         if (!hasModestBranding) missingParams.push('modestbranding=1');
         
-        // Normalize URL by removing trailing separators
         let cleanUrl = url.replace(/[?&]+$/, '');
-        
-        // Determine separator: use & if query string exists, otherwise ?
         const separator = cleanUrl.includes('?') ? '&' : '?';
         return cleanUrl + separator + missingParams.join('&');
       }
       
-      // Parameters to minimize off-topic suggestions
       const embedParams = 'rel=0&modestbranding=1';
       
-      // Handle different YouTube URL formats
-      // 1. Playlist URL: youtube.com/playlist?list=PLAYLIST_ID
       const playlistMatch = url.match(/[?&]list=([^&]+)/);
       if (playlistMatch) {
         const playlistId = playlistMatch[1];
-        const embedUrl = `https://www.youtube.com/embed/videoseries?list=${playlistId}&${embedParams}`;
-        console.log('Generated embed URL from playlist:', embedUrl);
-        return embedUrl;
+        return `https://www.youtube.com/embed/videoseries?list=${playlistId}&${embedParams}`;
       }
       
-      // 2. Standard watch URL: youtube.com/watch?v=VIDEO_ID
       const watchMatch = url.match(/youtube\.com\/watch\?v=([^&]+)/);
       if (watchMatch) {
         const videoId = watchMatch[1];
-        const embedUrl = `https://www.youtube.com/embed/${videoId}?${embedParams}`;
-        console.log('Generated embed URL from watch:', embedUrl);
-        return embedUrl;
+        return `https://www.youtube.com/embed/${videoId}?${embedParams}`;
       }
       
-      // 3. Short URL: youtu.be/VIDEO_ID
       const shortMatch = url.match(/youtu\.be\/([^?]+)/);
       if (shortMatch) {
         const videoId = shortMatch[1];
-        const embedUrl = `https://www.youtube.com/embed/${videoId}?${embedParams}`;
-        console.log('Generated embed URL from short:', embedUrl);
-        return embedUrl;
+        return `https://www.youtube.com/embed/${videoId}?${embedParams}`;
       }
       
-      // 4. Mobile URL: youtube.com/shorts/VIDEO_ID
       const shortsMatch = url.match(/youtube\.com\/shorts\/([^?]+)/);
       if (shortsMatch) {
         const videoId = shortsMatch[1];
-        const embedUrl = `https://www.youtube.com/embed/${videoId}?${embedParams}`;
-        console.log('Generated embed URL from shorts:', embedUrl);
-        return embedUrl;
+        return `https://www.youtube.com/embed/${videoId}?${embedParams}`;
       }
       
-      console.log('Could not process YouTube URL');
+      debugLog('Could not process YouTube URL');
       return null;
-    };
+    }, []);
+
+    // Memoize the YouTube embed URL to prevent repeated processing
+    const youtubeEmbedUrl = useMemo(() => {
+      return league?.youtube_embed_url ? getYoutubeEmbedUrl(league.youtube_embed_url) : null;
+    }, [league?.youtube_embed_url, getYoutubeEmbedUrl]);
 
     const fetchAllPlayerAverages = async () => {
-      console.log("📊 fetchAllPlayerAverages called, league_id:", league?.league_id);
+      debugLog("📊 fetchAllPlayerAverages called, league_id:", league?.league_id);
       if (!league?.league_id) {
-        console.log("📊 No league_id, returning early");
+        debugLog("📊 No league_id, returning early");
         return;
       }
 
+      if (playerAveragesCancelledRef.current) return;
       setIsLoadingStats(true);
       try {
+        // Helper to check cancellation
+        const isCancelled = () => playerAveragesCancelledRef.current;
+        
         // Use shared fuzzy matching from fuzzyMatch.ts
         // namesMatch handles: number stripping, initial matching (R Farrell vs Rhys Farrell), 
         // Jaro-Winkler similarity at 0.85 threshold for typo tolerance
@@ -2085,7 +2089,7 @@ export default function LeaguePage() {
 
         // ========== STATS-FIRST APPROACH ==========
         // Step 1: Fetch ALL player_stats for the league (paginated to bypass 1000 row limit)
-        console.log("📊 Step 1: Fetching all player_stats for league_id:", league.league_id);
+        debugLog("📊 Step 1: Fetching all player_stats for league_id:", league.league_id);
         
         let allPlayerStats: any[] = [];
         let page = 0;
@@ -2106,7 +2110,7 @@ export default function LeaguePage() {
           
           if (pageData && pageData.length > 0) {
             allPlayerStats = [...allPlayerStats, ...pageData];
-            console.log("📊 Step 1: Fetched page", page, "with", pageData.length, "records, total:", allPlayerStats.length);
+            debugLog("📊 Step 1: Fetched page", page, "with", pageData.length, "records, total:", allPlayerStats.length);
             hasMore = pageData.length === pageSize;
             page++;
           } else {
@@ -2114,19 +2118,23 @@ export default function LeaguePage() {
           }
         }
         
+        if (isCancelled()) return;
+        
         const playerStats = allPlayerStats;
 
-        console.log("📊 Step 1: Fetched", playerStats?.length || 0, "total stat records");
+        debugLog("📊 Step 1: Fetched", playerStats?.length || 0, "total stat records");
 
         if (!playerStats || playerStats.length === 0) {
-          console.log("📊 No stats found for this league");
-          setAllPlayerAverages([]);
-          setFilteredPlayerAverages([]);
+          debugLog("📊 No stats found for this league");
+          if (!isCancelled()) {
+            setAllPlayerAverages([]);
+            setFilteredPlayerAverages([]);
+          }
           return;
         }
 
         // Step 2: Group stats by player_id first
-        console.log("📊 Step 2: Grouping stats by player_id");
+        debugLog("📊 Step 2: Grouping stats by player_id");
         
         type PlayerAggregate = {
           name: string;
@@ -2254,7 +2262,7 @@ export default function LeaguePage() {
           }
         });
 
-        console.log("📊 Step 2: Grouped into", byPlayerId.size, "players by ID,", noPlayerId.length, "without ID");
+        debugLog("📊 Step 2: Grouped into", byPlayerId.size, "players by ID,", noPlayerId.length, "without ID");
 
         // Step 3: Merge player_id groups that have similar names (same player, different IDs)
         const mergedPlayers: PlayerAggregate[] = [];
@@ -2265,7 +2273,7 @@ export default function LeaguePage() {
           p.name.toLowerCase().includes('hamza')
         );
         if (hamzasBefore.length > 0) {
-          console.log("📊 DEBUG: Hamza players BEFORE merge:", hamzasBefore.map(p => ({
+          debugLog("📊 DEBUG: Hamza players BEFORE merge:", hamzasBefore.map(p => ({
             name: p.name,
             team: p.team,
             games: p.games
@@ -2286,7 +2294,7 @@ export default function LeaguePage() {
               if (sameTeam && areSimilarNames(player.name, otherPlayer.name)) {
                 // Debug: Log when Hamza players are about to be merged
                 if (player.name.toLowerCase().includes('hamza') || otherPlayer.name.toLowerCase().includes('hamza')) {
-                  console.log("📊 DEBUG: Merging Hamza:", player.name, "with", otherPlayer.name, 
+                  debugLog("📊 DEBUG: Merging Hamza:", player.name, "with", otherPlayer.name, 
                     "| Teams:", player.team, "vs", otherPlayer.team);
                 }
                 similarPlayers.push([otherId, otherPlayer]);
@@ -2331,12 +2339,12 @@ export default function LeaguePage() {
           mergedPlayers.push(player);
         }
 
-        console.log("📊 Step 3: After merging:", mergedPlayers.length, "unique players");
+        debugLog("📊 Step 3: After merging:", mergedPlayers.length, "unique players");
         
         // Debug: Check for Hamza players after merge
         const hamzasAfter = mergedPlayers.filter(p => p.name.toLowerCase().includes('hamza'));
         if (hamzasAfter.length > 0) {
-          console.log("📊 DEBUG: Hamza players AFTER merge:", hamzasAfter.map(p => ({
+          debugLog("📊 DEBUG: Hamza players AFTER merge:", hamzasAfter.map(p => ({
             name: p.name,
             team: p.team,
             games: p.games
@@ -2344,7 +2352,7 @@ export default function LeaguePage() {
         }
 
         // Step 4: Handle stats without player_id by grouping by name
-        console.log("📊 Step 4: Processing", noPlayerId.length, "stats without player_id");
+        debugLog("📊 Step 4: Processing", noPlayerId.length, "stats without player_id");
         
         noPlayerId.forEach(stat => {
           const playerName = stat.full_name || stat.name || 'Unknown Player';
@@ -2417,10 +2425,10 @@ export default function LeaguePage() {
           }
         });
 
-        console.log("📊 Step 4: Total players after processing null IDs:", mergedPlayers.length);
+        debugLog("📊 Step 4: Total players after processing null IDs:", mergedPlayers.length);
 
         // Step 5: Fetch slugs from players table
-        console.log("📊 Step 5: Fetching slugs from players table");
+        debugLog("📊 Step 5: Fetching slugs from players table");
         
         const { data: rosterData } = await supabase
           .from("players")
@@ -2439,10 +2447,10 @@ export default function LeaguePage() {
           }
         });
 
-        console.log("📊 Step 5: Found", slugLookup.size, "slugs by ID,", nameLookup.size, "by name");
+        debugLog("📊 Step 5: Found", slugLookup.size, "slugs by ID,", nameLookup.size, "by name");
 
         // Step 6: Calculate averages and build final list
-        console.log("📊 Step 6: Calculating averages");
+        debugLog("📊 Step 6: Calculating averages");
         
         // Filter out players with 0 games played (never actually played)
         const playersWithGames = mergedPlayers.filter(player => player.games > 0);
@@ -2505,14 +2513,17 @@ export default function LeaguePage() {
           };
         }).sort((a, b) => parseFloat(b.avgPoints) - parseFloat(a.avgPoints));
 
-        console.log("📊 Step 6: Final player list has", averagesList.length, "players");
+        debugLog("📊 Step 6: Final player list has", averagesList.length, "players");
 
+        if (isCancelled()) return;
         setAllPlayerAverages(averagesList);
         setFilteredPlayerAverages(averagesList);
       } catch (error) {
         console.error("Error in fetchAllPlayerAverages:", error);
       } finally {
-        setIsLoadingStats(false);
+        if (!playerAveragesCancelledRef.current) {
+          setIsLoadingStats(false);
+        }
       }
     };
 
@@ -4790,9 +4801,9 @@ export default function LeaguePage() {
                 </div>
               ) : (
                 <div>
-                  {league?.youtube_embed_url && getYoutubeEmbedUrl(league.youtube_embed_url) ? (
+                  {youtubeEmbedUrl ? (
                     <iframe
-                      src={getYoutubeEmbedUrl(league.youtube_embed_url)}
+                      src={youtubeEmbedUrl}
                       width="100%"
                       height="250"
                       className="rounded-md border"
