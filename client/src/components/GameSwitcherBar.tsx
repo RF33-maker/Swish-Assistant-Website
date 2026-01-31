@@ -184,7 +184,7 @@ export function GameSwitcherBar({ leagueId, currentGameKey, isTestMode }: GameSw
 
   return (
     <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white">
-      <div className="max-w-full overflow-x-auto scrollbar-hide">
+      <div className="max-w-full overflow-x-auto pb-1 [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-track]:bg-slate-800 [&::-webkit-scrollbar-thumb]:bg-slate-600 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb:hover]:bg-slate-500">
         <div className="flex items-center gap-1 px-2 py-2 min-w-max">
           {games.map((game) => {
             const gameStatus = getGameStatus(game.status);
