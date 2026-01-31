@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { TeamLogo } from "@/components/TeamLogo";
+import { GameSwitcherBar } from "@/components/GameSwitcherBar";
 import { ArrowLeft, Clock, MapPin, Calendar, Users, TrendingUp } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -708,6 +709,9 @@ export default function GamePage() {
 
   return (
     <div className="min-h-screen bg-[#fffaf1] dark:bg-neutral-950 text-slate-800 dark:text-white transition-colors">
+      {gameData?.league_id && (
+        <GameSwitcherBar leagueId={gameData.league_id} currentGameKey={gameKey} isTestMode={isTestMode} />
+      )}
       <div className="max-w-6xl mx-auto px-4 py-6">
         <button 
           onClick={() => navigate(leagueData?.slug ? `/league/${leagueData.slug}` : '/')}
