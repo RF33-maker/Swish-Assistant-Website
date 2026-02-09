@@ -83,7 +83,7 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
       
       const { data: teamStatsData, error: teamStatsError } = await supabase
         .from("team_stats")
-        .select("game_key, name, tot_spoints, is_home, created_at, numeric_id")
+        .select("game_key, name, tot_spoints, created_at, numeric_id")
         .eq("league_id", leagueId)
         .gte("created_at", thirtyDaysAgo.toISOString())
         .order("created_at", { ascending: false });
@@ -111,22 +111,10 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
           if (teams.length === 2) {
             processedGameKeys.add(gameKey);
             
-            const homeTeam = teams.find(t => t.is_home === true);
-            const awayTeam = teams.find(t => t.is_home === false);
-            
-            let home_team: string, away_team: string, home_score: number, away_score: number;
-            
-            if (homeTeam && awayTeam) {
-              home_team = homeTeam.name;
-              away_team = awayTeam.name;
-              home_score = homeTeam.tot_spoints || 0;
-              away_score = awayTeam.tot_spoints || 0;
-            } else {
-              home_team = teams[0].name;
-              away_team = teams[1].name;
-              home_score = teams[0].tot_spoints || 0;
-              away_score = teams[1].tot_spoints || 0;
-            }
+            const home_team = teams[0].name;
+            const away_team = teams[1].name;
+            const home_score = teams[0].tot_spoints || 0;
+            const away_score = teams[1].tot_spoints || 0;
             
             completedGames.push({
               game_key: gameKey,
@@ -149,7 +137,7 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
       
       const { data: scheduleData, error: scheduleError } = await supabase
         .from("game_schedule")
-        .select("game_key, matchtime, hometeam, awayteam, status, home_score, away_score")
+        .select("game_key, matchtime, hometeam, awayteam, status")
         .eq("league_id", leagueId)
         .gte("matchtime", sevenDaysAgo.toISOString())
         .lte("matchtime", sevenDaysAhead.toISOString())
@@ -179,8 +167,8 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
             game_date: game.matchtime,
             home_team: game.hometeam,
             away_team: game.awayteam,
-            home_score: (game as any).home_score ?? null,
-            away_score: (game as any).away_score ?? null,
+            home_score: null,
+            away_score: null,
             status: isLive ? 'LIVE' : 'SCHEDULED'
           };
 
