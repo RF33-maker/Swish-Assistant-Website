@@ -10,7 +10,7 @@ import { GameSummaryRow } from "./GameSummaryRow";
 import GameResultsCarousel from "@/components/GameResultsCarousel";
 import GameDetailModal from "@/components/GameDetailModal";
 import GamePreviewModal from "@/components/GamePreviewModal";
-import LiveGamesSection from "@/components/LiveGamesSection";
+
 import LeagueChatbot from "@/components/LeagueChatbot";
 import { TeamLogo } from "@/components/TeamLogo";
 import { TeamLogoUploader } from "@/components/TeamLogoUploader";
@@ -3215,14 +3215,9 @@ export default function LeaguePage() {
           </div>
         )}
 
-        {/* Live Games Section - Shows prominently when games are in progress */}
+        {/* Game Results / Live / Upcoming Carousel */}
         {league?.league_id && (
-          <LiveGamesSection leagueId={league.league_id} />
-        )}
-
-        {/* Horizontal Game Results Ticker */}
-        {league?.league_id && (
-          <section className="bg-gray-900 text-white py-4 overflow-hidden">
+          <section className="bg-gray-900 text-white overflow-hidden rounded-b-lg">
             <GameResultsCarousel 
               leagueId={league.league_id} 
               onGameClick={handleCarouselGameClick}
