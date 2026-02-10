@@ -98,7 +98,7 @@ export default function LandingPage() {
         .from("players")
         .select("id, full_name, slug, photo_path, league_id")
         .ilike("full_name", `%${query}%`)
-        .limit(10);
+        .limit(30);
 
       const leagues = leaguesResponse.data || [];
       const players = playersResponse.data || [];
@@ -121,24 +121,66 @@ export default function LandingPage() {
         }
       }
 
-      const uniquePlayers = players.reduce((acc: any[], player: any) => {
-        if (!acc.some(p => p.full_name === player.full_name)) {
-          let photoUrl: string | null = null;
-          if (player.photo_path) {
-            const { data: urlData } = supabase.storage.from('player-photos').getPublicUrl(player.photo_path);
-            photoUrl = urlData?.publicUrl || null;
-          }
-          acc.push({
-            name: player.full_name,
-            team: playerTeamMap[player.id] || '',
-            player_id: player.id,
-            player_slug: player.slug,
-            photo_url: photoUrl,
-            type: 'player'
-          });
+      const isAbbreviated = (name: string) => {
+        const parts = name.trim().split(/\s+/);
+        return parts.some(p => p.length <= 2 || p.includes('.'));
+      };
+
+      const getNameParts = (name: string) => {
+        const clean = name.toLowerCase().replace(/[.\-']/g, '').replace(/\s+/g, ' ').trim();
+        const parts = clean.split(' ').filter(p => !['jr', 'sr', 'ii', 'iii', 'iv'].includes(p));
+        return { first: parts[0] || '', last: parts[parts.length - 1] || '' };
+      };
+
+      const areSamePlayer = (a: string, b: string) => {
+        const pa = getNameParts(a);
+        const pb = getNameParts(b);
+        if (pa.last !== pb.last) return false;
+        if (pa.first === pb.first) return true;
+        if (pa.first.length >= 1 && pb.first.length >= 1 &&
+            (pa.first[0] === pb.first[0]) &&
+            (pa.first.length <= 2 || pb.first.length <= 2)) return true;
+        return false;
+      };
+
+      const playerGroups: any[][] = [];
+      players.forEach((player: any) => {
+        const existingGroup = playerGroups.find(group =>
+          group.some((p: any) => areSamePlayer(p.full_name, player.full_name))
+        );
+        if (existingGroup) {
+          existingGroup.push(player);
+        } else {
+          playerGroups.push([player]);
         }
-        return acc;
-      }, []);
+      });
+
+      const uniquePlayers = playerGroups.map((group: any[]) => {
+        group.sort((a: any, b: any) => {
+          if (a.photo_path && !b.photo_path) return -1;
+          if (!a.photo_path && b.photo_path) return 1;
+          const aAbbr = isAbbreviated(a.full_name);
+          const bAbbr = isAbbreviated(b.full_name);
+          if (!aAbbr && bAbbr) return -1;
+          if (aAbbr && !bAbbr) return 1;
+          if (b.full_name.length !== a.full_name.length) return b.full_name.length - a.full_name.length;
+          return String(a.id).localeCompare(String(b.id));
+        });
+        const best = group[0];
+        let photoUrl: string | null = null;
+        if (best.photo_path) {
+          const { data: urlData } = supabase.storage.from('player-photos').getPublicUrl(best.photo_path);
+          photoUrl = urlData?.publicUrl || null;
+        }
+        return {
+          name: best.full_name,
+          team: playerTeamMap[best.id] || '',
+          player_id: best.id,
+          player_slug: best.slug,
+          photo_url: photoUrl,
+          type: 'player'
+        };
+      });
 
       const uniqueTeams = teams.reduce((acc: any[], team: any) => {
         const leagueJoin = Array.isArray(team.leagues) ? team.leagues[0] : team.leagues;
