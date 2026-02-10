@@ -81,17 +81,12 @@ export default function LandingPage() {
         return
       }
 
-      const [leaguesResponse, playersResponse, teamsResponse] = await Promise.all([
+      const [leaguesResponse, teamsResponse] = await Promise.all([
         supabase
           .from("leagues")
           .select("name, slug")
           .or(`name.ilike.%${query}%`)
           .eq("is_public", true),
-        supabase
-          .from("players")
-          .select("id, full_name, team, slug, photo_path, league_id")
-          .ilike("full_name", `%${query}%`)
-          .limit(10),
         supabase
           .from("teams")
           .select("name, league_id, leagues:league_id(name, slug, is_public)")
@@ -99,9 +94,32 @@ export default function LandingPage() {
           .limit(20)
       ]);
 
+      const playersResponse = await supabase
+        .from("players")
+        .select("id, full_name, slug, photo_path, league_id")
+        .ilike("full_name", `%${query}%`)
+        .limit(10);
+
       const leagues = leaguesResponse.data || [];
       const players = playersResponse.data || [];
       const teams = teamsResponse.data || [];
+
+      let playerTeamMap: Record<string, string> = {};
+      if (players.length > 0) {
+        const playerIds = players.map((p: any) => p.id);
+        const { data: statsData } = await supabase
+          .from("player_stats")
+          .select("player_id, team")
+          .in("player_id", playerIds)
+          .limit(100);
+        if (statsData) {
+          statsData.forEach((s: any) => {
+            if (s.player_id && s.team && !playerTeamMap[s.player_id]) {
+              playerTeamMap[s.player_id] = s.team;
+            }
+          });
+        }
+      }
 
       const uniquePlayers = players.reduce((acc: any[], player: any) => {
         if (!acc.some(p => p.full_name === player.full_name)) {
@@ -112,7 +130,7 @@ export default function LandingPage() {
           }
           acc.push({
             name: player.full_name,
-            team: player.team,
+            team: playerTeamMap[player.id] || '',
             player_id: player.id,
             player_slug: player.slug,
             photo_url: photoUrl,
