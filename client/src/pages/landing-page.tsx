@@ -88,9 +88,9 @@ export default function LandingPage() {
           .or(`name.ilike.%${query}%`)
           .eq("is_public", true),
         supabase
-          .from("player_stats")
-          .select("name, team, id, player_id, players:player_id(slug, photo_path)")
-          .ilike("name", `%${query}%`)
+          .from("players")
+          .select("id, full_name, team, slug, photo_path, league_id")
+          .ilike("full_name", `%${query}%`)
           .limit(10),
         supabase
           .from("teams")
@@ -104,19 +104,17 @@ export default function LandingPage() {
       const teams = teamsResponse.data || [];
 
       const uniquePlayers = players.reduce((acc: any[], player: any) => {
-        if (!acc.some(p => p.name === player.name)) {
-          const playerJoin = Array.isArray(player.players) ? player.players[0] : player.players;
-          const photoPath = playerJoin?.photo_path || null;
+        if (!acc.some(p => p.full_name === player.full_name)) {
           let photoUrl: string | null = null;
-          if (photoPath) {
-            const { data: urlData } = supabase.storage.from('player-photos').getPublicUrl(photoPath);
+          if (player.photo_path) {
+            const { data: urlData } = supabase.storage.from('player-photos').getPublicUrl(player.photo_path);
             photoUrl = urlData?.publicUrl || null;
           }
           acc.push({
-            name: player.name,
+            name: player.full_name,
             team: player.team,
-            player_id: player.player_id || player.id,
-            player_slug: playerJoin?.slug,
+            player_id: player.id,
+            player_slug: player.slug,
             photo_url: photoUrl,
             type: 'player'
           });
