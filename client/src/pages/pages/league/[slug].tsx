@@ -1751,25 +1751,7 @@ export default function LeaguePage() {
       homeScore: number | null;
       awayScore: number | null;
     }) => {
-      if (data.status === 'LIVE') {
-        // For live games, navigate to full Game Centre page
-        navigate(`/game/${encodeURIComponent(data.gameKey)}`);
-      } else if (data.status === 'SCHEDULED') {
-        // For scheduled games, open the preview modal
-        const previewGame: GameSchedule = {
-          game_id: data.gameKey,
-          game_date: data.gameDate,
-          team1: data.homeTeam,
-          team2: data.awayTeam,
-          status: 'scheduled'
-        };
-        setSelectedPreviewGame(previewGame);
-        setIsPreviewModalOpen(true);
-      } else {
-        // For completed games, open the detail modal
-        setSelectedGameId(data.gameKey);
-        setIsGameModalOpen(true);
-      }
+      navigate(`/game/${encodeURIComponent(data.gameKey)}`);
     };
 
     const handleCloseGameModal = () => {
