@@ -989,12 +989,127 @@ export default function GamePage() {
                 </div>
               </div>
             ) : (
-              <Tabs defaultValue="boxscore" className="w-full">
-                <TabsList className="grid w-full grid-cols-3 bg-orange-100 dark:bg-neutral-800 mb-4">
+              <Tabs defaultValue="game" className="w-full">
+                <TabsList className="grid w-full grid-cols-4 bg-orange-100 dark:bg-neutral-800 mb-4">
+                  <TabsTrigger value="game" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">Game</TabsTrigger>
                   <TabsTrigger value="boxscore" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">Box Score</TabsTrigger>
                   <TabsTrigger value="teamstats" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">Team Stats</TabsTrigger>
-                  <TabsTrigger value="playbyplay" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">Play-by-Play</TabsTrigger>
+                  <TabsTrigger value="feed" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">Feed</TabsTrigger>
                 </TabsList>
+
+                <TabsContent value="game">
+                  <div className="space-y-4">
+                    {teamStats && teamStats.length >= 2 ? (
+                      <>
+                        <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
+                          <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3 uppercase tracking-wide">Team Comparison</h3>
+                          <div className="space-y-3">
+                            {[
+                              { label: 'Points', home: homeTeamStats?.tot_spoints || 0, away: awayTeamStats?.tot_spoints || 0 },
+                              { label: 'Rebounds', home: homeTeamStats?.tot_sreboundstotal || 0, away: awayTeamStats?.tot_sreboundstotal || 0 },
+                              { label: 'Assists', home: homeTeamStats?.tot_sassists || 0, away: awayTeamStats?.tot_sassists || 0 },
+                              { label: 'Steals', home: homeTeamStats?.tot_ssteals || 0, away: awayTeamStats?.tot_ssteals || 0 },
+                              { label: 'Turnovers', home: homeTeamStats?.tot_sturnovers || 0, away: awayTeamStats?.tot_sturnovers || 0 },
+                            ].map((stat) => {
+                              const total = (stat.home as number) + (stat.away as number);
+                              const homePct = total > 0 ? ((stat.home as number) / total) * 100 : 50;
+                              return (
+                                <div key={stat.label}>
+                                  <div className="flex justify-between text-sm mb-1">
+                                    <span className="font-semibold text-slate-800 dark:text-white">{stat.home}</span>
+                                    <span className="text-slate-500 dark:text-slate-400 text-xs">{stat.label}</span>
+                                    <span className="font-semibold text-slate-800 dark:text-white">{stat.away}</span>
+                                  </div>
+                                  <div className="flex h-2 rounded-full overflow-hidden bg-slate-100 dark:bg-neutral-700">
+                                    <div className="bg-orange-500 transition-all duration-500" style={{ width: `${homePct}%` }} />
+                                    <div className="bg-blue-500 transition-all duration-500" style={{ width: `${100 - homePct}%` }} />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
+                          <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3 uppercase tracking-wide">Shooting</h3>
+                          <div className="grid grid-cols-3 gap-2 text-center text-sm">
+                            <div className="font-semibold text-orange-600 dark:text-orange-400">{getTeamAbbr(gameData.hometeam)}</div>
+                            <div></div>
+                            <div className="font-semibold text-orange-600 dark:text-orange-400">{getTeamAbbr(gameData.awayteam)}</div>
+
+                            <div className="text-slate-800 dark:text-white font-medium">
+                              {homeTeamStats?.tot_sfieldgoalsmade || 0}/{homeTeamStats?.tot_sfieldgoalsattempted || 0}
+                            </div>
+                            <div className="text-slate-500 dark:text-slate-400 text-xs">FG</div>
+                            <div className="text-slate-800 dark:text-white font-medium">
+                              {awayTeamStats?.tot_sfieldgoalsmade || 0}/{awayTeamStats?.tot_sfieldgoalsattempted || 0}
+                            </div>
+
+                            <div className="text-slate-800 dark:text-white font-medium">
+                              {homeTeamStats?.tot_sthreepointersmade || 0}/{homeTeamStats?.tot_sthreepointersattempted || 0}
+                            </div>
+                            <div className="text-slate-500 dark:text-slate-400 text-xs">3PT</div>
+                            <div className="text-slate-800 dark:text-white font-medium">
+                              {awayTeamStats?.tot_sthreepointersmade || 0}/{awayTeamStats?.tot_sthreepointersattempted || 0}
+                            </div>
+
+                            <div className="text-slate-800 dark:text-white font-medium">
+                              {homeTeamStats?.tot_sfreethrowsmade || 0}/{homeTeamStats?.tot_sfreethrowsattempted || 0}
+                            </div>
+                            <div className="text-slate-500 dark:text-slate-400 text-xs">FT</div>
+                            <div className="text-slate-800 dark:text-white font-medium">
+                              {awayTeamStats?.tot_sfreethrowsmade || 0}/{awayTeamStats?.tot_sfreethrowsattempted || 0}
+                            </div>
+
+                            <div className="text-slate-800 dark:text-white font-medium">
+                              {homeTeamStats?.tot_sfieldgoalsattempted ? ((homeTeamStats.tot_sfieldgoalsmade / homeTeamStats.tot_sfieldgoalsattempted) * 100).toFixed(1) : '0.0'}%
+                            </div>
+                            <div className="text-slate-500 dark:text-slate-400 text-xs">FG%</div>
+                            <div className="text-slate-800 dark:text-white font-medium">
+                              {awayTeamStats?.tot_sfieldgoalsattempted ? ((awayTeamStats.tot_sfieldgoalsmade / awayTeamStats.tot_sfieldgoalsattempted) * 100).toFixed(1) : '0.0'}%
+                            </div>
+                          </div>
+                        </div>
+
+                        {homePlayerStats.length > 0 && awayPlayerStats.length > 0 && (
+                          <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
+                            <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3 uppercase tracking-wide">Top Scorers</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <TeamLogo teamName={gameData.hometeam} leagueId={gameData.league_id} size="sm" />
+                                  <span className="text-xs font-medium text-slate-600 dark:text-slate-400">{getTeamAbbr(gameData.hometeam)}</span>
+                                </div>
+                                {[...homePlayerStats].sort((a, b) => (b.spoints || 0) - (a.spoints || 0)).slice(0, 3).map((p, i) => (
+                                  <div key={i} className="flex justify-between items-center text-sm">
+                                    <span className="text-slate-700 dark:text-slate-300">{p.firstname} {p.familyname}</span>
+                                    <span className="font-bold text-orange-500">{p.spoints || 0} PTS</span>
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <TeamLogo teamName={gameData.awayteam} leagueId={gameData.league_id} size="sm" />
+                                  <span className="text-xs font-medium text-slate-600 dark:text-slate-400">{getTeamAbbr(gameData.awayteam)}</span>
+                                </div>
+                                {[...awayPlayerStats].sort((a, b) => (b.spoints || 0) - (a.spoints || 0)).slice(0, 3).map((p, i) => (
+                                  <div key={i} className="flex justify-between items-center text-sm">
+                                    <span className="text-slate-700 dark:text-slate-300">{p.firstname} {p.familyname}</span>
+                                    <span className="font-bold text-orange-500">{p.spoints || 0} PTS</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="bg-white dark:bg-neutral-800 rounded-lg p-8 border border-orange-100 dark:border-neutral-700 text-center">
+                        <p className="text-slate-500 dark:text-slate-400 italic">Game statistics will appear here once the game starts.</p>
+                      </div>
+                    )}
+                  </div>
+                </TabsContent>
 
                 <TabsContent value="boxscore" className="space-y-6">
                   {statsLoading ? (
@@ -1185,7 +1300,7 @@ export default function GamePage() {
                   </div>
                 </TabsContent>
 
-                <TabsContent value="playbyplay">
+                <TabsContent value="feed">
                   <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
                     {liveEvents && liveEvents.length > 0 ? (
                       <div className="space-y-2 max-h-96 overflow-y-auto">
