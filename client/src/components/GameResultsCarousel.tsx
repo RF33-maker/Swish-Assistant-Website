@@ -107,19 +107,52 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
           }
         });
 
+        const completedGameKeys = Array.from(gameMap.keys());
+        
+        let scheduleHomeAwayMap = new Map<string, { hometeam: string; awayteam: string; matchtime: string }>();
+        if (completedGameKeys.length > 0) {
+          const { data: schedLookup } = await supabase
+            .from("game_schedule")
+            .select("game_key, hometeam, awayteam, matchtime")
+            .eq("league_id", leagueId)
+            .in("game_key", completedGameKeys);
+          if (schedLookup) {
+            schedLookup.forEach(s => {
+              if (s.game_key) {
+                scheduleHomeAwayMap.set(s.game_key, { hometeam: s.hometeam, awayteam: s.awayteam, matchtime: s.matchtime });
+              }
+            });
+          }
+        }
+
         gameMap.forEach((teams, gameKey) => {
           if (teams.length === 2) {
             processedGameKeys.add(gameKey);
             
-            const home_team = teams[0].name;
-            const away_team = teams[1].name;
-            const home_score = teams[0].tot_spoints || 0;
-            const away_score = teams[1].tot_spoints || 0;
+            const schedInfo = scheduleHomeAwayMap.get(gameKey);
+            let home_team: string, away_team: string, home_score: number, away_score: number;
+            
+            if (schedInfo) {
+              home_team = schedInfo.hometeam;
+              away_team = schedInfo.awayteam;
+              const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+              const homeNorm = normalize(schedInfo.hometeam);
+              const awayNorm = normalize(schedInfo.awayteam);
+              const homeStats = teams.find(t => normalize(t.name) === homeNorm);
+              const awayStats = teams.find(t => normalize(t.name) === awayNorm);
+              home_score = homeStats?.tot_spoints ?? (awayStats ? teams.find(t => t !== awayStats)?.tot_spoints ?? 0 : teams[0].tot_spoints || 0);
+              away_score = awayStats?.tot_spoints ?? (homeStats ? teams.find(t => t !== homeStats)?.tot_spoints ?? 0 : teams[1].tot_spoints || 0);
+            } else {
+              home_team = teams[0].name;
+              away_team = teams[1].name;
+              home_score = teams[0].tot_spoints || 0;
+              away_score = teams[1].tot_spoints || 0;
+            }
             
             completedGames.push({
               game_key: gameKey,
               game_id: gameKey,
-              game_date: teams[0].created_at,
+              game_date: schedInfo?.matchtime || teams[0].created_at,
               home_team,
               away_team,
               home_score,
@@ -395,18 +428,6 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <TeamLogo teamName={game.away_team} leagueId={leagueId} size="sm" />
-                        <span className="text-xs sm:text-sm font-semibold text-white truncate">{game.away_team}</span>
-                      </div>
-                      <span className={`text-base sm:text-lg font-bold tabular-nums ml-2 ${
-                        game.status === 'LIVE' ? 'text-red-400' : 'text-white'
-                      }`}>
-                        {game.status === 'SCHEDULED' ? '-' : (game.away_score ?? '-')}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
                         <TeamLogo teamName={game.home_team} leagueId={leagueId} size="sm" />
                         <span className="text-xs sm:text-sm font-semibold text-white truncate">{game.home_team}</span>
                       </div>
@@ -414,6 +435,18 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
                         game.status === 'LIVE' ? 'text-red-400' : 'text-white'
                       }`}>
                         {game.status === 'SCHEDULED' ? '-' : (game.home_score ?? '-')}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <TeamLogo teamName={game.away_team} leagueId={leagueId} size="sm" />
+                        <span className="text-xs sm:text-sm font-semibold text-white truncate">{game.away_team}</span>
+                      </div>
+                      <span className={`text-base sm:text-lg font-bold tabular-nums ml-2 ${
+                        game.status === 'LIVE' ? 'text-red-400' : 'text-white'
+                      }`}>
+                        {game.status === 'SCHEDULED' ? '-' : (game.away_score ?? '-')}
                       </span>
                     </div>
                   </div>
