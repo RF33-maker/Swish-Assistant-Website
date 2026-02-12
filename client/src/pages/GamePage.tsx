@@ -1189,7 +1189,17 @@ export default function GamePage() {
                   <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
                     {liveEvents && liveEvents.length > 0 ? (
                       <div className="space-y-2 max-h-96 overflow-y-auto">
-                        {liveEvents.map((event) => {
+                        {[...liveEvents].sort((a, b) => {
+                          const periodDiff = (b.period || 0) - (a.period || 0);
+                          if (periodDiff !== 0) return periodDiff;
+                          const parseClockSeconds = (clock: string | null | undefined) => {
+                            if (!clock) return 0;
+                            const parts = clock.split(':').map(Number);
+                            if (parts.length >= 2) return parts[0] * 60 + parts[1];
+                            return parts[0] || 0;
+                          };
+                          return parseClockSeconds(a.clock) - parseClockSeconds(b.clock);
+                        }).map((event) => {
                           const actionType = event.action_type || 'event';
                           const subType = event.sub_type;
                           const eventDescription = event.description || buildEventDescription(actionType, subType, event.success, event.points);
