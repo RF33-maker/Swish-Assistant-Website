@@ -735,19 +735,19 @@ export default function GamePage() {
             <div className="flex items-center justify-between gap-2 md:gap-8">
               <div className="flex-1 text-center min-w-0">
                 <div className="flex justify-center mb-2 md:mb-3">
-                  <TeamLogo teamName={gameData.awayteam} leagueId={gameData.league_id} size="md" className="md:w-20 md:h-20" />
+                  <TeamLogo teamName={gameData.hometeam} leagueId={gameData.league_id} size="md" className="md:w-20 md:h-20" />
                 </div>
-                <h2 className="text-sm md:text-xl font-bold text-slate-800 dark:text-white md:truncate hidden md:block">{gameData.awayteam}</h2>
-                <h2 className="text-base font-bold text-slate-800 dark:text-white md:hidden">{getTeamAbbr(gameData.awayteam)}</h2>
-                <span className="text-xs text-orange-600 dark:text-orange-400">AWAY</span>
+                <h2 className="text-sm md:text-xl font-bold text-slate-800 dark:text-white md:truncate hidden md:block">{gameData.hometeam}</h2>
+                <h2 className="text-base font-bold text-slate-800 dark:text-white md:hidden">{getTeamAbbr(gameData.hometeam)}</h2>
+                <span className="text-xs text-orange-600 dark:text-orange-400">HOME</span>
               </div>
 
               <div className="flex flex-col items-center flex-shrink-0">
                 {isGamePlayed && homeScore !== null && awayScore !== null ? (
                   <div className="flex items-center gap-2 md:gap-4">
-                    <span className="text-3xl md:text-6xl font-bold text-slate-800 dark:text-white">{awayScore}</span>
-                    <span className="text-xl md:text-2xl text-orange-400">-</span>
                     <span className="text-3xl md:text-6xl font-bold text-slate-800 dark:text-white">{homeScore}</span>
+                    <span className="text-xl md:text-2xl text-orange-400">-</span>
+                    <span className="text-3xl md:text-6xl font-bold text-slate-800 dark:text-white">{awayScore}</span>
                   </div>
                 ) : (
                   <div className="text-center">
@@ -758,11 +758,11 @@ export default function GamePage() {
 
               <div className="flex-1 text-center min-w-0">
                 <div className="flex justify-center mb-2 md:mb-3">
-                  <TeamLogo teamName={gameData.hometeam} leagueId={gameData.league_id} size="md" className="md:w-20 md:h-20" />
+                  <TeamLogo teamName={gameData.awayteam} leagueId={gameData.league_id} size="md" className="md:w-20 md:h-20" />
                 </div>
-                <h2 className="text-sm md:text-xl font-bold text-slate-800 dark:text-white md:truncate hidden md:block">{gameData.hometeam}</h2>
-                <h2 className="text-base font-bold text-slate-800 dark:text-white md:hidden">{getTeamAbbr(gameData.hometeam)}</h2>
-                <span className="text-xs text-orange-600 dark:text-orange-400">HOME</span>
+                <h2 className="text-sm md:text-xl font-bold text-slate-800 dark:text-white md:truncate hidden md:block">{gameData.awayteam}</h2>
+                <h2 className="text-base font-bold text-slate-800 dark:text-white md:hidden">{getTeamAbbr(gameData.awayteam)}</h2>
+                <span className="text-xs text-orange-600 dark:text-orange-400">AWAY</span>
               </div>
             </div>
 
@@ -822,33 +822,6 @@ export default function GamePage() {
                     Recent Form
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                    {/* Away Team Form */}
-                    <div className="bg-white dark:bg-neutral-900 rounded-lg p-3 md:p-4 border border-orange-100 dark:border-neutral-700">
-                      <div className="flex items-center gap-2 mb-3">
-                        <TeamLogo teamName={gameData.awayteam} leagueId={gameData.league_id} size="sm" />
-                        <span className="font-medium text-sm md:text-base text-slate-800 dark:text-white truncate">{gameData.awayteam}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 md:gap-2">
-                        <span className="text-xs text-slate-500 dark:text-slate-400 mr-1 md:mr-2">Last 5:</span>
-                        {awayTeamForm && awayTeamForm.length > 0 ? (
-                          awayTeamForm.map((result, idx) => (
-                            <div
-                              key={idx}
-                              className={`w-7 h-7 md:w-8 md:h-8 rounded-md flex items-center justify-center font-bold text-xs md:text-sm ${
-                                result.won
-                                  ? 'bg-green-500 text-white'
-                                  : 'bg-red-500 text-white'
-                              }`}
-                            >
-                              {result.won ? 'W' : 'L'}
-                            </div>
-                          ))
-                        ) : (
-                          <span className="text-xs text-slate-400 italic">No games yet</span>
-                        )}
-                      </div>
-                    </div>
-
                     {/* Home Team Form */}
                     <div className="bg-white dark:bg-neutral-900 rounded-lg p-3 md:p-4 border border-orange-100 dark:border-neutral-700">
                       <div className="flex items-center gap-2 mb-3">
@@ -875,6 +848,33 @@ export default function GamePage() {
                         )}
                       </div>
                     </div>
+
+                    {/* Away Team Form */}
+                    <div className="bg-white dark:bg-neutral-900 rounded-lg p-3 md:p-4 border border-orange-100 dark:border-neutral-700">
+                      <div className="flex items-center gap-2 mb-3">
+                        <TeamLogo teamName={gameData.awayteam} leagueId={gameData.league_id} size="sm" />
+                        <span className="font-medium text-sm md:text-base text-slate-800 dark:text-white truncate">{gameData.awayteam}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 md:gap-2">
+                        <span className="text-xs text-slate-500 dark:text-slate-400 mr-1 md:mr-2">Last 5:</span>
+                        {awayTeamForm && awayTeamForm.length > 0 ? (
+                          awayTeamForm.map((result, idx) => (
+                            <div
+                              key={idx}
+                              className={`w-7 h-7 md:w-8 md:h-8 rounded-md flex items-center justify-center font-bold text-xs md:text-sm ${
+                                result.won
+                                  ? 'bg-green-500 text-white'
+                                  : 'bg-red-500 text-white'
+                              }`}
+                            >
+                              {result.won ? 'W' : 'L'}
+                            </div>
+                          ))
+                        ) : (
+                          <span className="text-xs text-slate-400 italic">No games yet</span>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -885,14 +885,14 @@ export default function GamePage() {
                     Players to Watch
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-                    {/* Away Team Top Players */}
+                    {/* Home Team Top Players */}
                     <div className="space-y-2 md:space-y-3">
                       <div className="flex items-center gap-2 mb-2 pb-2 border-b border-orange-200 dark:border-neutral-600">
-                        <TeamLogo teamName={gameData.awayteam} leagueId={gameData.league_id} size="sm" />
-                        <span className="font-medium text-sm md:text-base text-slate-800 dark:text-white truncate">{gameData.awayteam}</span>
+                        <TeamLogo teamName={gameData.hometeam} leagueId={gameData.league_id} size="sm" />
+                        <span className="font-medium text-sm md:text-base text-slate-800 dark:text-white truncate">{gameData.hometeam}</span>
                       </div>
-                      {awayTeamRoster && awayTeamRoster.length > 0 ? (
-                        awayTeamRoster.map((player, idx) => (
+                      {homeTeamRoster && homeTeamRoster.length > 0 ? (
+                        homeTeamRoster.map((player, idx) => (
                           <div key={idx} className="bg-white dark:bg-neutral-900 rounded-lg p-2.5 md:p-3 flex items-center justify-between border border-orange-100 dark:border-neutral-700">
                             <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                               {player.photoUrl ? (
@@ -932,14 +932,14 @@ export default function GamePage() {
                       )}
                     </div>
 
-                    {/* Home Team Top Players */}
+                    {/* Away Team Top Players */}
                     <div className="space-y-2 md:space-y-3">
                       <div className="flex items-center gap-2 mb-2 pb-2 border-b border-orange-200 dark:border-neutral-600">
-                        <TeamLogo teamName={gameData.hometeam} leagueId={gameData.league_id} size="sm" />
-                        <span className="font-medium text-sm md:text-base text-slate-800 dark:text-white truncate">{gameData.hometeam}</span>
+                        <TeamLogo teamName={gameData.awayteam} leagueId={gameData.league_id} size="sm" />
+                        <span className="font-medium text-sm md:text-base text-slate-800 dark:text-white truncate">{gameData.awayteam}</span>
                       </div>
-                      {homeTeamRoster && homeTeamRoster.length > 0 ? (
-                        homeTeamRoster.map((player, idx) => (
+                      {awayTeamRoster && awayTeamRoster.length > 0 ? (
+                        awayTeamRoster.map((player, idx) => (
                           <div key={idx} className="bg-white dark:bg-neutral-900 rounded-lg p-2.5 md:p-3 flex items-center justify-between border border-orange-100 dark:border-neutral-700">
                             <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
                               {player.photoUrl ? (
@@ -1006,62 +1006,6 @@ export default function GamePage() {
                     <>
                       <div className="bg-white dark:bg-neutral-800 rounded-lg overflow-hidden border border-orange-100 dark:border-neutral-700">
                         <div className="bg-orange-500 px-4 py-3 flex items-center gap-3 text-white">
-                          <TeamLogo teamName={gameData.awayteam} leagueId={gameData.league_id} size="sm" />
-                          <h4 className="font-semibold">{gameData.awayteam}</h4>
-                          {awayScore !== null && <span className="ml-auto text-2xl font-bold">{awayScore}</span>}
-                        </div>
-                        {awayPlayerStats.length > 0 ? (
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                              <thead className="bg-orange-50 dark:bg-neutral-900 text-slate-600 dark:text-slate-400">
-                                <tr>
-                                  <th className="text-left py-2 px-3 sticky left-0 bg-orange-50 dark:bg-neutral-900">Player</th>
-                                  <th className="text-center py-2 px-2">MIN</th>
-                                  <th className="text-center py-2 px-2">PTS</th>
-                                  <th className="text-center py-2 px-2">REB</th>
-                                  <th className="text-center py-2 px-2">AST</th>
-                                  <th className="text-center py-2 px-2">STL</th>
-                                  <th className="text-center py-2 px-2">BLK</th>
-                                  <th className="text-center py-2 px-2">TO</th>
-                                  <th className="text-center py-2 px-2">FG</th>
-                                  <th className="text-center py-2 px-2">3PT</th>
-                                  <th className="text-center py-2 px-2">FT</th>
-                                </tr>
-                              </thead>
-                              <tbody className="text-slate-800 dark:text-slate-200">
-                                {awayPlayerStats.map((player, idx) => (
-                                  <tr key={idx} className="border-t border-orange-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800">
-                                    <td className="py-2 px-3 sticky left-0 bg-white dark:bg-neutral-800 font-medium whitespace-nowrap">
-                                      {player.firstname} {player.familyname}
-                                    </td>
-                                    <td className="text-center py-2 px-2 text-slate-500">{parseMinutes(player.sminutes)}</td>
-                                    <td className="text-center py-2 px-2 font-semibold text-orange-500">{player.spoints || 0}</td>
-                                    <td className="text-center py-2 px-2">{player.sreboundstotal || 0}</td>
-                                    <td className="text-center py-2 px-2">{player.sassists || 0}</td>
-                                    <td className="text-center py-2 px-2 text-slate-500">{player.ssteals || 0}</td>
-                                    <td className="text-center py-2 px-2 text-slate-500">{player.sblocks || 0}</td>
-                                    <td className="text-center py-2 px-2 text-slate-500">{player.sturnovers || 0}</td>
-                                    <td className="text-center py-2 px-2 text-slate-500 whitespace-nowrap">
-                                      {player.sfieldgoalsmade || 0}/{player.sfieldgoalsattempted || 0}
-                                    </td>
-                                    <td className="text-center py-2 px-2 text-slate-500 whitespace-nowrap">
-                                      {player.sthreepointersmade || 0}/{player.sthreepointersattempted || 0}
-                                    </td>
-                                    <td className="text-center py-2 px-2 text-slate-500 whitespace-nowrap">
-                                      {player.sfreethrowsmade || 0}/{player.sfreethrowsattempted || 0}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        ) : (
-                          <p className="p-4 text-slate-500 text-center italic">No player stats available</p>
-                        )}
-                      </div>
-
-                      <div className="bg-white dark:bg-neutral-800 rounded-lg overflow-hidden border border-orange-100 dark:border-neutral-700">
-                        <div className="bg-orange-500 px-4 py-3 flex items-center gap-3 text-white">
                           <TeamLogo teamName={gameData.hometeam} leagueId={gameData.league_id} size="sm" />
                           <h4 className="font-semibold">{gameData.hometeam}</h4>
                           {homeScore !== null && <span className="ml-auto text-2xl font-bold">{homeScore}</span>}
@@ -1115,6 +1059,62 @@ export default function GamePage() {
                           <p className="p-4 text-slate-500 text-center italic">No player stats available</p>
                         )}
                       </div>
+
+                      <div className="bg-white dark:bg-neutral-800 rounded-lg overflow-hidden border border-orange-100 dark:border-neutral-700">
+                        <div className="bg-orange-500 px-4 py-3 flex items-center gap-3 text-white">
+                          <TeamLogo teamName={gameData.awayteam} leagueId={gameData.league_id} size="sm" />
+                          <h4 className="font-semibold">{gameData.awayteam}</h4>
+                          {awayScore !== null && <span className="ml-auto text-2xl font-bold">{awayScore}</span>}
+                        </div>
+                        {awayPlayerStats.length > 0 ? (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead className="bg-orange-50 dark:bg-neutral-900 text-slate-600 dark:text-slate-400">
+                                <tr>
+                                  <th className="text-left py-2 px-3 sticky left-0 bg-orange-50 dark:bg-neutral-900">Player</th>
+                                  <th className="text-center py-2 px-2">MIN</th>
+                                  <th className="text-center py-2 px-2">PTS</th>
+                                  <th className="text-center py-2 px-2">REB</th>
+                                  <th className="text-center py-2 px-2">AST</th>
+                                  <th className="text-center py-2 px-2">STL</th>
+                                  <th className="text-center py-2 px-2">BLK</th>
+                                  <th className="text-center py-2 px-2">TO</th>
+                                  <th className="text-center py-2 px-2">FG</th>
+                                  <th className="text-center py-2 px-2">3PT</th>
+                                  <th className="text-center py-2 px-2">FT</th>
+                                </tr>
+                              </thead>
+                              <tbody className="text-slate-800 dark:text-slate-200">
+                                {awayPlayerStats.map((player, idx) => (
+                                  <tr key={idx} className="border-t border-orange-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800">
+                                    <td className="py-2 px-3 sticky left-0 bg-white dark:bg-neutral-800 font-medium whitespace-nowrap">
+                                      {player.firstname} {player.familyname}
+                                    </td>
+                                    <td className="text-center py-2 px-2 text-slate-500">{parseMinutes(player.sminutes)}</td>
+                                    <td className="text-center py-2 px-2 font-semibold text-orange-500">{player.spoints || 0}</td>
+                                    <td className="text-center py-2 px-2">{player.sreboundstotal || 0}</td>
+                                    <td className="text-center py-2 px-2">{player.sassists || 0}</td>
+                                    <td className="text-center py-2 px-2 text-slate-500">{player.ssteals || 0}</td>
+                                    <td className="text-center py-2 px-2 text-slate-500">{player.sblocks || 0}</td>
+                                    <td className="text-center py-2 px-2 text-slate-500">{player.sturnovers || 0}</td>
+                                    <td className="text-center py-2 px-2 text-slate-500 whitespace-nowrap">
+                                      {player.sfieldgoalsmade || 0}/{player.sfieldgoalsattempted || 0}
+                                    </td>
+                                    <td className="text-center py-2 px-2 text-slate-500 whitespace-nowrap">
+                                      {player.sthreepointersmade || 0}/{player.sthreepointersattempted || 0}
+                                    </td>
+                                    <td className="text-center py-2 px-2 text-slate-500 whitespace-nowrap">
+                                      {player.sfreethrowsmade || 0}/{player.sfreethrowsattempted || 0}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : (
+                          <p className="p-4 text-slate-500 text-center italic">No player stats available</p>
+                        )}
+                      </div>
                     </>
                   )}
                 </TabsContent>
@@ -1124,59 +1124,59 @@ export default function GamePage() {
                     {teamStats && teamStats.length >= 2 ? (
                       <div className="grid grid-cols-3 gap-4 text-center text-slate-800 dark:text-slate-200">
                         <div className="font-semibold text-orange-600 dark:text-orange-400">
-                          {gameData.awayteam?.split(' ').slice(-1)[0]}
+                          {getTeamAbbr(gameData.hometeam)}
                         </div>
                         <div className="text-slate-500">Stat</div>
                         <div className="font-semibold text-orange-600 dark:text-orange-400">
-                          {gameData.hometeam?.split(' ').slice(-1)[0]}
+                          {getTeamAbbr(gameData.awayteam)}
                         </div>
 
-                        <div className="text-2xl font-bold">{awayTeamStats?.tot_spoints || 0}</div>
-                        <div className="text-slate-500">Points</div>
                         <div className="text-2xl font-bold">{homeTeamStats?.tot_spoints || 0}</div>
+                        <div className="text-slate-500">Points</div>
+                        <div className="text-2xl font-bold">{awayTeamStats?.tot_spoints || 0}</div>
 
-                        <div>{awayTeamStats?.tot_sreboundstotal || 0}</div>
-                        <div className="text-slate-500">Rebounds</div>
                         <div>{homeTeamStats?.tot_sreboundstotal || 0}</div>
+                        <div className="text-slate-500">Rebounds</div>
+                        <div>{awayTeamStats?.tot_sreboundstotal || 0}</div>
 
-                        <div>{awayTeamStats?.tot_sassists || 0}</div>
-                        <div className="text-slate-500">Assists</div>
                         <div>{homeTeamStats?.tot_sassists || 0}</div>
+                        <div className="text-slate-500">Assists</div>
+                        <div>{awayTeamStats?.tot_sassists || 0}</div>
 
-                        <div>{awayTeamStats?.tot_ssteals || 0}</div>
-                        <div className="text-slate-500">Steals</div>
                         <div>{homeTeamStats?.tot_ssteals || 0}</div>
+                        <div className="text-slate-500">Steals</div>
+                        <div>{awayTeamStats?.tot_ssteals || 0}</div>
 
-                        <div>{awayTeamStats?.tot_sblocks || 0}</div>
-                        <div className="text-slate-500">Blocks</div>
                         <div>{homeTeamStats?.tot_sblocks || 0}</div>
+                        <div className="text-slate-500">Blocks</div>
+                        <div>{awayTeamStats?.tot_sblocks || 0}</div>
 
-                        <div>{awayTeamStats?.tot_sturnovers || 0}</div>
-                        <div className="text-slate-500">Turnovers</div>
                         <div>{homeTeamStats?.tot_sturnovers || 0}</div>
+                        <div className="text-slate-500">Turnovers</div>
+                        <div>{awayTeamStats?.tot_sturnovers || 0}</div>
 
-                        <div className="whitespace-nowrap">
-                          {awayTeamStats?.tot_sfieldgoalsmade || 0}/{awayTeamStats?.tot_sfieldgoalsattempted || 0}
-                        </div>
-                        <div className="text-slate-500">FG</div>
                         <div className="whitespace-nowrap">
                           {homeTeamStats?.tot_sfieldgoalsmade || 0}/{homeTeamStats?.tot_sfieldgoalsattempted || 0}
                         </div>
-
+                        <div className="text-slate-500">FG</div>
                         <div className="whitespace-nowrap">
-                          {awayTeamStats?.tot_sthreepointersmade || 0}/{awayTeamStats?.tot_sthreepointersattempted || 0}
+                          {awayTeamStats?.tot_sfieldgoalsmade || 0}/{awayTeamStats?.tot_sfieldgoalsattempted || 0}
                         </div>
-                        <div className="text-slate-500">3PT</div>
+
                         <div className="whitespace-nowrap">
                           {homeTeamStats?.tot_sthreepointersmade || 0}/{homeTeamStats?.tot_sthreepointersattempted || 0}
                         </div>
+                        <div className="text-slate-500">3PT</div>
+                        <div className="whitespace-nowrap">
+                          {awayTeamStats?.tot_sthreepointersmade || 0}/{awayTeamStats?.tot_sthreepointersattempted || 0}
+                        </div>
 
                         <div className="whitespace-nowrap">
-                          {awayTeamStats?.tot_sfreethrowsmade || 0}/{awayTeamStats?.tot_sfreethrowsattempted || 0}
+                          {homeTeamStats?.tot_sfreethrowsmade || 0}/{homeTeamStats?.tot_sfreethrowsattempted || 0}
                         </div>
                         <div className="text-slate-500">FT</div>
                         <div className="whitespace-nowrap">
-                          {homeTeamStats?.tot_sfreethrowsmade || 0}/{homeTeamStats?.tot_sfreethrowsattempted || 0}
+                          {awayTeamStats?.tot_sfreethrowsmade || 0}/{awayTeamStats?.tot_sfreethrowsattempted || 0}
                         </div>
                       </div>
                     ) : (
