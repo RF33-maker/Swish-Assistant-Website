@@ -999,6 +999,74 @@ export default function GamePage() {
 
                 <TabsContent value="game">
                   <div className="space-y-4">
+                    {(() => {
+                      const quarterScores: { period: number; home: number; away: number }[] = [];
+                      if (liveEvents && liveEvents.length > 0) {
+                        const periods = Array.from(new Set(liveEvents.map(e => e.period)));
+                        periods.sort((a, b) => a - b).forEach(period => {
+                          const periodEvents = liveEvents.filter(e => e.period === period && e.scoring);
+                          const home = periodEvents.filter(e => e.team_no === 1).reduce((sum, e) => sum + (e.points || 0), 0);
+                          const away = periodEvents.filter(e => e.team_no === 2).reduce((sum, e) => sum + (e.points || 0), 0);
+                          quarterScores.push({ period, home, away });
+                        });
+                      }
+                      const homeTotal = quarterScores.reduce((s, q) => s + q.home, 0);
+                      const awayTotal = quarterScores.reduce((s, q) => s + q.away, 0);
+
+                      return (
+                        <>
+                          {quarterScores.length > 0 && (
+                            <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
+                              <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3 uppercase tracking-wide">Quarter Scores</h3>
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="text-slate-500 dark:text-slate-400 border-b border-orange-100 dark:border-neutral-700">
+                                    <th className="text-left py-2 px-2 font-medium">Team</th>
+                                    {quarterScores.map(q => (
+                                      <th key={q.period} className="text-center py-2 px-2 font-medium">
+                                        {q.period <= 4 ? `Q${q.period}` : `OT${q.period - 4}`}
+                                      </th>
+                                    ))}
+                                    <th className="text-center py-2 px-2 font-semibold">T</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="text-slate-800 dark:text-slate-200">
+                                  <tr className="border-b border-orange-50 dark:border-neutral-700">
+                                    <td className="py-2 px-2 font-medium flex items-center gap-2">
+                                      <TeamLogo teamName={gameData.hometeam} leagueId={gameData.league_id} size="sm" />
+                                      <span className="hidden sm:inline">{getTeamAbbr(gameData.hometeam)}</span>
+                                    </td>
+                                    {quarterScores.map(q => (
+                                      <td key={q.period} className={`text-center py-2 px-2 ${q.home > q.away ? 'font-bold text-orange-600 dark:text-orange-400' : ''}`}>
+                                        {q.home}
+                                      </td>
+                                    ))}
+                                    <td className={`text-center py-2 px-2 font-bold ${homeTotal > awayTotal ? 'text-orange-600 dark:text-orange-400' : ''}`}>
+                                      {homeTotal}
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td className="py-2 px-2 font-medium flex items-center gap-2">
+                                      <TeamLogo teamName={gameData.awayteam} leagueId={gameData.league_id} size="sm" />
+                                      <span className="hidden sm:inline">{getTeamAbbr(gameData.awayteam)}</span>
+                                    </td>
+                                    {quarterScores.map(q => (
+                                      <td key={q.period} className={`text-center py-2 px-2 ${q.away > q.home ? 'font-bold text-orange-600 dark:text-orange-400' : ''}`}>
+                                        {q.away}
+                                      </td>
+                                    ))}
+                                    <td className={`text-center py-2 px-2 font-bold ${awayTotal > homeTotal ? 'text-orange-600 dark:text-orange-400' : ''}`}>
+                                      {awayTotal}
+                                    </td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+
                     {teamStats && teamStats.length >= 2 ? (
                       <>
                         <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
@@ -1102,6 +1170,34 @@ export default function GamePage() {
                             </div>
                           </div>
                         )}
+
+                        <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
+                          <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3 uppercase tracking-wide">Score Differential</h3>
+                          <div className="py-6 text-center">
+                            <p className="text-xs text-slate-400 dark:text-slate-500 italic">Coming soon</p>
+                          </div>
+                        </div>
+
+                        <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
+                          <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3 uppercase tracking-wide">Runs</h3>
+                          <div className="py-6 text-center">
+                            <p className="text-xs text-slate-400 dark:text-slate-500 italic">Coming soon</p>
+                          </div>
+                        </div>
+
+                        <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
+                          <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3 uppercase tracking-wide">Momentum</h3>
+                          <div className="py-6 text-center">
+                            <p className="text-xs text-slate-400 dark:text-slate-500 italic">Coming soon</p>
+                          </div>
+                        </div>
+
+                        <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
+                          <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3 uppercase tracking-wide">Biggest Lead Changes</h3>
+                          <div className="py-6 text-center">
+                            <p className="text-xs text-slate-400 dark:text-slate-500 italic">Coming soon</p>
+                          </div>
+                        </div>
                       </>
                     ) : (
                       <div className="bg-white dark:bg-neutral-800 rounded-lg p-8 border border-orange-100 dark:border-neutral-700 text-center">
