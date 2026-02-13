@@ -173,6 +173,11 @@ function parseMinutes(minutesStr: string | null | undefined): string {
   return `${wholeMins}:${secs.toString().padStart(2, '0')}`;
 }
 
+function getTeamShortName(teamName: string): string {
+  const words = teamName.trim().split(/\s+/);
+  return words.length > 1 ? words[words.length - 1] : teamName;
+}
+
 function getTeamAbbr(teamName: string): string {
   if (!teamName) return '';
   const words = teamName.trim().split(/\s+/);
@@ -393,7 +398,7 @@ export default function GamePage() {
       }
       return data;
     },
-    enabled: !!gameData && isScheduled
+    enabled: !!gameData
   });
 
   // Fetch away team ID
@@ -421,7 +426,7 @@ export default function GamePage() {
       }
       return data;
     },
-    enabled: !!gameData && isScheduled
+    enabled: !!gameData
   });
 
   const homeTeamId = homeTeamData?.team_id;
@@ -655,6 +660,52 @@ export default function GamePage() {
     enabled: !!awayTeamId && isScheduled
   });
 
+  const { data: homeTeamRecord } = useQuery({
+    queryKey: ['team-record', gameData?.league_id, homeTeamId, isTestMode],
+    queryFn: async () => {
+      if (!homeTeamId || !gameData) return null;
+      const { data, error } = await db
+        .from('team_stats')
+        .select('numeric_id, won')
+        .eq('league_id', gameData.league_id)
+        .eq('team_id', homeTeamId);
+      if (error || !data) return null;
+      const uniqueGames = new Map<string, boolean>();
+      for (const g of data) {
+        if (g.numeric_id && !uniqueGames.has(g.numeric_id)) {
+          uniqueGames.set(g.numeric_id, g.won || false);
+        }
+      }
+      const wins = Array.from(uniqueGames.values()).filter(w => w).length;
+      const losses = uniqueGames.size - wins;
+      return { wins, losses };
+    },
+    enabled: !!homeTeamId && !!gameData
+  });
+
+  const { data: awayTeamRecord } = useQuery({
+    queryKey: ['team-record', gameData?.league_id, awayTeamId, isTestMode],
+    queryFn: async () => {
+      if (!awayTeamId || !gameData) return null;
+      const gamesWithId = await db
+        .from('team_stats')
+        .select('numeric_id, won')
+        .eq('league_id', gameData.league_id)
+        .eq('team_id', awayTeamId);
+      if (gamesWithId.error || !gamesWithId.data) return null;
+      const uniqueGames = new Map<string, boolean>();
+      for (const g of gamesWithId.data) {
+        if (g.numeric_id && !uniqueGames.has(g.numeric_id)) {
+          uniqueGames.set(g.numeric_id, g.won || false);
+        }
+      }
+      const wins = Array.from(uniqueGames.values()).filter(w => w).length;
+      const losses = uniqueGames.size - wins;
+      return { wins, losses };
+    },
+    enabled: !!awayTeamId && !!gameData
+  });
+
   if (gameLoading) {
     return (
       <div className="min-h-screen bg-[#fffaf1] dark:bg-neutral-950">
@@ -738,7 +789,10 @@ export default function GamePage() {
                   <TeamLogo teamName={gameData.hometeam} leagueId={gameData.league_id} size="md" className="md:w-20 md:h-20" />
                 </div>
                 <h2 className="text-sm md:text-xl font-bold text-slate-800 dark:text-white md:truncate hidden md:block">{gameData.hometeam}</h2>
-                <h2 className="text-base font-bold text-slate-800 dark:text-white md:hidden">{getTeamAbbr(gameData.hometeam)}</h2>
+                <h2 className="text-base font-bold text-slate-800 dark:text-white md:hidden">{getTeamShortName(gameData.hometeam)}</h2>
+                {homeTeamRecord && (
+                  <span className="text-xs text-slate-500 dark:text-slate-400">{homeTeamRecord.wins}-{homeTeamRecord.losses}</span>
+                )}
                 <span className="text-xs text-orange-600 dark:text-orange-400">HOME</span>
               </div>
 
@@ -761,7 +815,10 @@ export default function GamePage() {
                   <TeamLogo teamName={gameData.awayteam} leagueId={gameData.league_id} size="md" className="md:w-20 md:h-20" />
                 </div>
                 <h2 className="text-sm md:text-xl font-bold text-slate-800 dark:text-white md:truncate hidden md:block">{gameData.awayteam}</h2>
-                <h2 className="text-base font-bold text-slate-800 dark:text-white md:hidden">{getTeamAbbr(gameData.awayteam)}</h2>
+                <h2 className="text-base font-bold text-slate-800 dark:text-white md:hidden">{getTeamShortName(gameData.awayteam)}</h2>
+                {awayTeamRecord && (
+                  <span className="text-xs text-slate-500 dark:text-slate-400">{awayTeamRecord.wins}-{awayTeamRecord.losses}</span>
+                )}
                 <span className="text-xs text-orange-600 dark:text-orange-400">AWAY</span>
               </div>
             </div>
