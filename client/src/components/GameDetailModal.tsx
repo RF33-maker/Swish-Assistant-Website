@@ -105,7 +105,6 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
       setTeamStatsFromDb([]);
       
       try {
-        console.log("🎮 Fetching game details for gameId:", gameId);
         
         // Determine if gameId is numeric_id or game_key based on format
         const isGameKey = /^[A-Z0-9]{12,}$/.test(gameId); // game_key format check
@@ -131,7 +130,6 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
           teamError = result.error;
         }
           
-        console.log("🏀 Team stats query result:", { teamError, teamStatsData, count: teamStatsData?.length });
 
         let teamsInfo: { [key: string]: number } = {};
         let gameDate = new Date().toISOString();
@@ -152,7 +150,6 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
           if (teamStatsData[0]?.league_id) {
             setLeagueId(teamStatsData[0].league_id);
           }
-          console.log("🏆 Teams from team_stats:", Object.keys(teamsInfo), "Scores:", teamsInfo);
         }
         
         // Then get player stats with full names from players table
@@ -168,7 +165,6 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
         
         const { data: stats, error } = await statsQuery.order("spoints", { ascending: false });
 
-        console.log("📊 Player stats query result:", { error, stats, count: stats?.length });
 
         if (error) {
           console.error("Error fetching game details:", error);
@@ -176,7 +172,6 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
         }
 
         if (stats && stats.length > 0) {
-          console.log("📊 Sample player stat record:", stats[0]);
           
           // Process stats to use full names and proper team assignments
           const processedStats = stats.map(stat => ({
@@ -194,7 +189,6 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
           
           // Get unique teams from the processed stats
           const teamsFromStats = Array.from(new Set(processedStats.map(stat => stat.team).filter(Boolean)));
-          console.log("🏀 Teams from player stats:", teamsFromStats);
           
           // Update teams info if we have better data from stats
           if (teamsFromStats.length > 0) {
@@ -221,7 +215,6 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
             }
           }
           
-          console.log("✅ Final processed stats:", processedStats.slice(0, 2));
           setGameStats(processedStats);
         }
       } catch (error) {
@@ -258,7 +251,6 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
         fetchError = error;
         console.error('Error fetching summaries:', error);
       } else if (summaries && summaries.length > 0) {
-        console.log('Available summaries:', summaries);
         
         // Extract date and teams from gameId (format: "2025-07-11_CRI_vs_FRE")
         const parts = gameId.split('_');
@@ -266,11 +258,9 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
         const team1Code = parts[1]; // "CRI"  
         const team3Code = parts[3]; // "FRE"
         
-        console.log(`Looking for game on ${datePart} with teams containing: ${team1Code}, ${team3Code}`);
         
         // Debug: show what we're looking for vs what's available
         const availableGamesOnDate = summaries.filter(s => s.ref_id && s.ref_id.includes(datePart));
-        console.log(`Games available on ${datePart}:`, availableGamesOnDate.map(s => s.ref_id));
         
         // Find summary that matches the date and potentially team codes
         existingSummary = summaries.find(summary => {
@@ -300,9 +290,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
         });
         
         if (existingSummary) {
-          console.log('Found matching summary:', existingSummary);
         } else {
-          console.log('No matching summary found for date and teams');
         }
       }
 
@@ -312,7 +300,6 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
       }
 
       if (existingSummary && !fetchError) {
-        console.log('Found existing summary:', existingSummary);
         // Get the summary content from the database
         const summaryText = existingSummary.content || 
                            'Game summary found but content is empty.';
@@ -325,7 +312,6 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
         }, 1500);
       } else {
         // No summary found
-        console.log('No summary found for game_id:', gameId);
         setTimeout(() => {
           setAiSummary("No AI game summary available for this game yet. Summaries are generated after game completion and may take some time to appear.");
           setShowSummary(true);
@@ -358,14 +344,12 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
       
       if (gameError || !gameData?.game_key) {
         console.error("Error fetching game_key:", gameError);
-        console.log(`⚠️ No game_key found for numeric_id ${gameId}`);
         setEventsLoaded(true); // Mark as loaded to prevent retry loop
         setEventsLoading(false);
         return;
       }
       
       const gameKey = gameData.game_key;
-      console.log(`🔑 Found game_key: ${gameKey} for numeric_id: ${gameId}`);
       
       // Now fetch live_events using the game_key
       const { data: events, error } = await supabase
@@ -380,7 +364,6 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
       }
       
       if (events) {
-        console.log(`📊 Loaded ${events.length} live events for game_key ${gameKey} (numeric_id: ${gameId})`);
         setLiveEvents(events);
         setEventsLoaded(true);
       }
@@ -434,7 +417,6 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
             cachedEntry.version === CACHE_VERSION &&
             Date.now() - cachedEntry.timestamp < 7 * 24 * 60 * 60 * 1000) {
           colors[teamName] = cachedEntry.colors;
-          console.log(`✅ Using cached colors for ${teamName}`);
           continue;
         }
         
@@ -458,7 +440,6 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
               timestamp: Date.now(),
               version: CACHE_VERSION,
             };
-            console.log(`🎨 Extracted and cached colors for ${teamName}:`, extractedColors);
             break;
           }
         }
@@ -475,9 +456,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
       setTeamColors(colors);
       
       if (Object.keys(colors).length === 0) {
-        console.log("⚠️ No team colors extracted, using default theme");
       } else {
-        console.log("✅ Team colors loaded:", Object.keys(colors));
       }
     };
     

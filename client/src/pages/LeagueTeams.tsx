@@ -116,7 +116,6 @@ export default function LeagueTeams() {
         }
 
         if (!allTeams || allTeams.length === 0) {
-          console.log("No teams found for this league");
           setTeams([]);
           setLoading(false);
           return;

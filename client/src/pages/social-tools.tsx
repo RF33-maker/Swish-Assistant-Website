@@ -257,7 +257,6 @@ export default function SocialToolsPage() {
       .order("name");
     
     if (!error && data) {
-      console.log("[SocialTools] Loaded leagues:", data.length, data);
       setLeagues(data);
     } else {
       console.error("[SocialTools] Error loading leagues:", error);
@@ -306,9 +305,6 @@ export default function SocialToolsPage() {
       const numericIds = Array.from(new Set((playerStats || []).map((s: any) => s.numeric_id).filter(Boolean)));
       const gameKeys = Array.from(new Set((playerStats || []).map((s: any) => s.game_key).filter(Boolean)));
       
-      console.log('[SocialTools] numericIds:', numericIds.slice(0, 5));
-      console.log('[SocialTools] gameKeys:', gameKeys.slice(0, 5));
-      
       let teamStatsMap: Record<string, any[]> = {};
       
       if (numericIds.length > 0) {
@@ -316,8 +312,6 @@ export default function SocialToolsPage() {
           .from("team_stats")
           .select("numeric_id, game_key, name, tot_spoints, league_id")
           .in("numeric_id", numericIds);
-        console.log('[SocialTools] teamStats by numericId:', teamStats?.length, 'error:', teamError);
-        
         (teamStats || []).forEach((ts: any) => {
           if (ts.numeric_id) {
             if (!teamStatsMap[ts.numeric_id]) {
@@ -370,8 +364,6 @@ export default function SocialToolsPage() {
         const opponentName = opponentStats?.name || 
           (gameTeams.length === 2 ? gameTeams.find((t: any) => t !== playerTeamStats)?.name : null) || 
           'Unknown';
-        
-        console.log(`[SocialTools] Player: ${stat.players?.full_name}, Team: ${playerTeamName}, GameTeams:`, gameTeams.map((t: any) => t.name), 'Opponent:', opponentName);
         
         return {
           id: stat.id,

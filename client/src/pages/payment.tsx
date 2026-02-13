@@ -82,8 +82,6 @@ export default function PaymentPage() {
       // const stripe = await loadStripe('your_stripe_publishable_key');
       // stripe.redirectToCheckout({ sessionId });
       
-      console.log('Redirect to Stripe checkout with sessionId:', sessionId);
-      
     } catch (error) {
       console.error('Payment error:', error);
     } finally {

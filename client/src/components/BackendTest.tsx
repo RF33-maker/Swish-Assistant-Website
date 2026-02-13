@@ -17,12 +17,9 @@ export default function BackendTest() {
   const testHealthEndpoint = async () => {
     setIsTestingHealth(true);
     try {
-      console.log('Testing backend health at:', `${import.meta.env.VITE_BACKEND_URL}/health`);
-      
       const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/health`);
       const data = await response.json();
       
-      console.log('Health response:', data);
       setResults(prev => ({ ...prev, health: data }));
       
       toast({
@@ -46,8 +43,6 @@ export default function BackendTest() {
   const testChatEndpoint = async () => {
     setIsTestingChat(true);
     try {
-      console.log('Testing chat endpoint at:', `${import.meta.env.VITE_BACKEND_URL}/api/chat/league`);
-      
       const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/chat/league`, {
         method: 'POST',
         headers: {
@@ -62,7 +57,6 @@ export default function BackendTest() {
 
       const data = await response.json();
       
-      console.log('Chat response:', data);
       setResults(prev => ({ ...prev, chat: data }));
       
       toast({

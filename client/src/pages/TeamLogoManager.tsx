@@ -97,12 +97,7 @@ export default function TeamLogoManager() {
           });
         }
 
-        console.log("Fetching teams for league:", leagueData.league_id);
-        console.log("Team query result:", { error: teamsError || statsError || scheduleError, data: Array.from(allTeamNames) });
-        
         const uniqueTeams = Array.from(allTeamNames).sort();
-        console.log("Unique teams extracted:", uniqueTeams);
-        
         // Fetch existing team logos from the team_logos table (authoritative source)
         const { data: storedLogos, error: logoError } = await supabase
           .from("team_logos")
@@ -115,16 +110,13 @@ export default function TeamLogoManager() {
           storedLogos.forEach((logo: any) => {
             logoMap[logo.team_name] = logo.logo_url;
           });
-          console.log("Team logos from database:", logoMap);
         }
         
         // For teams not in the database, check storage directly with all extensions
-        console.log("Checking storage for teams without database entries...");
         const extensions = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
         
         for (const teamName of uniqueTeams) {
           if (logoMap[teamName]) {
-            console.log(`${teamName} already has logo from database`);
             continue; // Skip if already found in database
           }
           
@@ -133,8 +125,6 @@ export default function TeamLogoManager() {
           
           for (const ext of extensions) {
             const fileName = `${leagueData.league_id}_${baseFileName}.${ext}`;
-            console.log(`Checking for logo: ${fileName}`);
-            
             const { data } = supabase.storage
               .from('team-logos')
               .getPublicUrl(fileName);
@@ -143,7 +133,6 @@ export default function TeamLogoManager() {
               const response = await fetch(data.publicUrl, { method: 'HEAD' });
               if (response.ok) {
                 logoMap[teamName] = data.publicUrl;
-                console.log(`Found logo for ${teamName}: ${data.publicUrl}`);
                 foundLogo = true;
                 break;
               }
@@ -152,12 +141,8 @@ export default function TeamLogoManager() {
             }
           }
           
-          if (!foundLogo) {
-            console.log(`No logo found for ${teamName}`);
-          }
         }
         
-        console.log("Team logos loaded:", logoMap);
         setTeamLogos(logoMap);
 
         const teamsWithLogos = uniqueTeams.map(teamName => ({
@@ -202,8 +187,6 @@ export default function TeamLogoManager() {
       if (!response.ok) {
         throw new Error(result.error || 'Failed to delete logo');
       }
-
-      console.log("Logo deletion result:", result);
 
       // Update local state
       setTeamLogos(prev => {

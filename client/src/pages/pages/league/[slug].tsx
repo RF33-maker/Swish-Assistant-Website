@@ -905,9 +905,7 @@ export default function LeaguePage() {
         filtered = allPlayerAverages.filter(player => 
           player.name.toLowerCase().includes(statsSearch.toLowerCase())
         );
-        console.log("🎯 Filtered players:", filtered.length, "matching:", statsSearch);
       } else {
-        console.log("✅ No search term, showing all players");
       }
 
       // Apply sorting based on selected column and direction
@@ -1262,10 +1260,6 @@ export default function LeaguePage() {
           .eq("slug", slug)
           .single();
         
-        console.log("Resolved league from slug:", slug, "→ ID:", data?.league_id);
-        console.log("League data:", data);
-        console.log("Current user:", user);
-        console.log("Fetch error:", error);
 
         if (data) {
           setLeague(data);
@@ -1297,7 +1291,6 @@ export default function LeaguePage() {
           }
           
           setYoutubeUrl(data.youtube_embed_url || "");
-          console.log("Is owner?", ownerStatus, "User ID:", user?.id, "League owner ID:", data.user_id);
           
           // Fetch child competitions if this is a parent league
           const { data: competitions, error: competitionsError } = await supabase
@@ -1410,9 +1403,6 @@ export default function LeaguePage() {
               .select('competitionname, matchtime, hometeam, awayteam, league_id, game_key')
               .eq('league_id', data.league_id);
 
-            console.log("📅 Fetching from game_schedule table for league_id:", data.league_id);
-            console.log("📅 Schedule data:", scheduleData);
-            console.log("📅 Schedule error:", scheduleError);
 
             // Also fetch team_stats to get scores
             const { data: teamStatsForScores, error: teamStatsError } = await supabase
@@ -1515,17 +1505,6 @@ export default function LeaguePage() {
             }
 
             if (scheduleData && !scheduleError) {
-              console.log("📅 Raw schedule data from game_schedule:", scheduleData.length, "records");
-              if (scheduleData.length > 0) {
-                console.log("📅 Sample record:", scheduleData[0]);
-              }
-              
-              // Process the schedule data from game_schedule table
-              // Log the first record to see actual column structure
-              if (scheduleData.length > 0) {
-                console.log('📅 Available columns in game_schedule:', Object.keys(scheduleData[0]));
-              }
-              
               let matchedByKey = 0;
               let matchedByTeamDate = 0;
               let notMatched = 0;
@@ -1617,7 +1596,6 @@ export default function LeaguePage() {
                 };
               }).filter((game) => game.team1 && game.team2);
               
-              console.log("📅 Matching summary - By game_key:", matchedByKey, "By team+date:", matchedByTeamDate, "Not matched:", notMatched);
               
               // Sort games by date (most recent first)
               const sortedGames = games.sort((a, b) => {
@@ -1627,8 +1605,6 @@ export default function LeaguePage() {
                 return dateB - dateA; // Most recent first
               });
               
-              console.log("📅 Processed schedule from game_schedule:", sortedGames.length, "games");
-              console.log("📅 Games with scores:", sortedGames.filter(g => g.team1_score !== undefined).length);
               setSchedule(sortedGames);
             } else if (scheduleError) {
               console.error("📅 Error fetching from game_schedule:", scheduleError);
@@ -1768,13 +1744,11 @@ export default function LeaguePage() {
 
       setUploadingBanner(true);
       try {
-        console.log('Starting banner upload for league:', league.league_id);
         
         // Upload file to Supabase storage
         const fileExt = file.name.split('.').pop();
         const fileName = `${league.league_id}_${Date.now()}.${fileExt}`;
         
-        console.log('Uploading file:', fileName);
         const { data, error: uploadError } = await supabase.storage
           .from('league-banners')
           .upload(fileName, file);
@@ -1785,14 +1759,12 @@ export default function LeaguePage() {
           return;
         }
 
-        console.log('File uploaded successfully:', data);
 
         // Get public URL without cache-busting for database storage
         const { data: { publicUrl } } = supabase.storage
           .from('league-banners')
           .getPublicUrl(fileName);
         
-        console.log('Public URL:', publicUrl);
 
         // First check if banner_url column exists by trying a simple select
         const { data: checkData, error: checkError } = await supabase
@@ -1801,7 +1773,6 @@ export default function LeaguePage() {
           .eq('league_id', league.league_id)
           .single();
         
-        console.log('Column check result:', checkData, checkError);
 
         // Try updating by slug instead of league_id
         const { data: updateData, error: updateError } = await supabase
@@ -1816,12 +1787,10 @@ export default function LeaguePage() {
           return;
         }
 
-        console.log('Database updated successfully:', updateData);
 
         // Update local state immediately with the new banner URL
         const updatedLeagueData = { ...league, banner_url: publicUrl };
         setLeague(updatedLeagueData);
-        console.log('Updated local league state with banner URL:', publicUrl);
         
         // Force a refetch to ensure the banner persists
         setTimeout(async () => {
@@ -1834,7 +1803,6 @@ export default function LeaguePage() {
           if (fetchError) {
             console.error('Refetch error:', fetchError);
           } else {
-            console.log('Refetched league data:', updatedLeague);
             setLeague(updatedLeague);
           }
         }, 1000);
@@ -1960,7 +1928,6 @@ export default function LeaguePage() {
     const getInstagramEmbedUrl = (url: string) => {
       if (!url) return null;
       
-      console.log('Processing Instagram URL:', url);
       
       // Clean the URL by removing query parameters
       const cleanUrl = url.split('?')[0];
@@ -1971,7 +1938,6 @@ export default function LeaguePage() {
       
       if (profileMatch) {
         const embedUrl = `https://www.instagram.com/${profileMatch[1]}/embed`;
-        console.log('Generated profile embed URL:', embedUrl);
         return embedUrl;
       }
       
@@ -1981,11 +1947,9 @@ export default function LeaguePage() {
       
       if (postMatch) {
         const embedUrl = `https://www.instagram.com/p/${postMatch[1]}/embed`;
-        console.log('Generated post embed URL:', embedUrl);
         return embedUrl;
       }
       
-      console.log('No match found for URL:', url);
       return null;
     };
 
@@ -3107,10 +3071,7 @@ export default function LeaguePage() {
                 <input
                   type="file"
                   accept="image/*"
-                  onChange={(e) => {
-                    console.log('File input changed:', e.target.files?.[0]);
-                    handleBannerUpload(e);
-                  }}
+                  onChange={handleBannerUpload}
                   className="hidden"
                   id="banner-upload"
                   disabled={uploadingBanner}
@@ -3120,7 +3081,6 @@ export default function LeaguePage() {
                   className={`inline-flex items-center gap-2 px-4 py-2 bg-white/90 hover:bg-white text-slate-700 text-sm font-medium rounded-lg cursor-pointer transition-colors ${
                     uploadingBanner ? 'opacity-50 cursor-not-allowed' : ''
                   }`}
-                  onClick={() => console.log('Label clicked for banner upload')}
                 >
                   {uploadingBanner ? (
                     <>

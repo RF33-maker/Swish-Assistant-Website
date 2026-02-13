@@ -141,7 +141,6 @@ export async function extractTeamColors(teamName: string, leagueId: string): Pro
   if (cachedEntry && 
       cachedEntry.version === CACHE_VERSION && 
       Date.now() - cachedEntry.timestamp < CACHE_DURATION) {
-    console.log(`🎨 Using cached colors for ${teamName}`);
     return cachedEntry.colors;
   }
   
@@ -177,11 +176,9 @@ export async function extractTeamColors(teamName: string, leagueId: string): Pro
         console.warn("Failed to cache colors:", err);
       }
       
-      console.log(`🎨 Extracted and cached colors for ${teamName}:`, extractedColors);
       return extractedColors;
     }
   }
   
-  console.log(`🎨 No colors found for ${teamName}, will use defaults`);
   return null;
 }

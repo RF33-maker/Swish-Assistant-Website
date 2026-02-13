@@ -44,7 +44,6 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId, game
   const { data: team1Data } = useQuery({
     queryKey: ['team-lookup', leagueId, game.team1],
     queryFn: async () => {
-      console.log('🔍 Looking up team1 ID for:', game.team1);
       
       // Try exact match first
       let { data, error } = await supabase
@@ -57,7 +56,6 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId, game
       // If no exact match, try partial match
       if (error || !data) {
         const baseTeamName = game.team1.split(' Senior ')[0].split(' Men')[0];
-        console.log('🔍 Trying partial match for team1:', baseTeamName);
         
         const { data: partialData, error: partialError } = await supabase
           .from('teams')
@@ -71,7 +69,6 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId, game
         error = partialError;
       }
       
-      console.log('✅ Team1 lookup result:', data);
       return data;
     },
     enabled: isOpen
@@ -80,7 +77,6 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId, game
   const { data: team2Data } = useQuery({
     queryKey: ['team-lookup', leagueId, game.team2],
     queryFn: async () => {
-      console.log('🔍 Looking up team2 ID for:', game.team2);
       
       // Try exact match first
       let { data, error } = await supabase
@@ -93,7 +89,6 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId, game
       // If no exact match, try partial match
       if (error || !data) {
         const baseTeamName = game.team2.split(' Senior ')[0].split(' Men')[0];
-        console.log('🔍 Trying partial match for team2:', baseTeamName);
         
         const { data: partialData, error: partialError } = await supabase
           .from('teams')
@@ -107,7 +102,6 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId, game
         error = partialError;
       }
       
-      console.log('✅ Team2 lookup result:', data);
       return data;
     },
     enabled: isOpen
@@ -122,7 +116,6 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId, game
     queryFn: async () => {
       if (!team1Id) return [];
       
-      console.log('🏀 Fetching game results for team1_id:', team1Id);
       
       const { data: teamGames, error } = await supabase
         .from('team_stats')
@@ -164,7 +157,6 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId, game
         if (results.length >= 5) break;
       }
 
-      console.log('✅ Team1 game results:', results);
       return results;
     },
     enabled: isOpen && !!team1Id
@@ -176,7 +168,6 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId, game
     queryFn: async () => {
       if (!team2Id) return [];
       
-      console.log('🏀 Fetching game results for team2_id:', team2Id);
       
       const { data: teamGames, error } = await supabase
         .from('team_stats')
@@ -218,7 +209,6 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId, game
         if (results.length >= 5) break;
       }
 
-      console.log('✅ Team2 game results:', results);
       return results;
     },
     enabled: isOpen && !!team2Id
@@ -239,7 +229,6 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId, game
     queryFn: async () => {
       if (!team1Id) return [];
       
-      console.log('📊 Fetching roster for team1_id:', team1Id);
       
       const { data, error } = await supabase
         .from('player_stats')
@@ -307,7 +296,6 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId, game
         }))
         .sort((a, b) => parseFloat(b.ppg) - parseFloat(a.ppg));
       
-      console.log('✅ Team1 roster:', roster.length, 'players');
       return roster;
     },
     enabled: isOpen && !!team1Id
@@ -319,7 +307,6 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId, game
     queryFn: async () => {
       if (!team2Id) return [];
       
-      console.log('📊 Fetching roster for team2_id:', team2Id);
       
       const { data, error } = await supabase
         .from('player_stats')
@@ -387,7 +374,6 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId, game
         }))
         .sort((a, b) => parseFloat(b.ppg) - parseFloat(a.ppg));
       
-      console.log('✅ Team2 roster:', roster.length, 'players');
       return roster;
     },
     enabled: isOpen && !!team2Id
@@ -397,16 +383,6 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId, game
   const team1FullRoster = team1Roster?.slice(3) || [];
   const team2Top3 = team2Roster?.slice(0, 3) || [];
   const team2FullRoster = team2Roster?.slice(3) || [];
-
-  // Debug logging
-  if (isOpen) {
-    console.log('🎮 Game Preview Modal opened for:', game.team1, 'vs', game.team2);
-    console.log('🔑 Team IDs:', { team1Id, team2Id });
-    console.log('📊 Team1 roster data:', team1Roster?.length, 'players');
-    console.log('📊 Team2 roster data:', team2Roster?.length, 'players');
-    console.log('🏀 Team1 game results:', team1GameResults?.length, 'games');
-    console.log('🏀 Team2 game results:', team2GameResults?.length, 'games');
-  }
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>

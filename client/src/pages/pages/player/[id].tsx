@@ -96,9 +96,6 @@ export default function PlayerStatsPage() {
   
   const playerSlugOrId = params?.slug;
   
-  console.log('🎯 ROUTE DEBUG - Match:', match);
-  console.log('🎯 ROUTE DEBUG - Params:', params);
-  console.log('🎯 ROUTE DEBUG - Player Slug/ID:', playerSlugOrId);
   const [playerStats, setPlayerStats] = useState<PlayerStat[]>([]);
   const [seasonAverages, setSeasonAverages] = useState<SeasonAverages | null>(null);
   const [playerRankings, setPlayerRankings] = useState<PlayerRankings | null>(null);
@@ -314,22 +311,18 @@ export default function PlayerStatsPage() {
 
   useEffect(() => {
     if (!playerSlugOrId) {
-      console.log('No player slug/ID provided');
       return;
     }
 
-    console.log('🏀 PLAYER PAGE - Starting data fetch for:', playerSlugOrId);
 
     const fetchPlayerData = async () => {
       setLoading(true);
       try {
-        console.log('🔍 Step 1: Fetching initial player record...');
         
         let initialPlayer: any = null;
         const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(playerSlugOrId);
 
         if (isUUID) {
-          console.log('📋 Looking up player by UUID...');
           const { data, error } = await supabase
             .from('players')
             .select('*')
@@ -337,7 +330,6 @@ export default function PlayerStatsPage() {
             .single();
           if (data && !error) initialPlayer = data;
         } else {
-          console.log('📋 Looking up player by slug:', playerSlugOrId);
           const { data, error } = await supabase
             .from('players')
             .select('*')
@@ -347,9 +339,7 @@ export default function PlayerStatsPage() {
           
           // Fallback: If slug not found, try fuzzy matching by name
           if (!initialPlayer) {
-            console.log('📋 Slug not found, trying name-based search...');
             const searchName = slugToName(playerSlugOrId);
-            console.log('📋 Searching for name:', searchName);
             
             // First try a direct ilike search for efficiency
             const { data: directMatch, error: directError } = await supabase
@@ -364,11 +354,9 @@ export default function PlayerStatsPage() {
                 namesMatch(player.full_name, searchName)
               ) || directMatch[0];
               
-              console.log('✅ Found player via direct name search:', matchedPlayer.full_name);
               initialPlayer = matchedPlayer;
             } else {
               // Fallback: fetch all players with higher limit for fuzzy matching
-              console.log('📋 Direct search failed, trying full fuzzy search...');
               const { data: allPlayers, error: allPlayersError } = await supabase
                 .from('players')
                 .select('*')
@@ -381,7 +369,6 @@ export default function PlayerStatsPage() {
                 );
                 
                 if (matchedPlayer) {
-                  console.log('✅ Found player via fuzzy matching:', matchedPlayer.full_name);
                   initialPlayer = matchedPlayer;
                 }
               }
@@ -400,11 +387,9 @@ export default function PlayerStatsPage() {
           return;
         }
 
-        console.log('✅ Found initial player:', initialPlayer.full_name);
 
         // Step 2: Find ALL matching player records using fuzzy matching across ALL teams
         // This catches players who have transferred between teams
-        console.log('🔍 Step 2: Finding all matching player records via fuzzy matching...');
         
         // Search for ALL players with similar names (not just same team) to catch transfers
         const searchTerms = initialPlayer.full_name.split(' ').filter((t: string) => t.length > 2);
@@ -419,7 +404,6 @@ export default function PlayerStatsPage() {
         let allPlayers = [initialPlayer];
         if (!allPlayersError && allPlayersData) {
           allPlayers = allPlayersData;
-          console.log('📋 Found', allPlayers.length, 'players matching search:', searchQuery);
         } else if (allPlayersError) {
           console.error('❌ Error fetching players by name:', allPlayersError);
         }
@@ -429,7 +413,6 @@ export default function PlayerStatsPage() {
           namesMatch(player.full_name, initialPlayer.full_name)
         );
         
-        console.log('🎯 Fuzzy matched', matchingPlayers.length, 'player records across teams');
         
         const matches: PlayerMatch[] = matchingPlayers.map(p => ({
           id: p.id,
@@ -448,11 +431,9 @@ export default function PlayerStatsPage() {
         // Get all unique name variations
         const variations = Array.from(new Set(matches.map(m => m.full_name)));
         setNameVariations(variations);
-        console.log('📝 Name variations found:', variations);
 
         // Use the most complete name as the canonical name
         const canonicalName = getMostCompleteName(variations);
-        console.log('📛 Canonical name:', canonicalName);
 
         // Set player info from initial player
         let playerInfo = {
@@ -468,7 +449,6 @@ export default function PlayerStatsPage() {
 
         // Step 3: Get ALL stats for ALL matching player IDs
         const playerIds = matches.map(m => m.id);
-        console.log('🔍 Step 3: Getting stats for', playerIds.length, 'player IDs...');
         const { data: stats, error: statsError } = await supabase
           .from('player_stats')
           .select('*, players:player_id(full_name, league_id)')
@@ -489,13 +469,9 @@ export default function PlayerStatsPage() {
               leagueMap.set(league.league_id, league.name);
             });
             setLeagueNames(leagueMap);
-            console.log('🏆 Fetched league names:', leagueMap);
           }
         }
 
-        console.log('📊 Step 2 Result - Found', stats?.length || 0, 'stat records');
-        console.log('📊 Stats data sample:', stats?.[0]);
-        console.log('📊 Stats error:', statsError);
 
         if (statsError) {
           console.error('❌ Error fetching player stats:', statsError);
@@ -508,13 +484,11 @@ export default function PlayerStatsPage() {
           return;
         }
 
-        console.log('✅ Step 3: Setting player stats and info...');
         
         // Fetch opponent data using game_key
         let statsWithOpponents = stats || [];
         if (stats && stats.length > 0) {
           const gameKeys = Array.from(new Set(stats.map(stat => stat.game_key).filter(Boolean)));
-          console.log('🎮 Game keys found:', gameKeys.length, gameKeys.slice(0, 3));
           
           if (gameKeys.length > 0) {
             const { data: gamesData, error: gamesError } = await supabase
@@ -588,7 +562,6 @@ export default function PlayerStatsPage() {
               };
               
               setPlayerLeagues([playerLeague]);
-              console.log('🏆 Found actual league for player:', playerLeague);
             } else {
               setPlayerLeagues([]);
             }
@@ -599,7 +572,6 @@ export default function PlayerStatsPage() {
         
         // If we have stats with joined players data, use that for player info
         if (statsWithOpponents && statsWithOpponents.length > 0 && statsWithOpponents[0].players) {
-          console.log('📋 Using joined players data:', statsWithOpponents[0].players);
           
           // Sort by game_date to find the most recent game (handles cases where created_at order differs)
           const sortedByGameDate = [...statsWithOpponents].sort((a, b) => {
@@ -632,7 +604,6 @@ export default function PlayerStatsPage() {
           // Previous teams are any teams that are NOT the current team (compare normalized)
           const previousTeams = uniqueTeams.filter(t => normalizeTeam(t) !== currentTeamNorm);
           
-          console.log('🔄 Team history - Current:', currentTeam, 'Previous:', previousTeams);
           
           playerInfo = {
             name: mostRecentStat.players?.full_name || mostRecentStat.full_name || mostRecentStat.name || `${mostRecentStat.firstname || ''} ${mostRecentStat.familyname || ''}`.trim() || 'Unknown Player',
@@ -654,7 +625,6 @@ export default function PlayerStatsPage() {
         
         // Calculate season averages if we have stats
         if (gamesPlayed && gamesPlayed.length > 0) {
-          console.log('📈 Step 5: Calculating averages for', gamesPlayed.length, 'games played (filtered from', stats.length, 'total stats)');
           // This section is now redundant since we set playerInfo above with joined data
           // but keep as extra fallback safety
           if (!playerInfo || !playerInfo.name || playerInfo.name === 'Unknown Player') {
@@ -727,7 +697,6 @@ export default function PlayerStatsPage() {
             three_point_percentage: totals.three_pointers_attempted > 0 ? (totals.three_pointers_made / totals.three_pointers_attempted) * 100 : 0,
             ft_percentage: totals.free_throws_attempted > 0 ? (totals.free_throws_made / totals.free_throws_attempted) * 100 : 0,
           };
-          console.log('📊 Step 6: Calculated averages:', averages);
           setSeasonAverages(averages);
 
           // Calculate player rankings
@@ -757,7 +726,6 @@ export default function PlayerStatsPage() {
               
               const analysis = await generatePlayerAnalysis(analysisData);
               setAiAnalysis(analysis);
-              console.log("🤖 AI Analysis generated:", analysis);
             } catch (error) {
               console.error("❌ AI Analysis error:", error);
               setAiAnalysis("Dynamic player with strong fundamentals and competitive drive.");
@@ -766,10 +734,8 @@ export default function PlayerStatsPage() {
             }
           }
         } else {
-          console.log('⚠️ No stats found for player');
         }
         
-        console.log('✅ PLAYER PAGE - Data fetch completed successfully');
       } catch (error) {
         console.error('❌ PLAYER PAGE - Unexpected error:', error);
         toast({
@@ -778,7 +744,6 @@ export default function PlayerStatsPage() {
           variant: "destructive",
         });
       } finally {
-        console.log('🏁 PLAYER PAGE - Setting loading to false');
         setLoading(false);
       }
     };
@@ -873,7 +838,6 @@ export default function PlayerStatsPage() {
     }
 
     const fetchSuggestions = async () => {
-      console.log("🔍 Searching for:", searchQuery);
       
       const [leaguesResponse, playersResponse] = await Promise.all([
         supabase

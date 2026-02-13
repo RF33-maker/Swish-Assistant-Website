@@ -42,8 +42,6 @@ export default function AuthPage() {
   const [planPrice, setPlanPrice] = useState<string | null>(null);
   const [isContactSales, setIsContactSales] = useState(false);
 
-  console.log("User in AuthPage:", user);
-
   // Get plan from URL parameters
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);

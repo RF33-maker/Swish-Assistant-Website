@@ -62,7 +62,7 @@ const ChatContainer: React.FC = () => {
           <h2 className="text-lg font-bold mb-2">📇 Scouting Card</h2>
           <div className="whitespace-pre-wrap text-sm text-gray-800">{latestScouting}</div>
           <button
-            onClick={() => console.log("📤 Send to Scout Builder")}
+            onClick={() => {}}
             className="mt-4 px-4 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600"
           >
             Send to Scout Builder

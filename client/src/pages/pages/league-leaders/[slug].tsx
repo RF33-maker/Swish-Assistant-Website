@@ -85,7 +85,6 @@ export default function LeagueLeadersPage() {
           
           if (pageData && pageData.length > 0) {
             allPlayerStats = [...allPlayerStats, ...pageData];
-            console.log("📊 League Leaders: Fetched page", page, "with", pageData.length, "records, total:", allPlayerStats.length);
             hasMore = pageData.length === pageSize;
             page++;
           } else {
@@ -93,8 +92,6 @@ export default function LeagueLeadersPage() {
           }
         }
         
-        console.log("📊 League Leaders: Fetched", allPlayerStats.length, "total stat records");
-
         if (!allPlayerStats || allPlayerStats.length === 0) {
           setError("No player statistics found for this league");
           return;

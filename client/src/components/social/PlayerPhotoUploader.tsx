@@ -80,7 +80,6 @@ export function PlayerPhotoUploader() {
       mapped.sort((a, b) => a.name.localeCompare(b.name));
       
       setPlayers(mapped);
-      console.log("[PlayerPhotoUploader] Loaded players:", mapped.length, "(deduplicated from", allPlayers.length, "total)", "Sample:", allPlayers[0]);
       setLoadingPlayers(false);
     };
 
@@ -101,22 +100,17 @@ export function PlayerPhotoUploader() {
     setSelectedPlayer(player);
     setSearchQuery(player.name);
     
-    console.log("[PlayerPhotoUploader] Selected player:", player.name, "photo_path:", player.photo_path);
-    
     // If player has a photo_path stored, use it directly
     if (player.photo_path) {
       const { data } = supabase.storage
         .from("player-photos")
         .getPublicUrl(player.photo_path);
-      console.log("[PlayerPhotoUploader] Using stored photo_path:", player.photo_path, "URL:", data.publicUrl);
       setCurrentPhotoUrl(data.publicUrl);
     } else {
       // Fallback: check storage directly
       const { data: existingPhoto } = await supabase.storage
         .from("player-photos")
         .list(player.id);
-      
-      console.log("[PlayerPhotoUploader] Checking storage for folder:", player.id, "Found:", existingPhoto);
       
       if (existingPhoto && existingPhoto.length > 0) {
         const { data } = supabase.storage

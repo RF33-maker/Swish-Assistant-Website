@@ -403,8 +403,6 @@ export default function TeamProfile() {
         const decodedTeamName = decodeURIComponent(teamName);
         const normalizedTeamName = normalizeTeamName(decodedTeamName);
         
-        console.log("🏀 Looking for team:", decodedTeamName, "→ normalized:", normalizedTeamName, "leagueSlug:", leagueSlug);
-        
         // If leagueSlug is provided, fetch the league_id first
         let leagueId: string | null = null;
         if (leagueSlug) {
@@ -417,7 +415,6 @@ export default function TeamProfile() {
           if (leagueData) {
             leagueId = leagueData.league_id;
             setCurrentLeagueId(leagueId);
-            console.log("📋 Found league_id:", leagueId, "for slug:", leagueSlug);
           }
         }
         
@@ -438,8 +435,6 @@ export default function TeamProfile() {
         const allStats = (allTeamStats || []).filter(stat => 
           normalizeTeamName(stat.team_name || stat.team || '') === normalizedTeamName
         );
-        
-        console.log("📊 Found", allStats?.length, "player stats for", normalizedTeamName, leagueId ? `(filtered by league ${leagueId})` : "(all leagues)");
         
         // Build teams query with optional league filter
         let teamsQuery = supabase
