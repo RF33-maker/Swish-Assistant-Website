@@ -423,7 +423,7 @@ export default function GamePage() {
       if (!homeTeamId || !gameData) return [];
       const { data, error } = await db
         .from('player_stats')
-        .select('firstname, familyname, spoints, sreboundstotal, sassists, sminutes')
+        .select('player_id, full_name, spoints, sreboundstotal, sassists, sminutes')
         .eq('league_id', gameData.league_id)
         .eq('team_id', homeTeamId);
       
@@ -431,11 +431,13 @@ export default function GamePage() {
       
       const playerMap = new Map();
       data?.forEach(stat => {
-        const name = `${stat.firstname || ''} ${stat.familyname || ''}`.trim();
-        if (!playerMap.has(name)) {
-          playerMap.set(name, { name, games: 0, points: 0, rebounds: 0, assists: 0, minutes: 0 });
+        const key = stat.player_id || stat.full_name || '';
+        if (!key) return;
+        if (!playerMap.has(key)) {
+          playerMap.set(key, { playerId: stat.player_id, name: stat.full_name || '', games: 0, points: 0, rebounds: 0, assists: 0, minutes: 0 });
         }
-        const player = playerMap.get(name);
+        const player = playerMap.get(key);
+        if (!player.name && stat.full_name) player.name = stat.full_name;
         const mins = parseMinutesToDecimal(stat.sminutes);
         if (mins > 0) {
           player.games += 1;
@@ -446,40 +448,47 @@ export default function GamePage() {
         }
       });
 
-      const top3 = Array.from(playerMap.values())
-        .filter(p => p.games > 0)
-        .map(p => ({
-          ...p,
-          ppg: (p.points / p.games).toFixed(1),
-          rpg: (p.rebounds / p.games).toFixed(1),
-          apg: (p.assists / p.games).toFixed(1),
-          photoUrl: null as string | null,
-          photoFocusY: 30 as number,
-        }))
-        .sort((a, b) => parseFloat(b.ppg) - parseFloat(a.ppg))
-        .slice(0, 3);
-
-      // Look up player photos
-      for (const player of top3) {
-        try {
-          const { data: playerData } = await db
-            .from('players')
-            .select('photo_path, photo_focus_y')
-            .ilike('full_name', `%${player.name}%`)
-            .not('photo_path', 'is', null)
-            .limit(1);
-          
-          if (playerData && playerData.length > 0 && playerData[0].photo_path) {
-            const { data: urlData } = supabase.storage
-              .from('player-photos')
-              .getPublicUrl(playerData[0].photo_path);
-            player.photoUrl = urlData.publicUrl;
-            player.photoFocusY = playerData[0].photo_focus_y ?? 30;
-          }
-        } catch (err) {
-          // Silently fail - fallback to numbered circle
+      const playerIds = Array.from(playerMap.values())
+        .filter(p => p.playerId)
+        .map(p => p.playerId);
+      if (playerIds.length > 0) {
+        const { data: playersData } = await db
+          .from('players')
+          .select('id, full_name, photo_path, photo_focus_y')
+          .in('id', playerIds);
+        if (playersData) {
+          playersData.forEach(p => {
+            const entry = playerMap.get(p.id);
+            if (entry) {
+              if (p.full_name) entry.name = p.full_name;
+              entry.photoPath = p.photo_path;
+              entry.photoFocusY = p.photo_focus_y ?? 30;
+            }
+          });
         }
       }
+
+      const top3 = Array.from(playerMap.values())
+        .filter(p => p.games > 0)
+        .map(p => {
+          let photoUrl: string | null = null;
+          if (p.photoPath) {
+            const { data: urlData } = supabase.storage
+              .from('player-photos')
+              .getPublicUrl(p.photoPath);
+            photoUrl = urlData.publicUrl;
+          }
+          return {
+            ...p,
+            ppg: (p.points / p.games).toFixed(1),
+            rpg: (p.rebounds / p.games).toFixed(1),
+            apg: (p.assists / p.games).toFixed(1),
+            photoUrl,
+            photoFocusY: p.photoFocusY ?? 30,
+          };
+        })
+        .sort((a, b) => parseFloat(b.ppg) - parseFloat(a.ppg))
+        .slice(0, 3);
 
       return top3;
     },
@@ -493,7 +502,7 @@ export default function GamePage() {
       if (!awayTeamId || !gameData) return [];
       const { data, error } = await db
         .from('player_stats')
-        .select('firstname, familyname, spoints, sreboundstotal, sassists, sminutes')
+        .select('player_id, full_name, spoints, sreboundstotal, sassists, sminutes')
         .eq('league_id', gameData.league_id)
         .eq('team_id', awayTeamId);
       
@@ -501,11 +510,13 @@ export default function GamePage() {
       
       const playerMap = new Map();
       data?.forEach(stat => {
-        const name = `${stat.firstname || ''} ${stat.familyname || ''}`.trim();
-        if (!playerMap.has(name)) {
-          playerMap.set(name, { name, games: 0, points: 0, rebounds: 0, assists: 0, minutes: 0 });
+        const key = stat.player_id || stat.full_name || '';
+        if (!key) return;
+        if (!playerMap.has(key)) {
+          playerMap.set(key, { playerId: stat.player_id, name: stat.full_name || '', games: 0, points: 0, rebounds: 0, assists: 0, minutes: 0 });
         }
-        const player = playerMap.get(name);
+        const player = playerMap.get(key);
+        if (!player.name && stat.full_name) player.name = stat.full_name;
         const mins = parseMinutesToDecimal(stat.sminutes);
         if (mins > 0) {
           player.games += 1;
@@ -516,40 +527,47 @@ export default function GamePage() {
         }
       });
 
-      const top3 = Array.from(playerMap.values())
-        .filter(p => p.games > 0)
-        .map(p => ({
-          ...p,
-          ppg: (p.points / p.games).toFixed(1),
-          rpg: (p.rebounds / p.games).toFixed(1),
-          apg: (p.assists / p.games).toFixed(1),
-          photoUrl: null as string | null,
-          photoFocusY: 30 as number,
-        }))
-        .sort((a, b) => parseFloat(b.ppg) - parseFloat(a.ppg))
-        .slice(0, 3);
-
-      // Look up player photos
-      for (const player of top3) {
-        try {
-          const { data: playerData } = await db
-            .from('players')
-            .select('photo_path, photo_focus_y')
-            .ilike('full_name', `%${player.name}%`)
-            .not('photo_path', 'is', null)
-            .limit(1);
-          
-          if (playerData && playerData.length > 0 && playerData[0].photo_path) {
-            const { data: urlData } = supabase.storage
-              .from('player-photos')
-              .getPublicUrl(playerData[0].photo_path);
-            player.photoUrl = urlData.publicUrl;
-            player.photoFocusY = playerData[0].photo_focus_y ?? 30;
-          }
-        } catch (err) {
-          // Silently fail - fallback to numbered circle
+      const playerIds = Array.from(playerMap.values())
+        .filter(p => p.playerId)
+        .map(p => p.playerId);
+      if (playerIds.length > 0) {
+        const { data: playersData } = await db
+          .from('players')
+          .select('id, full_name, photo_path, photo_focus_y')
+          .in('id', playerIds);
+        if (playersData) {
+          playersData.forEach(p => {
+            const entry = playerMap.get(p.id);
+            if (entry) {
+              if (p.full_name) entry.name = p.full_name;
+              entry.photoPath = p.photo_path;
+              entry.photoFocusY = p.photo_focus_y ?? 30;
+            }
+          });
         }
       }
+
+      const top3 = Array.from(playerMap.values())
+        .filter(p => p.games > 0)
+        .map(p => {
+          let photoUrl: string | null = null;
+          if (p.photoPath) {
+            const { data: urlData } = supabase.storage
+              .from('player-photos')
+              .getPublicUrl(p.photoPath);
+            photoUrl = urlData.publicUrl;
+          }
+          return {
+            ...p,
+            ppg: (p.points / p.games).toFixed(1),
+            rpg: (p.rebounds / p.games).toFixed(1),
+            apg: (p.assists / p.games).toFixed(1),
+            photoUrl,
+            photoFocusY: p.photoFocusY ?? 30,
+          };
+        })
+        .sort((a, b) => parseFloat(b.ppg) - parseFloat(a.ppg))
+        .slice(0, 3);
 
       return top3;
     },
