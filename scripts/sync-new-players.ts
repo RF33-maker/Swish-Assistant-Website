@@ -4,15 +4,21 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseKey) {
+if (!supabaseUrl || (!supabaseServiceKey && !supabaseAnonKey)) {
   console.error('Missing Supabase credentials');
-  console.error('Required: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY');
+  console.error('Required: VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or VITE_SUPABASE_ANON_KEY)');
   process.exit(1);
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = createClient(supabaseUrl, supabaseServiceKey || supabaseAnonKey!);
+if (supabaseServiceKey) {
+  console.log('Using service role key (bypasses RLS)');
+} else {
+  console.log('WARNING: Using anon key - inserts may fail due to RLS policies');
+}
 
 function generateSlug(name: string): string {
   return name
@@ -68,7 +74,7 @@ async function syncNewPlayers() {
 
     const { data: statsForChunk, error: statsError } = await supabase
       .from('player_stats')
-      .select('player_id, firstname, familyname, full_name, team_name, league_id')
+      .select('player_id, firstname, familyname, full_name, team_name, league_id, team_id, shirtnumber')
       .in('player_id', chunk);
 
     if (statsError || !statsForChunk) {
@@ -83,15 +89,16 @@ async function syncNewPlayers() {
       const firstName = stat.firstname || '';
       const familyName = stat.familyname || '';
       const fullName = stat.full_name || `${firstName} ${familyName}`.trim() || 'Unknown';
-      const team = stat.team_name || '';
-      const leagueId = stat.league_id || '';
 
       playerMap.set(stat.player_id, {
         id: stat.player_id,
         full_name: fullName,
-        name: fullName,
-        team: team,
-        league_id: leagueId,
+        firstname: stat.firstname || null,
+        familyname: stat.familyname || null,
+        team_name: stat.team_name || '',
+        league_id: stat.league_id || null,
+        team_id: stat.team_id || null,
+        shirtNumber: stat.shirtnumber ? parseInt(stat.shirtnumber) || null : null,
       });
     }
 
