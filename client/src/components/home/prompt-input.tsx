@@ -9,7 +9,6 @@ export default function PromptInput() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (promptText.trim()) {
-      console.log("Submitting prompt:", promptText);
       // Here you would send the prompt to your backend
       // For now we'll just clear the input
       setPromptText("");
@@ -19,7 +18,6 @@ export default function PromptInput() {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      console.log("File selected:", file.name);
       // Here you would handle the file upload
     }
   };

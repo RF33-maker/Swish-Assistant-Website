@@ -12,8 +12,9 @@ import LeaguePage from "@/assets/League-page.png"
 import ChatbotExample from "@/assets/Chatbotexample.png"
 import { Button } from "@/components/ui/button"
 import { Analytics } from "@vercel/analytics/next"
-import { Search, ChevronDown, BarChart3, Zap, Clock, MessageSquare, Sparkles, TrendingUp, Trophy, FileText } from "lucide-react"
+import { Search, ChevronDown, BarChart3, Zap, Clock, MessageSquare, Sparkles, TrendingUp, Trophy, FileText, Users } from "lucide-react"
 import { ThemeToggle } from "@/components/ThemeToggle"
+import { TeamLogo } from "@/components/TeamLogo"
 
 function LeagueLogosCarousel() {
   const logos = [Ballpark, NBLBE, BCB, SLB]
@@ -44,6 +45,27 @@ function LeagueLogosCarousel() {
   )
 }
 
+function PlayerSearchAvatar({ name, photoUrl }: { name: string; photoUrl?: string | null }) {
+  const [imgError, setImgError] = useState(false);
+
+  if (photoUrl && !imgError) {
+    return (
+      <img
+        src={photoUrl}
+        alt={name}
+        className="h-8 w-8 rounded-full object-cover flex-shrink-0 border border-orange-200 dark:border-neutral-600"
+        onError={() => setImgError(true)}
+      />
+    );
+  }
+
+  return (
+    <div className="h-8 w-8 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center flex-shrink-0">
+      <Users className="h-4 w-4 text-white" />
+    </div>
+  );
+}
+
 export default function LandingPage() {
   const [query, setQuery] = useState("")
   const [suggestions, setSuggestions] = useState<any[]>([])
@@ -59,56 +81,128 @@ export default function LandingPage() {
         return
       }
 
-      // Search both leagues and players
-      console.log("🔍 Searching for:", query);
-
-      const [leaguesResponse, playersResponse] = await Promise.all([
+      const [leaguesResponse, teamsResponse] = await Promise.all([
         supabase
           .from("leagues")
           .select("name, slug")
           .or(`name.ilike.%${query}%`)
           .eq("is_public", true),
         supabase
-          .from("player_stats")
-          .select("name, team, id, player_id, players:player_id(slug)")
+          .from("teams")
+          .select("name, league_id, leagues:league_id(name, slug, is_public)")
           .ilike("name", `%${query}%`)
-          .limit(10)
+          .limit(20)
       ]);
 
-      console.log("📊 Players response:", playersResponse);
-      console.log("📊 Players data:", playersResponse.data);
-      console.log("📊 Players error:", playersResponse.error);
+      const playersResponse = await supabase
+        .from("players")
+        .select("id, full_name, slug, photo_path, league_id")
+        .ilike("full_name", `%${query}%`)
+        .limit(30);
 
       const leagues = leaguesResponse.data || [];
       const players = playersResponse.data || [];
+      const teams = teamsResponse.data || [];
 
-      // Remove duplicate players (same name) and format
-      const uniquePlayers = players.reduce((acc: any[], player: any) => {
-        if (!acc.some(p => p.name === player.name)) {
+      let playerTeamMap: Record<string, string> = {};
+      if (players.length > 0) {
+        const playerIds = players.map((p: any) => p.id);
+        const { data: statsData } = await supabase
+          .from("player_stats")
+          .select("player_id, team")
+          .in("player_id", playerIds)
+          .limit(100);
+        if (statsData) {
+          statsData.forEach((s: any) => {
+            if (s.player_id && s.team && !playerTeamMap[s.player_id]) {
+              playerTeamMap[s.player_id] = s.team;
+            }
+          });
+        }
+      }
+
+      const isAbbreviated = (name: string) => {
+        const parts = name.trim().split(/\s+/);
+        return parts.some(p => p.length <= 2 || p.includes('.'));
+      };
+
+      const getNameParts = (name: string) => {
+        const clean = name.toLowerCase().replace(/[.\-']/g, '').replace(/\s+/g, ' ').trim();
+        const parts = clean.split(' ').filter(p => !['jr', 'sr', 'ii', 'iii', 'iv'].includes(p));
+        return { first: parts[0] || '', last: parts[parts.length - 1] || '' };
+      };
+
+      const areSamePlayer = (a: string, b: string) => {
+        const pa = getNameParts(a);
+        const pb = getNameParts(b);
+        if (pa.last !== pb.last) return false;
+        if (pa.first === pb.first) return true;
+        if (pa.first.length >= 1 && pb.first.length >= 1 &&
+            (pa.first[0] === pb.first[0]) &&
+            (pa.first.length <= 2 || pb.first.length <= 2)) return true;
+        return false;
+      };
+
+      const playerGroups: any[][] = [];
+      players.forEach((player: any) => {
+        const existingGroup = playerGroups.find(group =>
+          group.some((p: any) => areSamePlayer(p.full_name, player.full_name))
+        );
+        if (existingGroup) {
+          existingGroup.push(player);
+        } else {
+          playerGroups.push([player]);
+        }
+      });
+
+      const uniquePlayers = playerGroups.map((group: any[]) => {
+        group.sort((a: any, b: any) => {
+          if (a.photo_path && !b.photo_path) return -1;
+          if (!a.photo_path && b.photo_path) return 1;
+          const aAbbr = isAbbreviated(a.full_name);
+          const bAbbr = isAbbreviated(b.full_name);
+          if (!aAbbr && bAbbr) return -1;
+          if (aAbbr && !bAbbr) return 1;
+          if (b.full_name.length !== a.full_name.length) return b.full_name.length - a.full_name.length;
+          return String(a.id).localeCompare(String(b.id));
+        });
+        const best = group[0];
+        let photoUrl: string | null = null;
+        if (best.photo_path) {
+          const { data: urlData } = supabase.storage.from('player-photos').getPublicUrl(best.photo_path);
+          photoUrl = urlData?.publicUrl || null;
+        }
+        return {
+          name: best.full_name,
+          team: playerTeamMap[best.id] || '',
+          player_id: best.id,
+          player_slug: best.slug,
+          photo_url: photoUrl,
+          type: 'player'
+        };
+      });
+
+      const uniqueTeams = teams.reduce((acc: any[], team: any) => {
+        const leagueJoin = Array.isArray(team.leagues) ? team.leagues[0] : team.leagues;
+        if (leagueJoin?.is_public === false) return acc;
+        if (!acc.some(t => t.name === team.name && t.league_id === team.league_id)) {
           acc.push({
-            name: player.name,
-            team: player.team,
-            player_id: player.player_id || player.id,
-            player_slug: Array.isArray(player.players) ? player.players[0]?.slug : player.players?.slug,
-            type: 'player'
+            name: team.name,
+            league_id: team.league_id,
+            league_name: leagueJoin?.name || '',
+            league_slug: leagueJoin?.slug || '',
+            type: 'team'
           });
         }
         return acc;
       }, []);
 
-      // Format leagues
       const formattedLeagues = leagues.map(league => ({
         ...league,
         type: 'league'
       }));
 
-      // Combine and limit results
-      const combined = [...formattedLeagues, ...uniquePlayers].slice(0, 8);
-
-      console.log("Query input:", query)
-      console.log("Leagues found:", leagues.length)
-      console.log("Players found:", uniquePlayers.length)
-      console.log("Combined suggestions:", combined);
+      const combined = [...formattedLeagues, ...uniqueTeams, ...uniquePlayers].slice(0, 10);
 
       setSuggestions(combined)
     }
@@ -124,6 +218,13 @@ export default function LandingPage() {
 
     if (item.type === 'league') {
       setLocation(`/league/${item.slug}`)
+    } else if (item.type === 'team') {
+      const encodedName = encodeURIComponent(item.name);
+      if (item.league_slug) {
+        setLocation(`/league/${item.league_slug}/team/${encodedName}`)
+      } else {
+        setLocation(`/team/${encodedName}`)
+      }
     } else if (item.type === 'player') {
       const identifier = item.player_slug || item.player_id;
       setLocation(`/player/${identifier}`)
@@ -134,21 +235,22 @@ export default function LandingPage() {
     e.preventDefault()
     if (!query.trim()) return
 
+    if (suggestions.length > 0) {
+      handleSelect(suggestions[0])
+      return
+    }
+
     const { data, error } = await supabase
       .from("leagues")
       .select("slug")
       .ilike("name", `%${query.toLowerCase()}%`)
       .eq("is_public", true)
 
-
     if (error) console.error("Supabase error:", error)
 
     if (data && data.length > 0) {
       setLocation(`/league/${data[0].slug}`)
-    } else {
-      alert("No public league found with that name.")
     }
-
   }
 
   useEffect(() => {
@@ -251,7 +353,7 @@ export default function LandingPage() {
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Find your league"
+                placeholder="Search for league, team or player"
                 className="flex-1 px-4 py-4 text-base text-slate-900 dark:text-white focus:outline-none bg-transparent placeholder:text-slate-400 dark:placeholder:text-slate-500"
               />
             </form>
@@ -267,24 +369,29 @@ export default function LandingPage() {
                 >
                   <div className="flex items-center gap-3">
                     {item.type === 'league' ? (
-                      <div className="h-8 w-8 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center">
-                        <span className="text-white text-sm">🏆</span>
+                      <div className="h-8 w-8 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center flex-shrink-0">
+                        <Trophy className="h-4 w-4 text-white" />
+                      </div>
+                    ) : item.type === 'team' ? (
+                      <div className="h-8 w-8 rounded-full bg-white dark:bg-neutral-800 border border-orange-200 dark:border-neutral-600 flex items-center justify-center overflow-hidden flex-shrink-0">
+                        <TeamLogo teamName={item.name} leagueId={item.league_id} size="sm" />
                       </div>
                     ) : (
-                      <div className="h-8 w-8 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center">
-                        <span className="text-white text-sm">👤</span>
-                      </div>
+                      <PlayerSearchAvatar name={item.name} photoUrl={item.photo_url} />
                     )}
-                    <div className="flex-1">
-                      <div className="font-medium text-orange-900 dark:text-orange-300 text-sm">{item.name}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-orange-900 dark:text-orange-300 text-sm truncate">{item.name}</div>
                       {item.type === 'player' && (
-                        <div className="text-xs text-orange-600 dark:text-orange-400">{item.team}</div>
+                        <div className="text-xs text-orange-600 dark:text-orange-400 truncate">{item.team}</div>
+                      )}
+                      {item.type === 'team' && (
+                        <div className="text-xs text-orange-600 dark:text-orange-400 truncate">{item.league_name}</div>
                       )}
                       {item.type === 'league' && (
                         <div className="text-xs text-orange-600 dark:text-orange-400">League</div>
                       )}
                     </div>
-                    <div className="text-xs text-orange-700 dark:text-orange-300 capitalize bg-orange-100 dark:bg-orange-900/50 px-2 py-1 rounded-full font-medium">
+                    <div className="text-xs text-orange-700 dark:text-orange-300 capitalize bg-orange-100 dark:bg-orange-900/50 px-2 py-1 rounded-full font-medium flex-shrink-0">
                       {item.type}
                     </div>
                   </div>

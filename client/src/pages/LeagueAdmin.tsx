@@ -129,11 +129,9 @@ export default function LeagueAdmin() {
 
   const fetchTeams = async () => {
     if (!league?.league_id) {
-      console.log("No league_id available for fetching teams");
       return;
     }
     
-    console.log("Fetching teams for league:", league.league_id);
     
     try {
       // Get all team data from team_stats table (which has proper team names)
@@ -142,7 +140,6 @@ export default function LeagueAdmin() {
         .select('name')
         .eq('league_id', league.league_id);
         
-      console.log("Team query result:", result);
       
       if (result.error) {
         console.error("Error in team query:", result.error);
@@ -151,7 +148,6 @@ export default function LeagueAdmin() {
       }
       
       if (!result.data || result.data.length === 0) {
-        console.log("No team data in team_stats, trying game_schedule...");
         
         // Fallback to game_schedule table
         const scheduleResult = await supabase
@@ -159,7 +155,6 @@ export default function LeagueAdmin() {
           .select('hometeam, awayteam')
           .eq('league_id', league.league_id);
         
-        console.log("Schedule query result:", scheduleResult);
         
         if (scheduleResult.error) {
           console.error("Error in schedule query:", scheduleResult.error);
@@ -168,7 +163,6 @@ export default function LeagueAdmin() {
         }
         
         if (!scheduleResult.data || scheduleResult.data.length === 0) {
-          console.log("No schedule data found either");
           setTeams([]);
           return;
         }
@@ -181,7 +175,6 @@ export default function LeagueAdmin() {
         });
         
         const uniqueTeams = Array.from(teamNames).sort();
-        console.log("Unique teams extracted from schedule:", uniqueTeams);
         setTeams(uniqueTeams);
         return;
       }
@@ -193,7 +186,6 @@ export default function LeagueAdmin() {
           .filter(Boolean)
       ));
       
-      console.log("Unique teams extracted:", uniqueTeams);
       setTeams(uniqueTeams);
     } catch (error) {
       console.error("Error fetching teams:", error);
@@ -203,11 +195,9 @@ export default function LeagueAdmin() {
 
   const fetchTeamLogos = async () => {
     if (!league?.league_id || teams.length === 0) {
-      console.log("Skipping logo fetch - no league ID or teams");
       return;
     }
     
-    console.log("Fetching logos for teams:", teams);
     
     try {
       // For now, we'll store logos in a simple format
@@ -218,7 +208,6 @@ export default function LeagueAdmin() {
       for (const teamName of teams) {
         try {
           const fileName = `${league.league_id}_${teamName.replace(/\s+/g, '_')}.png`;
-          console.log(`Checking for logo: ${fileName}`);
           
           const { data } = supabase.storage
             .from('team-logos')
@@ -227,19 +216,15 @@ export default function LeagueAdmin() {
           // Check if file exists by trying to fetch it
           const response = await fetch(data.publicUrl, { method: 'HEAD' });
           if (response.ok) {
-            console.log(`Found logo for ${teamName}: ${data.publicUrl}`);
             logoMap[teamName] = data.publicUrl;
           } else {
-            console.log(`No logo found for ${teamName}`);
           }
         } catch (error) {
           // File doesn't exist, that's okay
-          console.log(`Error checking logo for ${teamName}:`, error);
         }
       }
       
       setTeamLogos(logoMap);
-      console.log("Team logos loaded:", logoMap);
     } catch (error) {
       console.error("Error fetching team logos:", error);
     }
@@ -310,7 +295,6 @@ export default function LeagueAdmin() {
       const fileExt = file.name.split('.').pop();
       const fileName = `${league.league_id}_${teamName.replace(/\s+/g, '_')}.${fileExt}`;
       
-      console.log("Uploading file:", fileName);
       
       // Upload directly to Supabase storage
       const { data, error } = await supabase.storage
@@ -324,14 +308,12 @@ export default function LeagueAdmin() {
         throw error;
       }
 
-      console.log("Upload successful:", data);
 
       // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('team-logos')
         .getPublicUrl(fileName);
 
-      console.log("Public URL:", publicUrl);
 
       // Update local state
       setTeamLogos(prev => ({
@@ -368,7 +350,6 @@ export default function LeagueAdmin() {
         throw new Error(result.error || 'Failed to delete logo');
       }
 
-      console.log("Logo deletion result:", result);
 
       // Update local state
       setTeamLogos(prev => {

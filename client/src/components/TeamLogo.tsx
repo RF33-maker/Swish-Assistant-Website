@@ -1,19 +1,21 @@
-import { useState, useEffect, useCallback } from "react";
-import { supabase } from "@/lib/supabase";
-import { normalizeTeamNameForFile } from "@/lib/teamUtils";
+import { useState, useEffect } from "react";
+import { getTeamLogoCached, invalidateLogoCacheEntry } from "@/utils/teamLogoCache";
+import { debugLog } from "@/utils/debug";
 
 interface TeamLogoProps {
   teamName: string;
   leagueId: string;
   size?: "xs" | "sm" | "md" | "lg" | "xl" | number;
   className?: string;
-  logoUrl?: string;  // Optional logo URL from teams table
+  logoUrl?: string;
 }
 
-// Custom event for logo cache invalidation
 export const LOGO_CACHE_INVALIDATE_EVENT = 'teamLogoCacheInvalidate';
 
 export function invalidateLogoCache(teamName?: string, leagueId?: string) {
+  if (teamName && leagueId) {
+    invalidateLogoCacheEntry(leagueId, teamName);
+  }
   window.dispatchEvent(new CustomEvent(LOGO_CACHE_INVALIDATE_EVENT, { 
     detail: { teamName, leagueId } 
   }));
@@ -27,29 +29,18 @@ const sizeClasses = {
   xl: "w-24 h-24"
 };
 
-/**
- * TeamLogo component that displays the team logo if available, or a fallback placeholder.
- * Automatically fetches and caches team logos for the league.
- * 
- * @param props.teamName - The name of the team
- * @param props.leagueId - The ID of the league
- * @param props.size - Size variant (sm, md, lg, xl)
- * @param props.className - Additional CSS classes
- */
 export function TeamLogo({ teamName, leagueId, size = "md", className = "", logoUrl: providedLogoUrl }: TeamLogoProps) {
   const [logoUrl, setLogoUrl] = useState<string | null>(providedLogoUrl || null);
   const [isLoading, setIsLoading] = useState(!providedLogoUrl);
   const [hasError, setHasError] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
-  // Listen for cache invalidation events
   useEffect(() => {
     const handleInvalidate = (event: CustomEvent<{ teamName?: string; leagueId?: string }>) => {
       const { teamName: eventTeam, leagueId: eventLeague } = event.detail || {};
-      // Invalidate if no specific team/league specified, or if this component matches
       if (!eventTeam || eventTeam === teamName) {
         if (!eventLeague || eventLeague === leagueId) {
-          console.log(`[TeamLogo] Cache invalidated for ${teamName}, refetching...`);
+          debugLog(`[TeamLogo] Cache invalidated for ${teamName}, refetching...`);
           setLogoUrl(null);
           setHasError(false);
           setRefreshKey(prev => prev + 1);
@@ -64,94 +55,46 @@ export function TeamLogo({ teamName, leagueId, size = "md", className = "", logo
   }, [teamName, leagueId]);
 
   useEffect(() => {
-    // If logo URL is provided, use it directly and skip fetching
     if (providedLogoUrl) {
       setLogoUrl(providedLogoUrl);
       setIsLoading(false);
       return;
     }
 
-    const fetchTeamLogo = async () => {
+    if (!leagueId || !teamName) {
+      setIsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchLogo = async () => {
+      setIsLoading(true);
+      setHasError(false);
+
       try {
-        setIsLoading(true);
-        setHasError(false);
-        
-        console.log(`[TeamLogo] Fetching logo for team: "${teamName}" in league: ${leagueId}`);
-        
-        // Try common file extensions for team logos
-        const extensions = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
-        let foundLogo = false;
-        
-        // Try multiple filename strategies to handle various naming conventions:
-        // 1. Normalized name (for new uploads and teams with variations like "Team I" -> "Team")
-        // 2. Original name with underscores (for existing uploads with full names)
-        // 3. Normalized name + common suffixes (for existing files with "Senior Men" etc.)
-        const normalizedFileName = normalizeTeamNameForFile(teamName);
-        const originalFileName = teamName.replace(/\s+/g, '_');
-        
-        const filenamesToTry = [
-          normalizedFileName,
-          originalFileName,
-          `${normalizedFileName}_Senior_Men`,
-          `${normalizedFileName}_Senior_Men_I`,
-          `${originalFileName}_Senior_Men`,
-          `${originalFileName}_Senior_Men_I`
-        ];
-        
-        // Remove duplicates while preserving order
-        const uniqueFilenames = Array.from(new Set(filenamesToTry));
-        
-        console.log(`[TeamLogo] Trying filenames:`, uniqueFilenames);
-        
-        for (const baseFileName of uniqueFilenames) {
-          for (const ext of extensions) {
-            const fileName = `${leagueId}_${baseFileName}.${ext}`;
-            
-            // Get public URL from Supabase storage
-            const { data } = supabase.storage
-              .from('team-logos')
-              .getPublicUrl(fileName);
-            
-            try {
-              // Check if the file exists by attempting to fetch it
-              const response = await fetch(data.publicUrl, { method: 'HEAD' });
-              if (response.ok) {
-                // Add cache-busting timestamp from Last-Modified header or current time
-                const lastModified = response.headers.get('last-modified');
-                const cacheBuster = lastModified 
-                  ? new Date(lastModified).getTime() 
-                  : Date.now();
-                const urlWithCacheBuster = `${data.publicUrl}?t=${cacheBuster}`;
-                console.log(`[TeamLogo] ✓ Found logo: ${fileName} → ${urlWithCacheBuster}`);
-                setLogoUrl(urlWithCacheBuster);
-                foundLogo = true;
-                break;
-              }
-            } catch (error) {
-              // Continue to next extension
-            }
-          }
-          
-          if (foundLogo) break;
+        const url = await getTeamLogoCached({ leagueId, teamName });
+        if (!cancelled) {
+          setLogoUrl(url);
         }
-        
-        if (!foundLogo) {
-          console.log(`[TeamLogo] ✗ No logo found for "${teamName}"`);
+      } catch {
+        if (!cancelled) {
+          setHasError(true);
           setLogoUrl(null);
         }
-      } catch (error) {
-        console.error('Error fetching team logo:', error);
-        setHasError(true);
-        setLogoUrl(null);
       } finally {
-        setIsLoading(false);
+        if (!cancelled) {
+          setIsLoading(false);
+        }
       }
     };
 
-    if (leagueId && teamName) {
-      fetchTeamLogo();
-    }
-  }, [leagueId, teamName, refreshKey]);
+    fetchLogo();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [leagueId, teamName, refreshKey, providedLogoUrl]);
 
   const handleImageError = () => {
     setHasError(true);
@@ -188,7 +131,6 @@ export function TeamLogo({ teamName, leagueId, size = "md", className = "", logo
     );
   }
 
-  // Fallback placeholder
   return (
     <div className={`${baseClasses} bg-orange-500 text-white font-bold border-2 border-orange-600`}>
       <div className="text-center">

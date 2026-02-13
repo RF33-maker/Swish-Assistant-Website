@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useLocation, useParams } from "wouter";
 import { supabase } from "@/lib/supabase";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
@@ -12,6 +12,13 @@ import { useTeamBranding } from "@/hooks/useTeamBranding";
 import { adjustOpacity } from "@/lib/colorExtractor";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import GameDetailModal from "@/components/GameDetailModal";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface League {
   league_id: string;
@@ -72,6 +79,109 @@ interface Suggestion {
   slug: string;
 }
 
+const PLAYER_STAT_COLUMNS: Record<string, { key: string; label: string }[]> = {
+  Traditional: [
+    { key: "spoints", label: "PTS" },
+    { key: "sminutes", label: "MIN" },
+    { key: "sfieldgoalsmade", label: "FGM" },
+    { key: "sfieldgoalsattempted", label: "FGA" },
+    { key: "sthreepointersmade", label: "3PM" },
+    { key: "sthreepointersattempted", label: "3PA" },
+    { key: "sfreethrowsmade", label: "FTM" },
+    { key: "sfreethrowsattempted", label: "FTA" },
+    { key: "sreboundstotal", label: "REB" },
+    { key: "sassists", label: "AST" },
+    { key: "sturnovers", label: "TO" },
+    { key: "ssteals", label: "STL" },
+    { key: "sblocks", label: "BLK" },
+  ],
+  Advanced: [
+    { key: "efg_percent", label: "EFG%" },
+    { key: "ts_percent", label: "TS%" },
+    { key: "usage_percent", label: "USG%" },
+    { key: "ast_percent", label: "AST%" },
+    { key: "ast_to_ratio", label: "AST/TO" },
+    { key: "oreb_percent", label: "OREB%" },
+    { key: "dreb_percent", label: "DREB%" },
+    { key: "reb_percent", label: "REB%" },
+    { key: "tov_percent", label: "TOV%" },
+    { key: "three_point_rate", label: "3P RATE" },
+    { key: "player_possessions", label: "POSS" },
+    { key: "off_rating", label: "OFFRTG" },
+    { key: "def_rating", label: "DEFRTG" },
+    { key: "net_rating", label: "NETRTG" },
+    { key: "pie", label: "PIE" },
+  ],
+  Scoring: [
+    { key: "pts_percent_2pt", label: "%PTS 2PT" },
+    { key: "pts_percent_3pt", label: "%PTS 3PT" },
+    { key: "pts_percent_ft", label: "%PTS FT" },
+    { key: "pts_percent_midrange", label: "%PTS MR" },
+    { key: "pts_percent_pitp", label: "%PTS PITP" },
+    { key: "pts_percent_fastbreak", label: "%PTS FBPS" },
+    { key: "pts_percent_second_chance", label: "%PTS 2ND CH" },
+    { key: "pts_percent_off_turnovers", label: "%PTS OFFTO" }
+  ],
+  Misc: [
+    { key: "splusminuspoints", label: "+/-" },
+    { key: "sfoulspersonal", label: "PF" },
+    { key: "sblocksreceived", label: "BLK AGAINST" }
+  ]
+};
+
+const PLAYER_STAT_LEGENDS: Record<string, string[]> = {
+  Traditional: [
+    'PTS = Points', 'MIN = Minutes', 'FGM = Field Goals Made', 'FGA = Field Goals Attempted',
+    '3PM = Three-Pointers Made', '3PA = Three-Pointers Attempted', 'FTM = Free Throws Made',
+    'FTA = Free Throws Attempted', 'REB = Total Rebounds', 'AST = Assists', 'TO = Turnovers',
+    'STL = Steals', 'BLK = Blocks'
+  ],
+  Advanced: [
+    'EFG% = Effective Field Goal Percentage', 'TS% = True Shooting Percentage',
+    'USG% = Usage Percentage', 'AST% = Assist Percentage', 'AST/TO = Assist to Turnover Ratio',
+    'OREB% = Offensive Rebound Percentage', 'DREB% = Defensive Rebound Percentage',
+    'REB% = Total Rebound Percentage', 'TOV% = Turnover Percentage',
+    '3P RATE = Three-Point Attempt Rate', 'POSS = Player Possessions',
+    'OFFRTG = Offensive Rating', 'DEFRTG = Defensive Rating', 'NETRTG = Net Rating',
+    'PIE = Player Impact Estimate'
+  ],
+  Scoring: [
+    '%PTS 2PT = % of Points from 2-Pointers', '%PTS 3PT = % of Points from 3-Pointers',
+    '%PTS FT = % of Points from Free Throws', '%PTS MR = % of Points from Mid-Range',
+    '%PTS PITP = % of Points in the Paint', '%PTS FBPS = % of Points from Fastbreaks',
+    '%PTS 2ND CH = % of Points from 2nd Chance', '%PTS OFFTO = % of Points off Turnovers'
+  ],
+  Misc: ['+/- = Plus/Minus', 'PF = Personal Fouls', 'BLK AGAINST = Blocks Received']
+};
+
+const applyPlayerMode = (
+  statKey: string,
+  value: number,
+  gamesPlayed: number,
+  totalMinutes: number,
+  playerMode: 'Total' | 'Per Game' | 'Per 40'
+): number => {
+  const rateStats = [
+    'efg_percent', 'ts_percent', 'three_point_rate',
+    'ast_percent', 'ast_to_ratio',
+    'oreb_percent', 'dreb_percent', 'reb_percent',
+    'tov_percent', 'usage_percent', 'pie',
+    'off_rating', 'def_rating', 'net_rating',
+    'pts_percent_2pt', 'pts_percent_3pt', 'pts_percent_ft',
+    'pts_percent_midrange', 'pts_percent_pitp', 'pts_percent_fastbreak',
+    'pts_percent_second_chance', 'pts_percent_off_turnovers'
+  ];
+  if (rateStats.includes(statKey)) return value;
+  if (statKey === 'sminutes') {
+    if (playerMode === 'Total') return value;
+    return gamesPlayed > 0 ? value / gamesPlayed : 0;
+  }
+  if (playerMode === 'Total') return value;
+  if (playerMode === 'Per Game') return gamesPlayed > 0 ? value / gamesPlayed : 0;
+  if (playerMode === 'Per 40') return totalMinutes > 0 ? (value / totalMinutes) * 40 : 0;
+  return value;
+};
+
 export default function TeamProfile() {
   const { teamName, leagueSlug } = useParams();
   const [location, navigate] = useLocation();
@@ -87,6 +197,12 @@ export default function TeamProfile() {
   const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
   const [isGameModalOpen, setIsGameModalOpen] = useState(false);
   const [currentLeagueId, setCurrentLeagueId] = useState<string | null>(null);
+  const [activeStatsTab, setActiveStatsTab] = useState<'overview' | 'playerStats' | 'teamStats'>('overview');
+  const [playerStatsCategory, setPlayerStatsCategory] = useState<'Traditional' | 'Advanced' | 'Scoring' | 'Misc'>('Traditional');
+  const [playerStatsView, setPlayerStatsView] = useState<'Total' | 'Per Game' | 'Per 40'>('Per Game');
+  const [statsSearch, setStatsSearch] = useState('');
+  const [statsSortColumn, setStatsSortColumn] = useState<string>('PTS');
+  const [statsSortDirection, setStatsSortDirection] = useState<'asc' | 'desc'>('desc');
 
   // Extract team branding colors
   const { colors: teamBranding, primaryColor, secondaryColor } = useTeamBranding({
@@ -115,6 +231,139 @@ export default function TeamProfile() {
     
     return primaryColor;
   }, [teamBranding, primaryColor, secondaryColor]);
+
+  const activePlayerStatColumns = useMemo(() => {
+    return PLAYER_STAT_COLUMNS[playerStatsCategory] || PLAYER_STAT_COLUMNS['Traditional'];
+  }, [playerStatsCategory]);
+
+  const detailedPlayerAverages = useMemo(() => {
+    if (!playerStats || playerStats.length === 0) return [];
+
+    const parseMinutesPlayed = (stat: any): number => {
+      const minutes = stat.sminutes || stat.minutes_played;
+      if (!minutes) return 0;
+      if (typeof minutes === 'number') return minutes;
+      if (typeof minutes === 'string') {
+        const parts = minutes.split(':');
+        if (parts.length === 2) return parseInt(parts[0]) + parseInt(parts[1]) / 60;
+        return parseFloat(minutes) || 0;
+      }
+      return 0;
+    };
+
+    const byPlayerId = new Map<string, any>();
+
+    playerStats.forEach((stat: any) => {
+      const playerName = stat.full_name || stat.name || 'Unknown Player';
+      const minutesPlayed = parseMinutesPlayed(stat);
+      const didPlay = minutesPlayed > 0;
+
+      if (stat.player_id) {
+        if (!byPlayerId.has(stat.player_id)) {
+          byPlayerId.set(stat.player_id, {
+            id: stat.player_id,
+            name: playerName,
+            slug: stat.players?.slug || null,
+            games: 0,
+            totalMinutes: 0,
+            rawStats: []
+          });
+        }
+        const agg = byPlayerId.get(stat.player_id)!;
+        if (didPlay) {
+          agg.games += 1;
+          agg.totalMinutes += minutesPlayed;
+          agg.rawStats.push(stat);
+        }
+        if (playerName.length > agg.name.length) agg.name = playerName;
+      }
+    });
+
+    return Array.from(byPlayerId.values())
+      .filter(p => p.games > 0)
+      .sort((a, b) => {
+        const totalA = a.rawStats.reduce((s: number, st: any) => s + (st.spoints || 0), 0);
+        const totalB = b.rawStats.reduce((s: number, st: any) => s + (st.spoints || 0), 0);
+        return (totalB / b.games) - (totalA / a.games);
+      });
+  }, [playerStats]);
+
+  const filteredPlayerAverages = useMemo(() => {
+    let filtered = detailedPlayerAverages;
+    if (statsSearch.trim()) {
+      filtered = filtered.filter((p: any) => p.name.toLowerCase().includes(statsSearch.toLowerCase()));
+    }
+
+    const rateStats = [
+      'efg_percent', 'ts_percent', 'three_point_rate',
+      'ast_percent', 'ast_to_ratio', 'oreb_percent', 'dreb_percent', 'reb_percent',
+      'tov_percent', 'usage_percent', 'pie', 'off_rating', 'def_rating', 'net_rating',
+      'pts_percent_2pt', 'pts_percent_3pt', 'pts_percent_ft',
+      'pts_percent_midrange', 'pts_percent_pitp', 'pts_percent_fastbreak',
+      'pts_percent_second_chance', 'pts_percent_off_turnovers'
+    ];
+
+    return [...filtered].sort((a, b) => {
+      let valueA: number, valueB: number;
+      if (statsSortColumn === 'GP') {
+        valueA = a.games || 0;
+        valueB = b.games || 0;
+      } else {
+        const column = activePlayerStatColumns.find((col: any) => col.label === statsSortColumn);
+        if (column) {
+          const isRateStat = rateStats.includes(column.key);
+          const aggA = a.rawStats.reduce((acc: number, stat: any) => {
+            const v = stat[column.key];
+            return acc + (typeof v === 'number' ? v : (typeof v === 'string' && !isNaN(parseFloat(v)) ? parseFloat(v) : 0));
+          }, 0);
+          const aggB = b.rawStats.reduce((acc: number, stat: any) => {
+            const v = stat[column.key];
+            return acc + (typeof v === 'number' ? v : (typeof v === 'string' && !isNaN(parseFloat(v)) ? parseFloat(v) : 0));
+          }, 0);
+          const baseA = isRateStat && a.rawStats.length > 0 ? aggA / a.rawStats.length : aggA;
+          const baseB = isRateStat && b.rawStats.length > 0 ? aggB / b.rawStats.length : aggB;
+          valueA = applyPlayerMode(column.key, baseA, a.games, a.totalMinutes || 0, playerStatsView);
+          valueB = applyPlayerMode(column.key, baseB, b.games, b.totalMinutes || 0, playerStatsView);
+        } else {
+          valueA = 0;
+          valueB = 0;
+        }
+      }
+      return statsSortDirection === 'desc' ? valueB - valueA : valueA - valueB;
+    });
+  }, [detailedPlayerAverages, statsSearch, statsSortColumn, statsSortDirection, playerStatsView, activePlayerStatColumns]);
+
+  const teamAggregateStats = useMemo(() => {
+    if (!playerStats || playerStats.length === 0) return null;
+    
+    const gameKeys = new Set(playerStats.map((s: any) => s.game_key).filter(Boolean));
+    const gamesPlayed = gameKeys.size;
+    if (gamesPlayed === 0) return null;
+
+    const totals: Record<string, number> = {};
+    const statFields = [
+      'spoints', 'sfieldgoalsmade', 'sfieldgoalsattempted',
+      'sthreepointersmade', 'sthreepointersattempted',
+      'stwopointersmade', 'stwopointersattempted',
+      'sfreethrowsmade', 'sfreethrowsattempted',
+      'sreboundsoffensive', 'sreboundsdefensive', 'sreboundstotal',
+      'sassists', 'sturnovers', 'ssteals', 'sblocks',
+      'sfoulspersonal', 'splusminuspoints', 'sblocksreceived',
+      'spointsinthepaint', 'spointsfastbreak', 'spointssecondchance'
+    ];
+
+    statFields.forEach(f => { totals[f] = 0; });
+    
+    playerStats.forEach((stat: any) => {
+      statFields.forEach(f => { totals[f] += (stat[f] || 0); });
+    });
+
+    return {
+      gamesPlayed,
+      totals,
+      perGame: Object.fromEntries(statFields.map(f => [f, totals[f] / gamesPlayed]))
+    };
+  }, [playerStats]);
 
   useEffect(() => {
     const fetchSuggestions = async () => {
@@ -154,8 +403,6 @@ export default function TeamProfile() {
         const decodedTeamName = decodeURIComponent(teamName);
         const normalizedTeamName = normalizeTeamName(decodedTeamName);
         
-        console.log("🏀 Looking for team:", decodedTeamName, "→ normalized:", normalizedTeamName, "leagueSlug:", leagueSlug);
-        
         // If leagueSlug is provided, fetch the league_id first
         let leagueId: string | null = null;
         if (leagueSlug) {
@@ -168,7 +415,6 @@ export default function TeamProfile() {
           if (leagueData) {
             leagueId = leagueData.league_id;
             setCurrentLeagueId(leagueId);
-            console.log("📋 Found league_id:", leagueId, "for slug:", leagueSlug);
           }
         }
         
@@ -189,8 +435,6 @@ export default function TeamProfile() {
         const allStats = (allTeamStats || []).filter(stat => 
           normalizeTeamName(stat.team_name || stat.team || '') === normalizedTeamName
         );
-        
-        console.log("📊 Found", allStats?.length, "player stats for", normalizedTeamName, leagueId ? `(filtered by league ${leagueId})` : "(all leagues)");
         
         // Build teams query with optional league filter
         let teamsQuery = supabase
@@ -757,7 +1001,47 @@ export default function TeamProfile() {
           </div>
         </div>
 
-        {/* Team Content Grid */}
+        {/* Tab Navigation */}
+        <div className="bg-white dark:bg-neutral-900 rounded-xl shadow mb-6 overflow-hidden">
+          <div className="flex border-b border-gray-200 dark:border-neutral-700">
+            <button
+              onClick={() => setActiveStatsTab('overview')}
+              className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
+                activeStatsTab === 'overview'
+                  ? 'border-b-2 text-orange-600 dark:text-orange-400'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-orange-500'
+              }`}
+              style={activeStatsTab === 'overview' ? { borderBottomColor: textOnWhiteColor, color: textOnWhiteColor } : {}}
+            >
+              Overview
+            </button>
+            <button
+              onClick={() => setActiveStatsTab('playerStats')}
+              className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
+                activeStatsTab === 'playerStats'
+                  ? 'border-b-2 text-orange-600 dark:text-orange-400'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-orange-500'
+              }`}
+              style={activeStatsTab === 'playerStats' ? { borderBottomColor: textOnWhiteColor, color: textOnWhiteColor } : {}}
+            >
+              Player Stats
+            </button>
+            <button
+              onClick={() => setActiveStatsTab('teamStats')}
+              className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
+                activeStatsTab === 'teamStats'
+                  ? 'border-b-2 text-orange-600 dark:text-orange-400'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-orange-500'
+              }`}
+              style={activeStatsTab === 'teamStats' ? { borderBottomColor: textOnWhiteColor, color: textOnWhiteColor } : {}}
+            >
+              Team Stats
+            </button>
+          </div>
+        </div>
+
+        {/* Overview Tab */}
+        {activeStatsTab === 'overview' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
           {/* Left Column - Team Info */}
           <div className="lg:col-span-1 space-y-4 md:space-y-6">
@@ -1067,6 +1351,213 @@ export default function TeamProfile() {
             )}
           </div>
         </div>
+        )}
+
+        {activeStatsTab === 'playerStats' && (
+          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
+            <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 mb-4">
+              <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">Player Statistics - {team.name}</h2>
+              <div className="text-xs md:text-sm text-gray-500 dark:text-gray-400">
+                {filteredPlayerAverages.length} players
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search players..."
+                  value={statsSearch}
+                  onChange={(e) => setStatsSearch(e.target.value)}
+                  className="w-full px-4 py-2 pl-10 border border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-neutral-800 text-slate-900 dark:text-white placeholder:text-gray-400"
+                />
+                <svg className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+            </div>
+
+            <div className="flex flex-col md:flex-row gap-4 mb-4">
+              <div className="flex-1">
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">Stat Category</label>
+                <Select value={playerStatsCategory} onValueChange={(value) => setPlayerStatsCategory(value as any)}>
+                  <SelectTrigger className="w-full bg-white dark:bg-neutral-800 border-slate-200 dark:border-neutral-600">
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
+                    <SelectItem value="Traditional">Traditional</SelectItem>
+                    <SelectItem value="Advanced">Advanced</SelectItem>
+                    <SelectItem value="Scoring">Scoring</SelectItem>
+                    <SelectItem value="Misc">Misc</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex-1">
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">Mode</label>
+                <Select value={playerStatsView} onValueChange={(value) => setPlayerStatsView(value as any)}>
+                  <SelectTrigger className="w-full bg-white dark:bg-neutral-800 border-slate-200 dark:border-neutral-600">
+                    <SelectValue placeholder="Select mode" />
+                  </SelectTrigger>
+                  <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
+                    <SelectItem value="Per Game">Per Game</SelectItem>
+                    <SelectItem value="Total">Total</SelectItem>
+                    <SelectItem value="Per 40">Per 40</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {filteredPlayerAverages.length > 0 ? (
+              <div className="overflow-x-auto -mx-4 md:mx-0 border border-orange-200 dark:border-neutral-700 rounded-lg">
+                <table className="w-full text-xs md:text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-200 dark:border-neutral-700 bg-orange-50 dark:bg-neutral-800">
+                      <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-orange-50 dark:bg-neutral-800 z-10 min-w-[100px] md:min-w-[140px]">Player</th>
+                      <th
+                        onClick={() => {
+                          if (statsSortColumn === 'GP') setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                          else { setStatsSortColumn('GP'); setStatsSortDirection('desc'); }
+                        }}
+                        className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[45px] cursor-pointer hover:bg-orange-100 dark:hover:bg-neutral-700 transition-colors ${statsSortColumn === 'GP' ? 'text-orange-600 dark:text-orange-400' : 'text-slate-700 dark:text-slate-200'}`}
+                      >
+                        <div className="flex items-center justify-center gap-1">
+                          GP {statsSortColumn === 'GP' && <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>}
+                        </div>
+                      </th>
+                      {activePlayerStatColumns.map((column) => (
+                        <th
+                          key={column.key}
+                          onClick={() => {
+                            if (statsSortColumn === column.label) setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                            else { setStatsSortColumn(column.label); setStatsSortDirection('desc'); }
+                          }}
+                          className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 dark:hover:bg-neutral-700 transition-colors ${
+                            statsSortColumn === column.label ? 'text-orange-600 dark:text-orange-400' : 'text-slate-700 dark:text-slate-200'
+                          }`}
+                        >
+                          <div className="flex items-center justify-center gap-1">
+                            {column.label}
+                            {statsSortColumn === column.label && <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>}
+                          </div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredPlayerAverages.map((player, index) => (
+                      <tr
+                        key={`${player.id}-${index}`}
+                        className={`border-b border-gray-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors ${player.slug ? 'cursor-pointer' : ''}`}
+                        onClick={() => { if (player.slug) navigate(`/player/${player.slug}`); }}
+                      >
+                        <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 dark:text-slate-200 sticky left-0 bg-white dark:bg-neutral-900 hover:bg-orange-50 dark:hover:bg-neutral-800 z-10">
+                          <div className="min-w-0">
+                            <div className="font-medium text-slate-900 dark:text-white text-xs md:text-sm truncate">{player.name}</div>
+                          </div>
+                        </td>
+                        <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 dark:text-slate-300 font-medium">{player.games}</td>
+                        {activePlayerStatColumns.map((column) => {
+                          const rawStats = player.rawStats || [];
+                          const rateStats = [
+                            'efg_percent', 'ts_percent', 'three_point_rate',
+                            'ast_percent', 'ast_to_ratio', 'oreb_percent', 'dreb_percent', 'reb_percent',
+                            'tov_percent', 'usage_percent', 'pie', 'off_rating', 'def_rating', 'net_rating',
+                            'pts_percent_2pt', 'pts_percent_3pt', 'pts_percent_ft',
+                            'pts_percent_midrange', 'pts_percent_pitp', 'pts_percent_fastbreak',
+                            'pts_percent_second_chance', 'pts_percent_off_turnovers'
+                          ];
+                          const isRateStat = rateStats.includes(column.key);
+                          const aggregatedValue = rawStats.reduce((acc: number, stat: any) => {
+                            const statValue = stat[column.key];
+                            if (typeof statValue === 'number') return acc + statValue;
+                            if (typeof statValue === 'string' && !isNaN(parseFloat(statValue))) return acc + parseFloat(statValue);
+                            return acc;
+                          }, 0);
+                          const baseValue = isRateStat && rawStats.length > 0 ? aggregatedValue / rawStats.length : aggregatedValue;
+                          const value = applyPlayerMode(column.key, baseValue, player.games, player.totalMinutes || 0, playerStatsView);
+                          const displayValue = value === 0 ? '0.0' : value.toFixed(1);
+                          return (
+                            <td key={`${player.id}-${column.key}`} className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 dark:text-slate-300">
+                              {displayValue}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="md:hidden bg-orange-50 dark:bg-neutral-800 text-orange-700 dark:text-orange-400 text-center py-2 text-xs border-t border-orange-200 dark:border-neutral-700">
+                  ← Swipe to see all stats →
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400">No player statistics available</div>
+            )}
+
+            {filteredPlayerAverages.length > 0 && (
+              <div className="mt-6 pt-4 border-t border-gray-200 dark:border-neutral-700">
+                <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1">
+                  <div className="font-semibold text-slate-600 dark:text-slate-300 mb-2">Legend ({playerStatsCategory}):</div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    {PLAYER_STAT_LEGENDS[playerStatsCategory]?.map((legend, index) => (
+                      <span key={`legend-${index}`}>{legend}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeStatsTab === 'teamStats' && (
+          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
+            <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-4">Team Statistics - {team.name}</h2>
+            
+            {teamAggregateStats ? (
+              <div className="space-y-6">
+                <div className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                  Based on {teamAggregateStats.gamesPlayed} games played
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3 pb-2 border-b border-gray-200 dark:border-neutral-700">Traditional</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {[
+                      { label: 'PPG', value: (teamAggregateStats.perGame.spoints || 0).toFixed(1) },
+                      { label: 'FGM', value: (teamAggregateStats.perGame.sfieldgoalsmade || 0).toFixed(1) },
+                      { label: 'FGA', value: (teamAggregateStats.perGame.sfieldgoalsattempted || 0).toFixed(1) },
+                      { label: 'FG%', value: teamAggregateStats.totals.sfieldgoalsattempted > 0 ? ((teamAggregateStats.totals.sfieldgoalsmade / teamAggregateStats.totals.sfieldgoalsattempted) * 100).toFixed(1) : '0.0' },
+                      { label: '3PM', value: (teamAggregateStats.perGame.sthreepointersmade || 0).toFixed(1) },
+                      { label: '3PA', value: (teamAggregateStats.perGame.sthreepointersattempted || 0).toFixed(1) },
+                      { label: '3P%', value: teamAggregateStats.totals.sthreepointersattempted > 0 ? ((teamAggregateStats.totals.sthreepointersmade / teamAggregateStats.totals.sthreepointersattempted) * 100).toFixed(1) : '0.0' },
+                      { label: 'FTM', value: (teamAggregateStats.perGame.sfreethrowsmade || 0).toFixed(1) },
+                      { label: 'FTA', value: (teamAggregateStats.perGame.sfreethrowsattempted || 0).toFixed(1) },
+                      { label: 'FT%', value: teamAggregateStats.totals.sfreethrowsattempted > 0 ? ((teamAggregateStats.totals.sfreethrowsmade / teamAggregateStats.totals.sfreethrowsattempted) * 100).toFixed(1) : '0.0' },
+                      { label: 'REB', value: (teamAggregateStats.perGame.sreboundstotal || 0).toFixed(1) },
+                      { label: 'OREB', value: (teamAggregateStats.perGame.sreboundsoffensive || 0).toFixed(1) },
+                      { label: 'DREB', value: (teamAggregateStats.perGame.sreboundsdefensive || 0).toFixed(1) },
+                      { label: 'AST', value: (teamAggregateStats.perGame.sassists || 0).toFixed(1) },
+                      { label: 'STL', value: (teamAggregateStats.perGame.ssteals || 0).toFixed(1) },
+                      { label: 'BLK', value: (teamAggregateStats.perGame.sblocks || 0).toFixed(1) },
+                      { label: 'TO', value: (teamAggregateStats.perGame.sturnovers || 0).toFixed(1) },
+                      { label: 'PF', value: (teamAggregateStats.perGame.sfoulspersonal || 0).toFixed(1) },
+                      { label: '+/-', value: (teamAggregateStats.perGame.splusminuspoints || 0).toFixed(1) },
+                      { label: 'PITP', value: (teamAggregateStats.perGame.spointsinthepaint || 0).toFixed(1) },
+                      { label: 'FB PTS', value: (teamAggregateStats.perGame.spointsfastbreak || 0).toFixed(1) },
+                    ].map((stat) => (
+                      <div key={stat.label} className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 text-center">
+                        <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">{stat.label}</div>
+                        <div className="text-lg font-bold" style={{ color: textOnWhiteColor }}>{stat.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400">No team statistics available</div>
+            )}
+          </div>
+        )}
       </main>
 
       {/* Game Detail Modal */}

@@ -1,0 +1,92 @@
+Implement Match Centre MVP using wouter + Supabase direct queries.
+
+GOALS
+1) Add a new full page route: /game/:gameKey
+2) Update GameResultsCarousel to show Upcoming games (scheduled) as well as Results, using game_schedule.matchtime + status
+3) Update GamePreviewModal to include a CTA button “Open game page” that routes to /game/:gameKey
+4) Keep existing layout/styling consistent (Tailwind + shadcn). Do not redesign the league page, just extend behavior.
+
+CONTEXT
+- Router: wouter
+- Routes file: client/src/App.tsx
+- Carousel: client/src/components/GameResultsCarousel.tsx
+- Modal: client/src/components/GamePreviewModal.tsx
+- Supabase client: client/src/lib/supabase.ts
+- Team logos via: client/src/components/TeamLogo.tsx
+- Tables: game_schedule (game_key, league_id, matchtime, hometeam, awayteam, status, competitionname), player_stats, team_stats
+- Note: game_schedule has a column "LiveStats URL" in DB but frontend uses game_schedule for fixtures; ignore the worker parts.
+
+STEP-BY-STEP TASKS
+
+A) Add GamePage route
+1) Create file: client/src/pages/GamePage.tsx
+2) Use wouter to read param :gameKey
+3) Fetch from Supabase:
+   - game_schedule row where game_key == gameKey (select: game_key, league_id, matchtime, hometeam, awayteam, status, competitionname)
+4) Render MVP layout:
+   - Header with TeamLogo (home and away), team names, matchtime formatted
+   - Status badge (Scheduled / Live / Final)
+   - If status != 'final': show “Match Preview” section (simple: tip time, competitionname/pool if present, and “More live data appears when the game starts”)
+   - If status == 'final' OR status == 'live': show:
+       - Scoreline if available from team_stats (if you can derive it); otherwise show placeholder “Score available when stats are published”
+       - Two tabs or sections (simple stack is fine for MVP):
+           * Box Score: query player_stats by game_key, group by team, show top 10 players each team with PTS/REB/AST and shooting line if fields exist.
+           * Team Stats: query team_stats by game_key and list a few key stats if present.
+   - A lightweight “Play-by-play” placeholder section that will be implemented later.
+5) Error states:
+   - Loading skeleton
+   - If no game_schedule row found: show “Game not found” with a Back link
+
+B) Wire route in App.tsx
+1) Import GamePage
+2) Add route:
+   <Route path="/game/:gameKey" component={GamePage} />
+
+C) Update GamePreviewModal to include navigation CTA
+1) Update props to include gameKey (string) in addition to current game object:
+   - interface GamePreviewModalProps { ... gameKey?: string; ... }
+2) Update parent caller(s) (likely League page / carousel click handler) so when opening modal it passes the selected game_key.
+3) In modal footer area add:
+   - Link from wouter: import { Link } from "wouter";
+   - Button (shadcn) that links to `/game/${gameKey}`
+   - Only show button if gameKey exists.
+4) Keep modal UI consistent.
+
+D) Update GameResultsCarousel to support Upcoming games
+1) Current carousel only shows past games/results. Update it so it fetches from game_schedule first:
+   - Query game_schedule where league_id == props.leagueId
+   - Pull games in a window: now - 7 days to now + 7 days (matchtime bounds)
+   - Return fields: game_key, matchtime, hometeam, awayteam, status
+2) Determine which list to show:
+   - “Live” list: status == 'live' AND matchtime in reasonable window
+   - “Results” list: matchtime < now AND status == 'final' (or FINAL) — keep compatibility if status values differ in DB (handle lowercase/uppercase)
+   - “Upcoming” list: matchtime >= now AND status != 'final'
+3) Auto display logic (no major UI changes):
+   - If any live games -> show LIVE row(s) first (badge)
+   - Else if there are results in last 48h -> show those
+   - Else show upcoming (next 10 games)
+4) Card UI:
+   - For Results: keep existing (score data from team_stats if already supported)
+   - For Upcoming: show team names/logos + formatted date/time; show “Scheduled” badge; no score
+5) Clicking an upcoming card should still call onGameClick(game_key). Ensure onGameClick gets game_key not numeric_id.
+6) Ensure carousel width/animation remain unchanged.
+
+E) Data formatting + helpers
+- Use a small helper to format matchtime in UK locale (Europe/London). Keep it simple.
+- Keep all queries using client/src/lib/supabase.ts.
+
+F) Verify build
+- Ensure TypeScript compiles.
+- Ensure no unused imports.
+- Confirm the league page still renders the carousel.
+- Confirm modal opens and “Open game page” navigates.
+- Confirm /game/:gameKey loads a game.
+
+DELIVERABLE
+- Commit-ready changes across:
+  - client/src/App.tsx
+  - client/src/pages/GamePage.tsx (new)
+  - client/src/components/GameResultsCarousel.tsx
+  - client/src/components/GamePreviewModal.tsx
+  - any parent file that passes modal props (update to include gameKey)
+- Keep changes minimal and consistent with existing styling.

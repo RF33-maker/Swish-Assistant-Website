@@ -1,5 +1,5 @@
 import { useLocation } from "wouter";
-import { ArrowLeft, Download, Trophy, Loader2, Filter, Search } from "lucide-react";
+import { ArrowLeft, Download, Trophy, Loader2, Filter, Search, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -216,6 +216,11 @@ export default function SocialToolsPage() {
   const [queueIds, setQueueIds] = useState<string[]>([]);
   const [queueCardCache, setQueueCardCache] = useState<Record<string, PlayerPerformanceV1Data>>({});
   const [queueLoading, setQueueLoading] = useState(false);
+  const [showAllPerformances, setShowAllPerformances] = useState(false);
+  const [hasMorePerformances, setHasMorePerformances] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [performanceOffset, setPerformanceOffset] = useState(0);
+  const PAGE_SIZE = 50;
   
   // Compute queue cards from IDs and cache
   const queueCards = useMemo(() => {
@@ -239,7 +244,10 @@ export default function SocialToolsPage() {
   }, []);
 
   useEffect(() => {
-    fetchTopPerformances();
+    setPerformances([]);
+    setPerformanceOffset(0);
+    setHasMorePerformances(true);
+    fetchTopPerformances(0, true);
   }, [selectedLeague, timeFilter]);
 
   const fetchLeagues = async () => {
@@ -249,15 +257,19 @@ export default function SocialToolsPage() {
       .order("name");
     
     if (!error && data) {
-      console.log("[SocialTools] Loaded leagues:", data.length, data);
       setLeagues(data);
     } else {
       console.error("[SocialTools] Error loading leagues:", error);
     }
   };
 
-  const fetchTopPerformances = async () => {
-    setLoading(true);
+  const fetchTopPerformances = async (offset = 0, isInitialLoad = false) => {
+    if (isInitialLoad) {
+      setLoading(true);
+    } else {
+      setLoadingMore(true);
+    }
+    
     try {
       let query = supabase
         .from("player_stats")
@@ -283,7 +295,7 @@ export default function SocialToolsPage() {
         query = query.gte("created_at", sevenDaysAgo.toISOString());
       }
       
-      const { data: playerStats, error: playerError } = await query.limit(50);
+      const { data: playerStats, error: playerError } = await query.range(offset, offset + PAGE_SIZE - 1);
 
       if (playerError) {
         console.error("Error fetching performances:", playerError);
@@ -293,9 +305,6 @@ export default function SocialToolsPage() {
       const numericIds = Array.from(new Set((playerStats || []).map((s: any) => s.numeric_id).filter(Boolean)));
       const gameKeys = Array.from(new Set((playerStats || []).map((s: any) => s.game_key).filter(Boolean)));
       
-      console.log('[SocialTools] numericIds:', numericIds.slice(0, 5));
-      console.log('[SocialTools] gameKeys:', gameKeys.slice(0, 5));
-      
       let teamStatsMap: Record<string, any[]> = {};
       
       if (numericIds.length > 0) {
@@ -303,8 +312,6 @@ export default function SocialToolsPage() {
           .from("team_stats")
           .select("numeric_id, game_key, name, tot_spoints, league_id")
           .in("numeric_id", numericIds);
-        console.log('[SocialTools] teamStats by numericId:', teamStats?.length, 'error:', teamError);
-        
         (teamStats || []).forEach((ts: any) => {
           if (ts.numeric_id) {
             if (!teamStatsMap[ts.numeric_id]) {
@@ -358,8 +365,6 @@ export default function SocialToolsPage() {
           (gameTeams.length === 2 ? gameTeams.find((t: any) => t !== playerTeamStats)?.name : null) || 
           'Unknown';
         
-        console.log(`[SocialTools] Player: ${stat.players?.full_name}, Team: ${playerTeamName}, GameTeams:`, gameTeams.map((t: any) => t.name), 'Opponent:', opponentName);
-        
         return {
           id: stat.id,
           player_id: stat.players?.id || stat.player_id,
@@ -389,11 +394,28 @@ export default function SocialToolsPage() {
         };
       });
 
-      setPerformances(mapped);
+      // Check if there are more results
+      const hasMore = (playerStats?.length || 0) === PAGE_SIZE;
+      setHasMorePerformances(hasMore);
+      setPerformanceOffset(offset + (playerStats?.length || 0));
+      
+      // Append or replace performances based on whether this is initial load
+      if (isInitialLoad) {
+        setPerformances(mapped);
+      } else {
+        setPerformances(prev => [...prev, ...mapped]);
+      }
     } catch (err) {
       console.error("Failed to fetch performances:", err);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
+    }
+  };
+
+  const loadMorePerformances = () => {
+    if (!loadingMore && hasMorePerformances) {
+      fetchTopPerformances(performanceOffset, false);
     }
   };
 
@@ -583,54 +605,93 @@ export default function SocialToolsPage() {
                     <p>No performances found matching "{performanceSearch}"</p>
                   </div>
                 ) : (
-                  <ScrollArea className="h-[550px]">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pr-4">
-                      {filteredPerformances.map((perf) => (
-                        <div
-                          key={perf.id}
-                          onClick={() => handleSelectPerformance(perf)}
-                          className={`p-4 rounded-lg border cursor-pointer transition-all hover:shadow-md relative ${
-                            selectedId === perf.id
-                              ? "border-orange-500 bg-orange-50 dark:bg-orange-900/20"
-                              : queueIds.includes(perf.id)
-                              ? "border-green-400 bg-green-50 dark:bg-green-900/20"
-                              : "border-gray-200 dark:border-gray-600 hover:border-orange-300 dark:hover:border-orange-600"
-                          }`}
-                          data-testid={`card-performance-${perf.id}`}
+                  <div>
+                    <ScrollArea className={showAllPerformances ? "h-[800px]" : "h-[400px]"}>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pr-4">
+                        {filteredPerformances.map((perf) => (
+                          <div
+                            key={perf.id}
+                            onClick={() => handleSelectPerformance(perf)}
+                            className={`p-4 rounded-lg border cursor-pointer transition-all hover:shadow-md relative ${
+                              selectedId === perf.id
+                                ? "border-orange-500 bg-orange-50 dark:bg-orange-900/20"
+                                : queueIds.includes(perf.id)
+                                ? "border-green-400 bg-green-50 dark:bg-green-900/20"
+                                : "border-gray-200 dark:border-gray-600 hover:border-orange-300 dark:hover:border-orange-600"
+                            }`}
+                            data-testid={`card-performance-${perf.id}`}
+                          >
+                            <div className="flex justify-between items-start mb-2">
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-semibold text-gray-900 dark:text-white truncate">
+                                  {perf.player_name}
+                                </h3>
+                                <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
+                                  {perf.team}
+                                </p>
+                                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                                  vs {perf.opponent} ({perf.player_team_score}-{perf.opponent_score})
+                                </p>
+                              </div>
+                              <div className="text-right ml-3">
+                                <span className="text-2xl font-bold text-orange-600 dark:text-orange-400">
+                                  {perf.spoints}
+                                </span>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">PTS</p>
+                              </div>
+                            </div>
+                            <div className="flex gap-4 text-sm text-gray-600 dark:text-gray-300">
+                              <span>{perf.sreboundstotal} REB</span>
+                              <span>{perf.sassists} AST</span>
+                              {perf.ssteals ? <span>{perf.ssteals} STL</span> : null}
+                            </div>
+                            {queueIds.includes(perf.id) && (
+                              <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-0.5 rounded-full font-medium">
+                                Queued
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
+                    <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                      <button
+                        onClick={() => setShowAllPerformances(!showAllPerformances)}
+                        className="w-full py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-300 flex items-center justify-center gap-1"
+                      >
+                        {showAllPerformances ? (
+                          <>
+                            <ChevronUp className="h-4 w-4" />
+                            Collapse View
+                          </>
+                        ) : (
+                          <>
+                            <ChevronDown className="h-4 w-4" />
+                            Expand View ({filteredPerformances.length} loaded)
+                          </>
+                        )}
+                      </button>
+                      {hasMorePerformances && (
+                        <button
+                          onClick={loadMorePerformances}
+                          disabled={loadingMore}
+                          className="w-full py-2 text-sm font-medium text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 flex items-center justify-center gap-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg disabled:opacity-50"
                         >
-                          <div className="flex justify-between items-start mb-2">
-                            <div className="flex-1 min-w-0">
-                              <h3 className="font-semibold text-gray-900 dark:text-white truncate">
-                                {perf.player_name}
-                              </h3>
-                              <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
-                                {perf.team}
-                              </p>
-                              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                                vs {perf.opponent} ({perf.player_team_score}-{perf.opponent_score})
-                              </p>
-                            </div>
-                            <div className="text-right ml-3">
-                              <span className="text-2xl font-bold text-orange-600 dark:text-orange-400">
-                                {perf.spoints}
-                              </span>
-                              <p className="text-xs text-gray-500 dark:text-gray-400">PTS</p>
-                            </div>
-                          </div>
-                          <div className="flex gap-4 text-sm text-gray-600 dark:text-gray-300">
-                            <span>{perf.sreboundstotal} REB</span>
-                            <span>{perf.sassists} AST</span>
-                            {perf.ssteals ? <span>{perf.ssteals} STL</span> : null}
-                          </div>
-                          {queueIds.includes(perf.id) && (
-                            <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-0.5 rounded-full font-medium">
-                              Queued
-                            </div>
+                          {loadingMore ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Loading more...
+                            </>
+                          ) : (
+                            <>
+                              <ChevronDown className="h-4 w-4" />
+                              Load More Performances
+                            </>
                           )}
-                        </div>
-                      ))}
+                        </button>
+                      )}
                     </div>
-                  </ScrollArea>
+                  </div>
                 )}
               </CardContent>
             </Card>

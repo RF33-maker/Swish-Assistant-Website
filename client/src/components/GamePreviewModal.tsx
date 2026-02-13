@@ -1,8 +1,11 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { X } from "lucide-react";
+import { X, ExternalLink } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { TeamLogo } from "@/components/TeamLogo";
+import { generateGameSlug } from "@/lib/gameSlug";
+import { Link } from "wouter";
+import { Button } from "@/components/ui/button";
 
 interface GamePreviewModalProps {
   isOpen: boolean;
@@ -15,6 +18,7 @@ interface GamePreviewModalProps {
     venue?: string;
   };
   leagueId: number;
+  gameKey?: string;
 }
 
 interface GameResult {
@@ -36,12 +40,11 @@ function parseMinutes(minutesStr: string | null | undefined): number {
   return 0;
 }
 
-export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: GamePreviewModalProps) {
+export default function GamePreviewModal({ isOpen, onClose, game, leagueId, gameKey }: GamePreviewModalProps) {
   // First, fetch team IDs from teams table
   const { data: team1Data } = useQuery({
     queryKey: ['team-lookup', leagueId, game.team1],
     queryFn: async () => {
-      console.log('🔍 Looking up team1 ID for:', game.team1);
       
       // Try exact match first
       let { data, error } = await supabase
@@ -54,7 +57,6 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
       // If no exact match, try partial match
       if (error || !data) {
         const baseTeamName = game.team1.split(' Senior ')[0].split(' Men')[0];
-        console.log('🔍 Trying partial match for team1:', baseTeamName);
         
         const { data: partialData, error: partialError } = await supabase
           .from('teams')
@@ -68,7 +70,6 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
         error = partialError;
       }
       
-      console.log('✅ Team1 lookup result:', data);
       return data;
     },
     enabled: isOpen
@@ -77,7 +78,6 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
   const { data: team2Data } = useQuery({
     queryKey: ['team-lookup', leagueId, game.team2],
     queryFn: async () => {
-      console.log('🔍 Looking up team2 ID for:', game.team2);
       
       // Try exact match first
       let { data, error } = await supabase
@@ -90,7 +90,6 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
       // If no exact match, try partial match
       if (error || !data) {
         const baseTeamName = game.team2.split(' Senior ')[0].split(' Men')[0];
-        console.log('🔍 Trying partial match for team2:', baseTeamName);
         
         const { data: partialData, error: partialError } = await supabase
           .from('teams')
@@ -104,7 +103,6 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
         error = partialError;
       }
       
-      console.log('✅ Team2 lookup result:', data);
       return data;
     },
     enabled: isOpen
@@ -119,7 +117,6 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
     queryFn: async () => {
       if (!team1Id) return [];
       
-      console.log('🏀 Fetching game results for team1_id:', team1Id);
       
       const { data: teamGames, error } = await supabase
         .from('team_stats')
@@ -161,7 +158,6 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
         if (results.length >= 5) break;
       }
 
-      console.log('✅ Team1 game results:', results);
       return results;
     },
     enabled: isOpen && !!team1Id
@@ -173,7 +169,6 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
     queryFn: async () => {
       if (!team2Id) return [];
       
-      console.log('🏀 Fetching game results for team2_id:', team2Id);
       
       const { data: teamGames, error } = await supabase
         .from('team_stats')
@@ -215,7 +210,6 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
         if (results.length >= 5) break;
       }
 
-      console.log('✅ Team2 game results:', results);
       return results;
     },
     enabled: isOpen && !!team2Id
@@ -236,7 +230,6 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
     queryFn: async () => {
       if (!team1Id) return [];
       
-      console.log('📊 Fetching roster for team1_id:', team1Id);
       
       const { data, error } = await supabase
         .from('player_stats')
@@ -304,7 +297,6 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
         }))
         .sort((a, b) => parseFloat(b.ppg) - parseFloat(a.ppg));
       
-      console.log('✅ Team1 roster:', roster.length, 'players');
       return roster;
     },
     enabled: isOpen && !!team1Id
@@ -316,7 +308,6 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
     queryFn: async () => {
       if (!team2Id) return [];
       
-      console.log('📊 Fetching roster for team2_id:', team2Id);
       
       const { data, error } = await supabase
         .from('player_stats')
@@ -384,7 +375,6 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
         }))
         .sort((a, b) => parseFloat(b.ppg) - parseFloat(a.ppg));
       
-      console.log('✅ Team2 roster:', roster.length, 'players');
       return roster;
     },
     enabled: isOpen && !!team2Id
@@ -394,16 +384,6 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
   const team1FullRoster = team1Roster?.slice(3) || [];
   const team2Top3 = team2Roster?.slice(0, 3) || [];
   const team2FullRoster = team2Roster?.slice(3) || [];
-
-  // Debug logging
-  if (isOpen) {
-    console.log('🎮 Game Preview Modal opened for:', game.team1, 'vs', game.team2);
-    console.log('🔑 Team IDs:', { team1Id, team2Id });
-    console.log('📊 Team1 roster data:', team1Roster?.length, 'players');
-    console.log('📊 Team2 roster data:', team2Roster?.length, 'players');
-    console.log('🏀 Team1 game results:', team1GameResults?.length, 'games');
-    console.log('🏀 Team2 game results:', team2GameResults?.length, 'games');
-  }
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -666,6 +646,17 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId }: Ga
             </div>
           </div>
           </div>
+
+          {gameKey && (
+            <div className="mt-4 pt-4 border-t border-orange-200 dark:border-neutral-700 flex justify-center">
+              <Link href={`/game/${generateGameSlug(game.team1, game.team2, game.game_date)}`}>
+                <Button className="bg-orange-600 hover:bg-orange-700 text-white flex items-center gap-2">
+                  <ExternalLink className="w-4 h-4" />
+                  Open Game Page
+                </Button>
+              </Link>
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>

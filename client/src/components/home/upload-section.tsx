@@ -28,9 +28,6 @@ export default function UploadSection() {
         const filePath = `${user.id}/${safeName}`;
 
 
-      console.log("User:", user);
-      console.log("File path:", filePath);
-
       const { error } = await supabase.storage
         .from("user-uploads")
         .upload(filePath, file, {
@@ -38,9 +35,6 @@ export default function UploadSection() {
           //upsert: true,
           contentType: "application/pdf",
         });
-      console.log("Uploading file:", file.name, file.size, file.type);
-
-
       if (error) {
         setMessage("Upload failed: " + error.message);
         setUploading(false);

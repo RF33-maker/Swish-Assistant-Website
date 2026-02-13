@@ -132,11 +132,6 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
       const BASE = import.meta.env.VITE_BACKEND_URL;
 
       if (BASE) {
-        console.log('🚀 Attempting backend chat request...');
-        console.log('Backend URL:', BASE);
-        console.log('Question:', question);
-        console.log('League ID:', leagueId);
-
         try {
           const response = await fetch(`${BASE}/api/chat/league`, {
             method: 'POST',
@@ -151,13 +146,8 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
             signal: AbortSignal.timeout(10000) // 10 second timeout
           });
 
-          console.log('Backend response status:', response.status);
-          console.log('Backend response headers:', Object.fromEntries(response.headers.entries()));
-
           if (response.ok) {
             const data = await response.json();
-            console.log('✅ Backend response received:', data);
-
             if (data.response || data.answer) {
               return {
                 content: data.response || data.answer,
@@ -172,12 +162,9 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
         } catch (backendError) {
           console.error('❌ Backend request failed:', backendError);
         }
-      } else {
-        console.log('⚠️ No backend URL configured, using fallback');
       }
 
       // Fallback to local Supabase processing
-      console.log('🔄 Falling back to local Supabase processing...');
       const lowerQuestion = question.toLowerCase();
 
       // Gather comprehensive league data for local processing
@@ -199,16 +186,6 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
       const playersData = playersDataResult.data || [];
       const gamesData = gamesDataResult.data || [];
 
-      console.log('League data retrieved for local processing:', { 
-        players: playersData.length, 
-        games: gamesData.length 
-      });
-      
-      // Debug: Log available player names
-      if (playersData.length > 0) {
-        console.log('Available players:', playersData.map(p => p.name).join(', '));
-      }
-
       // Enhanced Pattern-based intelligent responses
 
       // Player team lookup
@@ -216,8 +193,6 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
         const playerNameMatch = lowerQuestion.match(/who does (.+?) play/);
         if (playerNameMatch) {
           const playerName = playerNameMatch[1].trim();
-          console.log('Looking for player:', playerName);
-
           const player = playersData.find(p => {
             const playerNameLower = playerName.toLowerCase();
             const pNameLower = p.name.toLowerCase();
@@ -261,8 +236,6 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
         const nameMatch = lowerQuestion.match(/how is (.+?) (doing|playing)/);
         if (nameMatch) {
           const searchName = nameMatch[1].trim();
-          console.log('Searching for player performance:', searchName);
-
           const player = playersData.find(p => {
             const searchNameLower = searchName.toLowerCase();
             const pNameLower = p.name.toLowerCase();

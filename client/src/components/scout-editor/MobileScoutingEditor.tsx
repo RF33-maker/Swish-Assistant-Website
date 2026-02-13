@@ -270,7 +270,6 @@ export default function MobileScoutingEditor({
           localStorage.removeItem(`scouting_doc_${docId}`);
         }
       } catch (supabaseError) {
-        console.log('Supabase storage not available, using local storage');
       }
     } catch (error) {
       console.error('Error creating document:', error);

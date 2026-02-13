@@ -32,15 +32,10 @@ export default function PlayersListPage() {
     const fetchPlayers = async () => {
       setLoading(true);
       try {
-        console.log("Fetching all player stats to create player list...");
-        
         // Get all player stats to build player list, including slug from players table
         const { data: allStats, error } = await supabase
           .from('player_stats')
           .select('*, players:player_id(slug)');
-
-        console.log("All player stats:", allStats);
-        console.log("Error:", error);
 
         if (error) {
           console.error('Error fetching player stats:', error);
@@ -53,7 +48,6 @@ export default function PlayersListPage() {
         }
 
         if (!allStats || allStats.length === 0) {
-          console.log("No player stats found in database");
           setPlayers([]);
           setFilteredPlayers([]);
           return;
@@ -110,8 +104,6 @@ export default function PlayersListPage() {
           };
         });
 
-        console.log("Processed players with averages:", playersWithAverages);
-        
         setPlayers(playersWithAverages);
         setFilteredPlayers(playersWithAverages);
       } catch (error) {

@@ -1,359 +1,460 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { TeamLogo } from "./TeamLogo";
+import { CheckCircle2, Clock, ChevronLeft, ChevronRight } from "lucide-react";
 
-interface GameResult {
+interface GameItem {
+  game_key: string;
   game_id: string;
   game_date: string;
   home_team: string;
   away_team: string;
-  home_score: number;
-  away_score: number;
-  status: string;
+  home_score: number | null;
+  away_score: number | null;
+  status: 'LIVE' | 'FINAL' | 'SCHEDULED';
+}
+
+interface GameClickData {
+  gameKey: string;
+  status: 'LIVE' | 'FINAL' | 'SCHEDULED';
+  homeTeam: string;
+  awayTeam: string;
+  gameDate: string;
+  homeScore: number | null;
+  awayScore: number | null;
 }
 
 interface GameResultsCarouselProps {
   leagueId: string;
-  onGameClick: (gameId: string) => void;
+  onGameClick: (data: GameClickData) => void;
+}
+
+type FilterTab = "results" | "live" | "upcoming";
+
+function formatDateUK(dateStr: string): string {
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('en-GB', { 
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'Europe/London'
+  }).toUpperCase();
+}
+
+function formatTimeUK(dateStr: string): string {
+  const date = new Date(dateStr);
+  return date.toLocaleTimeString('en-GB', { 
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Europe/London'
+  });
+}
+
+function formatRelativeDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = Math.floor(Math.abs(diffMs) / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) {
+    return `Today • ${formatTimeUK(dateStr)}`;
+  }
+  if (diffDays === 1 && diffMs > 0) {
+    return 'Yesterday';
+  }
+  if (diffDays === 1 && diffMs < 0) {
+    return `Tomorrow • ${formatTimeUK(dateStr)}`;
+  }
+  return `${formatDateUK(dateStr)} • ${formatTimeUK(dateStr)}`;
 }
 
 export default function GameResultsCarousel({ leagueId, onGameClick }: GameResultsCarouselProps) {
-  const [games, setGames] = useState<GameResult[]>([]);
+  const [allGames, setAllGames] = useState<GameItem[]>([]);
+  const [activeTab, setActiveTab] = useState<FilterTab>("results");
+  const [hasSetDefaultTab, setHasSetDefaultTab] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [isPaused, setIsPaused] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const fetchGameResults = async () => {
-      setLoading(true);
+  const fetchGames = async (isPolling = false) => {
+    if (!isPolling) setLoading(true);
+    
+    try {
+      const now = new Date();
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
       
-      try {
-        // Fetch both team_stats and game_schedule in parallel
-        const [teamStatsResult, scheduleResult] = await Promise.all([
-          supabase
-            .from("team_stats")
-            .select("*")
-            .eq("league_id", leagueId)
-            .order("created_at", { ascending: false }),
-          supabase
+      const { data: teamStatsData, error: teamStatsError } = await supabase
+        .from("team_stats")
+        .select("game_key, name, tot_spoints, created_at, numeric_id")
+        .eq("league_id", leagueId)
+        .gte("created_at", thirtyDaysAgo.toISOString())
+        .order("created_at", { ascending: false });
+      
+      if (teamStatsError) {
+        console.error("Error fetching team stats:", teamStatsError);
+      }
+
+      const completedGames: GameItem[] = [];
+      const processedGameKeys = new Set<string>();
+      
+      if (teamStatsData && teamStatsData.length > 0) {
+        const gameMap = new Map<string, any[]>();
+        teamStatsData.forEach(stat => {
+          const key = stat.game_key || stat.numeric_id;
+          if (key) {
+            if (!gameMap.has(key)) {
+              gameMap.set(key, []);
+            }
+            gameMap.get(key)!.push(stat);
+          }
+        });
+
+        const completedGameKeys = Array.from(gameMap.keys());
+        
+        let scheduleHomeAwayMap = new Map<string, { hometeam: string; awayteam: string; matchtime: string }>();
+        if (completedGameKeys.length > 0) {
+          const { data: schedLookup } = await supabase
             .from("game_schedule")
-            .select("game_key, matchtime")
+            .select("game_key, hometeam, awayteam, matchtime")
             .eq("league_id", leagueId)
-        ]);
-
-        const { data: teamStatsData, error: teamStatsError } = teamStatsResult;
-        const { data: scheduleData } = scheduleResult;
-
-        // Create a map of game_key -> matchtime for date lookups
-        const scheduleDateMap = new Map<string, string>();
-        if (scheduleData) {
-          scheduleData.forEach((game: any) => {
-            if (game.game_key && game.matchtime) {
-              scheduleDateMap.set(game.game_key, game.matchtime);
-            }
-          });
-        }
-
-        if (teamStatsData && teamStatsData.length > 0 && !teamStatsError) {
-          // Group team stats by numeric_id to create game results
-          const gameMap = new Map<string, any[]>();
-          
-          teamStatsData.forEach(stat => {
-            const numericId = stat.numeric_id;
-            if (numericId && stat.name) { // Only process records with team names and numeric_id
-              if (!gameMap.has(numericId)) {
-                gameMap.set(numericId, []);
+            .in("game_key", completedGameKeys);
+          if (schedLookup) {
+            schedLookup.forEach(s => {
+              if (s.game_key) {
+                scheduleHomeAwayMap.set(s.game_key, { hometeam: s.hometeam, awayteam: s.awayteam, matchtime: s.matchtime });
               }
-              gameMap.get(numericId)!.push(stat);
-            }
-          });
-
-          // Convert to game results
-          const gamesFromTeamStats: GameResult[] = [];
-          
-          gameMap.forEach((gameTeams, numericId) => {
-            if (gameTeams.length === 2) { // Valid game with 2 teams
-              // Find which team is home and which is away using is_home field
-              const homeTeam = gameTeams.find(team => team.is_home === true);
-              const awayTeam = gameTeams.find(team => team.is_home === false);
-              
-              let finalHomeTeam;
-              let finalAwayTeam;
-              
-              // If we found both teams with proper is_home flags and they're different, use them
-              if (homeTeam && awayTeam && homeTeam !== awayTeam) {
-                finalHomeTeam = homeTeam;
-                finalAwayTeam = awayTeam;
-              } 
-              // If we only found home team, the other one must be away
-              else if (homeTeam && !awayTeam) {
-                finalHomeTeam = homeTeam;
-                finalAwayTeam = gameTeams.find(team => team !== homeTeam);
-              }
-              // If we only found away team, the other one must be home
-              else if (!homeTeam && awayTeam) {
-                finalAwayTeam = awayTeam;
-                finalHomeTeam = gameTeams.find(team => team !== awayTeam);
-              }
-              // Fallback: neither team has proper is_home flags, just assign them as is
-              else {
-                finalHomeTeam = gameTeams[0];
-                finalAwayTeam = gameTeams[1];
-              }
-              
-              // Safety check: ensure we have two distinct teams
-              if (!finalHomeTeam || !finalAwayTeam || finalHomeTeam === finalAwayTeam) {
-                console.warn(`⚠️ Invalid team data for game ${numericId}, skipping`);
-                return;
-              }
-
-              // Get game_key from team_stats to look up matchtime from game_schedule
-              const gameKey = finalHomeTeam.game_key || finalAwayTeam.game_key;
-              const matchtime = gameKey ? scheduleDateMap.get(gameKey) : null;
-              
-              gamesFromTeamStats.push({
-                game_id: numericId,
-                game_date: matchtime || finalHomeTeam.game_date || finalAwayTeam.game_date || new Date().toISOString(),
-                home_team: finalHomeTeam.name,
-                away_team: finalAwayTeam.name,
-                home_score: finalHomeTeam.tot_spoints || 0,
-                away_score: finalAwayTeam.tot_spoints || 0,
-                status: "FINAL"
-              });
-            }
-          });
-
-          // Sort by date and take recent 10
-          const sortedGames = gamesFromTeamStats
-            .sort((a, b) => new Date(b.game_date).getTime() - new Date(a.game_date).getTime())
-            .slice(0, 10);
-
-          setGames(sortedGames);
-          return;
-        }
-
-        // Fallback to player_stats approach
-        console.log("🎮 Using fallback: processing game results from player_stats");
-        
-        // Get all player stats grouped by game
-        const { data: playerStats, error } = await supabase
-          .from("player_stats")
-          .select("*")
-          .eq("league_id", leagueId)
-          .order("game_date", { ascending: false });
-
-        if (error) {
-          console.error("Error fetching game results:", error);
-          return;
-        }
-
-        if (!playerStats || playerStats.length === 0) {
-          console.log("No player stats available");
-          return;
-        }
-
-        // Get game_id or numeric_id values to match against game_schedule
-        const gameIds = new Set<string>();
-        playerStats.forEach(stat => {
-          if (stat.game_id) gameIds.add(stat.game_id);
-        });
-
-        // Fetch game schedule to get correct home/away team mapping
-        const { data: gameSchedule } = await supabase
-          .from("game_schedule")
-          .select("*")
-          .eq("league_id", leagueId);
-
-        // Create a map of game_id -> {hometeam, awayteam}
-        const gameScheduleMap = new Map<string, any>();
-        gameSchedule?.forEach(game => {
-          if (game.game_id) {
-            gameScheduleMap.set(game.game_id, game);
-          }
-          // Also try numeric_id as fallback
-          if (game.numeric_id) {
-            gameScheduleMap.set(game.numeric_id?.toString(), game);
-          }
-        });
-
-        // Group stats by game_id and process
-        const gameMap = new Map<string, any>();
-        
-        playerStats.forEach(stat => {
-          if (!gameMap.has(stat.game_id)) {
-            gameMap.set(stat.game_id, {
-              game_id: stat.game_id,
-              game_date: stat.game_date,
-              players: [],
-              scheduleData: gameScheduleMap.get(stat.game_id)
             });
           }
-          gameMap.get(stat.game_id).players.push(stat);
+        }
+
+        gameMap.forEach((teams, gameKey) => {
+          if (teams.length === 2) {
+            processedGameKeys.add(gameKey);
+            
+            const schedInfo = scheduleHomeAwayMap.get(gameKey);
+            let home_team: string, away_team: string, home_score: number, away_score: number;
+            
+            if (schedInfo) {
+              home_team = schedInfo.hometeam;
+              away_team = schedInfo.awayteam;
+              const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+              const homeNorm = normalize(schedInfo.hometeam);
+              const awayNorm = normalize(schedInfo.awayteam);
+              const homeStats = teams.find(t => normalize(t.name) === homeNorm);
+              const awayStats = teams.find(t => normalize(t.name) === awayNorm);
+              home_score = homeStats?.tot_spoints ?? (awayStats ? teams.find(t => t !== awayStats)?.tot_spoints ?? 0 : teams[0].tot_spoints || 0);
+              away_score = awayStats?.tot_spoints ?? (homeStats ? teams.find(t => t !== homeStats)?.tot_spoints ?? 0 : teams[1].tot_spoints || 0);
+            } else {
+              home_team = teams[0].name;
+              away_team = teams[1].name;
+              home_score = teams[0].tot_spoints || 0;
+              away_score = teams[1].tot_spoints || 0;
+            }
+            
+            completedGames.push({
+              game_key: gameKey,
+              game_id: gameKey,
+              game_date: schedInfo?.matchtime || teams[0].created_at,
+              home_team,
+              away_team,
+              home_score,
+              away_score,
+              status: 'FINAL'
+            });
+          }
         });
-
-        // Convert to array and process each game
-        const processedGames = Array.from(gameMap.values()).map((game) => {
-          // Calculate team scores (sum of all player points per team)
-          const teamScores = game.players.reduce((acc: any, player: any) => {
-            if (!acc[player.team]) acc[player.team] = 0;
-            acc[player.team] += player.spoints || 0; // Use spoints for consistency
-            return acc;
-          }, {});
-
-          // Get the unique teams from player data
-          const uniqueTeams = Object.keys(teamScores);
-          
-          if (uniqueTeams.length !== 2) {
-            // Skip invalid games
-            return null;
-          }
-
-          let homeTeam, awayTeam;
-
-          // First, try to use game_schedule data (most reliable)
-          if (game.scheduleData?.hometeam && game.scheduleData?.awayteam) {
-            homeTeam = game.scheduleData.hometeam;
-            awayTeam = game.scheduleData.awayteam;
-          } else {
-            // Fallback: use the teams from player data
-            const team1 = uniqueTeams[0];
-            const team2 = uniqueTeams[1];
-            homeTeam = team1;
-            awayTeam = team2;
-          }
-          
-          return {
-            game_id: game.game_id,
-            game_date: game.game_date,
-            home_team: homeTeam,
-            away_team: awayTeam,
-            home_score: teamScores[homeTeam] || 0,
-            away_score: teamScores[awayTeam] || 0,
-            status: "FINAL"
-          };
-        }).filter((game): game is GameResult => game !== null);
-
-        setGames(processedGames.slice(0, 10)); // Show recent 10 games
-      } catch (error) {
-        console.error("Error processing game results:", error);
-      } finally {
-        setLoading(false);
       }
-    };
 
+      completedGames.sort((a, b) => new Date(b.game_date).getTime() - new Date(a.game_date).getTime());
+
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const sevenDaysAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      
+      const { data: scheduleData, error: scheduleError } = await supabase
+        .from("game_schedule")
+        .select("game_key, matchtime, hometeam, awayteam, status")
+        .eq("league_id", leagueId)
+        .gte("matchtime", sevenDaysAgo.toISOString())
+        .lte("matchtime", sevenDaysAhead.toISOString())
+        .order("matchtime", { ascending: true });
+
+      if (scheduleError) {
+        console.error("Error fetching schedule:", scheduleError);
+      }
+
+      const upcomingGames: GameItem[] = [];
+      const liveGames: GameItem[] = [];
+      
+      if (scheduleData) {
+        scheduleData.forEach(game => {
+          if (!game.hometeam || !game.awayteam || !game.game_key) return;
+          if (processedGameKeys.has(game.game_key)) return;
+
+          const statusLower = (game.status || '').toLowerCase();
+          const isLive = statusLower === 'live' || statusLower === 'in_progress';
+          const isFinal = statusLower === 'final' || statusLower === 'finished';
+          
+          if (isFinal) return;
+          
+          const gameItem: GameItem = {
+            game_key: game.game_key,
+            game_id: game.game_key,
+            game_date: game.matchtime,
+            home_team: game.hometeam,
+            away_team: game.awayteam,
+            home_score: null,
+            away_score: null,
+            status: isLive ? 'LIVE' : 'SCHEDULED'
+          };
+
+          if (isLive) {
+            liveGames.push(gameItem);
+          } else {
+            const gameTime = new Date(game.matchtime);
+            if (gameTime > now) {
+              upcomingGames.push(gameItem);
+            }
+          }
+        });
+      }
+
+      const combined: GameItem[] = [
+        ...liveGames,
+        ...completedGames,
+        ...upcomingGames
+      ];
+
+      if (!hasSetDefaultTab) {
+        if (liveGames.length > 0) {
+          setActiveTab("live");
+        } else if (completedGames.length > 0) {
+          setActiveTab("results");
+        } else {
+          setActiveTab("upcoming");
+        }
+        setHasSetDefaultTab(true);
+      }
+
+      setAllGames(combined);
+    } catch (error) {
+      console.error("Error fetching games:", error);
+    } finally {
+      if (!isPolling) setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     if (leagueId) {
-      fetchGameResults();
+      fetchGames();
     }
   }, [leagueId]);
 
-  // Calculate animation duration based on number of games
-  const animationDuration = games.length > 0 ? games.length * 8 : 40; // 8 seconds per game
+  useEffect(() => {
+    if (!leagueId) return;
+    const interval = setInterval(() => {
+      fetchGames(true);
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [leagueId]);
+
+  const filteredGames = useMemo(() => {
+    const games = allGames.filter(g => {
+      if (activeTab === 'live') return g.status === 'LIVE';
+      if (activeTab === 'results') return g.status === 'FINAL';
+      return g.status === 'SCHEDULED';
+    });
+
+    if (activeTab === 'results') {
+      return games.sort((a, b) => new Date(b.game_date).getTime() - new Date(a.game_date).getTime());
+    }
+    return games.sort((a, b) => new Date(a.game_date).getTime() - new Date(b.game_date).getTime());
+  }, [allGames, activeTab]);
+
+  const tabCounts = useMemo(() => {
+    let results = 0, live = 0, upcoming = 0;
+    allGames.forEach(g => {
+      if (g.status === 'FINAL') results++;
+      else if (g.status === 'LIVE') live++;
+      else upcoming++;
+    });
+    return { results, live, upcoming };
+  }, [allGames]);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollLeft = 0;
+    }
+  }, [activeTab]);
+
+  const scrollLeft = () => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollBy({ left: -300, behavior: 'smooth' });
+    }
+  };
+
+  const scrollRight = () => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollBy({ left: 300, behavior: 'smooth' });
+    }
+  };
 
   if (loading) {
     return (
-      <div className="overflow-x-auto scrollbar-hide">
-        <div className="flex gap-3 md:gap-4 animate-pulse">
-          {[1,2,3,4,5].map(i => (
-            <div key={i} className="bg-gray-800 rounded-lg h-16 w-64 md:w-80 flex-shrink-0"></div>
+      <div className="px-3 md:px-4">
+        <div className="flex gap-3 md:gap-4 animate-pulse py-3">
+          {[1,2,3,4].map(i => (
+            <div key={i} className="bg-white/10 rounded-xl h-28 w-64 md:w-72 flex-shrink-0"></div>
           ))}
         </div>
       </div>
     );
   }
 
-  if (games.length === 0) {
+  if (allGames.length === 0) {
     return (
-      <div className="text-center text-white/70 py-4">
-        No recent game results available
+      <div className="text-center text-slate-400 py-6">
+        No games available
       </div>
     );
   }
 
-  // Format date for display
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
-      day: 'numeric' 
-    }).toUpperCase();
-  };
-
-  // Get team abbreviation (first 3 letters)
-  const getTeamAbbr = (teamName: string) => {
-    return teamName.substring(0, 3).toUpperCase();
-  };
-
-  // Create duplicated games array for infinite scroll
-  const duplicatedGames = [...games, ...games];
-
-  // Calculate fixed track width based on screen size
-  const mobileCardWidth = 280;
-  const desktopCardWidth = 320;
-  const mobileGap = 12; // gap-3
-  const desktopGap = 16; // gap-4
-  
-  // Use desktop values for animation calculation
-  const trackWidth = duplicatedGames.length * (desktopCardWidth + desktopGap);
-
   return (
-    <div className="w-full overflow-hidden">
-      <div 
-        className="flex gap-3 md:gap-4 px-3 md:px-4 py-2"
-        style={{
-          width: `${trackWidth}px`,
-          animation: `scroll ${animationDuration}s linear infinite`,
-          animationPlayState: isPaused ? 'paused' : 'running'
-        }}
-        onMouseEnter={() => setIsPaused(true)}
-        onMouseLeave={() => setIsPaused(false)}
-      >
-        {duplicatedGames.map((game, index) => (
-          <div
-            key={`carousel-game-${index}`}
-            className="bg-gray-800 rounded-lg p-3 md:p-4 flex-shrink-0 cursor-pointer hover:bg-gray-700 transition-colors border border-gray-700 min-w-[280px] md:min-w-[320px]"
-            style={{ width: '280px' }}
-            onClick={() => onGameClick(game.game_id)}
-            onMouseDown={(e) => e.preventDefault()}
+    <div className="w-full">
+      <div className="flex items-center justify-between border-b border-white/10 px-3 md:px-4">
+        <div className="flex items-center">
+          <button
+            onClick={() => setActiveTab("results")}
+            className={`flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-medium transition-all border-b-2 whitespace-nowrap ${
+              activeTab === "results"
+                ? "border-orange-400 text-orange-400"
+                : "border-transparent text-white/50 hover:text-white/80"
+            }`}
           >
-          {/* Header with date and status */}
-          <div className="flex justify-between items-center mb-2 md:mb-3">
-            <div className="text-xs font-medium text-gray-300 bg-gray-700 px-2 py-1 rounded">
-              {game.status}
-            </div>
-            <div className="text-xs text-gray-400">
-              {formatDate(game.game_date)}
-            </div>
-          </div>
-          
-          {/* Team matchup */}
-          <div className="space-y-2">
-            {/* Away team */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <TeamLogo teamName={game.away_team} leagueId={leagueId} size="sm" />
-                <div className="text-white font-bold text-sm md:text-base">
-                  {getTeamAbbr(game.away_team)}
-                </div>
-              </div>
-              <div className="text-xl md:text-2xl font-bold text-white">
-                {game.away_score}
-              </div>
-            </div>
-            
-            {/* Home team */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <TeamLogo teamName={game.home_team} leagueId={leagueId} size="sm" />
-                <div className="text-white font-bold text-sm md:text-base">
-                  {getTeamAbbr(game.home_team)}
-                </div>
-              </div>
-              <div className="text-xl md:text-2xl font-bold text-white">
-                {game.home_score}
-              </div>
-            </div>
-          </div>
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            <span>Results</span>
+            {tabCounts.results > 0 && (
+              <span className={`text-[10px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center ${
+                activeTab === "results" ? "bg-orange-400/20 text-orange-400" : "bg-white/10"
+              }`}>{tabCounts.results}</span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("live")}
+            className={`flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-medium transition-all border-b-2 whitespace-nowrap ${
+              activeTab === "live"
+                ? "border-red-400 text-red-400"
+                : "border-transparent text-white/50 hover:text-white/80"
+            }`}
+          >
+            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${tabCounts.live > 0 ? 'bg-red-500 animate-pulse' : 'bg-white/30'}`}></span>
+            <span>Live</span>
+            {tabCounts.live > 0 && (
+              <span className="text-[10px] bg-red-500/20 text-red-400 rounded-full px-1.5 py-0.5 min-w-[18px] text-center font-bold">{tabCounts.live}</span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("upcoming")}
+            className={`flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-medium transition-all border-b-2 whitespace-nowrap ${
+              activeTab === "upcoming"
+                ? "border-blue-400 text-blue-400"
+                : "border-transparent text-white/50 hover:text-white/80"
+            }`}
+          >
+            <Clock className="w-3.5 h-3.5" />
+            <span>Upcoming</span>
+            {tabCounts.upcoming > 0 && (
+              <span className={`text-[10px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center ${
+                activeTab === "upcoming" ? "bg-blue-400/20 text-blue-400" : "bg-white/10"
+              }`}>{tabCounts.upcoming}</span>
+            )}
+          </button>
         </div>
-      ))}
+
+        <div className="hidden sm:flex items-center gap-1">
+          <button onClick={scrollLeft} className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <button onClick={scrollRight} className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      <div className="relative">
+        <div
+          ref={scrollRef}
+          className="overflow-x-auto pb-2 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/20 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb:hover]:bg-white/30"
+        >
+          {filteredGames.length === 0 ? (
+            <div className="flex items-center justify-center py-6 px-4">
+              <span className="text-sm text-white/40">
+                {activeTab === "live" ? "No live games right now" : activeTab === "results" ? "No recent results" : "No upcoming games scheduled"}
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-stretch gap-2 md:gap-3 px-3 md:px-4 py-3 min-w-max">
+              {filteredGames.map((game) => (
+                <div
+                  key={game.game_key}
+                  className={`rounded-xl p-3 flex-shrink-0 cursor-pointer transition-all w-[200px] sm:w-[240px] md:w-[280px] ${
+                    game.status === 'LIVE'
+                      ? 'bg-gradient-to-br from-red-500/20 to-orange-500/10 border border-red-500/40 hover:border-red-400'
+                      : 'bg-white/5 border border-white/10 hover:border-white/25 hover:bg-white/10'
+                  }`}
+                  onClick={() => onGameClick({
+                    gameKey: game.game_key,
+                    status: game.status,
+                    homeTeam: game.home_team,
+                    awayTeam: game.away_team,
+                    gameDate: game.game_date,
+                    homeScore: game.home_score,
+                    awayScore: game.away_score
+                  })}
+                >
+                  <div className="flex justify-between items-center mb-2">
+                    {game.status === 'LIVE' && (
+                      <span className="text-[10px] sm:text-xs font-bold text-red-400 uppercase tracking-wider flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>
+                        Live
+                      </span>
+                    )}
+                    {game.status === 'FINAL' && (
+                      <span className="text-[10px] sm:text-xs font-semibold text-green-400/80 uppercase tracking-wider">Final</span>
+                    )}
+                    {game.status === 'SCHEDULED' && (
+                      <span className="text-[10px] sm:text-xs font-semibold text-blue-400/80 uppercase tracking-wider">Scheduled</span>
+                    )}
+                    <span className="text-[10px] sm:text-xs text-white/40">{formatRelativeDate(game.game_date)}</span>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <TeamLogo teamName={game.home_team} leagueId={leagueId} size="sm" />
+                        <span className="text-xs sm:text-sm font-semibold text-white truncate">{game.home_team}</span>
+                      </div>
+                      <span className={`text-base sm:text-lg font-bold tabular-nums ml-2 ${
+                        game.status === 'LIVE' ? 'text-red-400' : 'text-white'
+                      }`}>
+                        {game.status === 'SCHEDULED' ? '-' : (game.home_score ?? '-')}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <TeamLogo teamName={game.away_team} leagueId={leagueId} size="sm" />
+                        <span className="text-xs sm:text-sm font-semibold text-white truncate">{game.away_team}</span>
+                      </div>
+                      <span className={`text-base sm:text-lg font-bold tabular-nums ml-2 ${
+                        game.status === 'LIVE' ? 'text-red-400' : 'text-white'
+                      }`}>
+                        {game.status === 'SCHEDULED' ? '-' : (game.away_score ?? '-')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -18,9 +18,6 @@ export default function TestConnections() {
 
       // Test player_stats table and show structure
       const { data: playerStatsData, error: playerStatsError } = await supabase.from('player_stats').select('*').limit(1);
-      console.log('Player stats table sample:', playerStatsData);
-      console.log('Player stats table error:', playerStatsError);
-      
       setSupabaseStatus('success');
       toast({
         title: "Supabase Connected",

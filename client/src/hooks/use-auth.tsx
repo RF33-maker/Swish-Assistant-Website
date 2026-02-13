@@ -36,12 +36,10 @@ function useAuthProviderValue(): AuthContextType {
       try {
         const { data, error } = await supabase.auth.getUser();
         if (error) {
-          console.log("Auth error (not throwing):", error.message);
           return null; // Return null instead of throwing
         }
         return data?.user ?? null;
       } catch (err) {
-        console.log("Auth catch error (not throwing):", err);
         return null; // Return null instead of throwing
       }
     },

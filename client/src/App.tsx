@@ -25,6 +25,7 @@ import TeamLogoManager from "@/pages/TeamLogoManager";
 import LeagueAdmin from "@/pages/LeagueAdmin";
 import LeagueManagement from "@/pages/LeagueManagement";
 import SocialToolsPage from "@/pages/social-tools";
+import GamePage from "@/pages/GamePage";
 import { AuthProvider } from "./hooks/use-auth";
 import { ProtectedRoute } from "./lib/protected-route";
 import ResetPassword from "./pages/reset-password";
@@ -59,6 +60,7 @@ function Router() {
       <Route path="/terms" component={TermsOfServicePage} />
       <Route path="/cookies" component={CookiePolicyPage} />
       <Route path="/contact-sales" component={ContactSalesPage} />
+      <Route path="/game/:gameKey" component={GamePage} />
 
       {/* Protected routes */}
       <ProtectedRoute path="/dashboard" component={PostLoginDashboard} />

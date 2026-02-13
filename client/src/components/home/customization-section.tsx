@@ -27,7 +27,6 @@ export default function CustomizationSection() {
   const applyBrandColors = () => {
     // This would implement the actual color changing functionality
     // by updating CSS variables or a theme context
-    console.log("Applied brand colors:", { primaryColor, secondaryColor, accentColor });
   };
 
   return (
