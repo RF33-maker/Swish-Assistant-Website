@@ -791,7 +791,7 @@ export default function GamePage() {
                 <h2 className="text-sm md:text-xl font-bold text-slate-800 dark:text-white md:truncate hidden md:block">{gameData.hometeam}</h2>
                 <h2 className="text-base font-bold text-slate-800 dark:text-white md:hidden">{getTeamShortName(gameData.hometeam)}</h2>
                 {homeTeamRecord && (
-                  <span className="text-xs text-slate-500 dark:text-slate-400">{homeTeamRecord.wins}-{homeTeamRecord.losses}</span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">({homeTeamRecord.wins}-{homeTeamRecord.losses})</span>
                 )}
                 <span className="text-xs text-orange-600 dark:text-orange-400">HOME</span>
               </div>
@@ -817,7 +817,7 @@ export default function GamePage() {
                 <h2 className="text-sm md:text-xl font-bold text-slate-800 dark:text-white md:truncate hidden md:block">{gameData.awayteam}</h2>
                 <h2 className="text-base font-bold text-slate-800 dark:text-white md:hidden">{getTeamShortName(gameData.awayteam)}</h2>
                 {awayTeamRecord && (
-                  <span className="text-xs text-slate-500 dark:text-slate-400">{awayTeamRecord.wins}-{awayTeamRecord.losses}</span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">({awayTeamRecord.wins}-{awayTeamRecord.losses})</span>
                 )}
                 <span className="text-xs text-orange-600 dark:text-orange-400">AWAY</span>
               </div>
