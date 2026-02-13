@@ -329,7 +329,7 @@ export default function GamePage() {
     refetchIntervalInBackground: false,
   });
 
-  const { data: teamStats } = useQuery({
+  const { data: teamStats, dataUpdatedAt: teamStatsUpdatedAt } = useQuery({
     queryKey: ['game-team-stats', gameKey, isTestMode],
     queryFn: async () => {
       const { data, error } = await db
@@ -365,6 +365,21 @@ export default function GamePage() {
     refetchInterval: 5000,
     refetchIntervalInBackground: false,
   });
+
+  const [lastUpdatedText, setLastUpdatedText] = useState('');
+
+  useEffect(() => {
+    if (!teamStatsUpdatedAt) return;
+    const update = () => {
+      const seconds = Math.floor((Date.now() - teamStatsUpdatedAt) / 1000);
+      if (seconds < 5) setLastUpdatedText('Just now');
+      else if (seconds < 60) setLastUpdatedText(`${seconds}s ago`);
+      else setLastUpdatedText(`${Math.floor(seconds / 60)}m ago`);
+    };
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, [teamStatsUpdatedAt]);
 
   // Countdown timer state
   const [timeLeft, setTimeLeft] = useState<TimeLeft | null>(null);
@@ -872,6 +887,14 @@ export default function GamePage() {
                 </div>
               )}
             </div>
+            {lastUpdatedText && (
+              <div className="flex justify-center mt-3">
+                <span className="text-[11px] text-slate-400 dark:text-slate-500 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse inline-block"></span>
+                  Updated {lastUpdatedText}
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="p-4 md:p-6">
