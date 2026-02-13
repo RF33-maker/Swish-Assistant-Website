@@ -41,6 +41,7 @@ interface PlayerStat {
 interface TeamStat {
   name: string;
   side: string;
+  score: number;
   tot_spoints: number;
   tot_sreboundstotal: number;
   tot_sassists: number;
@@ -53,6 +54,10 @@ interface TeamStat {
   tot_sthreepointersattempted: number;
   tot_sfreethrowsmade: number;
   tot_sfreethrowsattempted: number;
+  p1_score: number | null;
+  p2_score: number | null;
+  p3_score: number | null;
+  p4_score: number | null;
 }
 
 interface GameResult {
@@ -175,7 +180,7 @@ function parseMinutes(minutesStr: string | null | undefined): string {
 
 function getTeamShortName(teamName: string): string {
   const words = teamName.trim().split(/\s+/);
-  return words.length > 1 ? words[words.length - 1] : teamName;
+  return words.length > 2 ? words.slice(0, 2).join(' ') : teamName;
 }
 
 function getTeamAbbr(teamName: string): string {
@@ -660,51 +665,49 @@ export default function GamePage() {
     enabled: !!awayTeamId && isScheduled
   });
 
-  const { data: homeTeamRecord } = useQuery({
-    queryKey: ['team-record', gameData?.league_id, homeTeamId, isTestMode],
+  const { data: allLeagueGameStats } = useQuery({
+    queryKey: ['league-game-stats', gameData?.league_id, isTestMode],
     queryFn: async () => {
-      if (!homeTeamId || !gameData) return null;
+      if (!gameData) return null;
       const { data, error } = await db
         .from('team_stats')
-        .select('numeric_id, won')
-        .eq('league_id', gameData.league_id)
-        .eq('team_id', homeTeamId);
+        .select('numeric_id, team_id, tot_spoints')
+        .eq('league_id', gameData.league_id);
       if (error || !data) return null;
-      const uniqueGames = new Map<string, boolean>();
-      for (const g of data) {
-        if (g.numeric_id && !uniqueGames.has(g.numeric_id)) {
-          uniqueGames.set(g.numeric_id, g.won || false);
-        }
-      }
-      const wins = Array.from(uniqueGames.values()).filter(w => w).length;
-      const losses = uniqueGames.size - wins;
-      return { wins, losses };
+      return data as { numeric_id: string; team_id: string; tot_spoints: number }[];
     },
-    enabled: !!homeTeamId && !!gameData
+    enabled: !!gameData
   });
 
-  const { data: awayTeamRecord } = useQuery({
-    queryKey: ['team-record', gameData?.league_id, awayTeamId, isTestMode],
-    queryFn: async () => {
-      if (!awayTeamId || !gameData) return null;
-      const gamesWithId = await db
-        .from('team_stats')
-        .select('numeric_id, won')
-        .eq('league_id', gameData.league_id)
-        .eq('team_id', awayTeamId);
-      if (gamesWithId.error || !gamesWithId.data) return null;
-      const uniqueGames = new Map<string, boolean>();
-      for (const g of gamesWithId.data) {
-        if (g.numeric_id && !uniqueGames.has(g.numeric_id)) {
-          uniqueGames.set(g.numeric_id, g.won || false);
-        }
+  const computeRecord = (teamId: string | undefined) => {
+    if (!teamId || !allLeagueGameStats) return null;
+    const gameMap = new Map<string, { teamScore: number; opponentScore: number }>();
+    for (const row of allLeagueGameStats) {
+      if (!row.numeric_id) continue;
+      if (row.team_id === teamId) {
+        const existing = gameMap.get(row.numeric_id) || { teamScore: 0, opponentScore: 0 };
+        existing.teamScore = row.tot_spoints || 0;
+        gameMap.set(row.numeric_id, existing);
       }
-      const wins = Array.from(uniqueGames.values()).filter(w => w).length;
-      const losses = uniqueGames.size - wins;
-      return { wins, losses };
-    },
-    enabled: !!awayTeamId && !!gameData
-  });
+    }
+    for (const row of allLeagueGameStats) {
+      if (!row.numeric_id) continue;
+      const existing = gameMap.get(row.numeric_id);
+      if (existing && row.team_id !== teamId) {
+        existing.opponentScore = row.tot_spoints || 0;
+      }
+    }
+    let wins = 0;
+    let losses = 0;
+    gameMap.forEach(({ teamScore, opponentScore }) => {
+      if (teamScore > opponentScore) wins++;
+      else if (opponentScore > 0 || teamScore > 0) losses++;
+    });
+    return { wins, losses };
+  };
+
+  const homeTeamRecord = computeRecord(homeTeamId);
+  const awayTeamRecord = computeRecord(awayTeamId);
 
   if (gameLoading) {
     return (
@@ -1058,14 +1061,16 @@ export default function GamePage() {
                   <div className="space-y-4">
                     {(() => {
                       const quarterScores: { period: number; home: number; away: number }[] = [];
-                      if (liveEvents && liveEvents.length > 0) {
-                        const periods = Array.from(new Set(liveEvents.map(e => e.period)));
-                        periods.sort((a, b) => a - b).forEach(period => {
-                          const periodEvents = liveEvents.filter(e => e.period === period && e.scoring);
-                          const home = periodEvents.filter(e => e.team_no === 1).reduce((sum, e) => sum + (e.points || 0), 0);
-                          const away = periodEvents.filter(e => e.team_no === 2).reduce((sum, e) => sum + (e.points || 0), 0);
-                          quarterScores.push({ period, home, away });
-                        });
+                      if (homeTeamStats && awayTeamStats) {
+                        const periods = [
+                          { period: 1, home: homeTeamStats.p1_score || 0, away: awayTeamStats.p1_score || 0 },
+                          { period: 2, home: homeTeamStats.p2_score || 0, away: awayTeamStats.p2_score || 0 },
+                          { period: 3, home: homeTeamStats.p3_score || 0, away: awayTeamStats.p3_score || 0 },
+                          { period: 4, home: homeTeamStats.p4_score || 0, away: awayTeamStats.p4_score || 0 },
+                        ];
+                        for (const p of periods) {
+                          if (p.home > 0 || p.away > 0) quarterScores.push(p);
+                        }
                       }
                       const homeTotal = quarterScores.reduce((s, q) => s + q.home, 0);
                       const awayTotal = quarterScores.reduce((s, q) => s + q.away, 0);
