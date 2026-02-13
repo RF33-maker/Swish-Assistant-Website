@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { TeamLogo } from "@/components/TeamLogo";
 import { GameSwitcherBar } from "@/components/GameSwitcherBar";
+import { isGameSlug, parseGameSlug } from "@/lib/gameSlug";
 import { ArrowLeft, Clock, MapPin, Calendar, Users, TrendingUp } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -236,15 +237,47 @@ function buildEventDescription(actionType: string, subType: string | null, succe
 
 export default function GamePage() {
   const params = useParams<{ gameKey: string }>();
-  const gameKey = params.gameKey ? decodeURIComponent(params.gameKey) : '';
+  const rawParam = params.gameKey ? decodeURIComponent(params.gameKey) : '';
   const [, navigate] = useLocation();
 
-  // Read mode query param for test schema support
   const searchParams = new URLSearchParams(window.location.search);
   const isTestMode = searchParams.get("mode") === "test";
   
-  // Create schema-scoped Supabase client (test schema when mode=test, otherwise public)
   const db = isTestMode ? supabase.schema("test") : supabase;
+
+  const slugMode = isGameSlug(rawParam);
+
+  const { data: resolvedGameKey } = useQuery({
+    queryKey: ['resolve-game-slug', rawParam, isTestMode],
+    queryFn: async () => {
+      if (!slugMode) return rawParam;
+      const parsed = parseGameSlug(rawParam);
+      if (!parsed) return rawParam;
+
+      const dateStart = `${parsed.date}T00:00:00+00:00`;
+      const dateEnd = `${parsed.date}T23:59:59+00:00`;
+
+      const { data, error } = await db
+        .from('game_schedule')
+        .select('game_key, hometeam, awayteam')
+        .gte('matchtime', dateStart)
+        .lte('matchtime', dateEnd);
+
+      if (error || !data || data.length === 0) return null;
+
+      const slugify = (name: string) =>
+        name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+      const match = data.find(g =>
+        slugify(g.hometeam) === parsed.home && slugify(g.awayteam) === parsed.away
+      );
+      return match?.game_key || null;
+    },
+    enabled: !!rawParam,
+    staleTime: Infinity,
+  });
+
+  const gameKey = resolvedGameKey || '';
 
   const { data: gameData, isLoading: gameLoading, error: gameError } = useQuery({
     queryKey: ['game-schedule', gameKey, isTestMode],

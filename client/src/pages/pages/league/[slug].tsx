@@ -39,6 +39,7 @@ import { TeamComparison } from "@/components/TeamComparison";
 import { TournamentBracket } from "@/components/TournamentBracket";
 import { normalizeTeamName } from "@/lib/teamUtils";
 import { namesMatch, getMostCompleteName } from "@/lib/fuzzyMatch";
+import { generateGameSlug } from "@/lib/gameSlug";
 import { DEBUG, debugLog } from "@/utils/debug";
 
 type GameSchedule = {
@@ -1727,7 +1728,8 @@ export default function LeaguePage() {
       homeScore: number | null;
       awayScore: number | null;
     }) => {
-      navigate(`/game/${encodeURIComponent(data.gameKey)}`);
+      const slug = generateGameSlug(data.homeTeam, data.awayTeam, data.gameDate);
+      navigate(`/game/${slug}`);
     };
 
     const handleCloseGameModal = () => {

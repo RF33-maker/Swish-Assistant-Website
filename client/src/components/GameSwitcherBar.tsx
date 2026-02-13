@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { TeamLogo } from "./TeamLogo";
+import { generateGameSlug } from "@/lib/gameSlug";
 import { CheckCircle2, Clock, Radio } from "lucide-react";
 
 interface Game {
@@ -194,10 +195,11 @@ export function GameSwitcherBar({ leagueId, currentGameKey, isTestMode }: GameSw
     return date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
   };
 
-  const handleGameClick = (gameKey: string) => {
-    if (gameKey === currentGameKey) return;
+  const handleGameClick = (game: Game) => {
+    if (game.game_key === currentGameKey) return;
     const modeParam = isTestMode ? "?mode=test" : "";
-    navigate(`/game/${encodeURIComponent(gameKey)}${modeParam}`);
+    const slug = generateGameSlug(game.hometeam, game.awayteam, game.matchtime);
+    navigate(`/game/${slug}${modeParam}`);
   };
 
   const tabCounts = useMemo(() => {
@@ -281,7 +283,7 @@ export function GameSwitcherBar({ leagueId, currentGameKey, isTestMode }: GameSw
               return (
                 <button
                   key={game.game_key}
-                  onClick={() => handleGameClick(game.game_key)}
+                  onClick={() => handleGameClick(game)}
                   className={`flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-all min-w-[100px] sm:min-w-[120px] ${
                     isCurrent
                       ? 'bg-orange-500 text-white ring-1 ring-orange-400'

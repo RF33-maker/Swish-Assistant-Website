@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { TeamLogo } from "./TeamLogo";
+import { generateGameSlug } from "@/lib/gameSlug";
 import { Radio, Clock, CheckCircle2, ExternalLink } from "lucide-react";
 
 interface Game {
@@ -201,9 +202,10 @@ export default function LiveGamesSection({ leagueId }: LiveGamesSectionProps) {
     return () => clearInterval(interval);
   }, [leagueId, isTestMode]);
 
-  const handleGameClick = (gameKey: string) => {
+  const handleGameClick = (game: Game) => {
     const modeParam = isTestMode ? "?mode=test" : "";
-    navigate(`/game/${encodeURIComponent(gameKey)}${modeParam}`);
+    const slug = generateGameSlug(game.hometeam, game.awayteam, game.matchtime);
+    navigate(`/game/${slug}${modeParam}`);
   };
 
   const getGameStatus = (status: string | null): 'live' | 'final' | 'scheduled' => {
@@ -291,7 +293,7 @@ export default function LiveGamesSection({ leagueId }: LiveGamesSectionProps) {
             return (
               <div
                 key={game.game_key}
-                onClick={() => handleGameClick(game.game_key)}
+                onClick={() => handleGameClick(game)}
                 className={`backdrop-blur-sm rounded-xl p-4 cursor-pointer transition-all border hover:scale-[1.02] group ${
                   gameStatus === 'live' 
                     ? 'bg-white/10 border-white/20 hover:bg-white/20 hover:border-white/40' 

@@ -3,6 +3,7 @@ import { X, ExternalLink } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { TeamLogo } from "@/components/TeamLogo";
+import { generateGameSlug } from "@/lib/gameSlug";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 
@@ -648,7 +649,7 @@ export default function GamePreviewModal({ isOpen, onClose, game, leagueId, game
 
           {gameKey && (
             <div className="mt-4 pt-4 border-t border-orange-200 dark:border-neutral-700 flex justify-center">
-              <Link href={`/game/${encodeURIComponent(gameKey)}`}>
+              <Link href={`/game/${generateGameSlug(game.team1, game.team2, game.game_date)}`}>
                 <Button className="bg-orange-600 hover:bg-orange-700 text-white flex items-center gap-2">
                   <ExternalLink className="w-4 h-4" />
                   Open Game Page
