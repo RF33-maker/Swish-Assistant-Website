@@ -294,14 +294,14 @@ export function GameSwitcherBar({ leagueId, currentGameKey, isTestMode }: GameSw
 
                   <div className="flex items-center gap-1.5 w-full justify-center">
                     <div className="flex items-center gap-1 flex-1 justify-end">
-                      <span className="text-[11px] sm:text-xs font-medium truncate max-w-[40px] sm:max-w-[50px]">{getTeamAbbr(game.awayteam)}</span>
-                      <TeamLogo teamName={game.awayteam} leagueId={leagueId} size="xs" />
+                      <span className="text-[11px] sm:text-xs font-medium truncate max-w-[40px] sm:max-w-[50px]">{getTeamAbbr(game.hometeam)}</span>
+                      <TeamLogo teamName={game.hometeam} leagueId={leagueId} size="xs" />
                     </div>
 
                     <div className="flex items-center gap-0.5 min-w-[40px] justify-center">
-                      {(category === 'live' || category === 'results') && game.away_score != null && game.home_score != null ? (
+                      {(category === 'live' || category === 'results') && game.home_score != null && game.away_score != null ? (
                         <span className="text-xs sm:text-sm font-bold tabular-nums">
-                          {game.away_score} - {game.home_score}
+                          {game.home_score} - {game.away_score}
                         </span>
                       ) : (
                         <span className="text-[10px] text-white/30">vs</span>
@@ -309,8 +309,8 @@ export function GameSwitcherBar({ leagueId, currentGameKey, isTestMode }: GameSw
                     </div>
 
                     <div className="flex items-center gap-1 flex-1 justify-start">
-                      <TeamLogo teamName={game.hometeam} leagueId={leagueId} size="xs" />
-                      <span className="text-[11px] sm:text-xs font-medium truncate max-w-[40px] sm:max-w-[50px]">{getTeamAbbr(game.hometeam)}</span>
+                      <TeamLogo teamName={game.awayteam} leagueId={leagueId} size="xs" />
+                      <span className="text-[11px] sm:text-xs font-medium truncate max-w-[40px] sm:max-w-[50px]">{getTeamAbbr(game.awayteam)}</span>
                     </div>
                   </div>
 
