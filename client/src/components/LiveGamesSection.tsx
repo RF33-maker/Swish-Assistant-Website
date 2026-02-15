@@ -14,6 +14,8 @@ interface Game {
   competitionname: string | null;
   home_score?: number | null;
   away_score?: number | null;
+  current_period?: number | null;
+  current_clock?: string | null;
 }
 
 interface LiveGamesSectionProps {
@@ -46,51 +48,32 @@ export default function LiveGamesSection({ leagueId }: LiveGamesSectionProps) {
       let allGames: any[] = [];
       let hasStatusColumn = isTestMode;
 
-      if (isTestMode) {
-        const [liveResponse, timeRangeResponse] = await Promise.all([
-          db
-            .from("game_schedule")
-            .select("game_key, hometeam, awayteam, matchtime, status, competitionname")
-            .eq("league_id", leagueId)
-            .or("status.ilike.%live%,status.eq.in_progress"),
-          
-          db
-            .from("game_schedule")
-            .select("game_key, hometeam, awayteam, matchtime, status, competitionname")
-            .eq("league_id", leagueId)
-            .gte("matchtime", sevenDaysAgo.toISOString())
-            .lte("matchtime", threeDaysFromNow.toISOString())
-        ]);
-
-        if (liveResponse.error) {
-          console.error("Error fetching live games:", liveResponse.error);
-        }
-        if (timeRangeResponse.error) {
-          console.error("Error fetching time range games:", timeRangeResponse.error);
-          setLoading(false);
-          return;
-        }
-
-        allGames = [...(liveResponse.data || []), ...(timeRangeResponse.data || [])];
-      } else {
-        const { data, error } = await db
+      const [liveResponse, timeRangeResponse] = await Promise.all([
+        db
           .from("game_schedule")
-          .select("game_key, hometeam, awayteam, matchtime, competitionname")
+          .select("game_key, hometeam, awayteam, matchtime, status, competitionname")
           .eq("league_id", leagueId)
-          .gte("matchtime", now.toISOString())
+          .or("status.ilike.%live%,status.eq.in_progress"),
+        
+        db
+          .from("game_schedule")
+          .select("game_key, hometeam, awayteam, matchtime, status, competitionname")
+          .eq("league_id", leagueId)
+          .gte("matchtime", sevenDaysAgo.toISOString())
           .lte("matchtime", threeDaysFromNow.toISOString())
-          .order("matchtime", { ascending: true })
-          .limit(12);
+      ]);
 
-        if (error) {
-          console.error("Error fetching games:", error);
-          setLoading(false);
-          return;
-        }
-
-        allGames = (data || []).map(g => ({ ...g, status: null }));
-        hasStatusColumn = false;
+      if (liveResponse.error) {
+        console.error("Error fetching live games:", liveResponse.error);
       }
+      if (timeRangeResponse.error) {
+        console.error("Error fetching time range games:", timeRangeResponse.error);
+        setLoading(false);
+        return;
+      }
+
+      allGames = [...(liveResponse.data || []), ...(timeRangeResponse.data || [])];
+      hasStatusColumn = true;
 
       const uniqueGames = allGames.filter((game, index, self) => 
         index === self.findIndex(g => g.game_key === game.game_key)
@@ -170,6 +153,45 @@ export default function LiveGamesSection({ leagueId }: LiveGamesSectionProps) {
         away_score: scoresByGame[game.game_key]?.away_score,
       }));
 
+      const liveGamesList = gamesWithScores.filter(g => getGameStatus(g.status) === 'live');
+      if (liveGamesList.length > 0) {
+        const liveKeys = liveGamesList.map(g => g.game_key);
+        const { data: liveEventsData } = await db
+          .from("live_events")
+          .select("game_key, period, clock, created_at")
+          .in("game_key", liveKeys)
+          .order("created_at", { ascending: false });
+
+        const latestByGame: Record<string, { period: number; clock: string; created_at: string }> = {};
+        if (liveEventsData) {
+          liveEventsData.forEach(ev => {
+            if (!latestByGame[ev.game_key]) {
+              latestByGame[ev.game_key] = { period: ev.period, clock: ev.clock, created_at: ev.created_at };
+            }
+          });
+        }
+
+        const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
+        gamesWithScores.forEach(game => {
+          if (getGameStatus(game.status) !== 'live') return;
+          const latest = latestByGame[game.game_key];
+          if (latest) {
+            game.current_period = latest.period;
+            game.current_clock = latest.clock;
+            const timeSinceLastEvent = now.getTime() - new Date(latest.created_at).getTime();
+            if (timeSinceLastEvent >= FOUR_HOURS_MS) {
+              game.status = 'final';
+            }
+          } else {
+            const matchDate = new Date(game.matchtime);
+            const timeSinceStart = now.getTime() - matchDate.getTime();
+            if (isNaN(timeSinceStart) || timeSinceStart >= FOUR_HOURS_MS) {
+              game.status = 'final';
+            }
+          }
+        });
+      }
+
       gamesWithScores.sort((a, b) => {
         const statusA = getGameStatus(a.status);
         const statusB = getGameStatus(b.status);
@@ -198,7 +220,7 @@ export default function LiveGamesSection({ leagueId }: LiveGamesSectionProps) {
     if (!leagueId) return;
     const interval = setInterval(() => {
       fetchGames();
-    }, 30000);
+    }, 15000);
     return () => clearInterval(interval);
   }, [leagueId, isTestMode]);
 
@@ -306,7 +328,9 @@ export default function LiveGamesSection({ leagueId }: LiveGamesSectionProps) {
                   {gameStatus === 'live' ? (
                     <span className="text-xs font-semibold bg-red-700 px-2 py-1 rounded-full flex items-center gap-1">
                       <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
-                      LIVE
+                      {game.current_period
+                        ? `${game.current_period <= 4 ? `Q${game.current_period}` : `OT${game.current_period - 4}`}${game.current_clock ? ` ${game.current_clock.split(':').slice(0, 2).join(':')}` : ''}`
+                        : 'LIVE'}
                     </span>
                   ) : gameStatus === 'final' ? (
                     <span className="text-xs font-semibold bg-gray-600 px-2 py-1 rounded-full">

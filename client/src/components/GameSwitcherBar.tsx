@@ -13,6 +13,8 @@ interface Game {
   status: string | null;
   home_score?: number | null;
   away_score?: number | null;
+  current_period?: number | null;
+  current_clock?: string | null;
 }
 
 type FilterTab = "results" | "live" | "upcoming";
@@ -35,8 +37,7 @@ export function GameSwitcherBar({ leagueId, currentGameKey, isTestMode }: GameSw
     return isTestMode ? supabase.schema("test") : supabase;
   }, [isTestMode]);
 
-  useEffect(() => {
-    const fetchGames = async () => {
+  const fetchGames = async () => {
       const now = new Date();
       const sevenDaysAgo = new Date(now);
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
@@ -45,40 +46,28 @@ export function GameSwitcherBar({ leagueId, currentGameKey, isTestMode }: GameSw
 
       let fetchedGames: any[] = [];
 
-      if (isTestMode) {
-        const [liveResponse, rangeResponse] = await Promise.all([
-          db
-            .from("game_schedule")
-            .select("game_key, hometeam, awayteam, matchtime, status")
-            .eq("league_id", leagueId)
-            .or("status.ilike.%live%,status.eq.in_progress"),
-          db
-            .from("game_schedule")
-            .select("game_key, hometeam, awayteam, matchtime, status")
-            .eq("league_id", leagueId)
-            .gte("matchtime", sevenDaysAgo.toISOString())
-            .lte("matchtime", sevenDaysFromNow.toISOString())
-            .order("matchtime", { ascending: true })
-        ]);
-
-        fetchedGames = [...(liveResponse.data || []), ...(rangeResponse.data || [])];
-      } else {
-        const { data } = await db
+      const [liveResponse, rangeResponse] = await Promise.all([
+        db
           .from("game_schedule")
-          .select("game_key, hometeam, awayteam, matchtime")
+          .select("game_key, hometeam, awayteam, matchtime, status")
+          .eq("league_id", leagueId)
+          .or("status.ilike.%live%,status.eq.in_progress"),
+        db
+          .from("game_schedule")
+          .select("game_key, hometeam, awayteam, matchtime, status")
           .eq("league_id", leagueId)
           .gte("matchtime", sevenDaysAgo.toISOString())
           .lte("matchtime", sevenDaysFromNow.toISOString())
-          .order("matchtime", { ascending: true });
+          .order("matchtime", { ascending: true })
+      ]);
 
-        fetchedGames = (data || []).map(g => ({ ...g, status: null }));
-      }
+      fetchedGames = [...(liveResponse.data || []), ...(rangeResponse.data || [])];
 
       const uniqueGames = fetchedGames.filter((game, index, self) =>
         index === self.findIndex(g => g.game_key === game.game_key)
       );
 
-      if (isTestMode && uniqueGames.length > 0) {
+      if (uniqueGames.length > 0) {
         const gameKeys = uniqueGames.map(g => g.game_key);
         const { data: teamStatsData } = await db
           .from("team_stats")
@@ -117,7 +106,49 @@ export function GameSwitcherBar({ leagueId, currentGameKey, isTestMode }: GameSw
         });
       }
 
-      const live = uniqueGames.filter(g => getGameCategory(g) === 'live');
+      let live = uniqueGames.filter(g => getGameCategory(g) === 'live');
+
+      if (live.length > 0) {
+        const liveKeys = live.map(g => g.game_key);
+        const { data: liveEventsData } = await db
+          .from("live_events")
+          .select("game_key, period, clock, created_at")
+          .in("game_key", liveKeys)
+          .order("created_at", { ascending: false });
+
+        const latestByGame: Record<string, { period: number; clock: string; created_at: string }> = {};
+        if (liveEventsData) {
+          liveEventsData.forEach(ev => {
+            if (!latestByGame[ev.game_key]) {
+              latestByGame[ev.game_key] = { period: ev.period, clock: ev.clock, created_at: ev.created_at };
+            }
+          });
+        }
+
+        const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
+        const now = new Date();
+        uniqueGames.forEach(game => {
+          if (getGameCategory(game) !== 'live') return;
+          const latest = latestByGame[game.game_key];
+          if (latest) {
+            game.current_period = latest.period;
+            game.current_clock = latest.clock;
+            const timeSinceLastEvent = now.getTime() - new Date(latest.created_at).getTime();
+            if (timeSinceLastEvent >= FOUR_HOURS_MS) {
+              game.status = 'final';
+            }
+          } else {
+            const matchDate = new Date(game.matchtime);
+            const timeSinceStart = now.getTime() - matchDate.getTime();
+            if (isNaN(timeSinceStart) || timeSinceStart >= FOUR_HOURS_MS) {
+              game.status = 'final';
+            }
+          }
+        });
+
+        live = uniqueGames.filter(g => getGameCategory(g) === 'live');
+      }
+
       setLiveCount(live.length);
 
       if (!hasSetDefaultTab) {
@@ -131,10 +162,13 @@ export function GameSwitcherBar({ leagueId, currentGameKey, isTestMode }: GameSw
       }
 
       setAllGames(uniqueGames);
-    };
+  };
 
+  useEffect(() => {
     if (leagueId) {
       fetchGames();
+      const interval = setInterval(fetchGames, 15000);
+      return () => clearInterval(interval);
     }
   }, [leagueId, isTestMode]);
 
@@ -319,7 +353,9 @@ export function GameSwitcherBar({ leagueId, currentGameKey, isTestMode }: GameSw
                   {category === 'live' && (
                     <span className="text-[9px] sm:text-[10px] font-bold text-red-400 uppercase tracking-wider flex items-center gap-1">
                       <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>
-                      Live
+                      {game.current_period
+                        ? `${game.current_period <= 4 ? `Q${game.current_period}` : `OT${game.current_period - 4}`}${game.current_clock ? ` ${game.current_clock.split(':').slice(0, 2).join(':')}` : ''}`
+                        : 'Live'}
                     </span>
                   )}
                   {category === 'results' && (
