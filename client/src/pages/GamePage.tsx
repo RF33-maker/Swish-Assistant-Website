@@ -790,9 +790,14 @@ export default function GamePage() {
     );
   }
 
-  const isGamePlayed = gameData.status?.toLowerCase() === 'final' || 
-                       gameData.status?.toLowerCase() === 'finished' ||
-                       gameData.status?.toLowerCase() === 'live';
+  const statusLower = gameData.status?.toLowerCase() || '';
+  const isLive = statusLower === 'live' || statusLower === 'in_progress' || statusLower.includes('live');
+  const isFinal = statusLower === 'final' || statusLower === 'finished' || statusLower === 'completed';
+  const isGamePlayed = isFinal || isLive;
+
+  const latestEvent = liveEvents && liveEvents.length > 0 ? liveEvents[0] : null;
+  const currentPeriod = latestEvent?.period || null;
+  const currentClock = latestEvent?.clock || null;
   
   const homeTeamStats = teamStats?.find(t => t.side === "1");
   const awayTeamStats = teamStats?.find(t => t.side === "2");
@@ -846,11 +851,21 @@ export default function GamePage() {
 
               <div className="flex flex-col items-center flex-shrink-0">
                 {isGamePlayed && homeScore !== null && awayScore !== null ? (
-                  <div className="flex items-center gap-2 md:gap-4">
-                    <span className="text-3xl md:text-6xl font-bold text-slate-800 dark:text-white">{homeScore}</span>
-                    <span className="text-xl md:text-2xl text-orange-400">-</span>
-                    <span className="text-3xl md:text-6xl font-bold text-slate-800 dark:text-white">{awayScore}</span>
-                  </div>
+                  <>
+                    <div className="flex items-center gap-2 md:gap-4">
+                      <span className="text-3xl md:text-6xl font-bold text-slate-800 dark:text-white">{homeScore}</span>
+                      <span className="text-xl md:text-2xl text-orange-400">-</span>
+                      <span className="text-3xl md:text-6xl font-bold text-slate-800 dark:text-white">{awayScore}</span>
+                    </div>
+                    {isLive && currentPeriod && (
+                      <div className="flex flex-col items-center mt-1">
+                        <span className="text-xs md:text-sm font-semibold text-red-500">
+                          {currentPeriod <= 4 ? `Q${currentPeriod}` : `OT${currentPeriod - 4}`}
+                          {currentClock ? ` · ${currentClock.split(':').slice(0, 2).join(':')}` : ''}
+                        </span>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <div className="text-center">
                     <div className="text-xl md:text-3xl font-bold text-orange-500">VS</div>
