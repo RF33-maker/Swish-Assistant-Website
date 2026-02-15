@@ -106,8 +106,7 @@ export function GameSwitcherBar({ leagueId, currentGameKey, isTestMode }: GameSw
         });
       }
 
-      const live = uniqueGames.filter(g => getGameCategory(g) === 'live');
-      setLiveCount(live.length);
+      let live = uniqueGames.filter(g => getGameCategory(g) === 'live');
 
       if (live.length > 0) {
         const liveKeys = live.map(g => g.game_key);
@@ -117,21 +116,40 @@ export function GameSwitcherBar({ leagueId, currentGameKey, isTestMode }: GameSw
           .in("game_key", liveKeys)
           .order("created_at", { ascending: false });
 
+        const latestByGame: Record<string, { period: number; clock: string; created_at: string }> = {};
         if (liveEventsData) {
-          const latestByGame: Record<string, { period: number; clock: string }> = {};
           liveEventsData.forEach(ev => {
             if (!latestByGame[ev.game_key]) {
-              latestByGame[ev.game_key] = { period: ev.period, clock: ev.clock };
-            }
-          });
-          uniqueGames.forEach(game => {
-            if (latestByGame[game.game_key]) {
-              game.current_period = latestByGame[game.game_key].period;
-              game.current_clock = latestByGame[game.game_key].clock;
+              latestByGame[ev.game_key] = { period: ev.period, clock: ev.clock, created_at: ev.created_at };
             }
           });
         }
+
+        const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
+        const now = new Date();
+        uniqueGames.forEach(game => {
+          if (getGameCategory(game) !== 'live') return;
+          const latest = latestByGame[game.game_key];
+          if (latest) {
+            game.current_period = latest.period;
+            game.current_clock = latest.clock;
+            const timeSinceLastEvent = now.getTime() - new Date(latest.created_at).getTime();
+            if (timeSinceLastEvent >= FOUR_HOURS_MS) {
+              game.status = 'final';
+            }
+          } else {
+            const matchDate = new Date(game.matchtime);
+            const timeSinceStart = now.getTime() - matchDate.getTime();
+            if (isNaN(timeSinceStart) || timeSinceStart >= FOUR_HOURS_MS) {
+              game.status = 'final';
+            }
+          }
+        });
+
+        live = uniqueGames.filter(g => getGameCategory(g) === 'live');
       }
+
+      setLiveCount(live.length);
 
       if (!hasSetDefaultTab) {
         if (live.length > 0) {

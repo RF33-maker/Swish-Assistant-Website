@@ -162,20 +162,34 @@ export default function LiveGamesSection({ leagueId }: LiveGamesSectionProps) {
           .in("game_key", liveKeys)
           .order("created_at", { ascending: false });
 
+        const latestByGame: Record<string, { period: number; clock: string; created_at: string }> = {};
         if (liveEventsData) {
-          const latestByGame: Record<string, { period: number; clock: string }> = {};
           liveEventsData.forEach(ev => {
             if (!latestByGame[ev.game_key]) {
-              latestByGame[ev.game_key] = { period: ev.period, clock: ev.clock };
-            }
-          });
-          gamesWithScores.forEach(game => {
-            if (latestByGame[game.game_key]) {
-              game.current_period = latestByGame[game.game_key].period;
-              game.current_clock = latestByGame[game.game_key].clock;
+              latestByGame[ev.game_key] = { period: ev.period, clock: ev.clock, created_at: ev.created_at };
             }
           });
         }
+
+        const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
+        gamesWithScores.forEach(game => {
+          if (getGameStatus(game.status) !== 'live') return;
+          const latest = latestByGame[game.game_key];
+          if (latest) {
+            game.current_period = latest.period;
+            game.current_clock = latest.clock;
+            const timeSinceLastEvent = now.getTime() - new Date(latest.created_at).getTime();
+            if (timeSinceLastEvent >= FOUR_HOURS_MS) {
+              game.status = 'final';
+            }
+          } else {
+            const matchDate = new Date(game.matchtime);
+            const timeSinceStart = now.getTime() - matchDate.getTime();
+            if (isNaN(timeSinceStart) || timeSinceStart >= FOUR_HOURS_MS) {
+              game.status = 'final';
+            }
+          }
+        });
       }
 
       gamesWithScores.sort((a, b) => {

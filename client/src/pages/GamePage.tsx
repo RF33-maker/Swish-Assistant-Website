@@ -791,13 +791,33 @@ export default function GamePage() {
   }
 
   const statusLower = gameData.status?.toLowerCase() || '';
-  const isLive = statusLower === 'live' || statusLower === 'in_progress' || statusLower.includes('live');
-  const isFinal = statusLower === 'final' || statusLower === 'finished' || statusLower === 'completed';
-  const isGamePlayed = isFinal || isLive;
+  let isLive = statusLower === 'live' || statusLower === 'in_progress' || statusLower.includes('live');
+  let isFinal = statusLower === 'final' || statusLower === 'finished' || statusLower === 'completed';
 
   const latestEvent = liveEvents && liveEvents.length > 0 ? liveEvents[0] : null;
   const currentPeriod = latestEvent?.period || null;
   const currentClock = latestEvent?.clock || null;
+
+  if (isLive) {
+    const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
+    const now = new Date();
+    if (latestEvent?.created_at) {
+      const timeSinceLastEvent = now.getTime() - new Date(latestEvent.created_at).getTime();
+      if (timeSinceLastEvent >= FOUR_HOURS_MS) {
+        isLive = false;
+        isFinal = true;
+      }
+    } else {
+      const matchDate = new Date(gameData.matchtime);
+      const timeSinceStart = now.getTime() - matchDate.getTime();
+      if (isNaN(timeSinceStart) || timeSinceStart >= FOUR_HOURS_MS) {
+        isLive = false;
+        isFinal = true;
+      }
+    }
+  }
+
+  const isGamePlayed = isFinal || isLive;
   
   const homeTeamStats = teamStats?.find(t => t.side === "1");
   const awayTeamStats = teamStats?.find(t => t.side === "2");
