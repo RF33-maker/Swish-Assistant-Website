@@ -72,11 +72,11 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
   }, [messages]);
 
   const suggestedQuestions = [
-    "How is Marcos Perez Tosca doing?",
-    "Who does Rhys Farrell play for?",
-    "Who is the best team?",
-    "Who are the most efficient players?",
-    "Show me the top scorers"
+    "Who are the top 3 teams right now?",
+    "Who does Jaron Thames play for?",
+    "Who is the best rebounding team right now?",
+    "Who are the most efficient players in the league?",
+    "Show me the top scorers this month"
   ];
 
   const handleSendMessage = async (messageText?: string) => {
@@ -171,7 +171,7 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
       const [playersDataResult, gamesDataResult] = await Promise.all([
         supabase
           .from('player_stats')
-          .select('id, name, points, rebounds_total, assists, steals, blocks, team, player_id, players:player_id(slug)')
+          .select('id, name, spoints, srebounds_total, sassists, ssteals, sblocks, team, player_id, players:player_id(slug)')
           .eq('league_id', leagueId)
           .order('points', { ascending: false })
           .limit(20),
