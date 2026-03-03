@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { supabase } from "../client/src/lib/supabase";
@@ -7,11 +7,37 @@ import multer from 'multer';
 // Configure multer for memory storage
 const upload = multer({ storage: multer.memoryStorage() });
 
+const PYTHON_BACKEND = "http://localhost:8000";
+
+async function proxyToPython(req: Request, res: Response, path: string) {
+  try {
+    const url = `${PYTHON_BACKEND}${path}`;
+    const isGet = req.method === "GET";
+    const fetchRes = await fetch(url, {
+      method: req.method,
+      headers: { "Content-Type": "application/json" },
+      body: isGet ? undefined : JSON.stringify(req.body),
+    });
+    const data = await fetchRes.json();
+    res.status(fetchRes.status).json(data);
+  } catch (err: any) {
+    console.error(`Error proxying to Python ${path}:`, err.message);
+    res.status(502).json({ error: "Python backend unavailable", details: err.message });
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Test endpoint to verify routes are working
   app.get("/api/test", (req, res) => {
     res.json({ message: "API routes are working!", timestamp: new Date().toISOString() });
   });
+
+  // Python backend proxy routes
+  app.get("/start", (req, res) => proxyToPython(req, res, "/start"));
+  app.post("/chat", (req, res) => proxyToPython(req, res, "/chat"));
+  app.post("/api/chat/league", (req, res) => proxyToPython(req, res, "/api/chat/league"));
+  app.post("/api/ai-analysis", (req, res) => proxyToPython(req, res, "/api/ai-analysis"));
+  app.post("/api/parse", (req, res) => proxyToPython(req, res, "/api/parse"));
 
   // Team logo upload endpoint - Get upload URL
   app.post("/api/team-logos/upload", async (req, res) => {

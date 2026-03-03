@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import MessageBubble from './MessageBubble';
 import ModeToggle from './ModeToggle';
+import { getPythonBackendUrl } from '@/lib/backendUrl';
 
 interface Message {
   sender: 'user' | 'assistant';
@@ -13,7 +14,7 @@ interface ChatAreaProps {
   onScoutingResponse?: (text: string) => void;
 }
 
-const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000').replace(/\/$/, '');
+const BACKEND_URL = getPythonBackendUrl();
 
 const ChatArea: React.FC<ChatAreaProps> = ({ externalMode, onScoutingResponse }) => {
   const [messages, setMessages] = useState<Message[]>([]);

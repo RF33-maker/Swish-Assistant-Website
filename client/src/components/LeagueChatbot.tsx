@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/use-auth';
 import { supabase } from '@/lib/supabase';
 import { useLocation } from 'wouter';
+import { getPythonBackendUrl } from '@/lib/backendUrl';
 
 interface Message {
   id: string;
@@ -129,10 +130,8 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
   const queryLeagueData = async (question: string, leagueId: string): Promise<{ content: string; suggestions?: string[]; navigationButtons?: { label: string; id: string; type: 'player' | 'team' }[] } | string> => {
     try {
       // First try to use the backend API
-      const BASE = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000').replace(/\/$/, '');
-
-      if (BASE) {
-        try {
+      try {
+          const BASE = getPythonBackendUrl();
           const response = await fetch(`${BASE}/api/chat/league`, {
             method: 'POST',
             headers: {
@@ -159,9 +158,8 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
             const errorText = await response.text();
             console.error('❌ Backend response error:', response.status, errorText);
           }
-        } catch (backendError) {
-          console.error('❌ Backend request failed:', backendError);
-        }
+      } catch (backendError) {
+        console.error('❌ Backend request failed:', backendError);
       }
 
       // Fallback to local Supabase processing

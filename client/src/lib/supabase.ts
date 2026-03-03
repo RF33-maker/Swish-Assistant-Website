@@ -7,17 +7,14 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIU
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-// Python backend configuration - local development
-const backendUrl = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000').replace(/\/$/, '');
-
-// API utilities for Flask backend
+// API utilities for Flask backend (proxied through Express)
 export const backendApi = {
   // Upload and parse file
   async uploadFile(file: File): Promise<any> {
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await fetch(`${backendUrl}/upload`, {
+    const response = await fetch(`/upload`, {
       method: 'POST',
       body: formData,
     });
@@ -32,7 +29,7 @@ export const backendApi = {
 
   // Send chat message
   async sendMessage(message: string, context?: any): Promise<any> {
-    const response = await fetch(`${backendUrl}/chat`, {
+    const response = await fetch(`/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -50,7 +47,7 @@ export const backendApi = {
 
   // Parse document
   async parseDocument(documentId: string): Promise<any> {
-    const response = await fetch(`${backendUrl}/parse/${documentId}`, {
+    const response = await fetch(`/parse/${documentId}`, {
       method: 'GET',
     });
 

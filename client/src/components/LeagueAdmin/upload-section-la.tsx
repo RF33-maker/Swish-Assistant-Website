@@ -20,8 +20,9 @@ const UploadSectionLA = ({ leagues }: any) => {
 
     try {
       setStatusMessage("🔄 Parsing file...");
+      const BASE = (import.meta.env.VITE_BACKEND_URL || `${window.location.protocol}//${window.location.hostname}:8000`).replace(/\/$/, '');
       const resp = await fetch(
-        `${(import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000').replace(/\/$/, '')}/api/parse`,
+        `${BASE}/api/parse`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
