@@ -3,7 +3,7 @@ import { useDropzone } from "react-dropzone";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
 
-const BASE = import.meta.env.VITE_BACKEND_URL;
+const BASE = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000').replace(/\/$/, '');
 
 export default function UploadSection() {
   const { user } = useAuth();

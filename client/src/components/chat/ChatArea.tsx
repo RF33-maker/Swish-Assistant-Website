@@ -13,7 +13,7 @@ interface ChatAreaProps {
   onScoutingResponse?: (text: string) => void;
 }
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL;
+const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000').replace(/\/$/, '');
 
 const ChatArea: React.FC<ChatAreaProps> = ({ externalMode, onScoutingResponse }) => {
   const [messages, setMessages] = useState<Message[]>([]);

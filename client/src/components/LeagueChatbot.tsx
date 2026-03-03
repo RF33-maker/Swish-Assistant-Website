@@ -129,7 +129,7 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
   const queryLeagueData = async (question: string, leagueId: string): Promise<{ content: string; suggestions?: string[]; navigationButtons?: { label: string; id: string; type: 'player' | 'team' }[] } | string> => {
     try {
       // First try to use the backend API
-      const BASE = import.meta.env.VITE_BACKEND_URL;
+      const BASE = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000').replace(/\/$/, '');
 
       if (BASE) {
         try {
