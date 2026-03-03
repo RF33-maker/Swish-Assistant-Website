@@ -99,37 +99,50 @@ def chat_league():
         data = request.get_json()
         question = data.get('question', '')
         league_id = data.get('league_id', '')
-        context = data.get('context', '')
+        league_data = data.get('league_data', '')
 
         if not question:
             return jsonify({'error': 'question is required'}), 400
 
-        system_prompt = (
-            "You are an expert basketball league analyst and coaching assistant. "
-            "You help coaches and league administrators with performance analysis, "
-            "player statistics interpretation, team strategies, and league insights. "
-            "Provide concise, actionable, and data-driven answers. "
-            "If you don't have specific data for a league, give general expert basketball advice."
-        )
+        if league_data:
+            system_prompt = (
+                "You are an expert basketball league analyst and coaching assistant. "
+                "You have been provided with REAL current league data below — use it to answer questions accurately. "
+                "Always reference actual player names, teams, and stats from the data provided. "
+                "Be concise and specific. If asked for top scorers or leaders, list them by name with their numbers. "
+                "Do not make up or estimate stats — only use what is in the data provided.\n\n"
+                f"CURRENT LEAGUE DATA:\n{league_data}"
+            )
+            user_message = question
+        else:
+            system_prompt = (
+                "You are an expert basketball league analyst and coaching assistant. "
+                "Help with performance analysis, player statistics, team strategies, and league insights. "
+                "Be concise and data-driven."
+            )
+            user_message = f"Question about league {league_id}: {question}"
 
         completion = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"League context: {context}. Question about league {league_id}: {question}"}
+                {"role": "user", "content": user_message}
             ],
-            max_tokens=400
+            max_tokens=500
         )
 
         answer = completion.choices[0].message.content
 
+        # Generate dynamic follow-up suggestions based on the answer
+        suggestions = [
+            'Who are the top scorers?',
+            'Show me recent game results',
+            'Who is the most efficient player?'
+        ]
+
         return jsonify({
             'response': answer,
-            'suggestions': [
-                'Who are the top scorers?',
-                'Show me team standings',
-                'Who is the most efficient player?'
-            ],
+            'suggestions': suggestions,
             'status': 'success'
         })
 

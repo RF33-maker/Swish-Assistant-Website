@@ -129,43 +129,7 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
 
   const queryLeagueData = async (question: string, leagueId: string): Promise<{ content: string; suggestions?: string[]; navigationButtons?: { label: string; id: string; type: 'player' | 'team' }[] } | string> => {
     try {
-      // First try to use the backend API
-      try {
-          const BASE = getPythonBackendUrl();
-          const response = await fetch(`${BASE}/api/chat/league`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              question: question,
-              league_id: leagueId,
-              context: "coaching_chatbot"
-            }),
-            signal: AbortSignal.timeout(10000) // 10 second timeout
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            if (data.response || data.answer) {
-              return {
-                content: data.response || data.answer,
-                suggestions: data.suggestions || [],
-                navigationButtons: data.navigation_buttons || []
-              };
-            }
-          } else {
-            const errorText = await response.text();
-            console.error('❌ Backend response error:', response.status, errorText);
-          }
-      } catch (backendError) {
-        console.error('❌ Backend request failed:', backendError);
-      }
-
-      // Fallback to local Supabase processing
-      const lowerQuestion = question.toLowerCase();
-
-      // Gather comprehensive league data for local processing
+      // Always fetch real league data from Supabase first
       const [playersDataResult, gamesDataResult] = await Promise.all([
         supabase
           .from('player_stats')
@@ -183,6 +147,61 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
 
       const playersData = playersDataResult.data || [];
       const gamesData = gamesDataResult.data || [];
+
+      // Build a concise data summary to send as context to the AI
+      const topPlayers = [...playersData]
+        .sort((a: any, b: any) => (b.spoints ?? 0) - (a.spoints ?? 0))
+        .slice(0, 15)
+        .map((p: any) => `${p.name} (${p.team}): ${p.spoints ?? 0} pts, ${p.srebounds_total ?? 0} reb, ${p.sassists ?? 0} ast, ${p.ssteals ?? 0} stl, ${p.sblocks ?? 0} blk`)
+        .join('\n');
+
+      const recentGames = gamesData
+        .slice(0, 10)
+        .map((g: any) => `${g.home_team} ${g.home_score} - ${g.away_score} ${g.away_team} (${g.game_date})`)
+        .join('\n');
+
+      const leagueDataContext = `
+League: ${leagueName}
+
+TOP PLAYERS (season totals):
+${topPlayers || 'No player data available'}
+
+RECENT RESULTS:
+${recentGames || 'No game results available'}
+`.trim();
+
+      // Call AI with real league data as context
+      try {
+        const BASE = getPythonBackendUrl();
+        const response = await fetch(`${BASE}/api/chat/league`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            question,
+            league_id: leagueId,
+            league_data: leagueDataContext,
+          }),
+          signal: AbortSignal.timeout(15000)
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.response || data.answer) {
+            return {
+              content: data.response || data.answer,
+              suggestions: data.suggestions || [],
+              navigationButtons: data.navigation_buttons || []
+            };
+          }
+        } else {
+          console.error('❌ Backend response error:', response.status);
+        }
+      } catch (backendError) {
+        console.error('❌ Backend request failed:', backendError);
+      }
+
+      // Fallback to local pattern-matching if AI call fails
+      const lowerQuestion = question.toLowerCase();
 
       // Enhanced Pattern-based intelligent responses
 
