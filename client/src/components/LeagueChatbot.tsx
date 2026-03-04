@@ -194,7 +194,10 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
         (Array.isArray(p.players) ? p.players[0]?.slug : p.players?.slug) || p.player_id || p.id;
 
       // ── Step 2: Intent detection ───────────────────────────────────────
-      const q = question.toLowerCase();
+      // Normalize apostrophes/quotes so "3's" (curly) matches "3's" (straight)
+      const q = question.toLowerCase()
+        .replace(/[\u2018\u2019\u201A\u201B\u02BC]/g, "'")
+        .replace(/[\u201C\u201D]/g, '"');
 
       const is = (keywords: string[]) => keywords.some(k => q.includes(k));
 
@@ -491,6 +494,37 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
       const isSeasonQuery = is(['this season', 'season total', 'all season', 'so far', 'this year', 'how many', 'how much']);
       const detectedStat = detectStat();
 
+      // ── STAT LEADERBOARD: "top 3-point shooters", "who has made the most 3s" ──
+      const isLeaderboardQuery = is(['most', 'who leads', 'who lead', 'who has the most', 'who have the most',
+        'who made the most', 'top', 'leader', 'leaders', 'best', 'highest', 'ranked', 'who is best']);
+      if (detectedStat && isLeaderboardQuery && !findPlayerInQuestion() && !findTeamInQuestion()) {
+        const sorted = [...playersData]
+          .sort((a: any, b: any) => (b[detectedStat.column] ?? 0) - (a[detectedStat.column] ?? 0))
+          .slice(0, 5);
+        if (sorted.length > 0) {
+          const rows = sorted.map((p: any, i: number) => {
+            const val = p[detectedStat.column] ?? 0;
+            let extra = '';
+            if (detectedStat.companions) {
+              const attComp = detectedStat.companions.find(c => c.column);
+              const pctComp = detectedStat.companions.find(c => c.compute);
+              if (attComp?.column) {
+                const att = p[attComp.column] ?? 0;
+                const pct = pctComp ? pctComp.compute!(p) : '';
+                extra = ` / ${att} att${pct ? ` (${pct})` : ''}`;
+              }
+            }
+            return `${i + 1}. ${p.name} (${p.team}) — ${val} ${detectedStat.label}${extra}`;
+          }).join('\n');
+          const top = sorted[0];
+          return {
+            content: `${detectedStat.label} Leaders in ${leagueName}:\n\n${rows}`,
+            suggestions: [`How is ${top.name} performing?`, 'Top scorers', 'Show me the standings'],
+            navigationButtons: [{ label: `${top.name}'s Profile`, id: playerSlug(top), type: 'player' as const }]
+          };
+        }
+      }
+
       if (isSeasonQuery && detectedStat) {
         const foundPlayer = findPlayerInQuestion();
         const foundTeam = findTeamInQuestion();
@@ -661,7 +695,18 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
       // ── Step 3: AI fallback for open-ended questions ───────────────────
       const topPlayers = [...playersData]
         .slice(0, 15)
-        .map((p: any) => `${p.name} (${p.team}): ${p.spoints ?? 0} pts, ${p.srebounds_total ?? 0} reb, ${p.sassists ?? 0} ast, ${p.ssteals ?? 0} stl, ${p.sblocks ?? 0} blk`)
+        .map((p: any) => {
+          const fga = p.sfieldgoalsattempted ?? 0;
+          const fgm = p.sfieldgoalsmade ?? 0;
+          const tpa = p.sthreepointersattempted ?? 0;
+          const tpm = p.sthreepointersmade ?? 0;
+          const fta = p.sfreethrowsattempted ?? 0;
+          const ftm = p.sfreethrowsmade ?? 0;
+          const fgPct = fga > 0 ? ((fgm/fga)*100).toFixed(1)+'%' : 'N/A';
+          const tpPct = tpa > 0 ? ((tpm/tpa)*100).toFixed(1)+'%' : 'N/A';
+          const ftPct = fta > 0 ? ((ftm/fta)*100).toFixed(1)+'%' : 'N/A';
+          return `${p.name} (${p.team}): ${p.spoints ?? 0}pts, ${p.srebounds_total ?? 0}reb, ${p.sassists ?? 0}ast, ${p.ssteals ?? 0}stl, ${p.sblocks ?? 0}blk | 3PT: ${tpm}/${tpa} (${tpPct}) | FG: ${fgm}/${fga} (${fgPct}) | FT: ${ftm}/${fta} (${ftPct})`;
+        })
         .join('\n');
       const recentGames = gamesData.slice(0, 8)
         .map((g: any) => `${g.home_team} ${g.home_score}–${g.away_score} ${g.away_team} (${g.game_date})`)
