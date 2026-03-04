@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { MessageCircle, Send, Lock, User, Bot, TrendingUp, BarChart3, Users, ExternalLink } from 'lucide-react';
+import { MessageCircle, Send, Lock, User, Bot, TrendingUp, BarChart3, Users, ExternalLink, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/use-auth';
@@ -24,9 +24,10 @@ interface LeagueChatbotProps {
   leagueSlug?: string;
   onResponseReceived?: (response: string) => void;
   isPanelMode?: boolean;
+  isFloatingWidget?: boolean;
 }
 
-export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResponseReceived, isPanelMode = false }: LeagueChatbotProps) {
+export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResponseReceived, isPanelMode = false, isFloatingWidget = false }: LeagueChatbotProps) {
   const { user, isLoading: authLoading } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
@@ -34,6 +35,8 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
   const [isExpanded, setIsExpanded] = useState(isPanelMode);
   const [isOverlayMode, setIsOverlayMode] = useState(false);
   const [isActivelyUsed, setIsActivelyUsed] = useState(isPanelMode);
+  const [isWidgetOpen, setIsWidgetOpen] = useState(false);
+  const [showTooltip, setShowTooltip] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [, setLocation] = useLocation(); // Hook for routing
 
@@ -73,6 +76,14 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Tooltip: show after 1.5s, auto-dismiss after 6s
+  useEffect(() => {
+    if (!isFloatingWidget || !user) return;
+    const showTimer = setTimeout(() => setShowTooltip(true), 1500);
+    const hideTimer = setTimeout(() => setShowTooltip(false), 7500);
+    return () => { clearTimeout(showTimer); clearTimeout(hideTimer); };
+  }, [isFloatingWidget, user]);
 
   const suggestedQuestions = [
     "Who are the top 3 teams right now?",
@@ -1431,6 +1442,193 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
             </Button>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  // ── FLOATING WIDGET MODE ──────────────────────────────────────────────────
+  if (isFloatingWidget && user && leagueId) {
+    return (
+      <div className="fixed bottom-6 right-6 z-[9990] flex flex-col items-end gap-3">
+
+        {/* Chat panel — slides up from button */}
+        {isWidgetOpen && (
+          <div className="w-80 h-[520px] bg-white rounded-2xl shadow-2xl border border-orange-200 flex flex-col overflow-hidden"
+               style={{ animation: 'widgetSlideUp 0.2s ease-out' }}>
+            {/* Header */}
+            <div className="bg-gradient-to-r from-orange-500 to-yellow-500 p-4 flex items-center justify-between flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <MessageCircle className="w-5 h-5 text-white" />
+                <span className="font-semibold text-white text-sm">League Assistant</span>
+                <span className="text-xs bg-white/20 text-white px-2 py-0.5 rounded-full">AI</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { setMessages([]); setInputMessage(''); }}
+                  className="text-white/70 hover:text-white text-xs transition-colors"
+                  title="Clear chat"
+                >
+                  Clear
+                </button>
+                <button
+                  onClick={() => setIsWidgetOpen(false)}
+                  className="text-white hover:text-orange-100 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Messages / Suggestions area */}
+            <div className="flex-1 overflow-y-auto p-3 space-y-3">
+              {messages.length === 0 ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-slate-500 font-medium mb-3">Try asking about {leagueName}:</p>
+                  {suggestedQuestions.slice(0, 4).map((question, index) => (
+                    <button
+                      key={index}
+                      onClick={() => handleSendMessage(question)}
+                      disabled={isLoading}
+                      className="w-full text-left text-xs p-2.5 bg-orange-50 hover:bg-orange-100 text-slate-700 rounded-lg border border-orange-200 hover:border-orange-300 transition-colors leading-relaxed"
+                    >
+                      {question}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <>
+                  {messages.map((message) => (
+                    <div key={message.id} className={`flex gap-2 ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      {message.type === 'bot' && <Bot className="w-5 h-5 text-orange-500 mt-1 flex-shrink-0" />}
+                      <div className="flex flex-col max-w-[85%]">
+                        <div className={`p-2.5 rounded-lg text-xs leading-relaxed ${
+                          message.type === 'user'
+                            ? 'bg-orange-500 text-white'
+                            : 'bg-slate-50 text-slate-800 border border-slate-200'
+                        }`}>
+                          <div className="prose prose-xs max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_p]:my-1 [&_ul]:my-1 [&_li]:my-0 [&_h3]:text-xs [&_h3]:font-bold [&_h3]:mt-0 [&_h3]:mb-1">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                          </div>
+                        </div>
+                        {message.type === 'bot' && message.suggestions && message.suggestions.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {message.suggestions.slice(0, 3).map((s, i) => (
+                              <button
+                                key={i}
+                                onClick={() => handleSendMessage(s)}
+                                disabled={isLoading}
+                                className="px-2 py-1 text-[10px] bg-orange-50 hover:bg-orange-100 text-orange-700 rounded border border-orange-200 transition-colors"
+                              >
+                                {s}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {message.type === 'bot' && message.navigationButtons && message.navigationButtons.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {message.navigationButtons.map((button, i) => (
+                              <Button
+                                key={i}
+                                onClick={() => {
+                                  if (button.type === 'player') setLocation(`/player/${button.id}`);
+                                  else if (button.type === 'team') setLocation(leagueSlug ? `/league/${leagueSlug}/team/${button.id}` : `/team/${button.id}`);
+                                }}
+                                variant="outline"
+                                size="sm"
+                                className="text-[10px] h-auto py-1 px-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200"
+                              >
+                                <ExternalLink className="w-2.5 h-2.5 mr-1" />
+                                {button.label}
+                              </Button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {message.type === 'user' && <User className="w-5 h-5 text-slate-400 mt-1 flex-shrink-0" />}
+                    </div>
+                  ))}
+                  {isLoading && (
+                    <div className="flex gap-2 justify-start">
+                      <Bot className="w-5 h-5 text-orange-500 mt-1 flex-shrink-0" />
+                      <div className="bg-slate-50 border border-slate-200 p-2.5 rounded-lg">
+                        <div className="flex items-center gap-1">
+                          <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" />
+                          <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                          <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={messagesEndRef} />
+                </>
+              )}
+            </div>
+
+            {/* Input bar */}
+            <div className="p-3 border-t border-orange-100 flex gap-2 flex-shrink-0">
+              <Input
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                placeholder="Ask about stats, players..."
+                onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
+                className="text-xs py-2 px-3 border-orange-200 focus:border-orange-400"
+                disabled={isLoading}
+              />
+              <Button
+                onClick={() => handleSendMessage()}
+                disabled={!inputMessage.trim() || isLoading}
+                size="sm"
+                className="bg-orange-500 hover:bg-orange-600 text-white px-3 flex-shrink-0"
+              >
+                <Send className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Tooltip callout */}
+        {showTooltip && !isWidgetOpen && (
+          <div className="relative mr-2" style={{ animation: 'widgetSlideUp 0.3s ease-out' }}>
+            <div className="bg-white border border-orange-300 rounded-xl shadow-lg px-4 py-3 text-sm text-slate-700 font-medium max-w-[200px] leading-snug">
+              Query any stats you want instantly
+              {/* Arrow pointing down-right toward the button */}
+              <div className="absolute -bottom-2 right-4 w-0 h-0 border-l-8 border-r-8 border-t-8 border-l-transparent border-r-transparent border-t-orange-300" />
+              <div className="absolute -bottom-[7px] right-[17px] w-0 h-0 border-l-[7px] border-r-[7px] border-t-[7px] border-l-transparent border-r-transparent border-t-white" />
+            </div>
+          </div>
+        )}
+
+        {/* Glow button */}
+        <div className="relative flex items-center justify-center">
+          {/* Ping glow ring */}
+          {!isWidgetOpen && (
+            <div className="absolute inset-0 rounded-full bg-orange-400 opacity-50 animate-ping" />
+          )}
+          {/* Steady glow halo */}
+          <div className={`absolute inset-0 rounded-full transition-all duration-300 ${
+            isWidgetOpen
+              ? 'shadow-[0_0_24px_rgba(249,115,22,0.7)]'
+              : 'shadow-[0_0_20px_rgba(249,115,22,0.55)]'
+          }`} />
+          <button
+            onClick={() => { setIsWidgetOpen(!isWidgetOpen); setShowTooltip(false); }}
+            className="relative w-14 h-14 bg-gradient-to-br from-orange-500 to-yellow-500 rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-transform duration-150 shadow-lg"
+            aria-label="Open League Assistant"
+          >
+            {isWidgetOpen
+              ? <X className="w-6 h-6 text-white" />
+              : <MessageCircle className="w-6 h-6 text-white" />
+            }
+          </button>
+        </div>
+
+        {/* Slide-up keyframe */}
+        <style>{`
+          @keyframes widgetSlideUp {
+            from { opacity: 0; transform: translateY(12px) scale(0.97); }
+            to   { opacity: 1; transform: translateY(0)   scale(1); }
+          }
+        `}</style>
       </div>
     );
   }

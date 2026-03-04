@@ -4570,14 +4570,6 @@ export default function LeaguePage() {
               </div>
             )}
 
-            {/* League Chatbot */}
-            {league?.league_id && (
-              <LeagueChatbot 
-                leagueId={league.league_id} 
-                leagueName={league.name || 'League'} 
-                leagueSlug={slug}
-              />
-            )}
 
             {/* Instagram Embed */}
             <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4">
@@ -4794,6 +4786,16 @@ export default function LeaguePage() {
             isOpen={isPreviewModalOpen}
             onClose={() => setIsPreviewModalOpen(false)}
             gameKey={selectedPreviewGame.game_id}
+          />
+        )}
+
+        {/* Floating AI assistant widget — fixed bottom-right, always accessible */}
+        {league?.league_id && (
+          <LeagueChatbot
+            isFloatingWidget
+            leagueId={league.league_id}
+            leagueName={league.name || 'League'}
+            leagueSlug={slug}
           />
         )}
       </div>
