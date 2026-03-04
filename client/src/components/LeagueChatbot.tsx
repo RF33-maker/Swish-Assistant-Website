@@ -207,19 +207,24 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
       const is = (keywords: string[]) => keywords.some(k => q.includes(k));
 
       // ── STANDINGS / BEST TEAM ──────────────────────────────────────────
-      if (is(['standing', 'best team', 'top team', 'win-loss', 'win loss', 'who leads the league',
+      const topNTeamsMatch = q.match(/top\s+(\d+)\s+teams?/);
+      if (topNTeamsMatch || is(['standing', 'best team', 'top team', 'top teams', 'best teams',
+               'teams right now', 'teams at the top', 'who are the best teams',
+               'win-loss', 'win loss', 'who leads the league',
                'league leader', 'team rank', 'which team is first', 'which team is best',
                'who is winning', 'table', 'league table'])) {
         const standings = computeStandings();
         if (standings.length > 0) {
-          const rows = standings.map(([team, r], i) => {
+          const displayCount = topNTeamsMatch ? parseInt(topNTeamsMatch[1]) : standings.length;
+          const rows = standings.slice(0, displayCount).map(([team, r], i) => {
             const gp = r.wins + r.losses;
             const pct = gp > 0 ? ((r.wins / gp) * 100).toFixed(0) : '0';
             return `${i + 1}. **${team}** — ${r.wins}W–${r.losses}L (${pct}%)`;
           }).join('\n');
           const [leader] = standings[0];
+          const title = topNTeamsMatch ? `Top ${displayCount} Teams — ${leagueName}` : `${leagueName} Standings`;
           return {
-            content: `### ${leagueName} Standings\n\n${rows}`,
+            content: `### ${title}\n\n${rows}`,
             suggestions: [`Who are ${leader}'s top players?`, 'Top scorers in the league', 'Recent game results'],
             navigationButtons: [{ label: `${leader}'s Record`, id: leader, type: 'team' as const }]
           };
@@ -711,6 +716,266 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
             } catch {}
             return { content: `### ${foundPlayer.player_name} — Last ${playerGames.length} Game(s)\n\n${rows}`, suggestions: [`How is ${foundPlayer.player_name} performing?`, 'Top scorers'], navigationButtons: [{ label: `${foundPlayer.player_name}'s Profile`, id: playerSlug(foundPlayer), type: 'player' as const }] };
           }
+        }
+      }
+
+      // ── UNIVERSAL STAT-LINE FILTER ENGINE ─────────────────────────────
+      // Parses any combination of thresholds: "20/10/10", "30pts 10reb", "60% FG", etc.
+      const parseStatThresholds = (text: string) => {
+        const t: { pts?: number; reb?: number; ast?: number; stl?: number; blk?: number;
+                   fg_pct?: number; tp_pct?: number; ft_pct?: number; plus_minus?: number } = {};
+        // Slash notation: 20/10/10 → pts/reb/ast, 30/10 → pts/reb
+        const slash = text.match(/\b(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)(?:\/(\d+(?:\.\d+)?))?(?:\/(\d+(?:\.\d+)?))?(?:\/\S*)?\b/);
+        if (slash) {
+          if (slash[1]) t.pts = parseFloat(slash[1]);
+          if (slash[2]) t.reb = parseFloat(slash[2]);
+          if (slash[3]) t.ast = parseFloat(slash[3]);
+        }
+        // Individual stat patterns (don't override slash notation values)
+        const m = (re: RegExp) => { const r = text.match(re); return r ? parseFloat(r[1]) : undefined; };
+        if (!t.pts) t.pts = m(/(\d+(?:\.\d+)?)\s*(?:pts?|points?|ppg)/);
+        if (!t.reb) t.reb = m(/(\d+(?:\.\d+)?)\s*(?:reb(?:ounds?)?|rpg|boards?)/);
+        if (!t.ast) t.ast = m(/(\d+(?:\.\d+)?)\s*(?:ass?ts?|assists?|apg|dimes?)/);
+        if (!t.stl) t.stl = m(/(\d+(?:\.\d+)?)\s*(?:stls?|steals?|spg)/);
+        if (!t.blk) t.blk = m(/(\d+(?:\.\d+)?)\s*(?:blks?|blocks?|bpg)/);
+        const pmMatch = text.match(/\+(\d+(?:\.\d+)?)\s*(?:plus.?minus|±)?/);
+        if (pmMatch) t.plus_minus = parseFloat(pmMatch[1]);
+        // Percentages
+        const fgMatch = text.match(/(\d+(?:\.\d+)?)\s*%\s*(?:fg|field goal|from the field)/) ||
+                        text.match(/(?:fg%?|field goal%?)\s*(?:above|over|of|at|above|:)?\s*(\d+(?:\.\d+)?)/);
+        if (fgMatch) t.fg_pct = parseFloat(fgMatch[1]);
+        const tpMatch = text.match(/(\d+(?:\.\d+)?)\s*%\s*(?:3pt|three.?point|from three|from deep|from the arc)/) ||
+                        text.match(/(?:3pt%?|three.?point%?)\s*(?:above|over|of|at|:)?\s*(\d+(?:\.\d+)?)/);
+        if (tpMatch) t.tp_pct = parseFloat(tpMatch[1]);
+        const ftMatch = text.match(/(\d+(?:\.\d+)?)\s*%\s*(?:ft|free throw|from the line)/) ||
+                        text.match(/(?:ft%?|free throw%?)\s*(?:above|over|of|at|:)?\s*(\d+(?:\.\d+)?)/);
+        if (ftMatch) t.ft_pct = parseFloat(ftMatch[1]);
+        // Remove undefined keys
+        (Object.keys(t) as (keyof typeof t)[]).forEach(k => { if (t[k] === undefined) delete t[k]; });
+        return t;
+      };
+
+      const buildFilterDesc = (t: ReturnType<typeof parseStatThresholds>): string => {
+        const p: string[] = [];
+        if (t.pts != null) p.push(`≥${t.pts}pts`);
+        if (t.reb != null) p.push(`≥${t.reb}reb`);
+        if (t.ast != null) p.push(`≥${t.ast}ast`);
+        if (t.stl != null) p.push(`≥${t.stl}stl`);
+        if (t.blk != null) p.push(`≥${t.blk}blk`);
+        if (t.fg_pct != null) p.push(`≥${t.fg_pct}% FG`);
+        if (t.tp_pct != null) p.push(`≥${t.tp_pct}% 3PT`);
+        if (t.ft_pct != null) p.push(`≥${t.ft_pct}% FT`);
+        if (t.plus_minus != null) p.push(`≥+${t.plus_minus} +/-`);
+        return p.join(' · ');
+      };
+
+      const hasSlashNotation = /\b\d+(?:\.\d+)?\/\d+/.test(q);
+      const isStatLineQuery = hasSlashNotation || is([
+        'how many players', 'any player', 'which player', 'only player',
+        'players with', 'players averaging', 'players who', 'players that',
+        'players scoring', 'players putting up', 'players over', 'players above',
+        'qualify', 'show me players', 'find players', 'list players',
+        'teams with', 'teams averaging', 'team averaging', 'any team averaging',
+        'which teams are', 'teams over', 'teams above'
+      ]);
+
+      if (isStatLineQuery) {
+        const thresholds = parseStatThresholds(q);
+        const hasThresholds = Object.keys(thresholds).length > 0;
+
+        if (hasThresholds) {
+          const isTeamScope = is(['which team', 'teams with', 'teams averaging', 'team averaging',
+                                  'any team', 'what team', 'team that', 'which teams']);
+          const filterDesc = buildFilterDesc(thresholds);
+          const fmt = (v: number | null | undefined, dec = 1) => v != null ? Number(v).toFixed(dec) : 'N/A';
+
+          // ── LAST N GAMES scope ────────────────────────────────────────
+          const lastNScopeMatch = q.match(/(?:last|past|over\s+(?:the\s+)?last|in\s+(?:the\s+)?last)\s+(\d+)\s+(?:game|match)/);
+          if (lastNScopeMatch && !isTeamScope) {
+            const N = parseInt(lastNScopeMatch[1]);
+            const { data: allGameLogs } = await supabase
+              .from('v_player_game_log')
+              .select('player_name, team_name, game_date, pts, reb, ast, stl, blk, fg_pct, tp_pct, ft_pct, plus_minus')
+              .eq('league_id', leagueId)
+              .order('game_date', { ascending: false })
+              .limit(N * 150);
+
+            if (allGameLogs && allGameLogs.length > 0) {
+              // Group by player, take each player's last N games
+              const playerMap: Record<string, any[]> = {};
+              for (const row of allGameLogs as any[]) {
+                if (!playerMap[row.player_name]) playerMap[row.player_name] = [];
+                if (playerMap[row.player_name].length < N) playerMap[row.player_name].push(row);
+              }
+              const avgCol = (games: any[], col: string) => {
+                const vals = games.map((g: any) => g[col]).filter((v: any) => v != null);
+                return vals.length > 0 ? vals.reduce((a: number, b: number) => a + b, 0) / vals.length : null;
+              };
+              const playerAverages = Object.entries(playerMap)
+                .filter(([, games]) => games.length >= Math.min(N, games.length))
+                .map(([name, games]) => ({
+                  player_name: name,
+                  team_name: games[0].team_name,
+                  avg_pts: avgCol(games, 'pts'),
+                  avg_reb: avgCol(games, 'reb'),
+                  avg_ast: avgCol(games, 'ast'),
+                  avg_stl: avgCol(games, 'stl'),
+                  avg_blk: avgCol(games, 'blk'),
+                  avg_fg_pct: avgCol(games, 'fg_pct'),
+                  avg_tp_pct: avgCol(games, 'tp_pct'),
+                  avg_ft_pct: avgCol(games, 'ft_pct'),
+                  avg_plus_minus: avgCol(games, 'plus_minus'),
+                }));
+
+              const matches = playerAverages.filter((p: any) => {
+                if (thresholds.pts != null && (p.avg_pts ?? 0) < thresholds.pts) return false;
+                if (thresholds.reb != null && (p.avg_reb ?? 0) < thresholds.reb) return false;
+                if (thresholds.ast != null && (p.avg_ast ?? 0) < thresholds.ast) return false;
+                if (thresholds.stl != null && (p.avg_stl ?? 0) < thresholds.stl) return false;
+                if (thresholds.blk != null && (p.avg_blk ?? 0) < thresholds.blk) return false;
+                if (thresholds.fg_pct != null && (p.avg_fg_pct ?? 0) < thresholds.fg_pct) return false;
+                if (thresholds.tp_pct != null && (p.avg_tp_pct ?? 0) < thresholds.tp_pct) return false;
+                if (thresholds.ft_pct != null && (p.avg_ft_pct ?? 0) < thresholds.ft_pct) return false;
+                if (thresholds.plus_minus != null && (p.avg_plus_minus ?? 0) < thresholds.plus_minus) return false;
+                return true;
+              });
+
+              const buildLastNRow = (p: any, i: number) => {
+                const stats: string[] = [];
+                if (thresholds.pts != null) stats.push(`${fmt(p.avg_pts)}pts`);
+                if (thresholds.reb != null) stats.push(`${fmt(p.avg_reb)}reb`);
+                if (thresholds.ast != null) stats.push(`${fmt(p.avg_ast)}ast`);
+                if (thresholds.stl != null) stats.push(`${fmt(p.avg_stl)}stl`);
+                if (thresholds.blk != null) stats.push(`${fmt(p.avg_blk)}blk`);
+                if (thresholds.fg_pct != null) stats.push(`${fmt(p.avg_fg_pct)}% FG`);
+                if (thresholds.tp_pct != null) stats.push(`${fmt(p.avg_tp_pct)}% 3PT`);
+                if (thresholds.ft_pct != null) stats.push(`${fmt(p.avg_ft_pct)}% FT`);
+                return `${i + 1}. **${p.player_name}** *(${p.team_name})* — ${stats.join(' · ')}`;
+              };
+
+              if (matches.length === 0) {
+                const primaryCol = thresholds.pts != null ? 'avg_pts' : thresholds.reb != null ? 'avg_reb' : 'avg_ast';
+                const closest = [...playerAverages].sort((a: any, b: any) => (b[primaryCol] ?? 0) - (a[primaryCol] ?? 0)).slice(0, 3);
+                return {
+                  content: `### No Matches — Last ${N} Games\n*Filter: ${filterDesc}*\n\nNo players averaged this stat line over their last ${N} games.\n\n**Closest players:**\n${closest.map(buildLastNRow).join('\n')}`,
+                  suggestions: ['Top scorers', 'Top rebounders', 'Show me the standings']
+                };
+              }
+
+              const sorted = [...matches].sort((a: any, b: any) => (b.avg_pts ?? 0) - (a.avg_pts ?? 0));
+              const header = `### Last ${N} Games — ${filterDesc}\n*${matches.length} player${matches.length === 1 ? '' : 's'} qualify*\n\n`;
+              if (matches.length === 1) {
+                const p = sorted[0];
+                const statLine = [
+                  thresholds.pts != null ? `${fmt(p.avg_pts)}pts` : null,
+                  thresholds.reb != null ? `${fmt(p.avg_reb)}reb` : null,
+                  thresholds.ast != null ? `${fmt(p.avg_ast)}ast` : null,
+                  thresholds.fg_pct != null ? `${fmt(p.avg_fg_pct)}% FG` : null,
+                  thresholds.tp_pct != null ? `${fmt(p.avg_tp_pct)}% 3PT` : null,
+                ].filter(Boolean).join('/');
+                return {
+                  content: `${header}**${p.player_name}** is the only player to average ${statLine} over the last ${N} games *(${p.team_name})*`,
+                  suggestions: [`How is ${p.player_name} performing?`, 'Top scorers', 'Show me the standings'],
+                  navigationButtons: [{ label: `${p.player_name}'s Profile`, id: playerSlug({ player_name: p.player_name }), type: 'player' as const }]
+                };
+              }
+              return {
+                content: `${header}${sorted.map(buildLastNRow).join('\n')}`,
+                suggestions: ['Top scorers', 'Show me the standings', 'Top rebounders']
+              };
+            }
+          }
+
+          // ── TEAM SCOPE (season averages) ──────────────────────────────
+          if (isTeamScope && teamsData.length > 0) {
+            const matches = teamsData.filter((t: any) => {
+              if (thresholds.pts != null && (t.avg_pts ?? 0) < thresholds.pts) return false;
+              if (thresholds.reb != null && (t.avg_reb ?? 0) < thresholds.reb) return false;
+              if (thresholds.ast != null && (t.avg_ast ?? 0) < thresholds.ast) return false;
+              if (thresholds.stl != null && (t.avg_stl ?? 0) < thresholds.stl) return false;
+              if (thresholds.blk != null && (t.avg_blk ?? 0) < thresholds.blk) return false;
+              if (thresholds.fg_pct != null && (t.season_fg_pct ?? 0) < thresholds.fg_pct) return false;
+              if (thresholds.tp_pct != null && (t.season_tp_pct ?? 0) < thresholds.tp_pct) return false;
+              return true;
+            });
+            const buildTeamRow = (t: any, i: number) => {
+              const stats: string[] = [];
+              if (thresholds.pts != null) stats.push(`${fmt(t.avg_pts)}pts`);
+              if (thresholds.reb != null) stats.push(`${fmt(t.avg_reb)}reb`);
+              if (thresholds.ast != null) stats.push(`${fmt(t.avg_ast)}ast`);
+              if (thresholds.stl != null) stats.push(`${fmt(t.avg_stl)}stl`);
+              if (thresholds.fg_pct != null) stats.push(`${fmt(t.season_fg_pct)}% FG`);
+              if (thresholds.tp_pct != null) stats.push(`${fmt(t.season_tp_pct)}% 3PT`);
+              return `${i + 1}. **${t.team_name}** — ${stats.join(' · ')}`;
+            };
+            if (matches.length === 0) {
+              const closest = [...teamsData].sort((a: any, b: any) => (b.avg_pts ?? 0) - (a.avg_pts ?? 0)).slice(0, 3);
+              return {
+                content: `### No Teams Match — *Filter: ${filterDesc}*\n\nNo teams average this stat line this season.\n\n**Closest teams:**\n${closest.map(buildTeamRow).join('\n')}`,
+                suggestions: ['Show me the standings', 'Which team scores the most?', 'Top scorers']
+              };
+            }
+            const sorted = [...matches].sort((a: any, b: any) => (b.avg_pts ?? 0) - (a.avg_pts ?? 0));
+            return {
+              content: `### Teams Matching: ${filterDesc}\n*${matches.length} team${matches.length === 1 ? '' : 's'} qualify — season per-game averages*\n\n${sorted.map(buildTeamRow).join('\n')}`,
+              suggestions: ['Show me the standings', 'Top scorers', 'Which team scores the most?']
+            };
+          }
+
+          // ── PLAYER SCOPE (season per-game averages, default) ──────────
+          const matches = playersData.filter((p: any) => {
+            if (thresholds.pts != null && (p.avg_pts ?? 0) < thresholds.pts) return false;
+            if (thresholds.reb != null && (p.avg_reb ?? 0) < thresholds.reb) return false;
+            if (thresholds.ast != null && (p.avg_ast ?? 0) < thresholds.ast) return false;
+            if (thresholds.stl != null && (p.avg_stl ?? 0) < thresholds.stl) return false;
+            if (thresholds.blk != null && (p.avg_blk ?? 0) < thresholds.blk) return false;
+            if (thresholds.fg_pct != null && (p.season_fg_pct ?? 0) < thresholds.fg_pct) return false;
+            if (thresholds.tp_pct != null && (p.season_tp_pct ?? 0) < thresholds.tp_pct) return false;
+            if (thresholds.ft_pct != null && (p.season_ft_pct ?? 0) < thresholds.ft_pct) return false;
+            return true;
+          });
+          const buildPlayerRow = (p: any, i: number) => {
+            const stats: string[] = [];
+            if (thresholds.pts != null) stats.push(`${fmt(p.avg_pts)}pts`);
+            if (thresholds.reb != null) stats.push(`${fmt(p.avg_reb)}reb`);
+            if (thresholds.ast != null) stats.push(`${fmt(p.avg_ast)}ast`);
+            if (thresholds.stl != null) stats.push(`${fmt(p.avg_stl)}stl`);
+            if (thresholds.blk != null) stats.push(`${fmt(p.avg_blk)}blk`);
+            if (thresholds.fg_pct != null) stats.push(`${fmt(p.season_fg_pct)}% FG`);
+            if (thresholds.tp_pct != null) stats.push(`${fmt(p.season_tp_pct)}% 3PT`);
+            if (thresholds.ft_pct != null) stats.push(`${fmt(p.season_ft_pct)}% FT`);
+            return `${i + 1}. **${p.player_name}** *(${p.team_name})* — ${stats.join(' · ')}`;
+          };
+          if (matches.length === 0) {
+            const primaryCol = thresholds.pts != null ? 'avg_pts' : thresholds.reb != null ? 'avg_reb' : 'avg_ast';
+            const closest = [...playersData].sort((a: any, b: any) => (b[primaryCol] ?? 0) - (a[primaryCol] ?? 0)).slice(0, 3);
+            return {
+              content: `### No Players Match — *Filter: ${filterDesc}*\n\nNo players average this stat line per game this season.\n\n**Closest players:**\n${closest.map(buildPlayerRow).join('\n')}`,
+              suggestions: ['Top scorers', 'Top rebounders', 'Show me the standings']
+            };
+          }
+          const sorted = [...matches].sort((a: any, b: any) => (b.avg_pts ?? 0) - (a.avg_pts ?? 0));
+          const header = `### Players Matching: ${filterDesc}\n*${matches.length} player${matches.length === 1 ? '' : 's'} qualify — season per-game averages*\n\n`;
+          if (matches.length === 1) {
+            const p = sorted[0];
+            const statLine = [
+              thresholds.pts != null ? `${fmt(p.avg_pts)}pts` : null,
+              thresholds.reb != null ? `${fmt(p.avg_reb)}reb` : null,
+              thresholds.ast != null ? `${fmt(p.avg_ast)}ast` : null,
+              thresholds.fg_pct != null ? `${fmt(p.season_fg_pct)}% FG` : null,
+              thresholds.tp_pct != null ? `${fmt(p.season_tp_pct)}% 3PT` : null,
+            ].filter(Boolean).join('/');
+            return {
+              content: `${header}**${p.player_name}** is the only player averaging ${statLine} this season *(${p.team_name})*`,
+              suggestions: [`How is ${p.player_name} performing?`, 'Top scorers', 'Show me the standings'],
+              navigationButtons: [{ label: `${p.player_name}'s Profile`, id: playerSlug(p), type: 'player' as const }]
+            };
+          }
+          return {
+            content: `${header}${sorted.map(buildPlayerRow).join('\n')}`,
+            suggestions: [`How is ${sorted[0].player_name} performing?`, 'Top scorers', 'Show me the standings'],
+            navigationButtons: [{ label: `${sorted[0].player_name}'s Profile`, id: playerSlug(sorted[0]), type: 'player' as const }]
+          };
         }
       }
 
