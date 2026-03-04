@@ -130,23 +130,28 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
   const queryLeagueData = async (question: string, leagueId: string): Promise<{ content: string; suggestions?: string[]; navigationButtons?: { label: string; id: string; type: 'player' | 'team' }[] } | string> => {
     try {
       // ── Step 1: Fetch real league data from Supabase ──────────────────
-      const [playersDataResult, gamesDataResult] = await Promise.all([
+      const [playersDataResult, gamesDataResult, teamsDataResult] = await Promise.all([
         supabase
           .from('player_stats')
-          .select('id, name, spoints, srebounds_total, sassists, ssteals, sblocks, team, player_id, players:player_id(slug)')
+          .select('id, name, spoints, srebounds_total, sassists, ssteals, sblocks, sthreepointersmade, sthreepointersattempted, sfieldgoalsmade, sfieldgoalsattempted, sfreethrowsmade, sfreethrowsattempted, sturnovers, sminutes, team, player_id, players:player_id(slug)')
           .eq('league_id', leagueId)
           .order('spoints', { ascending: false })
-          .limit(30),
+          .limit(50),
         supabase
           .from('games')
           .select('game_date, home_team, away_team, home_score, away_score')
           .eq('league_id', leagueId)
           .order('game_date', { ascending: false })
-          .limit(20)
+          .limit(30),
+        supabase
+          .from('teams')
+          .select('team_id, name')
+          .eq('league_id', leagueId)
       ]);
 
       const playersData = (playersDataResult.data || []) as any[];
       const gamesData = (gamesDataResult.data || []) as any[];
+      const teamsData = (teamsDataResult.data || []) as any[];
 
       // ── Helper: fuzzy player name match ───────────────────────────────
       const findPlayer = (searchName: string) => {
@@ -365,13 +370,22 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
           const ast = player.sassists ?? 0;
           const stl = player.ssteals ?? 0;
           const blk = player.sblocks ?? 0;
+          const fgm = player.sfieldgoalsmade ?? 0;
+          const fga = player.sfieldgoalsattempted ?? 0;
+          const tpm = player.sthreepointersmade ?? 0;
+          const tpa = player.sthreepointersattempted ?? 0;
+          const ftm = player.sfreethrowsmade ?? 0;
+          const fta = player.sfreethrowsattempted ?? 0;
+          const fgPct = fga > 0 ? ((fgm / fga) * 100).toFixed(1) : 'N/A';
+          const tpPct = tpa > 0 ? ((tpm / tpa) * 100).toFixed(1) : 'N/A';
+          const ftPct = fta > 0 ? ((ftm / fta) * 100).toFixed(1) : 'N/A';
           const badge = pts >= 30 ? 'Strong scorer who can put up big numbers!'
             : reb >= 15 ? 'Dominant presence in the paint!'
             : ast >= 10 ? 'Elite playmaker with great court vision!'
             : stl >= 5 ? 'Disruptive defender who creates turnovers!'
             : 'Well-rounded contributor on both ends!';
           return {
-            content: `${player.name} — ${player.team}\n\nSeason Totals:\n• Points: ${pts}\n• Rebounds: ${reb}\n• Assists: ${ast}\n• Steals: ${stl}\n• Blocks: ${blk}\n\n${badge}`,
+            content: `${player.name} — ${player.team}\n\nSeason Totals:\n• Points: ${pts}\n• Rebounds: ${reb}\n• Assists: ${ast}\n• Steals: ${stl}\n• Blocks: ${blk}\n\nShooting:\n• FG: ${fgm}/${fga} (${fgPct}%)\n• 3PT: ${tpm}/${tpa} (${tpPct}%)\n• FT: ${ftm}/${fta} (${ftPct}%)\n\n${badge}`,
             suggestions: [`Who are ${player.team}'s top players?`, 'Top scorers in the league', 'Show me the standings'],
             navigationButtons: [{ label: `${player.name}'s Profile`, id: playerSlug(player), type: 'player' as const }]
           };
@@ -380,6 +394,267 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
         return {
           content: `I couldn't find a player named "${name}" in ${leagueName}.\n\nHere are some players in the league:\n${sample}`,
           suggestions: playersData.slice(0, 3).map((p: any) => `How is ${p.name} performing?`)
+        };
+      }
+
+      // ── STAT MAP with companion stats ──────────────────────────────────
+      interface StatDef {
+        keywords: string[];
+        column: string;
+        label: string;
+        companions?: { column?: string; label: string; compute?: (p: any) => string }[];
+      }
+      const STAT_MAP: StatDef[] = [
+        {
+          keywords: ["three pointer", "three-pointer", "3-pointer", "3 pointer", "three's", "3's", "3s", "threes", "triple", "from three", "from the three", "from deep", "beyond the arc"],
+          column: 'sthreepointersmade', label: '3-Pointers Made',
+          companions: [
+            { column: 'sthreepointersattempted', label: '3-Pointers Attempted' },
+            { label: '3-Point %', compute: (p: any) => { const a = p.sthreepointersattempted ?? 0; const m = p.sthreepointersmade ?? 0; return a > 0 ? ((m/a)*100).toFixed(1)+'%' : 'N/A'; } }
+          ]
+        },
+        {
+          keywords: ['field goal', 'fg', 'shooting', 'from the field', 'shot'],
+          column: 'sfieldgoalsmade', label: 'Field Goals Made',
+          companions: [
+            { column: 'sfieldgoalsattempted', label: 'Field Goals Attempted' },
+            { label: 'FG %', compute: (p: any) => { const a = p.sfieldgoalsattempted ?? 0; const m = p.sfieldgoalsmade ?? 0; return a > 0 ? ((m/a)*100).toFixed(1)+'%' : 'N/A'; } }
+          ]
+        },
+        {
+          keywords: ['free throw', 'ft', 'foul shot', 'from the line'],
+          column: 'sfreethrowsmade', label: 'Free Throws Made',
+          companions: [
+            { column: 'sfreethrowsattempted', label: 'Free Throws Attempted' },
+            { label: 'FT %', compute: (p: any) => { const a = p.sfreethrowsattempted ?? 0; const m = p.sfreethrowsmade ?? 0; return a > 0 ? ((m/a)*100).toFixed(1)+'%' : 'N/A'; } }
+          ]
+        },
+        { keywords: ['point', 'score', 'scoring', 'pts'], column: 'spoints', label: 'Points' },
+        { keywords: ['rebound', 'board', 'glass'], column: 'srebounds_total', label: 'Rebounds' },
+        { keywords: ['assist', 'dish', 'pass'], column: 'sassists', label: 'Assists' },
+        { keywords: ['steal'], column: 'ssteals', label: 'Steals' },
+        { keywords: ['block', 'blk'], column: 'sblocks', label: 'Blocks' },
+        { keywords: ['turnover', 'to'], column: 'sturnovers', label: 'Turnovers' },
+        { keywords: ['minute', 'min', 'playing time'], column: 'sminutes', label: 'Minutes' },
+      ];
+
+      const detectStat = (): StatDef | null => {
+        for (const stat of STAT_MAP) {
+          if (stat.keywords.some(k => q.includes(k))) return stat;
+        }
+        return null;
+      };
+
+      // ── Helper: find team by name scan ─────────────────────────────────
+      const findTeamInQuestion = (): { name: string } | null => {
+        let best: { name: string } | null = null;
+        let bestLen = 0;
+        for (const t of teamsData) {
+          const tn = t.name.toLowerCase();
+          if (q.includes(tn) && tn.length > bestLen) { best = { name: t.name }; bestLen = tn.length; }
+        }
+        if (best) return best;
+        for (const t of teamsData) {
+          const parts = t.name.toLowerCase().split(' ').filter((w: string) => w.length >= 3);
+          if (parts.some((p: string) => q.includes(p))) return { name: t.name };
+        }
+        return null;
+      };
+
+      // ── Helper: find player by scanning whole question ─────────────────
+      const findPlayerInQuestion = (): any | null => {
+        for (const p of playersData) {
+          const n = p.name.toLowerCase();
+          if (q.includes(n)) return p;
+        }
+        for (const p of playersData) {
+          const parts = p.name.toLowerCase().split(' ').filter((w: string) => w.length >= 3);
+          if (parts.some((part: string) => q.includes(part))) return p;
+        }
+        return null;
+      };
+
+      // ── Helper: build stat summary line for a player row ──────────────
+      const buildStatLine = (stat: StatDef, p: any): string => {
+        const val = p[stat.column] ?? 0;
+        let line = `${stat.label}: ${val}`;
+        if (stat.companions) {
+          for (const c of stat.companions) {
+            if (c.compute) line += ` | ${c.label}: ${c.compute(p)}`;
+            else if (c.column) line += ` | ${c.label}: ${p[c.column] ?? 0}`;
+          }
+        }
+        return line;
+      };
+
+      // ── ENTITY + STAT + "THIS SEASON" ─────────────────────────────────
+      const isSeasonQuery = is(['this season', 'season total', 'all season', 'so far', 'this year', 'how many', 'how much']);
+      const detectedStat = detectStat();
+
+      if (isSeasonQuery && detectedStat) {
+        const foundPlayer = findPlayerInQuestion();
+        const foundTeam = findTeamInQuestion();
+
+        if (foundPlayer) {
+          const val = foundPlayer[detectedStat.column] ?? 0;
+          let lines = [`${detectedStat.label}: ${val}`];
+          if (detectedStat.companions) {
+            for (const c of detectedStat.companions) {
+              if (c.compute) lines.push(`${c.label}: ${c.compute(foundPlayer)}`);
+              else if (c.column) lines.push(`${c.label}: ${foundPlayer[c.column] ?? 0}`);
+            }
+          }
+          return {
+            content: `${foundPlayer.name} (${foundPlayer.team}) — Season Totals:\n\n${lines.map(l => `• ${l}`).join('\n')}`,
+            suggestions: [`How is ${foundPlayer.name} performing?`, `Who are ${foundPlayer.team}'s top players?`, 'Top scorers'],
+            navigationButtons: [{ label: `${foundPlayer.name}'s Profile`, id: playerSlug(foundPlayer), type: 'player' as const }]
+          };
+        }
+
+        if (foundTeam) {
+          const teamPlayers = playersData.filter((p: any) => p.team?.toLowerCase() === foundTeam.name.toLowerCase());
+          const total = teamPlayers.reduce((sum: number, p: any) => sum + (p[detectedStat.column] ?? 0), 0);
+          let lines = [`${detectedStat.label}: ${total}`];
+          if (detectedStat.companions) {
+            for (const c of detectedStat.companions) {
+              if (c.compute) {
+                const attCol = detectedStat.companions.find(x => x.column)?.column;
+                if (attCol) {
+                  const totalAtt = teamPlayers.reduce((s: number, p: any) => s + (p[attCol] ?? 0), 0);
+                  const pct = totalAtt > 0 ? ((total / totalAtt) * 100).toFixed(1) + '%' : 'N/A';
+                  lines.push(`${c.label}: ${pct} (${total}/${totalAtt})`);
+                }
+              } else if (c.column) {
+                const attTotal = teamPlayers.reduce((s: number, p: any) => s + (p[c.column!] ?? 0), 0);
+                lines.push(`${c.label}: ${attTotal}`);
+              }
+            }
+          }
+          return {
+            content: `${foundTeam.name} — Season Totals:\n\n${lines.map(l => `• ${l}`).join('\n')}\n\n(${teamPlayers.length} players on roster)`,
+            suggestions: [`Who are ${foundTeam.name}'s top players?`, 'Top scorers', 'Show me the standings']
+          };
+        }
+      }
+
+      // ── ENTITY + "LAST N GAMES" ────────────────────────────────────────
+      const lastNMatch = q.match(/(?:last|past|recent)\s+(\d+)\s+(?:game|match)/) ||
+                         q.match(/(\d+)\s+(?:game|match)\s+(?:ago|back)/);
+      const isLastGame = q.includes('last game') || q.includes('most recent game') || q.includes('latest game');
+      const hasTimeScope = lastNMatch || isLastGame ||
+        is(['last few games', 'past few games', 'recent games', 'recent form', 'current form', 'lately', 'recently']);
+
+      if (hasTimeScope) {
+        const limit = lastNMatch ? parseInt(lastNMatch[1]) : isLastGame ? 1 : 5;
+        const foundPlayer = findPlayerInQuestion();
+        const foundTeam = findTeamInQuestion();
+
+        if (foundTeam) {
+          const teamName = foundTeam.name;
+          const { data: teamGames } = await supabase
+            .from('games')
+            .select('game_date, home_team, away_team, home_score, away_score')
+            .eq('league_id', leagueId)
+            .or(`home_team.ilike.%${teamName}%,away_team.ilike.%${teamName}%`)
+            .order('game_date', { ascending: false })
+            .limit(limit);
+
+          if (teamGames && teamGames.length > 0) {
+            const rows = teamGames.map((g: any) => {
+              const date = g.game_date ? new Date(g.game_date).toLocaleDateString() : 'Unknown';
+              const isHome = g.home_team.toLowerCase().includes(teamName.toLowerCase());
+              const scored = isHome ? g.home_score : g.away_score;
+              const conceded = isHome ? g.away_score : g.home_score;
+              const opponent = isHome ? g.away_team : g.home_team;
+              const result = scored > conceded ? 'W' : 'L';
+              return `${result} vs ${opponent}: ${scored}-${conceded} (${date})`;
+            }).join('\n');
+            const context = `${leagueName} — ${teamName} Last ${teamGames.length} Game(s):\n\n${rows}`;
+            try {
+              const BASE = getPythonBackendUrl();
+              const resp = await fetch(`${BASE}/api/chat/league`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question, league_id: leagueId, league_data: context }),
+                signal: AbortSignal.timeout(15000)
+              });
+              if (resp.ok) { const d = await resp.json(); if (d.response) return { content: d.response, suggestions: d.suggestions || [] }; }
+            } catch {}
+            return { content: `${teamName} — Last ${teamGames.length} Game(s):\n\n${rows}`, suggestions: [`Top scorers on ${teamName}`, 'Show me the standings'] };
+          }
+        }
+
+        if (foundPlayer) {
+          const { data: playerGames } = await supabase
+            .from('player_stats')
+            .select('game_date, spoints, srebounds_total, sassists, ssteals, sblocks, sthreepointersmade, sthreepointersattempted, sfieldgoalsmade, sfieldgoalsattempted, team')
+            .eq('league_id', leagueId)
+            .eq('player_id', foundPlayer.player_id)
+            .not('game_date', 'is', null)
+            .order('game_date', { ascending: false })
+            .limit(limit);
+
+          if (playerGames && playerGames.length > 0) {
+            const rows = playerGames.map((g: any) => {
+              const date = g.game_date ? new Date(g.game_date).toLocaleDateString() : 'Unknown';
+              const fga = g.sfieldgoalsattempted ?? 0;
+              const fgm = g.sfieldgoalsmade ?? 0;
+              const fgPct = fga > 0 ? ((fgm/fga)*100).toFixed(0)+'%' : 'N/A';
+              return `${date}: ${g.spoints ?? 0}pts, ${g.srebounds_total ?? 0}reb, ${g.sassists ?? 0}ast, ${g.ssteals ?? 0}stl | 3PT: ${g.sthreepointersmade ?? 0}/${g.sthreepointersattempted ?? 0} | FG: ${fgm}/${fga} (${fgPct})`;
+            }).join('\n');
+            const context = `${leagueName} — ${foundPlayer.name} Last ${playerGames.length} Game(s):\n\n${rows}`;
+            try {
+              const BASE = getPythonBackendUrl();
+              const resp = await fetch(`${BASE}/api/chat/league`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question, league_id: leagueId, league_data: context }),
+                signal: AbortSignal.timeout(15000)
+              });
+              if (resp.ok) { const d = await resp.json(); if (d.response) return { content: d.response, suggestions: d.suggestions || [], navigationButtons: [{ label: `${foundPlayer.name}'s Profile`, id: playerSlug(foundPlayer), type: 'player' as const }] }; }
+            } catch {}
+            return { content: `${foundPlayer.name} — Last ${playerGames.length} Game(s):\n\n${rows}`, suggestions: [`How is ${foundPlayer.name} performing?`, 'Top scorers'], navigationButtons: [{ label: `${foundPlayer.name}'s Profile`, id: playerSlug(foundPlayer), type: 'player' as const }] };
+          }
+        }
+      }
+
+      // ── NAME SCAN FALLBACK: any question containing a player name ──────
+      const scannedPlayer = findPlayerInQuestion();
+      if (scannedPlayer) {
+        const p = scannedPlayer;
+        const pts = p.spoints ?? 0;
+        const reb = p.srebounds_total ?? 0;
+        const ast = p.sassists ?? 0;
+        const stl = p.ssteals ?? 0;
+        const blk = p.sblocks ?? 0;
+        const fgm = p.sfieldgoalsmade ?? 0;
+        const fga = p.sfieldgoalsattempted ?? 0;
+        const tpm = p.sthreepointersmade ?? 0;
+        const tpa = p.sthreepointersattempted ?? 0;
+        const ftm = p.sfreethrowsmade ?? 0;
+        const fta = p.sfreethrowsattempted ?? 0;
+        const fgPct = fga > 0 ? ((fgm/fga)*100).toFixed(1) : 'N/A';
+        const tpPct = tpa > 0 ? ((tpm/tpa)*100).toFixed(1) : 'N/A';
+        const ftPct = fta > 0 ? ((ftm/fta)*100).toFixed(1) : 'N/A';
+        return {
+          content: `${p.name} — ${p.team}\n\nSeason Totals:\n• Points: ${pts}\n• Rebounds: ${reb}\n• Assists: ${ast}\n• Steals: ${stl}\n• Blocks: ${blk}\n\nShooting:\n• FG: ${fgm}/${fga} (${fgPct}%)\n• 3PT: ${tpm}/${tpa} (${tpPct}%)\n• FT: ${ftm}/${fta} (${ftPct}%)`,
+          suggestions: [`How is ${p.name} performing?`, `Who are ${p.team}'s top players?`, 'Top scorers'],
+          navigationButtons: [{ label: `${p.name}'s Profile`, id: playerSlug(p), type: 'player' as const }]
+        };
+      }
+
+      // ── TEAM NAME SCAN FALLBACK ────────────────────────────────────────
+      const scannedTeam = findTeamInQuestion();
+      if (scannedTeam) {
+        const teamPlayers = [...playersData]
+          .filter((p: any) => p.team?.toLowerCase() === scannedTeam.name.toLowerCase())
+          .sort((a: any, b: any) => (b.spoints ?? 0) - (a.spoints ?? 0))
+          .slice(0, 5);
+        const rows = teamPlayers.map((p: any, i: number) => `${i+1}. ${p.name} — ${p.spoints ?? 0}pts, ${p.srebounds_total ?? 0}reb, ${p.sassists ?? 0}ast`).join('\n');
+        const standings = computeStandings();
+        const teamStanding = standings.findIndex(([t]) => t.toLowerCase() === scannedTeam.name.toLowerCase());
+        const standingText = teamStanding >= 0 ? `\n\nLeague position: #${teamStanding + 1}` : '';
+        return {
+          content: `${scannedTeam.name}${standingText}\n\nTop Players:\n${rows || 'No player data available'}\n\nTry asking:\n• "How have the ${scannedTeam.name} performed in their last 5 games?"\n• "How many 3s has ${scannedTeam.name} hit this season?"`,
+          suggestions: [`Last 5 games for ${scannedTeam.name}`, `How many 3s has ${scannedTeam.name} hit this season?`, 'Show me the standings']
         };
       }
 
