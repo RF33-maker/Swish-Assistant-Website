@@ -129,61 +129,278 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
 
   const queryLeagueData = async (question: string, leagueId: string): Promise<{ content: string; suggestions?: string[]; navigationButtons?: { label: string; id: string; type: 'player' | 'team' }[] } | string> => {
     try {
-      // Always fetch real league data from Supabase first
+      // ── Step 1: Fetch real league data from Supabase ──────────────────
       const [playersDataResult, gamesDataResult] = await Promise.all([
         supabase
           .from('player_stats')
           .select('id, name, spoints, srebounds_total, sassists, ssteals, sblocks, team, player_id, players:player_id(slug)')
           .eq('league_id', leagueId)
-          .order('points', { ascending: false })
-          .limit(20),
+          .order('spoints', { ascending: false })
+          .limit(30),
         supabase
           .from('games')
           .select('game_date, home_team, away_team, home_score, away_score')
           .eq('league_id', leagueId)
           .order('game_date', { ascending: false })
-          .limit(15)
+          .limit(20)
       ]);
 
-      const playersData = playersDataResult.data || [];
-      const gamesData = gamesDataResult.data || [];
+      const playersData = (playersDataResult.data || []) as any[];
+      const gamesData = (gamesDataResult.data || []) as any[];
 
-      // Build a concise data summary to send as context to the AI
+      // ── Helper: fuzzy player name match ───────────────────────────────
+      const findPlayer = (searchName: string) => {
+        const s = searchName.toLowerCase().trim();
+        return playersData.find(p => {
+          const n = p.name.toLowerCase();
+          if (n.includes(s) || s.includes(n)) return true;
+          const sw = s.split(' ');
+          const pw = n.split(' ');
+          return sw.some((w: string) => pw.some((pw2: string) => pw2.includes(w) || w.includes(pw2)));
+        });
+      };
+
+      // ── Helper: compute standings from games ──────────────────────────
+      const computeStandings = () => {
+        const records: Record<string, { wins: number; losses: number; pf: number; pa: number }> = {};
+        gamesData.forEach(g => {
+          if (!records[g.home_team]) records[g.home_team] = { wins: 0, losses: 0, pf: 0, pa: 0 };
+          if (!records[g.away_team]) records[g.away_team] = { wins: 0, losses: 0, pf: 0, pa: 0 };
+          records[g.home_team].pf += g.home_score;
+          records[g.home_team].pa += g.away_score;
+          records[g.away_team].pf += g.away_score;
+          records[g.away_team].pa += g.home_score;
+          if (g.home_score > g.away_score) {
+            records[g.home_team].wins++;
+            records[g.away_team].losses++;
+          } else {
+            records[g.away_team].wins++;
+            records[g.home_team].losses++;
+          }
+        });
+        return Object.entries(records).sort((a, b) => {
+          const aPct = a[1].wins / Math.max(1, a[1].wins + a[1].losses);
+          const bPct = b[1].wins / Math.max(1, b[1].wins + b[1].losses);
+          return bPct - aPct;
+        });
+      };
+
+      const playerSlug = (p: any) =>
+        (Array.isArray(p.players) ? p.players[0]?.slug : p.players?.slug) || p.player_id || p.id;
+
+      // ── Step 2: Intent detection ───────────────────────────────────────
+      const q = question.toLowerCase();
+
+      const is = (keywords: string[]) => keywords.some(k => q.includes(k));
+
+      // ── STANDINGS / BEST TEAM ──────────────────────────────────────────
+      if (is(['standing', 'best team', 'top team', 'win-loss', 'win loss', 'who leads the league',
+               'league leader', 'team rank', 'which team is first', 'which team is best',
+               'who is winning', 'table', 'league table'])) {
+        const standings = computeStandings();
+        if (standings.length > 0) {
+          const rows = standings.map(([team, r], i) => {
+            const gp = r.wins + r.losses;
+            const pct = gp > 0 ? ((r.wins / gp) * 100).toFixed(0) : '0';
+            return `${i + 1}. ${team} — ${r.wins}-${r.losses} (${pct}%)`;
+          }).join('\n');
+          const [leader] = standings[0];
+          return {
+            content: `${leagueName} Standings:\n\n${rows}\n\nTry asking:\n• "Who are ${leader}'s top players?"\n• "Top scorers in the league"`,
+            suggestions: [`Who are ${leader}'s top players?`, 'Top scorers in the league', 'Recent game results'],
+            navigationButtons: [{ label: `${leader}'s Record`, id: leader, type: 'team' as const }]
+          };
+        }
+      }
+
+      // ── RECENT RESULTS ─────────────────────────────────────────────────
+      if (is(['recent game', 'last game', 'latest game', 'recent result', 'latest result',
+               'game result', 'what happened', 'scores', 'game score', 'last match',
+               'recent match', 'show me games', 'show games'])) {
+        if (gamesData.length > 0) {
+          const rows = gamesData.slice(0, 8).map(g => {
+            const date = g.game_date ? new Date(g.game_date).toLocaleDateString() : 'TBD';
+            const winner = g.home_score > g.away_score ? g.home_team : g.away_team;
+            return `${g.home_team} ${g.home_score} – ${g.away_score} ${g.away_team} (${date}) ✓ ${winner}`;
+          }).join('\n');
+          return {
+            content: `Recent Results in ${leagueName}:\n\n${rows}\n\nTry asking:\n• "Who are the top scorers?"\n• "Show me the standings"`,
+            suggestions: ['Who are the top scorers?', 'Show me the standings', 'Top rebounders']
+          };
+        }
+      }
+
+      // ── TOP SCORERS ────────────────────────────────────────────────────
+      if (is(['top scorer', 'top scorers', 'leading scorer', 'leading scorers', 'most points',
+               'who scores the most', 'point leader', 'points leader', 'scoring leader',
+               'scoring leaders', 'who leads in points', 'highest scorer', 'best scorer'])) {
+        const sorted = [...playersData].sort((a, b) => (b.spoints ?? 0) - (a.spoints ?? 0)).slice(0, 5);
+        if (sorted.length > 0) {
+          const rows = sorted.map((p, i) => `${i + 1}. ${p.name} (${p.team}) — ${p.spoints ?? 0} pts`).join('\n');
+          const top = sorted[0];
+          return {
+            content: `Scoring Leaders in ${leagueName}:\n\n${rows}\n\nTry asking:\n• "How is ${top.name} performing?"\n• "Top rebounders"`,
+            suggestions: [`How is ${top.name} performing?`, 'Top rebounders', 'Show me the standings'],
+            navigationButtons: [{ label: `${top.name}'s Profile`, id: playerSlug(top), type: 'player' as const }]
+          };
+        }
+      }
+
+      // ── TOP REBOUNDERS ─────────────────────────────────────────────────
+      if (is(['top rebounder', 'top rebounders', 'rebound leader', 'rebounding leader',
+               'most rebounds', 'who grabs the most', 'who rebounds', 'board leader',
+               'best rebounder', 'leading rebounder', 'who leads in rebounds'])) {
+        const sorted = [...playersData].sort((a, b) => (b.srebounds_total ?? 0) - (a.srebounds_total ?? 0)).slice(0, 5);
+        if (sorted.length > 0) {
+          const rows = sorted.map((p, i) => `${i + 1}. ${p.name} (${p.team}) — ${p.srebounds_total ?? 0} reb`).join('\n');
+          const top = sorted[0];
+          return {
+            content: `Rebounding Leaders in ${leagueName}:\n\n${rows}\n\nTry asking:\n• "How is ${top.name} performing?"\n• "Top scorers"`,
+            suggestions: [`How is ${top.name} performing?`, 'Top scorers', 'Top assisters'],
+            navigationButtons: [{ label: `${top.name}'s Profile`, id: playerSlug(top), type: 'player' as const }]
+          };
+        }
+      }
+
+      // ── TOP ASSISTERS ──────────────────────────────────────────────────
+      if (is(['top assist', 'assist leader', 'most assists', 'who dishes', 'who passes the most',
+               'playmaker', 'best passer', 'leading assister', 'assist king', 'who leads in assists'])) {
+        const sorted = [...playersData].sort((a, b) => (b.sassists ?? 0) - (a.sassists ?? 0)).slice(0, 5);
+        if (sorted.length > 0) {
+          const rows = sorted.map((p, i) => `${i + 1}. ${p.name} (${p.team}) — ${p.sassists ?? 0} ast`).join('\n');
+          const top = sorted[0];
+          return {
+            content: `Assist Leaders in ${leagueName}:\n\n${rows}\n\nTry asking:\n• "How is ${top.name} performing?"\n• "Top scorers"`,
+            suggestions: [`How is ${top.name} performing?`, 'Top scorers', 'Top rebounders'],
+            navigationButtons: [{ label: `${top.name}'s Profile`, id: playerSlug(top), type: 'player' as const }]
+          };
+        }
+      }
+
+      // ── TOP STEALERS ───────────────────────────────────────────────────
+      if (is(['top steal', 'steal leader', 'most steals', 'who steals the most', 'defensive leader',
+               'best defender', 'who leads in steals', 'steals leader'])) {
+        const sorted = [...playersData].sort((a, b) => (b.ssteals ?? 0) - (a.ssteals ?? 0)).slice(0, 5);
+        if (sorted.length > 0) {
+          const rows = sorted.map((p, i) => `${i + 1}. ${p.name} (${p.team}) — ${p.ssteals ?? 0} stl`).join('\n');
+          const top = sorted[0];
+          return {
+            content: `Steal Leaders in ${leagueName}:\n\n${rows}\n\nTry asking:\n• "How is ${top.name} performing?"\n• "Top blockers"`,
+            suggestions: [`How is ${top.name} performing?`, 'Top blockers', 'Top scorers'],
+            navigationButtons: [{ label: `${top.name}'s Profile`, id: playerSlug(top), type: 'player' as const }]
+          };
+        }
+      }
+
+      // ── TOP BLOCKERS ───────────────────────────────────────────────────
+      if (is(['top block', 'block leader', 'most blocks', 'who blocks the most', 'shot blocker',
+               'who leads in blocks', 'blocks leader', 'best shot blocker'])) {
+        const sorted = [...playersData].sort((a, b) => (b.sblocks ?? 0) - (a.sblocks ?? 0)).slice(0, 5);
+        if (sorted.length > 0) {
+          const rows = sorted.map((p, i) => `${i + 1}. ${p.name} (${p.team}) — ${p.sblocks ?? 0} blk`).join('\n');
+          const top = sorted[0];
+          return {
+            content: `Block Leaders in ${leagueName}:\n\n${rows}\n\nTry asking:\n• "How is ${top.name} performing?"\n• "Top stealers"`,
+            suggestions: [`How is ${top.name} performing?`, 'Top stealers', 'Top scorers'],
+            navigationButtons: [{ label: `${top.name}'s Profile`, id: playerSlug(top), type: 'player' as const }]
+          };
+        }
+      }
+
+      // ── EFFICIENCY / BEST OVERALL ──────────────────────────────────────
+      if (is(['most efficient', 'most productive', 'best overall', 'best player',
+               'who is the best', 'top performer', 'mvp', 'all-around'])) {
+        const sorted = [...playersData].map(p => ({
+          ...p,
+          eff: (p.spoints ?? 0) + (p.srebounds_total ?? 0) + (p.sassists ?? 0) + (p.ssteals ?? 0) + (p.sblocks ?? 0)
+        })).sort((a, b) => b.eff - a.eff).slice(0, 5);
+        if (sorted.length > 0) {
+          const rows = sorted.map((p, i) => `${i + 1}. ${p.name} (${p.team}) — ${p.eff} total production (${p.spoints ?? 0}pts / ${p.srebounds_total ?? 0}reb / ${p.sassists ?? 0}ast)`).join('\n');
+          const top = sorted[0];
+          return {
+            content: `Most Efficient Players in ${leagueName}:\n(Points + Rebounds + Assists + Steals + Blocks)\n\n${rows}\n\nTry asking:\n• "How is ${top.name} performing?"\n• "Top scorers"`,
+            suggestions: [`How is ${top.name} performing?`, 'Top scorers', 'Top rebounders'],
+            navigationButtons: [{ label: `${top.name}'s Profile`, id: playerSlug(top), type: 'player' as const }]
+          };
+        }
+      }
+
+      // ── PLAYER TEAM LOOKUP ─────────────────────────────────────────────
+      const teamLookupMatch =
+        q.match(/who does (.+?) play/) ||
+        q.match(/what team (?:is|does) (.+?) (?:on|play)/) ||
+        q.match(/(.+?)'s team/) ||
+        q.match(/which team (?:is|does) (.+?) (?:on|play)/);
+      if (teamLookupMatch) {
+        const name = teamLookupMatch[1].trim();
+        const player = findPlayer(name);
+        if (player) {
+          return {
+            content: `${player.name} plays for ${player.team}.`,
+            suggestions: [`How is ${player.name} performing?`, `Who are ${player.team}'s top players?`],
+            navigationButtons: [{ label: `${player.name}'s Profile`, id: playerSlug(player), type: 'player' as const }]
+          };
+        }
+        const sample = playersData.slice(0, 5).map((p: any) => `• ${p.name} (${p.team})`).join('\n');
+        return {
+          content: `I couldn't find a player named "${name}" in ${leagueName}.\n\nHere are some players in the league:\n${sample}`,
+          suggestions: playersData.slice(0, 3).map((p: any) => `How is ${p.name} performing?`)
+        };
+      }
+
+      // ── PLAYER STATS LOOKUP ────────────────────────────────────────────
+      const statsMatch =
+        q.match(/how is (.+?) (?:doing|performing|playing)/) ||
+        q.match(/stats (?:for|of) (.+)/) ||
+        q.match(/tell me about (.+)/) ||
+        q.match(/(.+?)'s stats/) ||
+        q.match(/show me (.+?)'s performance/) ||
+        q.match(/how has (.+?) been/);
+      if (statsMatch) {
+        const name = statsMatch[1].trim();
+        const player = findPlayer(name);
+        if (player) {
+          const pts = player.spoints ?? 0;
+          const reb = player.srebounds_total ?? 0;
+          const ast = player.sassists ?? 0;
+          const stl = player.ssteals ?? 0;
+          const blk = player.sblocks ?? 0;
+          const badge = pts >= 30 ? 'Strong scorer who can put up big numbers!'
+            : reb >= 15 ? 'Dominant presence in the paint!'
+            : ast >= 10 ? 'Elite playmaker with great court vision!'
+            : stl >= 5 ? 'Disruptive defender who creates turnovers!'
+            : 'Well-rounded contributor on both ends!';
+          return {
+            content: `${player.name} — ${player.team}\n\nSeason Totals:\n• Points: ${pts}\n• Rebounds: ${reb}\n• Assists: ${ast}\n• Steals: ${stl}\n• Blocks: ${blk}\n\n${badge}`,
+            suggestions: [`Who are ${player.team}'s top players?`, 'Top scorers in the league', 'Show me the standings'],
+            navigationButtons: [{ label: `${player.name}'s Profile`, id: playerSlug(player), type: 'player' as const }]
+          };
+        }
+        const sample = playersData.slice(0, 5).map((p: any) => `• ${p.name} (${p.team})`).join('\n');
+        return {
+          content: `I couldn't find a player named "${name}" in ${leagueName}.\n\nHere are some players in the league:\n${sample}`,
+          suggestions: playersData.slice(0, 3).map((p: any) => `How is ${p.name} performing?`)
+        };
+      }
+
+      // ── Step 3: AI fallback for open-ended questions ───────────────────
       const topPlayers = [...playersData]
-        .sort((a: any, b: any) => (b.spoints ?? 0) - (a.spoints ?? 0))
         .slice(0, 15)
         .map((p: any) => `${p.name} (${p.team}): ${p.spoints ?? 0} pts, ${p.srebounds_total ?? 0} reb, ${p.sassists ?? 0} ast, ${p.ssteals ?? 0} stl, ${p.sblocks ?? 0} blk`)
         .join('\n');
-
-      const recentGames = gamesData
-        .slice(0, 10)
-        .map((g: any) => `${g.home_team} ${g.home_score} - ${g.away_score} ${g.away_team} (${g.game_date})`)
+      const recentGames = gamesData.slice(0, 8)
+        .map((g: any) => `${g.home_team} ${g.home_score}–${g.away_score} ${g.away_team} (${g.game_date})`)
         .join('\n');
+      const leagueDataContext = `League: ${leagueName}\n\nTOP PLAYERS:\n${topPlayers || 'None'}\n\nRECENT RESULTS:\n${recentGames || 'None'}`;
 
-      const leagueDataContext = `
-League: ${leagueName}
-
-TOP PLAYERS (season totals):
-${topPlayers || 'No player data available'}
-
-RECENT RESULTS:
-${recentGames || 'No game results available'}
-`.trim();
-
-      // Call AI with real league data as context
       try {
         const BASE = getPythonBackendUrl();
         const response = await fetch(`${BASE}/api/chat/league`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            question,
-            league_id: leagueId,
-            league_data: leagueDataContext,
-          }),
+          body: JSON.stringify({ question, league_id: leagueId, league_data: leagueDataContext }),
           signal: AbortSignal.timeout(15000)
         });
-
         if (response.ok) {
           const data = await response.json();
           if (data.response || data.answer) {
@@ -193,241 +410,27 @@ ${recentGames || 'No game results available'}
               navigationButtons: data.navigation_buttons || []
             };
           }
-        } else {
-          console.error('❌ Backend response error:', response.status);
         }
       } catch (backendError) {
-        console.error('❌ Backend request failed:', backendError);
+        console.error('Backend request failed:', backendError);
       }
 
-      // Fallback to local pattern-matching if AI call fails
-      const lowerQuestion = question.toLowerCase();
-
-      // Enhanced Pattern-based intelligent responses
-
-      // Player team lookup
-      if (lowerQuestion.includes('who does') && (lowerQuestion.includes('play for') || lowerQuestion.includes('play on'))) {
-        const playerNameMatch = lowerQuestion.match(/who does (.+?) play/);
-        if (playerNameMatch) {
-          const playerName = playerNameMatch[1].trim();
-          const player = playersData.find(p => {
-            const playerNameLower = playerName.toLowerCase();
-            const pNameLower = p.name.toLowerCase();
-            
-            // Direct match
-            if (pNameLower.includes(playerNameLower) || playerNameLower.includes(pNameLower)) {
-              return true;
-            }
-            
-            // Split and check individual words
-            const searchWords = playerNameLower.split(' ');
-            const playerWords = pNameLower.split(' ');
-            
-            // Check if any search word matches any player word
-            return searchWords.some((searchWord: string) => 
-              playerWords.some((playerWord: string) => 
-                playerWord.includes(searchWord) || searchWord.includes(playerWord)
-              )
-            );
-          });
-
-          if (player) {
-            const playerIdentifier = (Array.isArray(player.players) ? player.players[0]?.slug : player.players?.slug) || player.player_id || player.id;
-            return {
-              content: `${player.name} plays for ${player.team}.`,
-              suggestions: [`How is ${player.name} performing?`, `Who are ${player.team}'s top players?`],
-              navigationButtons: [{ label: `${player.name}'s Profile`, id: playerIdentifier, type: 'player' }]
-            };
-          } else {
-            const availablePlayers = playersData.slice(0, 5).map(p => `• ${p.name} (${p.team})`).join('\n');
-            return {
-              content: `I couldn't find a player named "${playerName}" in ${leagueName}. Here are some available players:\n\n${availablePlayers || 'No player data available'}`,
-              suggestions: playersData.slice(0, 3).map(p => `How is ${p.name} performing?`)
-            };
-          }
-        }
-      }
-
-      // Player performance analysis
-      if (lowerQuestion.includes('how is') && (lowerQuestion.includes('doing') || lowerQuestion.includes('playing'))) {
-        const nameMatch = lowerQuestion.match(/how is (.+?) (doing|playing)/);
-        if (nameMatch) {
-          const searchName = nameMatch[1].trim();
-          const player = playersData.find(p => {
-            const searchNameLower = searchName.toLowerCase();
-            const pNameLower = p.name.toLowerCase();
-            
-            // Direct match
-            if (pNameLower.includes(searchNameLower) || searchNameLower.includes(pNameLower)) {
-              return true;
-            }
-            
-            // Split and check individual words
-            const searchWords = searchNameLower.split(' ');
-            const playerWords = pNameLower.split(' ');
-            
-            // Check if any search word matches any player word
-            return searchWords.some((searchWord: string) => 
-              playerWords.some((playerWord: string) => 
-                playerWord.includes(searchWord) || searchWord.includes(playerWord)
-              )
-            );
-          });
-
-          if (player) {
-            const playerIdentifier = (Array.isArray(player.players) ? player.players[0]?.slug : player.players?.slug) || player.player_id || player.id;
-            return {
-              content: `${player.name} is having a solid season with ${player.team}!\n\nSeason totals: ${player.points} pts, ${player.rebounds_total} reb, ${player.assists} ast, ${player.steals} stl, ${player.blocks} blk\n\n${player.points >= 30 ? '🔥 Strong scorer who can put up big numbers!' : player.rebounds_total >= 15 ? '💪 Solid presence in the paint with good rebounding!' : player.assists >= 10 ? '🎯 Great court vision and playmaking ability!' : '⚡ Well-rounded contributor on both ends!'}`,
-              suggestions: [`Who is ${player.name}'s team?`, `Who does ${player.team} play next?`],
-              navigationButtons: [{ label: `${player.name}'s Profile`, id: playerIdentifier, type: 'player' }]
-            };
-          } else {
-            const availablePlayers = playersData.slice(0, 5).map(p => `• ${p.name} (${p.team})`).join('\n');
-            return {
-              content: `I couldn't find a player named "${searchName}" in ${leagueName}. Here are some available players:\n\n${availablePlayers || 'No player data available'}`,
-              suggestions: playersData.slice(0, 3).map(p => `How is ${p.name} performing?`)
-            };
-          }
-        }
-      }
-
-      // Team analysis
-      if (lowerQuestion.includes('best team') || lowerQuestion.includes('top team')) {
-        if (gamesData.length > 0) {
-          const teamRecords: { [team: string]: { wins: number; losses: number; pointsFor: number; pointsAgainst: number } } = {};
-
-          gamesData.forEach(game => {
-            if (!teamRecords[game.home_team]) {
-              teamRecords[game.home_team] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0 };
-            }
-            if (!teamRecords[game.away_team]) {
-              teamRecords[game.away_team] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0 };
-            }
-
-            teamRecords[game.home_team].pointsFor += game.home_score;
-            teamRecords[game.home_team].pointsAgainst += game.away_score;
-            teamRecords[game.away_team].pointsFor += game.away_score;
-            teamRecords[game.away_team].pointsAgainst += game.home_score;
-
-            if (game.home_score > game.away_score) {
-              teamRecords[game.home_team].wins++;
-              teamRecords[game.away_team].losses++;
-            } else {
-              teamRecords[game.away_team].wins++;
-              teamRecords[game.home_team].losses++;
-            }
-          });
-
-          const sortedTeams = Object.entries(teamRecords).sort((a, b) => {
-            const aWinPct = a[1].wins / (a[1].wins + a[1].losses);
-            const bWinPct = b[1].wins / (b[1].wins + b[1].losses);
-            return bWinPct - aWinPct;
-          });
-
-          if (sortedTeams.length > 0) {
-            const [teamName, record] = sortedTeams[0];
-            const winPct = ((record.wins / (record.wins + record.losses)) * 100).toFixed(1);
-            const avgFor = (record.pointsFor / (record.wins + record.losses)).toFixed(1);
-            const avgAgainst = (record.pointsAgainst / (record.wins + record.losses)).toFixed(1);
-
-            // Attempt to find a team ID for the button, if available. For now, we use the team name.
-            // In a real app, you'd have a mapping or a way to fetch team IDs.
-            const teamId = teamName; // Placeholder for actual team ID lookup
-
-            return {
-              content: `${teamName} is the top team in ${leagueName}.\n\nRecord: ${record.wins}-${record.losses} (${winPct}% win rate)\nAveraging ${avgFor} points per game\nAllowing ${avgAgainst} points per game\n\n💡 Want to know more? Try asking:\n• "Who are ${teamName}'s top players?"\n• "Show me recent games"`,
-              suggestions: [`Who are ${teamName}'s top players?`, `Show me recent games for ${teamName}`],
-              navigationButtons: [{ label: `${teamName}'s Profile`, id: teamId, type: 'team' }]
-            };
-          }
-        }
-      }
-
-      // Most efficient players
-      if (lowerQuestion.includes('efficient') || lowerQuestion.includes('best player') || lowerQuestion.includes('most productive')) {
-        if (playersData.length > 0) {
-          const efficiencyPlayers = playersData.map(p => ({
-            ...p,
-            efficiency: p.points + p.rebounds_total + p.assists + p.steals + p.blocks
-          })).sort((a, b) => b.efficiency - a.efficiency).slice(0, 5);
-
-          const topPlayer = efficiencyPlayers[0];
-          const efficiencyList = efficiencyPlayers.map((p, i) => 
-            `${i + 1}. ${p.name} (${p.team}) - ${p.efficiency} total production`
-          ).join('\n');
-
-          const topPlayerIdentifier = (Array.isArray(topPlayer.players) ? topPlayer.players[0]?.slug : topPlayer.players?.slug) || topPlayer.player_id || topPlayer.id;
-          return {
-            content: `Most Efficient Players in ${leagueName}:\n(Based on total statistical production)\n\n${efficiencyList}\n\n${topPlayer.name} leads with ${topPlayer.efficiency} total production.\n\n💡 Want more details? Try asking:\n• "How is ${topPlayer.name} performing?"\n• "Who leads in rebounds?"`,
-            suggestions: [`How is ${topPlayer.name} performing?`, `Who leads in rebounds?`],
-            navigationButtons: [{ label: `${topPlayer.name}'s Profile`, id: topPlayerIdentifier, type: 'player' }]
-          };
-        }
-      }
-
-      // Broader question matching for common terms
-      if (lowerQuestion.includes('rebound') || lowerQuestion.includes('board')) {
-        const topRebounder = playersData.length > 0 ? playersData.find(p => p.rebounds_total === Math.max(...playersData.map(player => player.rebounds_total))) : null;
-        if (topRebounder) {
-          const topRebounderIdentifier = topRebounder.players?.slug || topRebounder.player_id || topRebounder.id;
-          return {
-            content: `Rebounding Leaders in ${leagueName}:\n\n${playersData.sort((a, b) => b.rebounds_total - a.rebounds_total).slice(0, 5).map((p, i) => `${i + 1}. ${p.name} (${p.team}) - ${p.rebounds_total} rebounds`).join('\n')}\n\n💡 Want player details? Try asking:\n• "How is ${topRebounder.name} performing?"\n• "Who are the most efficient players?"`,
-            suggestions: [`How is ${topRebounder.name} performing?`, `Who are the most efficient players?`],
-            navigationButtons: [{ label: `${topRebounder.name}'s Profile`, id: topRebounderIdentifier, type: 'player' }]
-          };
-        }
-      }
-
-      if (lowerQuestion.includes('scorer') || lowerQuestion.includes('scoring') || lowerQuestion.includes('points') || lowerQuestion.includes('top')) {
-        const topScorer = playersData.length > 0 ? playersData[0] : null;
-        if (topScorer) {
-          const topScorerIdentifier = topScorer.players?.slug || topScorer.player_id || topScorer.id;
-          return {
-            content: `Scoring Leaders in ${leagueName}:\n\n${playersData.slice(0, 5).map((p, i) => `${i + 1}. ${p.name} (${p.team}) - ${p.points} points`).join('\n')}\n\n💡 Want more details? Try asking:\n• "How is ${topScorer.name} performing?"\n• "Who is the best team?"`,
-            suggestions: [`How is ${topScorer.name} performing?`, `Who is the best team?`],
-            navigationButtons: [{ label: `${topScorer.name}'s Profile`, id: topScorerIdentifier, type: 'player' }]
-          };
-        }
-      }
-
-      // General response with data
+      // ── Final fallback: league snapshot ───────────────────────────────
       if (playersData.length > 0) {
-        const topPlayer = playersData[0];
-
-        const topPlayerIdentifier = (Array.isArray(topPlayer.players) ? topPlayer.players[0]?.slug : topPlayer.players?.slug) || topPlayer.player_id || topPlayer.id;
+        const top = playersData[0];
+        const teamCount = new Set(playersData.map((p: any) => p.team)).size;
         return {
-          content: `Here's what's happening in ${leagueName}:\n\n🏀 League Leaders:\n• Top Scorer: ${topPlayer.name} (${topPlayer.team}) - ${topPlayer.points} points\n• Games Played: ${gamesData.length || 'Several'} recent games\n• Teams Competing: ${new Set(playersData.map(p => p.team)).size} active teams\n\n💡 Try asking me:\n• "How is [Player Name] performing?"\n• "Who is the best team?"\n• "Who are the most efficient players?"`,
-          suggestions: [`How is ${topPlayer.name} performing?`, `Who is the best team?`, `Who are the most efficient players?`],
-          navigationButtons: [{ label: `${topPlayer.name}'s Profile`, id: topPlayerIdentifier, type: 'player' }]
+          content: `Here's a snapshot of ${leagueName}:\n\n• Top Scorer: ${top.name} (${top.team}) — ${top.spoints ?? 0} pts\n• Active Teams: ${teamCount}\n• Recent Games Logged: ${gamesData.length}\n\nTry asking:\n• "Top scorers"\n• "Top rebounders"\n• "Show me the standings"\n• "How is [player name] performing?"`,
+          suggestions: ['Top scorers', 'Top rebounders', 'Show me the standings'],
+          navigationButtons: [{ label: `${top.name}'s Profile`, id: playerSlug(top), type: 'player' as const }]
         };
       }
 
-      return `I can help you explore ${leagueName} data! Try asking about specific players, team performance, or statistical leaders.`;
-
+      return `I can help you explore ${leagueName}! Try asking "top scorers", "top rebounders", "standings", or "how is [player name] performing?"`;
 
     } catch (error) {
-      console.error('Error querying league data:', error);
-
-      // Fallback to simple data response if OpenAI fails
-      try {
-        const { data: players } = await supabase
-          .from('player_stats')
-          .select('id, name, points, rebounds_total, assists, team')
-          .eq('league_id', leagueId)
-          .order('points', { ascending: false })
-          .limit(3);
-
-        if (players && players.length > 0) {
-          return {
-            content: `Here's some quick ${leagueName} data:\n\nTop Performers:\n${players.map((p, i) => `${i + 1}. ${p.name} (${p.team}) - ${p.points}pts, ${p.rebounds_total}reb, ${p.assists}ast`).join('\n')}\n\n(AI analysis temporarily unavailable - please try again)`,
-            navigationButtons: players.map(p => ({ label: `${p.name}'s Profile`, id: (Array.isArray((p as any).players) ? (p as any).players[0]?.slug : (p as any).players?.slug) || (p as any).player_id || p.id, type: 'player' }))
-          };
-        }
-      } catch (fallbackError) {
-        console.error('Fallback query also failed:', fallbackError);
-      }
-
-      return "I'm having trouble accessing the league data right now. Please try again in a moment.";
+      console.error('Error in queryLeagueData:', error);
+      return "I'm having trouble accessing league data right now. Please try again in a moment.";
     }
   };
 
