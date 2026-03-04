@@ -786,6 +786,9 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
         if (hasThresholds) {
           const isTeamScope = is(['which team', 'teams with', 'teams averaging', 'team averaging',
                                   'any team', 'what team', 'team that', 'which teams']);
+          // Only use season averages when explicitly requested
+          const isAveragesMode = is(['averaging', 'per game', 'per-game', 'ppg', 'rpg', 'apg',
+                                     'spg', 'bpg', 'season average', 'avg', 'on average']);
           const filterDesc = buildFilterDesc(thresholds);
           const fmt = (v: number | null | undefined, dec = 1) => v != null ? Number(v).toFixed(dec) : 'N/A';
 
@@ -922,60 +925,153 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
             };
           }
 
-          // ── PLAYER SCOPE (season per-game averages, default) ──────────
-          const matches = playersData.filter((p: any) => {
-            if (thresholds.pts != null && (p.avg_pts ?? 0) < thresholds.pts) return false;
-            if (thresholds.reb != null && (p.avg_reb ?? 0) < thresholds.reb) return false;
-            if (thresholds.ast != null && (p.avg_ast ?? 0) < thresholds.ast) return false;
-            if (thresholds.stl != null && (p.avg_stl ?? 0) < thresholds.stl) return false;
-            if (thresholds.blk != null && (p.avg_blk ?? 0) < thresholds.blk) return false;
-            if (thresholds.fg_pct != null && (p.season_fg_pct ?? 0) < thresholds.fg_pct) return false;
-            if (thresholds.tp_pct != null && (p.season_tp_pct ?? 0) < thresholds.tp_pct) return false;
-            if (thresholds.ft_pct != null && (p.season_ft_pct ?? 0) < thresholds.ft_pct) return false;
-            return true;
-          });
-          const buildPlayerRow = (p: any, i: number) => {
-            const stats: string[] = [];
-            if (thresholds.pts != null) stats.push(`${fmt(p.avg_pts)}pts`);
-            if (thresholds.reb != null) stats.push(`${fmt(p.avg_reb)}reb`);
-            if (thresholds.ast != null) stats.push(`${fmt(p.avg_ast)}ast`);
-            if (thresholds.stl != null) stats.push(`${fmt(p.avg_stl)}stl`);
-            if (thresholds.blk != null) stats.push(`${fmt(p.avg_blk)}blk`);
-            if (thresholds.fg_pct != null) stats.push(`${fmt(p.season_fg_pct)}% FG`);
-            if (thresholds.tp_pct != null) stats.push(`${fmt(p.season_tp_pct)}% 3PT`);
-            if (thresholds.ft_pct != null) stats.push(`${fmt(p.season_ft_pct)}% FT`);
-            return `${i + 1}. **${p.player_name}** *(${p.team_name})* — ${stats.join(' · ')}`;
-          };
-          if (matches.length === 0) {
-            const primaryCol = thresholds.pts != null ? 'avg_pts' : thresholds.reb != null ? 'avg_reb' : 'avg_ast';
-            const closest = [...playersData].sort((a: any, b: any) => (b[primaryCol] ?? 0) - (a[primaryCol] ?? 0)).slice(0, 3);
+          // ── SEASON AVERAGES scope (explicit: "averaging", "per game", "ppg") ──
+          if (isAveragesMode && !isTeamScope) {
+            const matches = playersData.filter((p: any) => {
+              if (thresholds.pts != null && (p.avg_pts ?? 0) < thresholds.pts) return false;
+              if (thresholds.reb != null && (p.avg_reb ?? 0) < thresholds.reb) return false;
+              if (thresholds.ast != null && (p.avg_ast ?? 0) < thresholds.ast) return false;
+              if (thresholds.stl != null && (p.avg_stl ?? 0) < thresholds.stl) return false;
+              if (thresholds.blk != null && (p.avg_blk ?? 0) < thresholds.blk) return false;
+              if (thresholds.fg_pct != null && (p.season_fg_pct ?? 0) < thresholds.fg_pct) return false;
+              if (thresholds.tp_pct != null && (p.season_tp_pct ?? 0) < thresholds.tp_pct) return false;
+              if (thresholds.ft_pct != null && (p.season_ft_pct ?? 0) < thresholds.ft_pct) return false;
+              return true;
+            });
+            const buildAvgRow = (p: any, i: number) => {
+              const stats: string[] = [];
+              if (thresholds.pts != null) stats.push(`${fmt(p.avg_pts)}pts`);
+              if (thresholds.reb != null) stats.push(`${fmt(p.avg_reb)}reb`);
+              if (thresholds.ast != null) stats.push(`${fmt(p.avg_ast)}ast`);
+              if (thresholds.stl != null) stats.push(`${fmt(p.avg_stl)}stl`);
+              if (thresholds.blk != null) stats.push(`${fmt(p.avg_blk)}blk`);
+              if (thresholds.fg_pct != null) stats.push(`${fmt(p.season_fg_pct)}% FG`);
+              if (thresholds.tp_pct != null) stats.push(`${fmt(p.season_tp_pct)}% 3PT`);
+              if (thresholds.ft_pct != null) stats.push(`${fmt(p.season_ft_pct)}% FT`);
+              return `${i + 1}. **${p.player_name}** *(${p.team_name})* — ${stats.join(' · ')}`;
+            };
+            if (matches.length === 0) {
+              const primaryCol = thresholds.pts != null ? 'avg_pts' : thresholds.reb != null ? 'avg_reb' : 'avg_ast';
+              const closest = [...playersData].sort((a: any, b: any) => (b[primaryCol] ?? 0) - (a[primaryCol] ?? 0)).slice(0, 3);
+              return {
+                content: `### No Players Match — *Season Averages · ${filterDesc}*\n\nNo players average this stat line per game this season.\n\n**Closest players:**\n${closest.map(buildAvgRow).join('\n')}`,
+                suggestions: ['Top scorers', 'Top rebounders', 'Show me the standings']
+              };
+            }
+            const sorted = [...matches].sort((a: any, b: any) => (b.avg_pts ?? 0) - (a.avg_pts ?? 0));
+            const header = `### Season Averages — ${filterDesc}\n*${matches.length} player${matches.length === 1 ? '' : 's'} qualify*\n\n`;
+            if (matches.length === 1) {
+              const p = sorted[0];
+              const statLine = [
+                thresholds.pts != null ? `${fmt(p.avg_pts)}pts` : null,
+                thresholds.reb != null ? `${fmt(p.avg_reb)}reb` : null,
+                thresholds.ast != null ? `${fmt(p.avg_ast)}ast` : null,
+                thresholds.fg_pct != null ? `${fmt(p.season_fg_pct)}% FG` : null,
+                thresholds.tp_pct != null ? `${fmt(p.season_tp_pct)}% 3PT` : null,
+              ].filter(Boolean).join('/');
+              return {
+                content: `${header}**${p.player_name}** is the only player averaging ${statLine} this season *(${p.team_name})*`,
+                suggestions: [`How is ${p.player_name} performing?`, 'Top scorers', 'Show me the standings'],
+                navigationButtons: [{ label: `${p.player_name}'s Profile`, id: playerSlug(p), type: 'player' as const }]
+              };
+            }
             return {
-              content: `### No Players Match — *Filter: ${filterDesc}*\n\nNo players average this stat line per game this season.\n\n**Closest players:**\n${closest.map(buildPlayerRow).join('\n')}`,
-              suggestions: ['Top scorers', 'Top rebounders', 'Show me the standings']
+              content: `${header}${sorted.map(buildAvgRow).join('\n')}`,
+              suggestions: [`How is ${sorted[0].player_name} performing?`, 'Top scorers', 'Show me the standings'],
+              navigationButtons: [{ label: `${sorted[0].player_name}'s Profile`, id: playerSlug(sorted[0]), type: 'player' as const }]
             };
           }
-          const sorted = [...matches].sort((a: any, b: any) => (b.avg_pts ?? 0) - (a.avg_pts ?? 0));
-          const header = `### Players Matching: ${filterDesc}\n*${matches.length} player${matches.length === 1 ? '' : 's'} qualify — season per-game averages*\n\n`;
-          if (matches.length === 1) {
-            const p = sorted[0];
-            const statLine = [
-              thresholds.pts != null ? `${fmt(p.avg_pts)}pts` : null,
-              thresholds.reb != null ? `${fmt(p.avg_reb)}reb` : null,
-              thresholds.ast != null ? `${fmt(p.avg_ast)}ast` : null,
-              thresholds.fg_pct != null ? `${fmt(p.season_fg_pct)}% FG` : null,
-              thresholds.tp_pct != null ? `${fmt(p.season_tp_pct)}% 3PT` : null,
-            ].filter(Boolean).join('/');
-            return {
-              content: `${header}**${p.player_name}** is the only player averaging ${statLine} this season *(${p.team_name})*`,
-              suggestions: [`How is ${p.player_name} performing?`, 'Top scorers', 'Show me the standings'],
-              navigationButtons: [{ label: `${p.player_name}'s Profile`, id: playerSlug(p), type: 'player' as const }]
-            };
+
+          // ── SINGLE-GAME scope (default) — individual game performances ──
+          // Query game log with server-side filters, group by player, count occurrences
+          if (!isTeamScope) {
+            let gameQuery = supabase
+              .from('v_player_game_log')
+              .select('player_name, team_name, game_date, pts, reb, ast, stl, blk, fg_pct, tp_pct, hometeam, awayteam')
+              .eq('league_id', leagueId)
+              .order('pts', { ascending: false })
+              .limit(500);
+            if (thresholds.pts != null) gameQuery = gameQuery.gte('pts', thresholds.pts);
+            if (thresholds.reb != null) gameQuery = gameQuery.gte('reb', thresholds.reb);
+            if (thresholds.ast != null) gameQuery = gameQuery.gte('ast', thresholds.ast);
+            if (thresholds.stl != null) gameQuery = gameQuery.gte('stl', thresholds.stl);
+            if (thresholds.blk != null) gameQuery = gameQuery.gte('blk', thresholds.blk);
+            if (thresholds.fg_pct != null) gameQuery = gameQuery.gte('fg_pct', thresholds.fg_pct);
+            if (thresholds.tp_pct != null) gameQuery = gameQuery.gte('tp_pct', thresholds.tp_pct);
+
+            const { data: gameRows } = await gameQuery;
+
+            if (gameRows) {
+              // Group by player
+              const playerGameMap: Record<string, { team_name: string; games: any[] }> = {};
+              for (const g of gameRows as any[]) {
+                if (!playerGameMap[g.player_name]) playerGameMap[g.player_name] = { team_name: g.team_name, games: [] };
+                playerGameMap[g.player_name].games.push(g);
+              }
+
+              const totalGames = gameRows.length;
+
+              if (totalGames === 0) {
+                // Show closest single-game performances as fallback
+                const { data: closestRows } = await supabase
+                  .from('v_player_game_log')
+                  .select('player_name, team_name, game_date, pts, reb, ast, fg_pct, hometeam, awayteam')
+                  .eq('league_id', leagueId)
+                  .order(thresholds.pts != null ? 'pts' : thresholds.reb != null ? 'reb' : 'ast', { ascending: false })
+                  .limit(3);
+                const closestStr = (closestRows || []).map((g: any, i: number) => {
+                  const date = g.game_date ? new Date(g.game_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '?';
+                  const opp = g.hometeam && g.awayteam ? (g.hometeam === g.team_name ? g.awayteam : g.hometeam) : '?';
+                  return `${i + 1}. **${g.player_name}** *(${g.team_name})* — ${g.pts}pts · ${g.reb}reb · ${g.ast}ast · ${g.fg_pct != null ? g.fg_pct + '% FG' : ''} vs ${opp} (${date})`;
+                }).join('\n');
+                return {
+                  content: `### No Games Match — *${filterDesc}*\n\nNo single-game performances hit this stat line this season.\n\n**Closest performances:**\n${closestStr}`,
+                  suggestions: ['Top scorers', 'Top rebounders', 'Show me the standings']
+                };
+              }
+
+              // Build player rows showing each qualifying game
+              const playerEntries = Object.entries(playerGameMap).sort((a, b) => b[1].games.length - a[1].games.length || (b[1].games[0]?.pts ?? 0) - (a[1].games[0]?.pts ?? 0));
+              const playerCount = playerEntries.length;
+
+              const buildGameDetail = (g: any) => {
+                const date = g.game_date ? new Date(g.game_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '?';
+                const opp = g.hometeam && g.awayteam ? (g.hometeam === g.team_name ? g.awayteam : g.hometeam) : '?';
+                const stats: string[] = [`${g.pts}pts`, `${g.reb}reb`, `${g.ast}ast`];
+                if (thresholds.stl != null) stats.push(`${g.stl}stl`);
+                if (thresholds.blk != null) stats.push(`${g.blk}blk`);
+                if (thresholds.fg_pct != null) stats.push(`${g.fg_pct}% FG`);
+                if (thresholds.tp_pct != null) stats.push(`${g.tp_pct != null ? Number(g.tp_pct).toFixed(0) : '?'}% 3PT`);
+                return `  - ${date} vs ${opp} — ${stats.join(' · ')}`;
+              };
+
+              const rows = playerEntries.map(([name, { team_name, games }], i) => {
+                const gameLines = games.map(buildGameDetail).join('\n');
+                const countLabel = games.length === 1 ? '1 game' : `${games.length} games`;
+                return `${i + 1}. **${name}** *(${team_name})* — ${countLabel}\n${gameLines}`;
+              }).join('\n\n');
+
+              const totalLabel = totalGames === 1 ? '1 game' : `${totalGames} games`;
+              const playerLabel = playerCount === 1 ? '1 player' : `${playerCount} players`;
+
+              if (totalGames === 1) {
+                const [name, { team_name, games }] = playerEntries[0];
+                const g = games[0];
+                const date = g.game_date ? new Date(g.game_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '?';
+                const opp = g.hometeam && g.awayteam ? (g.hometeam === g.team_name ? g.awayteam : g.hometeam) : '?';
+                return {
+                  content: `### Only 1 Game Matches: ${filterDesc}\n\n**${name}** *(${team_name})* has the only ${filterDesc} performance this season — **${g.pts}pts · ${g.reb}reb · ${g.ast}ast** vs ${opp} on ${date}`,
+                  suggestions: [`How is ${name} performing?`, 'Top scorers', 'Show me the standings'],
+                  navigationButtons: [{ label: `${name}'s Profile`, id: playerSlug({ player_name: name }), type: 'player' as const }]
+                };
+              }
+
+              return {
+                content: `### ${totalLabel} this season match: ${filterDesc}\n*${playerLabel} with qualifying game(s)*\n\n${rows}`,
+                suggestions: playerEntries.length > 0 ? [`How is ${playerEntries[0][0]} performing?`, 'Top scorers', 'Show me the standings'] : ['Top scorers', 'Show me the standings']
+              };
+            }
           }
-          return {
-            content: `${header}${sorted.map(buildPlayerRow).join('\n')}`,
-            suggestions: [`How is ${sorted[0].player_name} performing?`, 'Top scorers', 'Show me the standings'],
-            navigationButtons: [{ label: `${sorted[0].player_name}'s Profile`, id: playerSlug(sorted[0]), type: 'player' as const }]
-          };
         }
       }
 
