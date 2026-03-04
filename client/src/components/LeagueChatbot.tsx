@@ -130,7 +130,7 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
   const queryLeagueData = async (question: string, leagueId: string): Promise<{ content: string; suggestions?: string[]; navigationButtons?: { label: string; id: string; type: 'player' | 'team' }[] } | string> => {
     try {
       // ── Step 1: Fetch real league data from Supabase views ───────────
-      const [playersDataResult, gamesDataResult] = await Promise.all([
+      const [playersDataResult, gamesDataResult, teamsDataResult] = await Promise.all([
         supabase
           .from('v_player_season_averages')
           .select('player_name, team_name, league_id, games_played, total_pts, total_reb, total_ast, total_stl, total_blk, total_tpm, total_tpa, total_fgm, total_fga, total_ftm, total_fta, season_fg_pct, season_tp_pct, season_ft_pct, avg_pts, avg_reb, avg_ast, avg_stl, avg_blk')
@@ -142,11 +142,17 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
           .select('game_date, home_team, away_team, home_score, away_score')
           .eq('league_id', leagueId)
           .order('game_date', { ascending: false })
-          .limit(30)
+          .limit(30),
+        supabase
+          .from('v_team_season_averages')
+          .select('team_name, team_id, league_id, games_played, avg_pts, avg_ast, avg_reb, avg_stl, avg_blk, avg_tov, avg_tpm, avg_tpa, season_tp_pct, avg_fgm, avg_fga, season_fg_pct, avg_ftm, avg_fta, avg_pitp, avg_fastbreak_pts')
+          .eq('league_id', leagueId)
+          .order('avg_pts', { ascending: false })
       ]);
 
       const playersData = (playersDataResult.data || []) as any[];
       const gamesData = (gamesDataResult.data || []) as any[];
+      const teamsData = (teamsDataResult.data || []) as any[];
       // Derive unique team names from player data for team scanning
       const uniqueTeamNames = [...new Set(playersData.map((p: any) => p.team_name).filter(Boolean))] as string[];
 
@@ -485,6 +491,55 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
         return line;
       };
 
+      // ── TEAM STAT MAP ──────────────────────────────────────────────────
+      interface TeamStatDef {
+        keywords: string[];
+        column: string;
+        label: string;
+        isAdvanced?: boolean;
+      }
+      const TEAM_STAT_MAP: TeamStatDef[] = [
+        { keywords: ['team scoring', 'team points', 'team scores the most', 'team score the most', 'highest scoring team', 'most points as a team', 'team ppg'], column: 'avg_pts', label: 'Avg Points Per Game' },
+        { keywords: ['team rebounds', 'team rebound', 'best rebounding team', 'most team rebounds'], column: 'avg_reb', label: 'Avg Rebounds Per Game' },
+        { keywords: ['team assists', 'team assist', 'best passing team', 'most team assists'], column: 'avg_ast', label: 'Avg Assists Per Game' },
+        { keywords: ['team 3s', 'team three', 'team threes', 'team 3-pointer', 'most 3s as a team', 'team three pointer', 'most threes as a team'], column: 'avg_tpm', label: 'Avg 3-Pointers Made Per Game' },
+        { keywords: ['team 3pt%', 'team three point percent', 'best three point shooting team', 'best 3pt team', 'best shooting team from three'], column: 'season_tp_pct', label: 'Team 3-Point %' },
+        { keywords: ['team fg%', 'team field goal', 'best shooting team', 'team shooting percentage', 'team fg percent'], column: 'season_fg_pct', label: 'Team FG %' },
+        { keywords: ['team steals', 'most team steals', 'team steal'], column: 'avg_stl', label: 'Avg Steals Per Game' },
+        { keywords: ['team blocks', 'most team blocks', 'team block'], column: 'avg_blk', label: 'Avg Blocks Per Game' },
+        { keywords: ['team turnovers', 'most turnovers', 'team tov', 'turnover prone'], column: 'avg_tov', label: 'Avg Turnovers Per Game' },
+        { keywords: ['paint points', 'points in the paint', 'team pitp', 'inside scoring'], column: 'avg_pitp', label: 'Avg Points in the Paint Per Game' },
+        { keywords: ['fast break', 'fastbreak', 'transition points', 'fast break points'], column: 'avg_fastbreak_pts', label: 'Avg Fast Break Points Per Game' },
+      ];
+
+      const detectTeamStat = (): TeamStatDef | null => {
+        for (const stat of TEAM_STAT_MAP) {
+          if (stat.keywords.some(k => q.includes(k))) return stat;
+        }
+        return null;
+      };
+
+      // ── ADVANCED STATS KEYWORDS ────────────────────────────────────────
+      const isAdvancedQuery = is(['offensive rating', 'defensive rating', 'net rating', 'off rating', 'def rating',
+        'efficiency rating', 'effective fg', 'efg', 'true shooting', 'ts%', 'pie', 'pace',
+        'advanced stats', 'advanced stat', 'off rtg', 'def rtg', 'net rtg']);
+
+      // ── TEAM STAT LEADERBOARD ──────────────────────────────────────────
+      const detectedTeamStat = detectTeamStat();
+      const isTeamLeaderboardQuery = is(['which team', 'what team', 'team that', 'best team for', 'top team for']);
+      if (detectedTeamStat && teamsData.length > 0 && (isTeamLeaderboardQuery || is(['most', 'best', 'highest', 'top', 'leader'])) && !findPlayerInQuestion()) {
+        const col = detectedTeamStat.column;
+        const sorted = [...teamsData].sort((a: any, b: any) => (b[col] ?? 0) - (a[col] ?? 0)).slice(0, 5);
+        const rows = sorted.map((t: any, i: number) => {
+          const val = t[col] != null ? Number(t[col]).toFixed(1) : 'N/A';
+          return `${i + 1}. ${t.team_name} — ${val}`;
+        }).join('\n');
+        return {
+          content: `${detectedTeamStat.label} Leaders in ${leagueName}:\n\n${rows}`,
+          suggestions: ['Show me the standings', 'Top scorers', `Which team scores the most?`]
+        };
+      }
+
       // ── ENTITY + STAT + "THIS SEASON" ─────────────────────────────────
       const isSeasonQuery = is(['this season', 'season total', 'all season', 'so far', 'this year', 'how many', 'how much']);
       const detectedStat = detectStat();
@@ -580,23 +635,35 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
 
         if (foundTeam) {
           const teamName = foundTeam.name;
-          const { data: teamGames } = await supabase
-            .from('games')
-            .select('game_date, home_team, away_team, home_score, away_score')
-            .eq('league_id', leagueId)
-            .or(`home_team.ilike.%${teamName}%,away_team.ilike.%${teamName}%`)
-            .order('game_date', { ascending: false })
-            .limit(limit);
+          const [{ data: teamGames }, { data: teamAdvGames }] = await Promise.all([
+            supabase
+              .from('v_team_game_log')
+              .select('game_date, pts, ast, reb, stl, blk, tov, tpm, tpa, tp_pct, fgm, fga, fg_pct, ftm, fta, ft_pct, pitp, fastbreak_pts, hometeam, awayteam, score')
+              .eq('league_id', leagueId)
+              .ilike('team_name', `%${teamName}%`)
+              .order('game_date', { ascending: false })
+              .limit(limit),
+            supabase
+              .from('v_team_advanced_game')
+              .select('game_date, off_rating, def_rating, net_rating, efg_percent, ts_percent, pace, pie')
+              .eq('league_id', leagueId)
+              .ilike('team_name', `%${teamName}%`)
+              .order('game_date', { ascending: false })
+              .limit(limit)
+          ]);
 
           if (teamGames && teamGames.length > 0) {
             const rows = teamGames.map((g: any) => {
               const date = g.game_date ? new Date(g.game_date).toLocaleDateString() : 'Unknown';
-              const isHome = g.home_team.toLowerCase().includes(teamName.toLowerCase());
-              const scored = isHome ? g.home_score : g.away_score;
-              const conceded = isHome ? g.away_score : g.home_score;
-              const opponent = isHome ? g.away_team : g.home_team;
-              const result = scored > conceded ? 'W' : 'L';
-              return `${result} vs ${opponent}: ${scored}-${conceded} (${date})`;
+              const isHome = (g.hometeam || '').toLowerCase().includes(teamName.toLowerCase());
+              const opponent = isHome ? g.awayteam : g.hometeam;
+              const scored = g.pts ?? g.score ?? 0;
+              const result = g.score != null ? (g.score > 0 ? 'W' : 'L') : '?';
+              const tpPct = g.tp_pct != null ? `${Number(g.tp_pct).toFixed(0)}%` : 'N/A';
+              const fgPct = g.fg_pct != null ? `${Number(g.fg_pct).toFixed(0)}%` : 'N/A';
+              const adv = (teamAdvGames || []).find((a: any) => a.game_date === g.game_date);
+              const advStr = adv ? ` | OffRtg: ${Number(adv.off_rating).toFixed(1)} | DefRtg: ${Number(adv.def_rating).toFixed(1)} | eFG%: ${Number(adv.efg_percent).toFixed(1)}%` : '';
+              return `${date} vs ${opponent || '?'}: ${scored}pts, ${g.reb ?? 0}reb, ${g.ast ?? 0}ast | 3PT: ${g.tpm ?? 0}/${g.tpa ?? 0} (${tpPct}) | FG: ${g.fgm ?? 0}/${g.fga ?? 0} (${fgPct})${advStr}`;
             }).join('\n');
             const context = `${leagueName} — ${teamName} Last ${teamGames.length} Game(s):\n\n${rows}`;
             try {
@@ -669,20 +736,61 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
         };
       }
 
+      // ── ADVANCED STATS FOR A SPECIFIC TEAM ────────────────────────────
+      if (isAdvancedQuery) {
+        const foundTeam = findTeamInQuestion();
+        if (foundTeam) {
+          const teamName = foundTeam.name;
+          const { data: advGames } = await supabase
+            .from('v_team_advanced_game')
+            .select('off_rating, def_rating, net_rating, pace, efg_percent, ts_percent, pie, tov_percent, oreb_percent, dreb_percent, ast_percent')
+            .eq('league_id', leagueId)
+            .ilike('team_name', `%${teamName}%`);
+
+          if (advGames && advGames.length > 0) {
+            const avg = (col: string) => {
+              const vals = advGames.map((g: any) => g[col]).filter((v: any) => v != null);
+              return vals.length > 0 ? (vals.reduce((a: number, b: number) => a + b, 0) / vals.length) : null;
+            };
+            const fmt = (v: number | null, dec = 1) => v != null ? v.toFixed(dec) : 'N/A';
+            const offRtg = avg('off_rating');
+            const defRtg = avg('def_rating');
+            const netRtg = offRtg != null && defRtg != null ? offRtg - defRtg : null;
+            const teamSeasonStats = teamsData.find((t: any) => t.team_name?.toLowerCase() === teamName.toLowerCase());
+            const seasonLine = teamSeasonStats ? `\nGames Played: ${teamSeasonStats.games_played ?? '?'} | Avg Pts: ${fmt(teamSeasonStats.avg_pts)} | FG%: ${fmt(teamSeasonStats.season_fg_pct)}% | 3PT%: ${fmt(teamSeasonStats.season_tp_pct)}%` : '';
+            return {
+              content: `${teamName} — Advanced Stats (Season Averages over ${advGames.length} games):${seasonLine}\n\nRatings:\n• OFF RTG: ${fmt(offRtg)}\n• DEF RTG: ${fmt(defRtg)}\n• NET RTG: ${netRtg != null ? (netRtg >= 0 ? '+' : '') + fmt(netRtg) : 'N/A'}\n• Pace: ${fmt(avg('pace'))}\n\nEfficiency:\n• eFG%: ${fmt(avg('efg_percent'))}%\n• TS%: ${fmt(avg('ts_percent'))}%\n• PIE: ${fmt(avg('pie'))}%\n\nOther:\n• TOV%: ${fmt(avg('tov_percent'))}%\n• OREB%: ${fmt(avg('oreb_percent'))}%\n• AST%: ${fmt(avg('ast_percent'))}%`,
+              suggestions: [`Last 5 games for ${teamName}`, `Who are ${teamName}'s top players?`, 'Show me the standings']
+            };
+          }
+        }
+      }
+
       // ── TEAM NAME SCAN FALLBACK ────────────────────────────────────────
       const scannedTeam = findTeamInQuestion();
       if (scannedTeam) {
+        const teamStats = teamsData.find((t: any) =>
+          t.team_name?.toLowerCase() === scannedTeam.name.toLowerCase()
+        );
         const teamPlayers = [...playersData]
           .filter((p: any) => p.team_name?.toLowerCase() === scannedTeam.name.toLowerCase())
           .sort((a: any, b: any) => (b.total_pts ?? 0) - (a.total_pts ?? 0))
           .slice(0, 5);
-        const rows = teamPlayers.map((p: any, i: number) => `${i+1}. ${p.player_name} — ${p.total_pts ?? 0}pts, ${p.total_reb ?? 0}reb, ${p.total_ast ?? 0}ast`).join('\n');
+        const playerRows = teamPlayers.map((p: any, i: number) => `${i+1}. ${p.player_name} — ${p.total_pts ?? 0}pts, ${p.total_reb ?? 0}reb, ${p.total_ast ?? 0}ast`).join('\n');
         const standings = computeStandings();
         const teamStanding = standings.findIndex(([t]) => t.toLowerCase() === scannedTeam.name.toLowerCase());
-        const standingText = teamStanding >= 0 ? `\n\nLeague position: #${teamStanding + 1}` : '';
+        const standingText = teamStanding >= 0 ? `League Position: #${teamStanding + 1}` : '';
+
+        let seasonStatsBlock = '';
+        if (teamStats) {
+          const fg = teamStats.season_fg_pct != null ? `${Number(teamStats.season_fg_pct).toFixed(1)}%` : 'N/A';
+          const tp = teamStats.season_tp_pct != null ? `${Number(teamStats.season_tp_pct).toFixed(1)}%` : 'N/A';
+          seasonStatsBlock = `\nSeason Averages (${teamStats.games_played ?? '?'} games):\n• Points: ${teamStats.avg_pts != null ? Number(teamStats.avg_pts).toFixed(1) : 'N/A'} ppg\n• Rebounds: ${teamStats.avg_reb != null ? Number(teamStats.avg_reb).toFixed(1) : 'N/A'} rpg\n• Assists: ${teamStats.avg_ast != null ? Number(teamStats.avg_ast).toFixed(1) : 'N/A'} apg\n• 3-Pointers: ${teamStats.avg_tpm != null ? Number(teamStats.avg_tpm).toFixed(1) : 'N/A'}/game | 3PT%: ${tp}\n• FG%: ${fg} | Pts in Paint: ${teamStats.avg_pitp != null ? Number(teamStats.avg_pitp).toFixed(1) : 'N/A'} ppg`;
+        }
+
         return {
-          content: `${scannedTeam.name}${standingText}\n\nTop Players:\n${rows || 'No player data available'}\n\nTry asking:\n• "How have the ${scannedTeam.name} performed in their last 5 games?"\n• "How many 3s has ${scannedTeam.name} hit this season?"`,
-          suggestions: [`Last 5 games for ${scannedTeam.name}`, `How many 3s has ${scannedTeam.name} hit this season?`, 'Show me the standings']
+          content: `${scannedTeam.name}${standingText ? `\n${standingText}` : ''}${seasonStatsBlock}\n\nTop Players:\n${playerRows || 'No player data available'}\n\nTry asking:\n• "How have the ${scannedTeam.name} performed in their last 5 games?"\n• "What are ${scannedTeam.name}'s advanced stats?"`,
+          suggestions: [`Last 5 games for ${scannedTeam.name}`, `What are ${scannedTeam.name}'s advanced stats?`, 'Show me the standings']
         };
       }
 
@@ -699,7 +807,12 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
       const recentGames = gamesData.slice(0, 8)
         .map((g: any) => `${g.home_team} ${g.home_score}–${g.away_score} ${g.away_team} (${g.game_date})`)
         .join('\n');
-      const leagueDataContext = `League: ${leagueName}\n\nTOP PLAYERS:\n${topPlayers || 'None'}\n\nRECENT RESULTS:\n${recentGames || 'None'}`;
+      const topTeams = teamsData.slice(0, 10).map((t: any) => {
+        const fg = t.season_fg_pct != null ? `${Number(t.season_fg_pct).toFixed(1)}%` : 'N/A';
+        const tp = t.season_tp_pct != null ? `${Number(t.season_tp_pct).toFixed(1)}%` : 'N/A';
+        return `${t.team_name}: ${t.avg_pts != null ? Number(t.avg_pts).toFixed(1) : '?'}ppg, ${t.avg_reb != null ? Number(t.avg_reb).toFixed(1) : '?'}rpg, ${t.avg_ast != null ? Number(t.avg_ast).toFixed(1) : '?'}apg, 3PM/g: ${t.avg_tpm != null ? Number(t.avg_tpm).toFixed(1) : '?'} (${tp}), FG%: ${fg}, GP: ${t.games_played ?? '?'}`;
+      }).join('\n');
+      const leagueDataContext = `League: ${leagueName}\n\nTOP PLAYERS:\n${topPlayers || 'None'}\n\nTEAM SEASON AVERAGES:\n${topTeams || 'None'}\n\nRECENT RESULTS:\n${recentGames || 'None'}`;
 
       try {
         const BASE = getPythonBackendUrl();
