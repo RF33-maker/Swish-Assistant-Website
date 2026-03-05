@@ -138,7 +138,8 @@ def chat_league():
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message}
             ],
-            max_tokens=700
+            max_tokens=700,
+            temperature=0.2
         )
 
         raw_answer = completion.choices[0].message.content

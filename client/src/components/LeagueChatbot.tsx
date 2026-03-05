@@ -276,21 +276,27 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
       // pre-built content if the AI call fails or times out.
       type ChatbotResponse = { content: string; suggestions?: string[]; navigationButtons?: { label: string; id: string; type: 'player' | 'team' }[] };
       const aiEnhance = async (rawData: string, fallback: ChatbotResponse): Promise<ChatbotResponse> => {
-        try {
+        const attempt = async () => {
           const BASE = getPythonBackendUrl();
           const resp = await fetch(`${BASE}/api/chat/league`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ question, league_id: leagueId, league_data: rawData }),
-            signal: AbortSignal.timeout(15000)
+            signal: AbortSignal.timeout(25000)
           });
           if (resp.ok) {
             const d = await resp.json();
-            if (d.response) return {
-              content: d.response,
-              suggestions: d.suggestions?.length ? d.suggestions : fallback.suggestions,
-              navigationButtons: fallback.navigationButtons
-            };
+            if (d.response) return { content: d.response, suggestions: d.suggestions?.length ? d.suggestions : fallback.suggestions, navigationButtons: fallback.navigationButtons };
           }
+          return null;
+        };
+        try {
+          const result = await attempt();
+          if (result) return result;
+        } catch {}
+        try {
+          await new Promise(r => setTimeout(r, 500));
+          const result = await attempt();
+          if (result) return result;
         } catch {}
         return fallback;
       };
@@ -515,16 +521,34 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
             .slice(0, 5);
           const standings = computeStandings();
           const teamStanding = standings.findIndex(([t]) => t.toLowerCase() === teamFromStats.name.toLowerCase());
+          const standingRecord = teamStanding >= 0 ? standings[teamStanding][1] : null;
           const standingPos = teamStanding >= 0 ? `#${teamStanding + 1} in the league` : 'standing unknown';
           const fg = teamStats?.season_fg_pct != null ? `${Number(teamStats.season_fg_pct).toFixed(1)}%` : 'N/A';
           const tp = teamStats?.season_tp_pct != null ? `${Number(teamStats.season_tp_pct).toFixed(1)}%` : 'N/A';
-          const rawData = `${teamFromStats.name} — ${standingPos}, ${teamStats?.games_played ?? '?'} games played\nSeason averages: ${teamStats?.avg_pts != null ? Number(teamStats.avg_pts).toFixed(1) : 'N/A'} ppg, ${teamStats?.avg_reb != null ? Number(teamStats.avg_reb).toFixed(1) : 'N/A'} rpg, ${teamStats?.avg_ast != null ? Number(teamStats.avg_ast).toFixed(1) : 'N/A'} apg, FG% ${fg}, 3PT% ${tp}\nTop players: ${teamPlayers.map(p => `${p.player_name} (${p.total_pts ?? 0}pts, ${p.total_reb ?? 0}reb, ${p.total_ast ?? 0}ast)`).join('; ')}`;
+          const rawData = [
+            `TEAM: ${teamFromStats.name}`,
+            `FOCUS: Describe this team's overall performance — use team-level stats as the main subject, not individual players.`,
+            ``,
+            `TEAM OVERVIEW:`,
+            `- League standing: ${standingPos}`,
+            standingRecord ? `- Record: ${standingRecord.wins}W-${standingRecord.losses}L` : '',
+            `- Games played: ${teamStats?.games_played ?? '?'}`,
+            `- Avg points per game: ${teamStats?.avg_pts != null ? Number(teamStats.avg_pts).toFixed(1) : 'N/A'}`,
+            `- Avg rebounds per game: ${teamStats?.avg_reb != null ? Number(teamStats.avg_reb).toFixed(1) : 'N/A'}`,
+            `- Avg assists per game: ${teamStats?.avg_ast != null ? Number(teamStats.avg_ast).toFixed(1) : 'N/A'}`,
+            `- FG%: ${fg} | 3PT%: ${tp}`,
+            `- Avg 3PM per game: ${teamStats?.avg_tpm != null ? Number(teamStats.avg_tpm).toFixed(1) : 'N/A'}`,
+            `- Pts in Paint per game: ${teamStats?.avg_pitp != null ? Number(teamStats.avg_pitp).toFixed(1) : 'N/A'}`,
+            ``,
+            `ROSTER (top 5 by points):`,
+            ...teamPlayers.map((p: any, i: number) => `${i + 1}. ${p.player_name} — ${p.total_pts ?? 0}pts, ${p.total_reb ?? 0}reb, ${p.total_ast ?? 0}ast in ${p.games_played ?? '?'} games`)
+          ].filter(Boolean).join('\n');
           const playerRows = teamPlayers.map((p: any, i: number) => `${i + 1}. **${p.player_name}** — ${p.total_pts ?? 0}pts · ${p.total_reb ?? 0}reb · ${p.total_ast ?? 0}ast`).join('\n');
-          const standingText = teamStanding >= 0 ? `*League Position: #${teamStanding + 1}*` : '';
-          const seasonStatsBlock = teamStats ? `\n\n**Season Averages** *(${teamStats.games_played ?? '?'} games)*\n- **Points:** ${teamStats.avg_pts != null ? Number(teamStats.avg_pts).toFixed(1) : 'N/A'} ppg\n- **Rebounds:** ${teamStats.avg_reb != null ? Number(teamStats.avg_reb).toFixed(1) : 'N/A'} rpg\n- **Assists:** ${teamStats.avg_ast != null ? Number(teamStats.avg_ast).toFixed(1) : 'N/A'} apg\n- **3-Pointers:** ${teamStats.avg_tpm != null ? Number(teamStats.avg_tpm).toFixed(1) : 'N/A'}/game · 3PT%: ${tp}\n- **FG%:** ${fg} · Pts in Paint: ${teamStats.avg_pitp != null ? Number(teamStats.avg_pitp).toFixed(1) : 'N/A'} ppg` : '';
+          const standingText = teamStanding >= 0 ? `*League Position: #${teamStanding + 1}${standingRecord ? ` (${standingRecord.wins}W-${standingRecord.losses}L)` : ''}*\n\n` : '';
+          const seasonStatsBlock = teamStats ? `**Season Averages** *(${teamStats.games_played ?? '?'} games)*\n- **Points:** ${teamStats.avg_pts != null ? Number(teamStats.avg_pts).toFixed(1) : 'N/A'} ppg\n- **Rebounds:** ${teamStats.avg_reb != null ? Number(teamStats.avg_reb).toFixed(1) : 'N/A'} rpg\n- **Assists:** ${teamStats.avg_ast != null ? Number(teamStats.avg_ast).toFixed(1) : 'N/A'} apg\n- **3-Pointers:** ${teamStats.avg_tpm != null ? Number(teamStats.avg_tpm).toFixed(1) : 'N/A'}/game · 3PT%: ${tp}\n- **FG%:** ${fg} · Pts in Paint: ${teamStats.avg_pitp != null ? Number(teamStats.avg_pitp).toFixed(1) : 'N/A'} ppg\n\n` : '';
           return aiEnhance(rawData, {
-            content: `### ${teamFromStats.name}\n${standingText}${seasonStatsBlock}\n\n**Top Players**\n${playerRows || 'No player data available'}`,
-            suggestions: [`Who are the top scorers for ${teamFromStats.name}?`, `What are ${teamFromStats.name}'s advanced stats?`, 'Show me the standings']
+            content: `### ${teamFromStats.name}\n\n${standingText}${seasonStatsBlock}**Top Players**\n${playerRows || 'No player data available'}`,
+            suggestions: [`Who are the top scorers for ${teamFromStats.name}?`, `How has ${teamFromStats.name} been performing recently?`, 'Show me the standings']
           });
         }
 
@@ -1589,13 +1613,13 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
                   )}
                   <div className="flex flex-col max-w-[85%]">
                     <div
-                      className={`p-3 rounded-lg text-sm leading-relaxed ${
+                      className={`p-2.5 rounded-lg text-sm leading-relaxed ${
                         message.type === 'user'
                           ? 'bg-orange-500 text-white'
                           : 'bg-white text-slate-800 shadow-sm border border-slate-200'
                       }`}
                     >
-                      <div className="prose prose-sm max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_h3]:text-sm [&_h3]:font-bold [&_h3]:mt-0 [&_h3]:mb-1 [&_strong]:font-semibold">
+                      <div className="prose prose-xs max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_p]:my-0.5 [&_ul]:my-0.5 [&_ol]:my-0.5 [&_li]:my-0 [&_h3]:text-xs [&_h3]:font-semibold [&_h3]:mt-0 [&_h3]:mb-0.5 [&_strong]:font-semibold [&_table]:text-xs">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.type === 'bot' && message.displayedContent !== undefined ? message.displayedContent : message.content}</ReactMarkdown>
                         {message.type === 'bot' && message.displayedContent !== undefined && message.displayedContent.length < message.content.length && (
                           <span className="animate-pulse text-orange-400 font-bold">▌</span>
