@@ -824,6 +824,76 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
       const isSeasonQuery = is(['this season', 'season total', 'all season', 'so far', 'this year', 'how many', 'how much']);
       const detectedStat = detectStat();
 
+      // ── SINGLE-GAME RECORD: "most 3s in a game", "scoring record", "best single-game" ──
+      const isSingleGameRecordQuery = is([
+        'in a single game', 'in one game', 'single game record', 'game record',
+        'in a game', 'best game', 'highest in a game', 'most in a game', 'in any game',
+        'single game', 'in any single game', 'best single', 'ever scored in a game',
+        'most points in a game', 'most rebounds in a game', 'most assists in a game',
+        'most 3s in a game', 'most steals in a game', 'most blocks in a game'
+      ]);
+      if (isSingleGameRecordQuery && !findPlayerInQuestion()) {
+        const stat = detectStat();
+        const statColMap: Record<string, { gameCol: string; label: string }> = {
+          total_tpm:  { gameCol: 'tpm',  label: '3-Pointers Made' },
+          total_pts:  { gameCol: 'pts',  label: 'Points' },
+          total_reb:  { gameCol: 'reb',  label: 'Rebounds' },
+          total_ast:  { gameCol: 'ast',  label: 'Assists' },
+          total_stl:  { gameCol: 'stl',  label: 'Steals' },
+          total_blk:  { gameCol: 'blk',  label: 'Blocks' },
+          total_fgm:  { gameCol: 'fgm',  label: 'Field Goals Made' },
+          total_ftm:  { gameCol: 'ftm',  label: 'Free Throws Made' },
+        };
+        const mapped = stat ? statColMap[stat.column] : null;
+        const gameCol = mapped?.gameCol ?? 'pts';
+        const statLabel = mapped?.label ?? 'Points';
+        const tf = findTeamInQuestion();
+
+        let gameQuery = supabase
+          .from('v_player_game_log')
+          .select('player_name, team_name, game_date, pts, reb, ast, stl, blk, tpm, tpa, fgm, fga, fg_pct, tp_pct, hometeam, awayteam')
+          .eq('league_id', leagueId)
+          .order(gameCol, { ascending: false })
+          .limit(10);
+        if (tf) gameQuery = (gameQuery as any).ilike('team_name', `%${tf.name}%`);
+
+        const { data: singleGameRows } = await gameQuery;
+
+        if (singleGameRows && singleGameRows.length > 0) {
+          const top5 = (singleGameRows as any[]).slice(0, 5);
+          const title = tf ? `${statLabel} — Single-Game Records (${tf.name})` : `${statLabel} — Single-Game Records (${leagueName})`;
+
+          const rawData = [
+            `${leagueName} — Best single-game ${statLabel.toLowerCase()} performances this season:`,
+            ...top5.map((g: any, i: number) => {
+              const date = g.game_date ? new Date(g.game_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '?';
+              const opp = g.hometeam && g.awayteam ? (g.hometeam === g.team_name ? g.awayteam : g.hometeam) : '?';
+              const val = g[gameCol] ?? 0;
+              return `${i + 1}. ${g.player_name} (${g.team_name}) — ${val} ${statLabel.toLowerCase()} vs ${opp} on ${date} | full line: ${g.pts}pts ${g.reb}reb ${g.ast}ast`;
+            })
+          ].join('\n');
+
+          const rows = top5.map((g: any, i: number) => {
+            const date = g.game_date ? new Date(g.game_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '?';
+            const opp = g.hometeam && g.awayteam ? (g.hometeam === g.team_name ? g.awayteam : g.hometeam) : '?';
+            const val = g[gameCol] ?? 0;
+            const fgPct = g.fg_pct != null ? ` · ${Number(g.fg_pct).toFixed(0)}% FG` : '';
+            const tpPct = g.tp_pct != null ? ` · ${Number(g.tp_pct).toFixed(0)}% 3PT` : '';
+            return `${i + 1}. **${g.player_name}** *(${g.team_name})* — **${val} ${statLabel.toLowerCase()}** vs ${opp} (${date})\n   ${g.pts}pts · ${g.reb}reb · ${g.ast}ast${fgPct}${tpPct}`;
+          }).join('\n\n');
+
+          const topGame = top5[0];
+          return aiEnhance(rawData, {
+            content: `### ${title}\n\n${rows}`,
+            suggestions: [
+              `How is ${topGame.player_name} performing?`,
+              stat ? `Who leads the league in ${statLabel.toLowerCase()}?` : 'Top scorers',
+              'Show me the standings'
+            ]
+          });
+        }
+      }
+
       // ── STAT LEADERBOARD: "top 3-point shooters", "who has made the most 3s" ──
       const isLeaderboardQuery = is(['most', 'who leads', 'who lead', 'who has the most', 'who have the most',
         'who made the most', 'top', 'leader', 'leaders', 'best', 'highest', 'ranked', 'who is best']);
@@ -1327,22 +1397,37 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
               const totalLabel = totalGames === 1 ? '1 game' : `${totalGames} games`;
               const playerLabel = playerCount === 1 ? '1 player' : `${playerCount} players`;
 
+              const aiRawData = [
+                `${leagueName} — Single-game performances matching: ${filterDesc}`,
+                `Total qualifying games this season: ${totalGames}`,
+                `Players with qualifying game(s): ${playerCount}`,
+                ``,
+                ...playerEntries.map(([name, { team_name, games }]) => {
+                  const gameLines = games.map((g: any) => {
+                    const date = g.game_date ? new Date(g.game_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '?';
+                    const opp = g.hometeam && g.awayteam ? (g.hometeam === g.team_name ? g.awayteam : g.hometeam) : '?';
+                    return `  ${date} vs ${opp} — ${g.pts}pts · ${g.reb}reb · ${g.ast}ast`;
+                  }).join('\n');
+                  return `${name} (${team_name}) — ${games.length} qualifying game(s):\n${gameLines}`;
+                })
+              ].join('\n');
+
               if (totalGames === 1) {
                 const [name, { team_name, games }] = playerEntries[0];
                 const g = games[0];
                 const date = g.game_date ? new Date(g.game_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '?';
                 const opp = g.hometeam && g.awayteam ? (g.hometeam === g.team_name ? g.awayteam : g.hometeam) : '?';
-                return {
+                return aiEnhance(aiRawData, {
                   content: `### Only 1 Game Matches: ${filterDesc}\n\n**${name}** *(${team_name})* has the only ${filterDesc} performance this season — **${g.pts}pts · ${g.reb}reb · ${g.ast}ast** vs ${opp} on ${date}`,
                   suggestions: [`How is ${name} performing?`, 'Top scorers', 'Show me the standings'],
                   navigationButtons: [{ label: `${name}'s Profile`, id: playerSlug({ player_name: name }), type: 'player' as const }]
-                };
+                });
               }
 
-              return {
+              return aiEnhance(aiRawData, {
                 content: `### ${totalLabel} this season match: ${filterDesc}\n*${playerLabel} with qualifying game(s)*\n\n${rows}`,
                 suggestions: playerEntries.length > 0 ? [`How is ${playerEntries[0][0]} performing?`, 'Top scorers', 'Show me the standings'] : ['Top scorers', 'Show me the standings']
-              };
+              });
             }
           }
         }
