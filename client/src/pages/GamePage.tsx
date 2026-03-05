@@ -1,6 +1,6 @@
 import { useParams, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { TeamLogo } from "@/components/TeamLogo";
 import { GameSwitcherBar } from "@/components/GameSwitcherBar";
@@ -755,6 +755,33 @@ export default function GamePage() {
   const homeTeamRecord = computeRecord(homeTeamId);
   const awayTeamRecord = computeRecord(awayTeamId);
 
+  // Computed before early returns so hook order is stable
+  const homePlayerStats = playerStats?.filter(p => p.side === "1")
+    .sort((a, b) => (b.spoints || 0) - (a.spoints || 0)) || [];
+
+  const awayPlayerStats = playerStats?.filter(p => p.side === "2")
+    .sort((a, b) => (b.spoints || 0) - (a.spoints || 0)) || [];
+
+  const gameSuggestions = useMemo(() => {
+    const home = gameData?.hometeam || 'home team';
+    const away = gameData?.awayteam || 'away team';
+
+    const homePlayers = homePlayerStats.slice(0, 2).map(p => p.player_name).filter(Boolean) as string[];
+    const awayPlayers = awayPlayerStats.slice(0, 2).map(p => p.player_name).filter(Boolean) as string[];
+    const featuredPlayers = [...homePlayers.slice(0, 1), ...awayPlayers.slice(0, 1)];
+
+    const base = [
+      `How has ${home} been performing this season?`,
+      `Who are the top scorers for ${away}?`,
+      `Compare ${home} and ${away} rebounding stats`,
+      `What are ${home}'s shooting percentages this season?`,
+      `Which team has the better defence — ${home} or ${away}?`,
+    ];
+
+    const playerQs = featuredPlayers.map(name => `How many points is ${name} averaging this season?`);
+    return [...playerQs, ...base].slice(0, 5);
+  }, [gameData?.hometeam, gameData?.awayteam, homePlayerStats, awayPlayerStats]);
+
   if (gameLoading) {
     return (
       <div className="min-h-screen bg-[#fffaf1] dark:bg-neutral-950">
@@ -825,12 +852,6 @@ export default function GamePage() {
   
   const homeScore = homeTeamStats?.tot_spoints ?? null;
   const awayScore = awayTeamStats?.tot_spoints ?? null;
-
-  const homePlayerStats = playerStats?.filter(p => p.side === "1")
-    .sort((a, b) => (b.spoints || 0) - (a.spoints || 0)) || [];
-
-  const awayPlayerStats = playerStats?.filter(p => p.side === "2")
-    .sort((a, b) => (b.spoints || 0) - (a.spoints || 0)) || [];
 
   return (
     <div className="min-h-screen bg-[#fffaf1] dark:bg-neutral-950 text-slate-800 dark:text-white transition-colors">
@@ -1629,6 +1650,7 @@ export default function GamePage() {
           leagueId={gameData.league_id}
           leagueName={gameData.competitionname || 'League'}
           leagueSlug={leagueData?.slug}
+          suggestedQuestions={gameSuggestions}
         />
       )}
     </div>

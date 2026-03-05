@@ -25,9 +25,10 @@ interface LeagueChatbotProps {
   onResponseReceived?: (response: string) => void;
   isPanelMode?: boolean;
   isFloatingWidget?: boolean;
+  suggestedQuestions?: string[];
 }
 
-export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResponseReceived, isPanelMode = false, isFloatingWidget = false }: LeagueChatbotProps) {
+export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResponseReceived, isPanelMode = false, isFloatingWidget = false, suggestedQuestions: propSuggestedQuestions }: LeagueChatbotProps) {
   const { user, isLoading: authLoading } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
@@ -85,12 +86,12 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
     return () => { clearTimeout(showTimer); clearTimeout(hideTimer); };
   }, [isFloatingWidget, user]);
 
-  const suggestedQuestions = [
+  const suggestedQuestions = propSuggestedQuestions ?? [
     "Who are the top 3 teams right now?",
-    "Who does Jaron Thames play for?",
     "Who is the best rebounding team right now?",
     "Who are the most efficient players in the league?",
-    "Show me the top scorers this month"
+    "Show me the top scorers this season",
+    "Which team has the best defence?"
   ];
 
   const handleSendMessage = async (messageText?: string) => {
