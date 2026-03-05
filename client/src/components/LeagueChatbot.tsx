@@ -9,10 +9,20 @@ import { supabase } from '@/lib/supabase';
 import { useLocation } from 'wouter';
 import { getPythonBackendUrl } from '@/lib/backendUrl';
 
+const LOADING_PHRASES = [
+  'Checking the statbook…',
+  'Crunching the numbers…',
+  'Pulling up the data…',
+  'Scanning the game logs…',
+  'Analysing player records…',
+  'Reviewing the play-by-play…',
+];
+
 interface Message {
   id: string;
   type: 'user' | 'bot';
   content: string;
+  displayedContent?: string;
   timestamp: Date;
   suggestions?: string[];
   navigationButtons?: { label: string; id: string; type: 'player' | 'team' }[];
@@ -38,7 +48,9 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
   const [isActivelyUsed, setIsActivelyUsed] = useState(isPanelMode);
   const [isWidgetOpen, setIsWidgetOpen] = useState(false);
   const [showTooltip, setShowTooltip] = useState(false);
+  const [loadingPhraseIdx, setLoadingPhraseIdx] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const typingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [, setLocation] = useLocation(); // Hook for routing
 
   // Auto-expand when user starts interacting
@@ -76,6 +88,29 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
 
   useEffect(() => {
     scrollToBottom();
+  }, [messages]);
+
+  // Cycling loading phrase
+  useEffect(() => {
+    if (!isLoading) { setLoadingPhraseIdx(0); return; }
+    const id = setInterval(() => setLoadingPhraseIdx(i => (i + 1) % LOADING_PHRASES.length), 1800);
+    return () => clearInterval(id);
+  }, [isLoading]);
+
+  // Typewriter effect for incoming bot messages
+  useEffect(() => {
+    if (typingIntervalRef.current) { clearInterval(typingIntervalRef.current); typingIntervalRef.current = null; }
+    const typing = messages.find(m => m.displayedContent !== undefined && m.displayedContent.length < m.content.length);
+    if (!typing) return;
+    typingIntervalRef.current = setInterval(() => {
+      setMessages(prev => prev.map(m => {
+        if (m.id !== typing.id || m.displayedContent === undefined) return m;
+        const next = m.content.slice(0, (m.displayedContent.length) + 6);
+        return { ...m, displayedContent: next };
+      }));
+      scrollToBottom();
+    }, 10);
+    return () => { if (typingIntervalRef.current) clearInterval(typingIntervalRef.current); };
   }, [messages]);
 
   // Tooltip: show after 1.5s, auto-dismiss after 6s
@@ -116,6 +151,7 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
         id: (Date.now() + 1).toString(),
         type: 'bot',
         content: typeof response === 'string' ? response : response.content,
+        displayedContent: '',
         timestamp: new Date(),
         suggestions: typeof response === 'string' ? undefined : response.suggestions,
         navigationButtons: typeof response === 'string' ? undefined : response.navigationButtons
@@ -1524,12 +1560,15 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
                       }`}
                     >
                       <div className="prose prose-sm max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_li]:my-0.5 [&_h3]:text-sm [&_h3]:font-bold [&_h3]:mt-0 [&_h3]:mb-1 [&_strong]:font-semibold">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.type === 'bot' && message.displayedContent !== undefined ? message.displayedContent : message.content}</ReactMarkdown>
+                        {message.type === 'bot' && message.displayedContent !== undefined && message.displayedContent.length < message.content.length && (
+                          <span className="animate-pulse text-orange-400 font-bold">▌</span>
+                        )}
                       </div>
                     </div>
                     
                     {/* Suggestion buttons - compact for panel */}
-                    {message.type === 'bot' && message.suggestions && message.suggestions.length > 0 && (
+                    {message.type === 'bot' && message.suggestions && message.suggestions.length > 0 && (message.displayedContent === undefined || message.displayedContent.length >= message.content.length) && (
                       <div className="flex flex-wrap gap-1 mt-2">
                         {message.suggestions.slice(0, 2).map((suggestion, index) => (
                           <button
@@ -1576,11 +1615,8 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
                 <div className="flex gap-2 justify-start">
                   <Bot className="w-5 h-5 text-orange-500 mt-1 flex-shrink-0" />
                   <div className="bg-white text-slate-800 p-3 rounded-lg text-sm shadow-sm border border-slate-200">
-                    <div className="flex items-center gap-1">
-                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div>
-                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                    </div>
+                    <span className="text-orange-500 italic">{LOADING_PHRASES[loadingPhraseIdx]}</span>
+                    <span className="animate-pulse text-orange-400 font-bold ml-0.5">▌</span>
                   </div>
                 </div>
               )}
@@ -1673,10 +1709,13 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
                             : 'bg-slate-50 text-slate-800 border border-slate-200'
                         }`}>
                           <div className="prose prose-xs max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_p]:my-1 [&_ul]:my-1 [&_li]:my-0 [&_h3]:text-xs [&_h3]:font-bold [&_h3]:mt-0 [&_h3]:mb-1">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.type === 'bot' && message.displayedContent !== undefined ? message.displayedContent : message.content}</ReactMarkdown>
+                            {message.type === 'bot' && message.displayedContent !== undefined && message.displayedContent.length < message.content.length && (
+                              <span className="animate-pulse text-orange-400 font-bold">▌</span>
+                            )}
                           </div>
                         </div>
-                        {message.type === 'bot' && message.suggestions && message.suggestions.length > 0 && (
+                        {message.type === 'bot' && message.suggestions && message.suggestions.length > 0 && (message.displayedContent === undefined || message.displayedContent.length >= message.content.length) && (
                           <div className="flex flex-wrap gap-1 mt-1.5">
                             {message.suggestions.slice(0, 3).map((s, i) => (
                               <button
@@ -1717,11 +1756,8 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
                     <div className="flex gap-2 justify-start">
                       <Bot className="w-5 h-5 text-orange-500 mt-1 flex-shrink-0" />
                       <div className="bg-slate-50 border border-slate-200 p-2.5 rounded-lg">
-                        <div className="flex items-center gap-1">
-                          <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" />
-                          <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-                          <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
-                        </div>
+                        <span className="text-orange-500 italic text-xs">{LOADING_PHRASES[loadingPhraseIdx]}</span>
+                        <span className="animate-pulse text-orange-400 font-bold ml-0.5">▌</span>
                       </div>
                     </div>
                   )}
@@ -1937,7 +1973,10 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
                       }`}
                     >
                       <div className="prose prose-sm max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_p]:my-1.5 [&_ul]:my-1.5 [&_ol]:my-1.5 [&_li]:my-0.5 [&_h3]:text-base [&_h3]:font-bold [&_h3]:mt-0 [&_h3]:mb-2 [&_strong]:font-semibold">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.type === 'bot' && message.displayedContent !== undefined ? message.displayedContent : message.content}</ReactMarkdown>
+                        {message.type === 'bot' && message.displayedContent !== undefined && message.displayedContent.length < message.content.length && (
+                          <span className="animate-pulse text-orange-400 font-bold">▌</span>
+                        )}
                       </div>
                       <div className={`text-sm mt-2 ${
                         message.type === 'user' ? 'text-orange-100' : 'text-slate-500'
@@ -2019,11 +2058,8 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
                 <div className="flex gap-3 justify-start">
                   <Bot className="w-7 h-7 text-orange-500 mt-1 flex-shrink-0" />
                   <div className="bg-white text-slate-800 p-5 rounded-lg text-base shadow-sm border border-slate-200">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 bg-slate-400 rounded-full animate-bounce"></div>
-                      <div className="w-3 h-3 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                      <div className="w-3 h-3 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                    </div>
+                    <span className="text-orange-500 italic">{LOADING_PHRASES[loadingPhraseIdx]}</span>
+                    <span className="animate-pulse text-orange-400 font-bold ml-0.5">▌</span>
                   </div>
                 </div>
               )}
