@@ -280,18 +280,23 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
         const standings = computeStandings();
         if (standings.length > 0) {
           const displayCount = topNTeamsMatch ? parseInt(topNTeamsMatch[1]) : standings.length;
-          const rows = standings.slice(0, displayCount).map(([team, r], i) => {
+          const [leader] = standings[0];
+          const title = topNTeamsMatch ? `Top ${displayCount} Teams — ${leagueName}` : `${leagueName} Standings`;
+          const rawRows = standings.slice(0, displayCount).map(([team, r], i) => {
+            const gp = r.wins + r.losses;
+            const pct = gp > 0 ? ((r.wins / gp) * 100).toFixed(0) : '0';
+            return `${i + 1}. ${team} — ${r.wins}W-${r.losses}L (${pct}% win rate, ${gp} games played)`;
+          }).join('\n');
+          const fallbackRows = standings.slice(0, displayCount).map(([team, r], i) => {
             const gp = r.wins + r.losses;
             const pct = gp > 0 ? ((r.wins / gp) * 100).toFixed(0) : '0';
             return `${i + 1}. **${team}** — ${r.wins}W–${r.losses}L (${pct}%)`;
           }).join('\n');
-          const [leader] = standings[0];
-          const title = topNTeamsMatch ? `Top ${displayCount} Teams — ${leagueName}` : `${leagueName} Standings`;
-          return {
-            content: `### ${title}\n\n${rows}`,
+          return aiEnhance(`${leagueName} Current Standings:\n\n${rawRows}`, {
+            content: `### ${title}\n\n${fallbackRows}`,
             suggestions: [`Who are ${leader}'s top players?`, 'Top scorers in the league', 'Recent game results'],
             navigationButtons: [{ label: `${leader}'s Record`, id: leader, type: 'team' as const }]
-          };
+          });
         }
       }
 
@@ -300,15 +305,20 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
                'game result', 'what happened', 'scores', 'game score', 'last match',
                'recent match', 'show me games', 'show games'])) {
         if (gamesData.length > 0) {
-          const rows = gamesData.slice(0, 8).map(g => {
+          const rawRows = gamesData.slice(0, 8).map(g => {
+            const date = g.game_date ? new Date(g.game_date).toLocaleDateString('en-GB') : 'TBD';
+            const winner = g.home_score > g.away_score ? g.home_team : g.away_team;
+            return `${date}: ${g.home_team} ${g.home_score} - ${g.away_score} ${g.away_team} (Winner: ${winner})`;
+          }).join('\n');
+          const fallbackRows = gamesData.slice(0, 8).map(g => {
             const date = g.game_date ? new Date(g.game_date).toLocaleDateString('en-GB') : 'TBD';
             const winner = g.home_score > g.away_score ? g.home_team : g.away_team;
             return `**${g.home_team}** ${g.home_score} – ${g.away_score} **${g.away_team}** *(${date})* ✓ ${winner}`;
           }).join('\n');
-          return {
-            content: `### Recent Results — ${leagueName}\n\n${rows}`,
+          return aiEnhance(`${leagueName} Recent Game Results:\n\n${rawRows}`, {
+            content: `### Recent Results — ${leagueName}\n\n${fallbackRows}`,
             suggestions: ['Who are the top scorers?', 'Show me the standings', 'Top rebounders']
-          };
+          });
         }
       }
 
@@ -320,14 +330,15 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
         const pool = tf ? playersData.filter((p: any) => p.team_name?.toLowerCase() === tf.name.toLowerCase()) : playersData;
         const sorted = [...pool].sort((a: any, b: any) => (b.total_pts ?? 0) - (a.total_pts ?? 0)).slice(0, 5);
         if (sorted.length > 0) {
-          const rows = sorted.map((p: any, i: number) => `${i + 1}. **${p.player_name}** *(${p.team_name})* — ${p.total_pts ?? 0} pts`).join('\n');
           const top = sorted[0];
           const title = tf ? `Scoring Leaders — ${tf.name}` : `Scoring Leaders — ${leagueName}`;
-          return {
-            content: `### ${title}\n\n${rows}`,
+          const rawRows = sorted.map((p: any, i: number) => `${i + 1}. ${p.player_name} (${p.team_name}) — ${p.total_pts ?? 0} pts total, ${p.avg_pts != null ? Number(p.avg_pts).toFixed(1) : '?'} ppg`).join('\n');
+          const fallbackRows = sorted.map((p: any, i: number) => `${i + 1}. **${p.player_name}** *(${p.team_name})* — ${p.total_pts ?? 0} pts`).join('\n');
+          return aiEnhance(`${leagueName} Scoring Leaders:\n\n${rawRows}`, {
+            content: `### ${title}\n\n${fallbackRows}`,
             suggestions: [`How is ${top.player_name} performing?`, 'Top rebounders', 'Show me the standings'],
             navigationButtons: [{ label: `${top.player_name}'s Profile`, id: playerSlug(top), type: 'player' as const }]
-          };
+          });
         }
         if (tf) return { content: `No scoring data found for **${tf.name}** yet.`, suggestions: ['Show me the standings', 'Top scorers in the league'] };
       }
@@ -340,14 +351,15 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
         const pool = tf ? playersData.filter((p: any) => p.team_name?.toLowerCase() === tf.name.toLowerCase()) : playersData;
         const sorted = [...pool].sort((a: any, b: any) => (b.total_reb ?? 0) - (a.total_reb ?? 0)).slice(0, 5);
         if (sorted.length > 0) {
-          const rows = sorted.map((p: any, i: number) => `${i + 1}. **${p.player_name}** *(${p.team_name})* — ${p.total_reb ?? 0} reb`).join('\n');
           const top = sorted[0];
           const title = tf ? `Rebounding Leaders — ${tf.name}` : `Rebounding Leaders — ${leagueName}`;
-          return {
-            content: `### ${title}\n\n${rows}`,
+          const rawRows = sorted.map((p: any, i: number) => `${i + 1}. ${p.player_name} (${p.team_name}) — ${p.total_reb ?? 0} total reb, ${p.avg_reb != null ? Number(p.avg_reb).toFixed(1) : '?'} rpg`).join('\n');
+          const fallbackRows = sorted.map((p: any, i: number) => `${i + 1}. **${p.player_name}** *(${p.team_name})* — ${p.total_reb ?? 0} reb`).join('\n');
+          return aiEnhance(`${leagueName} Rebounding Leaders:\n\n${rawRows}`, {
+            content: `### ${title}\n\n${fallbackRows}`,
             suggestions: [`How is ${top.player_name} performing?`, 'Top scorers', 'Top assisters'],
             navigationButtons: [{ label: `${top.player_name}'s Profile`, id: playerSlug(top), type: 'player' as const }]
-          };
+          });
         }
         if (tf) return { content: `No rebounding data found for **${tf.name}** yet.`, suggestions: ['Show me the standings', 'Top rebounders in the league'] };
       }
@@ -359,14 +371,15 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
         const pool = tf ? playersData.filter((p: any) => p.team_name?.toLowerCase() === tf.name.toLowerCase()) : playersData;
         const sorted = [...pool].sort((a: any, b: any) => (b.total_ast ?? 0) - (a.total_ast ?? 0)).slice(0, 5);
         if (sorted.length > 0) {
-          const rows = sorted.map((p: any, i: number) => `${i + 1}. **${p.player_name}** *(${p.team_name})* — ${p.total_ast ?? 0} ast`).join('\n');
           const top = sorted[0];
           const title = tf ? `Assist Leaders — ${tf.name}` : `Assist Leaders — ${leagueName}`;
-          return {
-            content: `### ${title}\n\n${rows}`,
+          const rawRows = sorted.map((p: any, i: number) => `${i + 1}. ${p.player_name} (${p.team_name}) — ${p.total_ast ?? 0} total ast, ${p.avg_ast != null ? Number(p.avg_ast).toFixed(1) : '?'} apg`).join('\n');
+          const fallbackRows = sorted.map((p: any, i: number) => `${i + 1}. **${p.player_name}** *(${p.team_name})* — ${p.total_ast ?? 0} ast`).join('\n');
+          return aiEnhance(`${leagueName} Assist Leaders:\n\n${rawRows}`, {
+            content: `### ${title}\n\n${fallbackRows}`,
             suggestions: [`How is ${top.player_name} performing?`, 'Top scorers', 'Top rebounders'],
             navigationButtons: [{ label: `${top.player_name}'s Profile`, id: playerSlug(top), type: 'player' as const }]
-          };
+          });
         }
         if (tf) return { content: `No assist data found for **${tf.name}** yet.`, suggestions: ['Show me the standings', 'Top assisters in the league'] };
       }
@@ -378,14 +391,15 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
         const pool = tf ? playersData.filter((p: any) => p.team_name?.toLowerCase() === tf.name.toLowerCase()) : playersData;
         const sorted = [...pool].sort((a: any, b: any) => (b.total_stl ?? 0) - (a.total_stl ?? 0)).slice(0, 5);
         if (sorted.length > 0) {
-          const rows = sorted.map((p: any, i: number) => `${i + 1}. **${p.player_name}** *(${p.team_name})* — ${p.total_stl ?? 0} stl`).join('\n');
           const top = sorted[0];
           const title = tf ? `Steal Leaders — ${tf.name}` : `Steal Leaders — ${leagueName}`;
-          return {
-            content: `### ${title}\n\n${rows}`,
+          const rawRows = sorted.map((p: any, i: number) => `${i + 1}. ${p.player_name} (${p.team_name}) — ${p.total_stl ?? 0} steals, ${p.avg_stl != null ? Number(p.avg_stl).toFixed(1) : '?'} spg`).join('\n');
+          const fallbackRows = sorted.map((p: any, i: number) => `${i + 1}. **${p.player_name}** *(${p.team_name})* — ${p.total_stl ?? 0} stl`).join('\n');
+          return aiEnhance(`${leagueName} Steal Leaders:\n\n${rawRows}`, {
+            content: `### ${title}\n\n${fallbackRows}`,
             suggestions: [`How is ${top.player_name} performing?`, 'Top blockers', 'Top scorers'],
             navigationButtons: [{ label: `${top.player_name}'s Profile`, id: playerSlug(top), type: 'player' as const }]
-          };
+          });
         }
         if (tf) return { content: `No steal data found for **${tf.name}** yet.`, suggestions: ['Show me the standings', 'Top defenders in the league'] };
       }
@@ -397,14 +411,15 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
         const pool = tf ? playersData.filter((p: any) => p.team_name?.toLowerCase() === tf.name.toLowerCase()) : playersData;
         const sorted = [...pool].sort((a: any, b: any) => (b.total_blk ?? 0) - (a.total_blk ?? 0)).slice(0, 5);
         if (sorted.length > 0) {
-          const rows = sorted.map((p: any, i: number) => `${i + 1}. **${p.player_name}** *(${p.team_name})* — ${p.total_blk ?? 0} blk`).join('\n');
           const top = sorted[0];
           const title = tf ? `Block Leaders — ${tf.name}` : `Block Leaders — ${leagueName}`;
-          return {
-            content: `### ${title}\n\n${rows}`,
+          const rawRows = sorted.map((p: any, i: number) => `${i + 1}. ${p.player_name} (${p.team_name}) — ${p.total_blk ?? 0} blocks, ${p.avg_blk != null ? Number(p.avg_blk).toFixed(1) : '?'} bpg`).join('\n');
+          const fallbackRows = sorted.map((p: any, i: number) => `${i + 1}. **${p.player_name}** *(${p.team_name})* — ${p.total_blk ?? 0} blk`).join('\n');
+          return aiEnhance(`${leagueName} Block Leaders:\n\n${rawRows}`, {
+            content: `### ${title}\n\n${fallbackRows}`,
             suggestions: [`How is ${top.player_name} performing?`, 'Top stealers', 'Top scorers'],
             navigationButtons: [{ label: `${top.player_name}'s Profile`, id: playerSlug(top), type: 'player' as const }]
-          };
+          });
         }
         if (tf) return { content: `No block data found for **${tf.name}** yet.`, suggestions: ['Show me the standings', 'Top shot blockers in the league'] };
       }
@@ -419,14 +434,15 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
           eff: (p.total_pts ?? 0) + (p.total_reb ?? 0) + (p.total_ast ?? 0) + (p.total_stl ?? 0) + (p.total_blk ?? 0)
         })).sort((a: any, b: any) => b.eff - a.eff).slice(0, 5);
         if (sorted.length > 0) {
-          const rows = sorted.map((p: any, i: number) => `${i + 1}. **${p.player_name}** *(${p.team_name})* — ${p.eff} total *(${p.total_pts ?? 0}pts / ${p.total_reb ?? 0}reb / ${p.total_ast ?? 0}ast)*`).join('\n');
           const top = sorted[0];
           const title = tf ? `Most Efficient Players — ${tf.name}` : `Most Efficient Players — ${leagueName}`;
-          return {
-            content: `### ${title}\n*Points + Rebounds + Assists + Steals + Blocks*\n\n${rows}`,
+          const rawRows = sorted.map((p: any, i: number) => `${i + 1}. ${p.player_name} (${p.team_name}) — ${p.total_pts ?? 0} pts / ${p.total_reb ?? 0} reb / ${p.total_ast ?? 0} ast / ${p.total_stl ?? 0} stl / ${p.total_blk ?? 0} blk`).join('\n');
+          const fallbackRows = sorted.map((p: any, i: number) => `${i + 1}. **${p.player_name}** *(${p.team_name})* — ${p.eff} total *(${p.total_pts ?? 0}pts / ${p.total_reb ?? 0}reb / ${p.total_ast ?? 0}ast)*`).join('\n');
+          return aiEnhance(`${leagueName} Most Productive Players (pts+reb+ast+stl+blk totals):\n\n${rawRows}`, {
+            content: `### ${title}\n*Points + Rebounds + Assists + Steals + Blocks*\n\n${fallbackRows}`,
             suggestions: [`How is ${top.player_name} performing?`, 'Top scorers', 'Top rebounders'],
             navigationButtons: [{ label: `${top.player_name}'s Profile`, id: playerSlug(top), type: 'player' as const }]
-          };
+          });
         }
       }
 
@@ -472,20 +488,19 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
             .filter((p: any) => p.team_name?.toLowerCase() === teamFromStats.name.toLowerCase())
             .sort((a: any, b: any) => (b.total_pts ?? 0) - (a.total_pts ?? 0))
             .slice(0, 5);
-          const playerRows = teamPlayers.map((p: any, i: number) => `${i + 1}. **${p.player_name}** — ${p.total_pts ?? 0}pts · ${p.total_reb ?? 0}reb · ${p.total_ast ?? 0}ast`).join('\n');
           const standings = computeStandings();
           const teamStanding = standings.findIndex(([t]) => t.toLowerCase() === teamFromStats.name.toLowerCase());
+          const standingPos = teamStanding >= 0 ? `#${teamStanding + 1} in the league` : 'standing unknown';
+          const fg = teamStats?.season_fg_pct != null ? `${Number(teamStats.season_fg_pct).toFixed(1)}%` : 'N/A';
+          const tp = teamStats?.season_tp_pct != null ? `${Number(teamStats.season_tp_pct).toFixed(1)}%` : 'N/A';
+          const rawData = `${teamFromStats.name} — ${standingPos}, ${teamStats?.games_played ?? '?'} games played\nSeason averages: ${teamStats?.avg_pts != null ? Number(teamStats.avg_pts).toFixed(1) : 'N/A'} ppg, ${teamStats?.avg_reb != null ? Number(teamStats.avg_reb).toFixed(1) : 'N/A'} rpg, ${teamStats?.avg_ast != null ? Number(teamStats.avg_ast).toFixed(1) : 'N/A'} apg, FG% ${fg}, 3PT% ${tp}\nTop players: ${teamPlayers.map(p => `${p.player_name} (${p.total_pts ?? 0}pts, ${p.total_reb ?? 0}reb, ${p.total_ast ?? 0}ast)`).join('; ')}`;
+          const playerRows = teamPlayers.map((p: any, i: number) => `${i + 1}. **${p.player_name}** — ${p.total_pts ?? 0}pts · ${p.total_reb ?? 0}reb · ${p.total_ast ?? 0}ast`).join('\n');
           const standingText = teamStanding >= 0 ? `*League Position: #${teamStanding + 1}*` : '';
-          let seasonStatsBlock = '';
-          if (teamStats) {
-            const fg = teamStats.season_fg_pct != null ? `${Number(teamStats.season_fg_pct).toFixed(1)}%` : 'N/A';
-            const tp = teamStats.season_tp_pct != null ? `${Number(teamStats.season_tp_pct).toFixed(1)}%` : 'N/A';
-            seasonStatsBlock = `\n\n**Season Averages** *(${teamStats.games_played ?? '?'} games)*\n- **Points:** ${teamStats.avg_pts != null ? Number(teamStats.avg_pts).toFixed(1) : 'N/A'} ppg\n- **Rebounds:** ${teamStats.avg_reb != null ? Number(teamStats.avg_reb).toFixed(1) : 'N/A'} rpg\n- **Assists:** ${teamStats.avg_ast != null ? Number(teamStats.avg_ast).toFixed(1) : 'N/A'} apg\n- **3-Pointers:** ${teamStats.avg_tpm != null ? Number(teamStats.avg_tpm).toFixed(1) : 'N/A'}/game · 3PT%: ${tp}\n- **FG%:** ${fg} · Pts in Paint: ${teamStats.avg_pitp != null ? Number(teamStats.avg_pitp).toFixed(1) : 'N/A'} ppg`;
-          }
-          return {
+          const seasonStatsBlock = teamStats ? `\n\n**Season Averages** *(${teamStats.games_played ?? '?'} games)*\n- **Points:** ${teamStats.avg_pts != null ? Number(teamStats.avg_pts).toFixed(1) : 'N/A'} ppg\n- **Rebounds:** ${teamStats.avg_reb != null ? Number(teamStats.avg_reb).toFixed(1) : 'N/A'} rpg\n- **Assists:** ${teamStats.avg_ast != null ? Number(teamStats.avg_ast).toFixed(1) : 'N/A'} apg\n- **3-Pointers:** ${teamStats.avg_tpm != null ? Number(teamStats.avg_tpm).toFixed(1) : 'N/A'}/game · 3PT%: ${tp}\n- **FG%:** ${fg} · Pts in Paint: ${teamStats.avg_pitp != null ? Number(teamStats.avg_pitp).toFixed(1) : 'N/A'} ppg` : '';
+          return aiEnhance(rawData, {
             content: `### ${teamFromStats.name}\n${standingText}${seasonStatsBlock}\n\n**Top Players**\n${playerRows || 'No player data available'}`,
             suggestions: [`Who are the top scorers for ${teamFromStats.name}?`, `What are ${teamFromStats.name}'s advanced stats?`, 'Show me the standings']
-          };
+          });
         }
 
         const player = findPlayer(name);
@@ -504,16 +519,12 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
           const fgPct = player.season_fg_pct != null ? `${player.season_fg_pct.toFixed(1)}` : (fga > 0 ? ((fgm/fga)*100).toFixed(1) : 'N/A');
           const tpPct = player.season_tp_pct != null ? `${player.season_tp_pct.toFixed(1)}` : (tpa > 0 ? ((tpm/tpa)*100).toFixed(1) : 'N/A');
           const ftPct = player.season_ft_pct != null ? `${player.season_ft_pct.toFixed(1)}` : (fta > 0 ? ((ftm/fta)*100).toFixed(1) : 'N/A');
-          const badge = pts >= 200 ? 'Strong scorer who can put up big numbers!'
-            : reb >= 100 ? 'Dominant presence in the paint!'
-            : ast >= 60 ? 'Elite playmaker with great court vision!'
-            : stl >= 30 ? 'Disruptive defender who creates turnovers!'
-            : 'Well-rounded contributor on both ends!';
-          return {
-            content: `### ${player.player_name}\n*${player.team_name} · ${player.games_played ?? '?'} games*\n\n**Season Totals**\n- **Points:** ${pts}\n- **Rebounds:** ${reb}\n- **Assists:** ${ast}\n- **Steals:** ${stl}\n- **Blocks:** ${blk}\n\n**Shooting**\n- **FG:** ${fgm}/${fga} (${fgPct}%)\n- **3PT:** ${tpm}/${tpa} (${tpPct}%)\n- **FT:** ${ftm}/${fta} (${ftPct}%)\n\n*${badge}*`,
+          const rawData = `${player.player_name} (${player.team_name}) — ${player.games_played ?? '?'} games\nSeason totals: ${pts} pts, ${reb} reb, ${ast} ast, ${stl} stl, ${blk} blk\nShooting: FG ${fgm}/${fga} (${fgPct}%), 3PT ${tpm}/${tpa} (${tpPct}%), FT ${ftm}/${fta} (${ftPct}%)\nAverages: ${player.avg_pts != null ? Number(player.avg_pts).toFixed(1) : '?'} ppg, ${player.avg_reb != null ? Number(player.avg_reb).toFixed(1) : '?'} rpg, ${player.avg_ast != null ? Number(player.avg_ast).toFixed(1) : '?'} apg`;
+          return aiEnhance(rawData, {
+            content: `### ${player.player_name}\n*${player.team_name} · ${player.games_played ?? '?'} games*\n\n**Season Totals**\n- **Points:** ${pts}\n- **Rebounds:** ${reb}\n- **Assists:** ${ast}\n- **Steals:** ${stl}\n- **Blocks:** ${blk}\n\n**Shooting**\n- **FG:** ${fgm}/${fga} (${fgPct}%)\n- **3PT:** ${tpm}/${tpa} (${tpPct}%)\n- **FT:** ${ftm}/${fta} (${ftPct}%)`,
             suggestions: [`Who are ${player.team_name}'s top players?`, 'Top scorers in the league', 'Show me the standings'],
             navigationButtons: [{ label: `${player.player_name}'s Profile`, id: playerSlug(player), type: 'player' as const }]
-          };
+          });
         }
         const sample = playersData.slice(0, 5).map((p: any) => `• ${p.player_name} (${p.team_name})`).join('\n');
         return {
@@ -592,6 +603,31 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
           }
         }
         return line;
+      };
+
+      // ── AI ENHANCE HELPER ──────────────────────────────────────────────
+      // Sends structured raw data to the Python/OpenAI backend to get a
+      // well-formatted, NBA-style narrative response. Falls back to the
+      // pre-built content if the AI call fails or times out.
+      type ChatbotResponse = { content: string; suggestions?: string[]; navigationButtons?: { label: string; id: string; type: 'player' | 'team' }[] };
+      const aiEnhance = async (rawData: string, fallback: ChatbotResponse): Promise<ChatbotResponse> => {
+        try {
+          const BASE = getPythonBackendUrl();
+          const resp = await fetch(`${BASE}/api/chat/league`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ question, league_id: leagueId, league_data: rawData }),
+            signal: AbortSignal.timeout(15000)
+          });
+          if (resp.ok) {
+            const d = await resp.json();
+            if (d.response) return {
+              content: d.response,
+              suggestions: d.suggestions?.length ? d.suggestions : fallback.suggestions,
+              navigationButtons: fallback.navigationButtons
+            };
+          }
+        } catch {}
+        return fallback;
       };
 
       // ── TEAM COMPARISON ────────────────────────────────────────────────

@@ -106,19 +106,29 @@ def chat_league():
 
         if league_data:
             system_prompt = (
-                "You are an expert basketball league analyst and coaching assistant. "
-                "You have been provided with REAL current league data below — use it to answer questions accurately. "
-                "Always reference actual player names, teams, and stats from the data provided. "
-                "Be concise and specific. If asked for top scorers or leaders, list them by name with their numbers. "
-                "Do not make up or estimate stats — only use what is in the data provided.\n\n"
+                "You are an expert basketball league analyst for a professional league app, similar to the NBA app's Ask NBA feature.\n\n"
+                "RESPONSE FORMAT — follow this structure exactly:\n"
+                "1. Open with ONE context sentence naming the league/team/stat being discussed (e.g. 'As of this season, the British Championship Basketball league leaders in scoring are:')\n"
+                "2. Use a bullet list for rankings/stats — bold the player or team name, put their team in parentheses if relevant, then the stat on the same line\n"
+                "   Example: • **Xavier Wilson** (Milton Keynes Breakers) — 283 pts, 14.2 ppg\n"
+                "3. Close with 1-2 sentences of insight — e.g. how tight the race is, who is on a streak, a noteworthy trend\n"
+                "4. Keep total response under 200 words. Be punchy and specific — no fluff.\n\n"
+                "RULES:\n"
+                "- Only use stats from the data provided. Never invent numbers.\n"
+                "- Bold all player and team names.\n"
+                "- Use plain English, not overly formal language.\n\n"
+                "At the very end of your response (after the insight), append exactly this line:\n"
+                "SUGGESTIONS: <question 1> | <question 2> | <question 3>\n"
+                "These should be 3 natural follow-up questions a fan would ask, specific to the players/teams you mentioned.\n\n"
                 f"CURRENT LEAGUE DATA:\n{league_data}"
             )
             user_message = question
         else:
             system_prompt = (
-                "You are an expert basketball league analyst and coaching assistant. "
+                "You are an expert basketball league analyst. "
                 "Help with performance analysis, player statistics, team strategies, and league insights. "
-                "Be concise and data-driven."
+                "Be concise and data-driven. Bold all player and team names. "
+                "At the very end append: SUGGESTIONS: <q1> | <q2> | <q3>"
             )
             user_message = f"Question about league {league_id}: {question}"
 
@@ -128,17 +138,22 @@ def chat_league():
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_message}
             ],
-            max_tokens=500
+            max_tokens=700
         )
 
-        answer = completion.choices[0].message.content
+        raw_answer = completion.choices[0].message.content
 
-        # Generate dynamic follow-up suggestions based on the answer
-        suggestions = [
-            'Who are the top scorers?',
-            'Show me recent game results',
-            'Who is the most efficient player?'
-        ]
+        # Parse SUGGESTIONS out of the response
+        suggestions = []
+        answer = raw_answer
+        if 'SUGGESTIONS:' in raw_answer:
+            parts = raw_answer.rsplit('SUGGESTIONS:', 1)
+            answer = parts[0].strip()
+            suggestion_line = parts[1].strip()
+            suggestions = [s.strip() for s in suggestion_line.split('|') if s.strip()][:3]
+
+        if not suggestions:
+            suggestions = ['Who are the top scorers?', 'Show me recent game results', 'Who is the most efficient player?']
 
         return jsonify({
             'response': answer,
