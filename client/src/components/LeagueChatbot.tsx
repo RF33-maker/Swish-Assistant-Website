@@ -755,7 +755,7 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
             const resp = await fetch(`${BASE}/api/chat/league`, {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ question, league_id: leagueId, league_data: context }),
-              signal: AbortSignal.timeout(15000)
+              signal: AbortSignal.timeout(25000)
             });
             if (resp.ok) { const d = await resp.json(); if (d.response) return { content: d.response, suggestions: d.suggestions || [] }; }
           } catch {}
@@ -952,7 +952,7 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
               const resp = await fetch(`${BASE}/api/chat/league`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ question, league_id: leagueId, league_data: context }),
-                signal: AbortSignal.timeout(15000)
+                signal: AbortSignal.timeout(25000)
               });
               if (resp.ok) { const d = await resp.json(); if (d.response) return { content: d.response, suggestions: d.suggestions || [] }; }
             } catch {}
@@ -983,7 +983,7 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
               const resp = await fetch(`${BASE}/api/chat/league`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ question, league_id: leagueId, league_data: context }),
-                signal: AbortSignal.timeout(15000)
+                signal: AbortSignal.timeout(25000)
               });
               if (resp.ok) { const d = await resp.json(); if (d.response) return { content: d.response, suggestions: d.suggestions || [], navigationButtons: [{ label: `${foundPlayer.player_name}'s Profile`, id: playerSlug(foundPlayer), type: 'player' as const }] }; }
             } catch {}
@@ -1457,7 +1457,7 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ question, league_id: leagueId, league_data: leagueDataContext }),
-          signal: AbortSignal.timeout(15000)
+          signal: AbortSignal.timeout(25000)
         });
         if (response.ok) {
           const data = await response.json();
@@ -1619,7 +1619,7 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
                           : 'bg-white text-slate-800 shadow-sm border border-slate-200'
                       }`}
                     >
-                      <div className="prose prose-xs max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_p]:my-0.5 [&_ul]:my-0.5 [&_ol]:my-0.5 [&_li]:my-0 [&_h3]:text-xs [&_h3]:font-semibold [&_h3]:mt-0 [&_h3]:mb-0.5 [&_strong]:font-semibold [&_table]:text-xs">
+                      <div className="prose prose-sm max-w-none text-xs [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_p]:my-0.5 [&_p]:text-xs [&_ul]:my-0.5 [&_ul]:text-xs [&_ol]:my-0.5 [&_ol]:text-xs [&_li]:my-0 [&_li]:text-xs [&_h3]:text-xs [&_h3]:font-semibold [&_h3]:mt-0 [&_h3]:mb-0.5 [&_strong]:font-semibold [&_table]:text-xs [&_td]:text-xs [&_th]:text-xs">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.type === 'bot' && message.displayedContent !== undefined ? message.displayedContent : message.content}</ReactMarkdown>
                         {message.type === 'bot' && message.displayedContent !== undefined && message.displayedContent.length < message.content.length && (
                           <span className="animate-pulse text-orange-400 font-bold">▌</span>
@@ -1768,7 +1768,7 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
                             ? 'bg-orange-500 text-white'
                             : 'bg-slate-50 text-slate-800 border border-slate-200'
                         }`}>
-                          <div className="prose prose-xs max-w-none [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_p]:my-1 [&_ul]:my-1 [&_li]:my-0 [&_h3]:text-xs [&_h3]:font-bold [&_h3]:mt-0 [&_h3]:mb-1">
+                          <div className="prose prose-sm max-w-none text-xs [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_p]:my-0.5 [&_p]:text-xs [&_ul]:my-0.5 [&_ul]:text-xs [&_ol]:my-0.5 [&_li]:my-0 [&_li]:text-xs [&_h3]:text-xs [&_h3]:font-bold [&_h3]:mt-0 [&_h3]:mb-0.5 [&_strong]:font-semibold [&_table]:text-xs [&_td]:text-xs [&_th]:text-xs">
                             <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.type === 'bot' && message.displayedContent !== undefined ? message.displayedContent : message.content}</ReactMarkdown>
                             {message.type === 'bot' && message.displayedContent !== undefined && message.displayedContent.length < message.content.length && (
                               <span className="animate-pulse text-orange-400 font-bold">▌</span>
