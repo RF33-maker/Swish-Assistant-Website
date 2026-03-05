@@ -8,6 +8,7 @@ import { isGameSlug, parseGameSlug } from "@/lib/gameSlug";
 import { ArrowLeft, Clock, MapPin, Calendar, Users, TrendingUp } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import LeagueChatbot from "@/components/LeagueChatbot";
 
 interface GameSchedule {
   game_key: string;
@@ -1620,6 +1621,16 @@ export default function GamePage() {
           </div>
         </div>
       </div>
+
+      {/* Floating AI assistant — query stats without leaving the game */}
+      {gameData?.league_id && (
+        <LeagueChatbot
+          isFloatingWidget
+          leagueId={gameData.league_id}
+          leagueName={gameData.competitionname || 'League'}
+          leagueSlug={leagueData?.slug}
+        />
+      )}
     </div>
   );
 }
