@@ -558,6 +558,123 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
         return line;
       };
 
+      // ── TEAM COMPARISON ────────────────────────────────────────────────
+      const findTwoTeamsInQuestion = (): [string, string] | null => {
+        const found: string[] = [];
+        const sortedNames = [...uniqueTeamNames].sort((a, b) => b.length - a.length);
+        for (const tn of sortedNames) {
+          if (q.includes(tn.toLowerCase()) && !found.includes(tn)) found.push(tn);
+          if (found.length === 2) break;
+        }
+        if (found.length < 2) {
+          for (const tn of sortedNames) {
+            if (found.includes(tn)) continue;
+            const parts = tn.toLowerCase().split(' ').filter((w: string) => w.length >= 4);
+            if (parts.some((part: string) => q.includes(part))) found.push(tn);
+            if (found.length === 2) break;
+          }
+        }
+        return found.length === 2 ? [found[0], found[1]] : null;
+      };
+
+      const isCompareQuery = is(['compare', 'head to head', 'head-to-head']) ||
+        /\bvs\.?\s/.test(q) || !!q.match(/compare .+ (and|vs|versus) .+/);
+
+      if (isCompareQuery) {
+        const twoteams = findTwoTeamsInQuestion();
+        if (twoteams) {
+          const [teamA, teamB] = twoteams;
+          const cmpStat = detectStat();
+
+          const [{ data: gamesA }, { data: gamesB }] = await Promise.all([
+            supabase
+              .from('v_team_game_log')
+              .select('game_key, game_date, pts, reb, ast, stl, blk, tov, fgm, fga, fg_pct, tpm, tpa, tp_pct, hometeam, awayteam')
+              .eq('league_id', leagueId)
+              .ilike('team_name', `%${teamA}%`)
+              .order('game_date', { ascending: false })
+              .limit(20),
+            supabase
+              .from('v_team_game_log')
+              .select('game_key, game_date, pts, reb, ast, stl, blk, tov, fgm, fga, fg_pct, tpm, tpa, tp_pct, hometeam, awayteam')
+              .eq('league_id', leagueId)
+              .ilike('team_name', `%${teamB}%`)
+              .order('game_date', { ascending: false })
+              .limit(20)
+          ]);
+
+          const h2hGames = (gamesA || []).filter((g: any) => {
+            const opp = ((g.hometeam || '') + ' ' + (g.awayteam || '')).toLowerCase();
+            return opp.includes(teamB.toLowerCase());
+          });
+
+          const statsA = teamsData.find((t: any) => t.team_name?.toLowerCase() === teamA.toLowerCase());
+          const statsB = teamsData.find((t: any) => t.team_name?.toLowerCase() === teamB.toLowerCase());
+
+          let h2hBlock = '';
+          if (h2hGames.length > 0) {
+            const h2hRows = h2hGames.slice(0, 5).map((g: any) => {
+              const date = g.game_date ? new Date(g.game_date).toLocaleDateString('en-GB') : '?';
+              const isAHome = (g.hometeam || '').toLowerCase().includes(teamA.toLowerCase());
+              const gB = (gamesB || []).find((gb: any) => gb.game_key === g.game_key);
+              const apts = g.pts ?? 0;
+              const bpts = gB?.pts ?? 0;
+              const winner = apts > bpts ? teamA : (bpts > apts ? teamB : 'Draw');
+              let statLine = '';
+              if (cmpStat) {
+                const col = cmpStat.column.replace('total_', '');
+                const aVal = g[col] ?? 0;
+                const bVal = gB ? (gB[col] ?? 0) : '?';
+                statLine = `\n  ${cmpStat.label}: **${teamA}** ${aVal} · **${teamB}** ${bVal}`;
+              } else {
+                statLine = `\n  Pts: **${teamA}** ${apts} · **${teamB}** ${bpts} · Reb: ${g.reb ?? 0}/${gB?.reb ?? '?'} · Ast: ${g.ast ?? 0}/${gB?.ast ?? '?'}`;
+              }
+              return `**${date}** — ${isAHome ? teamA : teamB} (Home) · ✓ ${winner}${statLine}`;
+            }).join('\n\n');
+            h2hBlock = `**Head-to-Head Results** (${h2hGames.length} game${h2hGames.length !== 1 ? 's' : ''})\n\n${h2hRows}\n\n`;
+          } else {
+            h2hBlock = `*No head-to-head games found between these teams this season.*\n\n`;
+          }
+
+          const fmt = (v: any) => v != null ? Number(v).toFixed(1) : 'N/A';
+          const header = `| Stat | ${teamA} | ${teamB} |`;
+          const divider = `|------|${'-'.repeat(teamA.length + 2)}|${'-'.repeat(teamB.length + 2)}|`;
+          const tableRows = [
+            ['Points', `${fmt(statsA?.avg_pts)} ppg`, `${fmt(statsB?.avg_pts)} ppg`],
+            ['Rebounds', `${fmt(statsA?.avg_reb)} rpg`, `${fmt(statsB?.avg_reb)} rpg`],
+            ['Assists', `${fmt(statsA?.avg_ast)} apg`, `${fmt(statsB?.avg_ast)} apg`],
+            ['Steals', `${fmt(statsA?.avg_stl)} spg`, `${fmt(statsB?.avg_stl)} spg`],
+            ['Blocks', `${fmt(statsA?.avg_blk)} bpg`, `${fmt(statsB?.avg_blk)} bpg`],
+            ['FG%', `${fmt(statsA?.season_fg_pct)}%`, `${fmt(statsB?.season_fg_pct)}%`],
+            ['3PT%', `${fmt(statsA?.season_tp_pct)}%`, `${fmt(statsB?.season_tp_pct)}%`],
+            ['Games Played', `${statsA?.games_played ?? 'N/A'}`, `${statsB?.games_played ?? 'N/A'}`],
+          ].map(([stat, a, b]) => `| ${stat} | ${a} | ${b} |`).join('\n');
+          const avgBlock = `**Season Averages**\n\n${header}\n${divider}\n${tableRows}`;
+
+          const content = `### ${teamA} vs ${teamB}\n\n${h2hBlock}${avgBlock}`;
+          const context = `${leagueName} — Team Comparison: ${teamA} vs ${teamB}\n\n${h2hBlock}Season averages — ${teamA}: ${fmt(statsA?.avg_pts)}ppg / ${fmt(statsA?.avg_reb)}rpg / ${fmt(statsA?.avg_ast)}apg / FG% ${fmt(statsA?.season_fg_pct)}% / 3PT% ${fmt(statsA?.season_tp_pct)}%. ${teamB}: ${fmt(statsB?.avg_pts)}ppg / ${fmt(statsB?.avg_reb)}rpg / ${fmt(statsB?.avg_ast)}apg / FG% ${fmt(statsB?.season_fg_pct)}% / 3PT% ${fmt(statsB?.season_tp_pct)}%.`;
+
+          try {
+            const BASE = getPythonBackendUrl();
+            const resp = await fetch(`${BASE}/api/chat/league`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ question, league_id: leagueId, league_data: context }),
+              signal: AbortSignal.timeout(15000)
+            });
+            if (resp.ok) { const d = await resp.json(); if (d.response) return { content: d.response, suggestions: d.suggestions || [] }; }
+          } catch {}
+
+          return {
+            content,
+            suggestions: [
+              `Who are the top scorers for ${teamA}?`,
+              `Who are the top scorers for ${teamB}?`,
+              'Show me the standings'
+            ]
+          };
+        }
+      }
+
       // ── TEAM STAT MAP ──────────────────────────────────────────────────
       interface TeamStatDef {
         keywords: string[];
