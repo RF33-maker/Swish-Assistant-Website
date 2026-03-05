@@ -270,6 +270,31 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
         return null;
       };
 
+      // ── AI ENHANCE HELPER ──────────────────────────────────────────────
+      // Sends structured raw data to the Python/OpenAI backend to get a
+      // well-formatted, NBA-style narrative response. Falls back to the
+      // pre-built content if the AI call fails or times out.
+      type ChatbotResponse = { content: string; suggestions?: string[]; navigationButtons?: { label: string; id: string; type: 'player' | 'team' }[] };
+      const aiEnhance = async (rawData: string, fallback: ChatbotResponse): Promise<ChatbotResponse> => {
+        try {
+          const BASE = getPythonBackendUrl();
+          const resp = await fetch(`${BASE}/api/chat/league`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ question, league_id: leagueId, league_data: rawData }),
+            signal: AbortSignal.timeout(15000)
+          });
+          if (resp.ok) {
+            const d = await resp.json();
+            if (d.response) return {
+              content: d.response,
+              suggestions: d.suggestions?.length ? d.suggestions : fallback.suggestions,
+              navigationButtons: fallback.navigationButtons
+            };
+          }
+        } catch {}
+        return fallback;
+      };
+
       // ── STANDINGS / BEST TEAM ──────────────────────────────────────────
       const topNTeamsMatch = q.match(/top\s+(\d+)\s+teams?/);
       if (topNTeamsMatch || is(['standing', 'best team', 'top team', 'top teams', 'best teams',
@@ -603,31 +628,6 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
           }
         }
         return line;
-      };
-
-      // ── AI ENHANCE HELPER ──────────────────────────────────────────────
-      // Sends structured raw data to the Python/OpenAI backend to get a
-      // well-formatted, NBA-style narrative response. Falls back to the
-      // pre-built content if the AI call fails or times out.
-      type ChatbotResponse = { content: string; suggestions?: string[]; navigationButtons?: { label: string; id: string; type: 'player' | 'team' }[] };
-      const aiEnhance = async (rawData: string, fallback: ChatbotResponse): Promise<ChatbotResponse> => {
-        try {
-          const BASE = getPythonBackendUrl();
-          const resp = await fetch(`${BASE}/api/chat/league`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ question, league_id: leagueId, league_data: rawData }),
-            signal: AbortSignal.timeout(15000)
-          });
-          if (resp.ok) {
-            const d = await resp.json();
-            if (d.response) return {
-              content: d.response,
-              suggestions: d.suggestions?.length ? d.suggestions : fallback.suggestions,
-              navigationButtons: fallback.navigationButtons
-            };
-          }
-        } catch {}
-        return fallback;
       };
 
       // ── TEAM COMPARISON ────────────────────────────────────────────────
