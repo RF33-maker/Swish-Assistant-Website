@@ -3,6 +3,9 @@ import { createServer, type Server } from "http";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { supabase } from "../client/src/lib/supabase";
 import multer from 'multer';
+import OpenAI from 'openai';
+
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // Configure multer for memory storage
 const upload = multer({ storage: multer.memoryStorage() });
@@ -35,9 +38,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Python backend proxy routes
   app.get("/start", (req, res) => proxyToPython(req, res, "/start"));
   app.post("/chat", (req, res) => proxyToPython(req, res, "/chat"));
-  app.post("/api/chat/league", (req, res) => proxyToPython(req, res, "/api/chat/league"));
   app.post("/api/ai-analysis", (req, res) => proxyToPython(req, res, "/api/ai-analysis"));
   app.post("/api/parse", (req, res) => proxyToPython(req, res, "/api/parse"));
+
+  // League chatbot AI — handled directly in Express via OpenAI Node SDK
+  // (avoids dependency on the Python backend process which can go offline)
+  app.post("/api/chat/league", async (req: Request, res: Response) => {
+    try {
+      const { question, league_id, league_data } = req.body;
+      if (!question) return res.status(400).json({ error: "question is required" });
+
+      let systemPrompt: string;
+      let userMessage: string;
+
+      if (league_data) {
+        systemPrompt = [
+          "You are an expert basketball league analyst for a professional league app, similar to the NBA app's Ask NBA feature.",
+          "",
+          "IMPORTANT: The data you receive may include a FOCUS: directive and labelled sections (TEAM OVERVIEW, ROSTER, etc.).",
+          "Always follow the FOCUS directive. If it says to describe a team's overall performance, lead with TEAM-LEVEL stats —",
+          "do NOT make individual players the main subject. The ROSTER section is supplementary context only.",
+          "",
+          "RESPONSE FORMAT — follow this structure exactly:",
+          "1. Open with ONE context sentence naming the subject (team or player) and what you are summarising.",
+          "2. Use a bullet list for the key stats — bold the team/player name at the top, then stat lines beneath.",
+          "   For team queries: summarise record, PPG, RPG, APG, FG% as bullet points. Mention top players briefly at the end.",
+          "   For player queries: summarise PPG, RPG, APG, shooting splits as bullet points.",
+          "3. Close with 1-2 sentences of insight — e.g. what makes this team/player stand out, a trend, a strength.",
+          "4. Keep total response under 220 words. Be punchy and specific — no fluff.",
+          "",
+          "RULES:",
+          "- Only use stats from the data provided. Never invent numbers.",
+          "- Bold all player and team names.",
+          "- Use plain English, not overly formal language.",
+          "- Never start with 'As of this season' — vary your opening.",
+          "",
+          "At the very end of your response (after the insight), append exactly this line:",
+          "SUGGESTIONS: <question 1> | <question 2> | <question 3>",
+          "These should be 3 natural follow-up questions a fan would ask, specific to the players/teams you mentioned.",
+          "",
+          `CURRENT LEAGUE DATA:\n${league_data}`,
+        ].join("\n");
+        userMessage = question;
+      } else {
+        systemPrompt =
+          "You are an expert basketball league analyst. Help with performance analysis, player statistics, team strategies, and league insights. " +
+          "Be concise and data-driven. Bold all player and team names. " +
+          "At the very end append: SUGGESTIONS: <q1> | <q2> | <q3>";
+        userMessage = `Question about league ${league_id}: ${question}`;
+      }
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userMessage },
+        ],
+        max_tokens: 700,
+        temperature: 0.2,
+      });
+
+      const rawAnswer = completion.choices[0].message.content ?? "";
+
+      let answer = rawAnswer;
+      let suggestions: string[] = [];
+      if (rawAnswer.includes("SUGGESTIONS:")) {
+        const parts = rawAnswer.split("SUGGESTIONS:");
+        answer = parts[0].trim();
+        suggestions = parts[1].split("|").map((s: string) => s.trim()).filter(Boolean).slice(0, 3);
+      }
+      if (!suggestions.length) {
+        suggestions = ["Who are the top scorers?", "Show me recent game results", "Who is the most efficient player?"];
+      }
+
+      res.json({ response: answer, suggestions, status: "success" });
+    } catch (err: any) {
+      console.error("League chat error:", err.message);
+      res.status(500).json({ error: err.message, status: "error" });
+    }
+  });
 
   // Team logo upload endpoint - Get upload URL
   app.post("/api/team-logos/upload", async (req, res) => {

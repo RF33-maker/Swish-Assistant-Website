@@ -60,9 +60,16 @@ The application is structured into a React frontend and integrates with external
   - Teams (legacy): `/team/[teamName]` - backward compatible, shows first matching team
   - Players: `/player/[slug]` (e.g., `/player/john-doe`) - includes backward compatibility for UUID-based URLs
 
+## Server Architecture
+- **Primary server**: `tsx server/index.ts` — Express with Vite as middleware. Handles all API routes and serves the React frontend on port 5000.
+- **Workflow**: "Start application" runs `tsx server/index.ts` (not `npm run dev`). This is required so Express API routes are registered before Vite catches all requests.
+- **League AI chatbot** (`/api/chat/league`): Handled directly in `server/routes.ts` using the OpenAI Node SDK (`gpt-4o-mini`, `temperature: 0.2`). No dependency on the Python backend — always available when the main app is running.
+- **Python Backend** (port 8000, optional): Handles `/chat` (coaching chatbot), `/api/ai-analysis` (player scouting analysis). Proxied via `proxyToPython` in `server/routes.ts`. If Python is down, only these secondary features are affected.
+
 ## External Dependencies
 - **Supabase**: Used for database storage, user authentication, and object storage (e.g., `team-logos`, `league-banners`).
-- **Python Flask Backend (https://sab-backend.onrender.com)**: An external service that handles file processing, document parsing, and AI-powered chatbot functionality (e.g., player analysis using OpenAI API).
+- **OpenAI (Node SDK)**: Used directly in the Express backend for the league chatbot (`/api/chat/league`). API key stored as `OPENAI_API_KEY` environment secret.
+- **Python Flask Backend** (port 8000, secondary): Handles coaching chatbot and player scouting analysis.
 - **Instagram**: Enhanced carousel integration for displaying multiple Instagram posts/reels in league sidebar:
   - Auto-scrolling carousel with 6-second intervals
   - Manual navigation controls (prev/next arrows, dot indicators)

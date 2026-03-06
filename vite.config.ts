@@ -20,7 +20,6 @@ export default defineConfig({
     port: 5000,
     allowedHosts: true,
     proxy: {
-      "/api/chat/league": { target: "http://localhost:8000", changeOrigin: true },
       "/api/ai-analysis": { target: "http://localhost:8000", changeOrigin: true },
       "/api/parse": { target: "http://localhost:8000", changeOrigin: true },
       "/chat": { target: "http://localhost:8000", changeOrigin: true },
