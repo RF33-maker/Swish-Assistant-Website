@@ -51,6 +51,8 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
   const [loadingPhraseIdx, setLoadingPhraseIdx] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const lastMentionedPlayer = useRef<any>(null);
+  const lastMentionedTeam = useRef<string | null>(null);
   const [, setLocation] = useLocation(); // Hook for routing
 
   // Auto-expand when user starts interacting
@@ -641,6 +643,23 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
         return null;
       };
 
+      // ── Conversational context: remember last mentioned player/team ────
+      // Update stored context whenever a player or team is directly named
+      const directPlayer = findPlayerInQuestion();
+      if (directPlayer) lastMentionedPlayer.current = directPlayer;
+      const directTeam = findTeamInQuestion();
+      if (directTeam) lastMentionedTeam.current = directTeam.name;
+
+      // Detect pronoun follow-ups (uses "he/his/him" or "they/their" without naming an entity)
+      const isPronounPlayer = /\b(he|his|him|this player|the player)\b/.test(q) && !directPlayer;
+      const isPronounTeam   = /\b(they|their|them|this team|the team)\b/.test(q) && !directTeam && !directPlayer;
+
+      // Contextual resolvers — fall back to last mentioned entity when pronouns are detected
+      const resolveContextualPlayer = (): any | null =>
+        directPlayer ?? (isPronounPlayer && lastMentionedPlayer.current ? lastMentionedPlayer.current : null);
+      const resolveContextualTeam = (): { name: string } | null =>
+        directTeam ?? (isPronounTeam && lastMentionedTeam.current ? { name: lastMentionedTeam.current } : null);
+
       // ── Helper: build stat summary line for a player row ──────────────
       const buildStatLine = (stat: StatDef, p: any): string => {
         const val = p[stat.column] ?? 0;
@@ -957,8 +976,8 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
       }
 
       if (isSeasonQuery && detectedStat) {
-        const foundPlayer = findPlayerInQuestion();
-        const foundTeam = findTeamInQuestion();
+        const foundPlayer = resolveContextualPlayer();
+        const foundTeam = resolveContextualTeam();
 
         if (foundPlayer) {
           const val = foundPlayer[detectedStat.column] ?? 0;
@@ -1011,8 +1030,8 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
 
       if (hasTimeScope) {
         const limit = lastNMatch ? parseInt(lastNMatch[1]) : isLastGame ? 1 : 5;
-        const foundPlayer = findPlayerInQuestion();
-        const foundTeam = findTeamInQuestion();
+        const foundPlayer = resolveContextualPlayer();
+        const foundTeam = resolveContextualTeam();
 
         if (foundTeam) {
           const teamName = foundTeam.name;
@@ -1476,7 +1495,7 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
         'how does', 'what kind of', 'style of play', 'role', 'impact'
       ]);
 
-      const analysisPlayer = findPlayerInQuestion();
+      const analysisPlayer = resolveContextualPlayer();
       if (isPlayerAnalysisQuery && analysisPlayer) {
         const p = analysisPlayer;
 
@@ -1585,8 +1604,8 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
         });
       }
 
-      // ── NAME SCAN FALLBACK: any question containing a player name ──────
-      const scannedPlayer = findPlayerInQuestion();
+      // ── NAME SCAN FALLBACK: any question containing a player name (or pronoun follow-up) ──
+      const scannedPlayer = resolveContextualPlayer();
       if (scannedPlayer) {
         const p = scannedPlayer;
         const pts = p.total_pts ?? 0;
@@ -1612,7 +1631,7 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
 
       // ── ADVANCED STATS FOR A SPECIFIC TEAM ────────────────────────────
       if (isAdvancedQuery) {
-        const foundTeam = findTeamInQuestion();
+        const foundTeam = resolveContextualTeam();
         if (foundTeam) {
           const teamName = foundTeam.name;
           const { data: advGames } = await supabase
@@ -1641,7 +1660,7 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
       }
 
       // ── TEAM NAME SCAN FALLBACK ────────────────────────────────────────
-      const scannedTeam = findTeamInQuestion();
+      const scannedTeam = resolveContextualTeam();
       if (scannedTeam) {
         const teamStats = teamsData.find((t: any) =>
           t.team_name?.toLowerCase() === scannedTeam.name.toLowerCase()
@@ -1686,7 +1705,16 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
         const tp = t.season_tp_pct != null ? `${Number(t.season_tp_pct).toFixed(1)}%` : 'N/A';
         return `${t.team_name}: ${t.avg_pts != null ? Number(t.avg_pts).toFixed(1) : '?'}ppg, ${t.avg_reb != null ? Number(t.avg_reb).toFixed(1) : '?'}rpg, ${t.avg_ast != null ? Number(t.avg_ast).toFixed(1) : '?'}apg, 3PM/g: ${t.avg_tpm != null ? Number(t.avg_tpm).toFixed(1) : '?'} (${tp}), FG%: ${fg}, GP: ${t.games_played ?? '?'}`;
       }).join('\n');
-      const leagueDataContext = `League: ${leagueName}\n\nTOP PLAYERS:\n${topPlayers || 'None'}\n\nTEAM SEASON AVERAGES:\n${topTeams || 'None'}\n\nRECENT RESULTS:\n${recentGames || 'None'}`;
+      // If this is a pronoun follow-up, prepend the last mentioned player's details so the AI
+      // knows which player "he/his/him" refers to — without relying on the AI to guess.
+      let contextualPlayerNote = '';
+      if (isPronounPlayer && lastMentionedPlayer.current) {
+        const lp = lastMentionedPlayer.current;
+        const lpFg = lp.season_fg_pct != null ? `${Number(lp.season_fg_pct).toFixed(1)}%` : 'N/A';
+        const lpTp = lp.season_tp_pct != null ? `${Number(lp.season_tp_pct).toFixed(1)}%` : 'N/A';
+        contextualPlayerNote = `CONTEXT: The user's question uses a pronoun (he/his/him) referring to the previously discussed player: ${lp.player_name} (${lp.team_name}) — ${lp.total_pts ?? 0}pts, ${lp.total_reb ?? 0}reb, ${lp.total_ast ?? 0}ast | FG%: ${lpFg} | 3PT%: ${lpTp} | GP: ${lp.games_played ?? 0}. Answer the question specifically about ${lp.player_name}.\n\n`;
+      }
+      const leagueDataContext = `${contextualPlayerNote}League: ${leagueName}\n\nTOP PLAYERS:\n${topPlayers || 'None'}\n\nTEAM SEASON AVERAGES:\n${topTeams || 'None'}\n\nRECENT RESULTS:\n${recentGames || 'None'}`;
 
       try {
         const BASE = getPythonBackendUrl();
