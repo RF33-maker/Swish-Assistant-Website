@@ -1464,6 +1464,127 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
         }
       }
 
+      // ── PLAYER DEEP ANALYSIS: strengths, weaknesses, playmaking, scoring, defence, rebounding ──
+      const isPlayerAnalysisQuery = is([
+        'strength', 'weakness', 'weakness', 'how good is', 'analyse', 'analyze', 'analysis',
+        'playmaking', 'playmaker', 'passing ability', 'vision', 'assist rate',
+        'scoring ability', 'scorer', 'shooting ability', 'offensive', 'offense',
+        'defence', 'defense', 'defensive ability', 'defender', 'stopper',
+        'rebounding', 'rebounder', 'on the boards', 'glass',
+        'usage', 'efficiency', 'impact', 'contribution', 'how effective',
+        'breakdown', 'profile', 'scouting', 'scout report', 'evaluate', 'assessment',
+        'how does', 'what kind of', 'style of play', 'role', 'impact'
+      ]);
+
+      const analysisPlayer = findPlayerInQuestion();
+      if (isPlayerAnalysisQuery && analysisPlayer) {
+        const p = analysisPlayer;
+
+        const fgm = p.total_fgm ?? 0;
+        const fga = p.total_fga ?? 0;
+        const tpm = p.total_tpm ?? 0;
+        const tpa = p.total_tpa ?? 0;
+        const ftm = p.total_ftm ?? 0;
+        const fta = p.total_fta ?? 0;
+        const fgPct = p.season_fg_pct != null ? Number(p.season_fg_pct).toFixed(1) : (fga > 0 ? ((fgm/fga)*100).toFixed(1) : 'N/A');
+        const tpPct = p.season_tp_pct != null ? Number(p.season_tp_pct).toFixed(1) : (tpa > 0 ? ((tpm/tpa)*100).toFixed(1) : 'N/A');
+        const ftPct = p.season_ft_pct != null ? Number(p.season_ft_pct).toFixed(1) : (fta > 0 ? ((ftm/fta)*100).toFixed(1) : 'N/A');
+        const gp = p.games_played ?? 1;
+        const avgPts = p.avg_pts != null ? Number(p.avg_pts).toFixed(1) : (gp > 0 ? (p.total_pts / gp).toFixed(1) : 'N/A');
+        const avgReb = p.avg_reb != null ? Number(p.avg_reb).toFixed(1) : (gp > 0 ? (p.total_reb / gp).toFixed(1) : 'N/A');
+        const avgAst = p.avg_ast != null ? Number(p.avg_ast).toFixed(1) : (gp > 0 ? (p.total_ast / gp).toFixed(1) : 'N/A');
+        const avgStl = p.avg_stl != null ? Number(p.avg_stl).toFixed(1) : (gp > 0 ? (p.total_stl / gp).toFixed(1) : 'N/A');
+        const avgBlk = p.avg_blk != null ? Number(p.avg_blk).toFixed(1) : (gp > 0 ? (p.total_blk / gp).toFixed(1) : 'N/A');
+
+        const { data: advRows } = await supabase
+          .from('v_player_advanced_game')
+          .select('efg_percent, ts_percent, usage_percent, ast_percent, oreb_percent, dreb_percent, reb_percent, tov_percent, pie, off_rating, def_rating, net_rating, three_point_rate, pts_percent_2pt, pts_percent_3pt, pts_percent_ft, pts_percent_pitp, pts_percent_fastbreak, min')
+          .eq('league_id', leagueId)
+          .ilike('player_name', `%${p.player_name}%`)
+          .gt('min', '0:00');
+
+        const fmtAdv = (vals: any[], col: string, dec = 1) => {
+          const filtered = (vals || []).map(r => r[col]).filter((v: any) => v != null && !isNaN(Number(v)));
+          if (filtered.length === 0) return 'N/A';
+          return (filtered.reduce((a: number, b: any) => a + Number(b), 0) / filtered.length).toFixed(dec);
+        };
+
+        const hasAdv = advRows && advRows.length > 0;
+
+        const traditionalSection = [
+          `TRADITIONAL STATS (${gp} games played):`,
+          `  Per game: ${avgPts} PPG | ${avgReb} RPG | ${avgAst} APG | ${avgStl} SPG | ${avgBlk} BPG`,
+          `  Season totals: ${p.total_pts ?? 0} pts | ${p.total_reb ?? 0} reb | ${p.total_ast ?? 0} ast | ${p.total_stl ?? 0} stl | ${p.total_blk ?? 0} blk`,
+          `  Shooting: FG ${fgm}/${fga} (${fgPct}%) | 3PT ${tpm}/${tpa} (${tpPct}%) | FT ${ftm}/${fta} (${ftPct}%)`,
+        ].join('\n');
+
+        const advancedSection = hasAdv ? [
+          `ADVANCED METRICS (season averages across ${advRows!.length} games):`,
+          `  Efficiency: eFG% ${fmtAdv(advRows!, 'efg_percent')}% | TS% ${fmtAdv(advRows!, 'ts_percent')}% | PIE ${fmtAdv(advRows!, 'pie')}%`,
+          `  Usage & Creation: USG% ${fmtAdv(advRows!, 'usage_percent')}% | AST% ${fmtAdv(advRows!, 'ast_percent')}% | TOV% ${fmtAdv(advRows!, 'tov_percent')}%`,
+          `  Rebounding: OREB% ${fmtAdv(advRows!, 'oreb_percent')}% | DREB% ${fmtAdv(advRows!, 'dreb_percent')}% | REB% ${fmtAdv(advRows!, 'reb_percent')}%`,
+          `  Ratings: OFF RTG ${fmtAdv(advRows!, 'off_rating')} | DEF RTG ${fmtAdv(advRows!, 'def_rating')} | NET RTG ${fmtAdv(advRows!, 'net_rating')}`,
+          `  Shot distribution: 2PT% of pts ${fmtAdv(advRows!, 'pts_percent_2pt')}% | 3PT% of pts ${fmtAdv(advRows!, 'pts_percent_3pt')}% | FT% of pts ${fmtAdv(advRows!, 'pts_percent_ft')}%`,
+          `  3PT rate (share of FGA from 3): ${fmtAdv(advRows!, 'three_point_rate')}%`,
+          `  Paint pts share: ${fmtAdv(advRows!, 'pts_percent_pitp')}% | Fastbreak pts share: ${fmtAdv(advRows!, 'pts_percent_fastbreak')}%`,
+        ].join('\n') : 'ADVANCED METRICS: Not available for this player.';
+
+        const leagueContext = (() => {
+          const leagueAvgPts = playersData.length > 0
+            ? (playersData.reduce((s: number, pl: any) => s + (pl.avg_pts ?? 0), 0) / playersData.length).toFixed(1)
+            : 'N/A';
+          const leagueAvgAst = playersData.length > 0
+            ? (playersData.reduce((s: number, pl: any) => s + (pl.avg_ast ?? 0), 0) / playersData.length).toFixed(1)
+            : 'N/A';
+          const leagueAvgReb = playersData.length > 0
+            ? (playersData.reduce((s: number, pl: any) => s + (pl.avg_reb ?? 0), 0) / playersData.length).toFixed(1)
+            : 'N/A';
+          const rankPts = [...playersData].sort((a: any, b: any) => (b.avg_pts ?? 0) - (a.avg_pts ?? 0)).findIndex((pl: any) => pl.player_name === p.player_name) + 1;
+          const rankAst = [...playersData].sort((a: any, b: any) => (b.avg_ast ?? 0) - (a.avg_ast ?? 0)).findIndex((pl: any) => pl.player_name === p.player_name) + 1;
+          const rankReb = [...playersData].sort((a: any, b: any) => (b.avg_reb ?? 0) - (a.avg_reb ?? 0)).findIndex((pl: any) => pl.player_name === p.player_name) + 1;
+          return [
+            `LEAGUE CONTEXT (${leagueName}, ${playersData.length} players):`,
+            `  League avg per game: ${leagueAvgPts} PPG | ${leagueAvgReb} RPG | ${leagueAvgAst} APG`,
+            `  ${p.player_name}'s league rank: Scoring #${rankPts || '?'} | Assists #${rankAst || '?'} | Rebounds #${rankReb || '?'}`,
+          ].join('\n');
+        })();
+
+        const focusNote = is(['playmaking', 'playmaker', 'passing', 'assist', 'vision', 'dish'])
+          ? 'FOCUS: Analyse this player\'s playmaking — AST%, assist totals, TOV%, usage, and creation ability.'
+          : is(['scoring', 'scorer', 'offensive', 'offense', 'shooting'])
+          ? 'FOCUS: Analyse this player\'s scoring — PPG, eFG%, TS%, shot distribution (2PT/3PT/FT/paint), usage.'
+          : is(['defence', 'defense', 'defensive', 'defender', 'stopper'])
+          ? 'FOCUS: Analyse this player\'s defence — DEF RTG, steals, blocks, net rating, and defensive impact.'
+          : is(['rebound', 'rebounding', 'boards', 'glass'])
+          ? 'FOCUS: Analyse this player\'s rebounding — OREB%, DREB%, REB%, total boards, boards per game.'
+          : 'FOCUS: Provide a full strengths/weaknesses breakdown covering scoring, playmaking, defence, and rebounding.';
+
+        const rawData = [
+          `PLAYER ANALYSIS REQUEST: ${question}`,
+          `Player: ${p.player_name} | Team: ${p.team_name} | League: ${leagueName}`,
+          ``,
+          focusNote,
+          ``,
+          traditionalSection,
+          ``,
+          advancedSection,
+          ``,
+          leagueContext,
+          ``,
+          `Provide a detailed, NBA-coaching-style analysis addressing the user's specific question. Use the traditional and advanced stats as evidence. Highlight genuine strengths with supporting numbers, and note any areas for improvement. Be specific and insightful.`
+        ].join('\n');
+
+        return aiEnhance(rawData, {
+          content: `### ${p.player_name} — Player Analysis\n*${p.team_name} · ${gp} games*\n\n**Traditional Stats**\n- **Points:** ${avgPts} PPG (${p.total_pts ?? 0} total)\n- **Assists:** ${avgAst} APG (${p.total_ast ?? 0} total)\n- **Rebounds:** ${avgReb} RPG (${p.total_reb ?? 0} total)\n- **Steals/Blocks:** ${avgStl}/${avgBlk} per game\n\n**Shooting**\n- **FG:** ${fgm}/${fga} (${fgPct}%)\n- **3PT:** ${tpm}/${tpa} (${tpPct}%)\n- **FT:** ${ftm}/${fta} (${ftPct}%)\n\n${hasAdv ? `**Advanced**\n- **eFG%:** ${fmtAdv(advRows!, 'efg_percent')}% · **TS%:** ${fmtAdv(advRows!, 'ts_percent')}%\n- **USG%:** ${fmtAdv(advRows!, 'usage_percent')}% · **AST%:** ${fmtAdv(advRows!, 'ast_percent')}%\n- **NET RTG:** ${fmtAdv(advRows!, 'net_rating')}\n- **PIE:** ${fmtAdv(advRows!, 'pie')}%` : ''}`,
+          suggestions: [
+            `What are ${p.player_name}'s scoring strengths?`,
+            `What is ${p.player_name}'s defensive impact?`,
+            `Who are ${p.team_name}'s top players?`
+          ],
+          navigationButtons: [{ label: `${p.player_name}'s Profile`, id: playerSlug(p), type: 'player' as const }]
+        });
+      }
+
       // ── NAME SCAN FALLBACK: any question containing a player name ──────
       const scannedPlayer = findPlayerInQuestion();
       if (scannedPlayer) {
