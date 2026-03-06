@@ -870,13 +870,26 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
             return `${i + 1}. **${tn}**${record} — ${avg.toFixed(1)}${chosenMetric.unit}`;
           }).join('\n');
 
-          return aiEnhance(
-            `${leagueName} ${chosenMetric.label} Rankings:\n\n${rows}\n\nNOTE: Higher ${chosenMetric.col === 'def_rating' ? 'DEF RTG means worse defence (lower is better)' : `${chosenMetric.label} is better`}. Provide a concise NBA-style narrative analysis of these rankings.`,
-            {
-              content: `### ${chosenMetric.label} Leaders — ${leagueName}\n\n${rows}`,
-              suggestions: ['Show me the standings', 'Which team has the best offensive rating?', 'Which team has the best defensive rating?']
-            }
-          );
+          // Build enriched context — include traditional stats for each ranked team
+          const enrichedRows = ranked.map(({ tn, avg }, i) => {
+            const rec = standingsMap[tn];
+            const record = rec ? `${rec.wins}W-${rec.losses}L` : 'N/A';
+            const ts = teamsData.find((t: any) => t.team_name === tn);
+            const ppg = ts?.avg_pts != null ? Number(ts.avg_pts).toFixed(1) : 'N/A';
+            const rpg = ts?.avg_reb != null ? Number(ts.avg_reb).toFixed(1) : 'N/A';
+            const apg = ts?.avg_ast != null ? Number(ts.avg_ast).toFixed(1) : 'N/A';
+            const fg  = ts?.season_fg_pct != null ? `${Number(ts.season_fg_pct).toFixed(1)}%` : 'N/A';
+            const tp  = ts?.season_tp_pct != null ? `${Number(ts.season_tp_pct).toFixed(1)}%` : 'N/A';
+            return `${i + 1}. ${tn} | Record: ${record} | ${chosenMetric.label}: ${avg.toFixed(1)}${chosenMetric.unit} | PPG: ${ppg} | RPG: ${rpg} | APG: ${apg} | FG%: ${fg} | 3PT%: ${tp}`;
+          }).join('\n');
+
+          const defNote = chosenMetric.col === 'def_rating' ? ' (lower DEF RTG is better — it means fewer points allowed per 100 possessions)' : '';
+          const rawData = `League: ${leagueName}\n\n${chosenMetric.label} Rankings${defNote}:\n\n${enrichedRows}\n\nINSTRUCTION: Write a concise NBA-style narrative analysis focused on the ${chosenMetric.label} rankings above. Only reference stats that are explicitly provided in the data above. Do not add columns or fields not listed.`;
+
+          return aiEnhance(rawData, {
+            content: `### ${chosenMetric.label} Leaders — ${leagueName}\n\n${rows}`,
+            suggestions: ['Show me the standings', 'Which team has the best offensive rating?', 'Which team has the best defensive rating?']
+          });
         }
       }
 
