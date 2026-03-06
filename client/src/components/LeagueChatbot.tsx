@@ -861,7 +861,6 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
           }
           const ranked = Object.entries(aggMap)
             .map(([tn, { sum, count }]) => ({ tn, avg: sum / count }))
-            .filter(x => x.count > 0)
             .sort((a, b) => chosenMetric.ascending ? a.avg - b.avg : b.avg - a.avg)
             .slice(0, 5);
 
