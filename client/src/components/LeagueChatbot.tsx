@@ -823,18 +823,76 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
         'efficiency rating', 'effective fg', 'efg', 'true shooting', 'ts%', 'pie', 'pace',
         'advanced stats', 'advanced stat', 'off rtg', 'def rtg', 'net rtg']);
 
-      // ── TEAM STAT LEADERBOARD ──────────────────────────────────────────
-      const detectedTeamStat = detectTeamStat();
+      // ── ADVANCED TEAM LEADERBOARD (NET RTG, OFF RTG, DEF RTG, eFG%, TS%, PACE, PIE) ──
       const isTeamLeaderboardQuery = is(['which team', 'what team', 'team that', 'best team for', 'top team for']);
-      if (detectedTeamStat && teamsData.length > 0 && (isTeamLeaderboardQuery || is(['most', 'best', 'highest', 'top', 'leader'])) && !findPlayerInQuestion()) {
+      const isGeneralLeaderboard = isTeamLeaderboardQuery || is(['most', 'best', 'highest', 'top', 'leader', 'most efficient', 'most effective']);
+      if (isAdvancedQuery && isGeneralLeaderboard && !findPlayerInQuestion()) {
+        type AdvMetric = { col: string; label: string; unit: string; ascending?: boolean };
+        const advMetricMap: { keywords: string[]; metric: AdvMetric }[] = [
+          { keywords: ['net rtg', 'net rating', 'netrtg', 'net eff'], metric: { col: 'net_rating', label: 'Net Rating (NET RTG)', unit: '' } },
+          { keywords: ['off rtg', 'offensive rating', 'offrtg', 'off rating'], metric: { col: 'off_rating', label: 'Offensive Rating (OFF RTG)', unit: '' } },
+          { keywords: ['def rtg', 'defensive rating', 'defrtg', 'def rating'], metric: { col: 'def_rating', label: 'Defensive Rating (DEF RTG)', unit: '', ascending: true } },
+          { keywords: ['efg', 'effective fg', 'effective field goal', 'efg%'], metric: { col: 'efg_percent', label: 'Effective FG% (eFG%)', unit: '%' } },
+          { keywords: ['true shooting', 'ts%', 'ts %'], metric: { col: 'ts_percent', label: 'True Shooting % (TS%)', unit: '%' } },
+          { keywords: ['pace'], metric: { col: 'pace', label: 'Pace', unit: '' } },
+          { keywords: ['pie'], metric: { col: 'pie', label: 'Player Impact Estimate (PIE)', unit: '%' } },
+        ];
+        let chosenMetric: AdvMetric = { col: 'net_rating', label: 'Net Rating (NET RTG)', unit: '' };
+        for (const entry of advMetricMap) {
+          if (entry.keywords.some(k => q.includes(k))) { chosenMetric = entry.metric; break; }
+        }
+
+        const { data: advRows } = await supabase
+          .from('v_team_advanced_game')
+          .select('team_name, net_rating, off_rating, def_rating, efg_percent, ts_percent, pace, pie')
+          .eq('league_id', leagueId);
+
+        if (advRows && advRows.length > 0) {
+          const standings = computeStandings();
+          const standingsMap = Object.fromEntries(standings);
+          const aggMap: Record<string, { sum: number; count: number }> = {};
+          for (const row of advRows) {
+            const tn = row.team_name as string;
+            const val = (row as any)[chosenMetric.col];
+            if (val == null || val === 0) continue;
+            if (!aggMap[tn]) aggMap[tn] = { sum: 0, count: 0 };
+            aggMap[tn].sum += Number(val);
+            aggMap[tn].count++;
+          }
+          const ranked = Object.entries(aggMap)
+            .map(([tn, { sum, count }]) => ({ tn, avg: sum / count }))
+            .filter(x => x.count > 0)
+            .sort((a, b) => chosenMetric.ascending ? a.avg - b.avg : b.avg - a.avg)
+            .slice(0, 5);
+
+          const rows = ranked.map(({ tn, avg }, i) => {
+            const rec = standingsMap[tn];
+            const record = rec ? ` (${rec.wins}W-${rec.losses}L)` : '';
+            return `${i + 1}. **${tn}**${record} — ${avg.toFixed(1)}${chosenMetric.unit}`;
+          }).join('\n');
+
+          return {
+            content: `### ${chosenMetric.label} Leaders — ${leagueName}\n\n${rows}`,
+            suggestions: ['Show me the standings', 'Which team has the best offensive rating?', 'Which team has the best defensive rating?']
+          };
+        }
+      }
+
+      // ── TEAM STAT LEADERBOARD (traditional stats) ──────────────────────
+      const detectedTeamStat = detectTeamStat();
+      if (detectedTeamStat && teamsData.length > 0 && isGeneralLeaderboard && !findPlayerInQuestion()) {
         const col = detectedTeamStat.column;
+        const standings = computeStandings();
+        const standingsMap = Object.fromEntries(standings);
         const sorted = [...teamsData].sort((a: any, b: any) => (b[col] ?? 0) - (a[col] ?? 0)).slice(0, 5);
         const rows = sorted.map((t: any, i: number) => {
           const val = t[col] != null ? Number(t[col]).toFixed(1) : 'N/A';
-          return `${i + 1}. ${t.team_name} — ${val}`;
+          const rec = standingsMap[t.team_name];
+          const record = rec ? ` (${rec.wins}W-${rec.losses}L)` : '';
+          return `${i + 1}. **${t.team_name}**${record} — ${val}`;
         }).join('\n');
         return {
-          content: `${detectedTeamStat.label} Leaders in ${leagueName}:\n\n${rows}`,
+          content: `### ${detectedTeamStat.label} Leaders — ${leagueName}\n\n${rows}`,
           suggestions: ['Show me the standings', 'Top scorers', `Which team scores the most?`]
         };
       }
@@ -1672,7 +1730,9 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
         const playerRows = teamPlayers.map((p: any, i: number) => `${i+1}. **${p.player_name}** — ${p.total_pts ?? 0}pts · ${p.total_reb ?? 0}reb · ${p.total_ast ?? 0}ast`).join('\n');
         const standings = computeStandings();
         const teamStanding = standings.findIndex(([t]) => t.toLowerCase() === scannedTeam.name.toLowerCase());
-        const standingText = teamStanding >= 0 ? `*League Position: #${teamStanding + 1}*` : '';
+        const teamRecord = teamStanding >= 0 ? standings[teamStanding][1] : null;
+        const recordStr = teamRecord ? `${teamRecord.wins}W-${teamRecord.losses}L` : null;
+        const standingText = teamStanding >= 0 ? `*League Position: #${teamStanding + 1}${recordStr ? ` · ${recordStr}` : ''}*` : '';
 
         let seasonStatsBlock = '';
         if (teamStats) {
@@ -1700,10 +1760,14 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
       const recentGames = gamesData.slice(0, 8)
         .map((g: any) => `${g.home_team} ${g.home_score}–${g.away_score} ${g.away_team} (${g.game_date})`)
         .join('\n');
+      const fallbackStandings = computeStandings();
+      const fallbackStandingsMap = Object.fromEntries(fallbackStandings);
       const topTeams = teamsData.slice(0, 10).map((t: any) => {
         const fg = t.season_fg_pct != null ? `${Number(t.season_fg_pct).toFixed(1)}%` : 'N/A';
         const tp = t.season_tp_pct != null ? `${Number(t.season_tp_pct).toFixed(1)}%` : 'N/A';
-        return `${t.team_name}: ${t.avg_pts != null ? Number(t.avg_pts).toFixed(1) : '?'}ppg, ${t.avg_reb != null ? Number(t.avg_reb).toFixed(1) : '?'}rpg, ${t.avg_ast != null ? Number(t.avg_ast).toFixed(1) : '?'}apg, 3PM/g: ${t.avg_tpm != null ? Number(t.avg_tpm).toFixed(1) : '?'} (${tp}), FG%: ${fg}, GP: ${t.games_played ?? '?'}`;
+        const rec = fallbackStandingsMap[t.team_name];
+        const record = rec ? ` [${rec.wins}W-${rec.losses}L]` : '';
+        return `${t.team_name}${record}: ${t.avg_pts != null ? Number(t.avg_pts).toFixed(1) : '?'}ppg, ${t.avg_reb != null ? Number(t.avg_reb).toFixed(1) : '?'}rpg, ${t.avg_ast != null ? Number(t.avg_ast).toFixed(1) : '?'}apg, 3PM/g: ${t.avg_tpm != null ? Number(t.avg_tpm).toFixed(1) : '?'} (${tp}), FG%: ${fg}, GP: ${t.games_played ?? '?'}`;
       }).join('\n');
       // If this is a pronoun follow-up, prepend the last mentioned player's details so the AI
       // knows which player "he/his/him" refers to — without relying on the AI to guess.
