@@ -870,10 +870,13 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
             return `${i + 1}. **${tn}**${record} — ${avg.toFixed(1)}${chosenMetric.unit}`;
           }).join('\n');
 
-          return {
-            content: `### ${chosenMetric.label} Leaders — ${leagueName}\n\n${rows}`,
-            suggestions: ['Show me the standings', 'Which team has the best offensive rating?', 'Which team has the best defensive rating?']
-          };
+          return aiEnhance(
+            `${leagueName} ${chosenMetric.label} Rankings:\n\n${rows}\n\nNOTE: Higher ${chosenMetric.col === 'def_rating' ? 'DEF RTG means worse defence (lower is better)' : `${chosenMetric.label} is better`}. Provide a concise NBA-style narrative analysis of these rankings.`,
+            {
+              content: `### ${chosenMetric.label} Leaders — ${leagueName}\n\n${rows}`,
+              suggestions: ['Show me the standings', 'Which team has the best offensive rating?', 'Which team has the best defensive rating?']
+            }
+          );
         }
       }
 
