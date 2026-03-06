@@ -857,7 +857,7 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
           .limit(10);
         if (tf) gameQuery = (gameQuery as any).ilike('team_name', `%${tf.name}%`);
 
-        const { data: singleGameRows } = await gameQuery;
+        const { data: singleGameRows, error: gameLogError } = await gameQuery;
 
         if (singleGameRows && singleGameRows.length > 0) {
           const top5 = (singleGameRows as any[]).slice(0, 5);
@@ -891,13 +891,44 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
               'Show me the standings'
             ]
           });
+        } else {
+          const seasonCol = stat?.column ?? 'total_pts';
+          const top5Season = [...playersData]
+            .sort((a: any, b: any) => (b[seasonCol] ?? 0) - (a[seasonCol] ?? 0))
+            .slice(0, 5);
+          if (top5Season.length > 0) {
+            const rawData = [
+              `NOTE: Individual game-by-game logs are unavailable for this query. Answering with season totals instead. Do not claim you lack data — explain the season leaders and their per-game averages.`,
+              `${leagueName} — Top ${statLabel.toLowerCase()} providers this season:`,
+              ...top5Season.map((p: any, i: number) => {
+                const val = p[seasonCol] ?? 0;
+                const avgKey = seasonCol.replace('total_', 'avg_');
+                const avgVal = p[avgKey] != null ? ` (${Number(p[avgKey]).toFixed(1)} per game)` : '';
+                return `${i + 1}. ${p.player_name} (${p.team_name}) — ${val} total ${statLabel.toLowerCase()}${avgVal} in ${p.games_played ?? '?'} games`;
+              })
+            ].join('\n');
+            const top = top5Season[0];
+            return aiEnhance(rawData, {
+              content: `### ${statLabel} Leaders — ${leagueName}\n\n${top5Season.map((p: any, i: number) => {
+                const val = p[seasonCol] ?? 0;
+                const avgKey = seasonCol.replace('total_', 'avg_');
+                const avgVal = p[avgKey] != null ? ` · ${Number(p[avgKey]).toFixed(1)}/game` : '';
+                return `${i + 1}. **${p.player_name}** *(${p.team_name})* — ${val} total${avgVal}`;
+              }).join('\n')}`,
+              suggestions: [
+                `How is ${top.player_name} performing?`,
+                `Who leads the league in ${statLabel.toLowerCase()}?`,
+                'Show me the standings'
+              ]
+            });
+          }
         }
       }
 
       // ── STAT LEADERBOARD: "top 3-point shooters", "who has made the most 3s" ──
       const isLeaderboardQuery = is(['most', 'who leads', 'who lead', 'who has the most', 'who have the most',
         'who made the most', 'top', 'leader', 'leaders', 'best', 'highest', 'ranked', 'who is best']);
-      if (detectedStat && isLeaderboardQuery && !findPlayerInQuestion() && !findTeamInQuestion()) {
+      if (detectedStat && isLeaderboardQuery && !isSingleGameRecordQuery && !findPlayerInQuestion() && !findTeamInQuestion()) {
         const sorted = [...playersData]
           .sort((a: any, b: any) => (b[detectedStat.column] ?? 0) - (a[detectedStat.column] ?? 0))
           .slice(0, 5);
