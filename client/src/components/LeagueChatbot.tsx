@@ -185,7 +185,7 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
       const [playersDataResult, gamesDataResult, teamsDataResult] = await Promise.all([
         supabase
           .from('v_player_season_averages')
-          .select('player_name, team_name, league_id, games_played, total_pts, total_reb, total_ast, total_stl, total_blk, total_tpm, total_tpa, total_fgm, total_fga, total_ftm, total_fta, season_fg_pct, season_tp_pct, season_ft_pct, avg_pts, avg_reb, avg_ast, avg_stl, avg_blk')
+          .select('player_name, team_name, league_id, games_played, total_pts, total_reb, total_ast, total_stl, total_blk, total_tpm, total_tpa, total_fgm, total_fga, total_ftm, total_fta, season_fg_pct, season_tp_pct, season_ft_pct, avg_pts, avg_reb, avg_ast, avg_stl, avg_blk, avg_tpm')
           .eq('league_id', leagueId)
           .order('total_pts', { ascending: false })
           .limit(100),
@@ -589,12 +589,14 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
         keywords: string[];
         column: string;
         label: string;
+        avgColumn?: string;
+        avgLabel?: string;
         companions?: { column?: string; label: string; compute?: (p: any) => string }[];
       }
       const STAT_MAP: StatDef[] = [
         {
           keywords: ["three pointer", "three-pointer", "3-pointer", "3 pointer", "three's", "3's", "3s", "threes", "triple", "from three", "from the three", "from deep", "beyond the arc"],
-          column: 'total_tpm', label: '3-Pointers Made',
+          column: 'total_tpm', label: '3-Pointers Made', avgColumn: 'avg_tpm', avgLabel: '3PM/G',
           companions: [
             { column: 'total_tpa', label: '3-Pointers Attempted' },
             { label: '3-Point %', compute: (p: any) => p.season_tp_pct != null ? `${Number(p.season_tp_pct).toFixed(1)}%` : (p.total_tpa > 0 ? ((p.total_tpm/p.total_tpa)*100).toFixed(1)+'%' : 'N/A') }
@@ -602,7 +604,7 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
         },
         {
           keywords: ['field goal', 'fg', 'shooting', 'from the field', 'shot'],
-          column: 'total_fgm', label: 'Field Goals Made',
+          column: 'total_fgm', label: 'Field Goals Made', avgColumn: 'season_fg_pct', avgLabel: 'FG%',
           companions: [
             { column: 'total_fga', label: 'Field Goals Attempted' },
             { label: 'FG %', compute: (p: any) => p.season_fg_pct != null ? `${Number(p.season_fg_pct).toFixed(1)}%` : (p.total_fga > 0 ? ((p.total_fgm/p.total_fga)*100).toFixed(1)+'%' : 'N/A') }
@@ -610,17 +612,17 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
         },
         {
           keywords: ['free throw', 'ft', 'foul shot', 'from the line'],
-          column: 'total_ftm', label: 'Free Throws Made',
+          column: 'total_ftm', label: 'Free Throws Made', avgColumn: 'season_ft_pct', avgLabel: 'FT%',
           companions: [
             { column: 'total_fta', label: 'Free Throws Attempted' },
             { label: 'FT %', compute: (p: any) => p.season_ft_pct != null ? `${Number(p.season_ft_pct).toFixed(1)}%` : (p.total_fta > 0 ? ((p.total_ftm/p.total_fta)*100).toFixed(1)+'%' : 'N/A') }
           ]
         },
-        { keywords: ['point', 'score', 'scoring', 'pts'], column: 'total_pts', label: 'Points' },
-        { keywords: ['rebound', 'board', 'glass'], column: 'total_reb', label: 'Rebounds' },
-        { keywords: ['assist', 'dish', 'pass'], column: 'total_ast', label: 'Assists' },
-        { keywords: ['steal'], column: 'total_stl', label: 'Steals' },
-        { keywords: ['block', 'blk'], column: 'total_blk', label: 'Blocks' },
+        { keywords: ['point', 'score', 'scoring', 'pts'], column: 'total_pts', label: 'Points', avgColumn: 'avg_pts', avgLabel: 'PPG' },
+        { keywords: ['rebound', 'board', 'glass'], column: 'total_reb', label: 'Rebounds', avgColumn: 'avg_reb', avgLabel: 'RPG' },
+        { keywords: ['assist', 'dish', 'pass'], column: 'total_ast', label: 'Assists', avgColumn: 'avg_ast', avgLabel: 'APG' },
+        { keywords: ['steal'], column: 'total_stl', label: 'Steals', avgColumn: 'avg_stl', avgLabel: 'SPG' },
+        { keywords: ['block', 'blk'], column: 'total_blk', label: 'Blocks', avgColumn: 'avg_blk', avgLabel: 'BPG' },
       ];
 
       const detectStat = (): StatDef | null => {
@@ -1017,34 +1019,46 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
         }
       }
 
-      // ── STAT LEADERBOARD: "top 3-point shooters", "who has made the most 3s" ──
+      // ── STAT LEADERBOARD: "top scorers", "who averages the most points", "leaders in rebounds" ──
       const isLeaderboardQuery = is(['most', 'who leads', 'who lead', 'who has the most', 'who have the most',
-        'who made the most', 'top', 'leader', 'leaders', 'best', 'highest', 'ranked', 'who is best']);
+        'who made the most', 'top', 'leader', 'leaders', 'best', 'highest', 'ranked', 'who is best',
+        'averages the most', 'per game leader', 'ppg leader', 'rpg leader', 'apg leader']);
       if (detectedStat && isLeaderboardQuery && !isSingleGameRecordQuery && !findPlayerInQuestion() && !findTeamInQuestion()) {
-        const sorted = [...playersData]
-          .sort((a: any, b: any) => (b[detectedStat.column] ?? 0) - (a[detectedStat.column] ?? 0))
+        // Sort by per-game average when available, else totals
+        const sortCol = detectedStat.avgColumn ?? detectedStat.column;
+        const isPercentStat = sortCol === 'season_fg_pct' || sortCol === 'season_tp_pct' || sortCol === 'season_ft_pct';
+        // For percentage stats, require minimum attempts
+        const eligible = isPercentStat
+          ? playersData.filter((p: any) => {
+              const attCol = detectedStat.column.replace('total_ftm', 'total_fta').replace('total_fgm', 'total_fga').replace('total_tpm', 'total_tpa');
+              return (p[attCol] ?? 0) >= 10;
+            })
+          : playersData;
+        const sorted = [...eligible]
+          .sort((a: any, b: any) => (b[sortCol] ?? 0) - (a[sortCol] ?? 0))
           .slice(0, 5);
         if (sorted.length > 0) {
+          const leagueAvg = eligible.length > 0
+            ? (eligible.reduce((sum: number, p: any) => sum + (p[sortCol] ?? 0), 0) / eligible.length)
+            : null;
           const rows = sorted.map((p: any, i: number) => {
-            const val = p[detectedStat.column] ?? 0;
-            let extra = '';
-            if (detectedStat.companions) {
-              const attComp = detectedStat.companions.find(c => c.column);
-              const pctComp = detectedStat.companions.find(c => c.compute);
-              if (attComp?.column) {
-                const att = p[attComp.column] ?? 0;
-                const pct = pctComp ? pctComp.compute!(p) : '';
-                extra = ` / ${att} att${pct ? ` (${pct})` : ''}`;
-              }
-            }
-            return `${i + 1}. ${p.player_name} (${p.team_name}) — ${val} ${detectedStat.label}${extra}`;
+            const avgVal = p[sortCol] != null ? Number(p[sortCol]).toFixed(1) : 'N/A';
+            const totalVal = p[detectedStat.column] ?? 0;
+            const gp = p.games_played ?? '?';
+            const isPercent = isPercentStat;
+            const mainLabel = detectedStat.avgLabel ?? detectedStat.label;
+            return `${i + 1}. ${p.player_name} (${p.team_name}) — ${avgVal}${isPercent ? '%' : ''} ${mainLabel} · ${totalVal} total · ${gp} GP`;
           }).join('\n');
+          const leagueAvgLine = leagueAvg != null
+            ? `\nLeague average: ${leagueAvg.toFixed(1)}${isPercentStat ? '%' : ''} ${detectedStat.avgLabel ?? detectedStat.label}`
+            : '';
+          const rawData = `${leagueName} — ${detectedStat.label} Leaders (ranked by per-game average):\n\n${rows}${leagueAvgLine}\n\nProvide a concise NBA-style analysis of these rankings, noting standout performers and context.`;
           const top = sorted[0];
-          return {
-            content: `### ${detectedStat.label} Leaders — ${leagueName}\n\n${rows}`,
-            suggestions: [`How is ${top.player_name} performing?`, 'Top scorers', 'Show me the standings'],
+          return aiEnhance(rawData, {
+            content: `### ${detectedStat.label} Leaders (Per Game) — ${leagueName}\n\n${rows}${leagueAvgLine}`,
+            suggestions: [`How is ${top.player_name} performing?`, `Where does ${top.player_name} rank in rebounds?`, 'Show me the standings'],
             navigationButtons: [{ label: `${top.player_name}'s Profile`, id: playerSlug(top), type: 'player' as const }]
-          };
+          });
         }
       }
 
@@ -1677,15 +1691,74 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
         });
       }
 
+      // ── PLAYER LEAGUE RANK: "where does [player] rank in scoring / how does he compare?" ──
+      const isRankQuery = is(['rank', 'ranked', 'where does', 'compare in', 'in the league', 'compared to league',
+        'compared to other', 'how does he compare', 'league rank', 'league standing in', 'how does she compare',
+        'compared to the rest', 'compared to everyone', 'vs the league', 'league average']);
+      const rankPlayer = resolveContextualPlayer();
+      const rankStat = detectedStat ?? (
+        is(['scoring', 'point', 'pts', 'ppg']) ? STAT_MAP.find(s => s.label === 'Points') :
+        is(['rebound', 'board', 'rpg']) ? STAT_MAP.find(s => s.label === 'Rebounds') :
+        is(['assist', 'apg']) ? STAT_MAP.find(s => s.label === 'Assists') :
+        null
+      ) ?? null;
+      if (isRankQuery && rankPlayer && rankStat) {
+        const sortCol = rankStat.avgColumn ?? rankStat.column;
+        const isPercent = sortCol === 'season_fg_pct' || sortCol === 'season_tp_pct' || sortCol === 'season_ft_pct';
+        const sortedAll = [...playersData].sort((a: any, b: any) => (b[sortCol] ?? 0) - (a[sortCol] ?? 0));
+        const playerRank = sortedAll.findIndex(p => p.player_name === rankPlayer.player_name) + 1;
+        const leagueAvg = sortedAll.length > 0
+          ? sortedAll.reduce((sum, p: any) => sum + (p[sortCol] ?? 0), 0) / sortedAll.length
+          : null;
+        // Build comparison table: top 3 + the player (if not in top 3) + one below
+        const showRows: any[] = sortedAll.slice(0, 3);
+        if (playerRank > 3) {
+          if (playerRank > 4) showRows.push(null); // separator
+          showRows.push(sortedAll[playerRank - 1]);
+        }
+        if (playerRank < sortedAll.length && playerRank > 3) showRows.push(sortedAll[playerRank]);
+
+        const fmtRow = (p: any, rank: number) => {
+          const val = p[sortCol] != null ? Number(p[sortCol]).toFixed(1) : 'N/A';
+          const isTarget = p.player_name === rankPlayer.player_name;
+          return `${isTarget ? '▶' : ' '} ${rank}. ${p.player_name} (${p.team_name}) — ${val}${isPercent ? '%' : ''} ${rankStat.avgLabel ?? rankStat.label} · ${p.games_played ?? '?'} GP`;
+        };
+        const tableRows = showRows.map((p, i) => {
+          if (p === null) return '   ...';
+          const rank = sortedAll.findIndex(x => x.player_name === p.player_name) + 1;
+          return fmtRow(p, rank);
+        }).join('\n');
+
+        const playerVal = rankPlayer[sortCol] != null ? Number(rankPlayer[sortCol]).toFixed(1) : 'N/A';
+        const leagueAvgStr = leagueAvg != null ? leagueAvg.toFixed(1) : 'N/A';
+        const rawData = [
+          `${leagueName} — ${rankStat.label} League Rankings (per game):`,
+          ``,
+          tableRows,
+          ``,
+          `Player in focus: ${rankPlayer.player_name} (${rankPlayer.team_name}) — ranks #${playerRank} of ${sortedAll.length} players`,
+          `Their average: ${playerVal}${isPercent ? '%' : ''} ${rankStat.avgLabel ?? rankStat.label}`,
+          `League average: ${leagueAvgStr}${isPercent ? '%' : ''} ${rankStat.avgLabel ?? rankStat.label}`,
+          ``,
+          `Write a concise NBA-style analysis of where ${rankPlayer.player_name} ranks in ${rankStat.label.toLowerCase()}, comparing them to the league average and nearby players. Be specific and insightful.`
+        ].join('\n');
+
+        return aiEnhance(rawData, {
+          content: `### ${rankPlayer.player_name} — ${rankStat.label} Ranking\n*#${playerRank} in ${leagueName}*\n\n${tableRows}\n\n*League average: ${leagueAvgStr}${isPercent ? '%' : ''} ${rankStat.avgLabel ?? rankStat.label}*`,
+          suggestions: [
+            `How is ${rankPlayer.player_name} performing overall?`,
+            `Where does ${rankPlayer.player_name} rank in assists?`,
+            `Top scorers in the league`
+          ],
+          navigationButtons: [{ label: `${rankPlayer.player_name}'s Profile`, id: playerSlug(rankPlayer), type: 'player' as const }]
+        });
+      }
+
       // ── NAME SCAN FALLBACK: any question containing a player name (or pronoun follow-up) ──
       const scannedPlayer = resolveContextualPlayer();
       if (scannedPlayer) {
         const p = scannedPlayer;
-        const pts = p.total_pts ?? 0;
-        const reb = p.total_reb ?? 0;
-        const ast = p.total_ast ?? 0;
-        const stl = p.total_stl ?? 0;
-        const blk = p.total_blk ?? 0;
+        const gp = p.games_played ?? 1;
         const fgm = p.total_fgm ?? 0;
         const fga = p.total_fga ?? 0;
         const tpm = p.total_tpm ?? 0;
@@ -1695,11 +1768,30 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
         const fgPct = p.season_fg_pct != null ? Number(p.season_fg_pct).toFixed(1) : (fga > 0 ? ((fgm/fga)*100).toFixed(1) : 'N/A');
         const tpPct = p.season_tp_pct != null ? Number(p.season_tp_pct).toFixed(1) : (tpa > 0 ? ((tpm/tpa)*100).toFixed(1) : 'N/A');
         const ftPct = p.season_ft_pct != null ? Number(p.season_ft_pct).toFixed(1) : (fta > 0 ? ((ftm/fta)*100).toFixed(1) : 'N/A');
-        return {
-          content: `### ${p.player_name}\n*${p.team_name} · ${p.games_played ?? '?'} games*\n\n**Season Totals**\n- **Points:** ${pts}\n- **Rebounds:** ${reb}\n- **Assists:** ${ast}\n- **Steals:** ${stl}\n- **Blocks:** ${blk}\n\n**Shooting**\n- **FG:** ${fgm}/${fga} (${fgPct}%)\n- **3PT:** ${tpm}/${tpa} (${tpPct}%)\n- **FT:** ${ftm}/${fta} (${ftPct}%)`,
-          suggestions: [`How is ${p.player_name} performing?`, `Who are ${p.team_name}'s top players?`, 'Top scorers'],
+        const avgPts = p.avg_pts != null ? Number(p.avg_pts).toFixed(1) : (gp > 0 ? ((p.total_pts ?? 0) / gp).toFixed(1) : 'N/A');
+        const avgReb = p.avg_reb != null ? Number(p.avg_reb).toFixed(1) : (gp > 0 ? ((p.total_reb ?? 0) / gp).toFixed(1) : 'N/A');
+        const avgAst = p.avg_ast != null ? Number(p.avg_ast).toFixed(1) : (gp > 0 ? ((p.total_ast ?? 0) / gp).toFixed(1) : 'N/A');
+        const avgStl = p.avg_stl != null ? Number(p.avg_stl).toFixed(1) : (gp > 0 ? ((p.total_stl ?? 0) / gp).toFixed(1) : 'N/A');
+        const avgBlk = p.avg_blk != null ? Number(p.avg_blk).toFixed(1) : (gp > 0 ? ((p.total_blk ?? 0) / gp).toFixed(1) : 'N/A');
+        // League rank context for the AI
+        const ptsRank = [...playersData].sort((a: any, b: any) => (b.avg_pts ?? 0) - (a.avg_pts ?? 0)).findIndex(x => x.player_name === p.player_name) + 1;
+        const rawData = [
+          `${leagueName} — Player: ${p.player_name} (${p.team_name}) · ${gp} games`,
+          ``,
+          `Season Averages:`,
+          `  Points: ${avgPts} PPG (${p.total_pts ?? 0} total) — ranks #${ptsRank} in league`,
+          `  Rebounds: ${avgReb} RPG (${p.total_reb ?? 0} total)`,
+          `  Assists: ${avgAst} APG (${p.total_ast ?? 0} total)`,
+          `  Steals: ${avgStl} SPG · Blocks: ${avgBlk} BPG`,
+          `Shooting: FG ${fgm}/${fga} (${fgPct}%) · 3PT ${tpm}/${tpa} (${tpPct}%) · FT ${ftm}/${fta} (${ftPct}%)`,
+          ``,
+          `Answer the user's question about ${p.player_name}. Lead with per-game averages, not totals.`
+        ].join('\n');
+        return aiEnhance(rawData, {
+          content: `### ${p.player_name}\n*${p.team_name} · ${gp} games*\n\n**Season Averages**\n- **Points:** ${avgPts} PPG (${p.total_pts ?? 0} total)\n- **Rebounds:** ${avgReb} RPG\n- **Assists:** ${avgAst} APG\n- **Steals/Blocks:** ${avgStl}/${avgBlk} per game\n\n**Shooting**\n- **FG:** ${fgm}/${fga} (${fgPct}%)\n- **3PT:** ${tpm}/${tpa} (${tpPct}%)\n- **FT:** ${ftm}/${fta} (${ftPct}%)`,
+          suggestions: [`How is ${p.player_name} performing?`, `Where does ${p.player_name} rank in scoring?`, `Who are ${p.team_name}'s top players?`],
           navigationButtons: [{ label: `${p.player_name}'s Profile`, id: playerSlug(p), type: 'player' as const }]
-        };
+        });
       }
 
       // ── ADVANCED STATS FOR A SPECIFIC TEAM ────────────────────────────
