@@ -591,9 +591,35 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
         label: string;
         avgColumn?: string;
         avgLabel?: string;
+        attemptsColumn?: string;
         companions?: { column?: string; label: string; compute?: (p: any) => string }[];
       }
+
+      const parseMinAttemptsPerGame = (query: string): number | null => {
+        const patterns = [
+          /min(?:imum)?\s+(\d+(?:\.\d+)?)\s*(?:attempts?\s*)?(?:per\s*game|\/\s*g(?:ame)?|a\s*game|pg)/i,
+          /at\s+least\s+(\d+(?:\.\d+)?)\s*(?:attempts?\s*)?(?:per\s*game|\/\s*g(?:ame)?|a\s*game|pg)/i,
+          /(\d+(?:\.\d+)?)\+?\s*(?:attempts?\s*)?(?:per\s*game|\/\s*g(?:ame)?|a\s*game|pg)/i,
+          /min(?:imum)?\s+(\d+(?:\.\d+)?)\s*(?:attempts?|att)/i,
+          /at\s+least\s+(\d+(?:\.\d+)?)\s*(?:attempts?|att)/i,
+        ];
+        for (const pat of patterns) {
+          const m = query.match(pat);
+          if (m) return parseFloat(m[1]);
+        }
+        return null;
+      };
+
       const STAT_MAP: StatDef[] = [
+        {
+          keywords: ["3pt%", "3pt pct", "3-point percentage", "three point percent", "three point percentage", "3 point percentage", "3-point%", "three-point percentage", "3p%", "three pt%"],
+          column: 'total_tpm', label: '3-Point %', avgColumn: 'season_tp_pct', avgLabel: '3PT%',
+          attemptsColumn: 'total_tpa',
+          companions: [
+            { column: 'total_tpm', label: '3-Pointers Made' },
+            { column: 'total_tpa', label: '3-Pointers Attempted' },
+          ]
+        },
         {
           keywords: ["three pointer", "three-pointer", "3-pointer", "3 pointer", "three's", "3's", "3s", "threes", "triple", "from three", "from the three", "from deep", "beyond the arc"],
           column: 'total_tpm', label: '3-Pointers Made', avgColumn: 'avg_tpm', avgLabel: '3PM/G',
@@ -603,16 +629,18 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
           ]
         },
         {
-          keywords: ['field goal', 'fg', 'shooting', 'from the field', 'shot'],
+          keywords: ['fg%', 'fg pct', 'field goal percentage', 'field goal%', 'field goal', 'fg', 'shooting', 'from the field', 'shot'],
           column: 'total_fgm', label: 'Field Goals Made', avgColumn: 'season_fg_pct', avgLabel: 'FG%',
+          attemptsColumn: 'total_fga',
           companions: [
             { column: 'total_fga', label: 'Field Goals Attempted' },
             { label: 'FG %', compute: (p: any) => p.season_fg_pct != null ? `${Number(p.season_fg_pct).toFixed(1)}%` : (p.total_fga > 0 ? ((p.total_fgm/p.total_fga)*100).toFixed(1)+'%' : 'N/A') }
           ]
         },
         {
-          keywords: ['free throw', 'ft', 'foul shot', 'from the line'],
+          keywords: ['ft%', 'ft pct', 'free throw percentage', 'free throw%', 'free throw', 'ft', 'foul shot', 'from the line'],
           column: 'total_ftm', label: 'Free Throws Made', avgColumn: 'season_ft_pct', avgLabel: 'FT%',
+          attemptsColumn: 'total_fta',
           companions: [
             { column: 'total_fta', label: 'Free Throws Attempted' },
             { label: 'FT %', compute: (p: any) => p.season_ft_pct != null ? `${Number(p.season_ft_pct).toFixed(1)}%` : (p.total_fta > 0 ? ((p.total_ftm/p.total_fta)*100).toFixed(1)+'%' : 'N/A') }
@@ -1024,14 +1052,17 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
         'who made the most', 'top', 'leader', 'leaders', 'best', 'highest', 'ranked', 'who is best',
         'averages the most', 'per game leader', 'ppg leader', 'rpg leader', 'apg leader']);
       if (detectedStat && isLeaderboardQuery && !isSingleGameRecordQuery && !findPlayerInQuestion() && !findTeamInQuestion()) {
-        // Sort by per-game average when available, else totals
         const sortCol = detectedStat.avgColumn ?? detectedStat.column;
         const isPercentStat = sortCol === 'season_fg_pct' || sortCol === 'season_tp_pct' || sortCol === 'season_ft_pct';
-        // For percentage stats, require minimum attempts
-        const eligible = isPercentStat
+        const attCol = detectedStat.attemptsColumn;
+        const userThreshold = parseMinAttemptsPerGame(q);
+        const defaultThreshold = sortCol === 'season_tp_pct' ? 1.5 : 1.0;
+        const perGameThreshold = isPercentStat ? (userThreshold ?? defaultThreshold) : 0;
+        const eligible = isPercentStat && attCol
           ? playersData.filter((p: any) => {
-              const attCol = detectedStat.column.replace('total_ftm', 'total_fta').replace('total_fgm', 'total_fga').replace('total_tpm', 'total_tpa');
-              return (p[attCol] ?? 0) >= 10;
+              const gp = p.games_played ?? 1;
+              const totalAtt = p[attCol] ?? 0;
+              return gp > 0 && (totalAtt / gp) >= perGameThreshold;
             })
           : playersData;
         const sorted = [...eligible]
@@ -1041,6 +1072,7 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
           const leagueAvg = eligible.length > 0
             ? (eligible.reduce((sum: number, p: any) => sum + (p[sortCol] ?? 0), 0) / eligible.length)
             : null;
+          const thresholdNote = isPercentStat ? `\n_Minimum ${perGameThreshold} attempts per game to qualify (${eligible.length} players qualified)_` : '';
           const rows = sorted.map((p: any, i: number) => {
             const avgVal = p[sortCol] != null ? Number(p[sortCol]).toFixed(1) : 'N/A';
             const totalVal = p[detectedStat.column] ?? 0;
@@ -1052,10 +1084,10 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
           const leagueAvgLine = leagueAvg != null
             ? `\nLeague average: ${leagueAvg.toFixed(1)}${isPercentStat ? '%' : ''} ${detectedStat.avgLabel ?? detectedStat.label}`
             : '';
-          const rawData = `${leagueName} — ${detectedStat.label} Leaders (ranked by per-game average):\n\n${rows}${leagueAvgLine}\n\nProvide a concise NBA-style analysis of these rankings, noting standout performers and context.`;
+          const rawData = `${leagueName} — ${detectedStat.label} Leaders (ranked by per-game average):\n\n${rows}${leagueAvgLine}${thresholdNote}\n\nProvide a concise NBA-style analysis of these rankings, noting standout performers and context.`;
           const top = sorted[0];
           return aiEnhance(rawData, {
-            content: `### ${detectedStat.label} Leaders (Per Game) — ${leagueName}\n\n${rows}${leagueAvgLine}`,
+            content: `### ${detectedStat.label} Leaders (Per Game) — ${leagueName}\n\n${rows}${leagueAvgLine}${thresholdNote}`,
             suggestions: [`How is ${top.player_name} performing?`, `Where does ${top.player_name} rank in rebounds?`, 'Show me the standings'],
             navigationButtons: [{ label: `${top.player_name}'s Profile`, id: playerSlug(top), type: 'player' as const }]
           });
@@ -1705,46 +1737,89 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
       if (isRankQuery && rankPlayer && rankStat) {
         const sortCol = rankStat.avgColumn ?? rankStat.column;
         const isPercent = sortCol === 'season_fg_pct' || sortCol === 'season_tp_pct' || sortCol === 'season_ft_pct';
-        const sortedAll = [...playersData].sort((a: any, b: any) => (b[sortCol] ?? 0) - (a[sortCol] ?? 0));
-        const playerRank = sortedAll.findIndex(p => p.player_name === rankPlayer.player_name) + 1;
+        const rankAttCol = rankStat.attemptsColumn;
+        const rankUserThreshold = parseMinAttemptsPerGame(q);
+        const rankDefaultThreshold = sortCol === 'season_tp_pct' ? 1.5 : 1.0;
+        const rankPerGameThreshold = isPercent ? (rankUserThreshold ?? rankDefaultThreshold) : 0;
+        const qualifiedPlayers = isPercent && rankAttCol
+          ? playersData.filter((p: any) => {
+              const gp = p.games_played ?? 1;
+              const totalAtt = p[rankAttCol] ?? 0;
+              return gp > 0 && (totalAtt / gp) >= rankPerGameThreshold;
+            })
+          : playersData;
+        const sortedAll = [...qualifiedPlayers].sort((a: any, b: any) => (b[sortCol] ?? 0) - (a[sortCol] ?? 0));
+        const playerIsQualified = sortedAll.some(p => p.player_name === rankPlayer.player_name);
+        const playerRank = playerIsQualified
+          ? sortedAll.findIndex(p => p.player_name === rankPlayer.player_name) + 1
+          : -1;
+        const playerValNum = rankPlayer[sortCol] != null ? Number(rankPlayer[sortCol]) : 0;
+        const hypotheticalRank = !playerIsQualified
+          ? sortedAll.filter((p: any) => (p[sortCol] ?? 0) > playerValNum).length + 1
+          : playerRank;
         const leagueAvg = sortedAll.length > 0
           ? sortedAll.reduce((sum, p: any) => sum + (p[sortCol] ?? 0), 0) / sortedAll.length
           : null;
-        // Build comparison table: top 3 + the player (if not in top 3) + one below
         const showRows: any[] = sortedAll.slice(0, 3);
-        if (playerRank > 3) {
-          if (playerRank > 4) showRows.push(null); // separator
+        if (playerIsQualified && playerRank > 3) {
+          if (playerRank > 4) showRows.push(null);
           showRows.push(sortedAll[playerRank - 1]);
+          if (playerRank < sortedAll.length) showRows.push(sortedAll[playerRank]);
         }
-        if (playerRank < sortedAll.length && playerRank > 3) showRows.push(sortedAll[playerRank]);
+        if (!playerIsQualified) {
+          const existingNames = new Set(showRows.filter(Boolean).map((p: any) => p.player_name));
+          if (hypotheticalRank > 3) {
+            if (hypotheticalRank > 4) showRows.push(null);
+            const aboveIdx = hypotheticalRank - 2;
+            if (aboveIdx >= 0 && aboveIdx < sortedAll.length && !existingNames.has(sortedAll[aboveIdx].player_name)) {
+              showRows.push(sortedAll[aboveIdx]);
+            }
+          }
+          showRows.push(rankPlayer);
+          const belowIdx = hypotheticalRank - 1;
+          if (belowIdx < sortedAll.length && !existingNames.has(sortedAll[belowIdx].player_name)) {
+            showRows.push(sortedAll[belowIdx]);
+          }
+        }
 
-        const fmtRow = (p: any, rank: number) => {
+        const fmtRow = (p: any, rank: number, unqualifiedTag?: boolean) => {
           const val = p[sortCol] != null ? Number(p[sortCol]).toFixed(1) : 'N/A';
           const isTarget = p.player_name === rankPlayer.player_name;
-          return `${isTarget ? '▶' : ' '} ${rank}. ${p.player_name} (${p.team_name}) — ${val}${isPercent ? '%' : ''} ${rankStat.avgLabel ?? rankStat.label} · ${p.games_played ?? '?'} GP`;
+          const uqLabel = unqualifiedTag ? ' (unqualified)' : '';
+          return `${isTarget ? '▶' : ' '} ${rank}. ${p.player_name} (${p.team_name}) — ${val}${isPercent ? '%' : ''} ${rankStat.avgLabel ?? rankStat.label} · ${p.games_played ?? '?'} GP${uqLabel}`;
         };
         const tableRows = showRows.map((p, i) => {
           if (p === null) return '   ...';
+          if (!playerIsQualified && p.player_name === rankPlayer.player_name) {
+            return fmtRow(p, hypotheticalRank, true);
+          }
           const rank = sortedAll.findIndex(x => x.player_name === p.player_name) + 1;
           return fmtRow(p, rank);
         }).join('\n');
 
         const playerVal = rankPlayer[sortCol] != null ? Number(rankPlayer[sortCol]).toFixed(1) : 'N/A';
         const leagueAvgStr = leagueAvg != null ? leagueAvg.toFixed(1) : 'N/A';
+        const rankNote = playerIsQualified
+          ? `ranks #${playerRank} of ${sortedAll.length} qualified players`
+          : `does not meet the minimum ${rankPerGameThreshold} attempts/game threshold to qualify — would rank #${hypotheticalRank} of ${sortedAll.length} qualified players if eligible`;
+        const thresholdLine = isPercent ? `Qualification threshold: ${rankPerGameThreshold} attempts per game (${sortedAll.length} players qualified)` : '';
         const rawData = [
           `${leagueName} — ${rankStat.label} League Rankings (per game):`,
           ``,
           tableRows,
           ``,
-          `Player in focus: ${rankPlayer.player_name} (${rankPlayer.team_name}) — ranks #${playerRank} of ${sortedAll.length} players`,
+          `Player in focus: ${rankPlayer.player_name} (${rankPlayer.team_name}) — ${rankNote}`,
           `Their average: ${playerVal}${isPercent ? '%' : ''} ${rankStat.avgLabel ?? rankStat.label}`,
           `League average: ${leagueAvgStr}${isPercent ? '%' : ''} ${rankStat.avgLabel ?? rankStat.label}`,
+          thresholdLine,
           ``,
           `Write a concise NBA-style analysis of where ${rankPlayer.player_name} ranks in ${rankStat.label.toLowerCase()}, comparing them to the league average and nearby players. Be specific and insightful.`
         ].join('\n');
 
+        const rankDisplay = playerIsQualified ? `#${playerRank}` : `Unqualified (would be #${hypotheticalRank})`;
+        const thresholdFooter = isPercent ? `\n_Minimum ${rankPerGameThreshold} attempts per game to qualify_` : '';
         return aiEnhance(rawData, {
-          content: `### ${rankPlayer.player_name} — ${rankStat.label} Ranking\n*#${playerRank} in ${leagueName}*\n\n${tableRows}\n\n*League average: ${leagueAvgStr}${isPercent ? '%' : ''} ${rankStat.avgLabel ?? rankStat.label}*`,
+          content: `### ${rankPlayer.player_name} — ${rankStat.label} Ranking\n*${rankDisplay} in ${leagueName}*\n\n${tableRows}\n\n*League average: ${leagueAvgStr}${isPercent ? '%' : ''} ${rankStat.avgLabel ?? rankStat.label}*${thresholdFooter}`,
           suggestions: [
             `How is ${rankPlayer.player_name} performing overall?`,
             `Where does ${rankPlayer.player_name} rank in assists?`,
