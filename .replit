@@ -86,3 +86,7 @@ args = "cd python_backend && python main.py"
 
 [agent]
 integrations = ["javascript_supabase:1.0.0", "javascript_openai:1.0.0"]
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 20000
