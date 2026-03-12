@@ -61,11 +61,11 @@ function BasketballCourt() {
 
   const raR = 40;
 
-  const tpR = 237.5;
+  const tpR = 221.5;
   const cornerY_top = 30;
   const cornerY_bot = 470;
-  const arcStartL = 142;
-  const arcStartR = 798;
+  const arcStartL = 78;
+  const arcStartR = 862;
 
   const centerX = 470;
   const centerR = 60;
