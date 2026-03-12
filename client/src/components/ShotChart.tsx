@@ -97,11 +97,11 @@ function BasketballCourt() {
 
       <line x1="0" y1={cornerY_top} x2={arcStartL} y2={cornerY_top} stroke={lineColor} strokeWidth={lw} />
       <line x1="0" y1={cornerY_bot} x2={arcStartL} y2={cornerY_bot} stroke={lineColor} strokeWidth={lw} />
-      <path d={`M ${arcStartL} ${cornerY_top} A ${tpR} ${tpR} 0 1 1 ${arcStartL} ${cornerY_bot}`} fill="none" stroke={lineColor} strokeWidth={lw} />
+      <path d={`M ${arcStartL} ${cornerY_top} A ${tpR} ${tpR} 0 0 1 ${arcStartL} ${cornerY_bot}`} fill="none" stroke={lineColor} strokeWidth={lw} />
 
       <line x1={CW} y1={cornerY_top} x2={arcStartR} y2={cornerY_top} stroke={lineColor} strokeWidth={lw} />
       <line x1={CW} y1={cornerY_bot} x2={arcStartR} y2={cornerY_bot} stroke={lineColor} strokeWidth={lw} />
-      <path d={`M ${arcStartR} ${cornerY_top} A ${tpR} ${tpR} 0 1 0 ${arcStartR} ${cornerY_bot}`} fill="none" stroke={lineColor} strokeWidth={lw} />
+      <path d={`M ${arcStartR} ${cornerY_top} A ${tpR} ${tpR} 0 0 0 ${arcStartR} ${cornerY_bot}`} fill="none" stroke={lineColor} strokeWidth={lw} />
 
       <line x1={centerX} y1="0" x2={centerX} y2={CH} stroke={lineColor} strokeWidth={lw} />
       <circle cx={centerX} cy={cy} r={centerR} fill="none" stroke={lineColor} strokeWidth={lw} />
