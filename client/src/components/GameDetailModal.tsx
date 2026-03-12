@@ -5,6 +5,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { TeamLogo } from "./TeamLogo";
 import { extractColorsFromImage, TeamColors, adjustOpacity } from "@/lib/colorExtractor";
 import { generatePlayCaption } from "@/utils/generatePlayCaption";
+import ShotChart, { type ShotData } from "./ShotChart";
 
 interface PlayerGameStats {
   id: string;
@@ -85,11 +86,10 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
   const [liveEvents, setLiveEvents] = useState<LiveEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [eventsLoaded, setEventsLoaded] = useState(false);
+  const [shotChartShots, setShotChartShots] = useState<ShotData[]>([]);
+  const [shotChartLoading, setShotChartLoading] = useState(false);
   
   // Shot chart filters
-  const [shotPlayerFilter, setShotPlayerFilter] = useState<string>("all");
-  const [shotQuarterFilter, setShotQuarterFilter] = useState<string>("all");
-  const [shotTypeFilter, setShotTypeFilter] = useState<string>("all");
   const [quarterFilter, setQuarterFilter] = useState<string>("all");
   
   // Team branding colors
@@ -328,11 +328,12 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
     }
   };
 
-  // Lazy load live events for Feed and Shot Chart tabs
+  // Lazy load live events for Feed tab and shot chart for Shot Chart tab
   const fetchLiveEvents = async () => {
     if (eventsLoaded || !gameId) return;
     
     setEventsLoading(true);
+    setShotChartLoading(true);
     try {
       // First, get the game_key from player_stats using numeric_id
       const { data: gameData, error: gameError } = await supabase
@@ -344,14 +345,15 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
       
       if (gameError || !gameData?.game_key) {
         console.error("Error fetching game_key:", gameError);
-        setEventsLoaded(true); // Mark as loaded to prevent retry loop
+        setEventsLoaded(true);
         setEventsLoading(false);
+        setShotChartLoading(false);
         return;
       }
       
       const gameKey = gameData.game_key;
       
-      // Now fetch live_events using the game_key
+      // Fetch live_events for play-by-play feed
       const { data: events, error } = await supabase
         .from("live_events")
         .select("*")
@@ -360,17 +362,27 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
       
       if (error) {
         console.error("Error fetching live events:", error);
-        return;
-      }
-      
-      if (events) {
+      } else if (events) {
         setLiveEvents(events);
         setEventsLoaded(true);
+      }
+
+      // Fetch shot chart data from shot_chart table
+      const { data: shots, error: shotsError } = await supabase
+        .from("shot_chart")
+        .select("id, x, y, success, player_name, player_id, period, team_no, shot_type, sub_type, game_key")
+        .eq("game_key", gameKey);
+
+      if (shotsError) {
+        console.error("Error fetching shot chart:", shotsError);
+      } else {
+        setShotChartShots((shots || []) as ShotData[]);
       }
     } catch (error) {
       console.error("Error loading live events:", error);
     } finally {
       setEventsLoading(false);
+      setShotChartLoading(false);
     }
   };
 
@@ -378,6 +390,8 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
   useEffect(() => {
     setEventsLoaded(false);
     setLiveEvents([]);
+    setShotChartShots([]);
+    setShotChartLoading(false);
     setTeamColors({}); // Clear colors to prevent showing stale branding
   }, [gameId]);
 
@@ -1465,161 +1479,17 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
 
                 {/* Shot Chart Tab */}
                 <TabsContent value="shotchart" className="mt-4 space-y-4">
-                  {eventsLoading ? (
-                    <div className="p-8 text-center">
-                      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto"></div>
-                      <p className="mt-4 text-slate-600">Loading shot data...</p>
-                    </div>
-                  ) : (() => {
-                    // Filter shot events
-                    const shotEvents = liveEvents.filter(e => 
-                      (e.action_type?.toLowerCase().includes('shot') || 
-                       e.action_type?.toLowerCase().includes('layup') ||
-                       e.action_type?.toLowerCase().includes('dunk') ||
-                       e.action_type?.toLowerCase().includes('jumper')) &&
-                      e.x_coord != null && 
-                      e.y_coord != null
-                    );
-
-                    // Apply filters
-                    const filteredShots = shotEvents.filter(shot => {
-                      if (shotPlayerFilter !== "all" && shot.player_id !== shotPlayerFilter) return false;
-                      if (shotQuarterFilter !== "all" && shot.period?.toString() !== shotQuarterFilter) return false;
-                      if (shotTypeFilter === "makes" && !shot.success) return false;
-                      if (shotTypeFilter === "misses" && shot.success) return false;
-                      return true;
-                    });
-
-                    // Get unique players for filter
-                    const players = Array.from(new Set(shotEvents.map(e => e.player_id).filter(Boolean)))
-                      .map(id => {
-                        const event = shotEvents.find(e => e.player_id === id);
-                        return { id, name: event?.player_name || 'Unknown' };
-                      });
-
-                    const makes = filteredShots.filter(s => s.success).length;
-                    const total = filteredShots.length;
-                    const percentage = total > 0 ? ((makes / total) * 100).toFixed(1) : '0.0';
-
-                    return shotEvents.length === 0 ? (
-                      <div className="p-8 md:p-12 text-center bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg border border-gray-200">
-                        <MapPin className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                        <h3 className="text-xl font-semibold text-slate-800 mb-2">No Shot Data Available</h3>
-                        <p className="text-slate-600 max-w-md mx-auto">
-                          No shot coordinate data is available for this game yet.
-                        </p>
-                      </div>
-                    ) : (
-                      <>
-                        {/* Filters */}
-                        <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                          <div className="flex flex-col md:flex-row gap-3 md:gap-4 items-start md:items-center justify-between">
-                            <div className="flex flex-wrap gap-2 md:gap-3 w-full md:w-auto">
-                              <select
-                                value={shotPlayerFilter}
-                                onChange={(e) => setShotPlayerFilter(e.target.value)}
-                                className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                              >
-                                <option value="all">All Players</option>
-                                {players.map(p => (
-                                  <option key={p.id} value={p.id}>{p.name}</option>
-                                ))}
-                              </select>
-                              
-                              <select
-                                value={shotQuarterFilter}
-                                onChange={(e) => setShotQuarterFilter(e.target.value)}
-                                className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                              >
-                                <option value="all">All Quarters</option>
-                                <option value="1">Q1</option>
-                                <option value="2">Q2</option>
-                                <option value="3">Q3</option>
-                                <option value="4">Q4</option>
-                              </select>
-                              
-                              <select
-                                value={shotTypeFilter}
-                                onChange={(e) => setShotTypeFilter(e.target.value)}
-                                className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500"
-                              >
-                                <option value="all">All Shots</option>
-                                <option value="makes">Makes Only</option>
-                                <option value="misses">Misses Only</option>
-                              </select>
-                            </div>
-                            
-                            <div className="text-sm text-slate-600 whitespace-nowrap">
-                              <span className="font-semibold text-orange-600">{makes}/{total}</span> ({percentage}%)
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Basketball Court */}
-                        <div className="bg-white rounded-lg p-4 border border-gray-200">
-                          <div className="max-w-2xl mx-auto">
-                            <svg viewBox="0 0 500 470" className="w-full h-auto">
-                              {/* Court background */}
-                              <rect x="0" y="0" width="500" height="470" fill="#f8f0e3" stroke="#000" strokeWidth="2"/>
-                              
-                              {/* Half court line */}
-                              <line x1="0" y1="235" x2="500" y2="235" stroke="#000" strokeWidth="2"/>
-                              
-                              {/* Center circle */}
-                              <circle cx="250" cy="235" r="60" fill="none" stroke="#000" strokeWidth="2"/>
-                              
-                              {/* Left basket area */}
-                              <rect x="0" y="152.5" width="190" height="165" fill="none" stroke="#000" strokeWidth="2"/>
-                              <rect x="0" y="187.5" width="60" height="95" fill="none" stroke="#000" strokeWidth="2"/>
-                              <circle cx="60" cy="235" r="60" fill="none" stroke="#000" strokeWidth="2"/>
-                              {/* Left 3-point arc */}
-                              <path d="M 0 62 Q 135 235 0 408" fill="none" stroke="#000" strokeWidth="2"/>
-                              
-                              {/* Right basket area */}
-                              <rect x="310" y="152.5" width="190" height="165" fill="none" stroke="#000" strokeWidth="2"/>
-                              <rect x="440" y="187.5" width="60" height="95" fill="none" stroke="#000" strokeWidth="2"/>
-                              <circle cx="440" cy="235" r="60" fill="none" stroke="#000" strokeWidth="2"/>
-                              {/* Right 3-point arc */}
-                              <path d="M 500 62 Q 365 235 500 408" fill="none" stroke="#000" strokeWidth="2"/>
-                              
-                              {/* Plot shots */}
-                              {filteredShots.map((shot, idx) => {
-                                // Normalize coordinates (assuming x: 0-100, y: 0-100)
-                                const x = (shot.x_coord / 100) * 500;
-                                const y = (shot.y_coord / 100) * 470;
-                                
-                                return (
-                                  <g key={idx}>
-                                    <circle
-                                      cx={x}
-                                      cy={y}
-                                      r="6"
-                                      fill={shot.success ? "#22c55e" : "#ef4444"}
-                                      opacity="0.8"
-                                      stroke={shot.success ? "#16a34a" : "#dc2626"}
-                                      strokeWidth="2"
-                                    />
-                                  </g>
-                                );
-                              })}
-                            </svg>
-                            
-                            {/* Legend */}
-                            <div className="flex items-center justify-center gap-6 mt-4 text-sm">
-                              <div className="flex items-center gap-2">
-                                <div className="w-4 h-4 rounded-full bg-green-500 border-2 border-green-600"></div>
-                                <span className="text-slate-600">Made ({makes})</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <div className="w-4 h-4 rounded-full bg-red-500 border-2 border-red-600"></div>
-                                <span className="text-slate-600">Missed ({total - makes})</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </>
-                    );
-                  })()}
+                  <ShotChart
+                    shots={shotChartShots}
+                    loading={shotChartLoading}
+                    compact
+                    emptyMessage="No shot data is available for this game yet."
+                    filters={{
+                      showPlayerFilter: true,
+                      showQuarterFilter: true,
+                      showResultFilter: true,
+                    }}
+                  />
                 </TabsContent>
               </Tabs>
             </div>

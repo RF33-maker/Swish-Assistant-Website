@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useLocation, useParams } from "wouter";
 import { supabase } from "@/lib/supabase";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
@@ -19,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import ShotChart, { type ShotData } from "@/components/ShotChart";
 
 interface League {
   league_id: string;
@@ -182,6 +184,104 @@ const applyPlayerMode = (
   return value;
 };
 
+function TeamShotChartSection({
+  teamName,
+  leagueId,
+  recentGames,
+  shotChartRange,
+  setShotChartRange,
+}: {
+  teamName: string;
+  leagueId: string;
+  recentGames: Game[];
+  shotChartRange: string;
+  setShotChartRange: (v: string) => void;
+}) {
+  const selectedGames = useMemo(() => {
+    if (!recentGames || recentGames.length === 0) return [];
+    const sorted = [...recentGames]
+      .filter(g => g.game_key)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    if (shotChartRange === "last5") return sorted.slice(0, 5);
+    if (shotChartRange === "last10") return sorted.slice(0, 10);
+    if (shotChartRange.startsWith("game:")) {
+      const gk = shotChartRange.replace("game:", "");
+      return sorted.filter(g => g.game_key === gk);
+    }
+    return sorted;
+  }, [recentGames, shotChartRange]);
+
+  const gameKeys = useMemo(() => selectedGames.map(g => g.game_key).filter(Boolean) as string[], [selectedGames]);
+
+  const teamNoByGameKey = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const g of selectedGames) {
+      if (g.game_key) {
+        map.set(g.game_key, g.isHome ? 1 : 2);
+      }
+    }
+    return map;
+  }, [selectedGames]);
+
+  const { data: shotEvents, isLoading } = useQuery({
+    queryKey: ['team-shot-chart', teamName, leagueId, gameKeys],
+    queryFn: async () => {
+      if (gameKeys.length === 0) return [];
+      const { data, error } = await supabase
+        .from('shot_chart')
+        .select('id, x, y, success, player_name, player_id, period, team_no, shot_type, sub_type, game_key')
+        .in('game_key', gameKeys);
+      if (error) { console.error('Shot chart error:', error); return []; }
+      return ((data || []) as ShotData[])
+        .filter(e => {
+          if (!e.game_key || e.team_no == null) return false;
+          const expectedTeamNo = teamNoByGameKey.get(e.game_key);
+          return expectedTeamNo != null && e.team_no === expectedTeamNo;
+        });
+    },
+    enabled: gameKeys.length > 0,
+  });
+
+  const gamesWithKeys = useMemo(() => {
+    return (recentGames || [])
+      .filter(g => g.game_key)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [recentGames]);
+
+  return (
+    <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+        <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">Shot Chart - {teamName}</h2>
+        <Select value={shotChartRange} onValueChange={setShotChartRange}>
+          <SelectTrigger className="w-full md:w-48 bg-white dark:bg-neutral-800 border-slate-200 dark:border-neutral-600">
+            <SelectValue placeholder="Select range" />
+          </SelectTrigger>
+          <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
+            <SelectItem value="season">Full Season</SelectItem>
+            <SelectItem value="last10">Last 10 Games</SelectItem>
+            <SelectItem value="last5">Last 5 Games</SelectItem>
+            {gamesWithKeys.map((g, i) => (
+              <SelectItem key={g.game_key} value={`game:${g.game_key}`}>
+                vs {g.opponent} ({new Date(g.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <ShotChart
+        shots={shotEvents || []}
+        loading={isLoading}
+        emptyMessage="No shot data available for the selected games."
+        filters={{
+          showPlayerFilter: true,
+          showQuarterFilter: true,
+          showResultFilter: true,
+        }}
+      />
+    </div>
+  );
+}
+
 export default function TeamProfile() {
   const { teamName, leagueSlug } = useParams();
   const [location, navigate] = useLocation();
@@ -197,7 +297,8 @@ export default function TeamProfile() {
   const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
   const [isGameModalOpen, setIsGameModalOpen] = useState(false);
   const [currentLeagueId, setCurrentLeagueId] = useState<string | null>(null);
-  const [activeStatsTab, setActiveStatsTab] = useState<'overview' | 'playerStats' | 'teamStats'>('overview');
+  const [activeStatsTab, setActiveStatsTab] = useState<'overview' | 'playerStats' | 'teamStats' | 'shotChart'>('overview');
+  const [shotChartRange, setShotChartRange] = useState<string>("season");
   const [playerStatsCategory, setPlayerStatsCategory] = useState<'Traditional' | 'Advanced' | 'Scoring' | 'Misc'>('Traditional');
   const [playerStatsView, setPlayerStatsView] = useState<'Total' | 'Per Game' | 'Per 40'>('Per Game');
   const [statsSearch, setStatsSearch] = useState('');
@@ -1037,6 +1138,17 @@ export default function TeamProfile() {
             >
               Team Stats
             </button>
+            <button
+              onClick={() => setActiveStatsTab('shotChart')}
+              className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
+                activeStatsTab === 'shotChart'
+                  ? 'border-b-2 text-orange-600 dark:text-orange-400'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-orange-500'
+              }`}
+              style={activeStatsTab === 'shotChart' ? { borderBottomColor: textOnWhiteColor, color: textOnWhiteColor } : {}}
+            >
+              Shot Chart
+            </button>
           </div>
         </div>
 
@@ -1507,6 +1619,16 @@ export default function TeamProfile() {
               </div>
             )}
           </div>
+        )}
+
+        {activeStatsTab === 'shotChart' && (
+          <TeamShotChartSection
+            teamName={team.name}
+            leagueId={team.league?.league_id || currentLeagueId || ''}
+            recentGames={team.recentGames}
+            shotChartRange={shotChartRange}
+            setShotChartRange={setShotChartRange}
+          />
         )}
 
         {activeStatsTab === 'teamStats' && (
