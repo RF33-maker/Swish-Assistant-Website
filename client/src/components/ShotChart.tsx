@@ -13,6 +13,8 @@ export interface ShotData {
   shot_type?: string | null;
   sub_type?: string | null;
   game_key?: string | null;
+  action_number?: number | null;
+  created_at?: string | null;
 }
 
 interface ShotChartFilters {
@@ -20,6 +22,8 @@ interface ShotChartFilters {
   showQuarterFilter?: boolean;
   showTeamFilter?: boolean;
   showResultFilter?: boolean;
+  showShotTypeFilter?: boolean;
+  showSubTypeFilter?: boolean;
   teamNames?: { home?: string; away?: string };
 }
 
@@ -30,30 +34,78 @@ interface ShotChartProps {
   loading?: boolean;
   emptyMessage?: string;
   compact?: boolean;
+  pulseRecent?: boolean;
 }
 
-const COURT_WIDTH = 500;
-const COURT_HEIGHT = 470;
+const CW = 940;
+const CH = 500;
 
 function BasketballCourt() {
+  const basketL = 52.5;
+  const basketR = 887.5;
+  const cy = 250;
+
+  const paintL = 190;
+  const paintR = 750;
+  const paintTop = 170;
+  const paintBot = 330;
+
+  const ftRadius = 60;
+
+  const bbL = 40;
+  const bbR = 900;
+  const bbTop = 220;
+  const bbBot = 280;
+
+  const rimR = 7.5;
+
+  const raR = 40;
+
+  const tpR = 237.5;
+  const cornerY_top = 30;
+  const cornerY_bot = 470;
+  const arcStartL = 142;
+  const arcStartR = 798;
+
+  const centerX = 470;
+  const centerR = 60;
+
+  const lineColor = "#b8956a";
+  const courtFill = "#e8d5b7";
+  const paintFill = "rgba(184,149,106,0.08)";
+  const lw = 2;
+
   return (
     <>
-      <rect x="0" y="0" width={COURT_WIDTH} height={COURT_HEIGHT} fill="#f8f0e3" stroke="#c4956a" strokeWidth="2" rx="4"/>
-      <line x1="0" y1="235" x2="500" y2="235" stroke="#c4956a" strokeWidth="1.5" strokeDasharray="6,4"/>
-      <circle cx="250" cy="235" r="60" fill="none" stroke="#c4956a" strokeWidth="1.5"/>
-      <circle cx="250" cy="235" r="4" fill="#c4956a"/>
-      <rect x="0" y="152.5" width="190" height="165" fill="none" stroke="#c4956a" strokeWidth="1.5"/>
-      <rect x="0" y="187.5" width="60" height="95" fill="none" stroke="#c4956a" strokeWidth="1.5"/>
-      <circle cx="60" cy="235" r="60" fill="none" stroke="#c4956a" strokeWidth="1.5"/>
-      <path d="M 0 62 Q 135 235 0 408" fill="none" stroke="#c4956a" strokeWidth="1.5"/>
-      <line x1="25" y1="235" x2="35" y2="235" stroke="#c4956a" strokeWidth="2"/>
-      <circle cx="30" cy="235" r="3" fill="#c4956a"/>
-      <rect x="310" y="152.5" width="190" height="165" fill="none" stroke="#c4956a" strokeWidth="1.5"/>
-      <rect x="440" y="187.5" width="60" height="95" fill="none" stroke="#c4956a" strokeWidth="1.5"/>
-      <circle cx="440" cy="235" r="60" fill="none" stroke="#c4956a" strokeWidth="1.5"/>
-      <path d="M 500 62 Q 365 235 500 408" fill="none" stroke="#c4956a" strokeWidth="1.5"/>
-      <line x1="465" y1="235" x2="475" y2="235" stroke="#c4956a" strokeWidth="2"/>
-      <circle cx="470" cy="235" r="3" fill="#c4956a"/>
+      <rect x="0" y="0" width={CW} height={CH} fill={courtFill} rx="3" />
+      <rect x="0" y="0" width={CW} height={CH} fill="none" stroke={lineColor} strokeWidth={lw + 1} rx="3" />
+
+      <rect x="0" y={paintTop} width={paintL} height={paintBot - paintTop} fill={paintFill} stroke={lineColor} strokeWidth={lw} />
+      <rect x={paintR} y={paintTop} width={CW - paintR} height={paintBot - paintTop} fill={paintFill} stroke={lineColor} strokeWidth={lw} />
+
+      <circle cx={paintL} cy={cy} r={ftRadius} fill="none" stroke={lineColor} strokeWidth={lw} />
+      <circle cx={paintR} cy={cy} r={ftRadius} fill="none" stroke={lineColor} strokeWidth={lw} />
+
+      <line x1={bbL} y1={bbTop} x2={bbL} y2={bbBot} stroke={lineColor} strokeWidth={lw + 1} />
+      <line x1={bbR} y1={bbTop} x2={bbR} y2={bbBot} stroke={lineColor} strokeWidth={lw + 1} />
+
+      <circle cx={basketL} cy={cy} r={rimR} fill="none" stroke={lineColor} strokeWidth={lw} />
+      <circle cx={basketR} cy={cy} r={rimR} fill="none" stroke={lineColor} strokeWidth={lw} />
+
+      <path d={`M ${basketL + raR} ${cy - raR} A ${raR} ${raR} 0 0 1 ${basketL + raR} ${cy + raR}`} fill="none" stroke={lineColor} strokeWidth={lw} strokeDasharray="4,3" />
+      <path d={`M ${basketR - raR} ${cy - raR} A ${raR} ${raR} 0 0 0 ${basketR - raR} ${cy + raR}`} fill="none" stroke={lineColor} strokeWidth={lw} strokeDasharray="4,3" />
+
+      <line x1="0" y1={cornerY_top} x2={arcStartL} y2={cornerY_top} stroke={lineColor} strokeWidth={lw} />
+      <line x1="0" y1={cornerY_bot} x2={arcStartL} y2={cornerY_bot} stroke={lineColor} strokeWidth={lw} />
+      <path d={`M ${arcStartL} ${cornerY_top} A ${tpR} ${tpR} 0 1 1 ${arcStartL} ${cornerY_bot}`} fill="none" stroke={lineColor} strokeWidth={lw} />
+
+      <line x1={CW} y1={cornerY_top} x2={arcStartR} y2={cornerY_top} stroke={lineColor} strokeWidth={lw} />
+      <line x1={CW} y1={cornerY_bot} x2={arcStartR} y2={cornerY_bot} stroke={lineColor} strokeWidth={lw} />
+      <path d={`M ${arcStartR} ${cornerY_top} A ${tpR} ${tpR} 0 1 0 ${arcStartR} ${cornerY_bot}`} fill="none" stroke={lineColor} strokeWidth={lw} />
+
+      <line x1={centerX} y1="0" x2={centerX} y2={CH} stroke={lineColor} strokeWidth={lw} />
+      <circle cx={centerX} cy={cy} r={centerR} fill="none" stroke={lineColor} strokeWidth={lw} />
+      <circle cx={centerX} cy={cy} r="4" fill={lineColor} />
     </>
   );
 }
@@ -65,12 +117,15 @@ export default function ShotChart({
   loading = false,
   emptyMessage = "No shot data available",
   compact = false,
+  pulseRecent = false,
 }: ShotChartProps) {
   const {
     showPlayerFilter = false,
     showQuarterFilter = false,
     showTeamFilter = false,
     showResultFilter = false,
+    showShotTypeFilter = false,
+    showSubTypeFilter = false,
     teamNames,
   } = filters;
 
@@ -78,6 +133,8 @@ export default function ShotChart({
   const [quarterFilter, setQuarterFilter] = useState("all");
   const [teamFilter, setTeamFilter] = useState("all");
   const [resultFilter, setResultFilter] = useState("all");
+  const [shotTypeFilter, setShotTypeFilter] = useState("all");
+  const [subTypeFilter, setSubTypeFilter] = useState("all");
 
   const players = useMemo(() => {
     const map = new Map<string, string>();
@@ -86,7 +143,17 @@ export default function ShotChart({
         map.set(s.player_id, s.player_name);
       }
     });
-    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+    return Array.from(map.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [shots]);
+
+  const subTypes = useMemo(() => {
+    const set = new Set<string>();
+    shots.forEach((s) => {
+      if (s.sub_type) set.add(s.sub_type);
+    });
+    return Array.from(set).sort();
   }, [shots]);
 
   const filteredShots = useMemo(() => {
@@ -96,15 +163,30 @@ export default function ShotChart({
       if (teamFilter !== "all" && shot.team_no?.toString() !== teamFilter) return false;
       if (resultFilter === "makes" && !shot.success) return false;
       if (resultFilter === "misses" && shot.success) return false;
+      if (shotTypeFilter !== "all" && shot.shot_type !== shotTypeFilter) return false;
+      if (subTypeFilter !== "all" && shot.sub_type !== subTypeFilter) return false;
       return true;
     });
-  }, [shots, playerFilter, quarterFilter, teamFilter, resultFilter]);
+  }, [shots, playerFilter, quarterFilter, teamFilter, resultFilter, shotTypeFilter, subTypeFilter]);
+
+  const recentIds = useMemo(() => {
+    if (!pulseRecent || filteredShots.length === 0) return new Set<number | string>();
+    const sorted = [...filteredShots]
+      .filter((s) => s.action_number != null || s.created_at != null)
+      .sort((a, b) => {
+        if (a.action_number != null && b.action_number != null) return b.action_number - a.action_number;
+        if (a.created_at && b.created_at) return b.created_at.localeCompare(a.created_at);
+        return 0;
+      });
+    const top = sorted.slice(0, Math.max(5, Math.ceil(sorted.length * 0.1)));
+    return new Set(top.map((s) => s.id!).filter(Boolean));
+  }, [filteredShots, pulseRecent]);
 
   const makes = filteredShots.filter((s) => s.success).length;
   const total = filteredShots.length;
   const percentage = total > 0 ? ((makes / total) * 100).toFixed(1) : "0.0";
 
-  const hasFilters = showPlayerFilter || showQuarterFilter || showTeamFilter || showResultFilter;
+  const hasFilters = showPlayerFilter || showQuarterFilter || showTeamFilter || showResultFilter || showShotTypeFilter || showSubTypeFilter;
 
   if (loading) {
     return (
@@ -124,6 +206,9 @@ export default function ShotChart({
       </div>
     );
   }
+
+  const formatSubType = (st: string) =>
+    st.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase()).trim();
 
   return (
     <div className="space-y-4">
@@ -177,6 +262,31 @@ export default function ShotChart({
                 </select>
               )}
 
+              {showShotTypeFilter && (
+                <select
+                  value={shotTypeFilter}
+                  onChange={(e) => setShotTypeFilter(e.target.value)}
+                  className="px-3 py-2 text-sm border border-gray-300 dark:border-neutral-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-neutral-700 text-slate-800 dark:text-white"
+                >
+                  <option value="all">All Shot Types</option>
+                  <option value="2pt">2PT</option>
+                  <option value="3pt">3PT</option>
+                </select>
+              )}
+
+              {showSubTypeFilter && subTypes.length > 0 && (
+                <select
+                  value={subTypeFilter}
+                  onChange={(e) => setSubTypeFilter(e.target.value)}
+                  className="px-3 py-2 text-sm border border-gray-300 dark:border-neutral-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-neutral-700 text-slate-800 dark:text-white"
+                >
+                  <option value="all">All Sub Types</option>
+                  {subTypes.map((st) => (
+                    <option key={st} value={st}>{formatSubType(st)}</option>
+                  ))}
+                </select>
+              )}
+
               {showResultFilter && (
                 <select
                   value={resultFilter}
@@ -208,21 +318,21 @@ export default function ShotChart({
       )}
 
       <div className="bg-white dark:bg-neutral-800 rounded-lg p-3 md:p-4 border border-gray-200 dark:border-neutral-700">
-        <div className={compact ? "max-w-lg mx-auto" : "max-w-2xl mx-auto"}>
-          <svg viewBox={`0 0 ${COURT_WIDTH} ${COURT_HEIGHT}`} className="w-full h-auto">
+        <div className={compact ? "max-w-lg mx-auto" : "max-w-3xl mx-auto"}>
+          <svg viewBox={`0 0 ${CW} ${CH}`} className="w-full h-auto" style={{ maxHeight: "60vh" }}>
             <defs>
               <filter id="glow-green" x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                <feGaussianBlur stdDeviation="3" result="coloredBlur" />
                 <feMerge>
-                  <feMergeNode in="coloredBlur"/>
-                  <feMergeNode in="SourceGraphic"/>
+                  <feMergeNode in="coloredBlur" />
+                  <feMergeNode in="SourceGraphic" />
                 </feMerge>
               </filter>
               <filter id="glow-red" x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
+                <feGaussianBlur stdDeviation="2.5" result="coloredBlur" />
                 <feMerge>
-                  <feMergeNode in="coloredBlur"/>
-                  <feMergeNode in="SourceGraphic"/>
+                  <feMergeNode in="coloredBlur" />
+                  <feMergeNode in="SourceGraphic" />
                 </feMerge>
               </filter>
             </defs>
@@ -230,46 +340,50 @@ export default function ShotChart({
             <BasketballCourt />
 
             {filteredShots.map((shot, idx) => {
-              const x = (shot.x / 100) * COURT_WIDTH;
-              const y = (shot.y / 100) * COURT_HEIGHT;
+              const sx = (shot.x / 100) * CW;
+              const sy = (shot.y / 100) * CH;
+              const isRecent = pulseRecent && shot.id != null && recentIds.has(shot.id);
+              const dotR = compact ? 5 : 6;
 
               return (
                 <g key={shot.id ?? idx}>
-                  {shot.success ? (
+                  {isRecent && (
                     <circle
-                      cx={x}
-                      cy={y}
-                      r="7"
-                      fill="#22c55e"
-                      opacity="0.85"
-                      stroke="#15803d"
-                      strokeWidth="2"
-                      filter="url(#glow-green)"
-                      className="shot-dot"
-                      style={{
-                        animation: `shotFadeIn 0.4s ease-out ${idx * 0.02}s both`,
-                      }}
-                    >
-                      <title>{shot.player_name ? `${shot.player_name} - Made` : "Made shot"}</title>
-                    </circle>
-                  ) : (
-                    <circle
-                      cx={x}
-                      cy={y}
-                      r="7"
+                      cx={sx}
+                      cy={sy}
+                      r={dotR + 4}
                       fill="none"
-                      opacity="0.85"
-                      stroke="#ef4444"
-                      strokeWidth="2.5"
-                      filter="url(#glow-red)"
-                      className="shot-dot"
-                      style={{
-                        animation: `shotFadeIn 0.4s ease-out ${idx * 0.02}s both`,
-                      }}
-                    >
-                      <title>{shot.player_name ? `${shot.player_name} - Missed` : "Missed shot"}</title>
-                    </circle>
+                      stroke={shot.success ? "#22c55e" : "#ef4444"}
+                      strokeWidth="2"
+                      opacity="0.6"
+                      className="shot-pulse"
+                    />
                   )}
+                  <circle
+                    cx={sx}
+                    cy={sy}
+                    r={dotR}
+                    fill={shot.success ? "#22c55e" : "transparent"}
+                    opacity="0.85"
+                    stroke={shot.success ? "#15803d" : "#ef4444"}
+                    strokeWidth={shot.success ? 1.5 : 2.5}
+                    filter={shot.success ? "url(#glow-green)" : "url(#glow-red)"}
+                    className="shot-dot"
+                    style={{
+                      animation: `shotFadeIn 0.4s ease-out ${Math.min(idx * 0.008, 2)}s both`,
+                    }}
+                  >
+                    <title>
+                      {[
+                        shot.player_name,
+                        shot.success ? "Made" : "Missed",
+                        shot.shot_type?.toUpperCase(),
+                        shot.sub_type ? formatSubType(shot.sub_type) : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" - ")}
+                    </title>
+                  </circle>
                 </g>
               );
             })}
@@ -298,6 +412,13 @@ export default function ShotChart({
             opacity: 0.85;
             transform: scale(1);
           }
+        }
+        @keyframes shotPulse {
+          0%, 100% { opacity: 0.6; r: ${compact ? 9 : 10}; }
+          50% { opacity: 0.15; r: ${compact ? 16 : 18}; }
+        }
+        .shot-pulse {
+          animation: shotPulse 2s ease-in-out infinite;
         }
       `}</style>
     </div>
