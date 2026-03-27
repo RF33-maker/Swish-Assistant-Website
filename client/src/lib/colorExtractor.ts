@@ -8,6 +8,16 @@ export interface TeamColors {
   textSecondaryContrast: string;
 }
 
+export const DEFAULT_COLORS: TeamColors = {
+  primary: 'rgb(100, 100, 100)',
+  secondary: 'rgb(70, 70, 70)',
+  accent: 'rgba(100, 100, 100, 0.1)',
+  primaryRgb: { r: 100, g: 100, b: 100 },
+  secondaryRgb: { r: 70, g: 70, b: 70 },
+  textContrast: '#ffffff',
+  textSecondaryContrast: '#ffffff',
+};
+
 export async function extractColorsFromImage(imageUrl: string): Promise<TeamColors | null> {
   return new Promise((resolve) => {
     const img = new Image();
@@ -38,8 +48,8 @@ export async function extractColorsFromImage(imageUrl: string): Promise<TeamColo
         try {
           imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         } catch (err) {
-          console.error("CORS error getting image data:", err);
-          resolve(null);
+          console.warn("CORS error getting image data, using defaults:", imageUrl);
+          resolve(DEFAULT_COLORS);
           return;
         }
         
@@ -70,8 +80,8 @@ export async function extractColorsFromImage(imageUrl: string): Promise<TeamColo
         }
         
         if (colorMap.size === 0) {
-          console.warn("No vibrant colors found in:", imageUrl);
-          resolve(null);
+          console.warn("No qualifying colors found in image, using defaults:", imageUrl);
+          resolve(DEFAULT_COLORS);
           return;
         }
         
@@ -101,7 +111,6 @@ export async function extractColorsFromImage(imageUrl: string): Promise<TeamColo
     
     img.onerror = (err) => {
       clearTimeout(timeout);
-      console.error("Image load error:", imageUrl, err);
       resolve(null);
     };
     

@@ -25,6 +25,9 @@ export const leagues = pgTable("leagues", {
   approved: boolean("approved").default(false),
   instagram_embed_url: text("instagram_embed_url"),
   youtube_embed_url: text("youtube_embed_url"),
+  primary_color: text("primary_color"),
+  secondary_color: text("secondary_color"),
+  accent_color: text("accent_color"),
   created_at: timestamp("created_at").defaultNow(),
   updated_at: timestamp("updated_at").defaultNow(),
 });
