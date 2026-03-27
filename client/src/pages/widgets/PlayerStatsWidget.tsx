@@ -62,7 +62,7 @@ export default function PlayerStatsWidget({ params }: { params: WidgetParams }) 
       try {
         const { data: playerInfo, error: lookupError } = await supabase
           .from("players")
-          .select("id, full_name, name, team, slug")
+          .select("id, full_name, slug")
           .or(`id.eq.${playerId},slug.eq.${playerId}`)
           .limit(1)
           .single();
@@ -118,12 +118,9 @@ export default function PlayerStatsWidget({ params }: { params: WidgetParams }) 
           return;
         }
 
-        const playerName = playerInfo.full_name || playerInfo.name || "Unknown";
-        const teamName = playerInfo.team || "";
-
         const { data: stats, error: statsError } = await supabase
           .from("player_stats")
-          .select("spoints, sreboundstotal, sassists, ssteals, sblocks, sfieldgoalsmade, sfieldgoalsattempted, sthreepointersmade, sthreepointersattempted, sfreethrowsmade, sfreethrowsattempted")
+          .select("spoints, sreboundstotal, sassists, ssteals, sblocks, sfieldgoalsmade, sfieldgoalsattempted, sthreepointersmade, sthreepointersattempted, sfreethrowsmade, sfreethrowsattempted, team_name, firstname, familyname")
           .eq("player_id", canonicalId)
           .eq("league_id", resolvedLeagueId);
 
@@ -133,6 +130,8 @@ export default function PlayerStatsWidget({ params }: { params: WidgetParams }) 
           return;
         }
 
+        const playerName = playerInfo.full_name || "Unknown";
+        const teamName = stats[0]?.team_name || "";
         const gp = stats.length;
         const totals = (stats as PlayerStatRow[]).reduce<StatAccumulator>(
           (acc, s) => ({
