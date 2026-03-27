@@ -27,6 +27,7 @@ import LeagueManagement from "@/pages/LeagueManagement";
 import SocialToolsPage from "@/pages/social-tools";
 import WidgetBuilder from "@/pages/widget-builder";
 import WidgetPage from "@/pages/widgets/WidgetPage";
+import WidgetDemo from "@/pages/widget-demo";
 import GamePage from "@/pages/GamePage";
 import { AuthProvider } from "./hooks/use-auth";
 import { ProtectedRoute } from "./lib/protected-route";
@@ -64,6 +65,7 @@ function Router() {
       <Route path="/contact-sales" component={ContactSalesPage} />
       <Route path="/game/:gameKey" component={GamePage} />
       <Route path="/widget/:type" component={WidgetPage} />
+      <Route path="/widget-demo" component={WidgetDemo} />
 
       {/* Protected routes */}
       <ProtectedRoute path="/dashboard" component={PostLoginDashboard} />
