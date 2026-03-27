@@ -46,21 +46,28 @@ const UploadSectionLA = ({ leagues }: any) => {
     }
   };
 
+  const getContentType = (file: File): string => {
+    if (file.name.toLowerCase().endsWith(".pdf")) {
+      return "application/pdf";
+    }
+    return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  };
+
   const onDrop = async (acceptedFiles: File[]) => {
     if (!acceptedFiles?.length) return;
 
     const file = acceptedFiles[0];
     const filePath = `${file.name}`;
+    const isPdf = file.name.toLowerCase().endsWith(".pdf");
     setIsUploading(true);
-    setStatusMessage("📂 Uploading file...");
+    setStatusMessage(`📂 Uploading ${isPdf ? "PDF" : "Excel"} file...`);
 
     const { error } = await supabase.storage
-      .from("XLSX Uploads") // 👈 must match bucket name exactly
+      .from("XLSX Uploads")
       .upload(filePath, file, {
         cacheControl: "3600",
         upsert: true,
-        contentType:
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        contentType: getContentType(file),
       });
 
     if (error) {
@@ -81,7 +88,8 @@ const UploadSectionLA = ({ leagues }: any) => {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [],
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"],
+      "application/pdf": [".pdf"],
     },
     multiple: false,
   });
@@ -121,13 +129,13 @@ const UploadSectionLA = ({ leagues }: any) => {
           <input {...getInputProps()} />
           {isDragActive ? (
             <p className="text-orange-600 font-medium">
-              Drop the Excel file here...
+              Drop the file here...
             </p>
           ) : (
             <p className="text-gray-600">
-              Drag and drop an Excel file here, or{" "}
+              Drag and drop a file here, or{" "}
               <span className="font-semibold text-orange-600">click to select</span>{" "}
-              a <strong>.xlsx</strong> file
+              a <strong>.xlsx</strong> or <strong>.pdf</strong> file
             </p>
           )}
         </div>
@@ -147,7 +155,7 @@ const UploadSectionLA = ({ leagues }: any) => {
             className="mt-4 bg-orange-500 hover:bg-orange-600"
             disabled={!selectedLeagueId}
           >
-            🔄 Re-Parse Latest Excel
+            🔄 Re-Parse Latest File
           </Button>
         )}
       </CardContent>
