@@ -2,11 +2,18 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import os
 import uuid
+import tempfile
+import io
 from datetime import datetime
 from openai import OpenAI
+import pandas as pd
+from supabase import create_client
 
 app = Flask(__name__)
 CORS(app)
+
+SUPABASE_URL = os.environ.get("VITE_SUPABASE_URL", "https://omkwqpcgttrgvbhcxgqf.supabase.co")
+SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("VITE_SUPABASE_ANON_KEY", "")
 
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
@@ -209,6 +216,86 @@ def ai_analysis():
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+def parse_excel(file_bytes):
+    df = pd.read_excel(io.BytesIO(file_bytes), engine='openpyxl')
+    records = df.to_dict(orient='records')
+    columns = list(df.columns)
+    return {
+        'file_type': 'excel',
+        'row_count': len(records),
+        'columns': columns,
+        'data': records
+    }
+
+def parse_pdf(file_bytes):
+    import pdfplumber
+    all_tables = []
+    all_text = []
+
+    with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+        for page in pdf.pages:
+            text = page.extract_text()
+            if text:
+                all_text.append(text)
+
+            tables = page.extract_tables()
+            for table in tables:
+                if table and len(table) > 1:
+                    headers = table[0]
+                    for row in table[1:]:
+                        record = {}
+                        for i, header in enumerate(headers):
+                            if header and i < len(row):
+                                record[str(header).strip()] = row[i]
+                        if record:
+                            all_tables.append(record)
+
+    columns = list(all_tables[0].keys()) if all_tables else []
+    return {
+        'file_type': 'pdf',
+        'row_count': len(all_tables),
+        'columns': columns,
+        'data': all_tables,
+        'raw_text': '\n'.join(all_text) if not all_tables else None
+    }
+
+@app.route('/api/parse', methods=['POST'])
+def parse_file():
+    try:
+        data = request.get_json()
+        file_path = data.get('file_path', '')
+        user_id = data.get('user_id', '')
+        league_id = data.get('league_id', '')
+
+        if not file_path:
+            return jsonify({'error': 'file_path is required'}), 400
+
+        if '/' in file_path:
+            bucket = file_path.split('/')[0]
+            path_in_bucket = '/'.join(file_path.split('/')[1:])
+        else:
+            bucket = 'XLSX Uploads'
+            path_in_bucket = file_path
+
+        sb = create_client(SUPABASE_URL, SUPABASE_KEY)
+        file_bytes = sb.storage.from_(bucket).download(path_in_bucket)
+
+        is_pdf = path_in_bucket.lower().endswith('.pdf')
+
+        if is_pdf:
+            result = parse_pdf(file_bytes)
+        else:
+            result = parse_excel(file_bytes)
+
+        result['file_path'] = file_path
+        result['user_id'] = user_id
+        result['league_id'] = league_id
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({'error': f'Parse failed: {str(e)}'}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8000))
