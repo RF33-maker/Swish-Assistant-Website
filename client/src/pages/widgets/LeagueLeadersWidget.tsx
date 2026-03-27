@@ -97,7 +97,7 @@ export default function LeagueLeadersWidget({ params }: { params: WidgetParams }
         while (hasMore) {
           const { data: pageData } = await supabase
             .from("player_stats")
-            .select("player_id, id, full_name, name, firstname, familyname, team, team_name, spoints, sreboundstotal, sassists, ssteals, sblocks, players:player_id(full_name)")
+            .select("*, players:player_id(full_name)")
             .eq("league_id", league.id)
             .range(page * pageSize, (page + 1) * pageSize - 1);
 

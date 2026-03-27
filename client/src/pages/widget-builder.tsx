@@ -80,12 +80,29 @@ export default function WidgetBuilder() {
     }
     const fetchPlayers = async () => {
       setLoadingPlayers(true);
-      const { data } = await supabase
-        .from("players")
-        .select("id, full_name, name, slug, team")
-        .eq("league_id", leagueId)
-        .order("full_name");
-      if (data) setPlayers(data);
+      const { data: statsData } = await supabase
+        .from("player_stats")
+        .select("player_id, firstname, familyname, team, team_name, players:player_id(id, full_name, name, slug, team)")
+        .eq("league_id", leagueId);
+
+      if (statsData) {
+        const playerMap = new Map<string, PlayerOption>();
+        statsData.forEach((stat: any) => {
+          const pid = stat.player_id;
+          if (!pid || playerMap.has(pid)) return;
+          const p = stat.players;
+          const fullName = p?.full_name || p?.name || `${stat.firstname || ''} ${stat.familyname || ''}`.trim() || 'Unknown';
+          playerMap.set(pid, {
+            id: p?.id || pid,
+            full_name: fullName,
+            name: p?.name || fullName,
+            slug: p?.slug || pid,
+            team: p?.team || stat.team || stat.team_name || '',
+          });
+        });
+        const sorted = Array.from(playerMap.values()).sort((a, b) => a.full_name.localeCompare(b.full_name));
+        setPlayers(sorted);
+      }
       setLoadingPlayers(false);
     };
     fetchPlayers();
