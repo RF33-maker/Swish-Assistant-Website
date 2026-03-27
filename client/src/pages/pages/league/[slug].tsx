@@ -41,6 +41,7 @@ import { normalizeTeamName } from "@/lib/teamUtils";
 import { namesMatch, getMostCompleteName } from "@/lib/fuzzyMatch";
 import { generateGameSlug } from "@/lib/gameSlug";
 import { DEBUG, debugLog } from "@/utils/debug";
+import { useLeagueBranding } from "@/hooks/useLeagueBranding";
 
 type GameSchedule = {
   game_id: string;
@@ -542,8 +543,24 @@ export default function LeaguePage() {
   const [isDividerVisible, setIsDividerVisible] = useState(false); // Track if orange divider is in view
   const dividerRef = useRef<HTMLDivElement>(null); // Ref for the orange divider
 
-    
+  const { colors: leagueBrandColors } = useLeagueBranding({
+    slug,
+    bannerUrl: league?.banner_url,
+    logoUrl: league?.logo_url,
+    enabled: !!league,
+  });
 
+  const [brandFadedIn, setBrandFadedIn] = useState(false);
+  useEffect(() => {
+    if (leagueBrandColors) {
+      const raf = requestAnimationFrame(() => {
+        setBrandFadedIn(true);
+      });
+      return () => cancelAnimationFrame(raf);
+    } else {
+      setBrandFadedIn(false);
+    }
+  }, [leagueBrandColors]);
 
     useEffect(() => {
       const fetchSuggestions = async () => {
@@ -2978,7 +2995,26 @@ export default function LeaguePage() {
   
  return (
       
-      <div className="min-h-screen bg-[#fffaf1] dark:bg-neutral-950 transition-colors duration-300">
+      <div className="min-h-screen bg-[#fffaf1] dark:bg-neutral-950 transition-colors duration-700 relative">
+        {leagueBrandColors && (
+          <>
+            <div
+              className="absolute inset-0 pointer-events-none transition-opacity duration-1000 ease-in-out dark:hidden"
+              style={{
+                opacity: brandFadedIn ? 1 : 0,
+                background: `linear-gradient(180deg, rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.08) 0%, rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.03) 40%, transparent 80%)`,
+              }}
+            />
+            <div
+              className="absolute inset-0 pointer-events-none transition-opacity duration-1000 ease-in-out hidden dark:block"
+              style={{
+                opacity: brandFadedIn ? 1 : 0,
+                background: `linear-gradient(180deg, rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.12) 0%, rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.04) 40%, transparent 80%)`,
+              }}
+            />
+          </>
+        )}
+        <div className="relative z-10">
         <header className="bg-white dark:bg-neutral-900 shadow-sm sticky top-0 z-50 px-4 md:px-6 py-3 md:py-4">
           <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
             <div className="flex items-center justify-between md:justify-start">
@@ -4798,6 +4834,7 @@ export default function LeaguePage() {
             leagueSlug={slug}
           />
         )}
+        </div>
       </div>
      );
     }
