@@ -81,25 +81,49 @@ export default function WidgetBuilder() {
     const fetchPlayers = async () => {
       setLoadingPlayers(true);
       try {
-        const { data, error } = await supabase
-          .from("players")
-          .select("id, full_name, name, slug, team")
-          .eq("league_id", leagueId)
-          .eq("is_active", true)
-          .order("full_name");
+        let allStats: any[] = [];
+        let page = 0;
+        const pageSize = 1000;
+        let hasMore = true;
 
-        if (!error && data) {
-          setPlayers(data.map((p: any) => ({
-            id: p.id,
-            full_name: p.full_name || p.name || 'Unknown',
-            name: p.name || p.full_name || 'Unknown',
-            slug: p.slug || p.id,
-            team: p.team || '',
-          })));
-        } else {
-          console.error("[WidgetBuilder] Error loading players:", error);
-          setPlayers([]);
+        while (hasMore) {
+          const { data: pageData, error: pageError } = await supabase
+            .from("player_stats")
+            .select("player_id, firstname, familyname, team_name, players:player_id(id, full_name, slug)")
+            .eq("league_id", leagueId)
+            .range(page * pageSize, (page + 1) * pageSize - 1);
+
+          if (pageError) {
+            console.error("[WidgetBuilder] Error loading players:", pageError);
+            setPlayers([]);
+            return;
+          }
+
+          if (pageData && pageData.length > 0) {
+            allStats = [...allStats, ...pageData];
+            hasMore = pageData.length === pageSize;
+            page++;
+          } else {
+            hasMore = false;
+          }
         }
+
+        const playerMap = new Map<string, PlayerOption>();
+        allStats.forEach((stat: any) => {
+          const pid = stat.player_id;
+          if (!pid || playerMap.has(pid)) return;
+          const p = stat.players;
+          const fullName = p?.full_name || `${stat.firstname || ''} ${stat.familyname || ''}`.trim() || 'Unknown';
+          playerMap.set(pid, {
+            id: p?.id || pid,
+            full_name: fullName,
+            name: fullName,
+            slug: p?.slug || pid,
+            team: stat.team_name || '',
+          });
+        });
+        const sorted = Array.from(playerMap.values()).sort((a, b) => a.full_name.localeCompare(b.full_name));
+        setPlayers(sorted);
       } finally {
         setLoadingPlayers(false);
       }
