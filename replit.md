@@ -39,6 +39,20 @@ The application is structured into a React frontend and integrates with external
     - **Player Statistics Table**: Comprehensive table on league pages displaying full traditional basketball box score statistics with 25 columns (Player, GP, MIN, FGM, FGA, FG%, 2PM, 2PA, 2P%, 3PM, 3PA, 3P%, FTM, FTA, FT%, ORB, DRB, TRB, AST, STL, BLK, TO, PF, +/-, PTS). Features include sortable columns, averages/totals toggle, search filtering, mobile-responsive horizontal scrolling with sticky player column, and comprehensive legend explaining all abbreviations.
     - **Team Statistics Table**: Comprehensive table on league pages displaying full traditional basketball box score statistics with 27 columns (Logo, Team, GP, FGM, FGA, FG%, 2PM, 2PA, 2P%, 3PM, 3PA, 3P%, FTM, FTA, FT%, ORB, DRB, TRB, AST, STL, BLK, TO, PF, +/-, PTS, PITP, FB PTS, 2ND CH). Features include averages/totals toggle, mobile-responsive horizontal scrolling with sticky logo column, and comprehensive legend explaining all 26 statistical abbreviations including advanced metrics (Points in Paint, Fastbreak Points, Second Chance Points).
 
+## Embeddable Widget System
+- **Widget Builder**: Protected page at `/api-widgets` accessible from the 4th card ("API / Widgets") on the post-login dashboard. Provides a form-based editor with live iframe preview and embed code generation.
+- **Widget Types**: Four widget types available:
+  - League Standings (`/widget/standings`) - Team win/loss records and rankings
+  - Player Stats Card (`/widget/player-stats`) - Individual player stat summary
+  - Game Scores (`/widget/game-scores`) - Recent game results and scores
+  - League Leaders (`/widget/league-leaders`) - Top performers by category
+- **Widget Routes**: Public chromeless pages under `/widget/:type` that accept URL query parameters for data selection and visual customization. No app chrome, nav bars, or sidebars.
+- **Customization Options**: Primary color, accent color, background color, font family, border radius, layout presets (compact/standard/wide), and custom dimensions.
+- **Key Files**:
+  - `client/src/pages/widget-builder.tsx` - Widget Builder page
+  - `client/src/pages/widgets/` - Widget pages (WidgetPage, WidgetLayout, StandingsWidget, PlayerStatsWidget, GameScoresWidget, LeagueLeadersWidget)
+  - `client/src/lib/widgetUtils.ts` - Shared utilities for widget parameter parsing, URL building, and embed code generation
+
 ## SEO Implementation
 - **Dynamic Sitemap**: Automated sitemap generation via `scripts/generate-sitemap.ts` that queries Supabase for all public leagues, teams, and players. Run `npx tsx scripts/generate-sitemap.ts` to regenerate. Sitemap is served as a static file at `/sitemap.xml` with proper XML structure including lastmod dates, changefreq, and priority values.
   - ✅ **SEO-Friendly URLs**: Player pages now use human-readable slugs (e.g., `/player/john-doe`) instead of UUIDs for better search engine optimization

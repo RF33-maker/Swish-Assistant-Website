@@ -25,6 +25,8 @@ import TeamLogoManager from "@/pages/TeamLogoManager";
 import LeagueAdmin from "@/pages/LeagueAdmin";
 import LeagueManagement from "@/pages/LeagueManagement";
 import SocialToolsPage from "@/pages/social-tools";
+import WidgetBuilder from "@/pages/widget-builder";
+import WidgetPage from "@/pages/widgets/WidgetPage";
 import GamePage from "@/pages/GamePage";
 import { AuthProvider } from "./hooks/use-auth";
 import { ProtectedRoute } from "./lib/protected-route";
@@ -61,6 +63,7 @@ function Router() {
       <Route path="/cookies" component={CookiePolicyPage} />
       <Route path="/contact-sales" component={ContactSalesPage} />
       <Route path="/game/:gameKey" component={GamePage} />
+      <Route path="/widget/:type" component={WidgetPage} />
 
       {/* Protected routes */}
       <ProtectedRoute path="/dashboard" component={PostLoginDashboard} />
@@ -74,6 +77,7 @@ function Router() {
       <ProtectedRoute path="/settings" component={SettingsPage} />
       <ProtectedRoute path="/payment" component={PaymentPage} />
       <ProtectedRoute path="/social-tools" component={SocialToolsPage} />
+      <ProtectedRoute path="/api-widgets" component={WidgetBuilder} />
 
 
       {/* Fallback */}
