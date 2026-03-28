@@ -97,14 +97,13 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick }: Gam
 
       const gamesWithStats: GameItem[] = [];
       const processedGameKeys = new Set<string>();
+      const viewGameKeys: string[] = [];
 
       if (gameResults && gameResults.length > 0) {
         gameResults.forEach((game: any) => {
           if (!game.home_team || !game.away_team || !game.game_key) return;
           processedGameKeys.add(game.game_key);
-
-          const dbStatus = (game.game_status || game.schedule_status || '').toLowerCase();
-          const isLive = dbStatus === 'live' || dbStatus === 'in_progress' || dbStatus.includes('live');
+          viewGameKeys.push(game.game_key);
 
           gamesWithStats.push({
             game_key: game.game_key,
@@ -114,7 +113,7 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick }: Gam
             away_team: game.away_team,
             home_score: game.home_score,
             away_score: game.away_score,
-            status: isLive ? 'LIVE' : 'FINAL'
+            status: 'FINAL'
           });
         });
 
@@ -136,12 +135,17 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick }: Gam
         console.error("Error fetching schedule:", scheduleError);
       }
 
+      const scheduleStatusMap = new Map<string, string>();
       const upcomingGames: GameItem[] = [];
       const scheduleLiveGames: GameItem[] = [];
       
       if (scheduleData) {
         scheduleData.forEach(game => {
-          if (!game.hometeam || !game.awayteam || !game.game_key) return;
+          if (!game.game_key) return;
+          if (game.status) {
+            scheduleStatusMap.set(game.game_key, game.status);
+          }
+          if (!game.hometeam || !game.awayteam) return;
           if (processedGameKeys.has(game.game_key)) return;
 
           const statusLower = (game.status || '').toLowerCase();
@@ -171,6 +175,13 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick }: Gam
           }
         });
       }
+
+      gamesWithStats.forEach(game => {
+        const schedStatus = (scheduleStatusMap.get(game.game_key) || '').toLowerCase();
+        if (schedStatus === 'live' || schedStatus === 'in_progress' || schedStatus.includes('live')) {
+          game.status = 'LIVE';
+        }
+      });
 
       const combined: GameItem[] = [
         ...gamesWithStats,
