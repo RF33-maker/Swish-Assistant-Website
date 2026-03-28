@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useLocation, useParams } from "wouter";
-import { supabase } from "@/lib/supabase";
+import { supabase, getSupabaseForLeague, getDataLeagueId } from "@/lib/supabase";
 import type { League } from "@shared/schema";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import LeagueDefaultImage from "@/assets/league-default.png";
@@ -473,6 +473,7 @@ const PLAYER_STAT_LEGENDS: Record<string, string[]> = {
 
 export default function LeaguePage() {
   const { slug } = useParams();
+  const db = useMemo(() => getSupabaseForLeague(slug), [slug]);
     // SEO formatting helper for title
     const formatTitle = (text?: string) =>
       text
@@ -1016,10 +1017,11 @@ export default function LeaguePage() {
       
       setIsLoadingTeamStats(true);
       try {
-        const { data: rawTeamStats, error } = await supabase
+        const fetchLeagueId = getDataLeagueId(slug, league.league_id);
+        const { data: rawTeamStats, error } = await db
           .from("team_stats")
           .select("*")
-          .eq("league_id", league.league_id);
+          .eq("league_id", fetchLeagueId);
 
         if (error) {
           console.error("Error fetching team stats:", error);
@@ -1365,44 +1367,45 @@ export default function LeaguePage() {
         if (data?.league_id) {
           setIsLoadingLeaders(true);
           setIsLoadingStandings(true);
+          const effectiveLeagueId = getDataLeagueId(slug, data.league_id);
           
           const fetchTopStats = async () => {
-            const { data: scorerData, error: scorerError } = await supabase
+            const { data: scorerData, error: scorerError } = await db
               .from("player_stats")
               .select("firstname, familyname, spoints")
-              .eq("league_id", data.league_id)
+              .eq("league_id", effectiveLeagueId)
               .order("spoints", { ascending: false })
               .limit(1)
               .single();
             
 
-            const { data: reboundData } = await supabase
+            const { data: reboundData } = await db
               .from("player_stats")
               .select("firstname, familyname, sreboundstotal")
-              .eq("league_id", data.league_id)
+              .eq("league_id", effectiveLeagueId)
               .order("sreboundstotal", { ascending: false })
               .limit(1)
               .single();
 
-            const { data: assistData } = await supabase
+            const { data: assistData } = await db
               .from("player_stats")
               .select("firstname, familyname, sassists")
-              .eq("league_id", data.league_id)
+              .eq("league_id", effectiveLeagueId)
               .order("sassists", { ascending: false })
               .limit(1)
               .single();
 
-            const { data: recentGames } = await supabase
+            const { data: recentGames } = await db
               .from("player_stats")
               .select("firstname, familyname, created_at, spoints, sassists, sreboundstotal")
-              .eq("league_id", data.league_id)
+              .eq("league_id", effectiveLeagueId)
               .order("created_at", { ascending: false })
               .limit(5);
 
-            const { data: allPlayerStats, error: allStatsError } = await supabase
+            const { data: allPlayerStats, error: allStatsError } = await db
               .from("player_stats")
               .select("*")
-              .eq("league_id", data.league_id);
+              .eq("league_id", effectiveLeagueId);
             
 
             // Process the data to combine names and handle missing fields
@@ -1427,23 +1430,23 @@ export default function LeaguePage() {
             setPlayerStats(allPlayerStats || []);
             
             // Calculate standings using team_stats first, fallback to player_stats
-            await calculateStandingsWithTeamStats(data.league_id, allPlayerStats || []);
+            await calculateStandingsWithTeamStats(effectiveLeagueId, allPlayerStats || []);
             
             // Calculate pool-based standings with movement tracking
-            await calculatePoolStandings(data.league_id);
+            await calculatePoolStandings(effectiveLeagueId);
             
             // Fetch schedule data directly from game_schedule table filtering by league_id
-            const { data: scheduleData, error: scheduleError } = await supabase
+            const { data: scheduleData, error: scheduleError } = await db
               .from('game_schedule')
               .select('competitionname, matchtime, hometeam, awayteam, league_id, game_key')
-              .eq('league_id', data.league_id);
+              .eq('league_id', effectiveLeagueId);
 
 
             // Also fetch team_stats to get scores
-            const { data: teamStatsForScores, error: teamStatsError } = await supabase
+            const { data: teamStatsForScores, error: teamStatsError } = await db
               .from("team_stats")
               .select("*")
-              .eq("league_id", data.league_id);
+              .eq("league_id", effectiveLeagueId);
 
             debugLog("📊 Team stats for scores:", teamStatsForScores?.length, "records");
             if (teamStatsForScores && teamStatsForScores.length > 0) {
@@ -2071,7 +2074,8 @@ export default function LeaguePage() {
 
         // ========== STATS-FIRST APPROACH ==========
         // Step 1: Fetch ALL player_stats for the league (paginated to bypass 1000 row limit)
-        debugLog("📊 Step 1: Fetching all player_stats for league_id:", league.league_id);
+        const statsLeagueId = getDataLeagueId(slug, league.league_id);
+        debugLog("📊 Step 1: Fetching all player_stats for league_id:", statsLeagueId);
         
         let allPlayerStats: any[] = [];
         let page = 0;
@@ -2079,10 +2083,10 @@ export default function LeaguePage() {
         let hasMore = true;
         
         while (hasMore) {
-          const { data: pageData, error: pageError } = await supabase
+          const { data: pageData, error: pageError } = await db
             .from("player_stats")
             .select("*")
-            .eq("league_id", league.league_id)
+            .eq("league_id", statsLeagueId)
             .range(page * pageSize, (page + 1) * pageSize - 1);
           
           if (pageError) {
@@ -2415,7 +2419,7 @@ export default function LeaguePage() {
         const { data: rosterData } = await supabase
           .from("players")
           .select("id, full_name, slug")
-          .eq("league_id", league.league_id);
+          .eq("league_id", statsLeagueId);
 
         const slugLookup = new Map<string, string>();
         const nameLookup = new Map<string, string>();
@@ -2512,7 +2516,7 @@ export default function LeaguePage() {
     // Calculate team standings using team_stats table first, fallback to player_stats
     const calculateStandingsWithTeamStats = async (leagueId: string, playerStats: any[]) => {
       try {
-        // First, fetch ALL teams from the teams table
+        // First, fetch ALL teams from the teams table (always public schema)
         const { data: allTeams, error: teamsError } = await supabase
           .from("teams")
           .select("team_id, name")
@@ -2533,7 +2537,7 @@ export default function LeaguePage() {
         });
 
         // Now fetch team_stats to enhance with actual game results
-        const { data: teamStatsData, error: teamStatsError } = await supabase
+        const { data: teamStatsData, error: teamStatsError } = await db
           .from("team_stats")
           .select("*")
           .eq("league_id", leagueId);
@@ -2738,7 +2742,7 @@ export default function LeaguePage() {
       try {
         setIsLoadingStandings(true);
         
-        // First, fetch ALL teams from the teams table
+        // First, fetch ALL teams from the teams table (always public schema)
         const { data: allTeams, error: teamsError } = await supabase
           .from("teams")
           .select("team_id, name")
@@ -2754,7 +2758,7 @@ export default function LeaguePage() {
         }
 
         // Fetch game schedule to get pool information
-        const { data: scheduleData, error: scheduleError } = await supabase
+        const { data: scheduleData, error: scheduleError } = await db
           .from("game_schedule")
           .select("*")
           .eq("league_id", leagueId);
@@ -2794,7 +2798,7 @@ export default function LeaguePage() {
         });
 
         // Now fetch team_stats to enhance with actual game results
-        const { data: teamStatsData, error: teamStatsError } = await supabase
+        const { data: teamStatsData, error: teamStatsError } = await db
           .from("team_stats")
           .select("*")
           .eq("league_id", leagueId);

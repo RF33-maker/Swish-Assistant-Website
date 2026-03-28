@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase, getSupabaseForLeague } from "@/lib/supabase";
+import { supabase, getSupabaseForLeague, getDataLeagueId } from "@/lib/supabase";
 import { type WidgetParams, isLightColor } from "@/lib/widgetUtils";
 import WidgetLayout from "./WidgetLayout";
 
@@ -89,7 +89,9 @@ export default function LeagueLeadersWidget({ params }: { params: WidgetParams }
         }
         setLeagueName(league.name);
 
-        const db = getSupabaseForLeague(params.leagueSlug || params.leagueId);
+        const leagueKey = params.leagueSlug || params.leagueId;
+        const db = getSupabaseForLeague(leagueKey);
+        const dataLeagueId = getDataLeagueId(leagueKey, league.id);
         let allStats: PlayerStatRow[] = [];
         let page = 0;
         const pageSize = 1000;
@@ -98,8 +100,8 @@ export default function LeagueLeadersWidget({ params }: { params: WidgetParams }
         while (hasMore) {
           const { data: pageData } = await db
             .from("player_stats")
-            .select("*, players:player_id(full_name)")
-            .eq("league_id", league.id)
+            .select("*")
+            .eq("league_id", dataLeagueId)
             .range(page * pageSize, (page + 1) * pageSize - 1);
 
           if (pageData && pageData.length > 0) {

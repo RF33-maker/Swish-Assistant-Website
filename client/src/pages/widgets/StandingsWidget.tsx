@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase, getSupabaseForLeague } from "@/lib/supabase";
+import { supabase, getSupabaseForLeague, getDataLeagueId } from "@/lib/supabase";
 import { type WidgetParams, isLightColor } from "@/lib/widgetUtils";
 import WidgetLayout from "./WidgetLayout";
 
@@ -69,11 +69,13 @@ export default function StandingsWidget({ params }: { params: WidgetParams }) {
         }
         setLeagueName(league.name);
 
-        const db = getSupabaseForLeague(params.leagueSlug || params.leagueId);
+        const leagueKey = params.leagueSlug || params.leagueId;
+        const db = getSupabaseForLeague(leagueKey);
+        const dataLeagueId = getDataLeagueId(leagueKey, league.id);
         const { data: teamStats, error: statsError } = await db
           .from("team_stats")
           .select("name, tot_spoints, game_key")
-          .eq("league_id", league.id);
+          .eq("league_id", dataLeagueId);
 
         if (statsError || !teamStats || teamStats.length === 0) {
           setError(statsError ? "Failed to fetch standings" : "No standings data available");

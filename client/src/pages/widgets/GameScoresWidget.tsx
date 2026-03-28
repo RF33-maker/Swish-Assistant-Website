@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase, getSupabaseForLeague } from "@/lib/supabase";
+import { supabase, getSupabaseForLeague, getDataLeagueId } from "@/lib/supabase";
 import { type WidgetParams, isLightColor } from "@/lib/widgetUtils";
 import WidgetLayout from "./WidgetLayout";
 
@@ -72,14 +72,16 @@ export default function GameScoresWidget({ params }: { params: WidgetParams }) {
         }
         setLeagueName(league.name);
 
-        const db = getSupabaseForLeague(params.leagueSlug || params.leagueId);
+        const leagueKey = params.leagueSlug || params.leagueId;
+        const db = getSupabaseForLeague(leagueKey);
+        const dataLeagueId = getDataLeagueId(leagueKey, league.id);
         const now = new Date();
         const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
         const { data: teamStats } = await db
           .from("team_stats")
           .select("game_key, name, tot_spoints, created_at")
-          .eq("league_id", league.id)
+          .eq("league_id", dataLeagueId)
           .gte("created_at", thirtyDaysAgo.toISOString())
           .order("created_at", { ascending: false });
 
@@ -105,7 +107,7 @@ export default function GameScoresWidget({ params }: { params: WidgetParams }) {
           const { data: schedData } = await db
             .from("game_schedule")
             .select("game_key, hometeam, awayteam, matchtime")
-            .eq("league_id", league.id)
+            .eq("league_id", dataLeagueId)
             .in("game_key", gameKeys);
           if (schedData) {
             (schedData as ScheduleEntry[]).forEach(s => {

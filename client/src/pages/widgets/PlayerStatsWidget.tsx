@@ -61,7 +61,7 @@ export default function PlayerStatsWidget({ params }: { params: WidgetParams }) 
 
       try {
         const db = getSupabaseForLeague(params.leagueSlug || params.leagueId);
-        const { data: playerInfo, error: lookupError } = await db
+        const { data: playerInfo, error: lookupError } = await supabase
           .from("players")
           .select("id, full_name, slug")
           .or(`id.eq.${playerId},slug.eq.${playerId}`)

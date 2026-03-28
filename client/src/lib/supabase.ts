@@ -6,9 +6,14 @@ const supabaseAnonKey = import.meta.env?.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJI
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-const TEST_SCHEMA_LEAGUES: Record<string, string> = {
-  "uwe-summer-league-d1-2025": "test",
-  "feb33bc0-c928-4407-bc99-d28c7e6ee059": "test",
+interface TestSchemaConfig {
+  schema: string;
+  dataLeagueId: string;
+}
+
+const TEST_SCHEMA_LEAGUES: Record<string, TestSchemaConfig> = {
+  "uwe-summer-league-d1-2025": { schema: "test", dataLeagueId: "58d633d5-58e6-4aca-8532-d87d424119c5" },
+  "feb33bc0-c928-4407-bc99-d28c7e6ee059": { schema: "test", dataLeagueId: "58d633d5-58e6-4aca-8532-d87d424119c5" },
 };
 
 const schemaClients: Record<string, SupabaseClient> = {};
@@ -25,8 +30,19 @@ function getSchemaClient(schema: string): SupabaseClient {
 
 export function getSupabaseForLeague(leagueSlugOrId: string | undefined | null): SupabaseClient {
   if (!leagueSlugOrId) return supabase;
-  const schema = TEST_SCHEMA_LEAGUES[leagueSlugOrId];
-  return schema ? getSchemaClient(schema) : supabase;
+  const config = TEST_SCHEMA_LEAGUES[leagueSlugOrId];
+  return config ? getSchemaClient(config.schema) : supabase;
+}
+
+export function getDataLeagueId(leagueSlugOrId: string | undefined | null, originalLeagueId: string): string {
+  if (!leagueSlugOrId) return originalLeagueId;
+  const config = TEST_SCHEMA_LEAGUES[leagueSlugOrId];
+  return config ? config.dataLeagueId : originalLeagueId;
+}
+
+export function isTestSchemaLeague(leagueSlugOrId: string | undefined | null): boolean {
+  if (!leagueSlugOrId) return false;
+  return !!TEST_SCHEMA_LEAGUES[leagueSlugOrId];
 }
 
 // API utilities for Flask backend (proxied through Express)
