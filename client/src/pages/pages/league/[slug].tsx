@@ -1435,218 +1435,42 @@ export default function LeaguePage() {
             // Calculate pool-based standings with movement tracking
             await calculatePoolStandings(effectiveLeagueId);
             
-            // Fetch schedule data directly from game_schedule table filtering by league_id
-            const { data: scheduleData, error: scheduleError } = await db
-              .from('game_schedule')
-              .select('competitionname, matchtime, hometeam, awayteam, league_id, game_key')
+            // Fetch game results from v_game_results view (joins team_stats + game_schedule)
+            const { data: gameResults, error: gameResultsError } = await db
+              .from('v_game_results')
+              .select('*')
               .eq('league_id', effectiveLeagueId);
 
+            if (gameResults && !gameResultsError) {
+              debugLog("📊 Game results from view:", gameResults.length, "games");
 
-            // Also fetch team_stats to get scores
-            const { data: teamStatsForScores, error: teamStatsError } = await db
-              .from("team_stats")
-              .select("*")
-              .eq("league_id", effectiveLeagueId);
+              const games: GameSchedule[] = gameResults.map((game: any) => ({
+                game_id: game.game_key,
+                game_date: game.match_time,
+                team1: game.home_team,
+                team2: game.away_team,
+                kickoff_time: game.match_time ? new Date(game.match_time).toLocaleTimeString('en-US', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: true
+                }) : undefined,
+                venue: game.competition_name,
+                team1_score: game.home_score,
+                team2_score: game.away_score,
+                status: game.game_status === 'Final' ? 'FINAL' : game.game_status,
+                numeric_id: game.game_key
+              })).filter((game: GameSchedule) => game.team1 && game.team2);
 
-            debugLog("📊 Team stats for scores:", teamStatsForScores?.length, "records");
-            if (teamStatsForScores && teamStatsForScores.length > 0) {
-              debugLog("📊 Sample team_stats record:", JSON.stringify(teamStatsForScores[0], null, 2));
-              debugLog("📊 Available columns:", Object.keys(teamStatsForScores[0]));
-            }
-
-            // Create a map of game scores using game_key as primary identifier
-            // Key: game_key, Value: game score data
-            const gameScoresByKey = new Map<string, { team1: string, team2: string, team1_score: number, team2_score: number, numeric_id: string, game_date: Date }>();
-            
-            // Also keep the team pairing map for fallback matching
-            const gameScoresMap = new Map<string, Array<{ team1: string, team2: string, team1_score: number, team2_score: number, numeric_id: string, game_date: Date }>>();
-            
-            if (teamStatsForScores && !teamStatsError) {
-              const gameMap = new Map<string, any[]>();
-              
-              teamStatsForScores.forEach(stat => {
-                const numericId = stat.numeric_id;
-                if (numericId && stat.name) {
-                  if (!gameMap.has(numericId)) {
-                    gameMap.set(numericId, []);
-                  }
-                  gameMap.get(numericId)!.push(stat);
-                }
-              });
-
-              debugLog("📊 Unique games by numeric_id:", gameMap.size);
-
-              gameMap.forEach((gameTeams, numericId) => {
-                if (gameTeams.length === 2) {
-                  const [team1, team2] = gameTeams;
-                  // Normalize team names for matching
-                  const team1Normalized = normalizeAndMapTeamName(team1.name);
-                  const team2Normalized = normalizeAndMapTeamName(team2.name);
-                  
-                  // Get the game date
-                  const gameDate = team1.game_date || team2.game_date;
-                  const gameDateObj = gameDate ? new Date(gameDate) : new Date(0);
-                  
-                  // If team_stats has game_key, use that as primary key
-                  const gameKey = team1.game_key || team2.game_key;
-                  
-                  // Create base score data
-                  const scoreData1 = {
-                    team1: team1.name,
-                    team2: team2.name,
-                    team1_score: team1.tot_spoints || 0,
-                    team2_score: team2.tot_spoints || 0,
-                    numeric_id: numericId,
-                    game_date: gameDateObj
-                  };
-                  
-                  const scoreData2 = {
-                    team1: team2.name,
-                    team2: team1.name,
-                    team1_score: team2.tot_spoints || 0,
-                    team2_score: team1.tot_spoints || 0,
-                    numeric_id: numericId,
-                    game_date: gameDateObj
-                  };
-                  
-                  // Store by game_key if available (for primary lookup)
-                  if (gameKey) {
-                    gameScoresByKey.set(gameKey, scoreData1);
-                  }
-                  
-                  // ALWAYS store by team pairing for fallback (regardless of game_key)
-                  const key1 = `${team1Normalized}-vs-${team2Normalized}`;
-                  const key2 = `${team2Normalized}-vs-${team1Normalized}`;
-                  
-                  // Add to array of games for this matchup (instead of overwriting)
-                  if (!gameScoresMap.has(key1)) {
-                    gameScoresMap.set(key1, []);
-                  }
-                  gameScoresMap.get(key1)!.push(scoreData1);
-                  
-                  if (!gameScoresMap.has(key2)) {
-                    gameScoresMap.set(key2, []);
-                  }
-                  gameScoresMap.get(key2)!.push(scoreData2);
-                } else if (gameTeams.length !== 2) {
-                  debugLog("📊 Game with", gameTeams.length, "teams:", numericId, gameTeams.map(t => t.name));
-                }
-              });
-              
-              debugLog("📊 Games stored by game_key:", gameScoresByKey.size);
-              debugLog("📊 Team pairings stored:", gameScoresMap.size);
-              
-              // Sort all game arrays by date (newest first) so we can pick the closest match
-              gameScoresMap.forEach((games, key) => {
-                games.sort((a, b) => b.game_date.getTime() - a.game_date.getTime());
-              });
-            }
-
-            if (scheduleData && !scheduleError) {
-              let matchedByKey = 0;
-              let matchedByTeamDate = 0;
-              let notMatched = 0;
-              
-              const games: GameSchedule[] = scheduleData.map((game: any) => {
-                const gameKey = game.game_key || `${game.hometeam}-vs-${game.awayteam}`;
-                
-                let scoreData = null;
-                
-                // Strategy 1: Try direct game_key match first
-                if (game.game_key && gameScoresByKey.has(game.game_key)) {
-                  scoreData = gameScoresByKey.get(game.game_key)!;
-                  matchedByKey++;
-                }
-                
-                // Strategy 2: Fallback to team name + date matching
-                if (!scoreData) {
-                  const homeTeamNormalized = normalizeAndMapTeamName(game.hometeam);
-                  const awayTeamNormalized = normalizeAndMapTeamName(game.awayteam);
-                  const teamKey = `${homeTeamNormalized}-vs-${awayTeamNormalized}`;
-                  const matchingGames = gameScoresMap.get(teamKey) || [];
-                  
-                  // Find the game with the closest date to the scheduled matchtime
-                  const scheduledDate = game.matchtime ? new Date(game.matchtime) : new Date();
-                  if (matchingGames.length > 0) {
-                    // Find the game closest to the scheduled date (within 2 days tolerance for timezone issues)
-                    const closestGame = matchingGames.find(g => {
-                      const daysDiff = Math.abs(g.game_date.getTime() - scheduledDate.getTime()) / (1000 * 60 * 60 * 24);
-                      return daysDiff <= 2; // Within 2 days
-                    });
-                    if (closestGame) {
-                      scoreData = closestGame;
-                      matchedByTeamDate++;
-                    }
-                  }
-                }
-                
-                if (!scoreData) {
-                  notMatched++;
-                }
-                
-                // Match team names to get correct scores
-                // scoreData has team1/team2 in arbitrary order from team_stats
-                // We need to match against game_schedule's hometeam/awayteam
-                let homeScore: number | undefined = undefined;
-                let awayScore: number | undefined = undefined;
-                
-                if (scoreData) {
-                  const homeNorm = normalizeAndMapTeamName(game.hometeam);
-                  const awayNorm = normalizeAndMapTeamName(game.awayteam);
-                  const scoreTeam1Norm = normalizeAndMapTeamName(scoreData.team1);
-                  const scoreTeam2Norm = normalizeAndMapTeamName(scoreData.team2);
-                  
-                  // Check if scoreData.team1 matches hometeam
-                  if (scoreTeam1Norm === homeNorm) {
-                    homeScore = scoreData.team1_score;
-                    awayScore = scoreData.team2_score;
-                  } else if (scoreTeam2Norm === homeNorm) {
-                    homeScore = scoreData.team2_score;
-                    awayScore = scoreData.team1_score;
-                  } else if (scoreTeam1Norm === awayNorm) {
-                    homeScore = scoreData.team2_score;
-                    awayScore = scoreData.team1_score;
-                  } else if (scoreTeam2Norm === awayNorm) {
-                    homeScore = scoreData.team1_score;
-                    awayScore = scoreData.team2_score;
-                  } else {
-                    // Fallback: use as-is (shouldn't happen if matching worked)
-                    homeScore = scoreData.team1_score;
-                    awayScore = scoreData.team2_score;
-                  }
-                }
-                
-                return {
-                  game_id: gameKey,
-                  game_date: game.matchtime,
-                  team1: game.hometeam,
-                  team2: game.awayteam,
-                  kickoff_time: new Date(game.matchtime).toLocaleTimeString('en-US', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    hour12: true
-                  }),
-                  venue: game.competitionname,
-                  team1_score: homeScore,
-                  team2_score: awayScore,
-                  status: scoreData ? "FINAL" : undefined,
-                  numeric_id: scoreData?.numeric_id
-                };
-              }).filter((game) => game.team1 && game.team2);
-              
-              
-              // Sort games by date (most recent first)
               const sortedGames = games.sort((a, b) => {
                 if (!a.game_date || !b.game_date) return 0;
                 const dateA = new Date(a.game_date).getTime();
                 const dateB = new Date(b.game_date).getTime();
-                return dateB - dateA; // Most recent first
+                return dateB - dateA;
               });
-              
+
               setSchedule(sortedGames);
-            } else if (scheduleError) {
-              console.error("📅 Error fetching from game_schedule:", scheduleError);
-              // Fallback to empty schedule
+            } else if (gameResultsError) {
+              console.error("📅 Error fetching from v_game_results:", gameResultsError);
               setSchedule([]);
             }
             
@@ -2757,13 +2581,13 @@ export default function LeaguePage() {
           return;
         }
 
-        // Fetch game schedule to get pool information
+        // Fetch game results to get pool information
         const { data: scheduleData, error: scheduleError } = await db
-          .from("game_schedule")
+          .from("v_game_results")
           .select("*")
           .eq("league_id", leagueId);
 
-        // Build team-to-pool mapping from game_schedule
+        // Build team-to-pool mapping from v_game_results
         const extractPoolName = (poolValue: string): string => {
           const match = poolValue.match(/\(([^)]+)\)/);
           return match ? match[1] : poolValue;
@@ -2772,14 +2596,14 @@ export default function LeaguePage() {
         const teamPoolMap: Record<string, string> = {};
         if (scheduleData && !scheduleError) {
           scheduleData.forEach((game: any) => {
-            if (game.hometeam && game.pool) {
+            if (game.home_team && game.pool) {
               const poolName = extractPoolName(game.pool);
-              const normalizedHome = normalizeAndMapTeamName(game.hometeam);
+              const normalizedHome = normalizeAndMapTeamName(game.home_team);
               teamPoolMap[normalizedHome] = poolName;
             }
-            if (game.awayteam && game.pool) {
+            if (game.away_team && game.pool) {
               const poolName = extractPoolName(game.pool);
-              const normalizedAway = normalizeAndMapTeamName(game.awayteam);
+              const normalizedAway = normalizeAndMapTeamName(game.away_team);
               teamPoolMap[normalizedAway] = poolName;
             }
           });

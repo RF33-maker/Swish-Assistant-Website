@@ -13,20 +13,6 @@ interface GameScore {
   status: string;
 }
 
-interface TeamStatEntry {
-  game_key: string | null;
-  name: string;
-  tot_spoints: number | null;
-  created_at: string;
-}
-
-interface ScheduleEntry {
-  game_key: string;
-  hometeam: string;
-  awayteam: string;
-  matchtime: string;
-}
-
 async function resolvePublicLeague(leagueId?: string, leagueSlug?: string): Promise<{ id: string; name: string } | null> {
   if (leagueSlug) {
     const { data } = await supabase
@@ -75,92 +61,39 @@ export default function GameScoresWidget({ params }: { params: WidgetParams }) {
         const leagueKey = params.leagueSlug || params.leagueId;
         const db = getSupabaseForLeague(leagueKey);
         const dataLeagueId = getDataLeagueId(leagueKey, league.id);
-        const now = new Date();
-        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-        const { data: teamStats } = await db
-          .from("team_stats")
-          .select("game_key, name, tot_spoints, created_at")
+        const { data: gameResults, error: viewError } = await db
+          .from("v_game_results")
+          .select("*")
           .eq("league_id", dataLeagueId)
-          .gte("created_at", thirtyDaysAgo.toISOString())
-          .order("created_at", { ascending: false });
+          .order("match_time", { ascending: false })
+          .limit(20);
 
-        if (!teamStats || teamStats.length === 0) {
+        if (viewError || !gameResults || gameResults.length === 0) {
           setError("No recent games found");
           setLoading(false);
           return;
         }
 
-        const gameMap = new Map<string, TeamStatEntry[]>();
-        (teamStats as TeamStatEntry[]).forEach(stat => {
-          const key = stat.game_key;
-          if (key) {
-            if (!gameMap.has(key)) gameMap.set(key, []);
-            gameMap.get(key)!.push(stat);
-          }
-        });
+        let results: GameScore[] = gameResults.map((g: any) => ({
+          gameKey: g.game_key,
+          gameDate: g.match_time || g.game_date,
+          homeTeam: g.home_team,
+          awayTeam: g.away_team,
+          homeScore: g.home_score ?? 0,
+          awayScore: g.away_score ?? 0,
+          status: g.game_status || 'Final',
+        }));
 
-        const gameKeys = Array.from(gameMap.keys());
-        const scheduleMap = new Map<string, ScheduleEntry>();
-
-        if (gameKeys.length > 0) {
-          const { data: schedData } = await db
-            .from("game_schedule")
-            .select("game_key, hometeam, awayteam, matchtime")
-            .eq("league_id", dataLeagueId)
-            .in("game_key", gameKeys);
-          if (schedData) {
-            (schedData as ScheduleEntry[]).forEach(s => {
-              if (s.game_key) scheduleMap.set(s.game_key, s);
-            });
-          }
-        }
-
-        const results: GameScore[] = [];
-        gameMap.forEach((teams, gameKey) => {
-          if (teams.length === 2) {
-            const sched = scheduleMap.get(gameKey);
-            let homeTeam: string, awayTeam: string, homeScore: number, awayScore: number;
-
-            if (sched) {
-              homeTeam = sched.hometeam;
-              awayTeam = sched.awayteam;
-              const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
-              const homeNorm = normalize(sched.hometeam);
-              const homeStats = teams.find(t => normalize(t.name) === homeNorm);
-              const awayStats = teams.find(t => normalize(t.name) !== homeNorm);
-              homeScore = homeStats?.tot_spoints ?? teams[0].tot_spoints ?? 0;
-              awayScore = awayStats?.tot_spoints ?? teams[1].tot_spoints ?? 0;
-            } else {
-              homeTeam = teams[0].name;
-              awayTeam = teams[1].name;
-              homeScore = teams[0].tot_spoints || 0;
-              awayScore = teams[1].tot_spoints || 0;
-            }
-
-            results.push({
-              gameKey,
-              gameDate: sched?.matchtime || teams[0].created_at,
-              homeTeam,
-              awayTeam,
-              homeScore,
-              awayScore,
-              status: 'Final',
-            });
-          }
-        });
-
-        let filtered = results;
         if (params.teamName) {
           const filterName = params.teamName.toLowerCase();
-          filtered = results.filter(g =>
+          results = results.filter(g =>
             g.homeTeam.toLowerCase() === filterName ||
             g.awayTeam.toLowerCase() === filterName
           );
         }
 
-        filtered.sort((a, b) => new Date(b.gameDate).getTime() - new Date(a.gameDate).getTime());
-        setGames(filtered.slice(0, 10));
+        setGames(results.slice(0, 10));
       } catch {
         setError("Failed to load game scores");
       } finally {
