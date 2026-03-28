@@ -14,13 +14,66 @@ interface InstagramCarouselProps {
   height?: number;
 }
 
-export function InstagramCarousel({ urls, height = 600 }: InstagramCarouselProps) {
+function InstagramEmbed({ url, height }: { url: string; height: number }) {
+  const embedUrl = getInstagramEmbedUrl(url);
+  if (!embedUrl) return null;
+
+  return (
+    <div
+      className="relative overflow-hidden rounded-lg bg-white"
+      style={{ height }}
+    >
+      <iframe
+        src={embedUrl}
+        width="100%"
+        height={height + 80}
+        className="border-0"
+        style={{
+          marginTop: -1,
+          overflow: "hidden",
+        }}
+        scrolling="no"
+        allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+      />
+    </div>
+  );
+}
+
+function getInstagramEmbedUrl(url: string): string | null {
+  if (!url) return null;
+
+  const cleanUrl = url.split('?')[0];
+
+  const profileRegex = /(?:instagram\.com\/)([A-Za-z0-9._]+)(?:\/)?$/;
+  const profileMatch = cleanUrl.match(profileRegex);
+
+  if (profileMatch) {
+    return `https://www.instagram.com/${profileMatch[1]}/embed`;
+  }
+
+  const postRegex = /instagram\.com\/(p|reel|reels)\/([A-Za-z0-9_-]+)/;
+  const postMatch = cleanUrl.match(postRegex);
+
+  if (postMatch) {
+    const type = postMatch[1];
+    const id = postMatch[2];
+    
+    if (type === 'reel' || type === 'reels') {
+      return `https://www.instagram.com/reel/${id}/embed`;
+    } else {
+      return `https://www.instagram.com/p/${id}/embed`;
+    }
+  }
+
+  return null;
+}
+
+export function InstagramCarousel({ urls, height = 500 }: InstagramCarouselProps) {
   const [api, setApi] = useState<CarouselApi>();
   const [current, setCurrent] = useState(0);
   const [count, setCount] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
 
-  // Lazy initialization ensures plugin is created only once
   const autoplayRef = useRef<ReturnType<typeof Autoplay> | null>(null);
   if (!autoplayRef.current) {
     autoplayRef.current = Autoplay({
@@ -64,39 +117,6 @@ export function InstagramCarousel({ urls, height = 600 }: InstagramCarouselProps
     }
   }, [isPlaying]);
 
-  const getInstagramEmbedUrl = (url: string) => {
-    if (!url) return null;
-
-    const cleanUrl = url.split('?')[0];
-
-    // Check if it's a profile URL (instagram.com/username)
-    const profileRegex = /(?:instagram\.com\/)([A-Za-z0-9._]+)(?:\/)?$/;
-    const profileMatch = cleanUrl.match(profileRegex);
-
-    if (profileMatch) {
-      return `https://www.instagram.com/${profileMatch[1]}/embed`;
-    }
-
-    // Check if it's a post/reel URL (instagram.com/p/POST_ID or /reel/REEL_ID or /reels/REEL_ID)
-    const postRegex = /instagram\.com\/(p|reel|reels)\/([A-Za-z0-9_-]+)/;
-    const postMatch = cleanUrl.match(postRegex);
-
-    if (postMatch) {
-      const type = postMatch[1];
-      const id = postMatch[2];
-      
-      // Preserve the content type for proper embedding
-      // Reels need /reel/ path, regular posts use /p/
-      if (type === 'reel' || type === 'reels') {
-        return `https://www.instagram.com/reel/${id}/embed`;
-      } else {
-        return `https://www.instagram.com/p/${id}/embed`;
-      }
-    }
-
-    return null;
-  };
-
   if (!urls || urls.length === 0) {
     return (
       <div className="text-center py-8 text-gray-500">
@@ -105,7 +125,6 @@ export function InstagramCarousel({ urls, height = 600 }: InstagramCarouselProps
     );
   }
 
-  // Single post - no carousel needed
   if (urls.length === 1) {
     const embedUrl = getInstagramEmbedUrl(urls[0]);
     if (!embedUrl) {
@@ -117,20 +136,10 @@ export function InstagramCarousel({ urls, height = 600 }: InstagramCarouselProps
     }
 
     return (
-      <div className="relative">
-        <iframe
-          src={embedUrl}
-          width="100%"
-          height={height}
-          className="rounded-lg border border-gray-200"
-          allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
-          data-testid="instagram-single-post"
-        />
-      </div>
+      <InstagramEmbed url={urls[0]} height={height} />
     );
   }
 
-  // Multiple posts - use carousel
   return (
     <div className="relative" data-testid="instagram-carousel">
       <Carousel
@@ -149,20 +158,12 @@ export function InstagramCarousel({ urls, height = 600 }: InstagramCarouselProps
 
             return (
               <CarouselItem key={index}>
-                <iframe
-                  src={embedUrl}
-                  width="100%"
-                  height={height}
-                  className="rounded-lg border border-gray-200"
-                  allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
-                  data-testid={`instagram-post-${index}`}
-                />
+                <InstagramEmbed url={url} height={height} />
               </CarouselItem>
             );
           })}
         </CarouselContent>
 
-        {/* Navigation Arrows */}
         <Button
           variant="outline"
           size="icon"
@@ -185,7 +186,6 @@ export function InstagramCarousel({ urls, height = 600 }: InstagramCarouselProps
           <span className="sr-only">Next post</span>
         </Button>
 
-        {/* Play/Pause Control */}
         <Button
           variant="outline"
           size="icon"
@@ -201,7 +201,6 @@ export function InstagramCarousel({ urls, height = 600 }: InstagramCarouselProps
           <span className="sr-only">{isPlaying ? "Pause" : "Play"} autoplay</span>
         </Button>
 
-        {/* Dot Indicators */}
         {count > 1 && (
           <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-10">
             {Array.from({ length: count }).map((_, index) => (
