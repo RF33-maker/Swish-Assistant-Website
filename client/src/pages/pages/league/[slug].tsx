@@ -4624,7 +4624,7 @@ export default function LeaguePage() {
                   </div>
                 </div>
               ) : (
-                <InstagramCarousel urls={instagramUrls} height={500} />
+                <InstagramCarousel urls={instagramUrls} />
               )}
             </div>
 

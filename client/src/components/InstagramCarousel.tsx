@@ -9,27 +9,31 @@ import Autoplay from "embla-carousel-autoplay";
 import { ChevronLeft, ChevronRight, Pause, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+const MAX_POSTS = 6;
+const EMBED_VISIBLE_HEIGHT = 460;
+
 interface InstagramCarouselProps {
   urls: string[];
-  height?: number;
 }
 
-function InstagramEmbed({ url, height }: { url: string; height: number }) {
+function InstagramEmbed({ url }: { url: string }) {
   const embedUrl = getInstagramEmbedUrl(url);
   if (!embedUrl) return null;
 
   return (
     <div
-      className="relative overflow-hidden rounded-lg bg-white"
-      style={{ height }}
+      className="relative overflow-hidden rounded-lg"
+      style={{ height: EMBED_VISIBLE_HEIGHT }}
     >
       <iframe
         src={embedUrl}
         width="100%"
-        height={height + 80}
+        height={EMBED_VISIBLE_HEIGHT + 200}
         className="border-0"
         style={{
-          marginTop: -1,
+          position: "absolute",
+          top: 0,
+          left: 0,
           overflow: "hidden",
         }}
         scrolling="no"
@@ -68,11 +72,13 @@ function getInstagramEmbedUrl(url: string): string | null {
   return null;
 }
 
-export function InstagramCarousel({ urls, height = 500 }: InstagramCarouselProps) {
+export function InstagramCarousel({ urls }: InstagramCarouselProps) {
   const [api, setApi] = useState<CarouselApi>();
   const [current, setCurrent] = useState(0);
   const [count, setCount] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
+
+  const cappedUrls = urls.slice(0, MAX_POSTS);
 
   const autoplayRef = useRef<ReturnType<typeof Autoplay> | null>(null);
   if (!autoplayRef.current) {
@@ -117,7 +123,7 @@ export function InstagramCarousel({ urls, height = 500 }: InstagramCarouselProps
     }
   }, [isPlaying]);
 
-  if (!urls || urls.length === 0) {
+  if (!cappedUrls || cappedUrls.length === 0) {
     return (
       <div className="text-center py-8 text-gray-500">
         <p className="text-sm">No Instagram posts available</p>
@@ -125,8 +131,8 @@ export function InstagramCarousel({ urls, height = 500 }: InstagramCarouselProps
     );
   }
 
-  if (urls.length === 1) {
-    const embedUrl = getInstagramEmbedUrl(urls[0]);
+  if (cappedUrls.length === 1) {
+    const embedUrl = getInstagramEmbedUrl(cappedUrls[0]);
     if (!embedUrl) {
       return (
         <div className="text-center py-8 text-gray-500">
@@ -136,7 +142,7 @@ export function InstagramCarousel({ urls, height = 500 }: InstagramCarouselProps
     }
 
     return (
-      <InstagramEmbed url={urls[0]} height={height} />
+      <InstagramEmbed url={cappedUrls[0]} />
     );
   }
 
@@ -152,13 +158,13 @@ export function InstagramCarousel({ urls, height = 500 }: InstagramCarouselProps
         className="w-full"
       >
         <CarouselContent>
-          {urls.map((url, index) => {
+          {cappedUrls.map((url, index) => {
             const embedUrl = getInstagramEmbedUrl(url);
             if (!embedUrl) return null;
 
             return (
               <CarouselItem key={index}>
-                <InstagramEmbed url={url} height={height} />
+                <InstagramEmbed url={url} />
               </CarouselItem>
             );
           })}
