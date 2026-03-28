@@ -257,9 +257,10 @@ export default function LandingPage() {
     const fetchTrending = async () => {
       const { data, error } = await supabase
         .from("leagues")
-        .select("name, slug")
+        .select("name, slug, logo_url, banner_url, trending_position")
         .eq("is_public", true)
-        .order("updated_at", { ascending: false })
+        .not("trending_position", "is", null)
+        .order("trending_position", { ascending: true })
         .limit(4);
 
       if (!error) setTrendingLeagues(data || []);
@@ -403,41 +404,49 @@ export default function LandingPage() {
         </div>
 
         {/* Suggestions */}
-        <div className="mt-4 md:mt-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-3 max-w-xl w-full">
-          {trendingLeagues.length > 0
-            ? trendingLeagues.map((league, i) => (
-                <button
-                  key={i}
-                  onClick={() => handleSelect({ type: 'league', slug: league.slug })}
-                  className="bg-gradient-to-r from-orange-100 to-amber-50 dark:from-neutral-800 dark:to-neutral-900 hover:scale-105 hover:shadow-md text-sm text-orange-800 dark:text-orange-300 px-5 py-3 rounded-xl text-left transition-all duration-300 flex items-center justify-between gap-3 animate-slide-in-left"
-                  style={{ animationDelay: `${0.8 + i * 0.075}s`, opacity: 0, animationFillMode: 'forwards' }}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">🔥</span>
-                    <span className="font-medium">Trending: {league.name}</span>
-                  </div>
-                  <span className="text-xs text-orange-600 dark:text-orange-400 bg-orange-200/50 dark:bg-orange-900/50 px-2 py-0.5 rounded-full whitespace-nowrap">Updated today</span>
-                </button>
-              ))
-            : [
-                { name: "SLB Championship 25/26", slug: "super-league-basketball-20252026" },
-                { name: "British Championship Basketball", slug: "british-championship-basketball-20252026" },
-                { name: "NBL Division One 25/26", slug: "national-basketball-league-d1-mens-20252026" },
-                { name: "WNBL Division One 25/26", slug: "national-basketball-league-d1-womens-20252026" },
-              ].map((league, i) => (
-                <button
-                  key={i}
-                  onClick={() => handleSelect({ type: 'league', slug: league.slug })}
-                  className="bg-gradient-to-r from-orange-100 to-amber-50 dark:from-neutral-800 dark:to-neutral-900 hover:scale-105 hover:shadow-md text-sm text-orange-800 dark:text-orange-300 px-5 py-3 rounded-xl text-left transition-all duration-300 flex items-center justify-between gap-3 animate-slide-in-left"
-                  style={{ animationDelay: `${0.8 + i * 0.075}s`, opacity: 0, animationFillMode: 'forwards' }}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">🔥</span>
-                    <span className="font-medium">Trending: {league.name}</span>
-                  </div>
-                  <span className="text-xs text-orange-600 dark:text-orange-400 bg-orange-200/50 dark:bg-orange-900/50 px-2 py-0.5 rounded-full whitespace-nowrap">Updated today</span>
-                </button>
-              ))}
+        <div className="mt-4 md:mt-6 w-full max-w-xl">
+          <h3 className="text-sm font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider mb-3 animate-slide-in-left" style={{ animationDelay: '0.75s', opacity: 0, animationFillMode: 'forwards' }}>Trending</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {(trendingLeagues.length > 0
+              ? trendingLeagues
+              : [
+                  { name: "SLB Championship 25/26", slug: "super-league-basketball-20252026", logo_url: null, banner_url: null },
+                  { name: "British Championship Basketball", slug: "british-championship-basketball-20252026", logo_url: null, banner_url: null },
+                  { name: "NBL Division One 25/26", slug: "national-basketball-league-d1-mens-20252026", logo_url: null, banner_url: null },
+                  { name: "WNBL Division One 25/26", slug: "national-basketball-league-d1-womens-20252026", logo_url: null, banner_url: null },
+                ]
+            ).map((league, i) => {
+              const hasBanner = !!league.banner_url;
+              return (
+              <button
+                key={league.slug}
+                onClick={() => handleSelect({ type: 'league', slug: league.slug })}
+                className="relative overflow-hidden rounded-2xl h-24 hover:scale-[1.03] hover:shadow-lg transition-all duration-300 animate-slide-in-left group"
+                style={{
+                  animationDelay: `${0.8 + i * 0.075}s`,
+                  opacity: 0,
+                  animationFillMode: 'forwards',
+                  backgroundColor: '#1a1a1a',
+                }}
+              >
+                {hasBanner && (
+                  <img
+                    src={league.banner_url}
+                    alt=""
+                    className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:opacity-50 transition-opacity"
+                  />
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+                <div className="absolute bottom-0 left-0 right-0 p-4 flex items-end justify-between">
+                  <span className="font-semibold text-sm text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">{league.name}</span>
+                  {league.logo_url && (
+                    <img src={league.logo_url} alt={`${league.name} logo`} className="h-10 w-10 object-contain ml-2 flex-shrink-0" />
+                  )}
+                </div>
+              </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Tagline */}
