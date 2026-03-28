@@ -1370,30 +1370,30 @@ export default function LeaguePage() {
           const effectiveLeagueId = getDataLeagueId(slug, data.league_id);
           
           const fetchTopStats = async () => {
-            const { data: scorerData, error: scorerError } = await db
+            const { data: scorerRows } = await db
               .from("player_stats")
               .select("firstname, familyname, spoints")
               .eq("league_id", effectiveLeagueId)
               .order("spoints", { ascending: false })
-              .limit(1)
-              .single();
+              .limit(1);
+            const scorerData = scorerRows?.[0] || null;
             
 
-            const { data: reboundData } = await db
+            const { data: reboundRows } = await db
               .from("player_stats")
               .select("firstname, familyname, sreboundstotal")
               .eq("league_id", effectiveLeagueId)
               .order("sreboundstotal", { ascending: false })
-              .limit(1)
-              .single();
+              .limit(1);
+            const reboundData = reboundRows?.[0] || null;
 
-            const { data: assistData } = await db
+            const { data: assistRows } = await db
               .from("player_stats")
               .select("firstname, familyname, sassists")
               .eq("league_id", effectiveLeagueId)
               .order("sassists", { ascending: false })
-              .limit(1)
-              .single();
+              .limit(1);
+            const assistData = assistRows?.[0] || null;
 
             const { data: recentGames } = await db
               .from("player_stats")
@@ -1429,20 +1429,13 @@ export default function LeaguePage() {
             setGameSummaries(processedRecentGames);
             setPlayerStats(allPlayerStats || []);
             
-            // Calculate standings using team_stats first, fallback to player_stats
-            await calculateStandingsWithTeamStats(effectiveLeagueId, allPlayerStats || []);
-            
-            // Calculate pool-based standings with movement tracking
-            await calculatePoolStandings(effectiveLeagueId);
-            
-            // Fetch game results from v_game_results view (joins team_stats + game_schedule)
+            // Fetch game results FIRST (before standings which depend on teams lookup)
             const { data: gameResults, error: gameResultsError } = await db
               .from('v_game_results')
               .select('*')
               .eq('league_id', effectiveLeagueId);
 
             if (gameResults && !gameResultsError) {
-              debugLog("📊 Game results from view:", gameResults.length, "games");
 
               const games: GameSchedule[] = gameResults.map((game: any) => ({
                 game_id: game.game_key,
@@ -1470,16 +1463,32 @@ export default function LeaguePage() {
 
               setSchedule(sortedGames);
             } else if (gameResultsError) {
-              console.error("📅 Error fetching from v_game_results:", gameResultsError);
+              console.error("Error fetching from v_game_results:", gameResultsError);
               setSchedule([]);
             }
             
-            // Reset loading states
+            // Calculate standings (non-blocking)
+            try {
+              await calculateStandingsWithTeamStats(effectiveLeagueId, allPlayerStats || []);
+            } catch (standingsErr) {
+              console.error("Error in calculateStandingsWithTeamStats:", standingsErr);
+            }
+            
+            try {
+              await calculatePoolStandings(effectiveLeagueId);
+            } catch (poolErr) {
+              console.error("Error in calculatePoolStandings:", poolErr);
+            }
+            
             setIsLoadingLeaders(false);
             setIsLoadingStandings(false);
           };
 
-          fetchTopStats();
+          fetchTopStats().catch(err => {
+            console.error("Error in fetchTopStats:", err);
+            setIsLoadingLeaders(false);
+            setIsLoadingStandings(false);
+          });
         }
       };
 
@@ -3045,7 +3054,8 @@ export default function LeaguePage() {
         {league?.league_id && (
           <section className="bg-gray-900 text-white overflow-hidden rounded-b-lg">
             <GameResultsCarousel 
-              leagueId={league.league_id} 
+              leagueId={league.league_id}
+              slug={slug}
               onGameClick={handleCarouselGameClick}
             />
           </section>

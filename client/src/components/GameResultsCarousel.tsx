@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase, getSupabaseForLeague, getDataLeagueId } from "@/lib/supabase";
 import { TeamLogo } from "./TeamLogo";
 import { CheckCircle2, Clock, ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -28,6 +28,7 @@ interface GameClickData {
 
 interface GameResultsCarouselProps {
   leagueId: string;
+  slug?: string;
   onGameClick: (data: GameClickData) => void;
 }
 
@@ -69,113 +70,64 @@ function formatRelativeDate(dateStr: string): string {
   return `${formatDateUK(dateStr)} • ${formatTimeUK(dateStr)}`;
 }
 
-export default function GameResultsCarousel({ leagueId, onGameClick }: GameResultsCarouselProps) {
+export default function GameResultsCarousel({ leagueId, slug, onGameClick }: GameResultsCarouselProps) {
   const [allGames, setAllGames] = useState<GameItem[]>([]);
   const [activeTab, setActiveTab] = useState<FilterTab>("results");
   const [hasSetDefaultTab, setHasSetDefaultTab] = useState(false);
   const [loading, setLoading] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  const db = useMemo(() => getSupabaseForLeague(slug), [slug]);
+  const effectiveLeagueId = useMemo(() => getDataLeagueId(slug, leagueId), [slug, leagueId]);
+
   const fetchGames = async (isPolling = false) => {
     if (!isPolling) setLoading(true);
     
     try {
       const now = new Date();
-      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
       
-      const { data: teamStatsData, error: teamStatsError } = await supabase
-        .from("team_stats")
-        .select("game_key, name, tot_spoints, created_at, numeric_id")
-        .eq("league_id", leagueId)
-        .gte("created_at", thirtyDaysAgo.toISOString())
-        .order("created_at", { ascending: false });
-      
-      if (teamStatsError) {
-        console.error("Error fetching team stats:", teamStatsError);
+      const { data: gameResults, error: gameResultsError } = await db
+        .from('v_game_results')
+        .select('*')
+        .eq('league_id', effectiveLeagueId);
+
+      if (gameResultsError) {
+        console.error("Error fetching v_game_results:", gameResultsError);
       }
 
       const gamesWithStats: GameItem[] = [];
       const processedGameKeys = new Set<string>();
-      
-      const gameMap = new Map<string, any[]>();
-      if (teamStatsData && teamStatsData.length > 0) {
-        teamStatsData.forEach(stat => {
-          const key = stat.game_key || stat.numeric_id;
-          if (key) {
-            if (!gameMap.has(key)) {
-              gameMap.set(key, []);
-            }
-            gameMap.get(key)!.push(stat);
-          }
-        });
-      }
 
-      const statsGameKeys = Array.from(gameMap.keys());
-      let scheduleHomeAwayMap = new Map<string, { hometeam: string; awayteam: string; matchtime: string; status: string | null }>();
-      if (statsGameKeys.length > 0) {
-        const { data: schedLookup } = await supabase
-          .from("game_schedule")
-          .select("game_key, hometeam, awayteam, matchtime, status")
-          .eq("league_id", leagueId)
-          .in("game_key", statsGameKeys);
-        if (schedLookup) {
-          schedLookup.forEach(s => {
-            if (s.game_key) {
-              scheduleHomeAwayMap.set(s.game_key, { hometeam: s.hometeam, awayteam: s.awayteam, matchtime: s.matchtime, status: s.status });
-            }
-          });
-        }
-      }
+      if (gameResults && gameResults.length > 0) {
+        gameResults.forEach((game: any) => {
+          if (!game.home_team || !game.away_team || !game.game_key) return;
+          processedGameKeys.add(game.game_key);
 
-      gameMap.forEach((teams, gameKey) => {
-        if (teams.length === 2) {
-          processedGameKeys.add(gameKey);
-          
-          const schedInfo = scheduleHomeAwayMap.get(gameKey);
-          let home_team: string, away_team: string, home_score: number, away_score: number;
-          
-          if (schedInfo) {
-            home_team = schedInfo.hometeam;
-            away_team = schedInfo.awayteam;
-            const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
-            const homeNorm = normalize(schedInfo.hometeam);
-            const awayNorm = normalize(schedInfo.awayteam);
-            const homeStats = teams.find(t => normalize(t.name) === homeNorm);
-            const awayStats = teams.find(t => normalize(t.name) === awayNorm);
-            home_score = homeStats?.tot_spoints ?? (awayStats ? teams.find(t => t !== awayStats)?.tot_spoints ?? 0 : teams[0].tot_spoints || 0);
-            away_score = awayStats?.tot_spoints ?? (homeStats ? teams.find(t => t !== homeStats)?.tot_spoints ?? 0 : teams[1].tot_spoints || 0);
-          } else {
-            home_team = teams[0].name;
-            away_team = teams[1].name;
-            home_score = teams[0].tot_spoints || 0;
-            away_score = teams[1].tot_spoints || 0;
-          }
+          const dbStatus = (game.game_status || game.schedule_status || '').toLowerCase();
+          const isLive = dbStatus === 'live' || dbStatus === 'in_progress' || dbStatus.includes('live');
 
-          const dbStatus = (schedInfo?.status || '').toLowerCase();
-          const isDbLive = dbStatus === 'live' || dbStatus === 'in_progress' || dbStatus.includes('live');
-          
           gamesWithStats.push({
-            game_key: gameKey,
-            game_id: gameKey,
-            game_date: schedInfo?.matchtime || teams[0].created_at,
-            home_team,
-            away_team,
-            home_score,
-            away_score,
-            status: isDbLive ? 'LIVE' : 'FINAL'
+            game_key: game.game_key,
+            game_id: game.game_key,
+            game_date: game.match_time || new Date().toISOString(),
+            home_team: game.home_team,
+            away_team: game.away_team,
+            home_score: game.home_score,
+            away_score: game.away_score,
+            status: isLive ? 'LIVE' : 'FINAL'
           });
-        }
-      });
+        });
 
-      gamesWithStats.sort((a, b) => new Date(b.game_date).getTime() - new Date(a.game_date).getTime());
+        gamesWithStats.sort((a, b) => new Date(b.game_date).getTime() - new Date(a.game_date).getTime());
+      }
 
       const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       const sevenDaysAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-      
-      const { data: scheduleData, error: scheduleError } = await supabase
+
+      const { data: scheduleData, error: scheduleError } = await db
         .from("game_schedule")
         .select("game_key, matchtime, hometeam, awayteam, status")
-        .eq("league_id", leagueId)
+        .eq("league_id", effectiveLeagueId)
         .gte("matchtime", sevenDaysAgo.toISOString())
         .lte("matchtime", sevenDaysAhead.toISOString())
         .order("matchtime", { ascending: true });
@@ -287,18 +239,18 @@ export default function GameResultsCarousel({ leagueId, onGameClick }: GameResul
   };
 
   useEffect(() => {
-    if (leagueId) {
+    if (effectiveLeagueId) {
       fetchGames();
     }
-  }, [leagueId]);
+  }, [effectiveLeagueId]);
 
   useEffect(() => {
-    if (!leagueId) return;
+    if (!effectiveLeagueId) return;
     const interval = setInterval(() => {
       fetchGames(true);
     }, 15000);
     return () => clearInterval(interval);
-  }, [leagueId]);
+  }, [effectiveLeagueId]);
 
   const filteredGames = useMemo(() => {
     const games = allGames.filter(g => {
