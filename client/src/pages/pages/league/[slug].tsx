@@ -2856,14 +2856,14 @@ export default function LeaguePage() {
               className="absolute inset-0 pointer-events-none transition-opacity duration-1000 ease-in-out dark:hidden"
               style={{
                 opacity: brandFadedIn ? 1 : 0,
-                background: `linear-gradient(180deg, rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.18) 0%, rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.08) 40%, transparent 80%)`,
+                background: `linear-gradient(180deg, transparent 20%, rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.08) 60%, rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.18) 100%)`,
               }}
             />
             <div
               className="absolute inset-0 pointer-events-none transition-opacity duration-1000 ease-in-out hidden dark:block"
               style={{
                 opacity: brandFadedIn ? 1 : 0,
-                background: `linear-gradient(180deg, rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.22) 0%, rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.10) 40%, transparent 80%)`,
+                background: `linear-gradient(180deg, transparent 20%, rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.10) 60%, rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.22) 100%)`,
               }}
             />
           </>
