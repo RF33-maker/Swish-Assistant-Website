@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { X, Calendar, Users, Trophy, TrendingUp, Clock, Target, Bot, Sparkles, Zap, Activity, MapPin } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { supabase, getSupabaseForLeague } from "@/lib/supabase";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { TeamLogo } from "./TeamLogo";
 import { extractColorsFromImage, TeamColors, adjustOpacity } from "@/lib/colorExtractor";
@@ -101,104 +101,147 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
       if (!gameId || !isOpen) return;
       
       setLoading(true);
-      // Reset team stats to avoid stale data
       setTeamStatsFromDb([]);
       
       try {
+        const isGameKey = /^[A-Z0-9]{12,}$/.test(gameId) || gameId.startsWith('PDF_');
         
-        // Determine if gameId is numeric_id or game_key based on format
-        const isGameKey = /^[A-Z0-9]{12,}$/.test(gameId); // game_key format check
-        
-        let teamStatsData = null;
-        let teamError = null;
-        
-        if (isGameKey) {
-          // Query by game_key (from team_stats)
-          const result = await supabase
-            .from("team_stats")
-            .select("*")
-            .eq("game_key", gameId);
-          teamStatsData = result.data;
-          teamError = result.error;
-        } else {
-          // Query by numeric_id (legacy format)
-          const result = await supabase
-            .from("team_stats")
-            .select("*")
-            .eq("numeric_id", gameId);
-          teamStatsData = result.data;
-          teamError = result.error;
-        }
-          
-
         let teamsInfo: { [key: string]: number } = {};
         let gameDate = new Date().toISOString();
         
-        if (teamStatsData && teamStatsData.length > 0) {
-          // Store team stats data for use in team totals
-          setTeamStatsFromDb(teamStatsData);
-          
-          // Get teams and scores from team_stats
-          teamStatsData.forEach(teamStat => {
-            if (teamStat.name) {
-              teamsInfo[teamStat.name] = teamStat.tot_spoints || 0;
+        // Try v_game_detail view first for team-level data
+        const gameDetailQuery = isGameKey
+          ? supabase.from("v_game_detail").select("*").eq("game_key", gameId).limit(1).maybeSingle()
+          : supabase.from("team_stats").select("*").eq("numeric_id", gameId);
+        
+        const { data: gameDetail, error: detailError } = await gameDetailQuery;
+        
+        if (gameDetail && !detailError) {
+          if (Array.isArray(gameDetail)) {
+            // Legacy numeric_id path — got team_stats rows
+            setTeamStatsFromDb(gameDetail);
+            gameDetail.forEach((teamStat: any) => {
+              if (teamStat.name) {
+                teamsInfo[teamStat.name] = teamStat.tot_spoints || 0;
+              }
+            });
+            gameDate = gameDetail[0]?.created_at || gameDate;
+            if (gameDetail[0]?.league_id) setLeagueId(gameDetail[0].league_id);
+          } else {
+            // v_game_detail view — single row with both teams
+            const detail = gameDetail as any;
+            if (detail.league_id) setLeagueId(detail.league_id);
+            gameDate = detail.match_time || gameDate;
+            
+            if (detail.home_team) teamsInfo[detail.home_team] = detail.home_score || 0;
+            if (detail.away_team) teamsInfo[detail.away_team] = detail.away_score || 0;
+            
+            // Build team_stats-like data for downstream use
+            const fakeTeamStats = [];
+            if (detail.home_team) {
+              fakeTeamStats.push({
+                name: detail.home_team, tot_spoints: detail.home_score,
+                p1_score: detail.home_q1, p2_score: detail.home_q2, p3_score: detail.home_q3, p4_score: detail.home_q4,
+                tot_sfieldgoalsmade: detail.home_fgm, tot_sfieldgoalsattempted: detail.home_fga, tot_sfieldgoalspercentage: detail.home_fg_pct,
+                tot_sthreepointersmade: detail.home_3pm, tot_sthreepointersattempted: detail.home_3pa, tot_sthreepointerspercentage: detail.home_3p_pct,
+                tot_sfreethrowsmade: detail.home_ftm, tot_sfreethrowsattempted: detail.home_fta, tot_sfreethrowspercentage: detail.home_ft_pct,
+                tot_sreboundstotal: detail.home_reb, tot_sreboundsoffensive: detail.home_oreb, tot_sreboundsdefensive: detail.home_dreb,
+                tot_sassists: detail.home_ast, tot_sturnovers: detail.home_tov, tot_ssteals: detail.home_stl,
+                tot_sblocks: detail.home_blk, tot_sfoulspersonal: detail.home_pf,
+                tot_spointsfromturnovers: detail.home_pts_off_tov, tot_spointssecondchance: detail.home_second_chance_pts,
+                tot_spointsfastbreak: detail.home_fastbreak_pts, tot_sbenchpoints: detail.home_bench_pts,
+                tot_spointsinthepaint: detail.home_pitp, tot_sbiggestlead: detail.home_biggest_lead,
+                efg_percent: detail.home_efg_pct, ts_percent: detail.home_ts_pct,
+                pace: detail.home_pace, off_rating: detail.home_off_rtg, def_rating: detail.home_def_rtg, net_rating: detail.home_net_rtg,
+                coach: detail.home_coach, league_id: detail.league_id, game_key: detail.game_key,
+              });
             }
-          });
-          // Use the created_at from team_stats for the game date
-          gameDate = teamStatsData[0].created_at || new Date().toISOString();
-          // Store league_id for logo fetching
-          if (teamStatsData[0]?.league_id) {
-            setLeagueId(teamStatsData[0].league_id);
+            if (detail.away_team) {
+              fakeTeamStats.push({
+                name: detail.away_team, tot_spoints: detail.away_score,
+                p1_score: detail.away_q1, p2_score: detail.away_q2, p3_score: detail.away_q3, p4_score: detail.away_q4,
+                tot_sfieldgoalsmade: detail.away_fgm, tot_sfieldgoalsattempted: detail.away_fga, tot_sfieldgoalspercentage: detail.away_fg_pct,
+                tot_sthreepointersmade: detail.away_3pm, tot_sthreepointersattempted: detail.away_3pa, tot_sthreepointerspercentage: detail.away_3p_pct,
+                tot_sfreethrowsmade: detail.away_ftm, tot_sfreethrowsattempted: detail.away_fta, tot_sfreethrowspercentage: detail.away_ft_pct,
+                tot_sreboundstotal: detail.away_reb, tot_sreboundsoffensive: detail.away_oreb, tot_sreboundsdefensive: detail.away_dreb,
+                tot_sassists: detail.away_ast, tot_sturnovers: detail.away_tov, tot_ssteals: detail.away_stl,
+                tot_sblocks: detail.away_blk, tot_sfoulspersonal: detail.away_pf,
+                tot_spointsfromturnovers: detail.away_pts_off_tov, tot_spointssecondchance: detail.away_second_chance_pts,
+                tot_spointsfastbreak: detail.away_fastbreak_pts, tot_sbenchpoints: detail.away_bench_pts,
+                tot_spointsinthepaint: detail.away_pitp, tot_sbiggestlead: detail.away_biggest_lead,
+                efg_percent: detail.away_efg_pct, ts_percent: detail.away_ts_pct,
+                pace: detail.away_pace, off_rating: detail.away_off_rtg, def_rating: detail.away_def_rtg, net_rating: detail.away_net_rtg,
+                coach: detail.away_coach, league_id: detail.league_id, game_key: detail.game_key,
+              });
+            }
+            setTeamStatsFromDb(fakeTeamStats);
           }
         }
         
-        // Then get player stats with full names from players table
-        let statsQuery = supabase
-          .from("player_stats")
-          .select("*, players:player_id(full_name)");
-        
+        // Fetch player box scores — try v_box_score view first, fallback to player_stats
+        let boxScoreQuery = supabase.from("v_box_score").select("*");
         if (isGameKey) {
-          statsQuery = statsQuery.eq("game_key", gameId);
+          boxScoreQuery = boxScoreQuery.eq("game_key", gameId);
         } else {
-          statsQuery = statsQuery.eq("numeric_id", gameId);
+          boxScoreQuery = boxScoreQuery.eq("numeric_id", gameId);
         }
         
-        const { data: stats, error } = await statsQuery.order("spoints", { ascending: false });
-
-
-        if (error) {
-          console.error("Error fetching game details:", error);
-          return;
+        let { data: boxStats, error: boxError } = await boxScoreQuery.order("points", { ascending: false });
+        
+        // Fallback to player_stats if v_box_score doesn't exist yet
+        if (boxError) {
+          let statsQuery = supabase.from("player_stats").select("*, players:player_id(full_name)");
+          if (isGameKey) {
+            statsQuery = statsQuery.eq("game_key", gameId);
+          } else {
+            statsQuery = statsQuery.eq("numeric_id", gameId);
+          }
+          const { data: fallbackStats, error: fallbackError } = await statsQuery.order("spoints", { ascending: false });
+          if (!fallbackError && fallbackStats) {
+            boxStats = fallbackStats.map((stat: any) => ({
+              ...stat,
+              player_name: stat.full_name || stat.players?.full_name || stat.name ||
+                `${stat.firstname || ''} ${stat.familyname || ''}`.trim() || 'Unknown Player',
+              team_name: stat.team_name || stat.team || 'Unknown Team',
+              points: stat.spoints || 0,
+              assists: stat.sassists || 0,
+              rebounds: stat.sreboundstotal || 0,
+              steals: stat.ssteals || 0,
+              blocks: stat.sblocks || 0,
+              turnovers: stat.sturnovers || 0,
+              fouls: stat.sfoulspersonal || 0,
+              plus_minus: stat.splusminuspoints,
+              minutes: stat.sminutes,
+            }));
+          }
         }
 
-        if (stats && stats.length > 0) {
-          
-          // Process stats to use full names and proper team assignments
-          const processedStats = stats.map(stat => ({
+        if (boxStats && boxStats.length > 0) {
+          const processedStats = boxStats.map((stat: any) => ({
             ...stat,
-            // Use full_name from players table, fallback to existing name, then combine firstname/familyname
-            firstname: stat.full_name || 
-                      stat.players?.full_name || 
-                      stat.name || 
-                      `${stat.firstname || ''} ${stat.familyname || ''}`.trim() || 
-                      'Unknown Player',
-            familyname: '', // Clear since we're using full name in firstname
-            // Use team_name field for proper team assignment
-            team: stat.team_name || stat.team || 'Unknown Team'
+            firstname: stat.player_name || `${stat.firstname || ''} ${stat.familyname || ''}`.trim() || 'Unknown Player',
+            familyname: '',
+            team: stat.team_name || stat.team || 'Unknown Team',
+            spoints: stat.points ?? stat.spoints ?? 0,
+            sassists: stat.assists ?? stat.sassists ?? 0,
+            sreboundstotal: stat.rebounds ?? stat.sreboundstotal ?? 0,
+            ssteals: stat.steals ?? stat.ssteals ?? 0,
+            sblocks: stat.blocks ?? stat.sblocks ?? 0,
+            sturnovers: stat.turnovers ?? stat.sturnovers ?? 0,
+            sfoulspersonal: stat.fouls ?? stat.sfoulspersonal ?? 0,
+            splusminuspoints: stat.plus_minus ?? stat.splusminuspoints,
+            sminutes: stat.minutes ?? stat.sminutes,
           }));
           
-          // Get unique teams from the processed stats
-          const teamsFromStats = Array.from(new Set(processedStats.map(stat => stat.team).filter(Boolean)));
+          const teamsFromStats = Array.from(new Set(processedStats.map((stat: any) => stat.team).filter(Boolean)));
           
-          // Update teams info if we have better data from stats
           if (teamsFromStats.length > 0) {
             const updatedTeamsInfo = { ...teamsInfo };
             teamsFromStats.forEach(team => {
               if (!updatedTeamsInfo[team]) {
-                // Calculate team score from player stats if not available from team_stats
                 const teamScore = processedStats
-                  .filter(stat => stat.team === team)
-                  .reduce((sum, stat) => sum + (stat.spoints || 0), 0);
+                  .filter((stat: any) => stat.team === team)
+                  .reduce((sum: number, stat: any) => sum + (stat.spoints || 0), 0);
                 updatedTeamsInfo[team] = teamScore;
               }
             });
@@ -209,7 +252,6 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
               teamScores: updatedTeamsInfo,
             });
             
-            // Set first team as default selection
             if (teamsFromStats.length > 0 && !selectedTeam) {
               setSelectedTeam(teamsFromStats[0]);
             }

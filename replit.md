@@ -75,6 +75,28 @@ The application is structured into a React frontend and integrates with external
   - Teams (legacy): `/team/[teamName]` - backward compatible, shows first matching team
   - Players: `/player/[slug]` (e.g., `/player/john-doe`) - includes backward compatibility for UUID-based URLs
 
+## Database Views
+The app uses database views to simplify data fetching and eliminate complex client-side matching logic. Views must be created in Supabase SQL Editor.
+
+**SQL files** in `scripts/views/` (numbered for execution order):
+- `01-03`: Test schema views (run first to validate)
+- `04-06`: Public schema views (run after test validation)
+
+**Views:**
+- `v_game_results` — One row per game with final scores, quarter scores, game status. Self-joins `team_stats` pairs by `game_key`, left-joins `game_schedule` for home/away designation and match time.
+- `v_game_detail` — Comprehensive single-row game detail with both teams' full stats (shooting, rebounds, assists, turnovers, advanced metrics). Used by `GameDetailModal` summary and team stats tabs.
+- `v_box_score` — Player stats with resolved names (joins `players` table in public schema, falls back to `firstname`/`familyname`). Used by `GameDetailModal` box score tab.
+
+**Schema differences:**
+- Public schema views join with `game_schedule` and `players` tables for home/away designation and name resolution
+- Test schema views work without those tables (no `game_schedule`, no `players`)
+
+**Frontend usage:**
+- League page: queries `v_game_results` for game carousel
+- `GameDetailModal`: queries `v_game_detail` + `v_box_score` (with fallback to `team_stats` + `player_stats` if views don't exist)
+- `GameScoresWidget`: queries `v_game_results`
+- `live_events`, `shot_chart`, `summaries` are still queried directly (simple single-table lookups)
+
 ## Server Architecture
 - **Primary server**: `tsx server/index.ts` — Express with Vite as middleware. Handles all API routes and serves the React frontend on port 5000.
 - **Workflow**: "Start application" runs `tsx server/index.ts` (not `npm run dev`). This is required so Express API routes are registered before Vite catches all requests.
