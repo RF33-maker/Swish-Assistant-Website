@@ -1,11 +1,33 @@
 // client/src/lib/supabase.ts
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// Get Supabase configuration from environment variables
 const supabaseUrl = import.meta.env?.VITE_SUPABASE_URL || 'https://omkwqpcgttrgvbhcxgqf.supabase.co';
 const supabaseAnonKey = import.meta.env?.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ta3dxcGNndHRyZ3ZiaGN4Z3FmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY1MjQ5NDAsImV4cCI6MjA2MjEwMDk0MH0.m58UtfRt6uCpnaeLYEERlrpReF2B1sHy1ztCadL44CA';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+const TEST_SCHEMA_LEAGUES: Record<string, string> = {
+  "uwe-summer-league-d1-2025": "test",
+  "feb33bc0-c928-4407-bc99-d28c7e6ee059": "test",
+};
+
+const schemaClients: Record<string, SupabaseClient> = {};
+
+function getSchemaClient(schema: string): SupabaseClient {
+  if (schema === "public") return supabase;
+  if (!schemaClients[schema]) {
+    schemaClients[schema] = createClient(supabaseUrl, supabaseAnonKey, {
+      db: { schema },
+    });
+  }
+  return schemaClients[schema];
+}
+
+export function getSupabaseForLeague(leagueSlugOrId: string | undefined | null): SupabaseClient {
+  if (!leagueSlugOrId) return supabase;
+  const schema = TEST_SCHEMA_LEAGUES[leagueSlugOrId];
+  return schema ? getSchemaClient(schema) : supabase;
+}
 
 // API utilities for Flask backend (proxied through Express)
 export const backendApi = {

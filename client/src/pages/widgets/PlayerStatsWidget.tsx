@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase, getSupabaseForLeague } from "@/lib/supabase";
 import { type WidgetParams, isLightColor } from "@/lib/widgetUtils";
 import WidgetLayout from "./WidgetLayout";
 
@@ -60,7 +60,8 @@ export default function PlayerStatsWidget({ params }: { params: WidgetParams }) 
       }
 
       try {
-        const { data: playerInfo, error: lookupError } = await supabase
+        const db = getSupabaseForLeague(params.leagueSlug || params.leagueId);
+        const { data: playerInfo, error: lookupError } = await db
           .from("players")
           .select("id, full_name, slug")
           .or(`id.eq.${playerId},slug.eq.${playerId}`)
@@ -90,7 +91,7 @@ export default function PlayerStatsWidget({ params }: { params: WidgetParams }) 
         }
 
         if (!resolvedLeagueId) {
-          const { data: firstStat } = await supabase
+          const { data: firstStat } = await db
             .from("player_stats")
             .select("league_id")
             .eq("player_id", canonicalId)
@@ -118,7 +119,7 @@ export default function PlayerStatsWidget({ params }: { params: WidgetParams }) 
           return;
         }
 
-        const { data: stats, error: statsError } = await supabase
+        const { data: stats, error: statsError } = await db
           .from("player_stats")
           .select("spoints, sreboundstotal, sassists, ssteals, sblocks, sfieldgoalsmade, sfieldgoalsattempted, sthreepointersmade, sthreepointersattempted, sfreethrowsmade, sfreethrowsattempted, team_name, firstname, familyname")
           .eq("player_id", canonicalId)

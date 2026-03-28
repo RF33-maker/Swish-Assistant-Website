@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase, getSupabaseForLeague } from "@/lib/supabase";
 import { type WidgetParams, isLightColor } from "@/lib/widgetUtils";
 import WidgetLayout from "./WidgetLayout";
 
@@ -72,10 +72,11 @@ export default function GameScoresWidget({ params }: { params: WidgetParams }) {
         }
         setLeagueName(league.name);
 
+        const db = getSupabaseForLeague(params.leagueSlug || params.leagueId);
         const now = new Date();
         const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-        const { data: teamStats } = await supabase
+        const { data: teamStats } = await db
           .from("team_stats")
           .select("game_key, name, tot_spoints, created_at")
           .eq("league_id", league.id)
@@ -101,7 +102,7 @@ export default function GameScoresWidget({ params }: { params: WidgetParams }) {
         const scheduleMap = new Map<string, ScheduleEntry>();
 
         if (gameKeys.length > 0) {
-          const { data: schedData } = await supabase
+          const { data: schedData } = await db
             .from("game_schedule")
             .select("game_key, hometeam, awayteam, matchtime")
             .eq("league_id", league.id)

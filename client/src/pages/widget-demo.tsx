@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 const DEMO_LEAGUE_SLUGS = [
+  { slug: "uwe-summer-league-d1-2025", label: "UWE Summer League D1 2025 (test schema)" },
   { slug: "super-league-basketball-20252026", label: "Super League Basketball" },
   { slug: "british-championship-basketball-20252026", label: "British Championship Basketball" },
   { slug: "womens-super-league-basketball-championship-20252026", label: "Women's SLB Championship" },
