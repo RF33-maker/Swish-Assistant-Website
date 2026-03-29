@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, varchar, jsonb, uuid } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, smallint, boolean, timestamp, varchar, jsonb, uuid } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -25,6 +25,10 @@ export const leagues = pgTable("leagues", {
   approved: boolean("approved").default(false),
   instagram_embed_url: text("instagram_embed_url"),
   youtube_embed_url: text("youtube_embed_url"),
+  primary_color: text("primary_color"),
+  secondary_color: text("secondary_color"),
+  accent_color: text("accent_color"),
+  trending_position: smallint("trending_position"),
   created_at: timestamp("created_at").defaultNow(),
   updated_at: timestamp("updated_at").defaultNow(),
 });

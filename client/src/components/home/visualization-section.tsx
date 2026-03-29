@@ -3,7 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } fro
 import { Maximize } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const BASE = import.meta.env.VITE_BACKEND_URL;
+const BASE = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000').replace(/\/$/, '');
 
 export default function VisualizationSection() {
   const [chartData, setChartData] = useState([]);

@@ -1,13 +1,38 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/lib/supabase";
+import { Loader2, Check } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
-export default function CustomizationSection() {
+interface LeagueColors {
+  league_id?: string;
+  primary_color?: string | null;
+  secondary_color?: string | null;
+  accent_color?: string | null;
+}
+
+interface CustomizationSectionProps {
+  league?: LeagueColors | null;
+}
+
+export default function CustomizationSection({ league }: CustomizationSectionProps) {
   const [primaryColor, setPrimaryColor] = useState("#0d84e3");
   const [secondaryColor, setSecondaryColor] = useState("#1e293b");
   const [accentColor, setAccentColor] = useState("#22c55e");
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    if (league) {
+      if (league.primary_color) setPrimaryColor(league.primary_color);
+      if (league.secondary_color) setSecondaryColor(league.secondary_color);
+      if (league.accent_color) setAccentColor(league.accent_color);
+    }
+  }, [league]);
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -24,9 +49,40 @@ export default function CustomizationSection() {
     }
   };
 
-  const applyBrandColors = () => {
-    // This would implement the actual color changing functionality
-    // by updating CSS variables or a theme context
+  const applyBrandColors = async () => {
+    if (!league?.league_id) {
+      toast({ title: "Error", description: "No league loaded", variant: "destructive" });
+      return;
+    }
+
+    setIsSaving(true);
+    setSaved(false);
+
+    try {
+      const { error } = await supabase
+        .from("leagues")
+        .update({
+          primary_color: primaryColor,
+          secondary_color: secondaryColor,
+          accent_color: accentColor,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("league_id", league.league_id);
+
+      if (error) {
+        console.error("Error saving brand colors:", error);
+        toast({ title: "Error", description: "Failed to save brand colors. The color columns may need to be added to the database.", variant: "destructive" });
+      } else {
+        setSaved(true);
+        toast({ title: "Success", description: "Brand colors saved successfully" });
+        setTimeout(() => setSaved(false), 3000);
+      }
+    } catch (err) {
+      console.error("Error saving brand colors:", err);
+      toast({ title: "Error", description: "An unexpected error occurred", variant: "destructive" });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -38,7 +94,6 @@ export default function CustomizationSection() {
         <div className="bg-white rounded-xl shadow-md overflow-hidden">
           <div className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Logo upload section */}
               <div>
                 <h3 className="text-lg font-medium text-neutral-800 mb-4">Team Logo</h3>
                 <div className="flex items-start">
@@ -78,7 +133,6 @@ export default function CustomizationSection() {
                 </div>
               </div>
               
-              {/* Color customization section */}
               <div>
                 <h3 className="text-lg font-medium text-neutral-800 mb-4">Brand Colors</h3>
                 <div className="space-y-4">
@@ -86,11 +140,13 @@ export default function CustomizationSection() {
                     <Label htmlFor="primary-color" className="block text-sm font-medium text-neutral-700 mb-1">
                       Primary Color
                     </Label>
-                    <div className="flex items-center">
-                      <div 
-                        className="w-8 h-8 rounded-md mr-2" 
-                        style={{ backgroundColor: primaryColor }}
-                      ></div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={primaryColor}
+                        onChange={(e) => setPrimaryColor(e.target.value)}
+                        className="w-10 h-10 rounded-md border border-neutral-200 cursor-pointer p-0.5"
+                      />
                       <Input 
                         type="text" 
                         id="primary-color" 
@@ -105,11 +161,13 @@ export default function CustomizationSection() {
                     <Label htmlFor="secondary-color" className="block text-sm font-medium text-neutral-700 mb-1">
                       Secondary Color
                     </Label>
-                    <div className="flex items-center">
-                      <div 
-                        className="w-8 h-8 rounded-md mr-2" 
-                        style={{ backgroundColor: secondaryColor }}
-                      ></div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={secondaryColor}
+                        onChange={(e) => setSecondaryColor(e.target.value)}
+                        className="w-10 h-10 rounded-md border border-neutral-200 cursor-pointer p-0.5"
+                      />
                       <Input 
                         type="text" 
                         id="secondary-color" 
@@ -124,11 +182,13 @@ export default function CustomizationSection() {
                     <Label htmlFor="accent-color" className="block text-sm font-medium text-neutral-700 mb-1">
                       Accent Color
                     </Label>
-                    <div className="flex items-center">
-                      <div 
-                        className="w-8 h-8 rounded-md mr-2" 
-                        style={{ backgroundColor: accentColor }}
-                      ></div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={accentColor}
+                        onChange={(e) => setAccentColor(e.target.value)}
+                        className="w-10 h-10 rounded-md border border-neutral-200 cursor-pointer p-0.5"
+                      />
                       <Input 
                         type="text" 
                         id="accent-color" 
@@ -138,12 +198,34 @@ export default function CustomizationSection() {
                       />
                     </div>
                   </div>
+
+                  <div className="flex items-center gap-3 pt-2">
+                    <div className="flex gap-1">
+                      <div className="w-8 h-8 rounded-md border border-neutral-200" style={{ backgroundColor: primaryColor }} title="Primary" />
+                      <div className="w-8 h-8 rounded-md border border-neutral-200" style={{ backgroundColor: secondaryColor }} title="Secondary" />
+                      <div className="w-8 h-8 rounded-md border border-neutral-200" style={{ backgroundColor: accentColor }} title="Accent" />
+                    </div>
+                    <span className="text-xs text-neutral-500">Preview</span>
+                  </div>
                   
                   <Button 
                     className="mt-2 w-full" 
                     onClick={applyBrandColors}
+                    disabled={isSaving}
                   >
-                    Apply Brand Colors
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Saving...
+                      </>
+                    ) : saved ? (
+                      <>
+                        <Check className="w-4 h-4 mr-2" />
+                        Saved!
+                      </>
+                    ) : (
+                      'Apply Brand Colors'
+                    )}
                   </Button>
                 </div>
               </div>

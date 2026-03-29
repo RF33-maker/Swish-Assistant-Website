@@ -1,3 +1,5 @@
+import { getPythonBackendUrl } from './backendUrl';
+
 export interface PlayerAnalysisData {
   name: string;
   games_played: number;
@@ -13,8 +15,7 @@ export interface PlayerAnalysisData {
 
 export async function generatePlayerAnalysis(playerData: PlayerAnalysisData): Promise<string> {
   try {
-    // Use the external backend for AI analysis instead of local API
-    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'https://sab-backend.onrender.com';
+    const backendUrl = getPythonBackendUrl();
     const response = await fetch(`${backendUrl}/api/ai-analysis`, {
       method: 'POST',
       headers: {

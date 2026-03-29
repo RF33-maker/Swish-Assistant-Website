@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,7 @@ import { Helmet } from "react-helmet-async";
 import { namesMatch, getMostCompleteName, slugToName, type PlayerMatch } from "@/lib/fuzzyMatch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import ShotChart, { type ShotData } from "@/components/ShotChart";
 
 interface PlayerStat {
   id: string;
@@ -59,6 +61,7 @@ interface PlayerStat {
   sfreethrowsattempted?: number;
   sminutes?: string;
   created_at?: string;
+  game_key?: string;
   players?: {
     full_name?: string;
     league_id?: string;
@@ -110,6 +113,7 @@ export default function PlayerStatsPage() {
   const [aiAnalysis, setAiAnalysis] = useState<string>("");
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [leagueNames, setLeagueNames] = useState<Map<string, string>>(new Map());
+  const [playerShotChartRange, setPlayerShotChartRange] = useState<string>("season");
   const [photoUploading, setPhotoUploading] = useState(false);
   const [showFocusAdjuster, setShowFocusAdjuster] = useState(false);
   const [tempFocusY, setTempFocusY] = useState<number>(50);
@@ -823,6 +827,43 @@ export default function PlayerStatsPage() {
     return uniqueVariations;
   }, [playerMatches, leagueNames]);
 
+  const playerShotGameKeys = useMemo(() => {
+    if (!playerStats || playerStats.length === 0) return [];
+    const sorted = [...playerStats]
+      .filter(s => s.game_key)
+      .sort((a, b) => new Date(b.game_date || b.created_at || '').getTime() - new Date(a.game_date || a.created_at || '').getTime());
+    if (playerShotChartRange === "last5") return sorted.slice(0, 5).map(s => s.game_key).filter(Boolean) as string[];
+    if (playerShotChartRange === "last10") return sorted.slice(0, 10).map(s => s.game_key).filter(Boolean) as string[];
+    if (playerShotChartRange.startsWith("game:")) return [playerShotChartRange.replace("game:", "")];
+    return sorted.map(s => s.game_key).filter(Boolean) as string[];
+  }, [playerStats, playerShotChartRange]);
+
+  const playerIdsForShots = useMemo(() => playerMatches.map(m => m.id), [playerMatches]);
+
+  const { data: playerShotData, isLoading: playerShotsLoading } = useQuery({
+    queryKey: ['player-shot-chart', playerIdsForShots, playerShotGameKeys],
+    queryFn: async () => {
+      if (playerIdsForShots.length === 0 || playerShotGameKeys.length === 0) return [];
+      const { data, error } = await supabase
+        .from('shot_chart')
+        .select('id, x, y, success, player_name, player_id, period, team_no, shot_type, sub_type, game_key')
+        .in('player_id', playerIdsForShots)
+        .in('game_key', playerShotGameKeys);
+      if (error) { console.error('Player shot chart error:', error); return []; }
+      return (data || []) as ShotData[];
+    },
+    enabled: playerIdsForShots.length > 0 && playerShotGameKeys.length > 0,
+  });
+
+  const playerShotGamesWithKeys = useMemo(() => {
+    if (!playerStats) return [];
+    return playerStats
+      .filter(s => s.game_key)
+      .sort((a, b) => new Date(b.game_date || b.created_at || '').getTime() - new Date(a.game_date || a.created_at || '').getTime())
+      .map(s => ({ game_key: s.game_key!, opponent: s.opponent || 'TBD', date: s.game_date || s.created_at || '' }))
+      .filter((g, i, arr) => arr.findIndex(x => x.game_key === g.game_key) === i);
+  }, [playerStats]);
+
   // Compute player photo URL using Supabase storage getPublicUrl for production compatibility
   const playerPhotoUrl = useMemo(() => {
     if (!playerInfo?.photoPath) return null;
@@ -1454,6 +1495,43 @@ export default function PlayerStatsPage() {
             </CardContent>
           </Card>
         )}
+
+        {/* Shot Chart */}
+        <Card className="mb-4 border-orange-200 dark:border-orange-500/30 shadow-md animate-slide-in-up bg-white dark:bg-neutral-900">
+          <CardContent className="p-4">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                <span className="text-sm font-semibold text-orange-800 dark:text-orange-300">Shot Chart</span>
+              </div>
+              <Select value={playerShotChartRange} onValueChange={setPlayerShotChartRange}>
+                <SelectTrigger className="w-full md:w-48 h-8 text-sm border-orange-200 dark:border-neutral-600 focus:ring-orange-500 dark:bg-neutral-800 dark:text-white">
+                  <SelectValue placeholder="Select range" />
+                </SelectTrigger>
+                <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
+                  <SelectItem value="season">Full Season</SelectItem>
+                  <SelectItem value="last10">Last 10 Games</SelectItem>
+                  <SelectItem value="last5">Last 5 Games</SelectItem>
+                  {playerShotGamesWithKeys.map((g) => (
+                    <SelectItem key={g.game_key} value={`game:${g.game_key}`}>
+                      vs {g.opponent} ({new Date(g.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <ShotChart
+              shots={playerShotData || []}
+              loading={playerShotsLoading}
+              compact
+              emptyMessage="No shot data available for this player."
+              filters={{
+                showQuarterFilter: true,
+                showResultFilter: true,
+              }}
+            />
+          </CardContent>
+        </Card>
 
         {/* Competition Filter - Compact */}
         {playerMatches.length > 1 && (

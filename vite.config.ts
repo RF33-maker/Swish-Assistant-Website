@@ -1,9 +1,12 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
 export default defineConfig({
-  root: "client", // ✅ needed if your index.html lives in client/
+  root: "client",
   plugins: [react()],
   resolve: {
     alias: {
@@ -13,12 +16,19 @@ export default defineConfig({
     },
   },
   server: {
-    host: "0.0.0.0",       // ✅ required for Replit preview
+    host: "0.0.0.0",
     port: 5000,
-    allowedHosts: true,   // ✅ fixes the blocked host issue
+    allowedHosts: true,
+    proxy: {
+      "/api/ai-analysis": { target: "http://localhost:8000", changeOrigin: true },
+      "/api/parse": { target: "http://localhost:8000", changeOrigin: true },
+      "/chat": { target: "http://localhost:8000", changeOrigin: true },
+      "/start": { target: "http://localhost:8000", changeOrigin: true },
+      "/health": { target: "http://localhost:8000", changeOrigin: true },
+    },
   },
   build: {
-    outDir: "../dist",     // ✅ necessary if you're customizing build location
+    outDir: "../dist",
     emptyOutDir: true,
   },
 });

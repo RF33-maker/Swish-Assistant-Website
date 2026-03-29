@@ -1,13 +1,7 @@
 # React Frontend with Express Backend
 
 ## Overview
-This project delivers a professional React and Tailwind CSS website featuring user authentication and an interactive homepage. Its primary purpose is to provide a robust platform for managing league data, team statistics, and integrating AI-powered coaching tools. Key capabilities include:
-- Secure user authentication and protected routes.
-- Display of league standings, team profiles, and player statistics.
-- File upload and document parsing for enhanced data analysis.
-- AI-powered chatbot and analysis for coaching insights.
-- Dynamic content updates like league banners and team logos.
-The business vision is to create a comprehensive sports league management and analysis platform, leveraging AI to offer unique coaching and performance insights, targeting amateur and semi-professional sports organizations.
+This project delivers a professional React and Tailwind CSS website with user authentication and an interactive homepage, designed for managing sports league data, team statistics, and integrating AI-powered coaching tools. Key capabilities include secure user authentication, display of league standings and player statistics, file upload for data analysis, and AI-powered chatbots for coaching insights. The business vision is to create a comprehensive sports league management and analysis platform, leveraging AI to offer unique coaching and performance insights for amateur and semi-professional sports organizations.
 
 ## User Preferences
 - Use modern React patterns with hooks
@@ -16,61 +10,59 @@ The business vision is to create a comprehensive sports league management and an
 - Maintain separation between frontend and backend concerns
 
 ## System Architecture
-The application is structured into a React frontend and integrates with external backend services.
+The application features a React frontend and integrates with external backend services.
 
 **Frontend (React with Vite, Tailwind CSS, shadcn/ui, Wouter):**
-- **Structure**: Organized into `pages/` for main views, `components/` for reusable UI elements, `lib/` for utilities and configurations, and `hooks/` for custom React hooks.
-- **UI/UX Decisions**: Emphasizes a clean, professional design with a focus on readability and intuitive navigation. Utilizes a softer orange color palette (orange-50/100/300/400/700/800) for better aesthetics, with white backgrounds and soft orange borders (border-orange-200/300) for cards. Playful micro-interactions, hover animations, and smooth transitions are incorporated.
-    - **Dark Mode**: Site-wide dark mode support via ThemeProvider context with localStorage persistence. Toggle button (sun/moon icons) in navigation headers on landing and league pages. Dark theme uses gray-800/900 backgrounds with orange accent colors preserved. Tailwind's class-based dark mode enabled with `dark:` variants throughout components.
-    - **Team Branding Colors**: Team profiles dynamically extract vibrant colors from team logos using canvas-based color analysis. Colors are applied to headers, cards, and backgrounds throughout team profiles and adapt to both light and dark themes. Supports all league logo naming conventions (base names, `_Senior_Men`, `_Senior_Men_I` suffixes). Colors are cached locally for 7 days to minimize performance impact.
-- **Technical Implementations**:
-    - **Authentication**: Supabase handles user authentication and session management, securing routes.
-    - **Routing**: `Wouter` is used for client-side routing, enabling dynamic page navigation.
-    - **Data Display**: Features interactive tables for league standings with detailed statistics (Win%, PF, PA, Diff), sorted by win percentage. Animated team performance trend visualizer shows team progress over time.
-    - **Content Management**: Provides administrative interfaces for league owners to upload custom banners and manage team logos, which are integrated throughout the platform (standings, profiles, scoreboards).
-    - **Search & Filtering**: Comprehensive search for players and leagues, with filtering capabilities on player lists.
-    - **Coaching Tools**: Dedicated Coaches Hub with integrated League Assistant (chatbot) for insights, scouting reports with document editing capabilities, and a "Coming Soon" section for LLM coaching material.
-- **Feature Specifications**:
-    - **League Management**: Centralized `/league-admin/:slug` route for owners to manage logos, banners, and Instagram integration.
-    - **Team Pages**: Dedicated `/league/:slug/teams` for displaying all teams in a league, and `/team/:teamName` for individual team profiles with statistics and recent games.
-    - **Player Profiles**: Individual player pages at `/player/[slug]` showing season averages and game-by-game stats, with AI-powered analysis. **Fuzzy Matching**: Automatically consolidates duplicate player records across competitions using Jaro-Winkler similarity (85% threshold) to handle name variations, typos, and initials (e.g., "Rhys Farrell", "R Farrell", "R Farell"). League filter dropdown allows viewing combined stats across all competitions or filtered stats per individual league. Name variations indicator shows which name format appears in each competition.
-    - **Game Results**: Redesigned game results section with horizontal scrolling ticker and detailed game view modals with team-filtered box scores. Game detail modals query by both `game_key` (from game_schedule) and `numeric_id` (legacy format) for flexible game lookups. Clickable recent games in Team Profile sections open full game detail modals with complete statistics and box scores.
-    - **Statistical Leaderboards**: `/league-leaders/[slug]` displays top players across 9 statistical categories.
-    - **Player Statistics Table**: Comprehensive table on league pages displaying full traditional basketball box score statistics with 25 columns (Player, GP, MIN, FGM, FGA, FG%, 2PM, 2PA, 2P%, 3PM, 3PA, 3P%, FTM, FTA, FT%, ORB, DRB, TRB, AST, STL, BLK, TO, PF, +/-, PTS). Features include sortable columns, averages/totals toggle, search filtering, mobile-responsive horizontal scrolling with sticky player column, and comprehensive legend explaining all abbreviations.
-    - **Team Statistics Table**: Comprehensive table on league pages displaying full traditional basketball box score statistics with 27 columns (Logo, Team, GP, FGM, FGA, FG%, 2PM, 2PA, 2P%, 3PM, 3PA, 3P%, FTM, FTA, FT%, ORB, DRB, TRB, AST, STL, BLK, TO, PF, +/-, PTS, PITP, FB PTS, 2ND CH). Features include averages/totals toggle, mobile-responsive horizontal scrolling with sticky logo column, and comprehensive legend explaining all 26 statistical abbreviations including advanced metrics (Points in Paint, Fastbreak Points, Second Chance Points).
+-   **Structure**: Organized into `pages/`, `components/`, `lib/`, and `hooks/`.
+-   **UI/UX Decisions**: Emphasizes a clean, professional design with a softer orange color palette, white backgrounds, and soft orange borders for cards. Incorporates playful micro-interactions and smooth transitions.
+    -   **Dark Mode**: Site-wide dark mode support with localStorage persistence and a toggle button.
+    -   **Team Branding Colors**: Dynamically extracts vibrant colors from team logos for headers, cards, and backgrounds, adapting to light and dark themes. Supports various league logo naming conventions. Colors are cached locally.
+    -   **League Page Branded Background & Accent Colors**: Extracts dominant colors from league banner images to apply gradient backgrounds, section highlights, and accent colors throughout league pages. Manual color overrides are supported.
+-   **Technical Implementations**:
+    -   **Authentication**: Supabase handles user authentication and session management.
+    -   **Routing**: `Wouter` is used for client-side routing.
+    -   **Data Display**: Interactive tables for league standings with detailed statistics and animated team performance trends.
+    -   **Content Management**: Administrative interfaces for league owners to upload banners and manage team logos.
+    -   **Search & Filtering**: Comprehensive search for players and leagues with filtering capabilities.
+    -   **Coaching Tools**: Coaches Hub with an integrated League Assistant (chatbot) and document editing for scouting reports.
+-   **Feature Specifications**:
+    -   **League Management**: Centralized route (`/league-admin/:slug`) for owners to manage assets and integrations.
+    -   **Team Pages**: Dedicated pages for league teams (`/league/:slug/teams`) and individual team profiles (`/team/:teamName`).
+    -   **Player Profiles**: Individual player pages (`/player/[slug]`) showing season averages and game-by-game stats with AI analysis. Includes fuzzy matching to consolidate duplicate player records across competitions.
+    -   **Game Results**: Redesigned section with horizontal scrolling ticker and detailed game view modals showing team-filtered box scores.
+    -   **Statistical Leaderboards**: Displays top players across multiple statistical categories (`/league-leaders/[slug]`).
+    -   **Player Statistics Table**: Comprehensive, sortable table with 25 columns, search filtering, and mobile-responsive design.
+    -   **Team Statistics Table**: Comprehensive table with 27 columns including advanced metrics, and mobile-responsive design.
 
-## SEO Implementation
-- **Dynamic Sitemap**: Automated sitemap generation via `scripts/generate-sitemap.ts` that queries Supabase for all public leagues, teams, and players. Run `npx tsx scripts/generate-sitemap.ts` to regenerate. Sitemap is served as a static file at `/sitemap.xml` with proper XML structure including lastmod dates, changefreq, and priority values.
-  - ✅ **SEO-Friendly URLs**: Player pages now use human-readable slugs (e.g., `/player/john-doe`) instead of UUIDs for better search engine optimization
-  - 📊 Current stats: 871 URLs (5 leagues including SLB Championship 2025-26, 72 teams, 776 players with slugs)
-  - 🔄 Slug generation: Run `npx tsx scripts/generate-player-slugs.ts` to populate slugs for new players
-- **Robots.txt**: Configured to allow crawling while blocking sensitive routes (/auth, /admin, /api, etc.) and includes sitemap reference. Includes crawl-delay directive to prevent aggressive crawling.
-- **Meta Tags**: Comprehensive meta tag implementation across all pages:
-  - **League Pages**: Use custom editable `league.description` field for meta descriptions, with fallback to generic text. Includes Open Graph tags, canonical links, and Twitter cards.
-  - **Team Pages**: Use custom editable `team.description` field for meta descriptions. Full Open Graph, Twitter card, and canonical link support.
-  - **Player Pages**: Dynamic meta descriptions with player name, team, and season averages (e.g., "averaging 15.3 PPG"). Includes comprehensive social media tags.
-  - **Default (index.html)**: Mentions all supported leagues including NBL, WNBL, BCB, and SLB Championship.
-- **Editable SEO Descriptions**: League owners can add/edit custom descriptions for leagues and teams that appear in page content and are used for meta descriptions. Implemented via `EditableDescription` component with inline editing and auto-save functionality.
-  - League descriptions appear in "About This League" section above League Leaders and in meta tags
-  - Team descriptions appear in the team profile sidebar and in meta tags
-  - Requires `description` column (text, nullable) in both `leagues` and `teams` tables in Supabase
-- **URL Structure**: 
-  - Leagues: `/league/[slug]` (e.g., `/league/british-championship-basketball-20252026`)
-  - Teams: `/league/[leagueSlug]/team/[teamName]` (e.g., `/league/super-league-basketball-20252026/team/caledonia-gladiators`) - league-aware routing to separate men's/women's teams with same names
-  - Teams (legacy): `/team/[teamName]` - backward compatible, shows first matching team
-  - Players: `/player/[slug]` (e.g., `/player/john-doe`) - includes backward compatibility for UUID-based URLs
+**Embeddable Widget System**
+-   **Widget Builder**: A protected page (`/api-widgets`) provides a form-based editor with live iframe preview and embed code generation.
+-   **Widget Types**: Includes League Standings, Player Stats Card, Game Scores, and League Leaders widgets.
+-   **Widget Routes**: Public, chromeless pages (`/widget/:type`) accepting URL query parameters for data and visual customization.
+-   **Customization Options**: Allows customization of colors, font family, border radius, layout presets, and dimensions.
+
+**SEO Implementation**
+-   **Dynamic Sitemap**: Automated sitemap generation (`scripts/generate-sitemap.ts`) from Supabase data, served at `/sitemap.xml`.
+-   **Robots.txt**: Configured to allow crawling while blocking sensitive routes and includes sitemap reference.
+-   **Meta Tags**: Comprehensive meta tag implementation across all pages, including dynamic descriptions, Open Graph tags, canonical links, and Twitter cards for league, team, and player pages.
+-   **Editable SEO Descriptions**: League owners can add/edit custom descriptions for leagues and teams, used in page content and meta tags.
+-   **URL Structure**: SEO-friendly URLs for leagues (`/league/[slug]`), teams (`/league/[leagueSlug]/team/[teamName]`), and players (`/player/[slug]`).
+
+**Database Views & Schema Routing**
+The application utilizes Supabase database views to simplify data fetching:
+-   `v_game_results` for game scores and status (used by league page schedule + `GameResultsCarousel`).
+-   `v_game_detail` for comprehensive single-row game details (used by `GameDetailModal`).
+-   `v_box_score` for player statistics with resolved names (used by `GameDetailModal`).
+-   Views exist in both `public` and `test` schemas; the correct schema client is selected via `getSupabaseForLeague(slug)` and `getDataLeagueId(slug, leagueId)` from `client/src/lib/supabase.ts`.
+-   `TEST_SCHEMA_LEAGUES` in `supabase.ts` maps league slugs/IDs to test schema configs.
+-   Public schema is always used for: `leagues`, `teams`, `players`, `live_events`, `auth`, `storage`.
+
+**Server Architecture**
+-   **Primary server**: `tsx server/index.ts` (Express with Vite) handles API routes and serves the React frontend on port 5000.
+-   **League AI chatbot**: Handled directly in `server/routes.ts` using the OpenAI Node SDK.
+-   **Python Backend** (optional, port 8000): Handles a secondary coaching chatbot and player scouting analysis, proxied via `proxyToPython` in `server/routes.ts`.
 
 ## External Dependencies
-- **Supabase**: Used for database storage, user authentication, and object storage (e.g., `team-logos`, `league-banners`).
-- **Python Flask Backend (https://sab-backend.onrender.com)**: An external service that handles file processing, document parsing, and AI-powered chatbot functionality (e.g., player analysis using OpenAI API).
-- **Instagram**: Enhanced carousel integration for displaying multiple Instagram posts/reels in league sidebar:
-  - Auto-scrolling carousel with 6-second intervals
-  - Manual navigation controls (prev/next arrows, dot indicators)
-  - Play/pause toggle for auto-scroll
-  - Large display format (650px height) for better visibility
-  - Video playback support for Instagram reels
-  - League owners can manage multiple Instagram URLs through admin interface
-  - URLs stored as JSON array in existing `instagram_embed_url` field (backward compatible with single URL)
-  - URL normalization prevents duplicates (removes trailing slashes, query params)
-  - Supports profile URLs, post URLs (`/p/`), and reel URLs (`/reel/`, `/reels/`)
-  - Component: `InstagramCarousel.tsx` using Embla Carousel with Autoplay plugin
+-   **Supabase**: Database, user authentication, and object storage for assets like team logos and league banners.
+-   **OpenAI (Node SDK)**: Integrated directly into the Express backend for the league chatbot.
+-   **Python Flask Backend**: Used for coaching chatbot and player scouting analysis.
+-   **Instagram**: Enhanced carousel integration for displaying Instagram posts and reels on league pages, with auto-scrolling, navigation controls, and video playback.

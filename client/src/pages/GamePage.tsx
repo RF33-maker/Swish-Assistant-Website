@@ -1,6 +1,6 @@
 import { useParams, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { TeamLogo } from "@/components/TeamLogo";
 import { GameSwitcherBar } from "@/components/GameSwitcherBar";
@@ -8,6 +8,8 @@ import { isGameSlug, parseGameSlug } from "@/lib/gameSlug";
 import { ArrowLeft, Clock, MapPin, Calendar, Users, TrendingUp } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import LeagueChatbot from "@/components/LeagueChatbot";
+import ShotChart, { type ShotData } from "@/components/ShotChart";
 
 interface GameSchedule {
   game_key: string;
@@ -77,11 +79,14 @@ interface LiveEvent {
   clock: string;
   team_no: number;
   player_name: string | null;
+  player_id: string | null;
   description: string | null;
   score: string;
   success: boolean;
   scoring: boolean;
   points: number | null;
+  x_coord: number | null;
+  y_coord: number | null;
   created_at: string;
 }
 
@@ -364,6 +369,20 @@ export default function GamePage() {
     enabled: !!gameKey && !!gameData,
     refetchInterval: 5000,
     refetchIntervalInBackground: false,
+  });
+
+  // Fetch shot chart data from shot_chart table
+  const { data: shotChartData, isLoading: shotChartLoading } = useQuery({
+    queryKey: ['game-shot-chart', gameKey],
+    queryFn: async () => {
+      const { data, error } = await db
+        .from('shot_chart')
+        .select('id, x, y, success, player_name, player_id, period, team_no, shot_type, sub_type, game_key')
+        .eq('game_key', gameKey);
+      if (error) { console.error('[GamePage] shot_chart error:', error); return []; }
+      return (data || []) as ShotData[];
+    },
+    enabled: !!gameKey && !!gameData,
   });
 
   const [lastUpdatedText, setLastUpdatedText] = useState('');
@@ -754,6 +773,33 @@ export default function GamePage() {
   const homeTeamRecord = computeRecord(homeTeamId);
   const awayTeamRecord = computeRecord(awayTeamId);
 
+  // Computed before early returns so hook order is stable
+  const homePlayerStats = playerStats?.filter(p => p.side === "1")
+    .sort((a, b) => (b.spoints || 0) - (a.spoints || 0)) || [];
+
+  const awayPlayerStats = playerStats?.filter(p => p.side === "2")
+    .sort((a, b) => (b.spoints || 0) - (a.spoints || 0)) || [];
+
+  const gameSuggestions = useMemo(() => {
+    const home = gameData?.hometeam || 'home team';
+    const away = gameData?.awayteam || 'away team';
+
+    const homePlayers = homePlayerStats.slice(0, 2).map(p => p.player_name).filter(Boolean) as string[];
+    const awayPlayers = awayPlayerStats.slice(0, 2).map(p => p.player_name).filter(Boolean) as string[];
+    const featuredPlayers = [...homePlayers.slice(0, 1), ...awayPlayers.slice(0, 1)];
+
+    const base = [
+      `How has ${home} been performing this season?`,
+      `Who are the top scorers for ${away}?`,
+      `Compare ${home} and ${away} rebounding stats`,
+      `What are ${home}'s shooting percentages this season?`,
+      `Which team has the better defence — ${home} or ${away}?`,
+    ];
+
+    const playerQs = featuredPlayers.map(name => `How many points is ${name} averaging this season?`);
+    return [...playerQs, ...base].slice(0, 5);
+  }, [gameData?.hometeam, gameData?.awayteam, homePlayerStats, awayPlayerStats]);
+
   if (gameLoading) {
     return (
       <div className="min-h-screen bg-[#fffaf1] dark:bg-neutral-950">
@@ -824,12 +870,6 @@ export default function GamePage() {
   
   const homeScore = homeTeamStats?.tot_spoints ?? null;
   const awayScore = awayTeamStats?.tot_spoints ?? null;
-
-  const homePlayerStats = playerStats?.filter(p => p.side === "1")
-    .sort((a, b) => (b.spoints || 0) - (a.spoints || 0)) || [];
-
-  const awayPlayerStats = playerStats?.filter(p => p.side === "2")
-    .sort((a, b) => (b.spoints || 0) - (a.spoints || 0)) || [];
 
   return (
     <div className="min-h-screen bg-[#fffaf1] dark:bg-neutral-950 text-slate-800 dark:text-white transition-colors">
@@ -1138,11 +1178,12 @@ export default function GamePage() {
               </div>
             ) : (
               <Tabs defaultValue="game" className="w-full">
-                <TabsList className="grid w-full grid-cols-4 bg-orange-100 dark:bg-neutral-800 mb-4">
-                  <TabsTrigger value="game" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">Game</TabsTrigger>
-                  <TabsTrigger value="boxscore" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">Box Score</TabsTrigger>
-                  <TabsTrigger value="teamstats" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">Team Stats</TabsTrigger>
-                  <TabsTrigger value="feed" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white">Feed</TabsTrigger>
+                <TabsList className="grid w-full grid-cols-5 bg-orange-100 dark:bg-neutral-800 mb-4">
+                  <TabsTrigger value="game" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs md:text-sm">Game</TabsTrigger>
+                  <TabsTrigger value="boxscore" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs md:text-sm">Box Score</TabsTrigger>
+                  <TabsTrigger value="teamstats" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs md:text-sm">Team Stats</TabsTrigger>
+                  <TabsTrigger value="shotchart" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs md:text-sm">Shots</TabsTrigger>
+                  <TabsTrigger value="feed" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs md:text-sm">Feed</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="game">
@@ -1546,6 +1587,24 @@ export default function GamePage() {
                   </div>
                 </TabsContent>
 
+                <TabsContent value="shotchart">
+                  <ShotChart
+                    shots={shotChartData || []}
+                    loading={shotChartLoading}
+                    emptyMessage="No shot data is available for this game yet."
+                    filters={{
+                      showPlayerFilter: true,
+                      showQuarterFilter: true,
+                      showTeamFilter: true,
+                      showResultFilter: true,
+                      teamNames: {
+                        home: gameData.hometeam,
+                        away: gameData.awayteam,
+                      },
+                    }}
+                  />
+                </TabsContent>
+
                 <TabsContent value="feed">
                   <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
                     {liveEvents && liveEvents.length > 0 ? (
@@ -1620,6 +1679,17 @@ export default function GamePage() {
           </div>
         </div>
       </div>
+
+      {/* Floating AI assistant — query stats without leaving the game */}
+      {gameData?.league_id && (
+        <LeagueChatbot
+          isFloatingWidget
+          leagueId={gameData.league_id}
+          leagueName={gameData.competitionname || 'League'}
+          leagueSlug={leagueData?.slug}
+          suggestedQuestions={gameSuggestions}
+        />
+      )}
     </div>
   );
 }

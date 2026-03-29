@@ -1,5 +1,5 @@
 import { useLocation } from "wouter"
-import { Users, TrendingUp, Trophy, Settings, Share2 } from "lucide-react";
+import { Users, TrendingUp, Trophy, Settings, Share2, Code } from "lucide-react";
 import {
   Card,
   CardHeader,
@@ -40,7 +40,7 @@ export default function DashboardLanding() {
           Choose your mode
         </p>
 
-        <div className="mt-16 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="mt-16 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <Card className="bg-white border-orange-200 shadow-lg shadow-orange-500/20 hover:shadow-xl hover:shadow-orange-500/40 transition-all duration-300 cursor-pointer transform hover:scale-105 group" onClick={() => navigate("/league-management")}>
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-3">
@@ -121,6 +121,34 @@ export default function DashboardLanding() {
                 >
                   <Share2 className="h-3 w-3 mr-1 group-hover:animate-bounce" />
                   Create Graphics
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white border-orange-200 shadow-lg shadow-orange-500/20 hover:shadow-xl hover:shadow-orange-500/40 transition-all duration-300 cursor-pointer transform hover:scale-105 group" onClick={() => navigate("/api-widgets")}>
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-12 w-12 rounded-full bg-orange-600 group-hover:bg-orange-700 flex items-center justify-center transition-all duration-300 group-hover:rotate-12 group-hover:scale-110">
+                    <Code className="h-6 w-6 text-white group-hover:animate-pulse" />
+                  </div>
+                  <div className="flex-1">
+                    <CardTitle className="text-orange-900 text-lg group-hover:text-orange-700 transition-colors duration-300">API / Widgets</CardTitle>
+                    <CardDescription className="group-hover:text-orange-600 transition-colors duration-300">Embed league data anywhere</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <p className="text-orange-700 text-sm mb-4">Create embeddable widgets for standings, player stats, scores, and league leaders.</p>
+                <Button 
+                  size="sm" 
+                  className="bg-orange-600 hover:bg-orange-700 text-white transform transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate("/api-widgets");
+                  }}
+                >
+                  <Code className="h-3 w-3 mr-1 group-hover:animate-bounce" />
+                  Build Widgets
                 </Button>
               </CardContent>
             </Card>

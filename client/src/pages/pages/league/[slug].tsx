@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useLocation, useParams } from "wouter";
-import { supabase } from "@/lib/supabase";
+import { supabase, getSupabaseForLeague, getDataLeagueId } from "@/lib/supabase";
 import type { League } from "@shared/schema";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import LeagueDefaultImage from "@/assets/league-default.png";
@@ -41,6 +41,7 @@ import { normalizeTeamName } from "@/lib/teamUtils";
 import { namesMatch, getMostCompleteName } from "@/lib/fuzzyMatch";
 import { generateGameSlug } from "@/lib/gameSlug";
 import { DEBUG, debugLog } from "@/utils/debug";
+import { useLeagueBranding } from "@/hooks/useLeagueBranding";
 
 type GameSchedule = {
   game_id: string;
@@ -53,6 +54,8 @@ type GameSchedule = {
   team2_score?: number;
   status?: string;
   numeric_id?: string;
+  age_group?: string;
+  round?: string;
 };
 
 // Team name mapping for known variations that aren't covered by normalization
@@ -472,6 +475,7 @@ const PLAYER_STAT_LEGENDS: Record<string, string[]> = {
 
 export default function LeaguePage() {
   const { slug } = useParams();
+  const db = useMemo(() => getSupabaseForLeague(slug), [slug]);
     // SEO formatting helper for title
     const formatTitle = (text?: string) =>
       text
@@ -532,7 +536,9 @@ export default function LeaguePage() {
   const [previousRankings, setPreviousRankings] = useState<Record<string, number>>({});
   const [hasPools, setHasPools] = useState(false); // Track if league has pools
   const [viewMode, setViewMode] = useState<'standings' | 'bracket'>('standings'); // Toggle between standings and bracket
-  const [scheduleView, setScheduleView] = useState<'upcoming' | 'results'>('upcoming'); // Toggle for schedule view
+  const [scheduleView, setScheduleView] = useState<'upcoming' | 'results'>('upcoming');
+  const [filterAgeGroup, setFilterAgeGroup] = useState<string>('all');
+  const [filterRound, setFilterRound] = useState<string>('all');
   const [statsSortColumn, setStatsSortColumn] = useState<string>('PTS'); // Column to sort by in Player Statistics
   const [statsSortDirection, setStatsSortDirection] = useState<'asc' | 'desc'>('desc'); // Sort direction
   const [teamStatsSortColumn, setTeamStatsSortColumn] = useState<string>('PTS'); // Column to sort by in Team Statistics
@@ -542,8 +548,41 @@ export default function LeaguePage() {
   const [isDividerVisible, setIsDividerVisible] = useState(false); // Track if orange divider is in view
   const dividerRef = useRef<HTMLDivElement>(null); // Ref for the orange divider
 
-    
+  const { colors: leagueBrandColors } = useLeagueBranding({
+    slug,
+    bannerUrl: league?.banner_url,
+    logoUrl: league?.logo_url,
+    manualPrimaryColor: league?.primary_color,
+    manualSecondaryColor: league?.secondary_color,
+    manualAccentColor: league?.accent_color,
+    enabled: !!league,
+  });
 
+  const brandColor = leagueBrandColors?.primary || 'rgb(249, 115, 22)';
+  const brandColorHover = leagueBrandColors 
+    ? `rgb(${Math.max(0, leagueBrandColors.primaryRgb.r - 20)}, ${Math.max(0, leagueBrandColors.primaryRgb.g - 20)}, ${Math.max(0, leagueBrandColors.primaryRgb.b - 20)})`
+    : 'rgb(234, 88, 12)';
+  const brandBorderLight = leagueBrandColors 
+    ? `rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.2)` 
+    : 'rgb(255, 237, 213)';
+  const brandBg10 = leagueBrandColors
+    ? `rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.1)`
+    : 'rgba(249, 115, 22, 0.1)';
+  const brandBg50 = leagueBrandColors
+    ? `rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.05)`
+    : 'rgba(249, 115, 22, 0.05)';
+
+  const [brandFadedIn, setBrandFadedIn] = useState(false);
+  useEffect(() => {
+    if (leagueBrandColors) {
+      const raf = requestAnimationFrame(() => {
+        setBrandFadedIn(true);
+      });
+      return () => cancelAnimationFrame(raf);
+    } else {
+      setBrandFadedIn(false);
+    }
+  }, [leagueBrandColors]);
 
     useEffect(() => {
       const fetchSuggestions = async () => {
@@ -894,19 +933,114 @@ export default function LeaguePage() {
       return PLAYER_STAT_COLUMNS[playerStatsCategory] || PLAYER_STAT_COLUMNS['Traditional'];
     }, [playerStatsCategory]);
 
-    // Filter and sort players based on search and sort settings in stats section
+    const availableAgeGroups = useMemo(() => {
+      const ags = new Set<string>();
+      allPlayerAverages.forEach(p => {
+        (p.rawStats || []).forEach((s: any) => {
+          if (s.age_group) ags.add(s.age_group);
+        });
+      });
+      return [...ags].sort();
+    }, [allPlayerAverages]);
+
+    const availableRounds = useMemo(() => {
+      const rds = new Set<string>();
+      allPlayerAverages.forEach(p => {
+        (p.rawStats || []).forEach((s: any) => {
+          if (s.round) rds.add(s.round);
+        });
+      });
+      return [...rds].sort();
+    }, [allPlayerAverages]);
+
+    const filteredByAgeGroupRound = useMemo(() => {
+      if (filterAgeGroup === 'all' && filterRound === 'all') return allPlayerAverages;
+
+      return allPlayerAverages
+        .map(player => {
+          const matchingStats = (player.rawStats || []).filter((s: any) => {
+            if (filterAgeGroup !== 'all' && s.age_group !== filterAgeGroup) return false;
+            if (filterRound !== 'all' && s.round !== filterRound) return false;
+            return true;
+          });
+          if (matchingStats.length === 0) return null;
+
+          const games = matchingStats.length;
+          const totalPoints = matchingStats.reduce((sum: number, s: any) => sum + (s.spoints || 0), 0);
+          const totalRebounds = matchingStats.reduce((sum: number, s: any) => sum + (s.sreboundstotal || 0), 0);
+          const totalAssists = matchingStats.reduce((sum: number, s: any) => sum + (s.sassists || 0), 0);
+          const totalSteals = matchingStats.reduce((sum: number, s: any) => sum + (s.ssteals || 0), 0);
+          const totalBlocks = matchingStats.reduce((sum: number, s: any) => sum + (s.sblocks || 0), 0);
+          const totalTurnovers = matchingStats.reduce((sum: number, s: any) => sum + (s.sturnovers || 0), 0);
+          const totalFGM = matchingStats.reduce((sum: number, s: any) => sum + (s.sfieldgoalsmade || 0), 0);
+          const totalFGA = matchingStats.reduce((sum: number, s: any) => sum + (s.sfieldgoalsattempted || 0), 0);
+          const total2PM = matchingStats.reduce((sum: number, s: any) => sum + (s.stwopointersmade || 0), 0);
+          const total2PA = matchingStats.reduce((sum: number, s: any) => sum + (s.stwopointersattempted || 0), 0);
+          const total3PM = matchingStats.reduce((sum: number, s: any) => sum + (s.sthreepointersmade || 0), 0);
+          const total3PA = matchingStats.reduce((sum: number, s: any) => sum + (s.sthreepointersattempted || 0), 0);
+          const totalFTM = matchingStats.reduce((sum: number, s: any) => sum + (s.sfreethrowsmade || 0), 0);
+          const totalFTA = matchingStats.reduce((sum: number, s: any) => sum + (s.sfreethrowsattempted || 0), 0);
+          const totalORB = matchingStats.reduce((sum: number, s: any) => sum + (s.sreboundsoffensive || 0), 0);
+          const totalDRB = matchingStats.reduce((sum: number, s: any) => sum + (s.sreboundsdefensive || 0), 0);
+          const totalMinutes = matchingStats.reduce((sum: number, s: any) => {
+            const mins = s.sminutes || s.minutes_played;
+            if (!mins) return sum;
+            if (typeof mins === 'number') return sum + mins;
+            if (typeof mins === 'string') {
+              const parts = mins.split(':');
+              if (parts.length === 2) return sum + parseInt(parts[0]) + parseInt(parts[1]) / 60;
+              return sum + (parseFloat(mins) || 0);
+            }
+            return sum;
+          }, 0);
+          const totalPersonalFouls = matchingStats.reduce((sum: number, s: any) => sum + (s.sfoulspersonal || 0), 0);
+          const totalPlusMinus = matchingStats.reduce((sum: number, s: any) => sum + (s.splusminuspoints || 0), 0);
+
+          return {
+            ...player,
+            games,
+            totalPoints, totalRebounds, totalAssists, totalSteals, totalBlocks,
+            totalTurnovers, totalFGM, totalFGA, total2PM, total2PA, total3PM, total3PA,
+            totalFTM, totalFTA, totalORB, totalDRB, totalMinutes, totalPersonalFouls, totalPlusMinus,
+            rawStats: matchingStats,
+            avgPoints: (totalPoints / games).toFixed(1),
+            avgRebounds: (totalRebounds / games).toFixed(1),
+            avgAssists: (totalAssists / games).toFixed(1),
+            avgSteals: (totalSteals / games).toFixed(1),
+            avgBlocks: (totalBlocks / games).toFixed(1),
+            avgTurnovers: (totalTurnovers / games).toFixed(1),
+            avgMinutes: (totalMinutes / games).toFixed(1),
+            avgFGM: (totalFGM / games).toFixed(1),
+            avgFGA: (totalFGA / games).toFixed(1),
+            avg2PM: (total2PM / games).toFixed(1),
+            avg2PA: (total2PA / games).toFixed(1),
+            avg3PM: (total3PM / games).toFixed(1),
+            avg3PA: (total3PA / games).toFixed(1),
+            avgFTM: (totalFTM / games).toFixed(1),
+            avgFTA: (totalFTA / games).toFixed(1),
+            avgORB: (totalORB / games).toFixed(1),
+            avgDRB: (totalDRB / games).toFixed(1),
+            avgPersonalFouls: (totalPersonalFouls / games).toFixed(1),
+            avgPlusMinus: (totalPlusMinus / games).toFixed(1),
+            fgPercentage: totalFGA > 0 ? ((totalFGM / totalFGA) * 100).toFixed(1) : '0.0',
+            twoPercentage: total2PA > 0 ? ((total2PM / total2PA) * 100).toFixed(1) : '0.0',
+            threePercentage: total3PA > 0 ? ((total3PM / total3PA) * 100).toFixed(1) : '0.0',
+            ftPercentage: totalFTA > 0 ? ((totalFTM / totalFTA) * 100).toFixed(1) : '0.0'
+          };
+        })
+        .filter(Boolean) as any[];
+    }, [allPlayerAverages, filterAgeGroup, filterRound]);
+
     useEffect(() => {
       debugLog("🔍 Filtering players. Search term:", statsSearch);
       debugLog("📊 All players:", allPlayerAverages.length);
       
-      let filtered = allPlayerAverages;
+      let filtered = filteredByAgeGroupRound;
       
-      // Apply search filter if search term exists
       if (statsSearch.trim()) {
-        filtered = allPlayerAverages.filter(player => 
+        filtered = filteredByAgeGroupRound.filter(player => 
           player.name.toLowerCase().includes(statsSearch.toLowerCase())
         );
-      } else {
       }
 
       // Apply sorting based on selected column and direction
@@ -967,7 +1101,7 @@ export default function LeaguePage() {
       if (statsSearch.trim()) {
         setDisplayedPlayerCount(20); // Reset pagination when searching
       }
-    }, [statsSearch, allPlayerAverages, statsSortColumn, statsSortDirection, playerStatsView, activePlayerStatColumns]);
+    }, [statsSearch, filteredByAgeGroupRound, statsSortColumn, statsSortDirection, playerStatsView, activePlayerStatColumns]);
 
     // Reset standings view to 'full' if no pools exist and user is on a pool view
     useEffect(() => {
@@ -982,10 +1116,11 @@ export default function LeaguePage() {
       
       setIsLoadingTeamStats(true);
       try {
-        const { data: rawTeamStats, error } = await supabase
+        const fetchLeagueId = getDataLeagueId(slug, league.league_id);
+        const { data: rawTeamStats, error } = await db
           .from("team_stats")
           .select("*")
-          .eq("league_id", league.league_id);
+          .eq("league_id", fetchLeagueId);
 
         if (error) {
           console.error("Error fetching team stats:", error);
@@ -1331,44 +1466,45 @@ export default function LeaguePage() {
         if (data?.league_id) {
           setIsLoadingLeaders(true);
           setIsLoadingStandings(true);
+          const effectiveLeagueId = getDataLeagueId(slug, data.league_id);
           
           const fetchTopStats = async () => {
-            const { data: scorerData, error: scorerError } = await supabase
+            const { data: scorerRows } = await db
               .from("player_stats")
               .select("firstname, familyname, spoints")
-              .eq("league_id", data.league_id)
+              .eq("league_id", effectiveLeagueId)
               .order("spoints", { ascending: false })
-              .limit(1)
-              .single();
+              .limit(1);
+            const scorerData = scorerRows?.[0] || null;
             
 
-            const { data: reboundData } = await supabase
+            const { data: reboundRows } = await db
               .from("player_stats")
               .select("firstname, familyname, sreboundstotal")
-              .eq("league_id", data.league_id)
+              .eq("league_id", effectiveLeagueId)
               .order("sreboundstotal", { ascending: false })
-              .limit(1)
-              .single();
+              .limit(1);
+            const reboundData = reboundRows?.[0] || null;
 
-            const { data: assistData } = await supabase
+            const { data: assistRows } = await db
               .from("player_stats")
               .select("firstname, familyname, sassists")
-              .eq("league_id", data.league_id)
+              .eq("league_id", effectiveLeagueId)
               .order("sassists", { ascending: false })
-              .limit(1)
-              .single();
+              .limit(1);
+            const assistData = assistRows?.[0] || null;
 
-            const { data: recentGames } = await supabase
+            const { data: recentGames } = await db
               .from("player_stats")
               .select("firstname, familyname, created_at, spoints, sassists, sreboundstotal")
-              .eq("league_id", data.league_id)
+              .eq("league_id", effectiveLeagueId)
               .order("created_at", { ascending: false })
               .limit(5);
 
-            const { data: allPlayerStats, error: allStatsError } = await supabase
+            const { data: allPlayerStats, error: allStatsError } = await db
               .from("player_stats")
               .select("*")
-              .eq("league_id", data.league_id);
+              .eq("league_id", effectiveLeagueId);
             
 
             // Process the data to combine names and handle missing fields
@@ -1392,233 +1528,68 @@ export default function LeaguePage() {
             setGameSummaries(processedRecentGames);
             setPlayerStats(allPlayerStats || []);
             
-            // Calculate standings using team_stats first, fallback to player_stats
-            await calculateStandingsWithTeamStats(data.league_id, allPlayerStats || []);
-            
-            // Calculate pool-based standings with movement tracking
-            await calculatePoolStandings(data.league_id);
-            
-            // Fetch schedule data directly from game_schedule table filtering by league_id
-            const { data: scheduleData, error: scheduleError } = await supabase
-              .from('game_schedule')
-              .select('competitionname, matchtime, hometeam, awayteam, league_id, game_key')
-              .eq('league_id', data.league_id);
+            // Fetch game results FIRST (before standings which depend on teams lookup)
+            const { data: gameResults, error: gameResultsError } = await db
+              .from('v_game_results')
+              .select('*')
+              .eq('league_id', effectiveLeagueId);
 
+            if (gameResults && !gameResultsError) {
 
-            // Also fetch team_stats to get scores
-            const { data: teamStatsForScores, error: teamStatsError } = await supabase
-              .from("team_stats")
-              .select("*")
-              .eq("league_id", data.league_id);
+              const games: GameSchedule[] = gameResults.map((game: any) => ({
+                game_id: game.game_key,
+                game_date: game.match_time,
+                team1: game.home_team,
+                team2: game.away_team,
+                kickoff_time: game.match_time ? new Date(game.match_time).toLocaleTimeString('en-US', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: true
+                }) : undefined,
+                venue: game.competition_name,
+                team1_score: game.home_score,
+                team2_score: game.away_score,
+                status: game.game_status === 'Final' ? 'FINAL' : game.game_status,
+                age_group: game.age_group || undefined,
+                round: game.round || undefined,
+                numeric_id: game.game_key
+              })).filter((game: GameSchedule) => game.team1 && game.team2);
 
-            debugLog("📊 Team stats for scores:", teamStatsForScores?.length, "records");
-            if (teamStatsForScores && teamStatsForScores.length > 0) {
-              debugLog("📊 Sample team_stats record:", JSON.stringify(teamStatsForScores[0], null, 2));
-              debugLog("📊 Available columns:", Object.keys(teamStatsForScores[0]));
-            }
-
-            // Create a map of game scores using game_key as primary identifier
-            // Key: game_key, Value: game score data
-            const gameScoresByKey = new Map<string, { team1: string, team2: string, team1_score: number, team2_score: number, numeric_id: string, game_date: Date }>();
-            
-            // Also keep the team pairing map for fallback matching
-            const gameScoresMap = new Map<string, Array<{ team1: string, team2: string, team1_score: number, team2_score: number, numeric_id: string, game_date: Date }>>();
-            
-            if (teamStatsForScores && !teamStatsError) {
-              const gameMap = new Map<string, any[]>();
-              
-              teamStatsForScores.forEach(stat => {
-                const numericId = stat.numeric_id;
-                if (numericId && stat.name) {
-                  if (!gameMap.has(numericId)) {
-                    gameMap.set(numericId, []);
-                  }
-                  gameMap.get(numericId)!.push(stat);
-                }
-              });
-
-              debugLog("📊 Unique games by numeric_id:", gameMap.size);
-
-              gameMap.forEach((gameTeams, numericId) => {
-                if (gameTeams.length === 2) {
-                  const [team1, team2] = gameTeams;
-                  // Normalize team names for matching
-                  const team1Normalized = normalizeAndMapTeamName(team1.name);
-                  const team2Normalized = normalizeAndMapTeamName(team2.name);
-                  
-                  // Get the game date
-                  const gameDate = team1.game_date || team2.game_date;
-                  const gameDateObj = gameDate ? new Date(gameDate) : new Date(0);
-                  
-                  // If team_stats has game_key, use that as primary key
-                  const gameKey = team1.game_key || team2.game_key;
-                  
-                  // Create base score data
-                  const scoreData1 = {
-                    team1: team1.name,
-                    team2: team2.name,
-                    team1_score: team1.tot_spoints || 0,
-                    team2_score: team2.tot_spoints || 0,
-                    numeric_id: numericId,
-                    game_date: gameDateObj
-                  };
-                  
-                  const scoreData2 = {
-                    team1: team2.name,
-                    team2: team1.name,
-                    team1_score: team2.tot_spoints || 0,
-                    team2_score: team1.tot_spoints || 0,
-                    numeric_id: numericId,
-                    game_date: gameDateObj
-                  };
-                  
-                  // Store by game_key if available (for primary lookup)
-                  if (gameKey) {
-                    gameScoresByKey.set(gameKey, scoreData1);
-                  }
-                  
-                  // ALWAYS store by team pairing for fallback (regardless of game_key)
-                  const key1 = `${team1Normalized}-vs-${team2Normalized}`;
-                  const key2 = `${team2Normalized}-vs-${team1Normalized}`;
-                  
-                  // Add to array of games for this matchup (instead of overwriting)
-                  if (!gameScoresMap.has(key1)) {
-                    gameScoresMap.set(key1, []);
-                  }
-                  gameScoresMap.get(key1)!.push(scoreData1);
-                  
-                  if (!gameScoresMap.has(key2)) {
-                    gameScoresMap.set(key2, []);
-                  }
-                  gameScoresMap.get(key2)!.push(scoreData2);
-                } else if (gameTeams.length !== 2) {
-                  debugLog("📊 Game with", gameTeams.length, "teams:", numericId, gameTeams.map(t => t.name));
-                }
-              });
-              
-              debugLog("📊 Games stored by game_key:", gameScoresByKey.size);
-              debugLog("📊 Team pairings stored:", gameScoresMap.size);
-              
-              // Sort all game arrays by date (newest first) so we can pick the closest match
-              gameScoresMap.forEach((games, key) => {
-                games.sort((a, b) => b.game_date.getTime() - a.game_date.getTime());
-              });
-            }
-
-            if (scheduleData && !scheduleError) {
-              let matchedByKey = 0;
-              let matchedByTeamDate = 0;
-              let notMatched = 0;
-              
-              const games: GameSchedule[] = scheduleData.map((game: any) => {
-                const gameKey = game.game_key || `${game.hometeam}-vs-${game.awayteam}`;
-                
-                let scoreData = null;
-                
-                // Strategy 1: Try direct game_key match first
-                if (game.game_key && gameScoresByKey.has(game.game_key)) {
-                  scoreData = gameScoresByKey.get(game.game_key)!;
-                  matchedByKey++;
-                }
-                
-                // Strategy 2: Fallback to team name + date matching
-                if (!scoreData) {
-                  const homeTeamNormalized = normalizeAndMapTeamName(game.hometeam);
-                  const awayTeamNormalized = normalizeAndMapTeamName(game.awayteam);
-                  const teamKey = `${homeTeamNormalized}-vs-${awayTeamNormalized}`;
-                  const matchingGames = gameScoresMap.get(teamKey) || [];
-                  
-                  // Find the game with the closest date to the scheduled matchtime
-                  const scheduledDate = game.matchtime ? new Date(game.matchtime) : new Date();
-                  if (matchingGames.length > 0) {
-                    // Find the game closest to the scheduled date (within 2 days tolerance for timezone issues)
-                    const closestGame = matchingGames.find(g => {
-                      const daysDiff = Math.abs(g.game_date.getTime() - scheduledDate.getTime()) / (1000 * 60 * 60 * 24);
-                      return daysDiff <= 2; // Within 2 days
-                    });
-                    if (closestGame) {
-                      scoreData = closestGame;
-                      matchedByTeamDate++;
-                    }
-                  }
-                }
-                
-                if (!scoreData) {
-                  notMatched++;
-                }
-                
-                // Match team names to get correct scores
-                // scoreData has team1/team2 in arbitrary order from team_stats
-                // We need to match against game_schedule's hometeam/awayteam
-                let homeScore: number | undefined = undefined;
-                let awayScore: number | undefined = undefined;
-                
-                if (scoreData) {
-                  const homeNorm = normalizeAndMapTeamName(game.hometeam);
-                  const awayNorm = normalizeAndMapTeamName(game.awayteam);
-                  const scoreTeam1Norm = normalizeAndMapTeamName(scoreData.team1);
-                  const scoreTeam2Norm = normalizeAndMapTeamName(scoreData.team2);
-                  
-                  // Check if scoreData.team1 matches hometeam
-                  if (scoreTeam1Norm === homeNorm) {
-                    homeScore = scoreData.team1_score;
-                    awayScore = scoreData.team2_score;
-                  } else if (scoreTeam2Norm === homeNorm) {
-                    homeScore = scoreData.team2_score;
-                    awayScore = scoreData.team1_score;
-                  } else if (scoreTeam1Norm === awayNorm) {
-                    homeScore = scoreData.team2_score;
-                    awayScore = scoreData.team1_score;
-                  } else if (scoreTeam2Norm === awayNorm) {
-                    homeScore = scoreData.team1_score;
-                    awayScore = scoreData.team2_score;
-                  } else {
-                    // Fallback: use as-is (shouldn't happen if matching worked)
-                    homeScore = scoreData.team1_score;
-                    awayScore = scoreData.team2_score;
-                  }
-                }
-                
-                return {
-                  game_id: gameKey,
-                  game_date: game.matchtime,
-                  team1: game.hometeam,
-                  team2: game.awayteam,
-                  kickoff_time: new Date(game.matchtime).toLocaleTimeString('en-US', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    hour12: true
-                  }),
-                  venue: game.competitionname,
-                  team1_score: homeScore,
-                  team2_score: awayScore,
-                  status: scoreData ? "FINAL" : undefined,
-                  numeric_id: scoreData?.numeric_id
-                };
-              }).filter((game) => game.team1 && game.team2);
-              
-              
-              // Sort games by date (most recent first)
               const sortedGames = games.sort((a, b) => {
                 if (!a.game_date || !b.game_date) return 0;
                 const dateA = new Date(a.game_date).getTime();
                 const dateB = new Date(b.game_date).getTime();
-                return dateB - dateA; // Most recent first
+                return dateB - dateA;
               });
-              
+
               setSchedule(sortedGames);
-            } else if (scheduleError) {
-              console.error("📅 Error fetching from game_schedule:", scheduleError);
-              // Fallback to empty schedule
+            } else if (gameResultsError) {
+              console.error("Error fetching from v_game_results:", gameResultsError);
               setSchedule([]);
             }
             
-            // Reset loading states
+            // Calculate standings (non-blocking)
+            try {
+              await calculateStandingsWithTeamStats(effectiveLeagueId, allPlayerStats || []);
+            } catch (standingsErr) {
+              console.error("Error in calculateStandingsWithTeamStats:", standingsErr);
+            }
+            
+            try {
+              await calculatePoolStandings(effectiveLeagueId);
+            } catch (poolErr) {
+              console.error("Error in calculatePoolStandings:", poolErr);
+            }
+            
             setIsLoadingLeaders(false);
             setIsLoadingStandings(false);
           };
 
-          fetchTopStats();
+          fetchTopStats().catch(err => {
+            console.error("Error in fetchTopStats:", err);
+            setIsLoadingLeaders(false);
+            setIsLoadingStandings(false);
+          });
         }
       };
 
@@ -1670,7 +1641,6 @@ export default function LeaguePage() {
     };
 
     const getTopList = useMemo(() => (statKey: string) => {
-      // Map stat keys to both average and total field names
       const statToFields: Record<string, { avgField: string; totalField: string }> = {
         'spoints': { avgField: 'avgPoints', totalField: 'totalPoints' },
         'sreboundstotal': { avgField: 'avgRebounds', totalField: 'totalRebounds' },
@@ -1678,15 +1648,11 @@ export default function LeaguePage() {
       };
       
       const fields = statToFields[statKey];
-      if (!fields || !allPlayerAverages.length) return [];
+      if (!fields || !filteredByAgeGroupRound.length) return [];
       
-      // Choose field based on leagueLeadersView state
       const fieldToUse = leagueLeadersView === 'averages' ? fields.avgField : fields.totalField;
       
-      debugLog(`📊 getTopList(${statKey}): mode=${leagueLeadersView}, fieldToUse=${fieldToUse}`);
-      
-      // Sort by the selected field and take top 5
-      const result = [...allPlayerAverages]
+      const result = [...filteredByAgeGroupRound]
         .sort((a, b) => {
           const aVal = parseFloat(a[fieldToUse]) || 0;
           const bVal = parseFloat(b[fieldToUse]) || 0;
@@ -1697,18 +1663,11 @@ export default function LeaguePage() {
           ...player,
           value: leagueLeadersView === 'averages' 
             ? player[fields.avgField] 
-            : Math.round(player[fields.totalField]) // Round totals to whole numbers
+            : Math.round(player[fields.totalField])
         }));
       
-      debugLog(`📊 getTopList(${statKey}) result:`, result.map(p => ({ 
-        name: p.name, 
-        value: p.value, 
-        games: p.games,
-        totalPoints: p.totalPoints,
-        avgPoints: p.avgPoints
-      })));
       return result;
-    }, [allPlayerAverages, leagueLeadersView]);
+    }, [filteredByAgeGroupRound, leagueLeadersView]);
 
     const topScorers = getTopList("spoints");
     const topRebounders = getTopList("sreboundstotal");
@@ -2037,7 +1996,8 @@ export default function LeaguePage() {
 
         // ========== STATS-FIRST APPROACH ==========
         // Step 1: Fetch ALL player_stats for the league (paginated to bypass 1000 row limit)
-        debugLog("📊 Step 1: Fetching all player_stats for league_id:", league.league_id);
+        const statsLeagueId = getDataLeagueId(slug, league.league_id);
+        debugLog("📊 Step 1: Fetching all player_stats for league_id:", statsLeagueId);
         
         let allPlayerStats: any[] = [];
         let page = 0;
@@ -2045,10 +2005,10 @@ export default function LeaguePage() {
         let hasMore = true;
         
         while (hasMore) {
-          const { data: pageData, error: pageError } = await supabase
+          const { data: pageData, error: pageError } = await db
             .from("player_stats")
             .select("*")
-            .eq("league_id", league.league_id)
+            .eq("league_id", statsLeagueId)
             .range(page * pageSize, (page + 1) * pageSize - 1);
           
           if (pageError) {
@@ -2381,7 +2341,7 @@ export default function LeaguePage() {
         const { data: rosterData } = await supabase
           .from("players")
           .select("id, full_name, slug")
-          .eq("league_id", league.league_id);
+          .eq("league_id", statsLeagueId);
 
         const slugLookup = new Map<string, string>();
         const nameLookup = new Map<string, string>();
@@ -2478,7 +2438,7 @@ export default function LeaguePage() {
     // Calculate team standings using team_stats table first, fallback to player_stats
     const calculateStandingsWithTeamStats = async (leagueId: string, playerStats: any[]) => {
       try {
-        // First, fetch ALL teams from the teams table
+        // First, fetch ALL teams from the teams table (always public schema)
         const { data: allTeams, error: teamsError } = await supabase
           .from("teams")
           .select("team_id, name")
@@ -2499,7 +2459,7 @@ export default function LeaguePage() {
         });
 
         // Now fetch team_stats to enhance with actual game results
-        const { data: teamStatsData, error: teamStatsError } = await supabase
+        const { data: teamStatsData, error: teamStatsError } = await db
           .from("team_stats")
           .select("*")
           .eq("league_id", leagueId);
@@ -2704,7 +2664,7 @@ export default function LeaguePage() {
       try {
         setIsLoadingStandings(true);
         
-        // First, fetch ALL teams from the teams table
+        // First, fetch ALL teams from the teams table (always public schema)
         const { data: allTeams, error: teamsError } = await supabase
           .from("teams")
           .select("team_id, name")
@@ -2719,13 +2679,13 @@ export default function LeaguePage() {
           return;
         }
 
-        // Fetch game schedule to get pool information
-        const { data: scheduleData, error: scheduleError } = await supabase
-          .from("game_schedule")
+        // Fetch game results to get pool information
+        const { data: scheduleData, error: scheduleError } = await db
+          .from("v_game_results")
           .select("*")
           .eq("league_id", leagueId);
 
-        // Build team-to-pool mapping from game_schedule
+        // Build team-to-pool mapping from v_game_results
         const extractPoolName = (poolValue: string): string => {
           const match = poolValue.match(/\(([^)]+)\)/);
           return match ? match[1] : poolValue;
@@ -2734,14 +2694,14 @@ export default function LeaguePage() {
         const teamPoolMap: Record<string, string> = {};
         if (scheduleData && !scheduleError) {
           scheduleData.forEach((game: any) => {
-            if (game.hometeam && game.pool) {
+            if (game.home_team && game.pool) {
               const poolName = extractPoolName(game.pool);
-              const normalizedHome = normalizeAndMapTeamName(game.hometeam);
+              const normalizedHome = normalizeAndMapTeamName(game.home_team);
               teamPoolMap[normalizedHome] = poolName;
             }
-            if (game.awayteam && game.pool) {
+            if (game.away_team && game.pool) {
               const poolName = extractPoolName(game.pool);
-              const normalizedAway = normalizeAndMapTeamName(game.awayteam);
+              const normalizedAway = normalizeAndMapTeamName(game.away_team);
               teamPoolMap[normalizedAway] = poolName;
             }
           });
@@ -2760,7 +2720,7 @@ export default function LeaguePage() {
         });
 
         // Now fetch team_stats to enhance with actual game results
-        const { data: teamStatsData, error: teamStatsError } = await supabase
+        const { data: teamStatsData, error: teamStatsError } = await db
           .from("team_stats")
           .select("*")
           .eq("league_id", leagueId);
@@ -2978,7 +2938,26 @@ export default function LeaguePage() {
   
  return (
       
-      <div className="min-h-screen bg-[#fffaf1] dark:bg-neutral-950 transition-colors duration-300">
+      <div className="min-h-screen bg-[#fffaf1] dark:bg-neutral-950 transition-colors duration-700 relative">
+        {leagueBrandColors && (
+          <>
+            <div
+              className="absolute inset-0 pointer-events-none transition-opacity duration-1000 ease-in-out dark:hidden"
+              style={{
+                opacity: brandFadedIn ? 1 : 0,
+                background: `linear-gradient(180deg, transparent 20%, rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.08) 60%, rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.18) 100%)`,
+              }}
+            />
+            <div
+              className="absolute inset-0 pointer-events-none transition-opacity duration-1000 ease-in-out hidden dark:block"
+              style={{
+                opacity: brandFadedIn ? 1 : 0,
+                background: `linear-gradient(180deg, transparent 20%, rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.10) 60%, rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.22) 100%)`,
+              }}
+            />
+          </>
+        )}
+        <div className="relative z-10">
         <header className="bg-white dark:bg-neutral-900 shadow-sm sticky top-0 z-50 px-4 md:px-6 py-3 md:py-4">
           <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
             <div className="flex items-center justify-between md:justify-start">
@@ -3133,7 +3112,7 @@ export default function LeaguePage() {
         {/* SEO-Optimized About This League Section */}
         {league?.description && (
           <div className="w-full bg-gradient-to-b from-transparent to-[#fffaf5] dark:to-neutral-900 pt-3 pb-5 px-4 animate-fade-in-up">
-            <div className="max-w-4xl mx-auto bg-white dark:bg-neutral-900 rounded-lg shadow-sm p-4 md:p-5 border border-orange-100 dark:border-neutral-800">
+            <div className="max-w-4xl mx-auto bg-white dark:bg-neutral-900 rounded-lg shadow-sm p-4 md:p-5 dark:border-neutral-800" style={{ border: `1px solid ${brandBorderLight}` }}>
               <div className="flex items-center gap-3 mb-3">
                 {league?.logo_url && (
                   <img
@@ -3148,9 +3127,10 @@ export default function LeaguePage() {
               </div>
               <div 
                 ref={dividerRef}
-                className={`h-0.5 bg-orange-500 mb-3 rounded-full transition-all duration-1000 ease-out ${
+                className={`h-0.5 mb-3 rounded-full transition-all duration-1000 ease-out ${
                   isDividerVisible ? 'w-20' : 'w-8'
                 }`}
+                style={{ backgroundColor: brandColor }}
               ></div>
               <p className="text-slate-600 dark:text-white leading-relaxed text-sm">
                 {league?.description}
@@ -3163,7 +3143,8 @@ export default function LeaguePage() {
         {league?.league_id && (
           <section className="bg-gray-900 text-white overflow-hidden rounded-b-lg">
             <GameResultsCarousel 
-              leagueId={league.league_id} 
+              leagueId={league.league_id}
+              slug={slug}
               onGameClick={handleCarouselGameClick}
             />
           </section>
@@ -3177,10 +3158,12 @@ export default function LeaguePage() {
               <div className="flex gap-4 md:gap-6 text-sm font-medium text-slate-600 dark:text-slate-400 overflow-x-auto pb-1 md:pb-0">
                 <a 
                   href="#" 
-                  className={`hover:text-orange-500 cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'teams' ? 'text-orange-500 font-semibold border-b-2 border-orange-500' : ''}`}
+                  className={`cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'teams' ? 'font-semibold border-b-2' : ''}`}
+                  style={activeSection === 'teams' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                  onMouseEnter={(e) => { if (activeSection !== 'teams') (e.target as HTMLElement).style.color = brandColor; }}
+                  onMouseLeave={(e) => { if (activeSection !== 'teams') (e.target as HTMLElement).style.color = ''; }}
                   onClick={() => {
                     setActiveSection('teams');
-                    // Ensure standings are loaded for Teams section
                     if (league?.league_id && fullLeagueStandings.length === 0 && standings.length === 0) {
                       calculatePoolStandings(league.league_id);
                     }
@@ -3190,7 +3173,10 @@ export default function LeaguePage() {
                 </a>
               <a 
                 href="#" 
-                className={`hover:text-orange-500 cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'standings' ? 'text-orange-500 font-semibold border-b-2 border-orange-500' : ''}`}
+                className={`cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'standings' ? 'font-semibold border-b-2' : ''}`}
+                style={activeSection === 'standings' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                onMouseEnter={(e) => { if (activeSection !== 'standings') (e.target as HTMLElement).style.color = brandColor; }}
+                onMouseLeave={(e) => { if (activeSection !== 'standings') (e.target as HTMLElement).style.color = ''; }}
                 onClick={() => {
                   setActiveSection('standings');
                   if (league?.league_id && fullLeagueStandings.length === 0) {
@@ -3202,7 +3188,10 @@ export default function LeaguePage() {
               </a>
               <a 
                 href="#" 
-                className={`hover:text-orange-500 cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'stats' ? 'text-orange-500 font-semibold border-b-2 border-orange-500' : ''}`}
+                className={`cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'stats' ? 'font-semibold border-b-2' : ''}`}
+                style={activeSection === 'stats' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                onMouseEnter={(e) => { if (activeSection !== 'stats') (e.target as HTMLElement).style.color = brandColor; }}
+                onMouseLeave={(e) => { if (activeSection !== 'stats') (e.target as HTMLElement).style.color = ''; }}
                 onClick={() => {
                   setActiveSection('stats');
                   setDisplayedPlayerCount(20);
@@ -3216,7 +3205,10 @@ export default function LeaguePage() {
               </a>
               <a 
                 href="#" 
-                className={`hover:text-orange-500 cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'teamstats' ? 'text-orange-500 font-semibold border-b-2 border-orange-500' : ''}`}
+                className={`cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'teamstats' ? 'font-semibold border-b-2' : ''}`}
+                style={activeSection === 'teamstats' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                onMouseEnter={(e) => { if (activeSection !== 'teamstats') (e.target as HTMLElement).style.color = brandColor; }}
+                onMouseLeave={(e) => { if (activeSection !== 'teamstats') (e.target as HTMLElement).style.color = ''; }}
                 onClick={() => {
                   setActiveSection('teamstats');
                   if (teamStatsData.length === 0) {
@@ -3228,21 +3220,29 @@ export default function LeaguePage() {
               </a>
               <a 
                 href="#" 
-                className={`hover:text-orange-500 cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'schedule' ? 'text-orange-500 font-semibold border-b-2 border-orange-500' : ''}`}
+                className={`cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'schedule' ? 'font-semibold border-b-2' : ''}`}
+                style={activeSection === 'schedule' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                onMouseEnter={(e) => { if (activeSection !== 'schedule') (e.target as HTMLElement).style.color = brandColor; }}
+                onMouseLeave={(e) => { if (activeSection !== 'schedule') (e.target as HTMLElement).style.color = ''; }}
                 onClick={() => setActiveSection('schedule')}
               >
                 Schedule
               </a>
               <a 
                 href="#" 
-                className="hover:text-orange-500 cursor-pointer whitespace-nowrap pb-1"
+                className="cursor-pointer whitespace-nowrap pb-1"
+                onMouseEnter={(e) => { (e.target as HTMLElement).style.color = brandColor; }}
+                onMouseLeave={(e) => { (e.target as HTMLElement).style.color = ''; }}
                 onClick={() => navigate(`/league-leaders/${slug}`)}
               >
                 Leaders
               </a>
               <a 
                 href="#" 
-                className={`hover:text-orange-500 cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'comparison' ? 'text-orange-500 font-semibold border-b-2 border-orange-500' : ''}`}
+                className={`cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'comparison' ? 'font-semibold border-b-2' : ''}`}
+                style={activeSection === 'comparison' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                onMouseEnter={(e) => { if (activeSection !== 'comparison') (e.target as HTMLElement).style.color = brandColor; }}
+                onMouseLeave={(e) => { if (activeSection !== 'comparison') (e.target as HTMLElement).style.color = ''; }}
                 onClick={() => {
                   setActiveSection('comparison');
                   if (allPlayerAverages.length === 0) {
@@ -3257,7 +3257,10 @@ export default function LeaguePage() {
               </a>
               <a 
                 href="#" 
-                className={`hover:text-orange-500 cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'overview' ? 'text-orange-500 font-semibold border-b-2 border-orange-500' : ''}`}
+                className={`cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'overview' ? 'font-semibold border-b-2' : ''}`}
+                style={activeSection === 'overview' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                onMouseEnter={(e) => { if (activeSection !== 'overview') (e.target as HTMLElement).style.color = brandColor; }}
+                onMouseLeave={(e) => { if (activeSection !== 'overview') (e.target as HTMLElement).style.color = ''; }}
                 onClick={() => {
                   setActiveSection('overview');
                   if (teamStatsData.length === 0) {
@@ -3276,7 +3279,9 @@ export default function LeaguePage() {
                   <select
                     value={league?.slug || ''}
                     onChange={(e) => navigate(`/league/${e.target.value}`)}
-                    className="px-3 py-1.5 text-xs md:text-sm font-medium text-slate-700 bg-white border border-gray-300 rounded-lg hover:border-orange-300 focus:border-orange-400 focus:ring-2 focus:ring-orange-100 focus:outline-none transition-all cursor-pointer"
+                    className="px-3 py-1.5 text-xs md:text-sm font-medium text-slate-700 bg-white border border-gray-300 rounded-lg focus:outline-none transition-all cursor-pointer"
+                    onFocus={(e) => { e.currentTarget.style.borderColor = brandColor; }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = ''; }}
                     data-testid="select-competition"
                   >
                     <option value={league?.slug}>{league?.name}</option>
@@ -3308,9 +3313,10 @@ export default function LeaguePage() {
                         onClick={() => setViewMode('standings')}
                         className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
                           viewMode === 'standings'
-                            ? 'bg-white dark:bg-neutral-700 text-orange-600 shadow-sm'
+                            ? 'bg-white dark:bg-neutral-700 shadow-sm'
                             : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
                         }`}
+                        style={viewMode === 'standings' ? { color: brandColor } : {}}
                         data-testid="button-standings-view"
                       >
                         Standings
@@ -3319,9 +3325,10 @@ export default function LeaguePage() {
                         onClick={() => setViewMode('bracket')}
                         className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
                           viewMode === 'bracket'
-                            ? 'bg-white dark:bg-neutral-700 text-orange-600 shadow-sm'
+                            ? 'bg-white dark:bg-neutral-700 shadow-sm'
                             : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
                         }`}
+                        style={viewMode === 'bracket' ? { color: brandColor } : {}}
                         data-testid="button-bracket-view"
                       >
                         Bracket
@@ -3340,9 +3347,12 @@ export default function LeaguePage() {
                         onClick={() => setStandingsView('poolA')}
                         className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium transition-colors ${
                           standingsView === 'poolA' 
-                            ? 'text-orange-600 border-b-2 border-orange-600' 
-                            : 'text-gray-600 dark:text-gray-400 hover:text-orange-500'
+                            ? 'border-b-2' 
+                            : 'text-gray-600 dark:text-gray-400'
                         }`}
+                        style={standingsView === 'poolA' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                        onMouseEnter={(e) => { if (standingsView !== 'poolA') (e.target as HTMLElement).style.color = brandColor; }}
+                        onMouseLeave={(e) => { if (standingsView !== 'poolA') (e.target as HTMLElement).style.color = ''; }}
                       >
                         Pool A
                       </button>
@@ -3350,9 +3360,12 @@ export default function LeaguePage() {
                         onClick={() => setStandingsView('poolB')}
                         className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium transition-colors ${
                           standingsView === 'poolB' 
-                            ? 'text-orange-600 border-b-2 border-orange-600' 
-                            : 'text-gray-600 dark:text-gray-400 hover:text-orange-500'
+                            ? 'border-b-2' 
+                            : 'text-gray-600 dark:text-gray-400'
                         }`}
+                        style={standingsView === 'poolB' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                        onMouseEnter={(e) => { if (standingsView !== 'poolB') (e.target as HTMLElement).style.color = brandColor; }}
+                        onMouseLeave={(e) => { if (standingsView !== 'poolB') (e.target as HTMLElement).style.color = ''; }}
                       >
                         Pool B
                       </button>
@@ -3362,9 +3375,12 @@ export default function LeaguePage() {
                     onClick={() => setStandingsView('full')}
                     className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium transition-colors ${
                       standingsView === 'full' 
-                        ? 'text-orange-600 border-b-2 border-orange-600' 
-                        : 'text-gray-600 dark:text-gray-400 hover:text-orange-500'
+                        ? 'border-b-2' 
+                        : 'text-gray-600 dark:text-gray-400'
                     }`}
+                    style={standingsView === 'full' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                    onMouseEnter={(e) => { if (standingsView !== 'full') (e.target as HTMLElement).style.color = brandColor; }}
+                    onMouseLeave={(e) => { if (standingsView !== 'full') (e.target as HTMLElement).style.color = ''; }}
                   >
                     {hasPools ? 'Full League' : 'League Standings'}
                   </button>
@@ -3465,7 +3481,7 @@ export default function LeaguePage() {
                   <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">Player Statistics - {league?.name}</h2>
                   <div className="text-xs md:text-sm text-gray-500 dark:text-gray-400">
                     Showing {Math.min(displayedPlayerCount, filteredPlayerAverages.length)} of {filteredPlayerAverages.length} players
-                    {statsSearch && ` (filtered from ${allPlayerAverages.length})`}
+                    {(statsSearch || filterAgeGroup !== 'all' || filterRound !== 'all') && ` (filtered from ${allPlayerAverages.length})`}
                   </div>
                 </div>
                 
@@ -3494,6 +3510,43 @@ export default function LeaguePage() {
                     </svg>
                   </div>
                 </div>
+
+                {(availableAgeGroups.length > 0 || availableRounds.length > 0) && (
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {availableAgeGroups.length > 0 && (
+                      <select
+                        value={filterAgeGroup}
+                        onChange={(e) => setFilterAgeGroup(e.target.value)}
+                        className="px-3 py-1.5 text-xs md:text-sm rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
+                      >
+                        <option value="all">All Age Groups</option>
+                        {availableAgeGroups.map(ag => (
+                          <option key={ag} value={ag}>{ag}</option>
+                        ))}
+                      </select>
+                    )}
+                    {availableRounds.length > 0 && (
+                      <select
+                        value={filterRound}
+                        onChange={(e) => setFilterRound(e.target.value)}
+                        className="px-3 py-1.5 text-xs md:text-sm rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
+                      >
+                        <option value="all">All Rounds</option>
+                        {availableRounds.map(r => (
+                          <option key={r} value={r}>{r}</option>
+                        ))}
+                      </select>
+                    )}
+                    {(filterAgeGroup !== 'all' || filterRound !== 'all') && (
+                      <button
+                        onClick={() => { setFilterAgeGroup('all'); setFilterRound('all'); }}
+                        className="px-3 py-1.5 text-xs md:text-sm rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40"
+                      >
+                        Clear Filters
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 {/* Category and Mode Selectors */}
                 <div className="flex flex-col md:flex-row gap-4 mb-6">
@@ -3579,11 +3632,11 @@ export default function LeaguePage() {
                     </table>
                   </div>
                 ) : filteredPlayerAverages.length > 0 ? (
-                  <div className="overflow-x-auto -mx-4 md:mx-0 border border-orange-200 dark:border-neutral-700 rounded-lg">
+                  <div className="overflow-x-auto -mx-4 md:mx-0 dark:border-neutral-700 rounded-lg" style={{ border: `1px solid ${brandBorderLight}` }}>
                     <table className="w-full text-xs md:text-sm">
                       <thead>
-                        <tr className="border-b border-gray-200 dark:border-neutral-700 bg-orange-50 dark:bg-neutral-800">
-                          <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-orange-50 dark:bg-neutral-800 z-10 min-w-[100px] md:min-w-[140px]">Player</th>
+                        <tr className="border-b border-gray-200 dark:border-neutral-700 dark:bg-neutral-800" style={{ backgroundColor: brandBg50 }}>
+                          <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 dark:bg-neutral-800 z-10 min-w-[100px] md:min-w-[140px]" style={{ backgroundColor: brandBg50 }}>Player</th>
                           <th 
                             onClick={() => {
                               if (statsSortColumn === 'GP') {
@@ -3593,7 +3646,8 @@ export default function LeaguePage() {
                                 setStatsSortDirection('desc');
                               }
                             }}
-                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[45px] cursor-pointer hover:bg-orange-100 dark:hover:bg-neutral-700 transition-colors ${statsSortColumn === 'GP' ? 'text-orange-600 dark:text-orange-400' : 'text-slate-700 dark:text-slate-200'}`}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[45px] cursor-pointer dark:hover:bg-neutral-700 transition-colors ${statsSortColumn === 'GP' ? '' : 'text-slate-700 dark:text-slate-200'}`}
+                            style={statsSortColumn === 'GP' ? { color: brandColor } : {}}
                             data-testid="header-sort-gp"
                           >
                             <div className="flex items-center justify-center gap-1">
@@ -3614,9 +3668,10 @@ export default function LeaguePage() {
                                   setStatsSortDirection('desc');
                                 }
                               }}
-                              className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer hover:bg-orange-100 dark:hover:bg-neutral-700 transition-colors ${
-                                statsSortColumn === column.label ? 'text-orange-600 dark:text-orange-400' : 'text-slate-700 dark:text-slate-200'
+                              className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer dark:hover:bg-neutral-700 transition-colors ${
+                                statsSortColumn === column.label ? '' : 'text-slate-700 dark:text-slate-200'
                               }`}
+                              style={statsSortColumn === column.label ? { color: brandColor } : {}}
                               data-testid={`header-${column.key.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
                             >
                               <div className="flex items-center justify-center gap-1">
@@ -3708,7 +3763,7 @@ export default function LeaguePage() {
                     </table>
                     
                     {/* Scroll hint for mobile */}
-                    <div className="md:hidden bg-orange-50 dark:bg-neutral-800 text-orange-700 dark:text-orange-400 text-center py-2 text-xs border-t border-orange-200 dark:border-neutral-700">
+                    <div className="md:hidden dark:bg-neutral-800 text-center py-2 text-xs dark:border-neutral-700" style={{ backgroundColor: brandBg50, color: brandColor, borderTop: `1px solid ${brandBorderLight}` }}>
                       ← Swipe to see all stats →
                     </div>
                     
@@ -3717,7 +3772,8 @@ export default function LeaguePage() {
                       <div className="mt-4 text-center">
                         <button
                           onClick={() => setDisplayedPlayerCount(displayedPlayerCount + 20)}
-                          className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2 mx-auto"
+                          className="text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2 mx-auto"
+                          style={{ backgroundColor: brandColor }}
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
@@ -3734,7 +3790,8 @@ export default function LeaguePage() {
                           {displayedPlayerCount < filteredPlayerAverages.length && (
                             <button
                               onClick={() => setDisplayedPlayerCount(filteredPlayerAverages.length)}
-                              className="text-orange-500 hover:text-orange-600 font-medium text-sm hover:underline"
+                              className="font-medium text-sm hover:underline"
+                              style={{ color: brandColor }}
                             >
                               Show All ({filteredPlayerAverages.length} players)
                             </button>
@@ -3768,7 +3825,8 @@ export default function LeaguePage() {
                     <div className="mb-2">No players found matching "{statsSearch}"</div>
                     <button
                       onClick={() => setStatsSearch("")}
-                      className="text-orange-500 hover:text-orange-600 underline"
+                      className="underline"
+                      style={{ color: brandColor }}
                     >
                       Clear search
                     </button>
@@ -3888,11 +3946,11 @@ export default function LeaguePage() {
                     </table>
                   </div>
                 ) : sortedTeamStats.length > 0 ? (
-                  <div className="overflow-x-auto -mx-4 md:mx-0 border border-orange-200 dark:border-neutral-700 rounded-lg">
+                  <div className="overflow-x-auto -mx-4 md:mx-0 dark:border-neutral-700 rounded-lg" style={{ border: `1px solid ${brandBorderLight}` }}>
                     <table className="w-full text-xs md:text-sm">
                       <thead>
-                        <tr className="border-b border-gray-200 dark:border-neutral-700 bg-orange-50 dark:bg-neutral-800">
-                          <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-orange-50 dark:bg-neutral-800 z-10 w-16">Logo</th>
+                        <tr className="border-b border-gray-200 dark:border-neutral-700 dark:bg-neutral-800" style={{ backgroundColor: brandBg50 }}>
+                          <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 dark:bg-neutral-800 z-10 w-16" style={{ backgroundColor: brandBg50 }}>Logo</th>
                           <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 dark:text-slate-200 min-w-[120px]">Team</th>
                           <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 dark:text-slate-200 min-w-[45px]">
                             <div className="flex items-center justify-center gap-1">GP</div>
@@ -3911,10 +3969,11 @@ export default function LeaguePage() {
                                 }
                               }}
                               className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] ${
-                                column.sortable ? 'cursor-pointer hover:bg-orange-100 dark:hover:bg-neutral-700' : ''
+                                column.sortable ? 'cursor-pointer dark:hover:bg-neutral-700' : ''
                               } transition-colors ${
-                                teamStatsSortColumn === column.key ? 'text-orange-600 dark:text-orange-400' : 'text-slate-700 dark:text-slate-200'
+                                teamStatsSortColumn === column.key ? '' : 'text-slate-700 dark:text-slate-200'
                               }`}
+                              style={teamStatsSortColumn === column.key ? { color: brandColor } : {}}
                               data-testid={`header-${column.key.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
                             >
                               <div className="flex items-center justify-center gap-1">
@@ -3963,7 +4022,7 @@ export default function LeaguePage() {
                     </table>
                     
                     {/* Scroll hint for mobile */}
-                    <div className="md:hidden bg-orange-50 dark:bg-neutral-800 text-orange-700 dark:text-orange-400 text-center py-2 text-xs border-t border-orange-200 dark:border-neutral-700">
+                    <div className="md:hidden dark:bg-neutral-800 text-center py-2 text-xs dark:border-neutral-700" style={{ backgroundColor: brandBg50, color: brandColor, borderTop: `1px solid ${brandBorderLight}` }}>
                       ← Swipe to see all stats →
                     </div>
                   </div>
@@ -4029,9 +4088,12 @@ export default function LeaguePage() {
                     onClick={() => setScheduleView('upcoming')}
                     className={`px-3 md:px-4 py-2 text-xs md:text-sm font-semibold transition-all ${
                       scheduleView === 'upcoming'
-                        ? 'text-orange-500 border-b-2 border-orange-500 -mb-[2px]'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-orange-500'
+                        ? 'border-b-2 -mb-[2px]'
+                        : 'text-slate-600 dark:text-slate-400'
                     }`}
+                    style={scheduleView === 'upcoming' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                    onMouseEnter={(e) => { if (scheduleView !== 'upcoming') (e.target as HTMLElement).style.color = brandColor; }}
+                    onMouseLeave={(e) => { if (scheduleView !== 'upcoming') (e.target as HTMLElement).style.color = ''; }}
                     data-testid="button-upcoming-games"
                   >
                     Upcoming Games
@@ -4040,23 +4102,68 @@ export default function LeaguePage() {
                     onClick={() => setScheduleView('results')}
                     className={`px-3 md:px-4 py-2 text-xs md:text-sm font-semibold transition-all ${
                       scheduleView === 'results'
-                        ? 'text-orange-500 border-b-2 border-orange-500 -mb-[2px]'
-                        : 'text-slate-600 dark:text-slate-400 hover:text-orange-500'
+                        ? 'border-b-2 -mb-[2px]'
+                        : 'text-slate-600 dark:text-slate-400'
                     }`}
+                    style={scheduleView === 'results' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                    onMouseEnter={(e) => { if (scheduleView !== 'results') (e.target as HTMLElement).style.color = brandColor; }}
+                    onMouseLeave={(e) => { if (scheduleView !== 'results') (e.target as HTMLElement).style.color = ''; }}
                     data-testid="button-results"
                   >
                     Results
                   </button>
                 </div>
 
+                {/* Age Group & Round Filters */}
+                {(() => {
+                  const ageGroups = [...new Set(schedule.map(g => g.age_group).filter(Boolean))] as string[];
+                  const rounds = [...new Set(schedule.map(g => g.round).filter(Boolean))] as string[];
+                  if (ageGroups.length === 0 && rounds.length === 0) return null;
+                  return (
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {ageGroups.length > 0 && (
+                        <select
+                          value={filterAgeGroup}
+                          onChange={(e) => setFilterAgeGroup(e.target.value)}
+                          className="px-3 py-1.5 text-xs md:text-sm rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
+                          style={{ focusRingColor: brandColor } as any}
+                        >
+                          <option value="all">All Age Groups</option>
+                          {ageGroups.sort().map(ag => (
+                            <option key={ag} value={ag}>{ag}</option>
+                          ))}
+                        </select>
+                      )}
+                      {rounds.length > 0 && (
+                        <select
+                          value={filterRound}
+                          onChange={(e) => setFilterRound(e.target.value)}
+                          className="px-3 py-1.5 text-xs md:text-sm rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
+                          style={{ focusRingColor: brandColor } as any}
+                        >
+                          <option value="all">All Rounds</option>
+                          {rounds.sort().map(r => (
+                            <option key={r} value={r}>{r}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {schedule.length > 0 ? (
                   <>
                     {(() => {
                       const now = new Date();
-                      const upcomingGames = schedule
+                      const filtered = schedule.filter(game => {
+                        if (filterAgeGroup !== 'all' && game.age_group !== filterAgeGroup) return false;
+                        if (filterRound !== 'all' && game.round !== filterRound) return false;
+                        return true;
+                      });
+                      const upcomingGames = filtered
                         .filter(game => new Date(game.game_date) >= now)
                         .sort((a, b) => new Date(a.game_date).getTime() - new Date(b.game_date).getTime());
-                      const pastGames = schedule
+                      const pastGames = filtered
                         .filter(game => new Date(game.game_date) < now)
                         .sort((a, b) => new Date(b.game_date).getTime() - new Date(a.game_date).getTime());
 
@@ -4091,11 +4198,19 @@ export default function LeaguePage() {
                                           })}
                                           {game.kickoff_time && ` • ${game.kickoff_time}`}
                                         </div>
-                                        {game.venue && (
-                                          <div className="text-[10px] md:text-xs text-slate-400 dark:text-slate-500 truncate max-w-[100px] md:max-w-none">
-                                            {game.venue}
-                                          </div>
-                                        )}
+                                        <div className="flex items-center gap-1.5">
+                                          {game.age_group && (
+                                            <span className="text-[9px] md:text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">{game.age_group}</span>
+                                          )}
+                                          {game.round && (
+                                            <span className="text-[9px] md:text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">{game.round}</span>
+                                          )}
+                                          {game.venue && (
+                                            <span className="text-[10px] md:text-xs text-slate-400 dark:text-slate-500 truncate max-w-[100px] md:max-w-none">
+                                              {game.venue}
+                                            </span>
+                                          )}
+                                        </div>
                                       </div>
                                       {/* Teams Row */}
                                       <div className="flex items-center gap-2 md:gap-3">
@@ -4145,11 +4260,19 @@ export default function LeaguePage() {
                                             </span>
                                           )}
                                         </div>
-                                        {game.venue && (
-                                          <div className="text-[10px] md:text-xs text-slate-400 dark:text-slate-500 truncate max-w-[100px] md:max-w-none">
-                                            {game.venue}
-                                          </div>
-                                        )}
+                                        <div className="flex items-center gap-1.5">
+                                          {game.age_group && (
+                                            <span className="text-[9px] md:text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">{game.age_group}</span>
+                                          )}
+                                          {game.round && (
+                                            <span className="text-[9px] md:text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">{game.round}</span>
+                                          )}
+                                          {game.venue && (
+                                            <span className="text-[10px] md:text-xs text-slate-400 dark:text-slate-500 truncate max-w-[100px] md:max-w-none">
+                                              {game.venue}
+                                            </span>
+                                          )}
+                                        </div>
                                       </div>
                                       {/* Teams and Score Row */}
                                       <div className="flex items-center gap-2 md:gap-3">
@@ -4216,9 +4339,10 @@ export default function LeaguePage() {
                       onClick={() => setComparisonMode('player')}
                       className={`px-4 md:px-6 py-1.5 md:py-2 rounded-lg text-sm md:text-base font-semibold transition-all ${
                         comparisonMode === 'player'
-                          ? 'bg-orange-500 text-white shadow-md'
+                          ? 'text-white shadow-md'
                           : 'bg-gray-100 dark:bg-neutral-800 text-slate-600 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-neutral-700'
                       }`}
+                      style={comparisonMode === 'player' ? { backgroundColor: brandColor } : {}}
                       data-testid="button-player-comparison"
                     >
                       Player Comparison
@@ -4227,9 +4351,10 @@ export default function LeaguePage() {
                       onClick={() => setComparisonMode('team')}
                       className={`px-4 md:px-6 py-1.5 md:py-2 rounded-lg text-sm md:text-base font-semibold transition-all ${
                         comparisonMode === 'team'
-                          ? 'bg-orange-500 text-white shadow-md'
+                          ? 'text-white shadow-md'
                           : 'bg-gray-100 dark:bg-neutral-800 text-slate-600 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-neutral-700'
                       }`}
+                      style={comparisonMode === 'team' ? { backgroundColor: brandColor } : {}}
                       data-testid="button-team-comparison"
                     >
                       Team Comparison
@@ -4260,15 +4385,43 @@ export default function LeaguePage() {
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-4 md:mb-6">
                 <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">League Leaders</h2>
                 <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-                  {/* Toggle between Averages and Totals */}
+                  {(availableAgeGroups.length > 0 || availableRounds.length > 0) && (
+                    <div className="flex gap-1.5">
+                      {availableAgeGroups.length > 0 && (
+                        <select
+                          value={filterAgeGroup}
+                          onChange={(e) => setFilterAgeGroup(e.target.value)}
+                          className="px-2 py-1 text-[11px] md:text-xs rounded-md border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300"
+                        >
+                          <option value="all">All Ages</option>
+                          {availableAgeGroups.map(ag => (
+                            <option key={ag} value={ag}>{ag}</option>
+                          ))}
+                        </select>
+                      )}
+                      {availableRounds.length > 0 && (
+                        <select
+                          value={filterRound}
+                          onChange={(e) => setFilterRound(e.target.value)}
+                          className="px-2 py-1 text-[11px] md:text-xs rounded-md border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300"
+                        >
+                          <option value="all">All Rounds</option>
+                          {availableRounds.map(r => (
+                            <option key={r} value={r}>{r}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  )}
                   <div className="inline-flex rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 p-1">
                     <button
                       onClick={() => setLeagueLeadersView('averages')}
                       className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                         leagueLeadersView === 'averages'
-                          ? 'bg-white dark:bg-neutral-700 text-orange-600 shadow-sm'
+                          ? 'bg-white dark:bg-neutral-700 shadow-sm'
                           : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
                       }`}
+                      style={leagueLeadersView === 'averages' ? { color: brandColor } : {}}
                       data-testid="button-league-leaders-averages"
                     >
                       Averages
@@ -4277,9 +4430,10 @@ export default function LeaguePage() {
                       onClick={() => setLeagueLeadersView('totals')}
                       className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
                         leagueLeadersView === 'totals'
-                          ? 'bg-white dark:bg-neutral-700 text-orange-600 shadow-sm'
+                          ? 'bg-white dark:bg-neutral-700 shadow-sm'
                           : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
                       }`}
+                      style={leagueLeadersView === 'totals' ? { color: brandColor } : {}}
                       data-testid="button-league-leaders-totals"
                     >
                       Totals
@@ -4287,7 +4441,8 @@ export default function LeaguePage() {
                   </div>
                   <button
                     onClick={() => navigate(`/league-leaders/${slug}`)}
-                    className="text-xs md:text-sm text-orange-500 hover:text-orange-600 font-medium hover:underline text-left sm:text-right"
+                    className="text-xs md:text-sm font-medium hover:underline text-left sm:text-right"
+                    style={{ color: brandColor }}
                   >
                     View All Leaders →
                   </button>
@@ -4326,7 +4481,7 @@ export default function LeaguePage() {
                           list.map((p, i) => (
                             <li key={`${title}-${p.name}-${i}`} className="flex justify-between">
                               <span className="truncate mr-2">{p.name}</span>
-                              <span className="font-medium text-orange-500 whitespace-nowrap">
+                              <span className="font-medium whitespace-nowrap" style={{ color: brandColor }}>
                                 {p.value} {leagueLeadersView === 'averages' ? avgLabel : totalLabel}
                               </span>
                             </li>
@@ -4344,7 +4499,8 @@ export default function LeaguePage() {
                     <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">Team Leaders</h2>
                     <button
                       onClick={() => setActiveSection('teamstats')}
-                      className="text-xs md:text-sm text-orange-500 hover:text-orange-600 font-medium hover:underline"
+                      className="text-xs md:text-sm font-medium hover:underline"
+                      style={{ color: brandColor }}
                     >
                       View All Team Stats →
                     </button>
@@ -4371,7 +4527,7 @@ export default function LeaguePage() {
                                   <TeamLogo teamName={team.teamName} leagueId={league?.league_id} size="xs" />
                                   <span className="truncate">{team.teamName}</span>
                                 </div>
-                                <span className="font-medium text-orange-500 whitespace-nowrap">
+                                <span className="font-medium whitespace-nowrap" style={{ color: brandColor }}>
                                   {team.ppg} PPG
                                 </span>
                               </li>
@@ -4393,7 +4549,7 @@ export default function LeaguePage() {
                                   <TeamLogo teamName={team.teamName} leagueId={league?.league_id} size="xs" />
                                   <span className="truncate">{team.teamName}</span>
                                 </div>
-                                <span className="font-medium text-orange-500 whitespace-nowrap">
+                                <span className="font-medium whitespace-nowrap" style={{ color: brandColor }}>
                                   {team.rpg} RPG
                                 </span>
                               </li>
@@ -4415,7 +4571,7 @@ export default function LeaguePage() {
                                   <TeamLogo teamName={team.teamName} leagueId={league?.league_id} size="xs" />
                                   <span className="truncate">{team.teamName}</span>
                                 </div>
-                                <span className="font-medium text-orange-500 whitespace-nowrap">
+                                <span className="font-medium whitespace-nowrap" style={{ color: brandColor }}>
                                   {team.apg} APG
                                 </span>
                               </li>
@@ -4570,14 +4726,6 @@ export default function LeaguePage() {
               </div>
             )}
 
-            {/* League Chatbot */}
-            {league?.league_id && (
-              <LeagueChatbot 
-                leagueId={league.league_id} 
-                leagueName={league.name || 'League'} 
-                leagueSlug={slug}
-              />
-            )}
 
             {/* Instagram Embed */}
             <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4">
@@ -4586,7 +4734,8 @@ export default function LeaguePage() {
                 {isOwner && (
                   <button
                     onClick={() => setIsEditingInstagram(!isEditingInstagram)}
-                    className="text-xs text-orange-500 hover:text-orange-600 font-medium"
+                    className="text-xs font-medium"
+                    style={{ color: brandColor }}
                     data-testid="edit-instagram-button"
                   >
                     {isEditingInstagram ? 'Cancel' : 'Edit'}
@@ -4649,8 +4798,9 @@ export default function LeaguePage() {
                       className={`px-3 py-1 text-xs font-medium rounded ${
                         updatingInstagram 
                           ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-                          : 'bg-orange-500 text-white hover:bg-orange-600'
+                          : 'text-white'
                       }`}
+                      style={!updatingInstagram ? { backgroundColor: brandColor } : {}}
                       data-testid="save-instagram-urls-button"
                     >
                       {updatingInstagram ? 'Saving...' : 'Save Changes'}
@@ -4685,7 +4835,7 @@ export default function LeaguePage() {
                   </div>
                 </div>
               ) : (
-                <InstagramCarousel urls={instagramUrls} height={650} />
+                <InstagramCarousel urls={instagramUrls} />
               )}
             </div>
 
@@ -4696,7 +4846,8 @@ export default function LeaguePage() {
                 {isOwner && (
                   <button
                     onClick={() => setIsEditingYoutube(!isEditingYoutube)}
-                    className="text-xs text-orange-500 hover:text-orange-600 font-medium"
+                    className="text-xs font-medium"
+                    style={{ color: brandColor }}
                   >
                     {isEditingYoutube ? 'Cancel' : 'Edit'}
                   </button>
@@ -4722,8 +4873,9 @@ export default function LeaguePage() {
                       className={`px-3 py-1 text-xs font-medium rounded ${
                         updatingYoutube 
                           ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
-                          : 'bg-orange-500 text-white hover:bg-orange-600'
+                          : 'text-white'
                       }`}
+                      style={!updatingYoutube ? { backgroundColor: brandColor } : {}}
                     >
                       {updatingYoutube ? 'Updating...' : 'Save'}
                     </button>
@@ -4757,7 +4909,8 @@ export default function LeaguePage() {
                       {isOwner && (
                         <button
                           onClick={() => setIsEditingYoutube(true)}
-                          className="mt-2 text-xs text-orange-500 hover:text-orange-600 underline"
+                          className="mt-2 text-xs underline"
+                          style={{ color: brandColor }}
                         >
                           Add YouTube Video
                         </button>
@@ -4796,6 +4949,17 @@ export default function LeaguePage() {
             gameKey={selectedPreviewGame.game_id}
           />
         )}
+
+        {/* Floating AI assistant widget — fixed bottom-right, always accessible */}
+        {league?.league_id && (
+          <LeagueChatbot
+            isFloatingWidget
+            leagueId={league.league_id}
+            leagueName={league.name || 'League'}
+            leagueSlug={slug}
+          />
+        )}
+        </div>
       </div>
      );
     }
