@@ -54,6 +54,8 @@ type GameSchedule = {
   team2_score?: number;
   status?: string;
   numeric_id?: string;
+  age_group?: string;
+  round?: string;
 };
 
 // Team name mapping for known variations that aren't covered by normalization
@@ -534,7 +536,9 @@ export default function LeaguePage() {
   const [previousRankings, setPreviousRankings] = useState<Record<string, number>>({});
   const [hasPools, setHasPools] = useState(false); // Track if league has pools
   const [viewMode, setViewMode] = useState<'standings' | 'bracket'>('standings'); // Toggle between standings and bracket
-  const [scheduleView, setScheduleView] = useState<'upcoming' | 'results'>('upcoming'); // Toggle for schedule view
+  const [scheduleView, setScheduleView] = useState<'upcoming' | 'results'>('upcoming');
+  const [filterAgeGroup, setFilterAgeGroup] = useState<string>('all');
+  const [filterRound, setFilterRound] = useState<string>('all');
   const [statsSortColumn, setStatsSortColumn] = useState<string>('PTS'); // Column to sort by in Player Statistics
   const [statsSortDirection, setStatsSortDirection] = useState<'asc' | 'desc'>('desc'); // Sort direction
   const [teamStatsSortColumn, setTeamStatsSortColumn] = useState<string>('PTS'); // Column to sort by in Team Statistics
@@ -1451,6 +1455,8 @@ export default function LeaguePage() {
                 team1_score: game.home_score,
                 team2_score: game.away_score,
                 status: game.game_status === 'Final' ? 'FINAL' : game.game_status,
+                age_group: game.age_group || undefined,
+                round: game.round || undefined,
                 numeric_id: game.game_key
               })).filter((game: GameSchedule) => game.team1 && game.team2);
 
@@ -3988,14 +3994,56 @@ export default function LeaguePage() {
                   </button>
                 </div>
 
+                {/* Age Group & Round Filters */}
+                {(() => {
+                  const ageGroups = [...new Set(schedule.map(g => g.age_group).filter(Boolean))] as string[];
+                  const rounds = [...new Set(schedule.map(g => g.round).filter(Boolean))] as string[];
+                  if (ageGroups.length === 0 && rounds.length === 0) return null;
+                  return (
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      {ageGroups.length > 0 && (
+                        <select
+                          value={filterAgeGroup}
+                          onChange={(e) => setFilterAgeGroup(e.target.value)}
+                          className="px-3 py-1.5 text-xs md:text-sm rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
+                          style={{ focusRingColor: brandColor } as any}
+                        >
+                          <option value="all">All Age Groups</option>
+                          {ageGroups.sort().map(ag => (
+                            <option key={ag} value={ag}>{ag}</option>
+                          ))}
+                        </select>
+                      )}
+                      {rounds.length > 0 && (
+                        <select
+                          value={filterRound}
+                          onChange={(e) => setFilterRound(e.target.value)}
+                          className="px-3 py-1.5 text-xs md:text-sm rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
+                          style={{ focusRingColor: brandColor } as any}
+                        >
+                          <option value="all">All Rounds</option>
+                          {rounds.sort().map(r => (
+                            <option key={r} value={r}>{r}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {schedule.length > 0 ? (
                   <>
                     {(() => {
                       const now = new Date();
-                      const upcomingGames = schedule
+                      const filtered = schedule.filter(game => {
+                        if (filterAgeGroup !== 'all' && game.age_group !== filterAgeGroup) return false;
+                        if (filterRound !== 'all' && game.round !== filterRound) return false;
+                        return true;
+                      });
+                      const upcomingGames = filtered
                         .filter(game => new Date(game.game_date) >= now)
                         .sort((a, b) => new Date(a.game_date).getTime() - new Date(b.game_date).getTime());
-                      const pastGames = schedule
+                      const pastGames = filtered
                         .filter(game => new Date(game.game_date) < now)
                         .sort((a, b) => new Date(b.game_date).getTime() - new Date(a.game_date).getTime());
 
@@ -4030,11 +4078,19 @@ export default function LeaguePage() {
                                           })}
                                           {game.kickoff_time && ` • ${game.kickoff_time}`}
                                         </div>
-                                        {game.venue && (
-                                          <div className="text-[10px] md:text-xs text-slate-400 dark:text-slate-500 truncate max-w-[100px] md:max-w-none">
-                                            {game.venue}
-                                          </div>
-                                        )}
+                                        <div className="flex items-center gap-1.5">
+                                          {game.age_group && (
+                                            <span className="text-[9px] md:text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">{game.age_group}</span>
+                                          )}
+                                          {game.round && (
+                                            <span className="text-[9px] md:text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">{game.round}</span>
+                                          )}
+                                          {game.venue && (
+                                            <span className="text-[10px] md:text-xs text-slate-400 dark:text-slate-500 truncate max-w-[100px] md:max-w-none">
+                                              {game.venue}
+                                            </span>
+                                          )}
+                                        </div>
                                       </div>
                                       {/* Teams Row */}
                                       <div className="flex items-center gap-2 md:gap-3">
@@ -4084,11 +4140,19 @@ export default function LeaguePage() {
                                             </span>
                                           )}
                                         </div>
-                                        {game.venue && (
-                                          <div className="text-[10px] md:text-xs text-slate-400 dark:text-slate-500 truncate max-w-[100px] md:max-w-none">
-                                            {game.venue}
-                                          </div>
-                                        )}
+                                        <div className="flex items-center gap-1.5">
+                                          {game.age_group && (
+                                            <span className="text-[9px] md:text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">{game.age_group}</span>
+                                          )}
+                                          {game.round && (
+                                            <span className="text-[9px] md:text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">{game.round}</span>
+                                          )}
+                                          {game.venue && (
+                                            <span className="text-[10px] md:text-xs text-slate-400 dark:text-slate-500 truncate max-w-[100px] md:max-w-none">
+                                              {game.venue}
+                                            </span>
+                                          )}
+                                        </div>
                                       </div>
                                       {/* Teams and Score Row */}
                                       <div className="flex items-center gap-2 md:gap-3">

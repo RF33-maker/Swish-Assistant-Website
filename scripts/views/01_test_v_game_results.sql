@@ -49,12 +49,16 @@ SELECT
   gp.game_date AS match_time,
   NULL::text AS competition_name,
   NULL::text AS pool,
+  t1_stats.age_group,
+  t1_stats.round,
   NULL::text AS schedule_status,
   CASE
     WHEN gp.team1_score IS NOT NULL AND gp.team2_score IS NOT NULL THEN 'Final'
     ELSE 'Scheduled'
   END AS game_status
-FROM game_pairs gp;
+FROM game_pairs gp
+LEFT JOIN test.team_stats t1_stats
+  ON t1_stats.id = gp.team1_stats_id;
 
 GRANT SELECT ON test.v_game_results TO anon;
 GRANT SELECT ON test.v_game_results TO authenticated;

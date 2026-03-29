@@ -89,6 +89,8 @@ SELECT
   COALESCE(gs.matchtime::timestamptz, gp.game_date) AS match_time,
   gs.competitionname AS competition_name,
   gs.pool,
+  t1_stats.age_group,
+  t1_stats.round,
   gs.status AS schedule_status,
   CASE
     WHEN gp.team1_score IS NOT NULL AND gp.team2_score IS NOT NULL THEN 'Final'
@@ -98,7 +100,9 @@ SELECT
 FROM game_pairs gp
 LEFT JOIN public.game_schedule gs
   ON gp.game_key = gs.game_key
-  AND gp.league_id = gs.league_id;
+  AND gp.league_id = gs.league_id
+LEFT JOIN public.team_stats t1_stats
+  ON t1_stats.id = gp.team1_stats_id;
 
 GRANT SELECT ON public.v_game_results TO anon;
 GRANT SELECT ON public.v_game_results TO authenticated;
