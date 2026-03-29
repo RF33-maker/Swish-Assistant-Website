@@ -933,7 +933,104 @@ export default function LeaguePage() {
       return PLAYER_STAT_COLUMNS[playerStatsCategory] || PLAYER_STAT_COLUMNS['Traditional'];
     }, [playerStatsCategory]);
 
-    // Filter and sort players based on search and sort settings in stats section
+    const availableAgeGroups = useMemo(() => {
+      const ags = new Set<string>();
+      allPlayerAverages.forEach(p => {
+        (p.rawStats || []).forEach((s: any) => {
+          if (s.age_group) ags.add(s.age_group);
+        });
+      });
+      return [...ags].sort();
+    }, [allPlayerAverages]);
+
+    const availableRounds = useMemo(() => {
+      const rds = new Set<string>();
+      allPlayerAverages.forEach(p => {
+        (p.rawStats || []).forEach((s: any) => {
+          if (s.round) rds.add(s.round);
+        });
+      });
+      return [...rds].sort();
+    }, [allPlayerAverages]);
+
+    const filteredByAgeGroupRound = useMemo(() => {
+      if (filterAgeGroup === 'all' && filterRound === 'all') return allPlayerAverages;
+
+      return allPlayerAverages
+        .map(player => {
+          const matchingStats = (player.rawStats || []).filter((s: any) => {
+            if (filterAgeGroup !== 'all' && s.age_group !== filterAgeGroup) return false;
+            if (filterRound !== 'all' && s.round !== filterRound) return false;
+            return true;
+          });
+          if (matchingStats.length === 0) return null;
+
+          const games = matchingStats.length;
+          const totalPoints = matchingStats.reduce((sum: number, s: any) => sum + (s.spoints || 0), 0);
+          const totalRebounds = matchingStats.reduce((sum: number, s: any) => sum + (s.sreboundstotal || 0), 0);
+          const totalAssists = matchingStats.reduce((sum: number, s: any) => sum + (s.sassists || 0), 0);
+          const totalSteals = matchingStats.reduce((sum: number, s: any) => sum + (s.ssteals || 0), 0);
+          const totalBlocks = matchingStats.reduce((sum: number, s: any) => sum + (s.sblocks || 0), 0);
+          const totalTurnovers = matchingStats.reduce((sum: number, s: any) => sum + (s.sturnovers || 0), 0);
+          const totalFGM = matchingStats.reduce((sum: number, s: any) => sum + (s.sfieldgoalsmade || 0), 0);
+          const totalFGA = matchingStats.reduce((sum: number, s: any) => sum + (s.sfieldgoalsattempted || 0), 0);
+          const total2PM = matchingStats.reduce((sum: number, s: any) => sum + (s.stwopointersmade || 0), 0);
+          const total2PA = matchingStats.reduce((sum: number, s: any) => sum + (s.stwopointersattempted || 0), 0);
+          const total3PM = matchingStats.reduce((sum: number, s: any) => sum + (s.sthreepointersmade || 0), 0);
+          const total3PA = matchingStats.reduce((sum: number, s: any) => sum + (s.sthreepointersattempted || 0), 0);
+          const totalFTM = matchingStats.reduce((sum: number, s: any) => sum + (s.sfreethrowsmade || 0), 0);
+          const totalFTA = matchingStats.reduce((sum: number, s: any) => sum + (s.sfreethrowsattempted || 0), 0);
+          const totalORB = matchingStats.reduce((sum: number, s: any) => sum + (s.sreboundsoffensive || 0), 0);
+          const totalDRB = matchingStats.reduce((sum: number, s: any) => sum + (s.sreboundsdefensive || 0), 0);
+          const totalMinutes = matchingStats.reduce((sum: number, s: any) => {
+            const mins = s.sminutes || s.minutes_played;
+            if (!mins) return sum;
+            if (typeof mins === 'number') return sum + mins;
+            if (typeof mins === 'string') {
+              const parts = mins.split(':');
+              if (parts.length === 2) return sum + parseInt(parts[0]) + parseInt(parts[1]) / 60;
+              return sum + (parseFloat(mins) || 0);
+            }
+            return sum;
+          }, 0);
+          const totalPersonalFouls = matchingStats.reduce((sum: number, s: any) => sum + (s.sfoulspersonal || 0), 0);
+          const totalPlusMinus = matchingStats.reduce((sum: number, s: any) => sum + (s.splusminuspoints || 0), 0);
+
+          return {
+            ...player,
+            games,
+            totalPoints, totalRebounds, totalAssists, totalSteals, totalBlocks,
+            totalTurnovers, totalFGM, totalFGA, total2PM, total2PA, total3PM, total3PA,
+            totalFTM, totalFTA, totalORB, totalDRB, totalMinutes, totalPersonalFouls, totalPlusMinus,
+            rawStats: matchingStats,
+            avgPoints: (totalPoints / games).toFixed(1),
+            avgRebounds: (totalRebounds / games).toFixed(1),
+            avgAssists: (totalAssists / games).toFixed(1),
+            avgSteals: (totalSteals / games).toFixed(1),
+            avgBlocks: (totalBlocks / games).toFixed(1),
+            avgTurnovers: (totalTurnovers / games).toFixed(1),
+            avgMinutes: (totalMinutes / games).toFixed(1),
+            avgFGM: (totalFGM / games).toFixed(1),
+            avgFGA: (totalFGA / games).toFixed(1),
+            avg2PM: (total2PM / games).toFixed(1),
+            avg2PA: (total2PA / games).toFixed(1),
+            avg3PM: (total3PM / games).toFixed(1),
+            avg3PA: (total3PA / games).toFixed(1),
+            avgFTM: (totalFTM / games).toFixed(1),
+            avgFTA: (totalFTA / games).toFixed(1),
+            avgORB: (totalORB / games).toFixed(1),
+            avgDRB: (totalDRB / games).toFixed(1),
+            avgPersonalFouls: (totalPersonalFouls / games).toFixed(1),
+            avgPlusMinus: (totalPlusMinus / games).toFixed(1),
+            fgPercentage: totalFGA > 0 ? ((totalFGM / totalFGA) * 100).toFixed(1) : '0.0',
+            twoPercentage: total2PA > 0 ? ((total2PM / total2PA) * 100).toFixed(1) : '0.0',
+            threePercentage: total3PA > 0 ? ((total3PM / total3PA) * 100).toFixed(1) : '0.0',
+            ftPercentage: totalFTA > 0 ? ((totalFTM / totalFTA) * 100).toFixed(1) : '0.0'
+          };
+        })
+        .filter(Boolean) as any[];
+    }, [allPlayerAverages, filterAgeGroup, filterRound]);
+
     useEffect(() => {
       debugLog("🔍 Filtering players. Search term:", statsSearch);
       debugLog("📊 All players:", allPlayerAverages.length);
@@ -1542,104 +1639,6 @@ export default function LeaguePage() {
       "Top Rebounders": "sreboundstotal",
       "Top Playmakers": "sassists",
     };
-
-    const availableAgeGroups = useMemo(() => {
-      const ags = new Set<string>();
-      allPlayerAverages.forEach(p => {
-        (p.rawStats || []).forEach((s: any) => {
-          if (s.age_group) ags.add(s.age_group);
-        });
-      });
-      return [...ags].sort();
-    }, [allPlayerAverages]);
-
-    const availableRounds = useMemo(() => {
-      const rds = new Set<string>();
-      allPlayerAverages.forEach(p => {
-        (p.rawStats || []).forEach((s: any) => {
-          if (s.round) rds.add(s.round);
-        });
-      });
-      return [...rds].sort();
-    }, [allPlayerAverages]);
-
-    const filteredByAgeGroupRound = useMemo(() => {
-      if (filterAgeGroup === 'all' && filterRound === 'all') return allPlayerAverages;
-
-      return allPlayerAverages
-        .map(player => {
-          const matchingStats = (player.rawStats || []).filter((s: any) => {
-            if (filterAgeGroup !== 'all' && s.age_group !== filterAgeGroup) return false;
-            if (filterRound !== 'all' && s.round !== filterRound) return false;
-            return true;
-          });
-          if (matchingStats.length === 0) return null;
-
-          const games = matchingStats.length;
-          const totalPoints = matchingStats.reduce((sum: number, s: any) => sum + (s.spoints || 0), 0);
-          const totalRebounds = matchingStats.reduce((sum: number, s: any) => sum + (s.sreboundstotal || 0), 0);
-          const totalAssists = matchingStats.reduce((sum: number, s: any) => sum + (s.sassists || 0), 0);
-          const totalSteals = matchingStats.reduce((sum: number, s: any) => sum + (s.ssteals || 0), 0);
-          const totalBlocks = matchingStats.reduce((sum: number, s: any) => sum + (s.sblocks || 0), 0);
-          const totalTurnovers = matchingStats.reduce((sum: number, s: any) => sum + (s.sturnovers || 0), 0);
-          const totalFGM = matchingStats.reduce((sum: number, s: any) => sum + (s.sfieldgoalsmade || 0), 0);
-          const totalFGA = matchingStats.reduce((sum: number, s: any) => sum + (s.sfieldgoalsattempted || 0), 0);
-          const total2PM = matchingStats.reduce((sum: number, s: any) => sum + (s.stwopointersmade || 0), 0);
-          const total2PA = matchingStats.reduce((sum: number, s: any) => sum + (s.stwopointersattempted || 0), 0);
-          const total3PM = matchingStats.reduce((sum: number, s: any) => sum + (s.sthreepointersmade || 0), 0);
-          const total3PA = matchingStats.reduce((sum: number, s: any) => sum + (s.sthreepointersattempted || 0), 0);
-          const totalFTM = matchingStats.reduce((sum: number, s: any) => sum + (s.sfreethrowsmade || 0), 0);
-          const totalFTA = matchingStats.reduce((sum: number, s: any) => sum + (s.sfreethrowsattempted || 0), 0);
-          const totalORB = matchingStats.reduce((sum: number, s: any) => sum + (s.sreboundsoffensive || 0), 0);
-          const totalDRB = matchingStats.reduce((sum: number, s: any) => sum + (s.sreboundsdefensive || 0), 0);
-          const totalMinutes = matchingStats.reduce((sum: number, s: any) => {
-            const mins = s.sminutes || s.minutes_played;
-            if (!mins) return sum;
-            if (typeof mins === 'number') return sum + mins;
-            if (typeof mins === 'string') {
-              const parts = mins.split(':');
-              if (parts.length === 2) return sum + parseInt(parts[0]) + parseInt(parts[1]) / 60;
-              return sum + (parseFloat(mins) || 0);
-            }
-            return sum;
-          }, 0);
-          const totalPersonalFouls = matchingStats.reduce((sum: number, s: any) => sum + (s.sfoulspersonal || 0), 0);
-          const totalPlusMinus = matchingStats.reduce((sum: number, s: any) => sum + (s.splusminuspoints || 0), 0);
-
-          return {
-            ...player,
-            games,
-            totalPoints, totalRebounds, totalAssists, totalSteals, totalBlocks,
-            totalTurnovers, totalFGM, totalFGA, total2PM, total2PA, total3PM, total3PA,
-            totalFTM, totalFTA, totalORB, totalDRB, totalMinutes, totalPersonalFouls, totalPlusMinus,
-            rawStats: matchingStats,
-            avgPoints: (totalPoints / games).toFixed(1),
-            avgRebounds: (totalRebounds / games).toFixed(1),
-            avgAssists: (totalAssists / games).toFixed(1),
-            avgSteals: (totalSteals / games).toFixed(1),
-            avgBlocks: (totalBlocks / games).toFixed(1),
-            avgTurnovers: (totalTurnovers / games).toFixed(1),
-            avgMinutes: (totalMinutes / games).toFixed(1),
-            avgFGM: (totalFGM / games).toFixed(1),
-            avgFGA: (totalFGA / games).toFixed(1),
-            avg2PM: (total2PM / games).toFixed(1),
-            avg2PA: (total2PA / games).toFixed(1),
-            avg3PM: (total3PM / games).toFixed(1),
-            avg3PA: (total3PA / games).toFixed(1),
-            avgFTM: (totalFTM / games).toFixed(1),
-            avgFTA: (totalFTA / games).toFixed(1),
-            avgORB: (totalORB / games).toFixed(1),
-            avgDRB: (totalDRB / games).toFixed(1),
-            avgPersonalFouls: (totalPersonalFouls / games).toFixed(1),
-            avgPlusMinus: (totalPlusMinus / games).toFixed(1),
-            fgPercentage: totalFGA > 0 ? ((totalFGM / totalFGA) * 100).toFixed(1) : '0.0',
-            twoPercentage: total2PA > 0 ? ((total2PM / total2PA) * 100).toFixed(1) : '0.0',
-            threePercentage: total3PA > 0 ? ((total3PM / total3PA) * 100).toFixed(1) : '0.0',
-            ftPercentage: totalFTA > 0 ? ((totalFTM / totalFTA) * 100).toFixed(1) : '0.0'
-          };
-        })
-        .filter(Boolean) as any[];
-    }, [allPlayerAverages, filterAgeGroup, filterRound]);
 
     const getTopList = useMemo(() => (statKey: string) => {
       const statToFields: Record<string, { avgField: string; totalField: string }> = {
