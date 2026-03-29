@@ -938,14 +938,12 @@ export default function LeaguePage() {
       debugLog("🔍 Filtering players. Search term:", statsSearch);
       debugLog("📊 All players:", allPlayerAverages.length);
       
-      let filtered = allPlayerAverages;
+      let filtered = filteredByAgeGroupRound;
       
-      // Apply search filter if search term exists
       if (statsSearch.trim()) {
-        filtered = allPlayerAverages.filter(player => 
+        filtered = filteredByAgeGroupRound.filter(player => 
           player.name.toLowerCase().includes(statsSearch.toLowerCase())
         );
-      } else {
       }
 
       // Apply sorting based on selected column and direction
@@ -1006,7 +1004,7 @@ export default function LeaguePage() {
       if (statsSearch.trim()) {
         setDisplayedPlayerCount(20); // Reset pagination when searching
       }
-    }, [statsSearch, allPlayerAverages, statsSortColumn, statsSortDirection, playerStatsView, activePlayerStatColumns]);
+    }, [statsSearch, filteredByAgeGroupRound, statsSortColumn, statsSortDirection, playerStatsView, activePlayerStatColumns]);
 
     // Reset standings view to 'full' if no pools exist and user is on a pool view
     useEffect(() => {
@@ -1545,8 +1543,105 @@ export default function LeaguePage() {
       "Top Playmakers": "sassists",
     };
 
+    const availableAgeGroups = useMemo(() => {
+      const ags = new Set<string>();
+      allPlayerAverages.forEach(p => {
+        (p.rawStats || []).forEach((s: any) => {
+          if (s.age_group) ags.add(s.age_group);
+        });
+      });
+      return [...ags].sort();
+    }, [allPlayerAverages]);
+
+    const availableRounds = useMemo(() => {
+      const rds = new Set<string>();
+      allPlayerAverages.forEach(p => {
+        (p.rawStats || []).forEach((s: any) => {
+          if (s.round) rds.add(s.round);
+        });
+      });
+      return [...rds].sort();
+    }, [allPlayerAverages]);
+
+    const filteredByAgeGroupRound = useMemo(() => {
+      if (filterAgeGroup === 'all' && filterRound === 'all') return allPlayerAverages;
+
+      return allPlayerAverages
+        .map(player => {
+          const matchingStats = (player.rawStats || []).filter((s: any) => {
+            if (filterAgeGroup !== 'all' && s.age_group !== filterAgeGroup) return false;
+            if (filterRound !== 'all' && s.round !== filterRound) return false;
+            return true;
+          });
+          if (matchingStats.length === 0) return null;
+
+          const games = matchingStats.length;
+          const totalPoints = matchingStats.reduce((sum: number, s: any) => sum + (s.spoints || 0), 0);
+          const totalRebounds = matchingStats.reduce((sum: number, s: any) => sum + (s.sreboundstotal || 0), 0);
+          const totalAssists = matchingStats.reduce((sum: number, s: any) => sum + (s.sassists || 0), 0);
+          const totalSteals = matchingStats.reduce((sum: number, s: any) => sum + (s.ssteals || 0), 0);
+          const totalBlocks = matchingStats.reduce((sum: number, s: any) => sum + (s.sblocks || 0), 0);
+          const totalTurnovers = matchingStats.reduce((sum: number, s: any) => sum + (s.sturnovers || 0), 0);
+          const totalFGM = matchingStats.reduce((sum: number, s: any) => sum + (s.sfieldgoalsmade || 0), 0);
+          const totalFGA = matchingStats.reduce((sum: number, s: any) => sum + (s.sfieldgoalsattempted || 0), 0);
+          const total2PM = matchingStats.reduce((sum: number, s: any) => sum + (s.stwopointersmade || 0), 0);
+          const total2PA = matchingStats.reduce((sum: number, s: any) => sum + (s.stwopointersattempted || 0), 0);
+          const total3PM = matchingStats.reduce((sum: number, s: any) => sum + (s.sthreepointersmade || 0), 0);
+          const total3PA = matchingStats.reduce((sum: number, s: any) => sum + (s.sthreepointersattempted || 0), 0);
+          const totalFTM = matchingStats.reduce((sum: number, s: any) => sum + (s.sfreethrowsmade || 0), 0);
+          const totalFTA = matchingStats.reduce((sum: number, s: any) => sum + (s.sfreethrowsattempted || 0), 0);
+          const totalORB = matchingStats.reduce((sum: number, s: any) => sum + (s.sreboundsoffensive || 0), 0);
+          const totalDRB = matchingStats.reduce((sum: number, s: any) => sum + (s.sreboundsdefensive || 0), 0);
+          const totalMinutes = matchingStats.reduce((sum: number, s: any) => {
+            const mins = s.sminutes || s.minutes_played;
+            if (!mins) return sum;
+            if (typeof mins === 'number') return sum + mins;
+            if (typeof mins === 'string') {
+              const parts = mins.split(':');
+              if (parts.length === 2) return sum + parseInt(parts[0]) + parseInt(parts[1]) / 60;
+              return sum + (parseFloat(mins) || 0);
+            }
+            return sum;
+          }, 0);
+          const totalPersonalFouls = matchingStats.reduce((sum: number, s: any) => sum + (s.sfoulspersonal || 0), 0);
+          const totalPlusMinus = matchingStats.reduce((sum: number, s: any) => sum + (s.splusminuspoints || 0), 0);
+
+          return {
+            ...player,
+            games,
+            totalPoints, totalRebounds, totalAssists, totalSteals, totalBlocks,
+            totalTurnovers, totalFGM, totalFGA, total2PM, total2PA, total3PM, total3PA,
+            totalFTM, totalFTA, totalORB, totalDRB, totalMinutes, totalPersonalFouls, totalPlusMinus,
+            rawStats: matchingStats,
+            avgPoints: (totalPoints / games).toFixed(1),
+            avgRebounds: (totalRebounds / games).toFixed(1),
+            avgAssists: (totalAssists / games).toFixed(1),
+            avgSteals: (totalSteals / games).toFixed(1),
+            avgBlocks: (totalBlocks / games).toFixed(1),
+            avgTurnovers: (totalTurnovers / games).toFixed(1),
+            avgMinutes: (totalMinutes / games).toFixed(1),
+            avgFGM: (totalFGM / games).toFixed(1),
+            avgFGA: (totalFGA / games).toFixed(1),
+            avg2PM: (total2PM / games).toFixed(1),
+            avg2PA: (total2PA / games).toFixed(1),
+            avg3PM: (total3PM / games).toFixed(1),
+            avg3PA: (total3PA / games).toFixed(1),
+            avgFTM: (totalFTM / games).toFixed(1),
+            avgFTA: (totalFTA / games).toFixed(1),
+            avgORB: (totalORB / games).toFixed(1),
+            avgDRB: (totalDRB / games).toFixed(1),
+            avgPersonalFouls: (totalPersonalFouls / games).toFixed(1),
+            avgPlusMinus: (totalPlusMinus / games).toFixed(1),
+            fgPercentage: totalFGA > 0 ? ((totalFGM / totalFGA) * 100).toFixed(1) : '0.0',
+            twoPercentage: total2PA > 0 ? ((total2PM / total2PA) * 100).toFixed(1) : '0.0',
+            threePercentage: total3PA > 0 ? ((total3PM / total3PA) * 100).toFixed(1) : '0.0',
+            ftPercentage: totalFTA > 0 ? ((totalFTM / totalFTA) * 100).toFixed(1) : '0.0'
+          };
+        })
+        .filter(Boolean) as any[];
+    }, [allPlayerAverages, filterAgeGroup, filterRound]);
+
     const getTopList = useMemo(() => (statKey: string) => {
-      // Map stat keys to both average and total field names
       const statToFields: Record<string, { avgField: string; totalField: string }> = {
         'spoints': { avgField: 'avgPoints', totalField: 'totalPoints' },
         'sreboundstotal': { avgField: 'avgRebounds', totalField: 'totalRebounds' },
@@ -1554,15 +1649,11 @@ export default function LeaguePage() {
       };
       
       const fields = statToFields[statKey];
-      if (!fields || !allPlayerAverages.length) return [];
+      if (!fields || !filteredByAgeGroupRound.length) return [];
       
-      // Choose field based on leagueLeadersView state
       const fieldToUse = leagueLeadersView === 'averages' ? fields.avgField : fields.totalField;
       
-      debugLog(`📊 getTopList(${statKey}): mode=${leagueLeadersView}, fieldToUse=${fieldToUse}`);
-      
-      // Sort by the selected field and take top 5
-      const result = [...allPlayerAverages]
+      const result = [...filteredByAgeGroupRound]
         .sort((a, b) => {
           const aVal = parseFloat(a[fieldToUse]) || 0;
           const bVal = parseFloat(b[fieldToUse]) || 0;
@@ -1573,18 +1664,11 @@ export default function LeaguePage() {
           ...player,
           value: leagueLeadersView === 'averages' 
             ? player[fields.avgField] 
-            : Math.round(player[fields.totalField]) // Round totals to whole numbers
+            : Math.round(player[fields.totalField])
         }));
       
-      debugLog(`📊 getTopList(${statKey}) result:`, result.map(p => ({ 
-        name: p.name, 
-        value: p.value, 
-        games: p.games,
-        totalPoints: p.totalPoints,
-        avgPoints: p.avgPoints
-      })));
       return result;
-    }, [allPlayerAverages, leagueLeadersView]);
+    }, [filteredByAgeGroupRound, leagueLeadersView]);
 
     const topScorers = getTopList("spoints");
     const topRebounders = getTopList("sreboundstotal");
@@ -3398,7 +3482,7 @@ export default function LeaguePage() {
                   <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">Player Statistics - {league?.name}</h2>
                   <div className="text-xs md:text-sm text-gray-500 dark:text-gray-400">
                     Showing {Math.min(displayedPlayerCount, filteredPlayerAverages.length)} of {filteredPlayerAverages.length} players
-                    {statsSearch && ` (filtered from ${allPlayerAverages.length})`}
+                    {(statsSearch || filterAgeGroup !== 'all' || filterRound !== 'all') && ` (filtered from ${allPlayerAverages.length})`}
                   </div>
                 </div>
                 
@@ -3427,6 +3511,43 @@ export default function LeaguePage() {
                     </svg>
                   </div>
                 </div>
+
+                {(availableAgeGroups.length > 0 || availableRounds.length > 0) && (
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {availableAgeGroups.length > 0 && (
+                      <select
+                        value={filterAgeGroup}
+                        onChange={(e) => setFilterAgeGroup(e.target.value)}
+                        className="px-3 py-1.5 text-xs md:text-sm rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
+                      >
+                        <option value="all">All Age Groups</option>
+                        {availableAgeGroups.map(ag => (
+                          <option key={ag} value={ag}>{ag}</option>
+                        ))}
+                      </select>
+                    )}
+                    {availableRounds.length > 0 && (
+                      <select
+                        value={filterRound}
+                        onChange={(e) => setFilterRound(e.target.value)}
+                        className="px-3 py-1.5 text-xs md:text-sm rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
+                      >
+                        <option value="all">All Rounds</option>
+                        {availableRounds.map(r => (
+                          <option key={r} value={r}>{r}</option>
+                        ))}
+                      </select>
+                    )}
+                    {(filterAgeGroup !== 'all' || filterRound !== 'all') && (
+                      <button
+                        onClick={() => { setFilterAgeGroup('all'); setFilterRound('all'); }}
+                        className="px-3 py-1.5 text-xs md:text-sm rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40"
+                      >
+                        Clear Filters
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 {/* Category and Mode Selectors */}
                 <div className="flex flex-col md:flex-row gap-4 mb-6">
@@ -4265,7 +4386,34 @@ export default function LeaguePage() {
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-4 md:mb-6">
                 <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">League Leaders</h2>
                 <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-                  {/* Toggle between Averages and Totals */}
+                  {(availableAgeGroups.length > 0 || availableRounds.length > 0) && (
+                    <div className="flex gap-1.5">
+                      {availableAgeGroups.length > 0 && (
+                        <select
+                          value={filterAgeGroup}
+                          onChange={(e) => setFilterAgeGroup(e.target.value)}
+                          className="px-2 py-1 text-[11px] md:text-xs rounded-md border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300"
+                        >
+                          <option value="all">All Ages</option>
+                          {availableAgeGroups.map(ag => (
+                            <option key={ag} value={ag}>{ag}</option>
+                          ))}
+                        </select>
+                      )}
+                      {availableRounds.length > 0 && (
+                        <select
+                          value={filterRound}
+                          onChange={(e) => setFilterRound(e.target.value)}
+                          className="px-2 py-1 text-[11px] md:text-xs rounded-md border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300"
+                        >
+                          <option value="all">All Rounds</option>
+                          {availableRounds.map(r => (
+                            <option key={r} value={r}>{r}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  )}
                   <div className="inline-flex rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 p-1">
                     <button
                       onClick={() => setLeagueLeadersView('averages')}
