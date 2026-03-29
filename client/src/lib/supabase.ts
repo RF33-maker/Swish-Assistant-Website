@@ -12,8 +12,6 @@ interface TestSchemaConfig {
 }
 
 const TEST_SCHEMA_LEAGUES: Record<string, TestSchemaConfig> = {
-  "uwe-summer-league-d1-2025": { schema: "test", dataLeagueId: "58d633d5-58e6-4aca-8532-d87d424119c5" },
-  "feb33bc0-c928-4407-bc99-d28c7e6ee059": { schema: "test", dataLeagueId: "58d633d5-58e6-4aca-8532-d87d424119c5" },
 };
 
 const schemaClients: Record<string, SupabaseClient> = {};
