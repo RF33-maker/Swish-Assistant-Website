@@ -1138,9 +1138,9 @@ export default function LeaguePage() {
         const teamMap = new Map<string, any>();
 
         rawTeamStats.forEach(stat => {
-          if (!stat.name) return; // Skip records without team name
+          if (!stat.name) return;
+          if (stat.name.toLowerCase().trim().startsWith('coach')) return;
 
-          // Normalize team name to handle variations (including MK Breakers → Milton Keynes Breakers, Essex Rebels (M) → Essex Rebels)
           const normalizedName = normalizeAndMapTeamName(stat.name);
 
           if (!teamMap.has(normalizedName)) {
@@ -1536,11 +1536,22 @@ export default function LeaguePage() {
 
             if (gameResults && !gameResultsError) {
 
-              const games: GameSchedule[] = gameResults.map((game: any) => ({
+              const cleanTeamName = (name: string | null) => {
+                if (!name) return '';
+                return name.replace(/^coach:\s*/i, '').trim();
+              };
+
+              const games: GameSchedule[] = gameResults
+                .filter((game: any) => {
+                  const home = (game.home_team || '').toLowerCase().trim();
+                  const away = (game.away_team || '').toLowerCase().trim();
+                  return !home.startsWith('coach') && !away.startsWith('coach');
+                })
+                .map((game: any) => ({
                 game_id: game.game_key,
                 game_date: game.match_time,
-                team1: game.home_team,
-                team2: game.away_team,
+                team1: cleanTeamName(game.home_team),
+                team2: cleanTeamName(game.away_team),
                 kickoff_time: game.match_time ? new Date(game.match_time).toLocaleTimeString('en-US', {
                   hour: '2-digit',
                   minute: '2-digit',
@@ -2458,19 +2469,17 @@ export default function LeaguePage() {
           teamStatsMap[normalizedName] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0 };
         });
 
-        // Now fetch team_stats to enhance with actual game results
         const { data: teamStatsData, error: teamStatsError } = await db
           .from("team_stats")
           .select("*")
           .eq("league_id", leagueId);
 
         if (teamStatsData && teamStatsData.length > 0 && !teamStatsError) {
-          // Group team stats by numeric_id to find games (teams that played each other)
           const gameMap = new Map<string, any[]>();
           
           teamStatsData.forEach(stat => {
             const numericId = stat.numeric_id;
-            if (numericId && stat.name) {
+            if (numericId && stat.name && !stat.name.toLowerCase().trim().startsWith('coach')) {
               if (!gameMap.has(numericId)) {
                 gameMap.set(numericId, []);
               }
@@ -2746,11 +2755,10 @@ export default function LeaguePage() {
             }
           });
 
-          // Group by game (numeric_id) and calculate standings
           const gameMap = new Map<string, any[]>();
           teamStatsData.forEach(stat => {
             const numericId = stat.numeric_id;
-            if (numericId && stat.name) {
+            if (numericId && stat.name && !stat.name.toLowerCase().trim().startsWith('coach')) {
               if (!gameMap.has(numericId)) {
                 gameMap.set(numericId, []);
               }

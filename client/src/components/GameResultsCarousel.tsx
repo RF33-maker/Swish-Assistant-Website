@@ -101,9 +101,17 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick }: Gam
       const processedGameKeys = new Set<string>();
       const viewGameKeys: string[] = [];
 
+      const cleanTeamName = (name: string | null) => {
+        if (!name) return '';
+        return name.replace(/^coach:\s*/i, '').trim();
+      };
+
       if (gameResults && gameResults.length > 0) {
         gameResults.forEach((game: any) => {
           if (!game.home_team || !game.away_team || !game.game_key) return;
+          const homeName = (game.home_team || '').toLowerCase().trim();
+          const awayName = (game.away_team || '').toLowerCase().trim();
+          if (homeName.startsWith('coach') || awayName.startsWith('coach')) return;
           processedGameKeys.add(game.game_key);
           viewGameKeys.push(game.game_key);
 
@@ -111,8 +119,8 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick }: Gam
             game_key: game.game_key,
             game_id: game.game_key,
             game_date: game.match_time || new Date().toISOString(),
-            home_team: game.home_team,
-            away_team: game.away_team,
+            home_team: cleanTeamName(game.home_team),
+            away_team: cleanTeamName(game.away_team),
             home_score: game.home_score,
             away_score: game.away_score,
             status: 'FINAL',

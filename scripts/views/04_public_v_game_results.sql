@@ -30,6 +30,8 @@ WITH game_pairs AS (
     AND t1.league_id = t2.league_id
     AND t1.id < t2.id
   WHERE t1.game_key IS NOT NULL
+    AND LOWER(TRIM(t1.name)) NOT LIKE 'coach%'
+    AND LOWER(TRIM(t2.name)) NOT LIKE 'coach%'
 )
 SELECT
   gp.game_key,
