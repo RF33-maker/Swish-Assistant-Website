@@ -122,7 +122,7 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
             status: 'FINAL',
             age_group: ageGroup,
             round: game.round || undefined,
-            hasGamePage: !!game.schedule_status || !!game.competition_name,
+            hasGamePage: false,
           });
         });
 
@@ -194,7 +194,44 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
         });
       }
 
+      const scheduleByGameKey = new Map<string, { hometeam: string; awayteam: string }>();
+      if (scheduleData) {
+        scheduleData.forEach(game => {
+          if (game.game_key && game.hometeam && game.awayteam) {
+            scheduleByGameKey.set(game.game_key, { hometeam: game.hometeam, awayteam: game.awayteam });
+          }
+        });
+      }
+
+      const missingKeys = viewGameKeys.filter(k => !scheduleByGameKey.has(k));
+      if (missingKeys.length > 0) {
+        let extraQuery = db
+          .from('game_schedule')
+          .select('game_key, hometeam, awayteam')
+          .in('game_key', missingKeys);
+        extraQuery = isParent
+          ? extraQuery.in('league_id', childLeagueIds!)
+          : extraQuery.eq('league_id', effectiveLeagueId);
+        const { data: extraSchedule } = await extraQuery;
+        if (extraSchedule) {
+          extraSchedule.forEach(game => {
+            if (game.game_key && game.hometeam && game.awayteam) {
+              scheduleByGameKey.set(game.game_key, { hometeam: game.hometeam, awayteam: game.awayteam });
+            }
+          });
+        }
+      }
+
+      const slugify = (name: string) =>
+        name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
       gamesWithStats.forEach(game => {
+        const schedEntry = scheduleByGameKey.get(game.game_key);
+        if (schedEntry) {
+          const homeMatch = slugify(schedEntry.hometeam) === slugify(game.home_team);
+          const awayMatch = slugify(schedEntry.awayteam) === slugify(game.away_team);
+          game.hasGamePage = homeMatch && awayMatch;
+        }
         const schedStatus = (scheduleStatusMap.get(game.game_key) || '').toLowerCase();
         if (schedStatus === 'live' || schedStatus === 'in_progress' || schedStatus.includes('live')) {
           game.status = 'LIVE';
