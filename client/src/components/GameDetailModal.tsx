@@ -212,6 +212,15 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
               fouls: stat.sfoulspersonal || 0,
               plus_minus: stat.splusminuspoints,
               minutes: stat.sminutes,
+              fgm: stat.sfieldgoalsmade,
+              fga: stat.sfieldgoalsattempted,
+              fg_pct: stat.sfieldgoalspercentage,
+              three_pm: stat.sthreepointersmade,
+              three_pa: stat.sthreepointersattempted,
+              three_p_pct: stat.sthreepointerspercentage,
+              ftm: stat.sfreethrowsmade,
+              fta: stat.sfreethrowsattempted,
+              ft_pct: stat.sfreethrowspercentage,
             }));
           }
         }
@@ -231,6 +240,15 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
             sfoulspersonal: stat.fouls ?? stat.sfoulspersonal ?? 0,
             splusminuspoints: stat.plus_minus ?? stat.splusminuspoints,
             sminutes: stat.minutes ?? stat.sminutes,
+            sfieldgoalsmade: stat.fgm ?? stat.sfieldgoalsmade,
+            sfieldgoalsattempted: stat.fga ?? stat.sfieldgoalsattempted,
+            sfieldgoalspercentage: stat.fg_pct ?? stat.sfieldgoalspercentage,
+            sthreepointersmade: stat.three_pm ?? stat.sthreepointersmade,
+            sthreepointersattempted: stat.three_pa ?? stat.sthreepointersattempted,
+            sthreepointerspercentage: stat.three_p_pct ?? stat.sthreepointerspercentage,
+            sfreethrowsmade: stat.ftm ?? stat.sfreethrowsmade,
+            sfreethrowsattempted: stat.fta ?? stat.sfreethrowsattempted,
+            sfreethrowspercentage: stat.ft_pct ?? stat.sfreethrowspercentage,
           }));
           
           const teamsFromStats = Array.from(new Set(processedStats.map((stat: any) => stat.team).filter(Boolean)));
