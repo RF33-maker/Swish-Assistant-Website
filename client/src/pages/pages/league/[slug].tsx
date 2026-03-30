@@ -2550,12 +2550,12 @@ export default function LeaguePage() {
           });
         }
 
-        const { data: teamStatsRecords, error: teamStatsError } = await db
-          .from("team_stats")
-          .select("*")
+        const { data: gameResults, error: gameResultsError } = await db
+          .from("v_game_results")
+          .select("home_team, away_team, home_score, away_score")
           .eq("league_id", leagueId);
 
-        if (!teamStatsRecords || teamStatsRecords.length === 0 || teamStatsError) {
+        if (!gameResults || gameResults.length === 0 || gameResultsError) {
           if (Object.keys(teamStatsMap).length === 0) return [];
           return Object.entries(teamStatsMap).map(([team, stats], index) => ({
             team, originalName: stats.originalName, wins: 0, losses: 0, winPct: 0,
@@ -2564,46 +2564,41 @@ export default function LeaguePage() {
           }));
         }
 
-        teamStatsRecords.forEach(stat => {
-          if (stat.name) {
-            const normalized = normalizeAndMapTeamName(stat.name);
+        gameResults.forEach((game: any) => {
+          if (game.home_team) {
+            const normalized = normalizeAndMapTeamName(game.home_team);
             if (!teamStatsMap[normalized]) {
-              teamStatsMap[normalized] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0, originalName: stat.name };
+              teamStatsMap[normalized] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0, originalName: game.home_team };
+            }
+          }
+          if (game.away_team) {
+            const normalized = normalizeAndMapTeamName(game.away_team);
+            if (!teamStatsMap[normalized]) {
+              teamStatsMap[normalized] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0, originalName: game.away_team };
             }
           }
         });
 
-        const gameMap = new Map<string, any[]>();
-        teamStatsRecords.forEach(stat => {
-          const numericId = stat.numeric_id;
-          if (numericId && stat.name) {
-            if (!gameMap.has(numericId)) gameMap.set(numericId, []);
-            gameMap.get(numericId)!.push(stat);
-          }
-        });
+        gameResults.forEach((game: any) => {
+          if (game.home_score == null || game.away_score == null) return;
+          const homeName = normalizeAndMapTeamName(game.home_team || '');
+          const awayName = normalizeAndMapTeamName(game.away_team || '');
+          const homeScore = game.home_score;
+          const awayScore = game.away_score;
 
-        gameMap.forEach((gameTeams) => {
-          if (gameTeams.length === 2) {
-            const [team1, team2] = gameTeams;
-            const team1Name = normalizeAndMapTeamName(team1.name || '');
-            const team2Name = normalizeAndMapTeamName(team2.name || '');
-            const team1Score = team1.tot_spoints || 0;
-            const team2Score = team2.tot_spoints || 0;
-            
-            if (teamStatsMap[team1Name]) {
-              teamStatsMap[team1Name].pointsFor += team1Score;
-              teamStatsMap[team1Name].pointsAgainst += team2Score;
-              teamStatsMap[team1Name].games += 1;
-              if (team1Score > team2Score) teamStatsMap[team1Name].wins += 1;
-              else if (team1Score < team2Score) teamStatsMap[team1Name].losses += 1;
-            }
-            if (teamStatsMap[team2Name]) {
-              teamStatsMap[team2Name].pointsFor += team2Score;
-              teamStatsMap[team2Name].pointsAgainst += team1Score;
-              teamStatsMap[team2Name].games += 1;
-              if (team2Score > team1Score) teamStatsMap[team2Name].wins += 1;
-              else if (team2Score < team1Score) teamStatsMap[team2Name].losses += 1;
-            }
+          if (teamStatsMap[homeName]) {
+            teamStatsMap[homeName].pointsFor += homeScore;
+            teamStatsMap[homeName].pointsAgainst += awayScore;
+            teamStatsMap[homeName].games += 1;
+            if (homeScore > awayScore) teamStatsMap[homeName].wins += 1;
+            else if (homeScore < awayScore) teamStatsMap[homeName].losses += 1;
+          }
+          if (teamStatsMap[awayName]) {
+            teamStatsMap[awayName].pointsFor += awayScore;
+            teamStatsMap[awayName].pointsAgainst += homeScore;
+            teamStatsMap[awayName].games += 1;
+            if (awayScore > homeScore) teamStatsMap[awayName].wins += 1;
+            else if (awayScore < homeScore) teamStatsMap[awayName].losses += 1;
           }
         });
 
@@ -2676,61 +2671,33 @@ export default function LeaguePage() {
           teamStatsMap[normalizedName] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0 };
         });
 
-        // Now fetch team_stats to enhance with actual game results
-        const { data: teamStatsData, error: teamStatsError } = await db
-          .from("team_stats")
-          .select("*")
+        const { data: gameResults, error: gameResultsError } = await db
+          .from("v_game_results")
+          .select("home_team, away_team, home_score, away_score")
           .eq("league_id", leagueId);
 
-        if (teamStatsData && teamStatsData.length > 0 && !teamStatsError) {
-          // Group team stats by numeric_id to find games (teams that played each other)
-          const gameMap = new Map<string, any[]>();
-          
-          teamStatsData.forEach(stat => {
-            const numericId = stat.numeric_id;
-            if (numericId && stat.name) {
-              if (!gameMap.has(numericId)) {
-                gameMap.set(numericId, []);
-              }
-              gameMap.get(numericId)!.push(stat);
-            }
-          });
+        if (gameResults && gameResults.length > 0 && !gameResultsError) {
+          gameResults.forEach((game: any) => {
+            if (game.home_score == null || game.away_score == null) return;
+            const homeName = normalizeAndMapTeamName(game.home_team || '');
+            const awayName = normalizeAndMapTeamName(game.away_team || '');
+            const homeScore = game.home_score;
+            const awayScore = game.away_score;
 
-          // Process each game and update stats for teams that have played
-          gameMap.forEach((gameTeams, numericId) => {
-            if (gameTeams.length === 2) {
-              const [team1, team2] = gameTeams;
-              
-              const team1Name = normalizeAndMapTeamName(team1.name || '');
-              const team2Name = normalizeAndMapTeamName(team2.name || '');
-              
-              const team1Score = team1.tot_spoints || 0;
-              const team2Score = team2.tot_spoints || 0;
-              
-              // Only update if team exists in our map (from teams table)
-              if (teamStatsMap[team1Name]) {
-                teamStatsMap[team1Name].pointsFor += team1Score;
-                teamStatsMap[team1Name].pointsAgainst += team2Score;
-                teamStatsMap[team1Name].games += 1;
-                
-                if (team1Score > team2Score) {
-                  teamStatsMap[team1Name].wins += 1;
-                } else if (team1Score < team2Score) {
-                  teamStatsMap[team1Name].losses += 1;
-                }
-              }
-              
-              if (teamStatsMap[team2Name]) {
-                teamStatsMap[team2Name].pointsFor += team2Score;
-                teamStatsMap[team2Name].pointsAgainst += team1Score;
-                teamStatsMap[team2Name].games += 1;
-                
-                if (team2Score > team1Score) {
-                  teamStatsMap[team2Name].wins += 1;
-                } else if (team2Score < team1Score) {
-                  teamStatsMap[team2Name].losses += 1;
-                }
-              }
+            if (teamStatsMap[homeName]) {
+              teamStatsMap[homeName].pointsFor += homeScore;
+              teamStatsMap[homeName].pointsAgainst += awayScore;
+              teamStatsMap[homeName].games += 1;
+              if (homeScore > awayScore) teamStatsMap[homeName].wins += 1;
+              else if (homeScore < awayScore) teamStatsMap[homeName].losses += 1;
+            }
+
+            if (teamStatsMap[awayName]) {
+              teamStatsMap[awayName].pointsFor += awayScore;
+              teamStatsMap[awayName].pointsAgainst += homeScore;
+              teamStatsMap[awayName].games += 1;
+              if (awayScore > homeScore) teamStatsMap[awayName].wins += 1;
+              else if (awayScore < homeScore) teamStatsMap[awayName].losses += 1;
             }
           });
         }
@@ -2937,80 +2904,44 @@ export default function LeaguePage() {
           };
         });
 
-        // Now fetch team_stats to enhance with actual game results
-        const { data: teamStatsData, error: teamStatsError } = await db
-          .from("team_stats")
-          .select("*")
-          .eq("league_id", leagueId);
+        if (scheduleData && scheduleData.length > 0 && !scheduleError) {
+          scheduleData.forEach((game: any) => {
+            const homeName = normalizeAndMapTeamName(game.home_team || '');
+            const awayName = normalizeAndMapTeamName(game.away_team || '');
 
-        if (teamStatsData && teamStatsData.length > 0 && !teamStatsError) {
-          // First pass: ensure ALL teams from team_stats are in teamStatsMap with original names
-          const teamOriginalNames = new Map<string, string>();
-          teamStatsData.forEach(stat => {
-            if (stat.name) {
-              const normalized = normalizeAndMapTeamName(stat.name);
-              // Store the first occurrence of each team's original name
-              if (!teamOriginalNames.has(normalized)) {
-                teamOriginalNames.set(normalized, stat.name);
-              }
-              // If team not in map yet (not in teams table), add it
-              if (!teamStatsMap[normalized]) {
-                teamStatsMap[normalized] = {
-                  wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0,
-                  pool: teamPoolMap[normalized] || teamPoolMap[stat.name],
-                  originalName: stat.name
-                };
-              }
+            if (game.home_team && !teamStatsMap[homeName]) {
+              teamStatsMap[homeName] = {
+                wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0,
+                pool: teamPoolMap[homeName] || teamPoolMap[game.home_team],
+                originalName: game.home_team
+              };
             }
-          });
-
-          // Group by game (numeric_id) and calculate standings
-          const gameMap = new Map<string, any[]>();
-          teamStatsData.forEach(stat => {
-            const numericId = stat.numeric_id;
-            if (numericId && stat.name) {
-              if (!gameMap.has(numericId)) {
-                gameMap.set(numericId, []);
-              }
-              gameMap.get(numericId)!.push(stat);
+            if (game.away_team && !teamStatsMap[awayName]) {
+              teamStatsMap[awayName] = {
+                wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0,
+                pool: teamPoolMap[awayName] || teamPoolMap[game.away_team],
+                originalName: game.away_team
+              };
             }
-          });
 
-          // Process each game and update stats for teams that have played
-          gameMap.forEach((gameTeams) => {
-            if (gameTeams.length === 2) {
-              const [team1, team2] = gameTeams;
-              
-              const team1Name = normalizeAndMapTeamName(team1.name || '');
-              const team2Name = normalizeAndMapTeamName(team2.name || '');
-              
-              const team1Score = team1.tot_spoints || 0;
-              const team2Score = team2.tot_spoints || 0;
-              
-              // Only update if team exists in our map (from teams table)
-              if (teamStatsMap[team1Name]) {
-                teamStatsMap[team1Name].pointsFor += team1Score;
-                teamStatsMap[team1Name].pointsAgainst += team2Score;
-                teamStatsMap[team1Name].games += 1;
-                
-                if (team1Score > team2Score) {
-                  teamStatsMap[team1Name].wins += 1;
-                } else if (team1Score < team2Score) {
-                  teamStatsMap[team1Name].losses += 1;
-                }
-              }
-              
-              if (teamStatsMap[team2Name]) {
-                teamStatsMap[team2Name].pointsFor += team2Score;
-                teamStatsMap[team2Name].pointsAgainst += team1Score;
-                teamStatsMap[team2Name].games += 1;
-                
-                if (team2Score > team1Score) {
-                  teamStatsMap[team2Name].wins += 1;
-                } else if (team2Score < team1Score) {
-                  teamStatsMap[team2Name].losses += 1;
-                }
-              }
+            if (game.home_score == null || game.away_score == null) return;
+            const homeScore = game.home_score;
+            const awayScore = game.away_score;
+
+            if (teamStatsMap[homeName]) {
+              teamStatsMap[homeName].pointsFor += homeScore;
+              teamStatsMap[homeName].pointsAgainst += awayScore;
+              teamStatsMap[homeName].games += 1;
+              if (homeScore > awayScore) teamStatsMap[homeName].wins += 1;
+              else if (homeScore < awayScore) teamStatsMap[homeName].losses += 1;
+            }
+
+            if (teamStatsMap[awayName]) {
+              teamStatsMap[awayName].pointsFor += awayScore;
+              teamStatsMap[awayName].pointsAgainst += homeScore;
+              teamStatsMap[awayName].games += 1;
+              if (awayScore > homeScore) teamStatsMap[awayName].wins += 1;
+              else if (awayScore < homeScore) teamStatsMap[awayName].losses += 1;
             }
           });
         }
