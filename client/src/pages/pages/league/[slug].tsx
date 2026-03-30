@@ -39,7 +39,6 @@ import { TeamComparison } from "@/components/TeamComparison";
 import { TournamentBracket } from "@/components/TournamentBracket";
 import { normalizeTeamName } from "@/lib/teamUtils";
 import { namesMatch, getMostCompleteName } from "@/lib/fuzzyMatch";
-import { generateGameSlug } from "@/lib/gameSlug";
 import { DEBUG, debugLog } from "@/utils/debug";
 import { useLeagueBranding } from "@/hooks/useLeagueBranding";
 
@@ -1768,8 +1767,8 @@ export default function LeaguePage() {
       homeScore: number | null;
       awayScore: number | null;
     }) => {
-      const slug = generateGameSlug(data.homeTeam, data.awayTeam, data.gameDate);
-      navigate(`/game/${slug}`);
+      setSelectedGameId(data.gameKey);
+      setIsGameModalOpen(true);
     };
 
     const handleCloseGameModal = () => {

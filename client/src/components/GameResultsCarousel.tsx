@@ -47,15 +47,6 @@ function formatDateUK(dateStr: string): string {
   }).toUpperCase();
 }
 
-function formatTimeUK(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleTimeString('en-GB', { 
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'Europe/London'
-  });
-}
-
 function formatRelativeDate(dateStr: string): string {
   const date = new Date(dateStr);
   const now = new Date();
@@ -63,15 +54,15 @@ function formatRelativeDate(dateStr: string): string {
   const diffDays = Math.floor(Math.abs(diffMs) / (1000 * 60 * 60 * 24));
 
   if (diffDays === 0) {
-    return `Today • ${formatTimeUK(dateStr)}`;
+    return 'Today';
   }
   if (diffDays === 1 && diffMs > 0) {
     return 'Yesterday';
   }
   if (diffDays === 1 && diffMs < 0) {
-    return `Tomorrow • ${formatTimeUK(dateStr)}`;
+    return 'Tomorrow';
   }
-  return `${formatDateUK(dateStr)} • ${formatTimeUK(dateStr)}`;
+  return formatDateUK(dateStr);
 }
 
 export default function GameResultsCarousel({ leagueId, slug, onGameClick, childLeagueIds, childLeagueMap }: GameResultsCarouselProps) {
