@@ -11,10 +11,11 @@ interface StandingRow {
   ppg: number;
 }
 
-interface TeamStatEntry {
-  name: string;
-  tot_spoints: number | null;
-  game_key: string | null;
+interface GameResultEntry {
+  home_team: string;
+  away_team: string;
+  home_score: number | null;
+  away_score: number | null;
 }
 
 interface TeamRecord {
@@ -72,46 +73,66 @@ export default function StandingsWidget({ params }: { params: WidgetParams }) {
         const leagueKey = params.leagueSlug || params.leagueId;
         const db = getSupabaseForLeague(leagueKey);
         const dataLeagueId = getDataLeagueId(leagueKey, league.id);
-        const { data: teamStats, error: statsError } = await db
-          .from("team_stats")
-          .select("name, tot_spoints, game_key")
+
+        const { data: allTeams } = await supabase
+          .from("teams")
+          .select("team_id, name")
+          .eq("league_id", league.id);
+
+        const teamRecords = new Map<string, TeamRecord>();
+
+        if (allTeams && allTeams.length > 0) {
+          allTeams.forEach(team => {
+            teamRecords.set(team.name, { wins: 0, losses: 0, totalPoints: 0, games: 0 });
+          });
+        }
+
+        const { data: gameResults, error: statsError } = await db
+          .from("v_game_results")
+          .select("home_team, away_team, home_score, away_score")
           .eq("league_id", dataLeagueId);
 
-        if (statsError || !teamStats || teamStats.length === 0) {
-          setError(statsError ? "Failed to fetch standings" : "No standings data available");
+        if (statsError) {
+          setError("Failed to fetch standings");
           setLoading(false);
           return;
         }
 
-        const gameMap = new Map<string, TeamStatEntry[]>();
-        teamStats.forEach((stat: TeamStatEntry) => {
-          const key = stat.game_key;
-          if (key) {
-            if (!gameMap.has(key)) gameMap.set(key, []);
-            gameMap.get(key)!.push(stat);
-          }
-        });
+        if (gameResults && gameResults.length > 0) {
+          gameResults.forEach((game: GameResultEntry) => {
+            if (game.home_score == null || game.away_score == null) return;
+            const homeScore = game.home_score;
+            const awayScore = game.away_score;
 
-        const teamRecords = new Map<string, TeamRecord>();
-
-        gameMap.forEach((teams) => {
-          if (teams.length === 2) {
-            const [t1, t2] = teams;
-            [t1, t2].forEach((t, i) => {
-              const opponent = i === 0 ? t2 : t1;
-              const score = t.tot_spoints || 0;
-              const oppScore = opponent.tot_spoints || 0;
-              if (!teamRecords.has(t.name)) {
-                teamRecords.set(t.name, { wins: 0, losses: 0, totalPoints: 0, games: 0 });
+            if (game.home_team) {
+              if (!teamRecords.has(game.home_team)) {
+                teamRecords.set(game.home_team, { wins: 0, losses: 0, totalPoints: 0, games: 0 });
               }
-              const record = teamRecords.get(t.name)!;
+              const record = teamRecords.get(game.home_team)!;
               record.games++;
-              record.totalPoints += score;
-              if (score > oppScore) record.wins++;
-              else if (score < oppScore) record.losses++;
-            });
-          }
-        });
+              record.totalPoints += homeScore;
+              if (homeScore > awayScore) record.wins++;
+              else if (homeScore < awayScore) record.losses++;
+            }
+
+            if (game.away_team) {
+              if (!teamRecords.has(game.away_team)) {
+                teamRecords.set(game.away_team, { wins: 0, losses: 0, totalPoints: 0, games: 0 });
+              }
+              const record = teamRecords.get(game.away_team)!;
+              record.games++;
+              record.totalPoints += awayScore;
+              if (awayScore > homeScore) record.wins++;
+              else if (awayScore < homeScore) record.losses++;
+            }
+          });
+        }
+
+        if (teamRecords.size === 0) {
+          setError("No standings data available");
+          setLoading(false);
+          return;
+        }
 
         let rows: StandingRow[] = Array.from(teamRecords.entries())
           .map(([team, data]) => ({

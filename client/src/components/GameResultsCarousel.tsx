@@ -16,6 +16,7 @@ interface GameItem {
   current_clock?: string | null;
   age_group?: string;
   round?: string;
+  hasGamePage?: boolean;
 }
 
 interface GameClickData {
@@ -26,12 +27,15 @@ interface GameClickData {
   gameDate: string;
   homeScore: number | null;
   awayScore: number | null;
+  hasGamePage?: boolean;
 }
 
 interface GameResultsCarouselProps {
   leagueId: string;
   slug?: string;
   onGameClick: (data: GameClickData) => void;
+  childLeagueIds?: string[];
+  childLeagueMap?: Map<string, string>;
 }
 
 type FilterTab = "results" | "live" | "upcoming";
@@ -45,15 +49,6 @@ function formatDateUK(dateStr: string): string {
   }).toUpperCase();
 }
 
-function formatTimeUK(dateStr: string): string {
-  const date = new Date(dateStr);
-  return date.toLocaleTimeString('en-GB', { 
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'Europe/London'
-  });
-}
-
 function formatRelativeDate(dateStr: string): string {
   const date = new Date(dateStr);
   const now = new Date();
@@ -61,18 +56,18 @@ function formatRelativeDate(dateStr: string): string {
   const diffDays = Math.floor(Math.abs(diffMs) / (1000 * 60 * 60 * 24));
 
   if (diffDays === 0) {
-    return `Today • ${formatTimeUK(dateStr)}`;
+    return 'Today';
   }
   if (diffDays === 1 && diffMs > 0) {
     return 'Yesterday';
   }
   if (diffDays === 1 && diffMs < 0) {
-    return `Tomorrow • ${formatTimeUK(dateStr)}`;
+    return 'Tomorrow';
   }
-  return `${formatDateUK(dateStr)} • ${formatTimeUK(dateStr)}`;
+  return formatDateUK(dateStr);
 }
 
-export default function GameResultsCarousel({ leagueId, slug, onGameClick }: GameResultsCarouselProps) {
+export default function GameResultsCarousel({ leagueId, slug, onGameClick, childLeagueIds, childLeagueMap }: GameResultsCarouselProps) {
   const [allGames, setAllGames] = useState<GameItem[]>([]);
   const [activeTab, setActiveTab] = useState<FilterTab>("results");
   const [hasSetDefaultTab, setHasSetDefaultTab] = useState(false);
@@ -81,6 +76,8 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick }: Gam
 
   const db = useMemo(() => getSupabaseForLeague(slug), [slug]);
   const effectiveLeagueId = useMemo(() => getDataLeagueId(slug, leagueId), [slug, leagueId]);
+  const isParent = childLeagueIds && childLeagueIds.length > 0;
+  const childIdsKey = childLeagueIds?.join(',') || '';
 
   const fetchGames = async (isPolling = false) => {
     if (!isPolling) setLoading(true);
@@ -88,10 +85,13 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick }: Gam
     try {
       const now = new Date();
       
-      const { data: gameResults, error: gameResultsError } = await db
+      let gameResultsQuery = db
         .from('v_game_results')
-        .select('*')
-        .eq('league_id', effectiveLeagueId);
+        .select('*');
+      gameResultsQuery = isParent
+        ? gameResultsQuery.in('league_id', childLeagueIds)
+        : gameResultsQuery.eq('league_id', effectiveLeagueId);
+      const { data: gameResults, error: gameResultsError } = await gameResultsQuery;
 
       if (gameResultsError) {
         console.error("Error fetching v_game_results:", gameResultsError);
@@ -107,6 +107,10 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick }: Gam
           processedGameKeys.add(game.game_key);
           viewGameKeys.push(game.game_key);
 
+          const ageGroup = (isParent && childLeagueMap && game.league_id)
+            ? childLeagueMap.get(game.league_id) || game.age_group || undefined
+            : game.age_group || undefined;
+
           gamesWithStats.push({
             game_key: game.game_key,
             game_id: game.game_key,
@@ -116,8 +120,9 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick }: Gam
             home_score: game.home_score,
             away_score: game.away_score,
             status: 'FINAL',
-            age_group: game.age_group || undefined,
+            age_group: ageGroup,
             round: game.round || undefined,
+            hasGamePage: !!game.schedule_status || !!game.competition_name,
           });
         });
 
@@ -127,10 +132,13 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick }: Gam
       const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       const sevenDaysAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
-      const { data: scheduleData, error: scheduleError } = await db
+      let scheduleQuery = db
         .from("game_schedule")
-        .select("game_key, matchtime, hometeam, awayteam, status")
-        .eq("league_id", effectiveLeagueId)
+        .select("game_key, matchtime, hometeam, awayteam, status, league_id");
+      scheduleQuery = isParent
+        ? scheduleQuery.in("league_id", childLeagueIds)
+        : scheduleQuery.eq("league_id", effectiveLeagueId);
+      const { data: scheduleData, error: scheduleError } = await scheduleQuery
         .gte("matchtime", sevenDaysAgo.toISOString())
         .lte("matchtime", sevenDaysAhead.toISOString())
         .order("matchtime", { ascending: true });
@@ -158,6 +166,10 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick }: Gam
           
           if (isFinal) return;
           
+          const schedAgeGroup = (isParent && childLeagueMap && game.league_id)
+            ? childLeagueMap.get(game.league_id) || undefined
+            : undefined;
+
           const gameItem: GameItem = {
             game_key: game.game_key,
             game_id: game.game_key,
@@ -166,7 +178,9 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick }: Gam
             away_team: game.awayteam,
             home_score: null,
             away_score: null,
-            status: isLive ? 'LIVE' : 'SCHEDULED'
+            status: isLive ? 'LIVE' : 'SCHEDULED',
+            age_group: schedAgeGroup,
+            hasGamePage: true
           };
 
           if (isLive) {
@@ -257,7 +271,7 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick }: Gam
     if (effectiveLeagueId) {
       fetchGames();
     }
-  }, [effectiveLeagueId]);
+  }, [effectiveLeagueId, childIdsKey]);
 
   useEffect(() => {
     if (!effectiveLeagueId) return;
@@ -265,7 +279,7 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick }: Gam
       fetchGames(true);
     }, 15000);
     return () => clearInterval(interval);
-  }, [effectiveLeagueId]);
+  }, [effectiveLeagueId, childIdsKey]);
 
   const filteredGames = useMemo(() => {
     const games = allGames.filter(g => {
@@ -418,7 +432,8 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick }: Gam
                     awayTeam: game.away_team,
                     gameDate: game.game_date,
                     homeScore: game.home_score,
-                    awayScore: game.away_score
+                    awayScore: game.away_score,
+                    hasGamePage: game.hasGamePage
                   })}
                 >
                   <div className="flex justify-between items-center mb-2">
