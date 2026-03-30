@@ -132,15 +132,20 @@ export default function LeagueAdmin() {
       return;
     }
     
-    
     try {
-      // Get all team data from team_stats table (which has proper team names)
+      const { data: childCompetitions } = await supabase
+        .from('leagues')
+        .select('league_id')
+        .eq('parent_league_id', league.league_id);
+
+      const childIds = (childCompetitions || []).map((c: any) => c.league_id);
+      const queryLeagueIds = childIds.length > 0 ? [league.league_id, ...childIds] : [league.league_id];
+
       const result = await supabase
         .from('team_stats')
         .select('name')
-        .eq('league_id', league.league_id);
+        .in('league_id', queryLeagueIds);
         
-      
       if (result.error) {
         console.error("Error in team query:", result.error);
         setTeams([]);
@@ -148,13 +153,10 @@ export default function LeagueAdmin() {
       }
       
       if (!result.data || result.data.length === 0) {
-        
-        // Fallback to game_schedule table
         const scheduleResult = await supabase
           .from('game_schedule')
           .select('hometeam, awayteam')
-          .eq('league_id', league.league_id);
-        
+          .in('league_id', queryLeagueIds);
         
         if (scheduleResult.error) {
           console.error("Error in schedule query:", scheduleResult.error);
@@ -167,7 +169,6 @@ export default function LeagueAdmin() {
           return;
         }
         
-        // Extract unique team names from home and away teams
         const teamNames = new Set<string>();
         scheduleResult.data.forEach((game: any) => {
           if (game.hometeam) teamNames.add(game.hometeam);
@@ -179,7 +180,6 @@ export default function LeagueAdmin() {
         return;
       }
       
-      // Get unique team names from the data
       const uniqueTeams = Array.from(new Set(
         result.data
           .map((stat: any) => stat.name)
@@ -198,29 +198,33 @@ export default function LeagueAdmin() {
       return;
     }
     
-    
     try {
-      // For now, we'll store logos in a simple format
-      // Team logos will be stored as files in Supabase storage with predictable names
+      const { data: childCompetitions } = await supabase
+        .from('leagues')
+        .select('league_id')
+        .eq('parent_league_id', league.league_id);
+
+      const childIds = (childCompetitions || []).map((c: any) => c.league_id);
+      const logoQueryIds = childIds.length > 0 ? [league.league_id, ...childIds] : [league.league_id];
+
       const logoMap: Record<string, string> = {};
       
-      // Check for existing logo files for each team
       for (const teamName of teams) {
         try {
-          const fileName = `${league.league_id}_${teamName.replace(/\s+/g, '_')}.png`;
-          
-          const { data } = supabase.storage
-            .from('team-logos')
-            .getPublicUrl(fileName);
-          
-          // Check if file exists by trying to fetch it
-          const response = await fetch(data.publicUrl, { method: 'HEAD' });
-          if (response.ok) {
-            logoMap[teamName] = data.publicUrl;
-          } else {
+          for (const lid of logoQueryIds) {
+            const fileName = `${lid}_${teamName.replace(/\s+/g, '_')}.png`;
+            
+            const { data } = supabase.storage
+              .from('team-logos')
+              .getPublicUrl(fileName);
+            
+            const response = await fetch(data.publicUrl, { method: 'HEAD' });
+            if (response.ok) {
+              logoMap[teamName] = data.publicUrl;
+              break;
+            }
           }
         } catch (error) {
-          // File doesn't exist, that's okay
         }
       }
       
@@ -291,34 +295,30 @@ export default function LeagueAdmin() {
 
     setUploadingLogo(teamName);
     try {
-      // Upload to Supabase storage with predictable filename
       const fileExt = file.name.split('.').pop();
       const fileName = `${league.league_id}_${teamName.replace(/\s+/g, '_')}.${fileExt}`;
-      
-      
-      // Upload directly to Supabase storage
-      const { data, error } = await supabase.storage
-        .from('team-logos')
-        .upload(fileName, file, {
-          upsert: true // This will overwrite existing files
-        });
 
-      if (error) {
-        console.error("Upload error:", error);
-        throw error;
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('fileName', fileName);
+      formData.append('leagueId', league.league_id);
+      formData.append('teamName', teamName);
+
+      const response = await fetch('/api/team-logos/upload-direct', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.error || 'Upload failed');
       }
 
+      const result = await response.json();
 
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('team-logos')
-        .getPublicUrl(fileName);
-
-
-      // Update local state
       setTeamLogos(prev => ({
         ...prev,
-        [teamName]: publicUrl
+        [teamName]: result.publicUrl
       }));
       
       alert('Team logo uploaded successfully!');
@@ -578,6 +578,7 @@ export default function LeagueAdmin() {
                       <TeamLogo 
                         teamName={teamName} 
                         leagueId={league.league_id} 
+                        logoUrl={teamLogos[teamName]}
                         size="lg" 
                         className="mx-auto mb-2" 
                       />

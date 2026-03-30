@@ -10,7 +10,6 @@ import { GameSummaryRow } from "./GameSummaryRow";
 import GameResultsCarousel from "@/components/GameResultsCarousel";
 import GameDetailModal from "@/components/GameDetailModal";
 import GamePreviewModal from "@/components/GamePreviewModal";
-import { generateGameSlug } from "@/lib/gameSlug";
 
 import LeagueChatbot from "@/components/LeagueChatbot";
 import { TeamLogo } from "@/components/TeamLogo";
@@ -1769,9 +1768,8 @@ export default function LeaguePage() {
       awayScore: number | null;
       hasGamePage?: boolean;
     }) => {
-      if (data.hasGamePage && data.homeTeam && data.awayTeam && data.gameDate) {
-        const gameSlug = generateGameSlug(data.homeTeam, data.awayTeam, data.gameDate);
-        navigate(`/game/${gameSlug}`);
+      if (data.hasGamePage) {
+        navigate(`/game/${encodeURIComponent(data.gameKey)}`);
       } else {
         setSelectedGameId(data.gameKey);
         setIsGameModalOpen(true);
