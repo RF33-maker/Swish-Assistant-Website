@@ -547,6 +547,8 @@ export default function LeaguePage() {
   const [parentLeague, setParentLeague] = useState<Pick<League, 'league_id' | 'name' | 'slug' | 'logo_url'> | null>(null); // Parent league for breadcrumb
   const [isDividerVisible, setIsDividerVisible] = useState(false); // Track if orange divider is in view
   const dividerRef = useRef<HTMLDivElement>(null); // Ref for the orange divider
+  const [selectedAgeGroup, setSelectedAgeGroup] = useState<string>('all');
+  const [parentStandingsGroups, setParentStandingsGroups] = useState<{ageGroup: string, standings: any[]}[]>([]);
 
   const { colors: leagueBrandColors } = useLeagueBranding({
     slug,
@@ -571,6 +573,21 @@ export default function LeaguePage() {
   const brandBg50 = leagueBrandColors
     ? `rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.05)`
     : 'rgba(249, 115, 22, 0.05)';
+
+  const isParentLeague = childCompetitions.length > 0;
+
+  const childLeagueMap = useMemo(() => {
+    const map = new Map<string, string>();
+    childCompetitions.forEach(c => {
+      const label = league?.name ? c.name.replace(league.name, '').trim() || c.name : c.name;
+      map.set(c.league_id, label);
+    });
+    return map;
+  }, [childCompetitions, league?.name]);
+
+  const ageGroupLabels = useMemo(() => {
+    return Array.from(childLeagueMap.values()).sort();
+  }, [childLeagueMap]);
 
   const [brandFadedIn, setBrandFadedIn] = useState(false);
   useEffect(() => {
@@ -633,11 +650,14 @@ export default function LeaguePage() {
       };
     }, [league?.description]); // Re-run when description changes
 
-    // Sort team stats based on selected column and direction (derived view, doesn't mutate original data)
     const sortedTeamStats = useMemo(() => {
       if (teamStatsData.length === 0) return [];
       
-      return [...teamStatsData].sort((a, b) => {
+      const filtered = isParentLeague && filterAgeGroup !== 'all'
+        ? teamStatsData.filter((t: any) => t.age_group === filterAgeGroup)
+        : teamStatsData;
+      
+      return [...filtered].sort((a, b) => {
         let valueA: number, valueB: number;
         
         switch (teamStatsSortColumn) {
@@ -921,7 +941,7 @@ export default function LeaguePage() {
         
         return teamStatsSortDirection === 'desc' ? valueB - valueA : valueA - valueB;
       });
-    }, [teamStatsData, teamStatsSortColumn, teamStatsSortDirection, teamStatsMode]);
+    }, [teamStatsData, teamStatsSortColumn, teamStatsSortDirection, teamStatsMode, isParentLeague, filterAgeGroup]);
 
     // Get active columns based on selected category
     const activeTeamStatColumns = useMemo(() => {
@@ -1117,10 +1137,15 @@ export default function LeaguePage() {
       setIsLoadingTeamStats(true);
       try {
         const fetchLeagueId = getDataLeagueId(slug, league.league_id);
-        const { data: rawTeamStats, error } = await db
-          .from("team_stats")
-          .select("*")
-          .eq("league_id", fetchLeagueId);
+        const parentChildIdsForTeamStats = childCompetitions.map(c => c.league_id);
+        const isParentTeamStatsFetch = parentChildIdsForTeamStats.length > 0;
+        let teamStatsQuery = db.from("team_stats").select("*");
+        if (isParentTeamStatsFetch) {
+          teamStatsQuery = teamStatsQuery.in("league_id", parentChildIdsForTeamStats);
+        } else {
+          teamStatsQuery = teamStatsQuery.eq("league_id", fetchLeagueId);
+        }
+        const { data: rawTeamStats, error } = await teamStatsQuery;
 
         if (error) {
           console.error("Error fetching team stats:", error);
@@ -1134,18 +1159,28 @@ export default function LeaguePage() {
           return;
         }
 
-        // Aggregate stats by team
+        const parentChildNameMapForTeamStats = new Map<string, string>();
+        if (isParentTeamStatsFetch) {
+          childCompetitions.forEach(c => {
+            const label = league?.name ? c.name.replace(league.name, '').trim() || c.name : c.name;
+            parentChildNameMapForTeamStats.set(c.league_id, label);
+          });
+        }
+
         const teamMap = new Map<string, any>();
 
         rawTeamStats.forEach(stat => {
-          if (!stat.name) return; // Skip records without team name
+          if (!stat.name) return;
 
-          // Normalize team name to handle variations (including MK Breakers → Milton Keynes Breakers, Essex Rebels (M) → Essex Rebels)
           const normalizedName = normalizeAndMapTeamName(stat.name);
+          const ageGroup = isParentTeamStatsFetch ? (parentChildNameMapForTeamStats.get(stat.league_id) || '') : '';
 
-          if (!teamMap.has(normalizedName)) {
-            teamMap.set(normalizedName, {
+          const mapKey = isParentTeamStatsFetch ? `${normalizedName}__${ageGroup}` : normalizedName;
+
+          if (!teamMap.has(mapKey)) {
+            teamMap.set(mapKey, {
               teamName: normalizedName,
+              age_group: ageGroup,
               gamesPlayed: 0,
               totalMinutes: 0,
               totalPoints: 0,
@@ -1216,7 +1251,7 @@ export default function LeaguePage() {
             });
           }
 
-          const team = teamMap.get(normalizedName)!;
+          const team = teamMap.get(mapKey)!;
           team.gamesPlayed += 1;
           // Parse and add minutes
           if (stat.sminutes) {
@@ -1384,8 +1419,12 @@ export default function LeaguePage() {
     };
 
     useEffect(() => {
+      setSelectedAgeGroup('all');
+      setFilterAgeGroup('all');
+      setFilterRound('all');
+      setParentStandingsGroups([]);
+      
       const fetchUserAndLeague = async () => {
-        // First get the current user
         const { data: { user } } = await supabase.auth.getUser();
         setCurrentUser(user);
         
@@ -1397,29 +1436,24 @@ export default function LeaguePage() {
           .single();
         
 
+        let fetchedChildCompetitions: any[] = [];
+        
         if (data) {
           setLeague(data);
-          // Now check ownership with the fetched user data
           const ownerStatus = user?.id === data.user_id || user?.id === data.created_by;
           setIsOwner(ownerStatus);
           
-          // Handle Instagram URLs - support both JSON array and legacy single URL
           if (data.instagram_embed_url) {
             try {
-              // Try to parse as JSON (could be array or single string)
               const parsed = JSON.parse(data.instagram_embed_url);
               if (Array.isArray(parsed)) {
-                // Multiple URLs stored as JSON array
                 setInstagramUrls(parsed.filter(url => url && url.trim()));
               } else if (typeof parsed === 'string') {
-                // Single URL that was JSON-stringified
                 setInstagramUrls([parsed.trim()]);
               } else {
-                // Unexpected format, fall back to raw value
                 setInstagramUrls([data.instagram_embed_url]);
               }
             } catch {
-              // Legacy single URL (not JSON) - convert to array
               setInstagramUrls([data.instagram_embed_url]);
             }
           } else {
@@ -1428,7 +1462,6 @@ export default function LeaguePage() {
           
           setYoutubeUrl(data.youtube_embed_url || "");
           
-          // Fetch child competitions if this is a parent league
           const { data: competitions, error: competitionsError } = await supabase
             .from("leagues")
             .select("league_id, name, slug, logo_url")
@@ -1437,6 +1470,7 @@ export default function LeaguePage() {
           
           if (competitions && !competitionsError) {
             setChildCompetitions(competitions);
+            fetchedChildCompetitions = competitions;
           } else if (competitionsError) {
             console.error("Failed to fetch child competitions:", competitionsError);
           }
@@ -1467,47 +1501,46 @@ export default function LeaguePage() {
           setIsLoadingLeaders(true);
           setIsLoadingStandings(true);
           const effectiveLeagueId = getDataLeagueId(slug, data.league_id);
+          const childIds = fetchedChildCompetitions.map((c: any) => c.league_id);
+          const isParent = childIds.length > 0;
+          const queryLeagueIds = isParent ? childIds : [effectiveLeagueId];
+          
+          const childNameMap = new Map<string, string>();
+          if (isParent) {
+            fetchedChildCompetitions.forEach((c: any) => {
+              const label = data.name ? c.name.replace(data.name, '').trim() || c.name : c.name;
+              childNameMap.set(c.league_id, label);
+            });
+          }
+
+          const applyLeagueFilter = (query: any) => {
+            return isParent ? query.in("league_id", queryLeagueIds) : query.eq("league_id", effectiveLeagueId);
+          };
           
           const fetchTopStats = async () => {
-            const { data: scorerRows } = await db
-              .from("player_stats")
-              .select("firstname, familyname, spoints")
-              .eq("league_id", effectiveLeagueId)
-              .order("spoints", { ascending: false })
-              .limit(1);
+            const { data: scorerRows } = await applyLeagueFilter(
+              db.from("player_stats").select("firstname, familyname, spoints")
+            ).order("spoints", { ascending: false }).limit(1);
             const scorerData = scorerRows?.[0] || null;
-            
 
-            const { data: reboundRows } = await db
-              .from("player_stats")
-              .select("firstname, familyname, sreboundstotal")
-              .eq("league_id", effectiveLeagueId)
-              .order("sreboundstotal", { ascending: false })
-              .limit(1);
+            const { data: reboundRows } = await applyLeagueFilter(
+              db.from("player_stats").select("firstname, familyname, sreboundstotal")
+            ).order("sreboundstotal", { ascending: false }).limit(1);
             const reboundData = reboundRows?.[0] || null;
 
-            const { data: assistRows } = await db
-              .from("player_stats")
-              .select("firstname, familyname, sassists")
-              .eq("league_id", effectiveLeagueId)
-              .order("sassists", { ascending: false })
-              .limit(1);
+            const { data: assistRows } = await applyLeagueFilter(
+              db.from("player_stats").select("firstname, familyname, sassists")
+            ).order("sassists", { ascending: false }).limit(1);
             const assistData = assistRows?.[0] || null;
 
-            const { data: recentGames } = await db
-              .from("player_stats")
-              .select("firstname, familyname, created_at, spoints, sassists, sreboundstotal")
-              .eq("league_id", effectiveLeagueId)
-              .order("created_at", { ascending: false })
-              .limit(5);
+            const { data: recentGames } = await applyLeagueFilter(
+              db.from("player_stats").select("firstname, familyname, created_at, spoints, sassists, sreboundstotal")
+            ).order("created_at", { ascending: false }).limit(5);
 
-            const { data: allPlayerStats, error: allStatsError } = await db
-              .from("player_stats")
-              .select("*")
-              .eq("league_id", effectiveLeagueId);
-            
+            const { data: allPlayerStats, error: allStatsError } = await applyLeagueFilter(
+              db.from("player_stats").select("*")
+            );
 
-            // Process the data to combine names and handle missing fields
             const processPlayerData = (player: any) => {
               if (!player) return null;
               return {
@@ -1515,7 +1548,7 @@ export default function LeaguePage() {
                 name: player.firstname && player.familyname ? 
                   `${player.firstname} ${player.familyname}` : 
                   player.firstname || player.familyname || 'Unknown Player',
-                team: 'Team Not Available' // Since team data is missing
+                team: 'Team Not Available'
               };
             };
             
@@ -1523,19 +1556,15 @@ export default function LeaguePage() {
             setTopRebounder(processPlayerData(reboundData));
             setTopAssists(processPlayerData(assistData));
             
-            // Process recent games (using recent stat entries instead since we don't have game data)
             const processedRecentGames = recentGames?.map(processPlayerData) || [];
             setGameSummaries(processedRecentGames);
             setPlayerStats(allPlayerStats || []);
             
-            // Fetch game results FIRST (before standings which depend on teams lookup)
-            const { data: gameResults, error: gameResultsError } = await db
-              .from('v_game_results')
-              .select('*')
-              .eq('league_id', effectiveLeagueId);
+            const { data: gameResults, error: gameResultsError } = await applyLeagueFilter(
+              db.from('v_game_results').select('*')
+            );
 
             if (gameResults && !gameResultsError) {
-
               const games: GameSchedule[] = gameResults.map((game: any) => ({
                 game_id: game.game_key,
                 game_date: game.match_time,
@@ -1550,7 +1579,7 @@ export default function LeaguePage() {
                 team1_score: game.home_score,
                 team2_score: game.away_score,
                 status: game.game_status === 'Final' ? 'FINAL' : game.game_status,
-                age_group: game.age_group || undefined,
+                age_group: isParent && game.league_id ? (childNameMap.get(game.league_id) || game.age_group || undefined) : (game.age_group || undefined),
                 round: game.round || undefined,
                 numeric_id: game.game_key
               })).filter((game: GameSchedule) => game.team1 && game.team2);
@@ -1568,17 +1597,35 @@ export default function LeaguePage() {
               setSchedule([]);
             }
             
-            // Calculate standings (non-blocking)
-            try {
-              await calculateStandingsWithTeamStats(effectiveLeagueId, allPlayerStats || []);
-            } catch (standingsErr) {
-              console.error("Error in calculateStandingsWithTeamStats:", standingsErr);
-            }
-            
-            try {
-              await calculatePoolStandings(effectiveLeagueId);
-            } catch (poolErr) {
-              console.error("Error in calculatePoolStandings:", poolErr);
+            if (isParent) {
+              try {
+                const groups: {ageGroup: string, standings: any[]}[] = [];
+                for (const child of fetchedChildCompetitions) {
+                  const ageGroup = childNameMap.get(child.league_id) || child.name;
+                  const childStandings = await calculateStandingsForLeague(child.league_id);
+                  if (childStandings.length > 0) {
+                    groups.push({ ageGroup, standings: childStandings });
+                  }
+                }
+                setParentStandingsGroups(groups);
+                const allStandings = groups.flatMap(g => g.standings.map((s: any) => ({ ...s, ageGroup: g.ageGroup })));
+                setFullLeagueStandings(allStandings);
+                setStandings(allStandings);
+              } catch (standingsErr) {
+                console.error("Error calculating parent league standings:", standingsErr);
+              }
+            } else {
+              try {
+                await calculateStandingsWithTeamStats(effectiveLeagueId, allPlayerStats || []);
+              } catch (standingsErr) {
+                console.error("Error in calculateStandingsWithTeamStats:", standingsErr);
+              }
+              
+              try {
+                await calculatePoolStandings(effectiveLeagueId);
+              } catch (poolErr) {
+                console.error("Error in calculatePoolStandings:", poolErr);
+              }
             }
             
             setIsLoadingLeaders(false);
@@ -1598,35 +1645,35 @@ export default function LeaguePage() {
 
     // Ref to track last fetched league_id for deduplication
     const lastFetchedLeagueRef = useRef<string | null>(null);
-    // Ref for cancellation across async operations
     const playerAveragesCancelledRef = useRef(false);
 
-    // Fetch player averages when league is available
     useEffect(() => {
       const leagueId = league?.league_id;
       
       if (!leagueId) return;
       
-      if (lastFetchedLeagueRef.current === leagueId) return;
+      const childIds = childCompetitions.map(c => c.league_id).sort().join(',');
+      const fetchKey = `${leagueId}:${childIds}`;
+      
+      if (lastFetchedLeagueRef.current === fetchKey) return;
       
       playerAveragesCancelledRef.current = false;
-      lastFetchedLeagueRef.current = leagueId;
+      lastFetchedLeagueRef.current = fetchKey;
       
-      debugLog("🔄 Player averages useEffect triggered, league_id:", leagueId);
+      debugLog("🔄 Player averages useEffect triggered, league_id:", leagueId, "childIds:", childIds);
       
       fetchAllPlayerAverages();
       
       return () => {
         playerAveragesCancelledRef.current = true;
       };
-    }, [league?.league_id]);
+    }, [league?.league_id, childCompetitions]);
 
-    // Fetch team stats when league is available
     useEffect(() => {
       if (league?.league_id) {
         fetchTeamStats();
       }
-    }, [league?.league_id]);
+    }, [league?.league_id, childCompetitions]);
 
     const handleSearch = () => {
       if (search.trim()) {
@@ -1997,7 +2044,16 @@ export default function LeaguePage() {
         // ========== STATS-FIRST APPROACH ==========
         // Step 1: Fetch ALL player_stats for the league (paginated to bypass 1000 row limit)
         const statsLeagueId = getDataLeagueId(slug, league.league_id);
-        debugLog("📊 Step 1: Fetching all player_stats for league_id:", statsLeagueId);
+        const parentChildIds = childCompetitions.map(c => c.league_id);
+        const isParentFetch = parentChildIds.length > 0;
+        const parentChildNameMap = new Map<string, string>();
+        if (isParentFetch) {
+          childCompetitions.forEach(c => {
+            const label = league?.name ? c.name.replace(league.name, '').trim() || c.name : c.name;
+            parentChildNameMap.set(c.league_id, label);
+          });
+        }
+        debugLog("📊 Step 1: Fetching all player_stats for league_id:", statsLeagueId, "isParent:", isParentFetch);
         
         let allPlayerStats: any[] = [];
         let page = 0;
@@ -2005,10 +2061,13 @@ export default function LeaguePage() {
         let hasMore = true;
         
         while (hasMore) {
-          const { data: pageData, error: pageError } = await db
-            .from("player_stats")
-            .select("*")
-            .eq("league_id", statsLeagueId)
+          let query = db.from("player_stats").select("*");
+          if (isParentFetch) {
+            query = query.in("league_id", parentChildIds);
+          } else {
+            query = query.eq("league_id", statsLeagueId);
+          }
+          const { data: pageData, error: pageError } = await query
             .range(page * pageSize, (page + 1) * pageSize - 1);
           
           if (pageError) {
@@ -2017,6 +2076,13 @@ export default function LeaguePage() {
           }
           
           if (pageData && pageData.length > 0) {
+            if (isParentFetch) {
+              pageData.forEach((stat: any) => {
+                if (stat.league_id && parentChildNameMap.has(stat.league_id)) {
+                  stat.age_group = parentChildNameMap.get(stat.league_id);
+                }
+              });
+            }
             allPlayerStats = [...allPlayerStats, ...pageData];
             debugLog("📊 Step 1: Fetched page", page, "with", pageData.length, "records, total:", allPlayerStats.length);
             hasMore = pageData.length === pageSize;
@@ -2432,6 +2498,125 @@ export default function LeaguePage() {
         if (!playerAveragesCancelledRef.current) {
           setIsLoadingStats(false);
         }
+      }
+    };
+
+    const calculateStandingsForLeague = async (leagueId: string): Promise<any[]> => {
+      try {
+        const teamStatsMap: { [team: string]: { wins: number, losses: number, pointsFor: number, pointsAgainst: number, games: number, originalName: string } } = {};
+
+        const { data: allTeams } = await supabase
+          .from("teams")
+          .select("team_id, name")
+          .eq("league_id", leagueId);
+
+        if (allTeams && allTeams.length > 0) {
+          allTeams.forEach(team => {
+            const normalizedName = normalizeAndMapTeamName(team.name);
+            teamStatsMap[normalizedName] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0, originalName: team.name };
+          });
+        }
+
+        const { data: teamStatsRecords, error: teamStatsError } = await db
+          .from("team_stats")
+          .select("*")
+          .eq("league_id", leagueId);
+
+        if (!teamStatsRecords || teamStatsRecords.length === 0 || teamStatsError) {
+          if (Object.keys(teamStatsMap).length === 0) return [];
+          return Object.entries(teamStatsMap).map(([team, stats], index) => ({
+            team, originalName: stats.originalName, wins: 0, losses: 0, winPct: 0,
+            pointsFor: 0, pointsAgainst: 0, pointsDiff: 0, games: 0, avgPoints: 0,
+            record: '0-0', rank: index + 1, movement: 'same'
+          }));
+        }
+
+        teamStatsRecords.forEach(stat => {
+          if (stat.name) {
+            const normalized = normalizeAndMapTeamName(stat.name);
+            if (!teamStatsMap[normalized]) {
+              teamStatsMap[normalized] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0, originalName: stat.name };
+            }
+          }
+        });
+
+        const gameMap = new Map<string, any[]>();
+        teamStatsRecords.forEach(stat => {
+          const numericId = stat.numeric_id;
+          if (numericId && stat.name) {
+            if (!gameMap.has(numericId)) gameMap.set(numericId, []);
+            gameMap.get(numericId)!.push(stat);
+          }
+        });
+
+        gameMap.forEach((gameTeams) => {
+          if (gameTeams.length === 2) {
+            const [team1, team2] = gameTeams;
+            const team1Name = normalizeAndMapTeamName(team1.name || '');
+            const team2Name = normalizeAndMapTeamName(team2.name || '');
+            const team1Score = team1.tot_spoints || 0;
+            const team2Score = team2.tot_spoints || 0;
+            
+            if (teamStatsMap[team1Name]) {
+              teamStatsMap[team1Name].pointsFor += team1Score;
+              teamStatsMap[team1Name].pointsAgainst += team2Score;
+              teamStatsMap[team1Name].games += 1;
+              if (team1Score > team2Score) teamStatsMap[team1Name].wins += 1;
+              else if (team1Score < team2Score) teamStatsMap[team1Name].losses += 1;
+            }
+            if (teamStatsMap[team2Name]) {
+              teamStatsMap[team2Name].pointsFor += team2Score;
+              teamStatsMap[team2Name].pointsAgainst += team1Score;
+              teamStatsMap[team2Name].games += 1;
+              if (team2Score > team1Score) teamStatsMap[team2Name].wins += 1;
+              else if (team2Score < team1Score) teamStatsMap[team2Name].losses += 1;
+            }
+          }
+        });
+
+        const standingsArray = Object.entries(teamStatsMap).map(([team, stats]) => ({
+          team,
+          originalName: stats.originalName,
+          wins: stats.wins,
+          losses: stats.losses,
+          winPct: stats.games > 0 ? Math.round((stats.wins / stats.games) * 1000) / 1000 : 0,
+          pointsFor: stats.pointsFor,
+          pointsAgainst: stats.pointsAgainst,
+          pointsDiff: stats.pointsFor - stats.pointsAgainst,
+          games: stats.games,
+          avgPoints: stats.games > 0 ? Math.round((stats.pointsFor / stats.games) * 10) / 10 : 0,
+          record: `${stats.wins}-${stats.losses}`
+        }));
+
+        const mergedStandings = new Map<string, typeof standingsArray[0]>();
+        standingsArray.forEach(team => {
+          const teamKey = normalizeAndMapTeamName(team.team);
+          if (!mergedStandings.has(teamKey)) {
+            mergedStandings.set(teamKey, { ...team, team: teamKey });
+          } else {
+            const existing = mergedStandings.get(teamKey)!;
+            existing.wins += team.wins;
+            existing.losses += team.losses;
+            existing.games += team.games;
+            existing.pointsFor += team.pointsFor;
+            existing.pointsAgainst += team.pointsAgainst;
+            existing.pointsDiff = existing.pointsFor - existing.pointsAgainst;
+            existing.winPct = existing.games > 0 ? Math.round((existing.wins / existing.games) * 1000) / 1000 : 0;
+            existing.avgPoints = existing.games > 0 ? Math.round((existing.pointsFor / existing.games) * 10) / 10 : 0;
+            existing.record = `${existing.wins}-${existing.losses}`;
+          }
+        });
+
+        return Array.from(mergedStandings.values())
+          .sort((a, b) => {
+            if (b.winPct !== a.winPct) return b.winPct - a.winPct;
+            if (b.pointsDiff !== a.pointsDiff) return b.pointsDiff - a.pointsDiff;
+            return b.avgPoints - a.avgPoints;
+          })
+          .map((team, index) => ({ ...team, rank: index + 1, movement: 'same' }));
+      } catch (error) {
+        console.error("Error calculating standings for league:", leagueId, error);
+        return [];
       }
     };
 
@@ -3272,27 +3457,38 @@ export default function LeaguePage() {
               </a>
               </div>
 
-              {/* Competition Selector */}
-              {childCompetitions.length > 0 && (
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <Trophy className="w-4 h-4 text-slate-400 hidden md:block" />
-                  <select
-                    value={league?.slug || ''}
-                    onChange={(e) => navigate(`/league/${e.target.value}`)}
-                    className="px-3 py-1.5 text-xs md:text-sm font-medium text-slate-700 bg-white border border-gray-300 rounded-lg focus:outline-none transition-all cursor-pointer"
-                    onFocus={(e) => { e.currentTarget.style.borderColor = brandColor; }}
-                    onBlur={(e) => { e.currentTarget.style.borderColor = ''; }}
-                    data-testid="select-competition"
+              {/* Age Group Tab Bar for Parent Leagues */}
+              {isParentLeague && ageGroupLabels.length > 0 && (
+                <div className="flex items-center gap-1.5 flex-shrink-0 overflow-x-auto pb-1 md:pb-0" data-testid="age-group-tabs">
+                  <button
+                    onClick={() => { setSelectedAgeGroup('all'); setFilterAgeGroup('all'); }}
+                    className={`px-3 py-1.5 text-xs md:text-sm font-medium rounded-full whitespace-nowrap transition-all ${
+                      selectedAgeGroup === 'all'
+                        ? 'text-white shadow-sm'
+                        : 'text-slate-600 dark:text-slate-400 bg-gray-100 dark:bg-neutral-800 hover:bg-gray-200 dark:hover:bg-neutral-700'
+                    }`}
+                    style={selectedAgeGroup === 'all' ? { backgroundColor: brandColor } : {}}
                   >
-                    <option value={league?.slug}>{league?.name}</option>
-                    {childCompetitions.map((competition) => (
-                      <option key={competition.league_id} value={competition.slug}>
-                        {competition.name}
-                      </option>
-                    ))}
-                  </select>
+                    All
+                  </button>
+                  {ageGroupLabels.map((label) => (
+                    <button
+                      key={label}
+                      onClick={() => { setSelectedAgeGroup(label); setFilterAgeGroup(label); }}
+                      className={`px-3 py-1.5 text-xs md:text-sm font-medium rounded-full whitespace-nowrap transition-all ${
+                        selectedAgeGroup === label
+                          ? 'text-white shadow-sm'
+                          : 'text-slate-600 dark:text-slate-400 bg-gray-100 dark:bg-neutral-800 hover:bg-gray-200 dark:hover:bg-neutral-700'
+                      }`}
+                      style={selectedAgeGroup === label ? { backgroundColor: brandColor } : {}}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
               )}
+
+              
             </div>
           </div>
         </div>
@@ -3339,7 +3535,8 @@ export default function LeaguePage() {
                 
                 {viewMode === 'standings' && (
                   <>
-                    {/* Pool Tabs */}
+                    {/* Pool Tabs - hidden for parent leagues */}
+                    {!isParentLeague && (
                     <div className="flex flex-wrap gap-2 mb-4 md:mb-6 border-b border-gray-200 dark:border-neutral-700">
                   {hasPools && (
                     <>
@@ -3385,7 +3582,94 @@ export default function LeaguePage() {
                     {hasPools ? 'Full League' : 'League Standings'}
                   </button>
                 </div>
+                    )}
 
+                {/* Parent League Standings - grouped by age group */}
+                {isParentLeague && (
+                  <>
+                    {isLoadingStandings ? (
+                      <div className="text-center py-8">
+                        <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                        <p className="text-gray-600 dark:text-gray-400 mt-4">Loading standings...</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-6">
+                        {(selectedAgeGroup === 'all' ? parentStandingsGroups : parentStandingsGroups.filter(g => g.ageGroup === selectedAgeGroup)).map((group) => (
+                          <div key={group.ageGroup}>
+                            {selectedAgeGroup === 'all' && (
+                              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: brandColor }}></span>
+                                {group.ageGroup}
+                              </h3>
+                            )}
+                            <div className="overflow-x-auto -mx-4 md:mx-0 mb-4">
+                              <table className="w-full text-sm min-w-[600px]">
+                                <thead>
+                                  <tr className="border-b-2 border-gray-200 dark:border-neutral-700">
+                                    <th className="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-16 sticky left-0 bg-white dark:bg-neutral-900 z-10">Logo</th>
+                                    <th className="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 min-w-[140px]">Team</th>
+                                    <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-16">W</th>
+                                    <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-16">L</th>
+                                    <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">Win%</th>
+                                    <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">PF</th>
+                                    <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">PA</th>
+                                    <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">Diff</th>
+                                    <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-12"></th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {group.standings.map((team: any, index: number) => (
+                                    <tr 
+                                      key={`${team.team}-${index}`}
+                                      className="border-b border-gray-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors group"
+                                    >
+                                      <td className="py-3 px-3 sticky left-0 bg-white dark:bg-neutral-900 group-hover:bg-orange-50 dark:group-hover:bg-neutral-800 z-10 transition-colors">
+                                        <div className="flex items-center gap-2">
+                                          <span className="font-medium text-slate-600 dark:text-slate-400 text-xs">{team.rank}</span>
+                                          <TeamLogo 
+                                            teamName={team.originalName || team.team} 
+                                            leagueId={league?.league_id} 
+                                            size="sm" 
+                                          />
+                                        </div>
+                                      </td>
+                                      <td className="py-3 px-3 font-medium text-slate-800 dark:text-slate-200">
+                                        <span className="truncate">{team.team}</span>
+                                      </td>
+                                      <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.wins}</td>
+                                      <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.losses}</td>
+                                      <td className="py-3 px-3 text-center font-medium text-slate-600 dark:text-slate-400">{(team.winPct * 100).toFixed(1)}%</td>
+                                      <td className="py-3 px-3 text-right font-medium text-slate-700 dark:text-slate-300">{team.pointsFor}</td>
+                                      <td className="py-3 px-3 text-right font-medium text-slate-700 dark:text-slate-300">{team.pointsAgainst}</td>
+                                      <td className={`py-3 px-3 text-right font-semibold ${team.pointsDiff > 0 ? 'text-green-600 dark:text-green-400' : team.pointsDiff < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-400'}`}>
+                                        {team.pointsDiff > 0 ? `+${team.pointsDiff}` : team.pointsDiff}
+                                      </td>
+                                      <td className="py-3 px-3 text-center">
+                                        {team.movement === 'up' && <span className="text-green-600 font-bold text-sm">▲</span>}
+                                        {team.movement === 'down' && <span className="text-red-600 font-bold text-sm">▼</span>}
+                                        {team.movement === 'same' && <span className="text-gray-400 text-sm">▬</span>}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                              {group.standings.length === 0 && (
+                                <div className="text-center py-4 text-gray-500 text-sm">No standings data available</div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                        {parentStandingsGroups.length === 0 && (
+                          <div className="text-center py-8 text-gray-500">No standings data available</div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Non-parent League Standings */}
+                {!isParentLeague && (
+                <>
                 {isLoadingStandings ? (
                   <div className="text-center py-8">
                     <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
@@ -3462,6 +3746,8 @@ export default function LeaguePage() {
                   </div>
                 )}
                 </>
+                )}
+                  </>
               )}
                 
               {/* Bracket View - Only for BCB Trophy */}
@@ -3511,7 +3797,7 @@ export default function LeaguePage() {
                   </div>
                 </div>
 
-                {(availableAgeGroups.length > 0 || availableRounds.length > 0) && (
+                {!isParentLeague && (availableAgeGroups.length > 0 || availableRounds.length > 0) && (
                   <div className="flex flex-wrap gap-2 mb-4">
                     {availableAgeGroups.length > 0 && (
                       <select
@@ -4114,8 +4400,8 @@ export default function LeaguePage() {
                   </button>
                 </div>
 
-                {/* Age Group & Round Filters */}
-                {(() => {
+                {/* Age Group & Round Filters - hidden for parent leagues since tab bar handles it */}
+                {!isParentLeague && (() => {
                   const ageGroups = [...new Set(schedule.map(g => g.age_group).filter(Boolean))] as string[];
                   const rounds = [...new Set(schedule.map(g => g.round).filter(Boolean))] as string[];
                   if (ageGroups.length === 0 && rounds.length === 0) return null;
@@ -4385,7 +4671,7 @@ export default function LeaguePage() {
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-4 md:mb-6">
                 <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">League Leaders</h2>
                 <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-                  {(availableAgeGroups.length > 0 || availableRounds.length > 0) && (
+                  {!isParentLeague && (availableAgeGroups.length > 0 || availableRounds.length > 0) && (
                     <div className="flex gap-1.5">
                       {availableAgeGroups.length > 0 && (
                         <select
@@ -4505,7 +4791,11 @@ export default function LeaguePage() {
                       View All Team Stats →
                     </button>
                   </div>
-                  {isLoadingTeamStats || teamStatsData.length === 0 ? (
+                  {(() => {
+                    const filteredTeamStats = isParentLeague && filterAgeGroup !== 'all'
+                      ? teamStatsData.filter((t: any) => t.age_group === filterAgeGroup)
+                      : teamStatsData;
+                    return isLoadingTeamStats || filteredTeamStats.length === 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
                       {Array.from({ length: 3 }).map((_, i) => (
                         <LeaderCardSkeleton key={`team-leader-skeleton-${i}`} />
@@ -4517,11 +4807,11 @@ export default function LeaguePage() {
                       <div className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4 shadow-inner">
                         <h3 className="text-xs md:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 md:mb-3 text-center">Top Scoring</h3>
                         <ul className="space-y-1 text-xs md:text-sm text-slate-800 dark:text-white">
-                          {teamStatsData
+                          {filteredTeamStats
                             .slice()
-                            .sort((a, b) => parseFloat(b.ppg || '0') - parseFloat(a.ppg || '0'))
+                            .sort((a: any, b: any) => parseFloat(b.ppg || '0') - parseFloat(a.ppg || '0'))
                             .slice(0, 5)
-                            .map((team, i) => (
+                            .map((team: any, i: number) => (
                               <li key={`scoring-${team.teamName}-${i}`} className="flex justify-between items-center gap-2">
                                 <div className="flex items-center gap-1.5 truncate flex-1 min-w-0">
                                   <TeamLogo teamName={team.teamName} leagueId={league?.league_id} size="xs" />
@@ -4539,11 +4829,11 @@ export default function LeaguePage() {
                       <div className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4 shadow-inner">
                         <h3 className="text-xs md:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 md:mb-3 text-center">Top Rebounding</h3>
                         <ul className="space-y-1 text-xs md:text-sm text-slate-800 dark:text-white">
-                          {teamStatsData
+                          {filteredTeamStats
                             .slice()
-                            .sort((a, b) => parseFloat(b.rpg || '0') - parseFloat(a.rpg || '0'))
+                            .sort((a: any, b: any) => parseFloat(b.rpg || '0') - parseFloat(a.rpg || '0'))
                             .slice(0, 5)
-                            .map((team, i) => (
+                            .map((team: any, i: number) => (
                               <li key={`rebounding-${team.teamName}-${i}`} className="flex justify-between items-center gap-2">
                                 <div className="flex items-center gap-1.5 truncate flex-1 min-w-0">
                                   <TeamLogo teamName={team.teamName} leagueId={league?.league_id} size="xs" />
@@ -4561,11 +4851,11 @@ export default function LeaguePage() {
                       <div className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4 shadow-inner">
                         <h3 className="text-xs md:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 md:mb-3 text-center">Top Playmaking</h3>
                         <ul className="space-y-1 text-xs md:text-sm text-slate-800 dark:text-white">
-                          {teamStatsData
+                          {filteredTeamStats
                             .slice()
-                            .sort((a, b) => parseFloat(b.apg || '0') - parseFloat(a.apg || '0'))
+                            .sort((a: any, b: any) => parseFloat(b.apg || '0') - parseFloat(a.apg || '0'))
                             .slice(0, 5)
-                            .map((team, i) => (
+                            .map((team: any, i: number) => (
                               <li key={`assists-${team.teamName}-${i}`} className="flex justify-between items-center gap-2">
                                 <div className="flex items-center gap-1.5 truncate flex-1 min-w-0">
                                   <TeamLogo teamName={team.teamName} leagueId={league?.league_id} size="xs" />
@@ -4579,7 +4869,8 @@ export default function LeaguePage() {
                         </ul>
                       </div>
                     </div>
-                  )}
+                  )
+                  })()}
                 </div>
 
             {/* Tournament Bracket - Only for BCB Trophy */}
@@ -4617,7 +4908,11 @@ export default function LeaguePage() {
                     </tbody>
                   </table>
                 </div>
-              ) : standings.length > 0 ? (
+              ) : (() => {
+                const overviewStandings = isParentLeague && filterAgeGroup !== 'all'
+                  ? standings.filter((s: any) => s.ageGroup === filterAgeGroup)
+                  : standings;
+                return overviewStandings.length > 0 ? (
                 <div className="overflow-x-auto -mx-4 md:mx-0">
                   <table className="w-full text-sm min-w-[600px]">
                     <thead>
@@ -4633,7 +4928,7 @@ export default function LeaguePage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {standings.map((team, index) => {
+                      {overviewStandings.map((team: any, index: number) => {
                         const rowBg = index < 3 
                           ? 'bg-green-50 dark:bg-green-900/20' 
                           : index >= standings.length - 2 
@@ -4682,7 +4977,8 @@ export default function LeaguePage() {
                   <p className="text-sm">No standings available</p>
                   <p className="text-xs mt-1">Standings will appear once games are played</p>
                 </div>
-              )}
+              )
+              })()}
             </div>
               </>
             )}

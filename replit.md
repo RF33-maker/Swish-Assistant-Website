@@ -31,6 +31,7 @@ The application features a React frontend and integrates with external backend s
     -   **Player Profiles**: Individual player pages (`/player/[slug]`) showing season averages and game-by-game stats with AI analysis. Includes fuzzy matching to consolidate duplicate player records across competitions.
     -   **Game Results**: Redesigned section with horizontal scrolling ticker and detailed game view modals showing team-filtered box scores.
     -   **Statistical Leaderboards**: Displays top players across multiple statistical categories (`/league-leaders/[slug]`).
+    -   **Parent League Aggregation**: Parent leagues (e.g., REBA SL) that have child age-group sub-leagues automatically aggregate data from all children. A pill-style age group tab bar allows filtering all sections (standings, player stats, schedule, top performers) by age group. Standings are displayed as independent tables per age group.
     -   **Player Statistics Table**: Comprehensive, sortable table with 25 columns, search filtering, and mobile-responsive design.
     -   **Team Statistics Table**: Comprehensive table with 27 columns including advanced metrics, and mobile-responsive design.
 
