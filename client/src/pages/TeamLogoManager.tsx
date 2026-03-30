@@ -57,14 +57,21 @@ export default function TeamLogoManager() {
         setLeague(leagueData);
         setIsOwner(currentUser?.id === leagueData.user_id);
 
-        // Fetch teams from multiple sources to ensure we get ALL teams
+        const { data: childCompetitions } = await supabase
+          .from("leagues")
+          .select("league_id")
+          .eq("parent_league_id", leagueData.league_id);
+
+        const childIds = (childCompetitions || []).map((c: any) => c.league_id);
+        const isParent = childIds.length > 0;
+        const queryLeagueIds = isParent ? [leagueData.league_id, ...childIds] : [leagueData.league_id];
+
         const allTeamNames = new Set<string>();
         
-        // 1. Get teams from teams table (source of truth)
         const { data: teamsData, error: teamsError } = await supabase
           .from("teams")
           .select("name")
-          .eq("league_id", leagueData.league_id);
+          .in("league_id", queryLeagueIds);
 
         if (teamsData && !teamsError) {
           teamsData.forEach(team => {
@@ -72,11 +79,10 @@ export default function TeamLogoManager() {
           });
         }
 
-        // 2. Get teams from team_stats (teams with live stats)
         const { data: teamStats, error: statsError } = await supabase
           .from("team_stats")
-          .select("*")  // Select all fields including tot_s* stats
-          .eq("league_id", leagueData.league_id);
+          .select("*")
+          .in("league_id", queryLeagueIds);
 
         if (teamStats && !statsError) {
           teamStats.forEach(stat => {
@@ -84,11 +90,10 @@ export default function TeamLogoManager() {
           });
         }
 
-        // 3. Get teams from game_schedule (all teams that played, even without live stats)
         const { data: scheduleData, error: scheduleError } = await supabase
           .from("game_schedule")
           .select("hometeam, awayteam")
-          .eq("league_id", leagueData.league_id);
+          .in("league_id", queryLeagueIds);
 
         if (scheduleData && !scheduleError) {
           scheduleData.forEach(game => {
@@ -98,18 +103,22 @@ export default function TeamLogoManager() {
         }
 
         const uniqueTeams = Array.from(allTeamNames).sort();
-        // Fetch existing team logos from the team_logos table (authoritative source)
-        const { data: storedLogos, error: logoError } = await supabase
-          .from("team_logos")
-          .select("team_name, logo_url")
-          .eq("league_id", leagueData.league_id);
+        const logoQueryIds = isParent ? [leagueData.league_id, ...childIds] : [leagueData.league_id];
 
         const logoMap: Record<string, string> = {};
-        
-        if (!logoError && storedLogos) {
-          storedLogos.forEach((logo: any) => {
-            logoMap[logo.team_name] = logo.logo_url;
-          });
+
+        try {
+          const { data: storedLogos, error: logoError } = await supabase
+            .from("team_logos")
+            .select("team_name, logo_url")
+            .in("league_id", logoQueryIds);
+
+          if (!logoError && storedLogos) {
+            storedLogos.forEach((logo: any) => {
+              logoMap[logo.team_name] = logo.logo_url;
+            });
+          }
+        } catch (e) {
         }
         
         // For teams not in the database, check storage directly with all extensions
@@ -123,21 +132,23 @@ export default function TeamLogoManager() {
           const baseFileName = teamName.replace(/\s+/g, '_');
           let foundLogo = false;
           
-          for (const ext of extensions) {
-            const fileName = `${leagueData.league_id}_${baseFileName}.${ext}`;
-            const { data } = supabase.storage
-              .from('team-logos')
-              .getPublicUrl(fileName);
-            
-            try {
-              const response = await fetch(data.publicUrl, { method: 'HEAD' });
-              if (response.ok) {
-                logoMap[teamName] = data.publicUrl;
-                foundLogo = true;
-                break;
+          for (const lid of logoQueryIds) {
+            if (foundLogo) break;
+            for (const ext of extensions) {
+              const fileName = `${lid}_${baseFileName}.${ext}`;
+              const { data } = supabase.storage
+                .from('team-logos')
+                .getPublicUrl(fileName);
+              
+              try {
+                const response = await fetch(data.publicUrl, { method: 'HEAD' });
+                if (response.ok) {
+                  logoMap[teamName] = data.publicUrl;
+                  foundLogo = true;
+                  break;
+                }
+              } catch (error) {
               }
-            } catch (error) {
-              // Continue to next extension
             }
           }
           
@@ -302,6 +313,7 @@ export default function TeamLogoManager() {
                     <TeamLogo 
                       teamName={team.name} 
                       leagueId={league.league_id}
+                      logoUrl={teamLogos[team.name]}
                       size="md"
                       className="border-2 border-white/30"
                     />
@@ -322,6 +334,7 @@ export default function TeamLogoManager() {
                     <TeamLogo 
                       teamName={team.name} 
                       leagueId={league.league_id}
+                      logoUrl={teamLogos[team.name]}
                       size="xl"
                       className="mx-auto"
                     />

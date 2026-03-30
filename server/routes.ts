@@ -142,14 +142,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const objectStorageService = new ObjectStorageService();
       const logoPath = objectStorageService.normalizeTeamLogoPath(logoUrl);
 
-      // Insert or update team logo in database
       const { data: logoData, error: logoError } = await supabase
         .from("team_logos")
         .upsert({
           league_id: leagueId,
           team_name: teamName,
           logo_url: logoPath,
-          uploaded_by: "system", // In real app, this would be the authenticated user ID
+          uploaded_by: "system",
           updated_at: new Date().toISOString(),
         }, {
           onConflict: 'league_id,team_name',
@@ -158,25 +157,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .single();
 
       if (logoError) {
-        console.error("Database error:", logoError);
-        return res.status(500).json({ error: "Failed to save team logo" });
+        const isTableMissing = logoError.code === '42P01';
+        if (!isTableMissing) {
+          console.error("Database error:", logoError);
+          return res.status(500).json({ error: "Failed to save team logo" });
+        }
+        console.warn("team_logos table does not exist, skipping DB persist");
       }
 
-      // Update the teams table with the logo_id
-      const { error: teamError } = await supabase
-        .from("teams")
-        .upsert({
-          league_id: leagueId,
-          name: teamName,
-          logo_id: logoData.id,
-          updated_at: new Date().toISOString(),
-        }, {
-          onConflict: 'league_id,name',
-        });
+      if (logoData) {
+        const { error: teamError } = await supabase
+          .from("teams")
+          .upsert({
+            league_id: leagueId,
+            name: teamName,
+            logo_id: logoData.id,
+            updated_at: new Date().toISOString(),
+          }, {
+            onConflict: 'league_id,name',
+          });
 
-      if (teamError) {
-        console.error("Error updating team with logo_id:", teamError);
-        // Don't fail the request, logo is still saved
+        if (teamError) {
+          console.error("Error updating team with logo_id:", teamError);
+        }
       }
 
       res.json({
@@ -233,12 +236,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ error: error.message });
       }
 
-      // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('team-logos')
         .getPublicUrl(fileName);
 
       console.log("Upload successful, public URL:", publicUrl);
+
+      const { error: dbError } = await supabase
+        .from("team_logos")
+        .upsert({
+          league_id: leagueId,
+          team_name: teamName,
+          logo_url: publicUrl,
+          uploaded_by: "system",
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'league_id,team_name',
+        });
+
+      if (dbError && dbError.code !== '42P01') {
+        console.error("Error persisting to team_logos:", dbError);
+      }
 
       res.json({
         success: true,
