@@ -3365,6 +3365,8 @@ export default function LeaguePage() {
               leagueId={league.league_id}
               slug={slug}
               onGameClick={handleCarouselGameClick}
+              childLeagueIds={isParentLeague ? childCompetitions.map(c => c.league_id) : undefined}
+              childLeagueMap={isParentLeague ? childLeagueMap : undefined}
             />
           </section>
         )}
