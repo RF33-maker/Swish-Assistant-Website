@@ -492,6 +492,7 @@ export default function LeaguePage() {
     const [topRebounder, setTopRebounder] = useState<PlayerStat | null>(null);
     const [topAssists, setTopAssists] = useState<PlayerStat | null>(null);
     const [standings, setStandings] = useState([]);
+    const [teamLogoMap, setTeamLogoMap] = useState<Map<string, string>>(new Map());
     const [schedule, setSchedule] = useState<GameSchedule[]>([]);
     const [suggestions, setSuggestions] = useState<any[]>([]);
     const [gameSummaries, setGameSummaries] = useState<any[]>([]);
@@ -549,6 +550,12 @@ export default function LeaguePage() {
   const dividerRef = useRef<HTMLDivElement>(null); // Ref for the orange divider
   const [selectedAgeGroup, setSelectedAgeGroup] = useState<string>('all');
   const [parentStandingsGroups, setParentStandingsGroups] = useState<{ageGroup: string, standings: any[]}[]>([]);
+
+  const getTeamLogoUrl = (teamName: string): string | undefined => {
+    if (!teamName) return undefined;
+    const normalized = normalizeAndMapTeamName(teamName);
+    return teamLogoMap.get(normalized);
+  };
 
   const { colors: leagueBrandColors } = useLeagueBranding({
     slug,
@@ -1504,6 +1511,33 @@ export default function LeaguePage() {
           const childIds = fetchedChildCompetitions.map((c: any) => c.league_id);
           const isParent = childIds.length > 0;
           const queryLeagueIds = isParent ? childIds : [effectiveLeagueId];
+
+          const logoLeagueIds = isParent ? [data.league_id, ...childIds] : [effectiveLeagueId];
+          try {
+            let logoQuery = supabase.from("team_logos").select("team_name, logo_url, league_id");
+            if (logoLeagueIds.length === 1) {
+              logoQuery = logoQuery.eq("league_id", logoLeagueIds[0]);
+            } else {
+              logoQuery = logoQuery.in("league_id", logoLeagueIds);
+            }
+            const { data: logoRows, error: logoError } = await logoQuery;
+            if (logoError) {
+              console.error("Error fetching team logos:", logoError);
+            }
+            const map = new Map<string, string>();
+            if (logoRows && logoRows.length > 0) {
+              logoRows.forEach((row: any) => {
+                const normalized = normalizeAndMapTeamName(row.team_name);
+                if (normalized && row.logo_url) {
+                  map.set(normalized, row.logo_url);
+                }
+              });
+            }
+            setTeamLogoMap(map);
+          } catch (logoErr) {
+            console.error("Error fetching team logos:", logoErr);
+            setTeamLogoMap(new Map());
+          }
           
           const childNameMap = new Map<string, string>();
           if (isParent) {
@@ -3629,7 +3663,8 @@ export default function LeaguePage() {
                                           <TeamLogo 
                                             teamName={team.originalName || team.team} 
                                             leagueId={league?.league_id} 
-                                            size="sm" 
+                                            size="sm"
+                                            logoUrl={getTeamLogoUrl(team.originalName || team.team)}
                                           />
                                         </div>
                                       </td>
@@ -3705,7 +3740,8 @@ export default function LeaguePage() {
                                 <TeamLogo 
                                   teamName={team.originalName || team.team} 
                                   leagueId={league?.league_id} 
-                                  size="sm" 
+                                  size="sm"
+                                  logoUrl={getTeamLogoUrl(team.originalName || team.team)}
                                 />
                               </div>
                             </td>
@@ -4281,7 +4317,7 @@ export default function LeaguePage() {
                             data-testid={`row-team-${team.teamName}`}
                           >
                             <td className="py-2 md:py-3 px-2 md:px-3 sticky left-0 bg-white dark:bg-neutral-900 group-hover:bg-orange-50 dark:group-hover:bg-neutral-800 z-10 transition-colors">
-                              <TeamLogo teamName={team.teamName} leagueId={league?.league_id || ""} size="sm" />
+                              <TeamLogo teamName={team.teamName} leagueId={league?.league_id || ""} size="sm" logoUrl={getTeamLogoUrl(team.teamName)} />
                             </td>
                             <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 dark:text-slate-200 text-xs md:text-sm truncate">
                               {team.teamName}
@@ -4346,7 +4382,7 @@ export default function LeaguePage() {
                       <Link key={`team-${teamData.team}-${index}`} to={`/league/${slug}/team/${encodeURIComponent(teamData.team)}`}>
                         <div className="p-3 md:p-4 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors flex items-center justify-between group cursor-pointer">
                           <div className="flex items-center gap-2 md:gap-4">
-                            <TeamLogo teamName={teamData.team} leagueId={league?.league_id || ""} size="md" />
+                            <TeamLogo teamName={teamData.team} leagueId={league?.league_id || ""} size="md" logoUrl={getTeamLogoUrl(teamData.team)} />
                             <h3 className="font-semibold text-slate-800 dark:text-white text-sm md:text-lg">{teamData.team}</h3>
                           </div>
                           <ChevronRight className="w-4 md:w-5 h-4 md:h-5 text-gray-400 dark:text-gray-500 group-hover:text-orange-600 transition-colors" />
@@ -4501,13 +4537,13 @@ export default function LeaguePage() {
                                       {/* Teams Row */}
                                       <div className="flex items-center gap-2 md:gap-3">
                                         <div className="flex items-center gap-1 md:gap-1.5 flex-1 min-w-0">
-                                          <TeamLogo teamName={game.team1} leagueId={league?.league_id || ""} size="sm" />
+                                          <TeamLogo teamName={game.team1} leagueId={league?.league_id || ""} size="sm" logoUrl={getTeamLogoUrl(game.team1)} />
                                           <span className="font-medium text-slate-800 dark:text-white text-[11px] md:text-sm truncate">{game.team1}</span>
                                         </div>
                                         <span className="text-slate-400 dark:text-slate-500 text-[11px] md:text-xs flex-shrink-0">vs</span>
                                         <div className="flex items-center gap-1 md:gap-1.5 flex-1 justify-end min-w-0">
                                           <span className="font-medium text-slate-800 dark:text-white text-[11px] md:text-sm truncate">{game.team2}</span>
-                                          <TeamLogo teamName={game.team2} leagueId={league?.league_id || ""} size="sm" />
+                                          <TeamLogo teamName={game.team2} leagueId={league?.league_id || ""} size="sm" logoUrl={getTeamLogoUrl(game.team2)} />
                                         </div>
                                       </div>
                                     </div>
@@ -4563,7 +4599,7 @@ export default function LeaguePage() {
                                       {/* Teams and Score Row */}
                                       <div className="flex items-center gap-2 md:gap-3">
                                         <div className="flex items-center gap-1 md:gap-1.5 flex-1 min-w-0">
-                                          <TeamLogo teamName={game.team1} leagueId={league?.league_id || ""} size="sm" />
+                                          <TeamLogo teamName={game.team1} leagueId={league?.league_id || ""} size="sm" logoUrl={getTeamLogoUrl(game.team1)} />
                                           <span className="font-medium text-slate-800 dark:text-white text-[11px] md:text-sm truncate">{game.team1}</span>
                                         </div>
                                         {game.team1_score !== undefined && game.team2_score !== undefined ? (
@@ -4581,7 +4617,7 @@ export default function LeaguePage() {
                                         )}
                                         <div className="flex items-center gap-1 md:gap-1.5 flex-1 justify-end min-w-0">
                                           <span className="font-medium text-slate-800 dark:text-white text-[11px] md:text-sm truncate">{game.team2}</span>
-                                          <TeamLogo teamName={game.team2} leagueId={league?.league_id || ""} size="sm" />
+                                          <TeamLogo teamName={game.team2} leagueId={league?.league_id || ""} size="sm" logoUrl={getTeamLogoUrl(game.team2)} />
                                         </div>
                                       </div>
                                     </div>
@@ -4814,7 +4850,7 @@ export default function LeaguePage() {
                             .map((team: any, i: number) => (
                               <li key={`scoring-${team.teamName}-${i}`} className="flex justify-between items-center gap-2">
                                 <div className="flex items-center gap-1.5 truncate flex-1 min-w-0">
-                                  <TeamLogo teamName={team.teamName} leagueId={league?.league_id} size="xs" />
+                                  <TeamLogo teamName={team.teamName} leagueId={league?.league_id} size="xs" logoUrl={getTeamLogoUrl(team.teamName)} />
                                   <span className="truncate">{team.teamName}</span>
                                 </div>
                                 <span className="font-medium whitespace-nowrap" style={{ color: brandColor }}>
@@ -4836,7 +4872,7 @@ export default function LeaguePage() {
                             .map((team: any, i: number) => (
                               <li key={`rebounding-${team.teamName}-${i}`} className="flex justify-between items-center gap-2">
                                 <div className="flex items-center gap-1.5 truncate flex-1 min-w-0">
-                                  <TeamLogo teamName={team.teamName} leagueId={league?.league_id} size="xs" />
+                                  <TeamLogo teamName={team.teamName} leagueId={league?.league_id} size="xs" logoUrl={getTeamLogoUrl(team.teamName)} />
                                   <span className="truncate">{team.teamName}</span>
                                 </div>
                                 <span className="font-medium whitespace-nowrap" style={{ color: brandColor }}>
@@ -4858,7 +4894,7 @@ export default function LeaguePage() {
                             .map((team: any, i: number) => (
                               <li key={`assists-${team.teamName}-${i}`} className="flex justify-between items-center gap-2">
                                 <div className="flex items-center gap-1.5 truncate flex-1 min-w-0">
-                                  <TeamLogo teamName={team.teamName} leagueId={league?.league_id} size="xs" />
+                                  <TeamLogo teamName={team.teamName} leagueId={league?.league_id} size="xs" logoUrl={getTeamLogoUrl(team.teamName)} />
                                   <span className="truncate">{team.teamName}</span>
                                 </div>
                                 <span className="font-medium whitespace-nowrap" style={{ color: brandColor }}>
@@ -4947,7 +4983,7 @@ export default function LeaguePage() {
                           <td className={`py-3 px-3 font-medium text-slate-600 dark:text-slate-400 sticky left-0 z-10 ${stickyBg}`}>{index + 1}</td>
                           <td className={`py-3 px-3 font-medium text-slate-800 dark:text-slate-200 max-w-[180px] sticky left-12 md:static z-10 ${stickyBg}`}>
                             <div className="flex items-center gap-2">
-                              <TeamLogo teamName={team.team} leagueId={league?.league_id} size="sm" />
+                              <TeamLogo teamName={team.team} leagueId={league?.league_id} size="sm" logoUrl={getTeamLogoUrl(team.team)} />
                               <span className="truncate">{team.team}</span>
                             </div>
                           </td>
