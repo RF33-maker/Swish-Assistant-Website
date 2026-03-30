@@ -678,12 +678,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                             {gameInfo.teams[0]}
                           </div>
                           <div 
-                            className="text-3xl md:text-4xl font-bold"
-                            style={teamColors[gameInfo.teams[0]] ? {
-                              color: teamColors[gameInfo.teams[0]].primary
-                            } : {
-                              color: 'rgb(251, 146, 60)'
-                            }}
+                            className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white"
                           >
                             {gameInfo.teamScores[gameInfo.teams[0]]}
                           </div>
@@ -709,12 +704,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                             {gameInfo.teams[1]}
                           </div>
                           <div 
-                            className="text-3xl md:text-4xl font-bold"
-                            style={teamColors[gameInfo.teams[1]] ? {
-                              color: teamColors[gameInfo.teams[1]].primary
-                            } : {
-                              color: 'rgb(59, 130, 246)'
-                            }}
+                            className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white"
                           >
                             {gameInfo.teamScores[gameInfo.teams[1]]}
                           </div>
