@@ -16,6 +16,7 @@ interface GameItem {
   current_clock?: string | null;
   age_group?: string;
   round?: string;
+  hasGamePage?: boolean;
 }
 
 interface GameClickData {
@@ -26,6 +27,7 @@ interface GameClickData {
   gameDate: string;
   homeScore: number | null;
   awayScore: number | null;
+  hasGamePage?: boolean;
 }
 
 interface GameResultsCarouselProps {
@@ -120,6 +122,7 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
             status: 'FINAL',
             age_group: ageGroup,
             round: game.round || undefined,
+            hasGamePage: !!game.schedule_status || !!game.competition_name,
           });
         });
 
@@ -176,7 +179,8 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
             home_score: null,
             away_score: null,
             status: isLive ? 'LIVE' : 'SCHEDULED',
-            age_group: schedAgeGroup
+            age_group: schedAgeGroup,
+            hasGamePage: true
           };
 
           if (isLive) {
@@ -428,7 +432,8 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
                     awayTeam: game.away_team,
                     gameDate: game.game_date,
                     homeScore: game.home_score,
-                    awayScore: game.away_score
+                    awayScore: game.away_score,
+                    hasGamePage: game.hasGamePage
                   })}
                 >
                   <div className="flex justify-between items-center mb-2">
