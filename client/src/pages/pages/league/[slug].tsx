@@ -548,7 +548,7 @@ export default function LeaguePage() {
   const [isDividerVisible, setIsDividerVisible] = useState(false); // Track if orange divider is in view
   const dividerRef = useRef<HTMLDivElement>(null); // Ref for the orange divider
   const [selectedAgeGroup, setSelectedAgeGroup] = useState<string>('all');
-  const [parentStandingsGroups, setParentStandingsGroups] = useState<{ageGroup: string, standings: any[]}[]>([]);
+  const [parentStandingsGroups, setParentStandingsGroups] = useState<{ageGroup: string, standings: any[], poolAStandings: any[], poolBStandings: any[], hasPools: boolean}[]>([]);
 
   const getTeamLogoUrl = (teamName: string): string | undefined => {
     if (!teamName) return undefined;
@@ -1632,12 +1632,12 @@ export default function LeaguePage() {
             
             if (isParent) {
               try {
-                const groups: {ageGroup: string, standings: any[]}[] = [];
+                const groups: {ageGroup: string, standings: any[], poolAStandings: any[], poolBStandings: any[], hasPools: boolean}[] = [];
                 for (const child of fetchedChildCompetitions) {
                   const ageGroup = childNameMap.get(child.league_id) || child.name;
-                  const childStandings = await calculateStandingsForLeague(child.league_id);
-                  if (childStandings.length > 0) {
-                    groups.push({ ageGroup, standings: childStandings });
+                  const result = await calculateStandingsForLeague(child.league_id);
+                  if (result.standings.length > 0) {
+                    groups.push({ ageGroup, standings: result.standings, poolAStandings: result.poolAStandings, poolBStandings: result.poolBStandings, hasPools: result.hasPools });
                   }
                 }
                 setParentStandingsGroups(groups);
@@ -2539,117 +2539,142 @@ export default function LeaguePage() {
       }
     };
 
-    const calculateStandingsForLeague = async (leagueId: string): Promise<any[]> => {
+    const calculateStandingsForLeague = async (leagueId: string): Promise<{standings: any[], poolAStandings: any[], poolBStandings: any[], hasPools: boolean}> => {
       try {
-        const teamStatsMap: { [team: string]: { wins: number, losses: number, pointsFor: number, pointsAgainst: number, games: number, originalName: string } } = {};
-
         const { data: allTeams } = await supabase
           .from("teams")
           .select("team_id, name")
           .eq("league_id", leagueId);
 
-        if (allTeams && allTeams.length > 0) {
+        const { data: gameResults, error: gameResultsError } = await db
+          .from("v_game_results")
+          .select("home_team, away_team, home_score, away_score, pool")
+          .eq("league_id", leagueId);
+
+        if ((!gameResults || gameResults.length === 0 || gameResultsError) && (!allTeams || allTeams.length === 0)) {
+          return { standings: [], poolAStandings: [], poolBStandings: [], hasPools: false };
+        }
+        if (!gameResults || gameResults.length === 0 || gameResultsError) {
+          return { standings: [], poolAStandings: [], poolBStandings: [], hasPools: false };
+        }
+
+        const extractPoolName = (poolValue: string): string => {
+          const match = poolValue.match(/\(([^)]+)\)/);
+          return match ? match[1] : poolValue;
+        };
+
+        const buildStatsFromGames = (games: any[], teamNames?: Map<string, string>) => {
+          const statsMap: Record<string, { wins: number, losses: number, pointsFor: number, pointsAgainst: number, games: number, originalName: string }> = {};
+
+          const ensureTeam = (normalized: string, original: string) => {
+            if (!statsMap[normalized]) {
+              statsMap[normalized] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0, originalName: original };
+            }
+          };
+
+          if (teamNames) {
+            teamNames.forEach((original, normalized) => ensureTeam(normalized, original));
+          }
+
+          games.forEach((game: any) => {
+            if (game.home_team) ensureTeam(normalizeAndMapTeamName(game.home_team), game.home_team);
+            if (game.away_team) ensureTeam(normalizeAndMapTeamName(game.away_team), game.away_team);
+          });
+
+          games.forEach((game: any) => {
+            if (game.home_score == null || game.away_score == null) return;
+            const homeName = normalizeAndMapTeamName(game.home_team || '');
+            const awayName = normalizeAndMapTeamName(game.away_team || '');
+            const homeScore = game.home_score;
+            const awayScore = game.away_score;
+
+            if (statsMap[homeName]) {
+              statsMap[homeName].pointsFor += homeScore;
+              statsMap[homeName].pointsAgainst += awayScore;
+              statsMap[homeName].games += 1;
+              if (homeScore > awayScore) statsMap[homeName].wins += 1;
+              else if (homeScore < awayScore) statsMap[homeName].losses += 1;
+            }
+            if (statsMap[awayName]) {
+              statsMap[awayName].pointsFor += awayScore;
+              statsMap[awayName].pointsAgainst += homeScore;
+              statsMap[awayName].games += 1;
+              if (awayScore > homeScore) statsMap[awayName].wins += 1;
+              else if (awayScore < homeScore) statsMap[awayName].losses += 1;
+            }
+          });
+
+          const arr = Object.entries(statsMap).map(([team, stats]) => ({
+            team,
+            originalName: stats.originalName,
+            wins: stats.wins,
+            losses: stats.losses,
+            winPct: stats.games > 0 ? Math.round((stats.wins / stats.games) * 1000) / 1000 : 0,
+            pointsFor: stats.pointsFor,
+            pointsAgainst: stats.pointsAgainst,
+            pointsDiff: stats.pointsFor - stats.pointsAgainst,
+            games: stats.games,
+            avgPoints: stats.games > 0 ? Math.round((stats.pointsFor / stats.games) * 10) / 10 : 0,
+            record: `${stats.wins}-${stats.losses}`
+          }));
+
+          const merged = new Map<string, typeof arr[0]>();
+          arr.forEach(team => {
+            const teamKey = normalizeAndMapTeamName(team.team);
+            if (!merged.has(teamKey)) {
+              merged.set(teamKey, { ...team, team: teamKey });
+            } else {
+              const existing = merged.get(teamKey)!;
+              existing.wins += team.wins;
+              existing.losses += team.losses;
+              existing.games += team.games;
+              existing.pointsFor += team.pointsFor;
+              existing.pointsAgainst += team.pointsAgainst;
+              existing.pointsDiff = existing.pointsFor - existing.pointsAgainst;
+              existing.winPct = existing.games > 0 ? Math.round((existing.wins / existing.games) * 1000) / 1000 : 0;
+              existing.avgPoints = existing.games > 0 ? Math.round((existing.pointsFor / existing.games) * 10) / 10 : 0;
+              existing.record = `${existing.wins}-${existing.losses}`;
+            }
+          });
+
+          return Array.from(merged.values())
+            .filter(t => t.games > 0)
+            .sort((a, b) => {
+              if (b.winPct !== a.winPct) return b.winPct - a.winPct;
+              if (b.pointsDiff !== a.pointsDiff) return b.pointsDiff - a.pointsDiff;
+              return b.avgPoints - a.avgPoints;
+            })
+            .map((team, index) => ({ ...team, rank: index + 1, movement: 'same' }));
+        };
+
+        const teamNameMap = new Map<string, string>();
+        if (allTeams) {
           allTeams.forEach(team => {
-            const normalizedName = normalizeAndMapTeamName(team.name);
-            teamStatsMap[normalizedName] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0, originalName: team.name };
+            teamNameMap.set(normalizeAndMapTeamName(team.name), team.name);
           });
         }
 
-        const { data: gameResults, error: gameResultsError } = await db
-          .from("v_game_results")
-          .select("home_team, away_team, home_score, away_score")
-          .eq("league_id", leagueId);
+        const fullStandings = buildStatsFromGames(gameResults, teamNameMap);
 
-        if (!gameResults || gameResults.length === 0 || gameResultsError) {
-          if (Object.keys(teamStatsMap).length === 0) return [];
-          return Object.entries(teamStatsMap).map(([team, stats], index) => ({
-            team, originalName: stats.originalName, wins: 0, losses: 0, winPct: 0,
-            pointsFor: 0, pointsAgainst: 0, pointsDiff: 0, games: 0, avgPoints: 0,
-            record: '0-0', rank: index + 1, movement: 'same'
-          }));
-        }
+        const normalizePoolLabel = (pool: string): string => {
+          const extracted = extractPoolName(pool).toLowerCase().replace(/\s+/g, ' ').trim();
+          if (extracted === 'a' || extracted === 'pool a' || extracted === 'group a') return 'Pool A';
+          if (extracted === 'b' || extracted === 'pool b' || extracted === 'group b') return 'Pool B';
+          return extracted;
+        };
 
-        gameResults.forEach((game: any) => {
-          if (game.home_team) {
-            const normalized = normalizeAndMapTeamName(game.home_team);
-            if (!teamStatsMap[normalized]) {
-              teamStatsMap[normalized] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0, originalName: game.home_team };
-            }
-          }
-          if (game.away_team) {
-            const normalized = normalizeAndMapTeamName(game.away_team);
-            if (!teamStatsMap[normalized]) {
-              teamStatsMap[normalized] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0, originalName: game.away_team };
-            }
-          }
-        });
+        const poolAGames = gameResults.filter((g: any) => g.pool && normalizePoolLabel(g.pool) === 'Pool A');
+        const poolBGames = gameResults.filter((g: any) => g.pool && normalizePoolLabel(g.pool) === 'Pool B');
 
-        gameResults.forEach((game: any) => {
-          if (game.home_score == null || game.away_score == null) return;
-          const homeName = normalizeAndMapTeamName(game.home_team || '');
-          const awayName = normalizeAndMapTeamName(game.away_team || '');
-          const homeScore = game.home_score;
-          const awayScore = game.away_score;
+        const poolAStandings = buildStatsFromGames(poolAGames);
+        const poolBStandings = buildStatsFromGames(poolBGames);
+        const anyGameHasPool = gameResults.some((g: any) => g.pool && (normalizePoolLabel(g.pool) === 'Pool A' || normalizePoolLabel(g.pool) === 'Pool B'));
+        const poolsExist = anyGameHasPool;
 
-          if (teamStatsMap[homeName]) {
-            teamStatsMap[homeName].pointsFor += homeScore;
-            teamStatsMap[homeName].pointsAgainst += awayScore;
-            teamStatsMap[homeName].games += 1;
-            if (homeScore > awayScore) teamStatsMap[homeName].wins += 1;
-            else if (homeScore < awayScore) teamStatsMap[homeName].losses += 1;
-          }
-          if (teamStatsMap[awayName]) {
-            teamStatsMap[awayName].pointsFor += awayScore;
-            teamStatsMap[awayName].pointsAgainst += homeScore;
-            teamStatsMap[awayName].games += 1;
-            if (awayScore > homeScore) teamStatsMap[awayName].wins += 1;
-            else if (awayScore < homeScore) teamStatsMap[awayName].losses += 1;
-          }
-        });
-
-        const standingsArray = Object.entries(teamStatsMap).map(([team, stats]) => ({
-          team,
-          originalName: stats.originalName,
-          wins: stats.wins,
-          losses: stats.losses,
-          winPct: stats.games > 0 ? Math.round((stats.wins / stats.games) * 1000) / 1000 : 0,
-          pointsFor: stats.pointsFor,
-          pointsAgainst: stats.pointsAgainst,
-          pointsDiff: stats.pointsFor - stats.pointsAgainst,
-          games: stats.games,
-          avgPoints: stats.games > 0 ? Math.round((stats.pointsFor / stats.games) * 10) / 10 : 0,
-          record: `${stats.wins}-${stats.losses}`
-        }));
-
-        const mergedStandings = new Map<string, typeof standingsArray[0]>();
-        standingsArray.forEach(team => {
-          const teamKey = normalizeAndMapTeamName(team.team);
-          if (!mergedStandings.has(teamKey)) {
-            mergedStandings.set(teamKey, { ...team, team: teamKey });
-          } else {
-            const existing = mergedStandings.get(teamKey)!;
-            existing.wins += team.wins;
-            existing.losses += team.losses;
-            existing.games += team.games;
-            existing.pointsFor += team.pointsFor;
-            existing.pointsAgainst += team.pointsAgainst;
-            existing.pointsDiff = existing.pointsFor - existing.pointsAgainst;
-            existing.winPct = existing.games > 0 ? Math.round((existing.wins / existing.games) * 1000) / 1000 : 0;
-            existing.avgPoints = existing.games > 0 ? Math.round((existing.pointsFor / existing.games) * 10) / 10 : 0;
-            existing.record = `${existing.wins}-${existing.losses}`;
-          }
-        });
-
-        return Array.from(mergedStandings.values())
-          .sort((a, b) => {
-            if (b.winPct !== a.winPct) return b.winPct - a.winPct;
-            if (b.pointsDiff !== a.pointsDiff) return b.pointsDiff - a.pointsDiff;
-            return b.avgPoints - a.avgPoints;
-          })
-          .map((team, index) => ({ ...team, rank: index + 1, movement: 'same' }));
+        return { standings: fullStandings, poolAStandings, poolBStandings, hasPools: poolsExist };
       } catch (error) {
         console.error("Error calculating standings for league:", leagueId, error);
-        return [];
+        return { standings: [], poolAStandings: [], poolBStandings: [], hasPools: false };
       }
     };
 
@@ -2954,8 +2979,8 @@ export default function LeaguePage() {
         // Convert to standings format with movement tracking
         const formatStandings = (teams: any[], poolFilter?: string) => {
           const filtered = poolFilter 
-            ? teams.filter(t => t.pool === poolFilter)
-            : teams;
+            ? teams.filter(t => t.pool === poolFilter && t.games > 0)
+            : teams.filter(t => t.games > 0);
           
           return filtered
             .sort((a, b) => {
@@ -3432,7 +3457,7 @@ export default function LeaguePage() {
               {isParentLeague && ageGroupLabels.length > 0 && (
                 <div className="flex items-center gap-1.5 flex-shrink-0 overflow-x-auto pb-1 md:pb-0" data-testid="age-group-tabs">
                   <button
-                    onClick={() => { setSelectedAgeGroup('all'); setFilterAgeGroup('all'); }}
+                    onClick={() => { setSelectedAgeGroup('all'); setFilterAgeGroup('all'); setStandingsView('full'); }}
                     className={`px-3 py-1.5 text-xs md:text-sm font-medium rounded-full whitespace-nowrap transition-all ${
                       selectedAgeGroup === 'all'
                         ? 'text-white shadow-sm'
@@ -3445,7 +3470,7 @@ export default function LeaguePage() {
                   {ageGroupLabels.map((label) => (
                     <button
                       key={label}
-                      onClick={() => { setSelectedAgeGroup(label); setFilterAgeGroup(label); }}
+                      onClick={() => { setSelectedAgeGroup(label); setFilterAgeGroup(label); setStandingsView('full'); }}
                       className={`px-3 py-1.5 text-xs md:text-sm font-medium rounded-full whitespace-nowrap transition-all ${
                         selectedAgeGroup === label
                           ? 'text-white shadow-sm'
@@ -3506,10 +3531,14 @@ export default function LeaguePage() {
                 
                 {viewMode === 'standings' && (
                   <>
-                    {/* Pool Tabs - hidden for parent leagues */}
-                    {!isParentLeague && (
+                    {/* Pool Tabs - shown for non-parent leagues or when a specific age group with pools is selected */}
+                    {(() => {
+                      const parentAgeGroupHasPools = isParentLeague && selectedAgeGroup !== 'all' && parentStandingsGroups.some(g => g.ageGroup === selectedAgeGroup && g.hasPools);
+                      const showPoolSection = !isParentLeague || parentAgeGroupHasPools;
+                      const effectiveHasPools = isParentLeague ? parentAgeGroupHasPools : hasPools;
+                      return showPoolSection ? (
                     <div className="flex flex-wrap gap-2 mb-4 md:mb-6 border-b border-gray-200 dark:border-neutral-700">
-                  {hasPools && (
+                  {effectiveHasPools && (
                     <>
                       <button
                         onClick={() => setStandingsView('poolA')}
@@ -3550,10 +3579,11 @@ export default function LeaguePage() {
                     onMouseEnter={(e) => { if (standingsView !== 'full') (e.target as HTMLElement).style.color = brandColor; }}
                     onMouseLeave={(e) => { if (standingsView !== 'full') (e.target as HTMLElement).style.color = ''; }}
                   >
-                    {hasPools ? 'Full League' : 'League Standings'}
+                    {effectiveHasPools ? 'Full League' : 'League Standings'}
                   </button>
                 </div>
-                    )}
+                    ) : null;
+                    })()}
 
                 {/* Parent League Standings - grouped by age group */}
                 {isParentLeague && (
@@ -3565,7 +3595,11 @@ export default function LeaguePage() {
                       </div>
                     ) : (
                       <div className="space-y-6">
-                        {(selectedAgeGroup === 'all' ? parentStandingsGroups : parentStandingsGroups.filter(g => g.ageGroup === selectedAgeGroup)).map((group) => (
+                        {(selectedAgeGroup === 'all' ? parentStandingsGroups : parentStandingsGroups.filter(g => g.ageGroup === selectedAgeGroup)).map((group) => {
+                          const displayStandings = selectedAgeGroup !== 'all' && group.hasPools
+                            ? (standingsView === 'poolA' ? group.poolAStandings : standingsView === 'poolB' ? group.poolBStandings : group.standings)
+                            : group.standings;
+                          return (
                           <div key={group.ageGroup}>
                             {selectedAgeGroup === 'all' && (
                               <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
@@ -3589,7 +3623,7 @@ export default function LeaguePage() {
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {group.standings.map((team: any, index: number) => (
+                                  {displayStandings.map((team: any, index: number) => (
                                     <tr 
                                       key={`${team.team}-${index}`}
                                       className="border-b border-gray-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors group"
@@ -3625,12 +3659,13 @@ export default function LeaguePage() {
                                   ))}
                                 </tbody>
                               </table>
-                              {group.standings.length === 0 && (
+                              {displayStandings.length === 0 && (
                                 <div className="text-center py-4 text-gray-500 text-sm">No standings data available</div>
                               )}
                             </div>
                           </div>
-                        ))}
+                          );
+                        })}
                         {parentStandingsGroups.length === 0 && (
                           <div className="text-center py-8 text-gray-500">No standings data available</div>
                         )}
@@ -4882,9 +4917,9 @@ export default function LeaguePage() {
                   </table>
                 </div>
               ) : (() => {
-                const overviewStandings = isParentLeague && filterAgeGroup !== 'all'
+                const overviewStandings = (isParentLeague && filterAgeGroup !== 'all'
                   ? standings.filter((s: any) => s.ageGroup === filterAgeGroup)
-                  : standings;
+                  : standings).filter((s: any) => s.games > 0);
                 return overviewStandings.length > 0 ? (
                 <div className="overflow-x-auto -mx-4 md:mx-0">
                   <table className="w-full text-sm min-w-[600px]">
