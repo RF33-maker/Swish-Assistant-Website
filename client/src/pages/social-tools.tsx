@@ -220,6 +220,7 @@ export default function SocialToolsPage() {
   const [hasMorePerformances, setHasMorePerformances] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [performanceOffset, setPerformanceOffset] = useState(0);
+  const [selectedTemplate, setSelectedTemplate] = useState<string>("default");
   const PAGE_SIZE = 50;
   
   // Compute queue cards from IDs and cache
@@ -471,7 +472,7 @@ export default function SocialToolsPage() {
       // Create a promise that resolves when card is rendered
       await new Promise<void>((resolve) => {
         root.render(
-          <PlayerPerformanceCardV1 data={selectedData} />
+          <PlayerPerformanceCardV1 data={selectedData} template={selectedTemplate} />
         );
         // Give React time to render
         setTimeout(resolve, 200);
@@ -701,9 +702,20 @@ export default function SocialToolsPage() {
           <div className="lg:col-span-2 space-y-6">
             <Card className="bg-white dark:bg-gray-800 border-orange-200 dark:border-orange-700">
               <CardHeader className="pb-3">
-                <CardTitle className="text-orange-900 dark:text-orange-400">
-                  Card Preview
-                </CardTitle>
+                <div className="flex items-center justify-between gap-3">
+                  <CardTitle className="text-orange-900 dark:text-orange-400">
+                    Card Preview
+                  </CardTitle>
+                  <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
+                    <SelectTrigger className="w-[160px] border-orange-200 dark:border-orange-700" data-testid="select-template">
+                      <SelectValue placeholder="Template" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="default">Swish Default</SelectItem>
+                      <SelectItem value="reba-sl">REBA SL</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="mb-4">
@@ -729,7 +741,7 @@ export default function SocialToolsPage() {
                     }}
                   >
                     <div ref={cardRef}>
-                      <PlayerPerformanceCardV1 data={selectedData} />
+                      <PlayerPerformanceCardV1 data={selectedData} template={selectedTemplate} />
                     </div>
                   </div>
                 </div>
