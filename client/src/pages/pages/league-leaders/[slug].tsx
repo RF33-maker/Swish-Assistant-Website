@@ -483,7 +483,7 @@ export default function LeagueLeadersPage() {
                 </div>
                 <div>
                   <p className="brand-name text-sm md:text-base font-medium" style={{ color: brandColorHover }}>{player.name}</p>
-                  <p className="text-xs md:text-sm text-gray-800 dark:text-white">{player.team_name || 'Unknown Team'}</p>
+                  <p className="text-xs md:text-sm text-gray-300 dark:text-white">{player.team_name || 'Unknown Team'}</p>
                 </div>
               </div>
               <div className="text-right">
@@ -536,13 +536,16 @@ export default function LeagueLeadersPage() {
       style={{ '--brand-bg': brandBg50, '--brand-bg-hover': brandBg10, '--brand-text-light': brandTextLight } as React.CSSProperties}
     >
       <style>{`
-        .league-leaders-page .leader-row { background-color: var(--brand-bg); }
-        .league-leaders-page .leader-row:hover { background-color: var(--brand-bg-hover); }
+        .league-leaders-page .leader-row { background-color: #1a1a1a; }
+        .league-leaders-page .leader-row:hover { background-color: #2a2a2a; }
+        .league-leaders-page .leader-row .brand-name { color: #ffffff !important; }
+        .league-leaders-page .leader-row .brand-value { color: #ffffff !important; }
+        .league-leaders-page .leader-row .brand-games { color: #d4d4d4 !important; opacity: 0.85; }
         :is(.dark) .league-leaders-page .leader-row { background-color: rgb(38 38 38); }
         :is(.dark) .league-leaders-page .leader-row:hover { background-color: rgb(64 64 64); }
-        :is(.dark) .league-leaders-page .leader-row .brand-name { color: var(--brand-text-light); }
-        :is(.dark) .league-leaders-page .leader-row .brand-value { color: var(--brand-text-light); }
-        :is(.dark) .league-leaders-page .leader-row .brand-games { color: var(--brand-text-light); opacity: 0.7; }
+        :is(.dark) .league-leaders-page .leader-row .brand-name { color: var(--brand-text-light) !important; }
+        :is(.dark) .league-leaders-page .leader-row .brand-value { color: var(--brand-text-light) !important; }
+        :is(.dark) .league-leaders-page .leader-row .brand-games { color: var(--brand-text-light) !important; opacity: 0.7; }
         .league-leaders-page .brand-toggle:not(.brand-toggle-active):hover { background-color: var(--brand-bg-hover); }
       `}</style>
       {leagueBrandColors && (
