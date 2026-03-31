@@ -474,7 +474,11 @@ export default function LeagueLeadersPage() {
         {/* Header Section */}
         <div className="text-center space-y-3 md:space-y-4">
           <div className="flex flex-col md:flex-row items-center justify-center gap-2 md:gap-3">
-            <Trophy className="h-6 w-6 md:h-8 md:w-8 text-orange-500" />
+            {league?.logo_url ? (
+              <img src={league.logo_url} alt={league.name} className="h-10 w-10 md:h-14 md:w-14 object-contain" />
+            ) : (
+              <Trophy className="h-6 w-6 md:h-8 md:w-8 text-orange-500" />
+            )}
             <h1 className="sr-only">League Leaders</h1>
           </div>
           <h2 className="text-xl md:text-2xl font-semibold text-orange-800 dark:text-orange-300">{league?.name}</h2>
