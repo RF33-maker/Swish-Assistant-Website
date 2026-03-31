@@ -1,6 +1,6 @@
 import type { PlayerPerformanceV1Data } from "@/types/socialCards";
 
-type Props = { data: PlayerPerformanceV1Data };
+type Props = { data: PlayerPerformanceV1Data; template?: string };
 
 // Calculate font size based on name length - longer names get smaller text
 function getNameFontSize(name: string): number {
@@ -12,8 +12,14 @@ function getNameFontSize(name: string): number {
   return 32; // Very long names
 }
 
-export function PlayerPerformanceCardV1({ data }: Props) {
+const TEMPLATES: Record<string, string> = {
+  "default": "/card-templates/playerpeformancetemplateV1.3.png",
+  "reba-sl": "/card-templates/REBA-SL-PP.png",
+};
+
+export function PlayerPerformanceCardV1({ data, template = "default" }: Props) {
   const nameFontSize = getNameFontSize(data.player_name);
+  const bgImage = TEMPLATES[template] || TEMPLATES["default"];
   
   return (
     <div
@@ -24,7 +30,7 @@ export function PlayerPerformanceCardV1({ data }: Props) {
         overflow-hidden
       "
       style={{
-        backgroundImage: "url('/card-templates/playerpeformancetemplateV1.3.png')",
+        backgroundImage: `url('${bgImage}')`,
         backgroundSize: "cover",
         backgroundPosition: "center",
       }}
