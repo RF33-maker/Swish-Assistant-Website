@@ -363,6 +363,28 @@ const applyPlayerMode = (
   return value;
 };
 
+const computeEfficiencyFromRawStats = (rawStats: any[], games: number, totalMinutes: number, mode: 'Total' | 'Per Game' | 'Per 40'): number => {
+  const totals = rawStats.reduce((acc, stat) => ({
+    pts: acc.pts + (stat.spoints || 0),
+    reb: acc.reb + (stat.sreboundstotal || 0),
+    ast: acc.ast + (stat.sassists || 0),
+    stl: acc.stl + (stat.ssteals || 0),
+    blk: acc.blk + (stat.sblocks || 0),
+    fga: acc.fga + (stat.sfieldgoalsattempted || 0),
+    fgm: acc.fgm + (stat.sfieldgoalsmade || 0),
+    fta: acc.fta + (stat.sfreethrowsattempted || 0),
+    ftm: acc.ftm + (stat.sfreethrowsmade || 0),
+    to: acc.to + (stat.sturnovers || 0),
+  }), { pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, fga: 0, fgm: 0, fta: 0, ftm: 0, to: 0 });
+
+  const totalEff = (totals.pts + totals.reb + totals.ast + totals.stl + totals.blk)
+    - (totals.fga - totals.fgm) - (totals.fta - totals.ftm) - totals.to;
+
+  if (mode === 'Total') return totalEff;
+  if (mode === 'Per 40') return totalMinutes > 0 ? (totalEff / totalMinutes) * 40 : 0;
+  return games > 0 ? totalEff / games : 0;
+};
+
 // Player stats column configuration by category
 // Note: Advanced, Scoring, and Misc categories reference fields that are calculated by the backend
 // (advanced_player_stats.py). Traditional stats use raw Supabase fields that are always present.
@@ -386,6 +408,7 @@ const PLAYER_STAT_COLUMNS: Record<string, PlayerStatColumn[]> = {
     { key: "sturnovers", label: "TO" },
     { key: "ssteals", label: "STL" },
     { key: "sblocks", label: "BLK" },
+    { key: "efficiency", label: "EFF" },
   ],
   Advanced: [
     { key: "efg_percent", label: "EFG%" },
@@ -436,7 +459,8 @@ const PLAYER_STAT_LEGENDS: Record<string, string[]> = {
     'AST = Assists',
     'TO = Turnovers',
     'STL = Steals',
-    'BLK = Blocks'
+    'BLK = Blocks',
+    'EFF = Efficiency (PTS + REB + AST + STL + BLK - Missed FG - Missed FT - TO)'
   ],
   Advanced: [
     'EFG% = Effective Field Goal Percentage',
@@ -1080,6 +1104,10 @@ export default function LeaguePage() {
           const column = activePlayerStatColumns.find(col => col.label === statsSortColumn);
           
           if (column) {
+            if (column.key === 'efficiency') {
+              valueA = computeEfficiencyFromRawStats(a.rawStats || [], a.games, a.totalMinutes || 0, playerStatsView);
+              valueB = computeEfficiencyFromRawStats(b.rawStats || [], b.games, b.totalMinutes || 0, playerStatsView);
+            } else {
             const rawStatsA = a.rawStats || [];
             const rawStatsB = b.rawStats || [];
             
@@ -1114,6 +1142,7 @@ export default function LeaguePage() {
             // Apply mode transformation
             valueA = applyPlayerMode(column.key, baseA, a.games, a.totalMinutes || 0, playerStatsView);
             valueB = applyPlayerMode(column.key, baseB, b.games, b.totalMinutes || 0, playerStatsView);
+            }
           } else {
             valueA = 0;
             valueB = 0;
@@ -3919,6 +3948,7 @@ export default function LeaguePage() {
                           <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">PF</th>
                           <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">+/-</th>
                           <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">PTS</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">EFF</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -4004,7 +4034,12 @@ export default function LeaguePage() {
                             <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 dark:text-slate-300 font-medium">{player.games}</td>
                             {activePlayerStatColumns.map((column) => {
                               const rawStats = player.rawStats || [];
-                              
+                              const totalMinutes = player.totalMinutes || 0;
+                              let value: number;
+
+                              if (column.key === 'efficiency') {
+                                value = computeEfficiencyFromRawStats(rawStats, player.games, totalMinutes, playerStatsView);
+                              } else {
                               // Rate stats should be averaged, not summed
                               const rateStats = [
                                 'efg_percent', 'ts_percent', 'three_point_rate',
@@ -4033,17 +4068,15 @@ export default function LeaguePage() {
                               // For rate stats, convert sum to average before passing to applyPlayerMode
                               const baseValue = isRateStat && rawStats.length > 0 ? aggregatedValue / rawStats.length : aggregatedValue;
                               
-                              // Calculate total minutes from player.totalMinutes (already in decimal format)
-                              const totalMinutes = player.totalMinutes || 0;
-                              
                               // Apply the mode transformation
-                              const value = applyPlayerMode(
+                              value = applyPlayerMode(
                                 column.key,
                                 baseValue,
                                 player.games,
                                 totalMinutes,
                                 playerStatsView
                               );
+                              }
                               
                               const displayValue = value === 0 ? '0.0' : value.toFixed(1);
                               

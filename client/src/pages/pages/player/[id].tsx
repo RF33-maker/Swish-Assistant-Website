@@ -60,6 +60,8 @@ interface PlayerStat {
   sfreethrowsmade?: number;
   sfreethrowsattempted?: number;
   sminutes?: string;
+  sturnovers?: number;
+  turnovers?: number;
   created_at?: string;
   game_key?: string;
   players?: {
@@ -78,6 +80,7 @@ interface SeasonAverages {
   fg_percentage: number;
   three_point_percentage: number;
   ft_percentage: number;
+  avg_efficiency: number;
 }
 
 interface PlayerRankings {
@@ -682,11 +685,13 @@ export default function PlayerStatsPage() {
             three_pointers_attempted: acc.three_pointers_attempted + (game.sthreepointersattempted || 0),
             free_throws_made: acc.free_throws_made + (game.sfreethrowsmade || 0),
             free_throws_attempted: acc.free_throws_attempted + (game.sfreethrowsattempted || 0),
+            turnovers: acc.turnovers + (game.sturnovers || game.turnovers || 0),
           }), {
             points: 0, rebounds: 0, assists: 0, steals: 0, blocks: 0,
             field_goals_made: 0, field_goals_attempted: 0,
             three_pointers_made: 0, three_pointers_attempted: 0,
-            free_throws_made: 0, free_throws_attempted: 0
+            free_throws_made: 0, free_throws_attempted: 0,
+            turnovers: 0
           });
 
           const games = gamesPlayed.length;
@@ -700,6 +705,7 @@ export default function PlayerStatsPage() {
             fg_percentage: totals.field_goals_attempted > 0 ? (totals.field_goals_made / totals.field_goals_attempted) * 100 : 0,
             three_point_percentage: totals.three_pointers_attempted > 0 ? (totals.three_pointers_made / totals.three_pointers_attempted) * 100 : 0,
             ft_percentage: totals.free_throws_attempted > 0 ? (totals.free_throws_made / totals.free_throws_attempted) * 100 : 0,
+            avg_efficiency: ((totals.points + totals.rebounds + totals.assists + totals.steals + totals.blocks) - (totals.field_goals_attempted - totals.field_goals_made) - (totals.free_throws_attempted - totals.free_throws_made) - totals.turnovers) / games,
           };
           setSeasonAverages(averages);
 
@@ -788,11 +794,13 @@ export default function PlayerStatsPage() {
       three_pointers_attempted: acc.three_pointers_attempted + (game.sthreepointersattempted || game.three_pointers_attempted || 0),
       free_throws_made: acc.free_throws_made + (game.sfreethrowsmade || game.free_throws_made || 0),
       free_throws_attempted: acc.free_throws_attempted + (game.sfreethrowsattempted || game.free_throws_attempted || 0),
+      turnovers: acc.turnovers + (game.sturnovers || game.turnovers || 0),
     }), {
       points: 0, rebounds: 0, assists: 0, steals: 0, blocks: 0,
       field_goals_made: 0, field_goals_attempted: 0,
       three_pointers_made: 0, three_pointers_attempted: 0,
-      free_throws_made: 0, free_throws_attempted: 0
+      free_throws_made: 0, free_throws_attempted: 0,
+      turnovers: 0
     });
 
     const games = filteredStats.length;
@@ -806,6 +814,7 @@ export default function PlayerStatsPage() {
       fg_percentage: totals.field_goals_attempted > 0 ? (totals.field_goals_made / totals.field_goals_attempted) * 100 : 0,
       three_point_percentage: totals.three_pointers_attempted > 0 ? (totals.three_pointers_made / totals.three_pointers_attempted) * 100 : 0,
       ft_percentage: totals.free_throws_attempted > 0 ? (totals.free_throws_made / totals.free_throws_attempted) * 100 : 0,
+      avg_efficiency: ((totals.points + totals.rebounds + totals.assists + totals.steals + totals.blocks) - (totals.field_goals_attempted - totals.field_goals_made) - (totals.free_throws_attempted - totals.free_throws_made) - totals.turnovers) / games,
     };
   }, [filteredStats]);
 
@@ -1206,7 +1215,7 @@ export default function PlayerStatsPage() {
                             </Badge>
                           )}
                         </div>
-                        <div className="grid grid-cols-3 md:grid-cols-5 gap-3 md:gap-4">
+                        <div className="grid grid-cols-3 md:grid-cols-6 gap-3 md:gap-4">
                           {/* Points */}
                           <div className="text-center group">
                             <div className="text-xl md:text-2xl lg:text-3xl font-bold text-orange-700 dark:text-orange-400 group-hover:scale-110 transition-transform">
@@ -1256,6 +1265,13 @@ export default function PlayerStatsPage() {
                             {playerRankings && (
                               <div className="text-[10px] text-orange-500 dark:text-orange-600">({getOrdinalSuffix(playerRankings.blocks)})</div>
                             )}
+                          </div>
+                          {/* Efficiency - hidden on mobile */}
+                          <div className="text-center group hidden md:block">
+                            <div className="text-xl md:text-2xl lg:text-3xl font-bold text-orange-700 dark:text-orange-400 group-hover:scale-110 transition-transform">
+                              {filteredSeasonAverages.avg_efficiency.toFixed(1)}
+                            </div>
+                            <div className="text-xs text-orange-600 dark:text-orange-500">EFF</div>
                           </div>
                         </div>
                       </div>

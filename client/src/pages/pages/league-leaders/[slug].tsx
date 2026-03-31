@@ -3,11 +3,12 @@ import { useParams, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
-import { Trophy, TrendingUp, Users, Target, Shield, Zap, ArrowLeft, Filter } from "lucide-react";
+import { ArrowLeft, Filter } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { namesMatch, getMostCompleteName } from "@/lib/fuzzyMatch";
 import { normalizeTeamName } from "@/lib/teamUtils";
+import { useLeagueBranding } from "@/hooks/useLeagueBranding";
+import LeagueDefaultImage from "@/assets/league-default.png";
 
 interface ChildLeague {
   league_id: string;
@@ -24,6 +25,7 @@ interface LeaderboardStats {
   three_point_percentage: any[];
   free_throw_percentage: any[];
   games_played: any[];
+  efficiency: any[];
 }
 
 interface League {
@@ -32,6 +34,10 @@ interface League {
   slug: string;
   description?: string;
   logo_url?: string;
+  banner_url?: string;
+  primary_color?: string;
+  secondary_color?: string;
+  accent_color?: string;
 }
 
 export default function LeagueLeadersPage() {
@@ -44,6 +50,45 @@ export default function LeagueLeadersPage() {
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'averages' | 'totals'>('averages');
   const [selectedAgeGroup, setSelectedAgeGroup] = useState<string>('all');
+
+  const { colors: leagueBrandColors } = useLeagueBranding({
+    slug,
+    bannerUrl: league?.banner_url,
+    logoUrl: league?.logo_url,
+    manualPrimaryColor: league?.primary_color,
+    manualSecondaryColor: league?.secondary_color,
+    manualAccentColor: league?.accent_color,
+    enabled: !!league,
+  });
+
+  const brandColor = leagueBrandColors?.primary || 'rgb(249, 115, 22)';
+  const brandColorHover = leagueBrandColors
+    ? `rgb(${Math.max(0, leagueBrandColors.primaryRgb.r - 20)}, ${Math.max(0, leagueBrandColors.primaryRgb.g - 20)}, ${Math.max(0, leagueBrandColors.primaryRgb.b - 20)})`
+    : 'rgb(234, 88, 12)';
+  const brandBorderLight = leagueBrandColors
+    ? `rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.2)`
+    : 'rgb(255, 237, 213)';
+  const brandBg10 = leagueBrandColors
+    ? `rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.1)`
+    : 'rgba(249, 115, 22, 0.1)';
+  const brandBg50 = leagueBrandColors
+    ? `rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.05)`
+    : 'rgba(249, 115, 22, 0.05)';
+  const brandTextLight = leagueBrandColors
+    ? `rgb(${Math.min(255, leagueBrandColors.primaryRgb.r + 60)}, ${Math.min(255, leagueBrandColors.primaryRgb.g + 60)}, ${Math.min(255, leagueBrandColors.primaryRgb.b + 60)})`
+    : 'rgb(251, 146, 60)';
+
+  const [brandFadedIn, setBrandFadedIn] = useState(false);
+  useEffect(() => {
+    if (leagueBrandColors) {
+      const raf = requestAnimationFrame(() => {
+        setBrandFadedIn(true);
+      });
+      return () => cancelAnimationFrame(raf);
+    } else {
+      setBrandFadedIn(false);
+    }
+  }, [leagueBrandColors]);
 
   const isParentLeague = childLeagues.length > 0;
 
@@ -159,7 +204,8 @@ export default function LeagueLeadersPage() {
       field_goal_percentage: [],
       three_point_percentage: [],
       free_throw_percentage: [],
-      games_played: []
+      games_played: [],
+      efficiency: []
     };
 
     const playerStatsMap = new Map();
@@ -189,6 +235,7 @@ export default function LeagueLeadersPage() {
           total_three_points_attempted: 0,
           total_free_throws_made: 0,
           total_free_throws_attempted: 0,
+          total_turnovers: 0,
           games_played: 0
         });
       }
@@ -205,6 +252,7 @@ export default function LeagueLeadersPage() {
       playerData.total_three_points_attempted += stat.sthreepointersattempted || 0;
       playerData.total_free_throws_made += stat.sfreethrowsmade || 0;
       playerData.total_free_throws_attempted += stat.sfreethrowsattempted || 0;
+      playerData.total_turnovers += stat.sturnovers || 0;
       playerData.games_played += 1;
     });
 
@@ -232,6 +280,7 @@ export default function LeagueLeadersPage() {
           existingPlayer.total_three_points_attempted += player.total_three_points_attempted;
           existingPlayer.total_free_throws_made += player.total_free_throws_made;
           existingPlayer.total_free_throws_attempted += player.total_free_throws_attempted;
+          existingPlayer.total_turnovers += player.total_turnovers;
           existingPlayer.name = getMostCompleteName([existingPlayer.name, player.name]);
           if (!existingPlayer.player_slug && player.player_slug) {
             existingPlayer.player_slug = player.player_slug;
@@ -357,6 +406,27 @@ export default function LeagueLeadersPage() {
       .sort((a, b) => b.ft_percentage - a.ft_percentage)
       .slice(0, 5);
 
+    processedStats.efficiency = playersWithEnoughGames
+      .map(p => {
+        const totalEff = p.total_points + p.total_rebounds + p.total_assists + p.total_steals + p.total_blocks
+          - (p.total_field_goals_attempted - p.total_field_goals_made)
+          - (p.total_free_throws_attempted - p.total_free_throws_made)
+          - p.total_turnovers;
+        const avgEff = totalEff / p.games_played;
+        return {
+          ...p,
+          total_efficiency: totalEff,
+          avg_efficiency: avgEff,
+          display_value: viewMode === 'averages'
+            ? `${avgEff.toFixed(1)} EFF`
+            : `${Math.round(totalEff)} EFF`
+        };
+      })
+      .sort((a, b) => viewMode === 'averages'
+        ? b.avg_efficiency - a.avg_efficiency
+        : b.total_efficiency - a.total_efficiency)
+      .slice(0, 5);
+
     processedStats.games_played = playersArray
       .map(p => ({
         ...p,
@@ -370,19 +440,17 @@ export default function LeagueLeadersPage() {
 
   const StatLeaderboard = ({ 
     title, 
-    icon: Icon, 
     players, 
-    iconColor 
   }: { 
     title: string; 
-    icon: any; 
     players: any[]; 
-    iconColor: string;
   }) => (
-    <Card className="bg-white dark:bg-neutral-900 border-orange-200 dark:border-neutral-700 shadow-[0_4px_20px_rgba(255,115,0,0.1)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.3)] hover:shadow-[0_8px_30px_rgba(255,115,0,0.15)] dark:hover:shadow-[0_8px_30px_rgba(0,0,0,0.5)] transition-all duration-300">
+    <Card
+      className="bg-white dark:bg-neutral-900 dark:border-neutral-700 shadow-md hover:shadow-lg transition-all duration-300"
+      style={{ borderColor: brandBorderLight }}
+    >
       <CardHeader className="pb-2 md:pb-3 p-4 md:p-6">
-        <CardTitle className="flex items-center gap-2 text-base md:text-lg font-semibold text-orange-800 dark:text-orange-400">
-          <Icon className={`h-5 w-5 md:h-6 md:w-6 ${iconColor}`} />
+        <CardTitle className="text-base md:text-lg font-semibold" style={{ color: brandColor }}>
           {title}
         </CardTitle>
       </CardHeader>
@@ -391,35 +459,41 @@ export default function LeagueLeadersPage() {
           players.map((player, index) => (
             <div 
               key={`${player.player_id}-${index}`} 
-              className="flex items-center justify-between py-2 md:py-3 px-2 md:px-3 rounded-lg bg-orange-50 dark:bg-neutral-800 hover:bg-orange-100 dark:hover:bg-neutral-700 transition-colors duration-200 cursor-pointer"
+              className="leader-row flex items-center justify-between py-2 md:py-3 px-2 md:px-3 rounded-lg transition-colors duration-200 cursor-pointer"
               onClick={() => {
                 const identifier = player.player_slug || player.player_id;
                 if (identifier) navigate(`/player/${identifier}`);
               }}
             >
               <div className="flex items-center gap-2 md:gap-3">
-                <div className={`
-                  w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center text-xs md:text-sm font-bold text-white
-                  ${index === 0 ? 'bg-gradient-to-br from-yellow-400 to-yellow-600' : 
-                    index === 1 ? 'bg-gradient-to-br from-gray-400 to-gray-600' :
-                    index === 2 ? 'bg-gradient-to-br from-orange-400 to-orange-600' :
-                    'bg-gradient-to-br from-orange-300 to-orange-400'}
-                `}>
+                <div
+                  className="w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center text-xs md:text-sm font-bold text-white"
+                  style={{
+                    background: index === 0
+                      ? 'linear-gradient(to bottom right, #facc15, #ca8a04)'
+                      : index === 1
+                      ? 'linear-gradient(to bottom right, #9ca3af, #4b5563)'
+                      : index === 2
+                      ? `linear-gradient(to bottom right, ${brandColor}, ${brandColorHover})`
+                      : brandBg10,
+                    color: index >= 3 ? brandColor : '#ffffff',
+                  }}
+                >
                   {index + 1}
                 </div>
                 <div>
-                  <p className="text-sm md:text-base font-medium text-orange-900 dark:text-orange-300">{player.name}</p>
-                  <p className="text-xs md:text-sm text-gray-800 dark:text-white">{player.team_name || 'Unknown Team'}</p>
+                  <p className="brand-name text-sm md:text-base font-medium" style={{ color: brandColorHover }}>{player.name}</p>
+                  <p className="text-xs md:text-sm text-gray-300 dark:text-white">{player.team_name || 'Unknown Team'}</p>
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-sm md:text-base font-bold text-orange-800 dark:text-orange-400">{player.display_value}</p>
-                <p className="text-xs text-orange-600 dark:text-orange-500">{player.games_played} games</p>
+                <p className="brand-value text-sm md:text-base font-bold" style={{ color: brandColor }}>{player.display_value}</p>
+                <p className="brand-games text-xs" style={{ color: brandColor, opacity: 0.7 }}>{player.games_played} games</p>
               </div>
             </div>
           ))
         ) : (
-          <p className="text-orange-600 dark:text-orange-400 text-center py-4">No data available</p>
+          <p className="text-center py-4" style={{ color: brandColor }}>No data available</p>
         )}
       </CardContent>
     </Card>
@@ -431,8 +505,8 @@ export default function LeagueLeadersPage() {
         <Header />
         <main className="flex-grow flex items-center justify-center">
           <div className="text-center space-y-4">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto"></div>
-            <p className="text-orange-700 dark:text-orange-400">Loading league leaders...</p>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 mx-auto" style={{ borderColor: brandColor }}></div>
+            <p style={{ color: brandColor }}>Loading league leaders...</p>
           </div>
         </main>
         <Footer />
@@ -457,31 +531,81 @@ export default function LeagueLeadersPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-neutral-950">
+    <div
+      className="league-leaders-page min-h-screen flex flex-col bg-[#fffaf1] dark:bg-neutral-950 transition-colors duration-700 relative"
+      style={{ '--brand-bg': brandBg50, '--brand-bg-hover': brandBg10, '--brand-text-light': brandTextLight } as React.CSSProperties}
+    >
+      <style>{`
+        .league-leaders-page .leader-row { background-color: #1a1a1a; }
+        .league-leaders-page .leader-row:hover { background-color: #2a2a2a; }
+        .league-leaders-page .leader-row .brand-name { color: #ffffff !important; }
+        .league-leaders-page .leader-row .brand-value { color: #ffffff !important; }
+        .league-leaders-page .leader-row .brand-games { color: #d4d4d4 !important; opacity: 0.85; }
+        :is(.dark) .league-leaders-page .leader-row { background-color: rgb(38 38 38); }
+        :is(.dark) .league-leaders-page .leader-row:hover { background-color: rgb(64 64 64); }
+        :is(.dark) .league-leaders-page .leader-row .brand-name { color: var(--brand-text-light) !important; }
+        :is(.dark) .league-leaders-page .leader-row .brand-value { color: var(--brand-text-light) !important; }
+        :is(.dark) .league-leaders-page .leader-row .brand-games { color: var(--brand-text-light) !important; opacity: 0.7; }
+        .league-leaders-page .brand-toggle:not(.brand-toggle-active):hover { background-color: var(--brand-bg-hover); }
+      `}</style>
+      {leagueBrandColors && (
+        <>
+          <div
+            className="absolute inset-0 pointer-events-none transition-opacity duration-1000 ease-in-out dark:hidden"
+            style={{
+              opacity: brandFadedIn ? 1 : 0,
+              background: `linear-gradient(180deg, transparent 20%, rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.08) 60%, rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.18) 100%)`,
+            }}
+          />
+          <div
+            className="absolute inset-0 pointer-events-none transition-opacity duration-1000 ease-in-out hidden dark:block"
+            style={{
+              opacity: brandFadedIn ? 1 : 0,
+              background: `linear-gradient(180deg, transparent 20%, rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.10) 60%, rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.22) 100%)`,
+            }}
+          />
+        </>
+      )}
+      <div className="relative z-10 flex flex-col min-h-screen">
       <Header />
 
-      <main className="flex-grow p-4 md:p-6 max-w-7xl mx-auto space-y-6 md:space-y-8">
-        {/* Back Button */}
+      <section className="mb-6">
+        <div
+          className="rounded-xl overflow-hidden shadow relative h-40 sm:h-52 md:h-64 bg-gray-200 mx-4 md:mx-6 mt-4"
+          style={{
+            backgroundImage: `url(${league?.banner_url || LeagueDefaultImage})`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+          }}
+        >
+          <div className="absolute inset-0 bg-black/40 flex flex-col justify-end p-6">
+            <div className="flex items-center gap-3">
+              {league?.logo_url && (
+                <img src={league.logo_url} alt={league.name} className="h-10 w-10 md:h-14 md:w-14 object-contain rounded-lg bg-white/20 p-1" />
+              )}
+              <div>
+                <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white drop-shadow-md">
+                  League Leaders
+                </h1>
+                <p className="text-sm text-white/90 mt-1">{league?.name}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <main className="flex-grow p-4 md:p-6 max-w-7xl mx-auto w-full space-y-6 md:space-y-8">
         <button
           onClick={() => navigate(`/league/${slug}`)}
-          className="flex items-center gap-2 text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 font-medium transition-colors"
+          className="flex items-center gap-2 font-medium transition-colors opacity-90 hover:opacity-100"
+          style={{ color: brandColor }}
           data-testid="button-back-to-league"
         >
           <ArrowLeft className="h-5 w-5" />
           <span>Back to League</span>
         </button>
 
-        {/* Header Section */}
         <div className="text-center space-y-3 md:space-y-4">
-          <div className="flex flex-col md:flex-row items-center justify-center gap-2 md:gap-3">
-            {league?.logo_url ? (
-              <img src={league.logo_url} alt={league.name} className="h-10 w-10 md:h-14 md:w-14 object-contain" />
-            ) : (
-              <Trophy className="h-6 w-6 md:h-8 md:w-8 text-orange-500" />
-            )}
-            <h1 className="sr-only">League Leaders</h1>
-          </div>
-          <h2 className="text-xl md:text-2xl font-semibold text-orange-800 dark:text-orange-300">{league?.name}</h2>
           {league?.description && (
             <p className="text-sm md:text-base text-gray-800 dark:text-white max-w-2xl mx-auto">{league.description}</p>
           )}
@@ -489,11 +613,12 @@ export default function LeagueLeadersPage() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
             {isParentLeague && ageGroupOptions.length > 0 && (
               <div className="flex items-center gap-2">
-                <Filter className="h-4 w-4 text-orange-500" />
+                <Filter className="h-4 w-4" style={{ color: brandColor }} />
                 <select
                   value={selectedAgeGroup}
                   onChange={(e) => setSelectedAgeGroup(e.target.value)}
-                  className="px-3 py-2 text-sm font-medium rounded-lg border border-orange-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-orange-800 dark:text-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  className="px-3 py-2 text-sm font-medium rounded-lg border dark:border-neutral-700 bg-white dark:bg-neutral-800 focus:outline-none focus:ring-2"
+                  style={{ borderColor: brandBorderLight, color: brandColor }}
                   data-testid="select-age-group"
                 >
                   <option value="all">All Age Groups</option>
@@ -503,25 +628,27 @@ export default function LeagueLeadersPage() {
                 </select>
               </div>
             )}
-            <div className="inline-flex rounded-lg border border-orange-200 dark:border-neutral-700 bg-orange-50 dark:bg-neutral-800 p-1">
+            <div className="inline-flex rounded-lg border dark:border-neutral-700 p-1" style={{ borderColor: brandBorderLight, backgroundColor: brandBg50 }}>
               <button
                 onClick={() => setViewMode('averages')}
-                className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                className={`brand-toggle px-4 py-2 text-sm font-medium rounded-md transition-all ${
                   viewMode === 'averages'
-                    ? 'bg-white dark:bg-neutral-700 text-orange-600 dark:text-orange-400 shadow-sm'
-                    : 'text-orange-700 dark:text-orange-500 hover:text-orange-800 dark:hover:text-orange-300'
+                    ? 'brand-toggle-active bg-white dark:bg-neutral-700 shadow-sm'
+                    : ''
                 }`}
+                style={{ color: brandColor }}
                 data-testid="button-view-averages"
               >
                 Averages
               </button>
               <button
                 onClick={() => setViewMode('totals')}
-                className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${
+                className={`brand-toggle px-4 py-2 text-sm font-medium rounded-md transition-all ${
                   viewMode === 'totals'
-                    ? 'bg-white dark:bg-neutral-700 text-orange-600 dark:text-orange-400 shadow-sm'
-                    : 'text-orange-700 dark:text-orange-500 hover:text-orange-800 dark:hover:text-orange-300'
+                    ? 'brand-toggle-active bg-white dark:bg-neutral-700 shadow-sm'
+                    : ''
                 }`}
+                style={{ color: brandColor }}
                 data-testid="button-view-totals"
               >
                 Totals
@@ -533,89 +660,28 @@ export default function LeagueLeadersPage() {
         {/* Leaderboards Grid */}
         {leaderboardStats && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-            {/* Scoring */}
-            <StatLeaderboard
-              title="Scoring Leaders"
-              icon={Target}
-              players={leaderboardStats.points}
-              iconColor="text-red-500"
-            />
-
-            {/* Rebounds */}
-            <StatLeaderboard
-              title="Rebounding Leaders"
-              icon={Shield}
-              players={leaderboardStats.rebounds_total}
-              iconColor="text-blue-500"
-            />
-
-            {/* Assists */}
-            <StatLeaderboard
-              title="Assist Leaders"
-              icon={Users}
-              players={leaderboardStats.assists}
-              iconColor="text-green-500"
-            />
-
-            {/* Steals */}
-            <StatLeaderboard
-              title="Steal Leaders"
-              icon={Zap}
-              players={leaderboardStats.steals}
-              iconColor="text-purple-500"
-            />
-
-            {/* Blocks */}
-            <StatLeaderboard
-              title="Block Leaders"
-              icon={Shield}
-              players={leaderboardStats.blocks}
-              iconColor="text-indigo-500"
-            />
-
-            {/* Field Goal % */}
-            <StatLeaderboard
-              title="Field Goal %"
-              icon={Target}
-              players={leaderboardStats.field_goal_percentage}
-              iconColor="text-orange-500"
-            />
-
-            {/* Three Point % */}
-            <StatLeaderboard
-              title="Three Point %"
-              icon={Target}
-              players={leaderboardStats.three_point_percentage}
-              iconColor="text-cyan-500"
-            />
-
-            {/* Free Throw % */}
-            <StatLeaderboard
-              title="Free Throw %"
-              icon={Target}
-              players={leaderboardStats.free_throw_percentage}
-              iconColor="text-pink-500"
-            />
-
-            {/* Games Played */}
-            <StatLeaderboard
-              title="Games Played"
-              icon={TrendingUp}
-              players={leaderboardStats.games_played}
-              iconColor="text-gray-500"
-            />
+            <StatLeaderboard title="Scoring Leaders" players={leaderboardStats.points} />
+            <StatLeaderboard title="Rebounding Leaders" players={leaderboardStats.rebounds_total} />
+            <StatLeaderboard title="Assist Leaders" players={leaderboardStats.assists} />
+            <StatLeaderboard title="Steal Leaders" players={leaderboardStats.steals} />
+            <StatLeaderboard title="Block Leaders" players={leaderboardStats.blocks} />
+            <StatLeaderboard title="Field Goal %" players={leaderboardStats.field_goal_percentage} />
+            <StatLeaderboard title="Three Point %" players={leaderboardStats.three_point_percentage} />
+            <StatLeaderboard title="Free Throw %" players={leaderboardStats.free_throw_percentage} />
+            <StatLeaderboard title="Efficiency Leaders" players={leaderboardStats.efficiency} />
+            <StatLeaderboard title="Games Played" players={leaderboardStats.games_played} />
           </div>
         )}
 
-        {/* Note about minimum requirements */}
-        <div className="bg-orange-50 dark:bg-neutral-800 border border-orange-200 dark:border-neutral-700 rounded-lg p-3 md:p-4 text-center">
-          <p className="text-xs md:text-sm text-orange-700 dark:text-orange-400">
+        <div className="dark:bg-neutral-800 border dark:border-neutral-700 rounded-lg p-3 md:p-4 text-center" style={{ backgroundColor: brandBg50, borderColor: brandBorderLight }}>
+          <p className="text-xs md:text-sm" style={{ color: brandColor }}>
             * Shooting percentages require minimum attempts: Field Goals (2+), Three Pointers (1+), Free Throws (1+)
           </p>
         </div>
       </main>
 
       <Footer />
+      </div>
     </div>
   );
 }
