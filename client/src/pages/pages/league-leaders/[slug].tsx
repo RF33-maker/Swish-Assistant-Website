@@ -65,6 +65,17 @@ export default function LeagueLeadersPage() {
           return;
         }
 
+        // Check for child leagues (parent league pattern)
+        let leagueIdsToQuery = [leagueData.league_id];
+        const { data: childLeagues } = await supabase
+          .from("leagues")
+          .select("league_id")
+          .eq("parent_league_id", leagueData.league_id);
+        
+        if (childLeagues && childLeagues.length > 0) {
+          leagueIdsToQuery = childLeagues.map(c => c.league_id);
+        }
+
         // Fetch ALL player stats for the league with pagination to bypass 1000 row limit
         let allPlayerStats: any[] = [];
         let page = 0;
@@ -75,7 +86,7 @@ export default function LeagueLeadersPage() {
           const { data: pageData, error: pageError } = await supabase
             .from("player_stats")
             .select("*, players:player_id(full_name, slug)")
-            .eq("league_id", leagueData.league_id)
+            .in("league_id", leagueIdsToQuery)
             .range(page * pageSize, (page + 1) * pageSize - 1);
           
           if (pageError) {
