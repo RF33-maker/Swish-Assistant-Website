@@ -1,13 +1,18 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useParams, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
-import { Trophy, TrendingUp, Users, Target, Shield, Zap, ArrowLeft } from "lucide-react";
+import { Trophy, TrendingUp, Users, Target, Shield, Zap, ArrowLeft, Filter } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { namesMatch, getMostCompleteName } from "@/lib/fuzzyMatch";
 import { normalizeTeamName } from "@/lib/teamUtils";
+
+interface ChildLeague {
+  league_id: string;
+  name: string;
+}
 
 interface LeaderboardStats {
   points: any[];
@@ -33,10 +38,24 @@ export default function LeagueLeadersPage() {
   const { slug } = useParams();
   const [location, navigate] = useLocation();
   const [league, setLeague] = useState<League | null>(null);
-  const [leaderboardStats, setLeaderboardStats] = useState<LeaderboardStats | null>(null);
+  const [rawPlayerStats, setRawPlayerStats] = useState<any[]>([]);
+  const [childLeagues, setChildLeagues] = useState<ChildLeague[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'averages' | 'totals'>('averages');
+  const [selectedAgeGroup, setSelectedAgeGroup] = useState<string>('all');
+
+  const isParentLeague = childLeagues.length > 0;
+
+  const ageGroupOptions = useMemo(() => {
+    if (!isParentLeague || !league) return [];
+    return childLeagues
+      .map(c => ({
+        league_id: c.league_id,
+        label: league.name ? c.name.replace(league.name, '').trim() || c.name : c.name,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [childLeagues, league, isParentLeague]);
 
   useEffect(() => {
     const fetchLeagueAndStats = async () => {
@@ -46,7 +65,6 @@ export default function LeagueLeadersPage() {
         setLoading(true);
         setError(null);
 
-        // Fetch league information
         const { data: leagueData, error: leagueError } = await supabase
           .from("leagues")
           .select("*")
@@ -65,7 +83,19 @@ export default function LeagueLeadersPage() {
           return;
         }
 
-        // Fetch ALL player stats for the league with pagination to bypass 1000 row limit
+        let leagueIdsToQuery = [leagueData.league_id];
+        const { data: childLeagueData } = await supabase
+          .from("leagues")
+          .select("league_id, name")
+          .eq("parent_league_id", leagueData.league_id);
+        
+        if (childLeagueData && childLeagueData.length > 0) {
+          setChildLeagues(childLeagueData);
+          leagueIdsToQuery = childLeagueData.map(c => c.league_id);
+        } else {
+          setChildLeagues([]);
+        }
+
         let allPlayerStats: any[] = [];
         let page = 0;
         const pageSize = 1000;
@@ -75,7 +105,7 @@ export default function LeagueLeadersPage() {
           const { data: pageData, error: pageError } = await supabase
             .from("player_stats")
             .select("*, players:player_id(full_name, slug)")
-            .eq("league_id", leagueData.league_id)
+            .in("league_id", leagueIdsToQuery)
             .range(page * pageSize, (page + 1) * pageSize - 1);
           
           if (pageError) {
@@ -97,250 +127,7 @@ export default function LeagueLeadersPage() {
           return;
         }
 
-        // Process stats to create leaderboards
-        const processedStats: LeaderboardStats = {
-          points: [],
-          rebounds_total: [],
-          assists: [],
-          steals: [],
-          blocks: [],
-          field_goal_percentage: [],
-          three_point_percentage: [],
-          free_throw_percentage: [],
-          games_played: []
-        };
-
-        // Use shared fuzzy matching from fuzzyMatch.ts
-        // namesMatch handles: number stripping, initial matching (R Farrell vs Rhys Farrell), 
-        // Jaro-Winkler similarity at 0.85 threshold for typo tolerance
-
-        // First pass: Group stats by player_id
-        const playerStatsMap = new Map();
-
-        allPlayerStats.forEach(stat => {
-          // Use the correct team field from the data structure
-          const teamName = stat.team || stat.team_name || 'Unknown Team';
-          // Use full_name from players table, fallback to existing name, then combine firstname/familyname
-          const playerName = stat.full_name || 
-                            stat.players?.full_name || 
-                            stat.name || 
-                            `${stat.firstname || ''} ${stat.familyname || ''}`.trim() || 
-                            'Unknown Player';
-          // Use player_id for grouping to avoid name mismatches, fallback to record id
-          const playerKey = stat.player_id || stat.id;
-          if (!playerStatsMap.has(playerKey)) {
-            playerStatsMap.set(playerKey, {
-              player_id: stat.player_id || stat.id, // Use player_id if available, otherwise use id
-              player_slug: stat.players?.slug || null, // Get slug from joined players table
-              name: playerName,
-              team_name: teamName,
-              total_points: 0,
-              total_rebounds: 0,
-              total_assists: 0,
-              total_steals: 0,
-              total_blocks: 0,
-              total_field_goals_made: 0,
-              total_field_goals_attempted: 0,
-              total_three_points_made: 0,
-              total_three_points_attempted: 0,
-              total_free_throws_made: 0,
-              total_free_throws_attempted: 0,
-              games_played: 0
-            });
-          }
-
-          const playerData = playerStatsMap.get(playerKey);
-          playerData.total_points += stat.spoints || 0;
-          playerData.total_rebounds += stat.sreboundstotal || 0;
-          playerData.total_assists += stat.sassists || 0;
-          playerData.total_steals += stat.ssteals || 0;
-          playerData.total_blocks += stat.sblocks || 0;
-          playerData.total_field_goals_made += stat.sfieldgoalsmade || 0;
-          playerData.total_field_goals_attempted += stat.sfieldgoalsattempted || 0;
-          playerData.total_three_points_made += stat.sthreepointersmade || 0;
-          playerData.total_three_points_attempted += stat.sthreepointersattempted || 0;
-          playerData.total_free_throws_made += stat.sfreethrowsmade || 0;
-          playerData.total_free_throws_attempted += stat.sfreethrowsattempted || 0;
-          playerData.games_played += 1;
-        });
-
-        // Second pass: Merge duplicates by name (handles data quality issues where same player has multiple IDs)
-        // Uses shared namesMatch which handles: numbers in names, initials, typos via Jaro-Winkler
-        const playersByIdArray = Array.from(playerStatsMap.values());
-        
-        // Sort by games_played DESC so players with more games become the anchor
-        playersByIdArray.sort((a, b) => b.games_played - a.games_played);
-        
-        const mergedPlayers: typeof playersByIdArray = [];
-        
-        playersByIdArray.forEach((player) => {
-          // Normalize team name for comparison (handles "Senior Men I" vs base name)
-          const playerTeamNormalized = normalizeTeamName(player.team_name);
-          
-          // Check if we already have a similar name on the SAME TEAM (prevents false positives)
-          let foundMatch = false;
-          for (const existingPlayer of mergedPlayers) {
-            // Normalize existing player's team for comparison
-            const existingTeamNormalized = normalizeTeamName(existingPlayer.team_name);
-            
-            // Only merge if normalized teams match AND names match (handles typos, initials, numbers)
-            const sameTeam = existingTeamNormalized === playerTeamNormalized;
-            if (sameTeam && namesMatch(player.name, existingPlayer.name)) {
-              // Merge stats with existing player (which has more games since we sorted)
-              existingPlayer.games_played += player.games_played;
-              existingPlayer.total_points += player.total_points;
-              existingPlayer.total_rebounds += player.total_rebounds;
-              existingPlayer.total_assists += player.total_assists;
-              existingPlayer.total_steals += player.total_steals;
-              existingPlayer.total_blocks += player.total_blocks;
-              existingPlayer.total_field_goals_made += player.total_field_goals_made;
-              existingPlayer.total_field_goals_attempted += player.total_field_goals_attempted;
-              existingPlayer.total_three_points_made += player.total_three_points_made;
-              existingPlayer.total_three_points_attempted += player.total_three_points_attempted;
-              existingPlayer.total_free_throws_made += player.total_free_throws_made;
-              existingPlayer.total_free_throws_attempted += player.total_free_throws_attempted;
-              // Keep the most complete name (prefers full names over initials)
-              existingPlayer.name = getMostCompleteName([existingPlayer.name, player.name]);
-              // Keep player_slug if one exists
-              if (!existingPlayer.player_slug && player.player_slug) {
-                existingPlayer.player_slug = player.player_slug;
-              }
-              foundMatch = true;
-              break;
-            }
-          }
-          
-          if (!foundMatch) {
-            // First time seeing this player - add them
-            mergedPlayers.push({ ...player });
-          }
-        });
-
-        const playersArray = mergedPlayers;
-
-        // Data processing complete
-
-        // Create leaderboards for each category
-        processedStats.points = playersArray
-          .map(p => ({
-            ...p,
-            avg_points: p.total_points / p.games_played,
-            display_value: viewMode === 'averages' 
-              ? `${(p.total_points / p.games_played).toFixed(1)} PPG`
-              : `${Math.round(p.total_points)} PTS`
-          }))
-          .sort((a, b) => viewMode === 'averages' 
-            ? b.avg_points - a.avg_points 
-            : b.total_points - a.total_points)
-          .slice(0, 5);
-
-        processedStats.rebounds_total = playersArray
-          .map(p => ({
-            ...p,
-            avg_rebounds: p.total_rebounds / p.games_played,
-            display_value: viewMode === 'averages'
-              ? `${(p.total_rebounds / p.games_played).toFixed(1)} RPG`
-              : `${Math.round(p.total_rebounds)} REB`
-          }))
-          .sort((a, b) => viewMode === 'averages'
-            ? b.avg_rebounds - a.avg_rebounds
-            : b.total_rebounds - a.total_rebounds)
-          .slice(0, 5);
-
-        processedStats.assists = playersArray
-          .map(p => ({
-            ...p,
-            avg_assists: p.total_assists / p.games_played,
-            display_value: viewMode === 'averages'
-              ? `${(p.total_assists / p.games_played).toFixed(1)} APG`
-              : `${Math.round(p.total_assists)} AST`
-          }))
-          .sort((a, b) => viewMode === 'averages'
-            ? b.avg_assists - a.avg_assists
-            : b.total_assists - a.total_assists)
-          .slice(0, 5);
-
-        processedStats.steals = playersArray
-          .map(p => ({
-            ...p,
-            avg_steals: p.total_steals / p.games_played,
-            display_value: viewMode === 'averages'
-              ? `${(p.total_steals / p.games_played).toFixed(1)} SPG`
-              : `${Math.round(p.total_steals)} STL`
-          }))
-          .sort((a, b) => viewMode === 'averages'
-            ? b.avg_steals - a.avg_steals
-            : b.total_steals - a.total_steals)
-          .slice(0, 5);
-
-        processedStats.blocks = playersArray
-          .map(p => ({
-            ...p,
-            avg_blocks: p.total_blocks / p.games_played,
-            display_value: viewMode === 'averages'
-              ? `${(p.total_blocks / p.games_played).toFixed(1)} BPG`
-              : `${Math.round(p.total_blocks)} BLK`
-          }))
-          .sort((a, b) => viewMode === 'averages'
-            ? b.avg_blocks - a.avg_blocks
-            : b.total_blocks - a.total_blocks)
-          .slice(0, 5);
-
-        // Calculate shooting percentages (minimum 1 game)
-        const playersWithEnoughGames = playersArray.filter(p => p.games_played >= 1);
-
-        processedStats.field_goal_percentage = playersWithEnoughGames
-          .map(p => ({
-            ...p,
-            fg_percentage: p.total_field_goals_attempted > 0 
-              ? (p.total_field_goals_made / p.total_field_goals_attempted) * 100 
-              : 0,
-            display_value: p.total_field_goals_attempted > 0 
-              ? `${((p.total_field_goals_made / p.total_field_goals_attempted) * 100).toFixed(1)}%`
-              : "0.0%"
-          }))
-          .filter(p => p.total_field_goals_attempted >= 2) // Minimum 2 attempts
-          .sort((a, b) => b.fg_percentage - a.fg_percentage)
-          .slice(0, 5);
-
-        processedStats.three_point_percentage = playersWithEnoughGames
-          .map(p => ({
-            ...p,
-            three_point_percentage: p.total_three_points_attempted > 0 
-              ? (p.total_three_points_made / p.total_three_points_attempted) * 100 
-              : 0,
-            display_value: p.total_three_points_attempted > 0 
-              ? `${((p.total_three_points_made / p.total_three_points_attempted) * 100).toFixed(1)}%`
-              : "0.0%"
-          }))
-          .filter(p => p.total_three_points_attempted >= 1) // Minimum 1 attempt
-          .sort((a, b) => b.three_point_percentage - a.three_point_percentage)
-          .slice(0, 5);
-
-        processedStats.free_throw_percentage = playersWithEnoughGames
-          .map(p => ({
-            ...p,
-            ft_percentage: p.total_free_throws_attempted > 0 
-              ? (p.total_free_throws_made / p.total_free_throws_attempted) * 100 
-              : 0,
-            display_value: p.total_free_throws_attempted > 0 
-              ? `${((p.total_free_throws_made / p.total_free_throws_attempted) * 100).toFixed(1)}%`
-              : "0.0%"
-          }))
-          .filter(p => p.total_free_throws_attempted >= 1) // Minimum 1 attempt
-          .sort((a, b) => b.ft_percentage - a.ft_percentage)
-          .slice(0, 5);
-
-        // Games played is same for both modes (no average needed)
-        processedStats.games_played = playersArray
-          .map(p => ({
-            ...p,
-            display_value: `${p.games_played} GP`
-          }))
-          .sort((a, b) => b.games_played - a.games_played)
-          .slice(0, 5);
-
-        setLeaderboardStats(processedStats);
+        setRawPlayerStats(allPlayerStats);
 
       } catch (err) {
         console.error("Error fetching league leaders:", err);
@@ -351,7 +138,235 @@ export default function LeagueLeadersPage() {
     };
 
     fetchLeagueAndStats();
-  }, [slug, viewMode]);
+  }, [slug]);
+
+  const leaderboardStats = useMemo(() => {
+    if (rawPlayerStats.length === 0) return null;
+
+    let filteredStats = rawPlayerStats;
+    if (isParentLeague && selectedAgeGroup !== 'all') {
+      filteredStats = rawPlayerStats.filter(s => s.league_id === selectedAgeGroup);
+    }
+
+    if (filteredStats.length === 0) return null;
+
+    const processedStats: LeaderboardStats = {
+      points: [],
+      rebounds_total: [],
+      assists: [],
+      steals: [],
+      blocks: [],
+      field_goal_percentage: [],
+      three_point_percentage: [],
+      free_throw_percentage: [],
+      games_played: []
+    };
+
+    const playerStatsMap = new Map();
+
+    filteredStats.forEach(stat => {
+      const teamName = stat.team || stat.team_name || 'Unknown Team';
+      const playerName = stat.full_name || 
+                        stat.players?.full_name || 
+                        stat.name || 
+                        `${stat.firstname || ''} ${stat.familyname || ''}`.trim() || 
+                        'Unknown Player';
+      const playerKey = stat.player_id || stat.id;
+      if (!playerStatsMap.has(playerKey)) {
+        playerStatsMap.set(playerKey, {
+          player_id: stat.player_id || stat.id,
+          player_slug: stat.players?.slug || null,
+          name: playerName,
+          team_name: teamName,
+          total_points: 0,
+          total_rebounds: 0,
+          total_assists: 0,
+          total_steals: 0,
+          total_blocks: 0,
+          total_field_goals_made: 0,
+          total_field_goals_attempted: 0,
+          total_three_points_made: 0,
+          total_three_points_attempted: 0,
+          total_free_throws_made: 0,
+          total_free_throws_attempted: 0,
+          games_played: 0
+        });
+      }
+
+      const playerData = playerStatsMap.get(playerKey);
+      playerData.total_points += stat.spoints || 0;
+      playerData.total_rebounds += stat.sreboundstotal || 0;
+      playerData.total_assists += stat.sassists || 0;
+      playerData.total_steals += stat.ssteals || 0;
+      playerData.total_blocks += stat.sblocks || 0;
+      playerData.total_field_goals_made += stat.sfieldgoalsmade || 0;
+      playerData.total_field_goals_attempted += stat.sfieldgoalsattempted || 0;
+      playerData.total_three_points_made += stat.sthreepointersmade || 0;
+      playerData.total_three_points_attempted += stat.sthreepointersattempted || 0;
+      playerData.total_free_throws_made += stat.sfreethrowsmade || 0;
+      playerData.total_free_throws_attempted += stat.sfreethrowsattempted || 0;
+      playerData.games_played += 1;
+    });
+
+    const playersByIdArray = Array.from(playerStatsMap.values());
+    playersByIdArray.sort((a, b) => b.games_played - a.games_played);
+    
+    const mergedPlayers: typeof playersByIdArray = [];
+    
+    playersByIdArray.forEach((player) => {
+      const playerTeamNormalized = normalizeTeamName(player.team_name);
+      let foundMatch = false;
+      for (const existingPlayer of mergedPlayers) {
+        const existingTeamNormalized = normalizeTeamName(existingPlayer.team_name);
+        const sameTeam = existingTeamNormalized === playerTeamNormalized;
+        if (sameTeam && namesMatch(player.name, existingPlayer.name)) {
+          existingPlayer.games_played += player.games_played;
+          existingPlayer.total_points += player.total_points;
+          existingPlayer.total_rebounds += player.total_rebounds;
+          existingPlayer.total_assists += player.total_assists;
+          existingPlayer.total_steals += player.total_steals;
+          existingPlayer.total_blocks += player.total_blocks;
+          existingPlayer.total_field_goals_made += player.total_field_goals_made;
+          existingPlayer.total_field_goals_attempted += player.total_field_goals_attempted;
+          existingPlayer.total_three_points_made += player.total_three_points_made;
+          existingPlayer.total_three_points_attempted += player.total_three_points_attempted;
+          existingPlayer.total_free_throws_made += player.total_free_throws_made;
+          existingPlayer.total_free_throws_attempted += player.total_free_throws_attempted;
+          existingPlayer.name = getMostCompleteName([existingPlayer.name, player.name]);
+          if (!existingPlayer.player_slug && player.player_slug) {
+            existingPlayer.player_slug = player.player_slug;
+          }
+          foundMatch = true;
+          break;
+        }
+      }
+      
+      if (!foundMatch) {
+        mergedPlayers.push({ ...player });
+      }
+    });
+
+    const playersArray = mergedPlayers;
+
+    processedStats.points = playersArray
+      .map(p => ({
+        ...p,
+        avg_points: p.total_points / p.games_played,
+        display_value: viewMode === 'averages' 
+          ? `${(p.total_points / p.games_played).toFixed(1)} PPG`
+          : `${Math.round(p.total_points)} PTS`
+      }))
+      .sort((a, b) => viewMode === 'averages' 
+        ? b.avg_points - a.avg_points 
+        : b.total_points - a.total_points)
+      .slice(0, 5);
+
+    processedStats.rebounds_total = playersArray
+      .map(p => ({
+        ...p,
+        avg_rebounds: p.total_rebounds / p.games_played,
+        display_value: viewMode === 'averages'
+          ? `${(p.total_rebounds / p.games_played).toFixed(1)} RPG`
+          : `${Math.round(p.total_rebounds)} REB`
+      }))
+      .sort((a, b) => viewMode === 'averages'
+        ? b.avg_rebounds - a.avg_rebounds
+        : b.total_rebounds - a.total_rebounds)
+      .slice(0, 5);
+
+    processedStats.assists = playersArray
+      .map(p => ({
+        ...p,
+        avg_assists: p.total_assists / p.games_played,
+        display_value: viewMode === 'averages'
+          ? `${(p.total_assists / p.games_played).toFixed(1)} APG`
+          : `${Math.round(p.total_assists)} AST`
+      }))
+      .sort((a, b) => viewMode === 'averages'
+        ? b.avg_assists - a.avg_assists
+        : b.total_assists - a.total_assists)
+      .slice(0, 5);
+
+    processedStats.steals = playersArray
+      .map(p => ({
+        ...p,
+        avg_steals: p.total_steals / p.games_played,
+        display_value: viewMode === 'averages'
+          ? `${(p.total_steals / p.games_played).toFixed(1)} SPG`
+          : `${Math.round(p.total_steals)} STL`
+      }))
+      .sort((a, b) => viewMode === 'averages'
+        ? b.avg_steals - a.avg_steals
+        : b.total_steals - a.total_steals)
+      .slice(0, 5);
+
+    processedStats.blocks = playersArray
+      .map(p => ({
+        ...p,
+        avg_blocks: p.total_blocks / p.games_played,
+        display_value: viewMode === 'averages'
+          ? `${(p.total_blocks / p.games_played).toFixed(1)} BPG`
+          : `${Math.round(p.total_blocks)} BLK`
+      }))
+      .sort((a, b) => viewMode === 'averages'
+        ? b.avg_blocks - a.avg_blocks
+        : b.total_blocks - a.total_blocks)
+      .slice(0, 5);
+
+    const playersWithEnoughGames = playersArray.filter(p => p.games_played >= 1);
+
+    processedStats.field_goal_percentage = playersWithEnoughGames
+      .map(p => ({
+        ...p,
+        fg_percentage: p.total_field_goals_attempted > 0 
+          ? (p.total_field_goals_made / p.total_field_goals_attempted) * 100 
+          : 0,
+        display_value: p.total_field_goals_attempted > 0 
+          ? `${((p.total_field_goals_made / p.total_field_goals_attempted) * 100).toFixed(1)}%`
+          : "0.0%"
+      }))
+      .filter(p => p.total_field_goals_attempted >= 2)
+      .sort((a, b) => b.fg_percentage - a.fg_percentage)
+      .slice(0, 5);
+
+    processedStats.three_point_percentage = playersWithEnoughGames
+      .map(p => ({
+        ...p,
+        three_point_percentage: p.total_three_points_attempted > 0 
+          ? (p.total_three_points_made / p.total_three_points_attempted) * 100 
+          : 0,
+        display_value: p.total_three_points_attempted > 0 
+          ? `${((p.total_three_points_made / p.total_three_points_attempted) * 100).toFixed(1)}%`
+          : "0.0%"
+      }))
+      .filter(p => p.total_three_points_attempted >= 1)
+      .sort((a, b) => b.three_point_percentage - a.three_point_percentage)
+      .slice(0, 5);
+
+    processedStats.free_throw_percentage = playersWithEnoughGames
+      .map(p => ({
+        ...p,
+        ft_percentage: p.total_free_throws_attempted > 0 
+          ? (p.total_free_throws_made / p.total_free_throws_attempted) * 100 
+          : 0,
+        display_value: p.total_free_throws_attempted > 0 
+          ? `${((p.total_free_throws_made / p.total_free_throws_attempted) * 100).toFixed(1)}%`
+          : "0.0%"
+      }))
+      .filter(p => p.total_free_throws_attempted >= 1)
+      .sort((a, b) => b.ft_percentage - a.ft_percentage)
+      .slice(0, 5);
+
+    processedStats.games_played = playersArray
+      .map(p => ({
+        ...p,
+        display_value: `${p.games_played} GP`
+      }))
+      .sort((a, b) => b.games_played - a.games_played)
+      .slice(0, 5);
+
+    return processedStats;
+  }, [rawPlayerStats, viewMode, selectedAgeGroup, isParentLeague]);
 
   const StatLeaderboard = ({ 
     title, 
@@ -459,7 +474,11 @@ export default function LeagueLeadersPage() {
         {/* Header Section */}
         <div className="text-center space-y-3 md:space-y-4">
           <div className="flex flex-col md:flex-row items-center justify-center gap-2 md:gap-3">
-            <Trophy className="h-6 w-6 md:h-8 md:w-8 text-orange-500" />
+            {league?.logo_url ? (
+              <img src={league.logo_url} alt={league.name} className="h-10 w-10 md:h-14 md:w-14 object-contain" />
+            ) : (
+              <Trophy className="h-6 w-6 md:h-8 md:w-8 text-orange-500" />
+            )}
             <h1 className="sr-only">League Leaders</h1>
           </div>
           <h2 className="text-xl md:text-2xl font-semibold text-orange-800 dark:text-orange-300">{league?.name}</h2>
@@ -467,8 +486,23 @@ export default function LeagueLeadersPage() {
             <p className="text-sm md:text-base text-gray-800 dark:text-white max-w-2xl mx-auto">{league.description}</p>
           )}
           
-          {/* Toggle between Averages and Totals */}
-          <div className="flex justify-center pt-2">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+            {isParentLeague && ageGroupOptions.length > 0 && (
+              <div className="flex items-center gap-2">
+                <Filter className="h-4 w-4 text-orange-500" />
+                <select
+                  value={selectedAgeGroup}
+                  onChange={(e) => setSelectedAgeGroup(e.target.value)}
+                  className="px-3 py-2 text-sm font-medium rounded-lg border border-orange-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-orange-800 dark:text-orange-300 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  data-testid="select-age-group"
+                >
+                  <option value="all">All Age Groups</option>
+                  {ageGroupOptions.map(opt => (
+                    <option key={opt.league_id} value={opt.league_id}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="inline-flex rounded-lg border border-orange-200 dark:border-neutral-700 bg-orange-50 dark:bg-neutral-800 p-1">
               <button
                 onClick={() => setViewMode('averages')}
