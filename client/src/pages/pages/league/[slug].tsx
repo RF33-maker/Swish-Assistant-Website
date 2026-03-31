@@ -2151,6 +2151,7 @@ export default function LeaguePage() {
         type PlayerAggregate = {
           name: string;
           team: string;
+          shirtnumber: string | null;
           playerIds: Set<string>;
           games: number;
           totalPoints: number;
@@ -2209,6 +2210,7 @@ export default function LeaguePage() {
               byPlayerId.set(stat.player_id, {
                 name: playerName,
                 team: team,
+                shirtnumber: stat.shirtnumber || null,
                 playerIds: new Set([stat.player_id]),
                 games: 0,
                 totalPoints: 0,
@@ -2404,6 +2406,7 @@ export default function LeaguePage() {
             const newPlayer: PlayerAggregate = {
               name: playerName,
               team: team,
+              shirtnumber: stat.shirtnumber || null,
               playerIds: new Set<string>(),
               games: 1,
               totalPoints: stat.spoints || 0,
@@ -3931,6 +3934,7 @@ export default function LeaguePage() {
                       <thead>
                         <tr className="border-b border-gray-200 dark:border-neutral-700 dark:bg-neutral-800" style={{ backgroundColor: brandBg50 }}>
                           <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 dark:bg-neutral-800 z-10 min-w-[100px] md:min-w-[140px]" style={{ backgroundColor: brandBg50 }}>Player</th>
+                          <th className="text-center py-2 md:py-3 px-1 md:px-2 font-semibold text-slate-700 dark:text-slate-200 min-w-[30px]">#</th>
                           <th 
                             onClick={() => {
                               if (statsSortColumn === 'GP') {
@@ -3996,6 +4000,7 @@ export default function LeaguePage() {
                                 <div className="text-[10px] md:text-xs text-slate-500 dark:text-slate-400 truncate">{player.team}</div>
                               </div>
                             </td>
+                            <td className="py-2 md:py-3 px-1 md:px-2 text-center text-slate-500 dark:text-slate-400 text-xs">{player.shirtnumber || '-'}</td>
                             <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 dark:text-slate-300 font-medium">{player.games}</td>
                             {activePlayerStatColumns.map((column) => {
                               const rawStats = player.rawStats || [];
