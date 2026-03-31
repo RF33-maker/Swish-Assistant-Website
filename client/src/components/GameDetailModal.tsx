@@ -221,6 +221,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
               ftm: stat.sfreethrowsmade,
               fta: stat.sfreethrowsattempted,
               ft_pct: stat.sfreethrowspercentage,
+              efficiency: stat.efficiency ?? (((stat.spoints || 0) + (stat.sreboundstotal || 0) + (stat.sassists || 0) + (stat.ssteals || 0) + (stat.sblocks || 0)) - (((stat.sfieldgoalsattempted || 0) - (stat.sfieldgoalsmade || 0)) + ((stat.sfreethrowsattempted || 0) - (stat.sfreethrowsmade || 0)) + (stat.sturnovers || 0))),
             }));
           }
         }
@@ -249,6 +250,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
             sfreethrowsmade: stat.ftm ?? stat.sfreethrowsmade,
             sfreethrowsattempted: stat.fta ?? stat.sfreethrowsattempted,
             sfreethrowspercentage: stat.ft_pct ?? stat.sfreethrowspercentage,
+            efficiency: stat.efficiency ?? ((stat.points ?? stat.spoints ?? 0) + (stat.rebounds ?? stat.sreboundstotal ?? 0) + (stat.assists ?? stat.sassists ?? 0) + (stat.steals ?? stat.ssteals ?? 0) + (stat.blocks ?? stat.sblocks ?? 0)) - (((stat.fga ?? stat.sfieldgoalsattempted ?? 0) - (stat.fgm ?? stat.sfieldgoalsmade ?? 0)) + ((stat.fta ?? stat.sfreethrowsattempted ?? 0) - (stat.ftm ?? stat.sfreethrowsmade ?? 0)) + (stat.turnovers ?? stat.sturnovers ?? 0)),
           }));
           
           const teamsFromStats = Array.from(new Set(processedStats.map((stat: any) => stat.team).filter(Boolean)));
@@ -567,6 +569,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
       totalAssists: dbTeamStats?.tot_sassists ?? teamPlayers.reduce((sum, p) => sum + (p.sassists || 0), 0),
       totalSteals: dbTeamStats?.tot_ssteals ?? calcSteals,
       totalBlocks: dbTeamStats?.tot_sblocks ?? calcBlocks,
+      totalEfficiency: teamPlayers.reduce((sum, p) => sum + (p.efficiency || 0), 0),
     };
   });
 
@@ -1150,6 +1153,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                             <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">BLK</th>
                             <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">TO</th>
                             <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">+/-</th>
+                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">EFF</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1261,6 +1265,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                   </span>
                                 ) : <span className="text-slate-400">-</span>}
                               </td>
+                              <td className="px-1.5 py-1.5 md:p-3 text-center font-medium text-slate-800 dark:text-slate-200">{player.efficiency ?? 0}</td>
                             </tr>
                             );
                           })}
@@ -1296,6 +1301,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                               <td className="px-1.5 py-1.5 md:p-3 text-center">-</td>
                               <td className="px-1.5 py-1.5 md:p-3 text-center">-</td>
                               <td className="px-1.5 py-1.5 md:p-3 text-center">-</td>
+                              <td className="px-1.5 py-1.5 md:p-3 text-center">{selectedTeamStats.totalEfficiency}</td>
                             </tr>
                           </tfoot>
                         )}
