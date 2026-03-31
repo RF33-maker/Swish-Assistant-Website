@@ -3,7 +3,7 @@ import { useParams, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
-import { Trophy, TrendingUp, Users, Target, Shield, Zap, ArrowLeft, Filter } from "lucide-react";
+import { Trophy, TrendingUp, Users, Target, Shield, Zap, ArrowLeft, Filter, Activity } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { namesMatch, getMostCompleteName } from "@/lib/fuzzyMatch";
@@ -24,6 +24,7 @@ interface LeaderboardStats {
   three_point_percentage: any[];
   free_throw_percentage: any[];
   games_played: any[];
+  efficiency: any[];
 }
 
 interface League {
@@ -159,7 +160,8 @@ export default function LeagueLeadersPage() {
       field_goal_percentage: [],
       three_point_percentage: [],
       free_throw_percentage: [],
-      games_played: []
+      games_played: [],
+      efficiency: []
     };
 
     const playerStatsMap = new Map();
@@ -189,6 +191,7 @@ export default function LeagueLeadersPage() {
           total_three_points_attempted: 0,
           total_free_throws_made: 0,
           total_free_throws_attempted: 0,
+          total_turnovers: 0,
           games_played: 0
         });
       }
@@ -205,6 +208,7 @@ export default function LeagueLeadersPage() {
       playerData.total_three_points_attempted += stat.sthreepointersattempted || 0;
       playerData.total_free_throws_made += stat.sfreethrowsmade || 0;
       playerData.total_free_throws_attempted += stat.sfreethrowsattempted || 0;
+      playerData.total_turnovers += stat.sturnovers || 0;
       playerData.games_played += 1;
     });
 
@@ -232,6 +236,7 @@ export default function LeagueLeadersPage() {
           existingPlayer.total_three_points_attempted += player.total_three_points_attempted;
           existingPlayer.total_free_throws_made += player.total_free_throws_made;
           existingPlayer.total_free_throws_attempted += player.total_free_throws_attempted;
+          existingPlayer.total_turnovers += player.total_turnovers;
           existingPlayer.name = getMostCompleteName([existingPlayer.name, player.name]);
           if (!existingPlayer.player_slug && player.player_slug) {
             existingPlayer.player_slug = player.player_slug;
@@ -355,6 +360,27 @@ export default function LeagueLeadersPage() {
       }))
       .filter(p => p.total_free_throws_attempted >= 1)
       .sort((a, b) => b.ft_percentage - a.ft_percentage)
+      .slice(0, 5);
+
+    processedStats.efficiency = playersWithEnoughGames
+      .map(p => {
+        const totalEff = p.total_points + p.total_rebounds + p.total_assists + p.total_steals + p.total_blocks
+          - (p.total_field_goals_attempted - p.total_field_goals_made)
+          - (p.total_free_throws_attempted - p.total_free_throws_made)
+          - p.total_turnovers;
+        const avgEff = totalEff / p.games_played;
+        return {
+          ...p,
+          total_efficiency: totalEff,
+          avg_efficiency: avgEff,
+          display_value: viewMode === 'averages'
+            ? `${avgEff.toFixed(1)} EFF`
+            : `${Math.round(totalEff)} EFF`
+        };
+      })
+      .sort((a, b) => viewMode === 'averages'
+        ? b.avg_efficiency - a.avg_efficiency
+        : b.total_efficiency - a.total_efficiency)
       .slice(0, 5);
 
     processedStats.games_played = playersArray
@@ -595,6 +621,14 @@ export default function LeagueLeadersPage() {
               icon={Target}
               players={leaderboardStats.free_throw_percentage}
               iconColor="text-pink-500"
+            />
+
+            {/* Efficiency */}
+            <StatLeaderboard
+              title="Efficiency Leaders"
+              icon={Activity}
+              players={leaderboardStats.efficiency}
+              iconColor="text-emerald-500"
             />
 
             {/* Games Played */}
