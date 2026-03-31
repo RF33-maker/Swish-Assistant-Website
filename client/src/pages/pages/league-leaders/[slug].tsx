@@ -3,7 +3,7 @@ import { useParams, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
-import { TrendingUp, Users, Target, Shield, Zap, ArrowLeft, Filter, Activity } from "lucide-react";
+import { ArrowLeft, Filter } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { namesMatch, getMostCompleteName } from "@/lib/fuzzyMatch";
 import { normalizeTeamName } from "@/lib/teamUtils";
@@ -440,22 +440,17 @@ export default function LeagueLeadersPage() {
 
   const StatLeaderboard = ({ 
     title, 
-    icon: Icon, 
     players, 
-    iconColor 
   }: { 
     title: string; 
-    icon: any; 
     players: any[]; 
-    iconColor: string;
   }) => (
     <Card
       className="bg-white dark:bg-neutral-900 dark:border-neutral-700 shadow-md hover:shadow-lg transition-all duration-300"
       style={{ borderColor: brandBorderLight }}
     >
       <CardHeader className="pb-2 md:pb-3 p-4 md:p-6">
-        <CardTitle className="flex items-center gap-2 text-base md:text-lg font-semibold" style={{ color: brandColor }}>
-          <Icon className={`h-5 w-5 md:h-6 md:w-6 ${iconColor}`} />
+        <CardTitle className="text-base md:text-lg font-semibold" style={{ color: brandColor }}>
           {title}
         </CardTitle>
       </CardHeader>
@@ -662,85 +657,16 @@ export default function LeagueLeadersPage() {
         {/* Leaderboards Grid */}
         {leaderboardStats && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-            {/* Scoring */}
-            <StatLeaderboard
-              title="Scoring Leaders"
-              icon={Target}
-              players={leaderboardStats.points}
-              iconColor="text-red-500"
-            />
-
-            {/* Rebounds */}
-            <StatLeaderboard
-              title="Rebounding Leaders"
-              icon={Shield}
-              players={leaderboardStats.rebounds_total}
-              iconColor="text-blue-500"
-            />
-
-            {/* Assists */}
-            <StatLeaderboard
-              title="Assist Leaders"
-              icon={Users}
-              players={leaderboardStats.assists}
-              iconColor="text-green-500"
-            />
-
-            {/* Steals */}
-            <StatLeaderboard
-              title="Steal Leaders"
-              icon={Zap}
-              players={leaderboardStats.steals}
-              iconColor="text-purple-500"
-            />
-
-            {/* Blocks */}
-            <StatLeaderboard
-              title="Block Leaders"
-              icon={Shield}
-              players={leaderboardStats.blocks}
-              iconColor="text-indigo-500"
-            />
-
-            {/* Field Goal % */}
-            <StatLeaderboard
-              title="Field Goal %"
-              icon={Target}
-              players={leaderboardStats.field_goal_percentage}
-              iconColor="text-amber-500"
-            />
-
-            {/* Three Point % */}
-            <StatLeaderboard
-              title="Three Point %"
-              icon={Target}
-              players={leaderboardStats.three_point_percentage}
-              iconColor="text-cyan-500"
-            />
-
-            {/* Free Throw % */}
-            <StatLeaderboard
-              title="Free Throw %"
-              icon={Target}
-              players={leaderboardStats.free_throw_percentage}
-              iconColor="text-pink-500"
-            />
-
-            {/* Efficiency */}
-            <StatLeaderboard
-              title="Efficiency Leaders"
-              icon={Activity}
-              players={leaderboardStats.efficiency}
-              iconColor="text-emerald-500"
-            />
-
-            {/* Games Played */}
-            <StatLeaderboard
-              title="Games Played"
-              icon={TrendingUp}
-              players={leaderboardStats.games_played}
-              iconColor="text-gray-500"
-            />
+            <StatLeaderboard title="Scoring Leaders" players={leaderboardStats.points} />
+            <StatLeaderboard title="Rebounding Leaders" players={leaderboardStats.rebounds_total} />
+            <StatLeaderboard title="Assist Leaders" players={leaderboardStats.assists} />
+            <StatLeaderboard title="Steal Leaders" players={leaderboardStats.steals} />
+            <StatLeaderboard title="Block Leaders" players={leaderboardStats.blocks} />
+            <StatLeaderboard title="Field Goal %" players={leaderboardStats.field_goal_percentage} />
+            <StatLeaderboard title="Three Point %" players={leaderboardStats.three_point_percentage} />
+            <StatLeaderboard title="Free Throw %" players={leaderboardStats.free_throw_percentage} />
+            <StatLeaderboard title="Efficiency Leaders" players={leaderboardStats.efficiency} />
+            <StatLeaderboard title="Games Played" players={leaderboardStats.games_played} />
           </div>
         )}
 
