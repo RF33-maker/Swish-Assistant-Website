@@ -3244,6 +3244,19 @@ export default function LeaguePage() {
           </div>
         </header>
 
+        {/* Game Results / Live / Upcoming Carousel */}
+        {league?.league_id && (
+          <section className="overflow-hidden">
+            <GameResultsCarousel 
+              leagueId={league.league_id}
+              slug={slug}
+              onGameClick={handleCarouselGameClick}
+              childLeagueIds={isParentLeague ? childCompetitions.map(c => c.league_id) : undefined}
+              childLeagueMap={isParentLeague ? childLeagueMap : undefined}
+            />
+          </section>
+        )}
+
         <section className="mb-10">
           <div
             className="rounded-xl overflow-hidden shadow relative h-52 sm:h-64 md:h-80 bg-gray-200"
@@ -3354,19 +3367,6 @@ export default function LeaguePage() {
               </p>
             </div>
           </div>
-        )}
-
-        {/* Game Results / Live / Upcoming Carousel */}
-        {league?.league_id && (
-          <section className="bg-gray-900 text-white overflow-hidden rounded-b-lg">
-            <GameResultsCarousel 
-              leagueId={league.league_id}
-              slug={slug}
-              onGameClick={handleCarouselGameClick}
-              childLeagueIds={isParentLeague ? childCompetitions.map(c => c.league_id) : undefined}
-              childLeagueMap={isParentLeague ? childLeagueMap : undefined}
-            />
-          </section>
         )}
 
         {/* Navigation Tabs - Moved below carousel */}
