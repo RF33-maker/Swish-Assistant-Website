@@ -35,6 +35,7 @@ import { namesMatch, getMostCompleteName } from "@/lib/fuzzyMatch";
 import { DEBUG, debugLog } from "@/utils/debug";
 import { useLeagueBranding } from "@/hooks/useLeagueBranding";
 import { InlinePlayerProfile } from "@/components/InlinePlayerProfile";
+import { InlineTeamProfile } from "@/components/InlineTeamProfile";
 
 type GameSchedule = {
   game_id: string;
@@ -533,6 +534,7 @@ export default function LeaguePage() {
   const [updatingYoutube, setUpdatingYoutube] = useState(false);
   const [activeSection, setActiveSection] = useState('overview'); // 'overview', 'stats', 'teams', 'schedule'
   const [selectedPlayerSlug, setSelectedPlayerSlug] = useState<string | null>(null);
+  const [selectedTeamName, setSelectedTeamName] = useState<string | null>(null);
   const [previousSection, setPreviousSection] = useState<string>('overview');
   const [comparisonMode, setComparisonMode] = useState<'player' | 'team'>('player'); // Toggle between player and team comparison
   const [allPlayerAverages, setAllPlayerAverages] = useState<any[]>([]);
@@ -3380,6 +3382,7 @@ export default function LeaguePage() {
                   onMouseLeave={(e) => { if (activeSection !== 'teams') (e.target as HTMLElement).style.color = ''; }}
                   onClick={() => {
                     setSelectedPlayerSlug(null);
+                    setSelectedTeamName(null);
                     setActiveSection('teams');
                     if (league?.league_id && fullLeagueStandings.length === 0 && standings.length === 0) {
                       calculatePoolStandings(league.league_id);
@@ -3395,6 +3398,7 @@ export default function LeaguePage() {
                 onMouseLeave={(e) => { if (activeSection !== 'standings') (e.target as HTMLElement).style.color = ''; }}
                 onClick={() => {
                   setSelectedPlayerSlug(null);
+                  setSelectedTeamName(null);
                   setActiveSection('standings');
                   if (league?.league_id && fullLeagueStandings.length === 0) {
                     calculatePoolStandings(league.league_id);
@@ -3410,6 +3414,7 @@ export default function LeaguePage() {
                 onMouseLeave={(e) => { if (activeSection !== 'stats') (e.target as HTMLElement).style.color = ''; }}
                 onClick={() => {
                   setSelectedPlayerSlug(null);
+                  setSelectedTeamName(null);
                   setActiveSection('stats');
                   setDisplayedPlayerCount(20);
                   setStatsSearch("");
@@ -3427,6 +3432,7 @@ export default function LeaguePage() {
                 onMouseLeave={(e) => { if (activeSection !== 'teamstats') (e.target as HTMLElement).style.color = ''; }}
                 onClick={() => {
                   setSelectedPlayerSlug(null);
+                  setSelectedTeamName(null);
                   setActiveSection('teamstats');
                   if (teamStatsData.length === 0) {
                     fetchTeamStats();
@@ -3440,7 +3446,7 @@ export default function LeaguePage() {
                 style={activeSection === 'schedule' ? { color: brandColor, borderBottomColor: brandColor } : {}}
                 onMouseEnter={(e) => { if (activeSection !== 'schedule') (e.target as HTMLElement).style.color = brandColor; }}
                 onMouseLeave={(e) => { if (activeSection !== 'schedule') (e.target as HTMLElement).style.color = ''; }}
-                onClick={() => { setSelectedPlayerSlug(null); setActiveSection('schedule'); }}
+                onClick={() => { setSelectedPlayerSlug(null); setSelectedTeamName(null); setActiveSection('schedule'); }}
               >
                 Schedule
               </button>
@@ -3451,6 +3457,7 @@ export default function LeaguePage() {
                 onMouseLeave={(e) => { if (activeSection !== 'leaders') (e.target as HTMLElement).style.color = ''; }}
                 onClick={() => {
                   setSelectedPlayerSlug(null);
+                  setSelectedTeamName(null);
                   setActiveSection('leaders');
                   if (allPlayerAverages.length === 0) {
                     fetchAllPlayerAverages();
@@ -3466,6 +3473,7 @@ export default function LeaguePage() {
                 onMouseLeave={(e) => { if (activeSection !== 'comparison') (e.target as HTMLElement).style.color = ''; }}
                 onClick={() => {
                   setSelectedPlayerSlug(null);
+                  setSelectedTeamName(null);
                   setActiveSection('comparison');
                   if (allPlayerAverages.length === 0) {
                     fetchAllPlayerAverages();
@@ -3484,6 +3492,7 @@ export default function LeaguePage() {
                 onMouseLeave={(e) => { if (activeSection !== 'overview') (e.target as HTMLElement).style.color = ''; }}
                 onClick={() => {
                   setSelectedPlayerSlug(null);
+                  setSelectedTeamName(null);
                   setActiveSection('overview');
                   if (teamStatsData.length === 0) {
                     fetchTeamStats();
@@ -4381,7 +4390,12 @@ export default function LeaguePage() {
                           <tr
                             key={`team-stats-${team.teamName}-${index}`}
                             className="hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors cursor-pointer group"
-                            onClick={() => navigate(`/league/${slug}/team/${encodeURIComponent(team.teamName)}`)}
+                            onClick={() => {
+                              setPreviousSection(activeSection);
+                              setSelectedTeamName(team.teamName);
+                              setActiveSection('team');
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }}
                             data-testid={`row-team-${team.teamName}`}
                           >
                             <td className="py-2 md:py-3 px-2 md:px-3 sticky left-0 bg-white dark:bg-neutral-900 group-hover:bg-orange-50 dark:group-hover:bg-neutral-800 z-10 transition-colors">
@@ -4447,15 +4461,22 @@ export default function LeaguePage() {
                 {standings.length > 0 ? (
                   <div className="divide-y divide-gray-200 dark:divide-neutral-700">
                     {standings.map((teamData, index) => (
-                      <Link key={`team-${teamData.team}-${index}`} to={`/league/${slug}/team/${encodeURIComponent(teamData.team)}`}>
-                        <div className="p-3 md:p-4 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors flex items-center justify-between group cursor-pointer">
-                          <div className="flex items-center gap-2 md:gap-4">
-                            <TeamLogo teamName={teamData.team} leagueId={league?.league_id || ""} size="md" logoUrl={getTeamLogoUrl(teamData.team)} />
-                            <h3 className="font-semibold text-slate-800 dark:text-white text-sm md:text-lg">{teamData.team}</h3>
-                          </div>
-                          <ChevronRight className="w-4 md:w-5 h-4 md:h-5 text-gray-400 dark:text-gray-500 group-hover:text-orange-600 transition-colors" />
+                      <div
+                        key={`team-${teamData.team}-${index}`}
+                        className="p-3 md:p-4 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors flex items-center justify-between group cursor-pointer"
+                        onClick={() => {
+                          setPreviousSection(activeSection);
+                          setSelectedTeamName(teamData.team);
+                          setActiveSection('team');
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                      >
+                        <div className="flex items-center gap-2 md:gap-4">
+                          <TeamLogo teamName={teamData.team} leagueId={league?.league_id || ""} size="md" logoUrl={getTeamLogoUrl(teamData.team)} />
+                          <h3 className="font-semibold text-slate-800 dark:text-white text-sm md:text-lg">{teamData.team}</h3>
                         </div>
-                      </Link>
+                        <ChevronRight className="w-4 md:w-5 h-4 md:h-5 text-gray-400 dark:text-gray-500 group-hover:text-orange-600 transition-colors" />
+                      </div>
                     ))}
                   </div>
                 ) : (
@@ -4777,6 +4798,27 @@ export default function LeaguePage() {
                   onBack={() => {
                     setSelectedPlayerSlug(null);
                     setActiveSection(previousSection);
+                  }}
+                />
+              </div>
+            )}
+
+            {activeSection === 'team' && selectedTeamName && (
+              <div className="md:col-span-3">
+                <InlineTeamProfile
+                  teamName={selectedTeamName}
+                  brandColor={brandColor}
+                  leagueSlug={slug}
+                  leagueId={league?.league_id || ""}
+                  onBack={() => {
+                    setSelectedTeamName(null);
+                    setActiveSection(previousSection);
+                  }}
+                  onPlayerClick={(playerSlug) => {
+                    setPreviousSection('team');
+                    setSelectedPlayerSlug(playerSlug);
+                    setActiveSection('player');
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
                 />
               </div>
