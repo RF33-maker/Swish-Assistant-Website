@@ -5235,6 +5235,7 @@ export default function LeaguePage() {
             )}
 
 
+            {activeSection === 'overview' && (<>
             {/* Instagram Embed */}
             <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4">
               <div className="flex justify-between items-center mb-3">
@@ -5435,6 +5436,7 @@ export default function LeaguePage() {
               <p className="text-xs text-slate-500">💬 Only logged-in users can post.</p>
               <div className="text-xs italic text-slate-400 mt-2">Coming soon...</div>
             </div>
+            </>)}
           </aside>
         </main>
 
