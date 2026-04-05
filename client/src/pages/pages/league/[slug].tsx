@@ -3257,7 +3257,7 @@ export default function LeaguePage() {
           </section>
         )}
 
-        <section className="mb-10">
+        <section>
           <div
             className="rounded-xl overflow-hidden shadow relative h-52 sm:h-64 md:h-80 bg-gray-200"
             style={{
