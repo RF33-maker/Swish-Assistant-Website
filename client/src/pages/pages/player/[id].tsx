@@ -93,6 +93,13 @@ interface PlayerRankings {
   ft_percentage: number;
 }
 
+const getTeamAbbreviation = (name: string): string => {
+  if (!name) return '—';
+  const words = name.trim().split(/\s+/);
+  if (words.length === 1) return words[0].substring(0, 3).toUpperCase();
+  return words.map(w => w[0]).join('').toUpperCase().substring(0, 4);
+};
+
 export default function PlayerStatsPage() {
   const [match, params] = useRoute("/player/:slug");
   const [, setLocation] = useLocation();
@@ -1403,7 +1410,12 @@ export default function PlayerStatsPage() {
                     return (
                       <tr key={idx} className={`border-b border-gray-50 dark:border-neutral-800/50 text-slate-700 dark:text-slate-300 ${idx % 2 === 1 ? 'bg-gray-50/50 dark:bg-neutral-800/30' : ''}`}>
                         <td className="px-2 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap max-w-[100px] truncate">{row.season}</td>
-                        <td className="px-2 py-1.5 text-xs whitespace-nowrap max-w-[80px] truncate">{row.team}</td>
+                        <td className="px-2 py-1.5 text-xs whitespace-nowrap">
+                          <div className="flex items-center gap-1">
+                            <TeamLogo teamName={row.team} leagueId={row.leagueId} size="xs" className="flex-shrink-0" />
+                            <span className="truncate max-w-[50px]">{getTeamAbbreviation(row.team)}</span>
+                          </div>
+                        </td>
                         {careerStatsTab === "averages" && (
                           <>
                             <td className={ct}>{gp}</td>
