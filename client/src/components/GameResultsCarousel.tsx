@@ -38,8 +38,6 @@ interface GameResultsCarouselProps {
   childLeagueMap?: Map<string, string>;
 }
 
-type FilterTab = "results" | "live" | "upcoming";
-
 function formatDateUK(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleDateString('en-GB', { 
@@ -69,8 +67,6 @@ function formatRelativeDate(dateStr: string): string {
 
 export default function GameResultsCarousel({ leagueId, slug, onGameClick, childLeagueIds, childLeagueMap }: GameResultsCarouselProps) {
   const [allGames, setAllGames] = useState<GameItem[]>([]);
-  const [activeTab, setActiveTab] = useState<FilterTab>("results");
-  const [hasSetDefaultTab, setHasSetDefaultTab] = useState(false);
   const [loading, setLoading] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -283,19 +279,6 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
         });
       }
 
-      const finalLiveCount = combined.filter(g => g.status === 'LIVE').length;
-
-      if (!hasSetDefaultTab) {
-        if (finalLiveCount > 0) {
-          setActiveTab("live");
-        } else if (combined.some(g => g.status === 'FINAL')) {
-          setActiveTab("results");
-        } else {
-          setActiveTab("upcoming");
-        }
-        setHasSetDefaultTab(true);
-      }
-
       setAllGames(combined);
     } catch (error) {
       console.error("Error fetching games:", error);
@@ -318,34 +301,15 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
     return () => clearInterval(interval);
   }, [effectiveLeagueId, childIdsKey]);
 
-  const filteredGames = useMemo(() => {
-    const games = allGames.filter(g => {
-      if (activeTab === 'live') return g.status === 'LIVE';
-      if (activeTab === 'results') return g.status === 'FINAL';
-      return g.status === 'SCHEDULED';
-    });
-
-    if (activeTab === 'results') {
-      return games.sort((a, b) => new Date(b.game_date).getTime() - new Date(a.game_date).getTime());
-    }
-    return games.sort((a, b) => new Date(a.game_date).getTime() - new Date(b.game_date).getTime());
-  }, [allGames, activeTab]);
-
-  const tabCounts = useMemo(() => {
-    let results = 0, live = 0, upcoming = 0;
-    allGames.forEach(g => {
-      if (g.status === 'FINAL') results++;
-      else if (g.status === 'LIVE') live++;
-      else upcoming++;
-    });
-    return { results, live, upcoming };
+  const sortedGames = useMemo(() => {
+    const live = allGames.filter(g => g.status === 'LIVE')
+      .sort((a, b) => new Date(a.game_date).getTime() - new Date(b.game_date).getTime());
+    const upcoming = allGames.filter(g => g.status === 'SCHEDULED')
+      .sort((a, b) => new Date(a.game_date).getTime() - new Date(b.game_date).getTime());
+    const results = allGames.filter(g => g.status === 'FINAL')
+      .sort((a, b) => new Date(b.game_date).getTime() - new Date(a.game_date).getTime());
+    return [...live, ...upcoming, ...results];
   }, [allGames]);
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollLeft = 0;
-    }
-  }, [activeTab]);
 
   const scrollLeft = () => {
     if (scrollRef.current) {
@@ -371,10 +335,10 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
 
   if (loading) {
     return (
-      <div className="w-full bg-white/5 border-b border-white/10">
-        <div className="flex items-center gap-0 animate-pulse px-2 py-1">
+      <div className="w-full border-b border-white/10">
+        <div className="flex items-center gap-0 animate-pulse px-1 py-1.5">
           {[1,2,3,4,5].map(i => (
-            <div key={i} className="bg-white/10 rounded h-[52px] w-[160px] flex-shrink-0 mx-0.5"></div>
+            <div key={i} className="bg-white/10 rounded h-[56px] w-[150px] flex-shrink-0 mx-0.5"></div>
           ))}
         </div>
       </div>
@@ -383,78 +347,40 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
 
   if (allGames.length === 0) {
     return (
-      <div className="text-center text-slate-400 py-2 text-xs bg-white/5 border-b border-white/10">
+      <div className="text-center text-slate-400 py-2.5 text-xs border-b border-white/10">
         No games available
       </div>
     );
   }
 
   return (
-    <div className="w-full bg-white/5 border-b border-white/10">
-      <div className="flex items-stretch">
-        <div className="flex items-center gap-0 border-r border-white/10 flex-shrink-0">
-          <button
-            onClick={() => setActiveTab("results")}
-            className={`px-2 sm:px-2.5 py-1 text-[10px] font-semibold transition-all whitespace-nowrap uppercase tracking-wide ${
-              activeTab === "results"
-                ? "text-orange-400 bg-orange-400/10"
-                : "text-white/40 hover:text-white/70 hover:bg-white/5"
-            }`}
-          >
-            Results
-          </button>
-          <button
-            onClick={() => setActiveTab("live")}
-            className={`px-2 sm:px-2.5 py-1 text-[10px] font-semibold transition-all whitespace-nowrap uppercase tracking-wide flex items-center gap-1 ${
-              activeTab === "live"
-                ? "text-red-400 bg-red-400/10"
-                : "text-white/40 hover:text-white/70 hover:bg-white/5"
-            }`}
-          >
-            {tabCounts.live > 0 && <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>}
-            Live
-            {tabCounts.live > 0 && (
-              <span className="text-[9px] bg-red-500/30 text-red-400 rounded px-1 min-w-[14px] text-center font-bold">{tabCounts.live}</span>
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab("upcoming")}
-            className={`px-2 sm:px-2.5 py-1 text-[10px] font-semibold transition-all whitespace-nowrap uppercase tracking-wide ${
-              activeTab === "upcoming"
-                ? "text-blue-400 bg-blue-400/10"
-                : "text-white/40 hover:text-white/70 hover:bg-white/5"
-            }`}
-          >
-            Upcoming
-          </button>
-        </div>
+    <div className="w-full border-b border-white/10">
+      <div className="flex items-center relative">
+        <button
+          onClick={scrollLeft}
+          className="hidden sm:flex items-center justify-center w-7 flex-shrink-0 bg-gradient-to-r from-black/40 to-transparent hover:from-black/60 transition-colors z-10 absolute left-0 top-0 bottom-0"
+        >
+          <ChevronLeft className="w-4 h-4 text-white/70" />
+        </button>
 
-        <div className="flex items-center flex-1 min-w-0 relative">
-          <button
-            onClick={scrollLeft}
-            className="hidden sm:flex items-center justify-center w-6 flex-shrink-0 bg-gradient-to-r from-white/10 to-transparent hover:from-white/20 transition-colors z-10"
-          >
-            <ChevronLeft className="w-3.5 h-3.5 text-white/60" />
-          </button>
+        <div
+          ref={scrollRef}
+          className="overflow-x-auto flex-1 sm:px-7 [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:hidden"
+          style={{ scrollbarWidth: 'none' }}
+        >
+          <div className="flex items-stretch min-w-max">
+            {sortedGames.map((game, idx) => {
+              const prevGame = idx > 0 ? sortedGames[idx - 1] : null;
+              const showDivider = prevGame && prevGame.status !== game.status;
 
-          <div
-            ref={scrollRef}
-            className="overflow-x-auto flex-1 [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:hidden"
-            style={{ scrollbarWidth: 'none' }}
-          >
-            {filteredGames.length === 0 ? (
-              <div className="flex items-center justify-center py-2 px-4">
-                <span className="text-[10px] text-white/40">
-                  {activeTab === "live" ? "No live games" : activeTab === "results" ? "No results" : "No upcoming games"}
-                </span>
-              </div>
-            ) : (
-              <div className="flex items-stretch min-w-max">
-                {filteredGames.map((game) => (
+              return (
+                <div key={game.game_key} className="flex items-stretch">
+                  {showDivider && (
+                    <div className="w-px bg-white/20 my-2 flex-shrink-0" />
+                  )}
                   <div
-                    key={game.game_key}
-                    className={`flex-shrink-0 cursor-pointer transition-all border-r border-white/5 hover:bg-white/10 px-3 py-1.5 ${
-                      game.status === 'LIVE' ? 'bg-red-500/5' : ''
+                    className={`flex-shrink-0 cursor-pointer transition-all hover:bg-white/10 px-3 py-2 border-r border-white/5 relative ${
+                      game.status === 'LIVE' ? 'bg-red-500/8' : ''
                     }`}
                     onClick={() => onGameClick({
                       gameKey: game.game_key,
@@ -467,68 +393,85 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
                       hasGamePage: game.hasGamePage
                     })}
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="text-center flex-shrink-0 w-[36px]">
+                    {game.status === 'LIVE' && (
+                      <div className="absolute top-0 left-0 right-0 h-[2px] bg-red-500 rounded-b" />
+                    )}
+                    {game.status === 'SCHEDULED' && (
+                      <div className="absolute top-0 left-0 right-0 h-[2px] bg-blue-400/50 rounded-b" />
+                    )}
+
+                    <div className="flex items-center gap-2.5">
+                      <div className="text-center flex-shrink-0 w-[38px]">
                         {game.status === 'LIVE' ? (
-                          <span className="text-[9px] font-bold text-red-400 uppercase leading-tight flex flex-col items-center">
-                            <span className="flex items-center gap-0.5">
-                              <span className="w-1 h-1 bg-red-500 rounded-full animate-pulse"></span>
+                          <div className="flex flex-col items-center">
+                            <span className="text-[9px] font-bold text-red-400 uppercase leading-tight flex items-center gap-0.5">
+                              <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>
                               LIVE
                             </span>
-                            {game.current_period && <span className="text-[8px] text-red-400/70">Q{game.current_period}</span>}
-                          </span>
+                            {game.current_period && (
+                              <span className="text-[8px] text-red-400/60 mt-0.5">Q{game.current_period}</span>
+                            )}
+                          </div>
                         ) : game.status === 'SCHEDULED' ? (
-                          <span className="text-[9px] text-white/40 leading-tight block">
-                            {formatGameTime(game.game_date)}
-                          </span>
+                          <div className="flex flex-col items-center">
+                            <span className="text-[9px] text-blue-300/70 font-medium leading-tight">
+                              {formatGameTime(game.game_date)}
+                            </span>
+                            <span className="text-[8px] text-white/25 mt-0.5">{formatRelativeDate(game.game_date)}</span>
+                          </div>
                         ) : (
-                          <span className="text-[9px] text-white/30 leading-tight block uppercase">
-                            {formatRelativeDate(game.game_date)}
-                          </span>
+                          <div className="flex flex-col items-center">
+                            <span className="text-[9px] text-white/30 font-medium leading-tight uppercase">
+                              {formatRelativeDate(game.game_date)}
+                            </span>
+                            <span className="text-[8px] text-green-400/50 mt-0.5">FT</span>
+                          </div>
                         )}
                       </div>
 
-                      <div className="flex flex-col gap-0.5 min-w-[120px]">
+                      <div className="flex flex-col gap-1 min-w-[130px]">
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5 min-w-0 flex-1">
                             <TeamLogo teamName={game.home_team} leagueId={leagueId} size="xs" />
-                            <span className="text-[11px] font-medium text-white/90 truncate max-w-[80px]">{game.home_team}</span>
+                            <span className="text-xs font-medium text-white/90 truncate max-w-[85px]">{game.home_team}</span>
                           </div>
-                          <span className={`text-[11px] font-bold tabular-nums ${
+                          <span className={`text-xs font-bold tabular-nums min-w-[20px] text-right ${
                             game.status === 'LIVE' ? 'text-red-400'
-                            : game.home_score !== null && game.away_score !== null && game.home_score > game.away_score ? 'text-white' : 'text-white/50'
+                            : game.status === 'SCHEDULED' ? 'text-white/20'
+                            : game.home_score !== null && game.away_score !== null && game.home_score > game.away_score ? 'text-white' : 'text-white/40'
                           }`}>
-                            {game.status === 'SCHEDULED' ? '' : (game.home_score ?? '-')}
+                            {game.status === 'SCHEDULED' ? '-' : (game.home_score ?? '-')}
                           </span>
                         </div>
 
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5 min-w-0 flex-1">
                             <TeamLogo teamName={game.away_team} leagueId={leagueId} size="xs" />
-                            <span className="text-[11px] font-medium text-white/90 truncate max-w-[80px]">{game.away_team}</span>
+                            <span className="text-xs font-medium text-white/90 truncate max-w-[85px]">{game.away_team}</span>
                           </div>
-                          <span className={`text-[11px] font-bold tabular-nums ${
+                          <span className={`text-xs font-bold tabular-nums min-w-[20px] text-right ${
                             game.status === 'LIVE' ? 'text-red-400'
-                            : game.away_score !== null && game.home_score !== null && game.away_score > game.home_score ? 'text-white' : 'text-white/50'
+                            : game.status === 'SCHEDULED' ? 'text-white/20'
+                            : game.away_score !== null && game.home_score !== null && game.away_score > game.home_score ? 'text-white' : 'text-white/40'
                           }`}>
-                            {game.status === 'SCHEDULED' ? '' : (game.away_score ?? '-')}
+                            {game.status === 'SCHEDULED' ? '-' : (game.away_score ?? '-')}
                           </span>
                         </div>
                       </div>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
+                </div>
+              );
+            })}
           </div>
-
-          <button
-            onClick={scrollRight}
-            className="hidden sm:flex items-center justify-center w-6 flex-shrink-0 bg-gradient-to-l from-white/10 to-transparent hover:from-white/20 transition-colors z-10"
-          >
-            <ChevronRight className="w-3.5 h-3.5 text-white/60" />
-          </button>
         </div>
+
+        <button
+          onClick={scrollRight}
+          className="hidden sm:flex items-center justify-center w-7 flex-shrink-0 bg-gradient-to-l from-black/40 to-transparent hover:from-black/60 transition-colors z-10 absolute right-0 top-0 bottom-0"
+        >
+          <ChevronRight className="w-4 h-4 text-white/70" />
+        </button>
       </div>
     </div>
   );
