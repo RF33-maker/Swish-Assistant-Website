@@ -571,8 +571,6 @@ export default function LeaguePage() {
   const [parentLeague, setParentLeague] = useState<Pick<League, 'league_id' | 'name' | 'slug' | 'logo_url'> | null>(null); // Parent league for breadcrumb
   const [isDividerVisible, setIsDividerVisible] = useState(false); // Track if orange divider is in view
   const dividerRef = useRef<HTMLDivElement>(null); // Ref for the orange divider
-  const headerRef = useRef<HTMLElement>(null);
-  const [headerHeight, setHeaderHeight] = useState(36);
   const [selectedAgeGroup, setSelectedAgeGroup] = useState<string>('all');
   const [parentStandingsGroups, setParentStandingsGroups] = useState<{ageGroup: string, standings: any[], poolAStandings: any[], poolBStandings: any[], hasPools: boolean}[]>([]);
 
@@ -682,16 +680,6 @@ export default function LeaguePage() {
       };
     }, [league?.description]);
 
-    useEffect(() => {
-      const measure = () => {
-        if (headerRef.current) {
-          setHeaderHeight(headerRef.current.offsetHeight);
-        }
-      };
-      measure();
-      window.addEventListener('resize', measure);
-      return () => window.removeEventListener('resize', measure);
-    }, []);
 
     const sortedTeamStats = useMemo(() => {
       if (teamStatsData.length === 0) return [];
@@ -3189,7 +3177,7 @@ export default function LeaguePage() {
           </>
         )}
         <div className="relative z-10">
-        <header ref={headerRef} className="bg-white dark:bg-neutral-900 shadow-sm sticky top-0 z-50 px-3 md:px-6 py-1.5 md:py-4">
+        <header className="bg-white dark:bg-neutral-900 shadow-sm sticky top-0 z-50 px-3 md:px-6 py-1.5 md:py-4">
           <div className="flex items-center gap-2 md:flex-row md:gap-4">
             <div className="flex items-center shrink-0">
               <img
@@ -3255,20 +3243,20 @@ export default function LeaguePage() {
 
             <ThemeToggle />
           </div>
-        </header>
 
-        {/* Game Results / Live / Upcoming Carousel */}
-        {league?.league_id && (
-          <section className="sticky z-40 shadow-sm" style={{ top: `${headerHeight}px` }}>
-            <GameResultsCarousel 
-              leagueId={league.league_id}
-              slug={slug}
-              onGameClick={handleCarouselGameClick}
-              childLeagueIds={isParentLeague ? childCompetitions.map(c => c.league_id) : undefined}
-              childLeagueMap={isParentLeague ? childLeagueMap : undefined}
-            />
-          </section>
-        )}
+          {/* Game Results / Live / Upcoming Carousel */}
+          {league?.league_id && (
+            <div className="-mx-3 md:-mx-6">
+              <GameResultsCarousel 
+                leagueId={league.league_id}
+                slug={slug}
+                onGameClick={handleCarouselGameClick}
+                childLeagueIds={isParentLeague ? childCompetitions.map(c => c.league_id) : undefined}
+                childLeagueMap={isParentLeague ? childLeagueMap : undefined}
+              />
+            </div>
+          )}
+        </header>
 
         <section>
           <div
