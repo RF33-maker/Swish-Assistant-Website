@@ -3460,7 +3460,7 @@ export default function LeaguePage() {
                   setSelectedPlayerSlug(null);
                   setSelectedTeamName(null);
                   setActiveSection('leaders');
-                  if (allPlayerAverages.length === 0) {
+                  if (allPlayerAverages.length === 0 && !isLoadingStats) {
                     fetchAllPlayerAverages();
                   }
                 }}
@@ -4882,7 +4882,7 @@ export default function LeaguePage() {
                     </div>
                   </div>
 
-                  {isLoadingLeaders ? (
+                  {(isLoadingLeaders || isLoadingStats) ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                       {Array.from({ length: 9 }).map((_, i) => (
                         <LeaderCardSkeleton key={`inline-leader-skeleton-${i}`} />
@@ -5041,7 +5041,7 @@ export default function LeaguePage() {
                     </button>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
-                    {isLoadingLeaders ? (
+                    {(isLoadingLeaders || isLoadingStats) ? (
                       Array.from({ length: 3 }).map((_, i) => (
                         <LeaderCardSkeleton key={`leader-skeleton-${i}`} />
                       ))
