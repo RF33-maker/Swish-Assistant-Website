@@ -50,6 +50,24 @@ export default function Header() {
 
               <span className="ml-2 text-base md:text-lg font-semibold text-neutral-800"></span>
             </div>
+            {user && (
+              <div className="flex items-center gap-2 ml-3">
+                <Link href="/coaches-hub">
+                  <Button
+                    className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1.5 md:px-4 md:py-2 rounded-lg font-medium transition-colors text-xs md:text-sm"
+                  >
+                    Coaches Hub
+                  </Button>
+                </Link>
+                <Link href="/league-management">
+                  <Button
+                    className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1.5 md:px-4 md:py-2 rounded-lg font-medium transition-colors text-xs md:text-sm"
+                  >
+                    League Admin
+                  </Button>
+                </Link>
+              </div>
+            )}
           </div>
           <div className="flex items-center space-x-2 md:space-x-3">
             <Button variant="ghost" size="icon">

@@ -15,17 +15,10 @@ import LeagueChatbot from "@/components/LeagueChatbot";
 import { TeamLogo } from "@/components/TeamLogo";
 import { TeamLogoUploader } from "@/components/TeamLogoUploader";
 import { InstagramCarousel } from "@/components/InstagramCarousel";
-import { ChevronRight, Trophy, ArrowRight } from "lucide-react";
+import { ChevronRight, ChevronDown, Trophy, ArrowRight } from "lucide-react";
 import { Link } from "wouter";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { EditableDescription } from "@/components/EditableDescription";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { 
   LoadingSkeleton, 
   PlayerRowSkeleton, 
@@ -41,6 +34,8 @@ import { normalizeTeamName } from "@/lib/teamUtils";
 import { namesMatch, getMostCompleteName } from "@/lib/fuzzyMatch";
 import { DEBUG, debugLog } from "@/utils/debug";
 import { useLeagueBranding } from "@/hooks/useLeagueBranding";
+import { InlinePlayerProfile } from "@/components/InlinePlayerProfile";
+import { InlineTeamProfile } from "@/components/InlineTeamProfile";
 
 type GameSchedule = {
   game_id: string;
@@ -538,6 +533,9 @@ export default function LeaguePage() {
   const [isEditingYoutube, setIsEditingYoutube] = useState(false);
   const [updatingYoutube, setUpdatingYoutube] = useState(false);
   const [activeSection, setActiveSection] = useState('overview'); // 'overview', 'stats', 'teams', 'schedule'
+  const [selectedPlayerSlug, setSelectedPlayerSlug] = useState<string | null>(null);
+  const [selectedTeamName, setSelectedTeamName] = useState<string | null>(null);
+  const [previousSection, setPreviousSection] = useState<string>('overview');
   const [comparisonMode, setComparisonMode] = useState<'player' | 'team'>('player'); // Toggle between player and team comparison
   const [allPlayerAverages, setAllPlayerAverages] = useState<any[]>([]);
   const [filteredPlayerAverages, setFilteredPlayerAverages] = useState<any[]>([]);
@@ -563,6 +561,8 @@ export default function LeaguePage() {
   const [scheduleView, setScheduleView] = useState<'upcoming' | 'results'>('upcoming');
   const [filterAgeGroup, setFilterAgeGroup] = useState<string>('all');
   const [filterRound, setFilterRound] = useState<string>('all');
+  const [playerCategoryDropdownOpen, setPlayerCategoryDropdownOpen] = useState(false);
+  const [teamCategoryDropdownOpen, setTeamCategoryDropdownOpen] = useState(false);
   const [statsSortColumn, setStatsSortColumn] = useState<string>('PTS'); // Column to sort by in Player Statistics
   const [statsSortDirection, setStatsSortDirection] = useState<'asc' | 'desc'>('desc'); // Sort direction
   const [teamStatsSortColumn, setTeamStatsSortColumn] = useState<string>('PTS'); // Column to sort by in Team Statistics
@@ -678,7 +678,8 @@ export default function LeaguePage() {
           observer.unobserve(dividerRef.current);
         }
       };
-    }, [league?.description]); // Re-run when description changes
+    }, [league?.description]);
+
 
     const sortedTeamStats = useMemo(() => {
       if (teamStatsData.length === 0) return [];
@@ -2474,10 +2475,17 @@ export default function LeaguePage() {
         // Step 5: Fetch slugs from players table
         debugLog("📊 Step 5: Fetching slugs from players table");
         
-        const { data: rosterData } = await supabase
+        let rosterQuery = supabase
           .from("players")
-          .select("id, full_name, slug")
-          .eq("league_id", statsLeagueId);
+          .select("id, full_name, slug");
+        
+        if (isParentFetch && parentChildIds.length > 0) {
+          rosterQuery = rosterQuery.in("league_id", parentChildIds);
+        } else {
+          rosterQuery = rosterQuery.eq("league_id", statsLeagueId);
+        }
+        
+        const { data: rosterData } = await rosterQuery;
 
         const slugLookup = new Map<string, string>();
         const nameLookup = new Map<string, string>();
@@ -3169,38 +3177,29 @@ export default function LeaguePage() {
           </>
         )}
         <div className="relative z-10">
-        <header className="bg-white dark:bg-neutral-900 shadow-sm sticky top-0 z-50 px-4 md:px-6 py-3 md:py-4">
-          <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
-            <div className="flex items-center justify-between md:justify-start">
+        <header className="bg-white dark:bg-neutral-900 shadow-sm sticky top-0 z-50 px-3 md:px-6 py-1.5 md:py-4">
+          <div className="flex items-center gap-2 md:flex-row md:gap-4">
+            <div className="flex items-center shrink-0">
               <img
                 src={SwishLogo}
                 alt="Swish Assistant"
-                className="h-8 md:h-9 cursor-pointer"
+                className="h-6 md:h-9 cursor-pointer"
                 onClick={() => navigate("/")}
               />
-              {currentUser && (
-                <button
-                  onClick={() => navigate("/coaches-hub")}
-                  className="md:hidden bg-orange-500 hover:bg-orange-600 text-white px-3 py-1.5 rounded-lg font-medium transition-colors text-sm group relative overflow-hidden"
-                >
-                  <span className="group-hover:opacity-0 transition-opacity duration-200">Coaches Hub</span>
-                  <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">Coming Soon</span>
-                </button>
-              )}
             </div>
 
-            <div className="relative w-full md:max-w-md md:mx-6">
+            <div className="relative flex-1 md:max-w-md md:mx-6">
               <input
                 type="text"
                 placeholder="Find your league"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-neutral-700 rounded-full text-sm bg-white dark:bg-neutral-800 text-slate-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                className="w-full px-3 py-1 md:py-2 border border-gray-300 dark:border-neutral-700 rounded-full text-xs md:text-sm bg-white dark:bg-neutral-800 text-slate-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500"
               />
               <button
                 onClick={handleSearch}
-                className="absolute right-0 top-0 h-full px-3 md:px-4 bg-orange-500 hover:bg-orange-600 text-white rounded-full text-sm"
+                className="absolute right-0 top-0 h-full px-2.5 md:px-4 bg-orange-500 hover:bg-orange-600 text-white rounded-full text-xs md:text-sm"
               >
                 Go
               </button>
@@ -3224,21 +3223,42 @@ export default function LeaguePage() {
               )}
             </div>
 
-            <ThemeToggle />
-
             {currentUser && (
-              <button
-                onClick={() => navigate("/coaches-hub")}
-                className="hidden md:block bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm whitespace-nowrap group relative overflow-hidden"
-              >
-                <span className="group-hover:opacity-0 transition-opacity duration-200">Coaches Hub</span>
-                <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">Coming Soon</span>
-              </button>
+              <div className="flex items-center gap-1 md:gap-2 shrink-0">
+                <button
+                  onClick={() => navigate("/coaches-hub")}
+                  className="bg-orange-500 hover:bg-orange-600 text-white px-2 py-1 md:px-4 md:py-2 rounded-lg font-medium transition-colors text-[10px] md:text-sm whitespace-nowrap group relative overflow-hidden"
+                >
+                  <span className="group-hover:opacity-0 transition-opacity duration-200">Coaches Hub</span>
+                  <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">Coming Soon</span>
+                </button>
+                <button
+                  onClick={() => navigate("/league-management")}
+                  className="bg-orange-500 hover:bg-orange-600 text-white px-2 py-1 md:px-4 md:py-2 rounded-lg font-medium transition-colors text-[10px] md:text-sm whitespace-nowrap"
+                >
+                  League Admin
+                </button>
+              </div>
             )}
+
+            <ThemeToggle />
           </div>
+
+          {/* Game Results / Live / Upcoming Carousel */}
+          {league?.league_id && (
+            <div className="-mx-3 md:-mx-6">
+              <GameResultsCarousel 
+                leagueId={league.league_id}
+                slug={slug}
+                onGameClick={handleCarouselGameClick}
+                childLeagueIds={isParentLeague ? childCompetitions.map(c => c.league_id) : undefined}
+                childLeagueMap={isParentLeague ? childLeagueMap : undefined}
+              />
+            </div>
+          )}
         </header>
 
-        <section className="mb-10">
+        <section>
           <div
             className="rounded-xl overflow-hidden shadow relative h-52 sm:h-64 md:h-80 bg-gray-200"
             style={{
@@ -3350,32 +3370,20 @@ export default function LeaguePage() {
           </div>
         )}
 
-        {/* Game Results / Live / Upcoming Carousel */}
-        {league?.league_id && (
-          <section className="bg-gray-900 text-white overflow-hidden rounded-b-lg">
-            <GameResultsCarousel 
-              leagueId={league.league_id}
-              slug={slug}
-              onGameClick={handleCarouselGameClick}
-              childLeagueIds={isParentLeague ? childCompetitions.map(c => c.league_id) : undefined}
-              childLeagueMap={isParentLeague ? childLeagueMap : undefined}
-            />
-          </section>
-        )}
-
         {/* Navigation Tabs - Moved below carousel */}
         <div className="bg-white dark:bg-neutral-900 border-b border-gray-200 dark:border-neutral-800">
           <div className="max-w-7xl mx-auto px-4 md:px-6">
             <div className="flex flex-col gap-3 py-3 md:py-4">
               {/* Navigation Links */}
               <div className="flex gap-4 md:gap-6 text-sm font-medium text-slate-600 dark:text-slate-400 overflow-x-auto pb-1 md:pb-0">
-                <a 
-                  href="#" 
-                  className={`cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'teams' ? 'font-semibold border-b-2' : ''}`}
+                <button 
+                  className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'teams' ? 'font-semibold border-b-2' : ''}`}
                   style={activeSection === 'teams' ? { color: brandColor, borderBottomColor: brandColor } : {}}
                   onMouseEnter={(e) => { if (activeSection !== 'teams') (e.target as HTMLElement).style.color = brandColor; }}
                   onMouseLeave={(e) => { if (activeSection !== 'teams') (e.target as HTMLElement).style.color = ''; }}
                   onClick={() => {
+                    setSelectedPlayerSlug(null);
+                    setSelectedTeamName(null);
                     setActiveSection('teams');
                     if (league?.league_id && fullLeagueStandings.length === 0 && standings.length === 0) {
                       calculatePoolStandings(league.league_id);
@@ -3383,14 +3391,15 @@ export default function LeaguePage() {
                   }}
                 >
                   Teams
-                </a>
-              <a 
-                href="#" 
-                className={`cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'standings' ? 'font-semibold border-b-2' : ''}`}
+                </button>
+              <button 
+                className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'standings' ? 'font-semibold border-b-2' : ''}`}
                 style={activeSection === 'standings' ? { color: brandColor, borderBottomColor: brandColor } : {}}
                 onMouseEnter={(e) => { if (activeSection !== 'standings') (e.target as HTMLElement).style.color = brandColor; }}
                 onMouseLeave={(e) => { if (activeSection !== 'standings') (e.target as HTMLElement).style.color = ''; }}
                 onClick={() => {
+                  setSelectedPlayerSlug(null);
+                  setSelectedTeamName(null);
                   setActiveSection('standings');
                   if (league?.league_id && fullLeagueStandings.length === 0) {
                     calculatePoolStandings(league.league_id);
@@ -3398,14 +3407,15 @@ export default function LeaguePage() {
                 }}
               >
                 Standings
-              </a>
-              <a 
-                href="#" 
-                className={`cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'stats' ? 'font-semibold border-b-2' : ''}`}
+              </button>
+              <button 
+                className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'stats' ? 'font-semibold border-b-2' : ''}`}
                 style={activeSection === 'stats' ? { color: brandColor, borderBottomColor: brandColor } : {}}
                 onMouseEnter={(e) => { if (activeSection !== 'stats') (e.target as HTMLElement).style.color = brandColor; }}
                 onMouseLeave={(e) => { if (activeSection !== 'stats') (e.target as HTMLElement).style.color = ''; }}
                 onClick={() => {
+                  setSelectedPlayerSlug(null);
+                  setSelectedTeamName(null);
                   setActiveSection('stats');
                   setDisplayedPlayerCount(20);
                   setStatsSearch("");
@@ -3415,14 +3425,15 @@ export default function LeaguePage() {
                 }}
               >
                 Player Stats
-              </a>
-              <a 
-                href="#" 
-                className={`cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'teamstats' ? 'font-semibold border-b-2' : ''}`}
+              </button>
+              <button 
+                className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'teamstats' ? 'font-semibold border-b-2' : ''}`}
                 style={activeSection === 'teamstats' ? { color: brandColor, borderBottomColor: brandColor } : {}}
                 onMouseEnter={(e) => { if (activeSection !== 'teamstats') (e.target as HTMLElement).style.color = brandColor; }}
                 onMouseLeave={(e) => { if (activeSection !== 'teamstats') (e.target as HTMLElement).style.color = ''; }}
                 onClick={() => {
+                  setSelectedPlayerSlug(null);
+                  setSelectedTeamName(null);
                   setActiveSection('teamstats');
                   if (teamStatsData.length === 0) {
                     fetchTeamStats();
@@ -3430,33 +3441,40 @@ export default function LeaguePage() {
                 }}
               >
                 Team Stats
-              </a>
-              <a 
-                href="#" 
-                className={`cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'schedule' ? 'font-semibold border-b-2' : ''}`}
+              </button>
+              <button 
+                className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'schedule' ? 'font-semibold border-b-2' : ''}`}
                 style={activeSection === 'schedule' ? { color: brandColor, borderBottomColor: brandColor } : {}}
                 onMouseEnter={(e) => { if (activeSection !== 'schedule') (e.target as HTMLElement).style.color = brandColor; }}
                 onMouseLeave={(e) => { if (activeSection !== 'schedule') (e.target as HTMLElement).style.color = ''; }}
-                onClick={() => setActiveSection('schedule')}
+                onClick={() => { setSelectedPlayerSlug(null); setSelectedTeamName(null); setActiveSection('schedule'); }}
               >
                 Schedule
-              </a>
-              <a 
-                href="#" 
-                className="cursor-pointer whitespace-nowrap pb-1"
-                onMouseEnter={(e) => { (e.target as HTMLElement).style.color = brandColor; }}
-                onMouseLeave={(e) => { (e.target as HTMLElement).style.color = ''; }}
-                onClick={() => navigate(`/league-leaders/${slug}`)}
+              </button>
+              <button 
+                className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'leaders' ? 'font-semibold border-b-2' : ''}`}
+                style={activeSection === 'leaders' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                onMouseEnter={(e) => { if (activeSection !== 'leaders') (e.target as HTMLElement).style.color = brandColor; }}
+                onMouseLeave={(e) => { if (activeSection !== 'leaders') (e.target as HTMLElement).style.color = ''; }}
+                onClick={() => {
+                  setSelectedPlayerSlug(null);
+                  setSelectedTeamName(null);
+                  setActiveSection('leaders');
+                  if (allPlayerAverages.length === 0) {
+                    fetchAllPlayerAverages();
+                  }
+                }}
               >
                 Leaders
-              </a>
-              <a 
-                href="#" 
-                className={`cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'comparison' ? 'font-semibold border-b-2' : ''}`}
+              </button>
+              <button 
+                className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'comparison' ? 'font-semibold border-b-2' : ''}`}
                 style={activeSection === 'comparison' ? { color: brandColor, borderBottomColor: brandColor } : {}}
                 onMouseEnter={(e) => { if (activeSection !== 'comparison') (e.target as HTMLElement).style.color = brandColor; }}
                 onMouseLeave={(e) => { if (activeSection !== 'comparison') (e.target as HTMLElement).style.color = ''; }}
                 onClick={() => {
+                  setSelectedPlayerSlug(null);
+                  setSelectedTeamName(null);
                   setActiveSection('comparison');
                   if (allPlayerAverages.length === 0) {
                     fetchAllPlayerAverages();
@@ -3467,14 +3485,15 @@ export default function LeaguePage() {
                 }}
               >
                 Compare
-              </a>
-              <a 
-                href="#" 
-                className={`cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'overview' ? 'font-semibold border-b-2' : ''}`}
+              </button>
+              <button 
+                className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'overview' ? 'font-semibold border-b-2' : ''}`}
                 style={activeSection === 'overview' ? { color: brandColor, borderBottomColor: brandColor } : {}}
                 onMouseEnter={(e) => { if (activeSection !== 'overview') (e.target as HTMLElement).style.color = brandColor; }}
                 onMouseLeave={(e) => { if (activeSection !== 'overview') (e.target as HTMLElement).style.color = ''; }}
                 onClick={() => {
+                  setSelectedPlayerSlug(null);
+                  setSelectedTeamName(null);
                   setActiveSection('overview');
                   if (teamStatsData.length === 0) {
                     fetchTeamStats();
@@ -3482,7 +3501,7 @@ export default function LeaguePage() {
                 }}
               >
                 Overview
-              </a>
+              </button>
               </div>
 
               {/* Age Group Tab Bar for Parent Leagues */}
@@ -3522,7 +3541,7 @@ export default function LeaguePage() {
         </div>
 
         <main className="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-10 grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
-          <section className="md:col-span-2 space-y-6">
+          <section className={`${activeSection === 'overview' ? 'md:col-span-2' : 'md:col-span-3'} space-y-6`}>
             
             {/* Standings Section */}
             {activeSection === 'standings' && (
@@ -3837,85 +3856,121 @@ export default function LeaguePage() {
                   </div>
                 </div>
 
-                {!isParentLeague && (availableAgeGroups.length > 0 || availableRounds.length > 0) && (
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {availableAgeGroups.length > 0 && (
-                      <select
-                        value={filterAgeGroup}
-                        onChange={(e) => setFilterAgeGroup(e.target.value)}
-                        className="px-3 py-1.5 text-xs md:text-sm rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
-                      >
-                        <option value="all">All Age Groups</option>
-                        {availableAgeGroups.map(ag => (
-                          <option key={ag} value={ag}>{ag}</option>
+                {/* Category Dropdown */}
+                <div className="relative mb-4">
+                  <button
+                    onClick={() => setPlayerCategoryDropdownOpen(!playerCategoryDropdownOpen)}
+                    className="flex items-center justify-between w-full max-w-xs px-4 py-2.5 rounded-xl border bg-white dark:bg-neutral-800 text-left text-base font-semibold text-slate-800 dark:text-white transition-all"
+                    style={{ borderColor: brandBorderLight }}
+                    data-testid="select-player-category"
+                  >
+                    <span>{playerStatsCategory}</span>
+                    <ChevronDown className={`h-5 w-5 text-gray-400 transition-transform ${playerCategoryDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  {playerCategoryDropdownOpen && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setPlayerCategoryDropdownOpen(false)} />
+                      <div className="absolute z-20 mt-1 w-full max-w-xs rounded-xl border bg-white dark:bg-neutral-800 shadow-lg overflow-hidden" style={{ borderColor: brandBorderLight }}>
+                        {(['Traditional', 'Advanced', 'Scoring', 'Misc'] as const).map(cat => (
+                          <button
+                            key={cat}
+                            onClick={() => { setPlayerStatsCategory(cat); setPlayerCategoryDropdownOpen(false); }}
+                            className={`w-full px-4 py-2.5 text-left text-sm font-medium transition-colors ${
+                              playerStatsCategory === cat
+                                ? 'bg-gray-100 dark:bg-neutral-700'
+                                : 'hover:bg-gray-50 dark:hover:bg-neutral-700'
+                            } text-slate-800 dark:text-white`}
+                            data-testid={`option-player-${cat.toLowerCase()}`}
+                          >
+                            {cat}
+                          </button>
                         ))}
-                      </select>
-                    )}
-                    {availableRounds.length > 0 && (
-                      <select
-                        value={filterRound}
-                        onChange={(e) => setFilterRound(e.target.value)}
-                        className="px-3 py-1.5 text-xs md:text-sm rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
-                      >
-                        <option value="all">All Rounds</option>
-                        {availableRounds.map(r => (
-                          <option key={r} value={r}>{r}</option>
-                        ))}
-                      </select>
-                    )}
-                    {(filterAgeGroup !== 'all' || filterRound !== 'all') && (
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Round Filter Tabs (non-parent leagues with rounds) */}
+                {!isParentLeague && availableRounds.length > 0 && (
+                  <div className="flex items-center gap-1 overflow-x-auto pb-1 mb-4 scrollbar-hide">
+                    <button
+                      onClick={() => setFilterRound('all')}
+                      className={`whitespace-nowrap px-3 py-1.5 text-sm font-medium transition-all ${
+                        filterRound === 'all' ? 'font-bold' : 'text-gray-500 dark:text-gray-400'
+                      }`}
+                      style={filterRound === 'all' ? { color: brandColor, borderBottom: `2px solid ${brandColor}` } : {}}
+                    >
+                      Season
+                    </button>
+                    {availableRounds.map(r => (
                       <button
-                        onClick={() => { setFilterAgeGroup('all'); setFilterRound('all'); }}
-                        className="px-3 py-1.5 text-xs md:text-sm rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40"
+                        key={r}
+                        onClick={() => setFilterRound(r)}
+                        className={`whitespace-nowrap px-3 py-1.5 text-sm font-medium transition-all ${
+                          filterRound === r ? 'font-bold' : 'text-gray-500 dark:text-gray-400'
+                        }`}
+                        style={filterRound === r ? { color: brandColor, borderBottom: `2px solid ${brandColor}` } : {}}
                       >
-                        Clear Filters
+                        {r}
                       </button>
-                    )}
+                    ))}
                   </div>
                 )}
 
-                {/* Category and Mode Selectors */}
-                <div className="flex flex-col md:flex-row gap-4 mb-6">
-                  <div className="flex-1">
-                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">Stat Category</label>
-                    <Select
-                      value={playerStatsCategory}
-                      onValueChange={(value) => setPlayerStatsCategory(value as typeof playerStatsCategory)}
+                {/* Age Group Filter Tabs (non-parent leagues with age groups) */}
+                {!isParentLeague && availableAgeGroups.length > 0 && (
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 mb-4 scrollbar-hide">
+                    <button
+                      onClick={() => setFilterAgeGroup('all')}
+                      className={`whitespace-nowrap px-3 py-1.5 text-xs md:text-sm font-medium rounded-full transition-all ${
+                        filterAgeGroup === 'all' ? 'text-white' : 'text-slate-600 dark:text-slate-400 bg-gray-100 dark:bg-neutral-800'
+                      }`}
+                      style={filterAgeGroup === 'all' ? { backgroundColor: brandColor } : {}}
                     >
-                      <SelectTrigger 
-                        className="w-full bg-white dark:bg-neutral-800 border-slate-200 dark:border-neutral-600 text-slate-700 dark:text-slate-200 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500"
-                        data-testid="select-player-category"
+                      All Ages
+                    </button>
+                    {availableAgeGroups.map(ag => (
+                      <button
+                        key={ag}
+                        onClick={() => setFilterAgeGroup(ag)}
+                        className={`whitespace-nowrap px-3 py-1.5 text-xs md:text-sm font-medium rounded-full transition-all ${
+                          filterAgeGroup === ag ? 'text-white' : 'text-slate-600 dark:text-slate-400 bg-gray-100 dark:bg-neutral-800'
+                        }`}
+                        style={filterAgeGroup === ag ? { backgroundColor: brandColor } : {}}
                       >
-                        <SelectValue placeholder="Select category" />
-                      </SelectTrigger>
-                      <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
-                        <SelectItem value="Traditional" data-testid="option-player-traditional">Traditional</SelectItem>
-                        <SelectItem value="Advanced" data-testid="option-player-advanced">Advanced</SelectItem>
-                        <SelectItem value="Scoring" data-testid="option-player-scoring">Scoring</SelectItem>
-                        <SelectItem value="Misc" data-testid="option-player-misc">Misc</SelectItem>
-                      </SelectContent>
-                    </Select>
+                        {ag}
+                      </button>
+                    ))}
                   </div>
+                )}
 
-                  <div className="flex-1">
-                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">Mode</label>
-                    <Select
-                      value={playerStatsView}
-                      onValueChange={(value) => setPlayerStatsView(value as typeof playerStatsView)}
-                    >
-                      <SelectTrigger 
-                        className="w-full bg-white dark:bg-neutral-800 border-slate-200 dark:border-neutral-600 text-slate-700 dark:text-slate-200 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500"
-                        data-testid="select-player-mode"
+                {/* Mode Tabs */}
+                <div className="flex items-center gap-2 mb-5">
+                  <div className="inline-flex rounded-lg border dark:border-neutral-700 p-1" style={{ borderColor: brandBorderLight, backgroundColor: brandBg50 }}>
+                    {(['Per Game', 'Total', 'Per 40'] as const).map(mode => (
+                      <button
+                        key={mode}
+                        onClick={() => setPlayerStatsView(mode)}
+                        className={`px-3 md:px-4 py-1.5 text-xs md:text-sm font-medium rounded-md transition-all ${
+                          playerStatsView === mode
+                            ? 'bg-white dark:bg-neutral-700 shadow-sm'
+                            : 'hover:bg-white/50 dark:hover:bg-neutral-800'
+                        }`}
+                        style={{ color: brandColor }}
+                        data-testid={`option-player-${mode.toLowerCase().replace(/\s/g, '-')}`}
                       >
-                        <SelectValue placeholder="Select mode" />
-                      </SelectTrigger>
-                      <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
-                        <SelectItem value="Per Game" data-testid="option-player-per-game">Per Game</SelectItem>
-                        <SelectItem value="Total" data-testid="option-player-total">Total</SelectItem>
-                        <SelectItem value="Per 40" data-testid="option-player-per-40">Per 40</SelectItem>
-                      </SelectContent>
-                    </Select>
+                        {mode}
+                      </button>
+                    ))}
                   </div>
+                  {(filterAgeGroup !== 'all' || filterRound !== 'all') && (
+                    <button
+                      onClick={() => { setFilterAgeGroup('all'); setFilterRound('all'); }}
+                      className="px-3 py-1.5 text-xs md:text-sm rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40"
+                    >
+                      Clear Filters
+                    </button>
+                  )}
                 </div>
                 
                 {isLoadingStats ? (
@@ -4019,14 +4074,16 @@ export default function LeaguePage() {
                             className={`border-b border-gray-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors ${player.slug ? 'cursor-pointer' : ''}`}
                             onClick={() => {
                               if (player.slug) {
-                                navigate(`/player/${player.slug}`);
+                                setPreviousSection(activeSection);
+                                setSelectedPlayerSlug(player.slug);
+                                setActiveSection('player');
                               }
                             }}
                             data-testid={`player-row-${player.id}`}
                           >
                             <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 dark:text-slate-200 sticky left-0 bg-white dark:bg-neutral-900 hover:bg-orange-50 dark:hover:bg-neutral-800 z-10">
                               <div className="min-w-0">
-                                <div className="font-medium text-slate-900 dark:text-white text-xs md:text-sm truncate">{player.name}</div>
+                                <div className={`font-medium text-xs md:text-sm truncate ${player.slug ? 'text-orange-600 dark:text-orange-400 hover:underline cursor-pointer' : 'text-slate-900 dark:text-white'}`}>{player.name}</div>
                                 <div className="text-[10px] md:text-xs text-slate-500 dark:text-slate-400 truncate">{player.team}</div>
                               </div>
                             </td>
@@ -4179,48 +4236,58 @@ export default function LeaguePage() {
                   <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-4">Team Statistics - {league?.name}</h2>
                 </div>
 
-                {/* Dropdowns for Category and Mode */}
-                <div className="flex flex-col sm:flex-row gap-3 mb-6">
-                  <div className="flex-1">
-                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">Category</label>
-                    <Select
-                      value={teamStatsCategory}
-                      onValueChange={(value) => setTeamStatsCategory(value as typeof teamStatsCategory)}
-                    >
-                      <SelectTrigger 
-                        className="w-full bg-white dark:bg-neutral-800 border-slate-200 dark:border-neutral-600 text-slate-700 dark:text-slate-200 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500"
-                        data-testid="select-category"
-                      >
-                        <SelectValue placeholder="Select category" />
-                      </SelectTrigger>
-                      <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
-                        <SelectItem value="Traditional" data-testid="option-traditional">Traditional</SelectItem>
-                        <SelectItem value="Advanced" data-testid="option-advanced">Advanced</SelectItem>
-                        <SelectItem value="Four Factors" data-testid="option-four-factors">Four Factors</SelectItem>
-                        <SelectItem value="Scoring" data-testid="option-scoring">Scoring</SelectItem>
-                        <SelectItem value="Misc" data-testid="option-misc">Misc</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                {/* Category Dropdown */}
+                <div className="relative mb-4">
+                  <button
+                    onClick={() => setTeamCategoryDropdownOpen(!teamCategoryDropdownOpen)}
+                    className="flex items-center justify-between w-full max-w-xs px-4 py-2.5 rounded-xl border bg-white dark:bg-neutral-800 text-left text-base font-semibold text-slate-800 dark:text-white transition-all"
+                    style={{ borderColor: brandBorderLight }}
+                    data-testid="select-category"
+                  >
+                    <span>{teamStatsCategory}</span>
+                    <ChevronDown className={`h-5 w-5 text-gray-400 transition-transform ${teamCategoryDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  {teamCategoryDropdownOpen && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setTeamCategoryDropdownOpen(false)} />
+                      <div className="absolute z-20 mt-1 w-full max-w-xs rounded-xl border bg-white dark:bg-neutral-800 shadow-lg overflow-hidden" style={{ borderColor: brandBorderLight }}>
+                        {(['Traditional', 'Advanced', 'Four Factors', 'Scoring', 'Misc'] as const).map(cat => (
+                          <button
+                            key={cat}
+                            onClick={() => { setTeamStatsCategory(cat); setTeamCategoryDropdownOpen(false); }}
+                            className={`w-full px-4 py-2.5 text-left text-sm font-medium transition-colors ${
+                              teamStatsCategory === cat
+                                ? 'bg-gray-100 dark:bg-neutral-700'
+                                : 'hover:bg-gray-50 dark:hover:bg-neutral-700'
+                            } text-slate-800 dark:text-white`}
+                            data-testid={`option-${cat.toLowerCase().replace(/\s/g, '-')}`}
+                          >
+                            {cat}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
 
-                  <div className="flex-1">
-                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">Mode</label>
-                    <Select
-                      value={teamStatsMode}
-                      onValueChange={(value) => setTeamStatsMode(value as typeof teamStatsMode)}
-                    >
-                      <SelectTrigger 
-                        className="w-full bg-white dark:bg-neutral-800 border-slate-200 dark:border-neutral-600 text-slate-700 dark:text-slate-200 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500"
-                        data-testid="select-mode"
+                {/* Mode Tabs */}
+                <div className="flex items-center gap-2 mb-5">
+                  <div className="inline-flex rounded-lg border dark:border-neutral-700 p-1" style={{ borderColor: brandBorderLight, backgroundColor: brandBg50 }}>
+                    {(['Per Game', 'Totals', 'Per 100 Possessions'] as const).map(mode => (
+                      <button
+                        key={mode}
+                        onClick={() => setTeamStatsMode(mode)}
+                        className={`px-3 md:px-4 py-1.5 text-xs md:text-sm font-medium rounded-md transition-all ${
+                          teamStatsMode === mode
+                            ? 'bg-white dark:bg-neutral-700 shadow-sm'
+                            : 'hover:bg-white/50 dark:hover:bg-neutral-800'
+                        }`}
+                        style={{ color: brandColor }}
+                        data-testid={`option-${mode.toLowerCase().replace(/\s/g, '-')}`}
                       >
-                        <SelectValue placeholder="Select mode" />
-                      </SelectTrigger>
-                      <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
-                        <SelectItem value="Per Game" data-testid="option-per-game">Per Game</SelectItem>
-                        <SelectItem value="Totals" data-testid="option-totals">Totals</SelectItem>
-                        <SelectItem value="Per 100 Possessions" data-testid="option-per-100">Per 100 Possessions</SelectItem>
-                      </SelectContent>
-                    </Select>
+                        {mode === 'Per 100 Possessions' ? 'Per 100 Poss' : mode}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
@@ -4323,7 +4390,11 @@ export default function LeaguePage() {
                           <tr
                             key={`team-stats-${team.teamName}-${index}`}
                             className="hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors cursor-pointer group"
-                            onClick={() => navigate(`/league/${slug}/team/${encodeURIComponent(team.teamName)}`)}
+                            onClick={() => {
+                              setPreviousSection(activeSection);
+                              setSelectedTeamName(team.teamName);
+                              setActiveSection('team');
+                            }}
                             data-testid={`row-team-${team.teamName}`}
                           >
                             <td className="py-2 md:py-3 px-2 md:px-3 sticky left-0 bg-white dark:bg-neutral-900 group-hover:bg-orange-50 dark:group-hover:bg-neutral-800 z-10 transition-colors">
@@ -4389,15 +4460,21 @@ export default function LeaguePage() {
                 {standings.length > 0 ? (
                   <div className="divide-y divide-gray-200 dark:divide-neutral-700">
                     {standings.map((teamData, index) => (
-                      <Link key={`team-${teamData.team}-${index}`} to={`/league/${slug}/team/${encodeURIComponent(teamData.team)}`}>
-                        <div className="p-3 md:p-4 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors flex items-center justify-between group cursor-pointer">
-                          <div className="flex items-center gap-2 md:gap-4">
-                            <TeamLogo teamName={teamData.team} leagueId={league?.league_id || ""} size="md" logoUrl={getTeamLogoUrl(teamData.team)} />
-                            <h3 className="font-semibold text-slate-800 dark:text-white text-sm md:text-lg">{teamData.team}</h3>
-                          </div>
-                          <ChevronRight className="w-4 md:w-5 h-4 md:h-5 text-gray-400 dark:text-gray-500 group-hover:text-orange-600 transition-colors" />
+                      <div
+                        key={`team-${teamData.team}-${index}`}
+                        className="p-3 md:p-4 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors flex items-center justify-between group cursor-pointer"
+                        onClick={() => {
+                          setPreviousSection(activeSection);
+                          setSelectedTeamName(teamData.team);
+                          setActiveSection('team');
+                        }}
+                      >
+                        <div className="flex items-center gap-2 md:gap-4">
+                          <TeamLogo teamName={teamData.team} leagueId={league?.league_id || ""} size="md" logoUrl={getTeamLogoUrl(teamData.team)} />
+                          <h3 className="font-semibold text-slate-800 dark:text-white text-sm md:text-lg">{teamData.team}</h3>
                         </div>
-                      </Link>
+                        <ChevronRight className="w-4 md:w-5 h-4 md:h-5 text-gray-400 dark:text-gray-500 group-hover:text-orange-600 transition-colors" />
+                      </div>
                     ))}
                   </div>
                 ) : (
@@ -4709,120 +4786,313 @@ export default function LeaguePage() {
               </div>
             )}
 
+            {/* Inline Leaders Section */}
+            {activeSection === 'player' && selectedPlayerSlug && (
+              <div className="md:col-span-3">
+                <InlinePlayerProfile
+                  playerSlug={selectedPlayerSlug}
+                  brandColor={brandColor}
+                  leagueSlug={slug}
+                  onBack={() => {
+                    setSelectedPlayerSlug(null);
+                    setActiveSection(previousSection);
+                  }}
+                />
+              </div>
+            )}
+
+            {activeSection === 'team' && selectedTeamName && (
+              <div className="md:col-span-3">
+                <InlineTeamProfile
+                  teamName={selectedTeamName}
+                  brandColor={brandColor}
+                  leagueSlug={slug}
+                  leagueId={league?.league_id || ""}
+                  onBack={() => {
+                    setSelectedTeamName(null);
+                    setActiveSection(previousSection);
+                  }}
+                  onPlayerClick={(playerSlug) => {
+                    setPreviousSection('team');
+                    setSelectedPlayerSlug(playerSlug);
+                    setActiveSection('player');
+                  }}
+                />
+              </div>
+            )}
+
+            {activeSection === 'leaders' && (
+              <div className="space-y-4 md:space-y-6">
+                <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-4 md:mb-6">
+                    <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">League Leaders</h2>
+                    <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                      {!isParentLeague && (availableAgeGroups.length > 0 || availableRounds.length > 0) && (
+                        <div className="flex gap-1.5">
+                          {availableAgeGroups.length > 0 && (
+                            <select
+                              value={filterAgeGroup}
+                              onChange={(e) => setFilterAgeGroup(e.target.value)}
+                              className="px-2 py-1 text-[11px] md:text-xs rounded-md border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300"
+                            >
+                              <option value="all">All Ages</option>
+                              {availableAgeGroups.map(ag => (
+                                <option key={ag} value={ag}>{ag}</option>
+                              ))}
+                            </select>
+                          )}
+                          {availableRounds.length > 0 && (
+                            <select
+                              value={filterRound}
+                              onChange={(e) => setFilterRound(e.target.value)}
+                              className="px-2 py-1 text-[11px] md:text-xs rounded-md border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300"
+                            >
+                              <option value="all">All Rounds</option>
+                              {availableRounds.map(r => (
+                                <option key={r} value={r}>{r}</option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                      )}
+                      <div className="inline-flex rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 p-1">
+                        <button
+                          onClick={() => setLeagueLeadersView('averages')}
+                          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                            leagueLeadersView === 'averages'
+                              ? 'bg-white dark:bg-neutral-700 shadow-sm'
+                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                          }`}
+                          style={leagueLeadersView === 'averages' ? { color: brandColor } : {}}
+                        >
+                          Averages
+                        </button>
+                        <button
+                          onClick={() => setLeagueLeadersView('totals')}
+                          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                            leagueLeadersView === 'totals'
+                              ? 'bg-white dark:bg-neutral-700 shadow-sm'
+                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                          }`}
+                          style={leagueLeadersView === 'totals' ? { color: brandColor } : {}}
+                        >
+                          Totals
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {isLoadingLeaders ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                      {Array.from({ length: 9 }).map((_, i) => (
+                        <LeaderCardSkeleton key={`inline-leader-skeleton-${i}`} />
+                      ))}
+                    </div>
+                  ) : filteredByAgeGroupRound.length === 0 ? (
+                    <div className="text-center py-12">
+                      <p className="text-sm text-slate-500 dark:text-slate-400">No player data available for the selected filters.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                      {(() => {
+                        const players = filteredByAgeGroupRound;
+                        const statCategories = [
+                          {
+                            title: "Scoring Leaders",
+                            sortFn: (a: any, b: any) => leagueLeadersView === 'averages'
+                              ? parseFloat(b.avgPoints || '0') - parseFloat(a.avgPoints || '0')
+                              : (b.totalPoints || 0) - (a.totalPoints || 0),
+                            displayFn: (p: any) => leagueLeadersView === 'averages'
+                              ? `${p.avgPoints} PPG` : `${Math.round(p.totalPoints)} PTS`,
+                          },
+                          {
+                            title: "Rebounding Leaders",
+                            sortFn: (a: any, b: any) => leagueLeadersView === 'averages'
+                              ? parseFloat(b.avgRebounds || '0') - parseFloat(a.avgRebounds || '0')
+                              : (b.totalRebounds || 0) - (a.totalRebounds || 0),
+                            displayFn: (p: any) => leagueLeadersView === 'averages'
+                              ? `${p.avgRebounds} RPG` : `${Math.round(p.totalRebounds)} REB`,
+                          },
+                          {
+                            title: "Assist Leaders",
+                            sortFn: (a: any, b: any) => leagueLeadersView === 'averages'
+                              ? parseFloat(b.avgAssists || '0') - parseFloat(a.avgAssists || '0')
+                              : (b.totalAssists || 0) - (a.totalAssists || 0),
+                            displayFn: (p: any) => leagueLeadersView === 'averages'
+                              ? `${p.avgAssists} APG` : `${Math.round(p.totalAssists)} AST`,
+                          },
+                          {
+                            title: "Steal Leaders",
+                            sortFn: (a: any, b: any) => leagueLeadersView === 'averages'
+                              ? parseFloat(b.avgSteals || '0') - parseFloat(a.avgSteals || '0')
+                              : (b.totalSteals || 0) - (a.totalSteals || 0),
+                            displayFn: (p: any) => leagueLeadersView === 'averages'
+                              ? `${p.avgSteals} SPG` : `${Math.round(p.totalSteals)} STL`,
+                          },
+                          {
+                            title: "Block Leaders",
+                            sortFn: (a: any, b: any) => leagueLeadersView === 'averages'
+                              ? parseFloat(b.avgBlocks || '0') - parseFloat(a.avgBlocks || '0')
+                              : (b.totalBlocks || 0) - (a.totalBlocks || 0),
+                            displayFn: (p: any) => leagueLeadersView === 'averages'
+                              ? `${p.avgBlocks} BPG` : `${Math.round(p.totalBlocks)} BLK`,
+                          },
+                          {
+                            title: "Field Goal %",
+                            sortFn: (a: any, b: any) => parseFloat(b.fgPercentage || '0') - parseFloat(a.fgPercentage || '0'),
+                            displayFn: (p: any) => `${p.fgPercentage}%`,
+                            filterFn: (p: any) => (p.totalFGA || 0) >= 2,
+                          },
+                          {
+                            title: "Three Point %",
+                            sortFn: (a: any, b: any) => parseFloat(b.threePercentage || '0') - parseFloat(a.threePercentage || '0'),
+                            displayFn: (p: any) => `${p.threePercentage}%`,
+                            filterFn: (p: any) => (p.total3PA || 0) >= 1,
+                          },
+                          {
+                            title: "Free Throw %",
+                            sortFn: (a: any, b: any) => parseFloat(b.ftPercentage || '0') - parseFloat(a.ftPercentage || '0'),
+                            displayFn: (p: any) => `${p.ftPercentage}%`,
+                            filterFn: (p: any) => (p.totalFTA || 0) >= 1,
+                          },
+                          {
+                            title: "Efficiency Leaders",
+                            sortFn: (a: any, b: any) => {
+                              const effA = leagueLeadersView === 'averages'
+                                ? ((a.totalPoints || 0) + (a.totalRebounds || 0) + (a.totalAssists || 0) + (a.totalSteals || 0) + (a.totalBlocks || 0) - ((a.totalFGA || 0) - (a.totalFGM || 0)) - ((a.totalFTA || 0) - (a.totalFTM || 0)) - (a.totalTurnovers || 0)) / (a.games || 1)
+                                : (a.totalPoints || 0) + (a.totalRebounds || 0) + (a.totalAssists || 0) + (a.totalSteals || 0) + (a.totalBlocks || 0) - ((a.totalFGA || 0) - (a.totalFGM || 0)) - ((a.totalFTA || 0) - (a.totalFTM || 0)) - (a.totalTurnovers || 0);
+                              const effB = leagueLeadersView === 'averages'
+                                ? ((b.totalPoints || 0) + (b.totalRebounds || 0) + (b.totalAssists || 0) + (b.totalSteals || 0) + (b.totalBlocks || 0) - ((b.totalFGA || 0) - (b.totalFGM || 0)) - ((b.totalFTA || 0) - (b.totalFTM || 0)) - (b.totalTurnovers || 0)) / (b.games || 1)
+                                : (b.totalPoints || 0) + (b.totalRebounds || 0) + (b.totalAssists || 0) + (b.totalSteals || 0) + (b.totalBlocks || 0) - ((b.totalFGA || 0) - (b.totalFGM || 0)) - ((b.totalFTA || 0) - (b.totalFTM || 0)) - (b.totalTurnovers || 0);
+                              return effB - effA;
+                            },
+                            displayFn: (p: any) => {
+                              const totalEff = (p.totalPoints || 0) + (p.totalRebounds || 0) + (p.totalAssists || 0) + (p.totalSteals || 0) + (p.totalBlocks || 0) - ((p.totalFGA || 0) - (p.totalFGM || 0)) - ((p.totalFTA || 0) - (p.totalFTM || 0)) - (p.totalTurnovers || 0);
+                              return leagueLeadersView === 'averages'
+                                ? `${(totalEff / (p.games || 1)).toFixed(1)} EFF`
+                                : `${Math.round(totalEff)} EFF`;
+                            },
+                          },
+                        ];
+
+                        return statCategories.map(({ title, sortFn, displayFn, filterFn }) => {
+                          const filtered = filterFn ? players.filter(filterFn) : players;
+                          const sorted = [...filtered].sort(sortFn).slice(0, 10);
+                          return (
+                            <div key={title} className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4">
+                              <h3 className="text-sm font-semibold mb-3 px-1" style={{ color: brandColor }}>{title}</h3>
+                              <div className="space-y-0">
+                                {sorted.map((player, idx) => (
+                                  <div
+                                    key={`${title}-${player.slug || player.name}-${idx}`}
+                                    className="flex items-center justify-between py-2 px-2 rounded-md hover:bg-gray-100 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
+                                    onClick={() => {
+                                      if (player.slug) {
+                                        setPreviousSection(activeSection);
+                                        setSelectedPlayerSlug(player.slug);
+                                        setActiveSection('player');
+                                      }
+                                    }}
+                                  >
+                                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                      <span className="text-xs font-bold w-5 text-center text-slate-400 dark:text-slate-500 shrink-0">{idx + 1}</span>
+                                      <div className="min-w-0 flex-1">
+                                        <p className={`text-sm font-medium truncate ${player.slug ? 'hover:underline' : ''}`} style={{ color: brandColor }}>{player.name}</p>
+                                        <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{player.team || 'Unknown Team'}</p>
+                                      </div>
+                                    </div>
+                                    <span className="text-sm font-semibold text-slate-800 dark:text-white whitespace-nowrap ml-2">
+                                      {displayFn(player)}
+                                    </span>
+                                  </div>
+                                ))}
+                                {sorted.length === 0 && (
+                                  <p className="text-xs text-slate-400 dark:text-slate-500 text-center py-4">No data available</p>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Overview Section - Default view */}
             {activeSection === 'overview' && (
               <>
-                {/* League Leaders */}
+                {/* League Leaders Quick View */}
                 <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
-              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-4 md:mb-6">
-                <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">League Leaders</h2>
-                <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-                  {!isParentLeague && (availableAgeGroups.length > 0 || availableRounds.length > 0) && (
-                    <div className="flex gap-1.5">
-                      {availableAgeGroups.length > 0 && (
-                        <select
-                          value={filterAgeGroup}
-                          onChange={(e) => setFilterAgeGroup(e.target.value)}
-                          className="px-2 py-1 text-[11px] md:text-xs rounded-md border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300"
-                        >
-                          <option value="all">All Ages</option>
-                          {availableAgeGroups.map(ag => (
-                            <option key={ag} value={ag}>{ag}</option>
-                          ))}
-                        </select>
-                      )}
-                      {availableRounds.length > 0 && (
-                        <select
-                          value={filterRound}
-                          onChange={(e) => setFilterRound(e.target.value)}
-                          className="px-2 py-1 text-[11px] md:text-xs rounded-md border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300"
-                        >
-                          <option value="all">All Rounds</option>
-                          {availableRounds.map(r => (
-                            <option key={r} value={r}>{r}</option>
-                          ))}
-                        </select>
-                      )}
-                    </div>
-                  )}
-                  <div className="inline-flex rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 p-1">
+                  <div className="flex justify-between items-center mb-4 md:mb-6">
+                    <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">League Leaders</h2>
                     <button
-                      onClick={() => setLeagueLeadersView('averages')}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                        leagueLeadersView === 'averages'
-                          ? 'bg-white dark:bg-neutral-700 shadow-sm'
-                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-                      }`}
-                      style={leagueLeadersView === 'averages' ? { color: brandColor } : {}}
-                      data-testid="button-league-leaders-averages"
+                      onClick={() => {
+                        setActiveSection('leaders');
+                        if (allPlayerAverages.length === 0) {
+                          fetchAllPlayerAverages();
+                        }
+                      }}
+                      className="text-xs md:text-sm font-medium hover:underline"
+                      style={{ color: brandColor }}
                     >
-                      Averages
-                    </button>
-                    <button
-                      onClick={() => setLeagueLeadersView('totals')}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                        leagueLeadersView === 'totals'
-                          ? 'bg-white dark:bg-neutral-700 shadow-sm'
-                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-                      }`}
-                      style={leagueLeadersView === 'totals' ? { color: brandColor } : {}}
-                      data-testid="button-league-leaders-totals"
-                    >
-                      Totals
+                      View All Leaders →
                     </button>
                   </div>
-                  <button
-                    onClick={() => navigate(`/league-leaders/${slug}`)}
-                    className="text-xs md:text-sm font-medium hover:underline text-left sm:text-right"
-                    style={{ color: brandColor }}
-                  >
-                    View All Leaders →
-                  </button>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
-                {isLoadingLeaders ? (
-                  Array.from({ length: 3 }).map((_, i) => (
-                    <LeaderCardSkeleton key={`leader-skeleton-${i}`} />
-                  ))
-                ) : (
-                  ([
-                    { 
-                      title: "Top Scorers", 
-                      list: topScorers, 
-                      avgLabel: "PPG", 
-                      totalLabel: "PTS",
-                    },
-                    { 
-                      title: "Top Rebounders", 
-                      list: topRebounders, 
-                      avgLabel: "RPG", 
-                      totalLabel: "REB",
-                    },
-                    { 
-                      title: "Top Playmakers", 
-                      list: topAssistsList, 
-                      avgLabel: "APG", 
-                      totalLabel: "AST",
-                    },
-                  ] as const).map(({ title, list, avgLabel, totalLabel }) => (
-                    <div key={title} className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4 shadow-inner">
-                      <h3 className="text-xs md:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 md:mb-3 text-center">{title}</h3>
-                      <ul className="space-y-1 text-xs md:text-sm text-slate-800 dark:text-white">
-                        {Array.isArray(list) &&
-                          list.map((p, i) => (
-                            <li key={`${title}-${p.name}-${i}`} className="flex justify-between">
-                              <span className="truncate mr-2">{p.name}</span>
-                              <span className="font-medium whitespace-nowrap" style={{ color: brandColor }}>
-                                {p.value} {leagueLeadersView === 'averages' ? avgLabel : totalLabel}
-                              </span>
-                            </li>
-                          ))}
-                      </ul>
-                    </div>
-                  ))
-                )}
-              </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+                    {isLoadingLeaders ? (
+                      Array.from({ length: 3 }).map((_, i) => (
+                        <LeaderCardSkeleton key={`leader-skeleton-${i}`} />
+                      ))
+                    ) : (
+                      ([
+                        { 
+                          title: "Top Scorers", 
+                          list: topScorers, 
+                          avgLabel: "PPG", 
+                          totalLabel: "PTS",
+                        },
+                        { 
+                          title: "Top Rebounders", 
+                          list: topRebounders, 
+                          avgLabel: "RPG", 
+                          totalLabel: "REB",
+                        },
+                        { 
+                          title: "Top Playmakers", 
+                          list: topAssistsList, 
+                          avgLabel: "APG", 
+                          totalLabel: "AST",
+                        },
+                      ] as const).map(({ title, list, avgLabel, totalLabel }) => (
+                        <div key={title} className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4 shadow-inner">
+                          <h3 className="text-xs md:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 md:mb-3 text-center">{title}</h3>
+                          <ul className="space-y-1 text-xs md:text-sm text-slate-800 dark:text-white">
+                            {Array.isArray(list) &&
+                              list.map((p, i) => (
+                                <li 
+                                  key={`${title}-${p.name}-${i}`} 
+                                  className={`flex justify-between ${p.slug ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700 rounded px-1 -mx-1 transition-colors' : ''}`}
+                                  onClick={() => {
+                                    if (p.slug) {
+                                      setPreviousSection(activeSection);
+                                      setSelectedPlayerSlug(p.slug);
+                                      setActiveSection('player');
+                                    }
+                                  }}
+                                >
+                                  <span className={`truncate mr-2 ${p.slug ? 'text-orange-600 dark:text-orange-400 hover:underline' : ''}`}>{p.name}</span>
+                                  <span className="font-medium whitespace-nowrap" style={{ color: brandColor }}>
+                                    {p.value} {leagueLeadersView === 'averages' ? avgLabel : totalLabel}
+                                  </span>
+                                </li>
+                              ))}
+                          </ul>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
 
                 {/* Team League Leaders */}
@@ -5031,7 +5301,7 @@ export default function LeaguePage() {
           </section>
 
           {/* Sidebar */}
-          <aside className="space-y-6">
+          <aside className={`space-y-6 ${activeSection !== 'overview' ? 'hidden' : ''}`}>
             {/* League Admin Panel */}
             {isOwner && league?.league_id && (
               <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-6 border-l-4 border-blue-500">
@@ -5069,6 +5339,7 @@ export default function LeaguePage() {
             )}
 
 
+            {activeSection === 'overview' && (<>
             {/* Instagram Embed */}
             <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4">
               <div className="flex justify-between items-center mb-3">
@@ -5269,6 +5540,7 @@ export default function LeaguePage() {
               <p className="text-xs text-slate-500">💬 Only logged-in users can post.</p>
               <div className="text-xs italic text-slate-400 mt-2">Coming soon...</div>
             </div>
+            </>)}
           </aside>
         </main>
 

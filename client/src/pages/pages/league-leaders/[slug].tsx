@@ -3,8 +3,7 @@ import { useParams, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
-import { ArrowLeft, Filter } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ArrowLeft, ChevronDown } from "lucide-react";
 import { namesMatch, getMostCompleteName } from "@/lib/fuzzyMatch";
 import { normalizeTeamName } from "@/lib/teamUtils";
 import { useLeagueBranding } from "@/hooks/useLeagueBranding";
@@ -13,19 +12,6 @@ import LeagueDefaultImage from "@/assets/league-default.png";
 interface ChildLeague {
   league_id: string;
   name: string;
-}
-
-interface LeaderboardStats {
-  points: any[];
-  rebounds_total: any[];
-  assists: any[];
-  steals: any[];
-  blocks: any[];
-  field_goal_percentage: any[];
-  three_point_percentage: any[];
-  free_throw_percentage: any[];
-  games_played: any[];
-  efficiency: any[];
 }
 
 interface League {
@@ -40,6 +26,19 @@ interface League {
   accent_color?: string;
 }
 
+type StatCategory = 'Traditional' | 'Advanced';
+
+interface StatLeaderDef {
+  key: string;
+  title: string;
+  avgLabel: string;
+  totalLabel: string;
+  compute: (p: any) => { avg: number; total: number; display: string };
+  minAttempts?: (p: any) => boolean;
+}
+
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
 export default function LeagueLeadersPage() {
   const { slug } = useParams();
   const [location, navigate] = useLocation();
@@ -50,6 +49,10 @@ export default function LeagueLeadersPage() {
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'averages' | 'totals'>('averages');
   const [selectedAgeGroup, setSelectedAgeGroup] = useState<string>('all');
+  const [selectedRound, setSelectedRound] = useState<string>('all');
+  const [selectedMonth, setSelectedMonth] = useState<string>('season');
+  const [statCategory, setStatCategory] = useState<StatCategory>('Traditional');
+  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
 
   const { colors: leagueBrandColors } = useLeagueBranding({
     slug,
@@ -101,6 +104,35 @@ export default function LeagueLeadersPage() {
       }))
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [childLeagues, league, isParentLeague]);
+
+  const availableRounds = useMemo(() => {
+    if (!isParentLeague) return [];
+    const rounds = new Set<string>();
+    rawPlayerStats.forEach(s => {
+      if (s.round) rounds.add(s.round);
+    });
+    return [...rounds].sort((a, b) => {
+      const numA = parseInt(a.replace(/\D/g, ''));
+      const numB = parseInt(b.replace(/\D/g, ''));
+      if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+      return a.localeCompare(b);
+    });
+  }, [rawPlayerStats, isParentLeague]);
+
+  const availableMonths = useMemo(() => {
+    if (isParentLeague) return [];
+    const months = new Set<string>();
+    rawPlayerStats.forEach(s => {
+      if (s.game_date) {
+        const d = new Date(s.game_date);
+        if (!isNaN(d.getTime())) {
+          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+          months.add(key);
+        }
+      }
+    });
+    return [...months].sort();
+  }, [rawPlayerStats, isParentLeague]);
 
   useEffect(() => {
     const fetchLeagueAndStats = async () => {
@@ -185,28 +217,148 @@ export default function LeagueLeadersPage() {
     fetchLeagueAndStats();
   }, [slug]);
 
-  const leaderboardStats = useMemo(() => {
-    if (rawPlayerStats.length === 0) return null;
+  const getTraditionalDefs = (vm: 'averages' | 'totals'): StatLeaderDef[] => [
+    {
+      key: 'points', title: 'Points', avgLabel: 'PPG', totalLabel: 'PTS',
+      compute: (p) => {
+        const avg = p.total_points / p.games_played;
+        return { avg, total: p.total_points, display: vm === 'averages' ? `${avg.toFixed(1)}` : `${Math.round(p.total_points)}` };
+      }
+    },
+    {
+      key: 'rebounds', title: 'Rebounds', avgLabel: 'RPG', totalLabel: 'REB',
+      compute: (p) => {
+        const avg = p.total_rebounds / p.games_played;
+        return { avg, total: p.total_rebounds, display: vm === 'averages' ? `${avg.toFixed(1)}` : `${Math.round(p.total_rebounds)}` };
+      }
+    },
+    {
+      key: 'assists', title: 'Assists', avgLabel: 'APG', totalLabel: 'AST',
+      compute: (p) => {
+        const avg = p.total_assists / p.games_played;
+        return { avg, total: p.total_assists, display: vm === 'averages' ? `${avg.toFixed(1)}` : `${Math.round(p.total_assists)}` };
+      }
+    },
+    {
+      key: 'steals', title: 'Steals', avgLabel: 'SPG', totalLabel: 'STL',
+      compute: (p) => {
+        const avg = p.total_steals / p.games_played;
+        return { avg, total: p.total_steals, display: vm === 'averages' ? `${avg.toFixed(1)}` : `${Math.round(p.total_steals)}` };
+      }
+    },
+    {
+      key: 'blocks', title: 'Blocks', avgLabel: 'BPG', totalLabel: 'BLK',
+      compute: (p) => {
+        const avg = p.total_blocks / p.games_played;
+        return { avg, total: p.total_blocks, display: vm === 'averages' ? `${avg.toFixed(1)}` : `${Math.round(p.total_blocks)}` };
+      }
+    },
+    {
+      key: 'turnovers', title: 'Turnovers', avgLabel: 'TPG', totalLabel: 'TO',
+      compute: (p) => {
+        const avg = p.total_turnovers / p.games_played;
+        return { avg, total: p.total_turnovers, display: vm === 'averages' ? `${avg.toFixed(1)}` : `${Math.round(p.total_turnovers)}` };
+      }
+    },
+    {
+      key: 'fg_pct', title: 'Field Goal %', avgLabel: 'FG%', totalLabel: 'FG%',
+      compute: (p) => {
+        const pct = p.total_field_goals_attempted > 0 ? (p.total_field_goals_made / p.total_field_goals_attempted) * 100 : 0;
+        return { avg: pct, total: pct, display: `${pct.toFixed(1)}%` };
+      },
+      minAttempts: (p) => p.total_field_goals_attempted >= 2
+    },
+    {
+      key: '3p_pct', title: 'Three Point %', avgLabel: '3P%', totalLabel: '3P%',
+      compute: (p) => {
+        const pct = p.total_three_points_attempted > 0 ? (p.total_three_points_made / p.total_three_points_attempted) * 100 : 0;
+        return { avg: pct, total: pct, display: `${pct.toFixed(1)}%` };
+      },
+      minAttempts: (p) => p.total_three_points_attempted >= 1
+    },
+    {
+      key: 'ft_pct', title: 'Free Throw %', avgLabel: 'FT%', totalLabel: 'FT%',
+      compute: (p) => {
+        const pct = p.total_free_throws_attempted > 0 ? (p.total_free_throws_made / p.total_free_throws_attempted) * 100 : 0;
+        return { avg: pct, total: pct, display: `${pct.toFixed(1)}%` };
+      },
+      minAttempts: (p) => p.total_free_throws_attempted >= 1
+    },
+  ];
 
-    let filteredStats = rawPlayerStats;
+  const getAdvancedDefs = (vm: 'averages' | 'totals'): StatLeaderDef[] => [
+    {
+      key: 'efficiency', title: 'Efficiency', avgLabel: 'EFF', totalLabel: 'EFF',
+      compute: (p) => {
+        const totalEff = p.total_points + p.total_rebounds + p.total_assists + p.total_steals + p.total_blocks
+          - (p.total_field_goals_attempted - p.total_field_goals_made)
+          - (p.total_free_throws_attempted - p.total_free_throws_made)
+          - p.total_turnovers;
+        const avg = totalEff / p.games_played;
+        return { avg, total: totalEff, display: vm === 'averages' ? `${avg.toFixed(1)}` : `${Math.round(totalEff)}` };
+      }
+    },
+    {
+      key: 'efg_pct', title: 'Effective FG%', avgLabel: 'EFG%', totalLabel: 'EFG%',
+      compute: (p) => {
+        const efg = p.total_field_goals_attempted > 0
+          ? ((p.total_field_goals_made + 0.5 * p.total_three_points_made) / p.total_field_goals_attempted) * 100
+          : 0;
+        return { avg: efg, total: efg, display: `${efg.toFixed(1)}%` };
+      },
+      minAttempts: (p) => p.total_field_goals_attempted >= 2
+    },
+    {
+      key: 'ts_pct', title: 'True Shooting %', avgLabel: 'TS%', totalLabel: 'TS%',
+      compute: (p) => {
+        const tsa = 2 * (p.total_field_goals_attempted + 0.44 * p.total_free_throws_attempted);
+        const ts = tsa > 0 ? (p.total_points / tsa) * 100 : 0;
+        return { avg: ts, total: ts, display: `${ts.toFixed(1)}%` };
+      },
+      minAttempts: (p) => p.total_field_goals_attempted >= 2
+    },
+    {
+      key: 'ast_to', title: 'Assist/Turnover Ratio', avgLabel: 'AST/TO', totalLabel: 'AST/TO',
+      compute: (p) => {
+        const ratio = p.total_turnovers > 0 ? p.total_assists / p.total_turnovers : p.total_assists;
+        return { avg: ratio, total: ratio, display: `${ratio.toFixed(2)}` };
+      },
+      minAttempts: (p) => p.games_played >= 2
+    },
+    {
+      key: 'games_played', title: 'Games Played', avgLabel: 'GP', totalLabel: 'GP',
+      compute: (p) => {
+        return { avg: p.games_played, total: p.games_played, display: `${p.games_played}` };
+      }
+    },
+  ];
+
+  const filteredStats = useMemo(() => {
+    let stats = rawPlayerStats;
+
     if (isParentLeague && selectedAgeGroup !== 'all') {
-      filteredStats = rawPlayerStats.filter(s => s.league_id === selectedAgeGroup);
+      stats = stats.filter(s => s.league_id === selectedAgeGroup);
     }
 
-    if (filteredStats.length === 0) return null;
+    if (isParentLeague && selectedRound !== 'all') {
+      stats = stats.filter(s => s.round === selectedRound);
+    }
 
-    const processedStats: LeaderboardStats = {
-      points: [],
-      rebounds_total: [],
-      assists: [],
-      steals: [],
-      blocks: [],
-      field_goal_percentage: [],
-      three_point_percentage: [],
-      free_throw_percentage: [],
-      games_played: [],
-      efficiency: []
-    };
+    if (!isParentLeague && selectedMonth !== 'season') {
+      stats = stats.filter(s => {
+        if (!s.game_date) return false;
+        const d = new Date(s.game_date);
+        if (isNaN(d.getTime())) return false;
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        return key === selectedMonth;
+      });
+    }
+
+    return stats;
+  }, [rawPlayerStats, isParentLeague, selectedAgeGroup, selectedRound, selectedMonth]);
+
+  const aggregatedPlayers = useMemo(() => {
+    if (filteredStats.length === 0) return [];
 
     const playerStatsMap = new Map();
 
@@ -295,179 +447,61 @@ export default function LeagueLeadersPage() {
       }
     });
 
-    const playersArray = mergedPlayers;
+    return mergedPlayers;
+  }, [filteredStats]);
 
-    processedStats.points = playersArray
-      .map(p => ({
-        ...p,
-        avg_points: p.total_points / p.games_played,
-        display_value: viewMode === 'averages' 
-          ? `${(p.total_points / p.games_played).toFixed(1)} PPG`
-          : `${Math.round(p.total_points)} PTS`
-      }))
-      .sort((a, b) => viewMode === 'averages' 
-        ? b.avg_points - a.avg_points 
-        : b.total_points - a.total_points)
-      .slice(0, 5);
+  const leaderboards = useMemo(() => {
+    if (aggregatedPlayers.length === 0) return [];
 
-    processedStats.rebounds_total = playersArray
-      .map(p => ({
-        ...p,
-        avg_rebounds: p.total_rebounds / p.games_played,
-        display_value: viewMode === 'averages'
-          ? `${(p.total_rebounds / p.games_played).toFixed(1)} RPG`
-          : `${Math.round(p.total_rebounds)} REB`
-      }))
-      .sort((a, b) => viewMode === 'averages'
-        ? b.avg_rebounds - a.avg_rebounds
-        : b.total_rebounds - a.total_rebounds)
-      .slice(0, 5);
+    const defs = statCategory === 'Traditional' 
+      ? getTraditionalDefs(viewMode) 
+      : getAdvancedDefs(viewMode);
 
-    processedStats.assists = playersArray
-      .map(p => ({
-        ...p,
-        avg_assists: p.total_assists / p.games_played,
-        display_value: viewMode === 'averages'
-          ? `${(p.total_assists / p.games_played).toFixed(1)} APG`
-          : `${Math.round(p.total_assists)} AST`
-      }))
-      .sort((a, b) => viewMode === 'averages'
-        ? b.avg_assists - a.avg_assists
-        : b.total_assists - a.total_assists)
-      .slice(0, 5);
+    return defs.map(def => {
+      let eligible = aggregatedPlayers.filter(p => p.games_played >= 1);
+      if (def.minAttempts) {
+        eligible = eligible.filter(def.minAttempts);
+      }
 
-    processedStats.steals = playersArray
-      .map(p => ({
-        ...p,
-        avg_steals: p.total_steals / p.games_played,
-        display_value: viewMode === 'averages'
-          ? `${(p.total_steals / p.games_played).toFixed(1)} SPG`
-          : `${Math.round(p.total_steals)} STL`
-      }))
-      .sort((a, b) => viewMode === 'averages'
-        ? b.avg_steals - a.avg_steals
-        : b.total_steals - a.total_steals)
-      .slice(0, 5);
+      const computed = eligible.map(p => {
+        const result = def.compute(p);
+        return { ...p, _computed: result };
+      });
 
-    processedStats.blocks = playersArray
-      .map(p => ({
-        ...p,
-        avg_blocks: p.total_blocks / p.games_played,
-        display_value: viewMode === 'averages'
-          ? `${(p.total_blocks / p.games_played).toFixed(1)} BPG`
-          : `${Math.round(p.total_blocks)} BLK`
-      }))
-      .sort((a, b) => viewMode === 'averages'
-        ? b.avg_blocks - a.avg_blocks
-        : b.total_blocks - a.total_blocks)
-      .slice(0, 5);
+      const isPercentage = def.key.includes('pct') || def.key === 'ast_to';
+      computed.sort((a, b) => {
+        if (isPercentage || viewMode === 'averages') {
+          return b._computed.avg - a._computed.avg;
+        }
+        return b._computed.total - a._computed.total;
+      });
 
-    const playersWithEnoughGames = playersArray.filter(p => p.games_played >= 1);
+      return {
+        key: def.key,
+        title: def.title,
+        players: computed.slice(0, 5),
+      };
+    });
+  }, [aggregatedPlayers, statCategory, viewMode]);
 
-    processedStats.field_goal_percentage = playersWithEnoughGames
-      .map(p => ({
-        ...p,
-        fg_percentage: p.total_field_goals_attempted > 0 
-          ? (p.total_field_goals_made / p.total_field_goals_attempted) * 100 
-          : 0,
-        display_value: p.total_field_goals_attempted > 0 
-          ? `${((p.total_field_goals_made / p.total_field_goals_attempted) * 100).toFixed(1)}%`
-          : "0.0%"
-      }))
-      .filter(p => p.total_field_goals_attempted >= 2)
-      .sort((a, b) => b.fg_percentage - a.fg_percentage)
-      .slice(0, 5);
-
-    processedStats.three_point_percentage = playersWithEnoughGames
-      .map(p => ({
-        ...p,
-        three_point_percentage: p.total_three_points_attempted > 0 
-          ? (p.total_three_points_made / p.total_three_points_attempted) * 100 
-          : 0,
-        display_value: p.total_three_points_attempted > 0 
-          ? `${((p.total_three_points_made / p.total_three_points_attempted) * 100).toFixed(1)}%`
-          : "0.0%"
-      }))
-      .filter(p => p.total_three_points_attempted >= 1)
-      .sort((a, b) => b.three_point_percentage - a.three_point_percentage)
-      .slice(0, 5);
-
-    processedStats.free_throw_percentage = playersWithEnoughGames
-      .map(p => ({
-        ...p,
-        ft_percentage: p.total_free_throws_attempted > 0 
-          ? (p.total_free_throws_made / p.total_free_throws_attempted) * 100 
-          : 0,
-        display_value: p.total_free_throws_attempted > 0 
-          ? `${((p.total_free_throws_made / p.total_free_throws_attempted) * 100).toFixed(1)}%`
-          : "0.0%"
-      }))
-      .filter(p => p.total_free_throws_attempted >= 1)
-      .sort((a, b) => b.ft_percentage - a.ft_percentage)
-      .slice(0, 5);
-
-    processedStats.efficiency = playersWithEnoughGames
-      .map(p => {
-        const totalEff = p.total_points + p.total_rebounds + p.total_assists + p.total_steals + p.total_blocks
-          - (p.total_field_goals_attempted - p.total_field_goals_made)
-          - (p.total_free_throws_attempted - p.total_free_throws_made)
-          - p.total_turnovers;
-        const avgEff = totalEff / p.games_played;
-        return {
-          ...p,
-          total_efficiency: totalEff,
-          avg_efficiency: avgEff,
-          display_value: viewMode === 'averages'
-            ? `${avgEff.toFixed(1)} EFF`
-            : `${Math.round(totalEff)} EFF`
-        };
-      })
-      .sort((a, b) => viewMode === 'averages'
-        ? b.avg_efficiency - a.avg_efficiency
-        : b.total_efficiency - a.total_efficiency)
-      .slice(0, 5);
-
-    processedStats.games_played = playersArray
-      .map(p => ({
-        ...p,
-        display_value: `${p.games_played} GP`
-      }))
-      .sort((a, b) => b.games_played - a.games_played)
-      .slice(0, 5);
-
-    return processedStats;
-  }, [rawPlayerStats, viewMode, selectedAgeGroup, isParentLeague]);
-
-  const StatLeaderboard = ({ 
-    title, 
-    players, 
-  }: { 
-    title: string; 
-    players: any[]; 
-  }) => (
-    <Card
-      className="bg-white dark:bg-neutral-900 dark:border-neutral-700 shadow-md hover:shadow-lg transition-all duration-300"
-      style={{ borderColor: brandBorderLight }}
-    >
-      <CardHeader className="pb-2 md:pb-3 p-4 md:p-6">
-        <CardTitle className="text-base md:text-lg font-semibold" style={{ color: brandColor }}>
-          {title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2 p-4 md:p-6 pt-0">
-        {players.length > 0 ? (
-          players.map((player, index) => (
+  const StatSection = ({ title, players }: { title: string; players: any[] }) => (
+    <div className="mb-6">
+      <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-3">{title}</h3>
+      {players.length > 0 ? (
+        <div className="space-y-1">
+          {players.map((player, index) => (
             <div 
               key={`${player.player_id}-${index}`} 
-              className="leader-row flex items-center justify-between py-2 md:py-3 px-2 md:px-3 rounded-lg transition-colors duration-200 cursor-pointer"
+              className="leader-row flex items-center justify-between py-3 px-3 rounded-lg transition-colors duration-200 cursor-pointer"
               onClick={() => {
                 const identifier = player.player_slug || player.player_id;
                 if (identifier) navigate(`/player/${identifier}`);
               }}
             >
-              <div className="flex items-center gap-2 md:gap-3">
+              <div className="flex items-center gap-3">
+                <span className="text-base font-bold text-gray-400 dark:text-gray-500 w-5 text-center">{index + 1}</span>
                 <div
-                  className="w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center text-xs md:text-sm font-bold text-white"
+                  className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold"
                   style={{
                     background: index === 0
                       ? 'linear-gradient(to bottom right, #facc15, #ca8a04)'
@@ -479,24 +513,23 @@ export default function LeagueLeadersPage() {
                     color: index >= 3 ? brandColor : '#ffffff',
                   }}
                 >
-                  {index + 1}
+                  {player.name?.charAt(0)?.toUpperCase() || '?'}
                 </div>
                 <div>
-                  <p className="brand-name text-sm md:text-base font-medium" style={{ color: brandColorHover }}>{player.name}</p>
-                  <p className="text-xs md:text-sm text-gray-300 dark:text-white">{player.team_name || 'Unknown Team'}</p>
+                  <p className="brand-name text-sm font-semibold">{player.name}</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500">{player.team_name || 'Unknown Team'}</p>
                 </div>
               </div>
               <div className="text-right">
-                <p className="brand-value text-sm md:text-base font-bold" style={{ color: brandColor }}>{player.display_value}</p>
-                <p className="brand-games text-xs" style={{ color: brandColor, opacity: 0.7 }}>{player.games_played} games</p>
+                <p className="brand-value text-lg font-bold" style={{ color: brandColor }}>{player._computed.display}</p>
               </div>
             </div>
-          ))
-        ) : (
-          <p className="text-center py-4" style={{ color: brandColor }}>No data available</p>
-        )}
-      </CardContent>
-    </Card>
+          ))}
+        </div>
+      ) : (
+        <p className="text-center py-4 text-gray-500">No data available</p>
+      )}
+    </div>
   );
 
   if (loading) {
@@ -530,6 +563,9 @@ export default function LeagueLeadersPage() {
     );
   }
 
+  const totalGamesInData = filteredStats.length;
+  const uniqueGames = new Set(filteredStats.map(s => s.game_id).filter(Boolean)).size;
+
   return (
     <div
       className="league-leaders-page min-h-screen flex flex-col bg-[#fffaf1] dark:bg-neutral-950 transition-colors duration-700 relative"
@@ -546,7 +582,9 @@ export default function LeagueLeadersPage() {
         :is(.dark) .league-leaders-page .leader-row .brand-name { color: var(--brand-text-light) !important; }
         :is(.dark) .league-leaders-page .leader-row .brand-value { color: var(--brand-text-light) !important; }
         :is(.dark) .league-leaders-page .leader-row .brand-games { color: var(--brand-text-light) !important; opacity: 0.7; }
-        .league-leaders-page .brand-toggle:not(.brand-toggle-active):hover { background-color: var(--brand-bg-hover); }
+        .league-leaders-page .filter-tab { transition: all 0.2s ease; }
+        .league-leaders-page .filter-tab:hover { opacity: 0.8; }
+        .league-leaders-page .filter-tab-active { border-bottom: 2px solid currentColor; }
       `}</style>
       {leagueBrandColors && (
         <>
@@ -585,7 +623,7 @@ export default function LeagueLeadersPage() {
               )}
               <div>
                 <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white drop-shadow-md">
-                  League Leaders
+                  Stat Leaders
                 </h1>
                 <p className="text-sm text-white/90 mt-1">{league?.name}</p>
               </div>
@@ -594,82 +632,193 @@ export default function LeagueLeadersPage() {
         </div>
       </section>
 
-      <main className="flex-grow p-4 md:p-6 max-w-7xl mx-auto w-full space-y-6 md:space-y-8">
+      <main className="flex-grow p-4 md:p-6 max-w-3xl mx-auto w-full space-y-5">
         <button
           onClick={() => navigate(`/league/${slug}`)}
           className="flex items-center gap-2 font-medium transition-colors opacity-90 hover:opacity-100"
           style={{ color: brandColor }}
-          data-testid="button-back-to-league"
         >
           <ArrowLeft className="h-5 w-5" />
           <span>Back to League</span>
         </button>
 
-        <div className="text-center space-y-3 md:space-y-4">
-          {league?.description && (
-            <p className="text-sm md:text-base text-gray-800 dark:text-white max-w-2xl mx-auto">{league.description}</p>
+        {/* Category Dropdown */}
+        <div className="relative">
+          <button
+            onClick={() => setCategoryDropdownOpen(!categoryDropdownOpen)}
+            className="flex items-center justify-between w-full max-w-xs px-4 py-3 rounded-xl border bg-white dark:bg-neutral-900 text-left text-lg font-semibold text-gray-900 dark:text-white transition-all"
+            style={{ borderColor: brandBorderLight }}
+          >
+            <span>{statCategory}</span>
+            <ChevronDown className={`h-5 w-5 text-gray-400 transition-transform ${categoryDropdownOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {categoryDropdownOpen && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setCategoryDropdownOpen(false)} />
+              <div className="absolute z-20 mt-1 w-full max-w-xs rounded-xl border bg-white dark:bg-neutral-900 shadow-lg overflow-hidden" style={{ borderColor: brandBorderLight }}>
+                {(['Traditional', 'Advanced'] as StatCategory[]).map(cat => (
+                  <button
+                    key={cat}
+                    onClick={() => { setStatCategory(cat); setCategoryDropdownOpen(false); }}
+                    className={`w-full px-4 py-3 text-left text-base font-medium transition-colors ${
+                      statCategory === cat
+                        ? 'bg-gray-100 dark:bg-neutral-800'
+                        : 'hover:bg-gray-50 dark:hover:bg-neutral-800'
+                    } text-gray-900 dark:text-white`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            </>
           )}
-          
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-            {isParentLeague && ageGroupOptions.length > 0 && (
-              <div className="flex items-center gap-2">
-                <Filter className="h-4 w-4" style={{ color: brandColor }} />
-                <select
-                  value={selectedAgeGroup}
-                  onChange={(e) => setSelectedAgeGroup(e.target.value)}
-                  className="px-3 py-2 text-sm font-medium rounded-lg border dark:border-neutral-700 bg-white dark:bg-neutral-800 focus:outline-none focus:ring-2"
-                  style={{ borderColor: brandBorderLight, color: brandColor }}
-                  data-testid="select-age-group"
+        </div>
+
+        {/* Filter Row: Age Group + Rounds (Parent League) OR Season + Months (Regular) */}
+        {isParentLeague ? (
+          <div className="space-y-3">
+            {/* Age Group Filter */}
+            {ageGroupOptions.length > 0 && (
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                <button
+                  onClick={() => setSelectedAgeGroup('all')}
+                  className={`filter-tab whitespace-nowrap px-3 py-1.5 text-sm font-medium rounded-full transition-all ${
+                    selectedAgeGroup === 'all'
+                      ? 'text-white'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  }`}
+                  style={selectedAgeGroup === 'all' ? { backgroundColor: brandColor } : {}}
                 >
-                  <option value="all">All Age Groups</option>
-                  {ageGroupOptions.map(opt => (
-                    <option key={opt.league_id} value={opt.league_id}>{opt.label}</option>
-                  ))}
-                </select>
+                  All Ages
+                </button>
+                {ageGroupOptions.map(opt => (
+                  <button
+                    key={opt.league_id}
+                    onClick={() => setSelectedAgeGroup(opt.league_id)}
+                    className={`filter-tab whitespace-nowrap px-3 py-1.5 text-sm font-medium rounded-full transition-all ${
+                      selectedAgeGroup === opt.league_id
+                        ? 'text-white'
+                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                    }`}
+                    style={selectedAgeGroup === opt.league_id ? { backgroundColor: brandColor } : {}}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
               </div>
             )}
-            <div className="inline-flex rounded-lg border dark:border-neutral-700 p-1" style={{ borderColor: brandBorderLight, backgroundColor: brandBg50 }}>
-              <button
-                onClick={() => setViewMode('averages')}
-                className={`brand-toggle px-4 py-2 text-sm font-medium rounded-md transition-all ${
-                  viewMode === 'averages'
-                    ? 'brand-toggle-active bg-white dark:bg-neutral-700 shadow-sm'
-                    : ''
-                }`}
-                style={{ color: brandColor }}
-                data-testid="button-view-averages"
-              >
-                Averages
-              </button>
-              <button
-                onClick={() => setViewMode('totals')}
-                className={`brand-toggle px-4 py-2 text-sm font-medium rounded-md transition-all ${
-                  viewMode === 'totals'
-                    ? 'brand-toggle-active bg-white dark:bg-neutral-700 shadow-sm'
-                    : ''
-                }`}
-                style={{ color: brandColor }}
-                data-testid="button-view-totals"
-              >
-                Totals
-              </button>
-            </div>
+            {/* Round Filter */}
+            {availableRounds.length > 0 && (
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
+                <button
+                  onClick={() => setSelectedRound('all')}
+                  className={`filter-tab whitespace-nowrap px-3 py-1.5 text-sm font-medium transition-all ${
+                    selectedRound === 'all'
+                      ? 'font-bold'
+                      : 'text-gray-500 dark:text-gray-400'
+                  }`}
+                  style={selectedRound === 'all' ? { color: brandColor, borderBottom: `2px solid ${brandColor}` } : {}}
+                >
+                  Season
+                </button>
+                {availableRounds.map(round => (
+                  <button
+                    key={round}
+                    onClick={() => setSelectedRound(round)}
+                    className={`filter-tab whitespace-nowrap px-3 py-1.5 text-sm font-medium transition-all ${
+                      selectedRound === round
+                        ? 'font-bold'
+                        : 'text-gray-500 dark:text-gray-400'
+                    }`}
+                    style={selectedRound === round ? { color: brandColor, borderBottom: `2px solid ${brandColor}` } : {}}
+                  >
+                    {round}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          /* Season / Month Tabs for regular leagues */
+          <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-hide">
+            <button
+              onClick={() => setSelectedMonth('season')}
+              className={`filter-tab whitespace-nowrap px-3 py-1.5 text-sm font-medium transition-all ${
+                selectedMonth === 'season'
+                  ? 'font-bold'
+                  : 'text-gray-500 dark:text-gray-400'
+              }`}
+              style={selectedMonth === 'season' ? { color: brandColor, borderBottom: `2px solid ${brandColor}` } : {}}
+            >
+              Season
+            </button>
+            {availableMonths.map(monthKey => {
+              const [year, month] = monthKey.split('-');
+              const monthLabel = MONTH_NAMES[parseInt(month) - 1];
+              return (
+                <button
+                  key={monthKey}
+                  onClick={() => setSelectedMonth(monthKey)}
+                  className={`filter-tab whitespace-nowrap px-3 py-1.5 text-sm font-medium transition-all ${
+                    selectedMonth === monthKey
+                      ? 'font-bold'
+                      : 'text-gray-500 dark:text-gray-400'
+                  }`}
+                  style={selectedMonth === monthKey ? { color: brandColor, borderBottom: `2px solid ${brandColor}` } : {}}
+                >
+                  {monthLabel}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Averages / Totals Toggle */}
+        <div className="flex items-center gap-2">
+          <div className="inline-flex rounded-lg border dark:border-neutral-700 p-1" style={{ borderColor: brandBorderLight, backgroundColor: brandBg50 }}>
+            <button
+              onClick={() => setViewMode('averages')}
+              className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
+                viewMode === 'averages'
+                  ? 'bg-white dark:bg-neutral-700 shadow-sm'
+                  : 'hover:bg-white/50 dark:hover:bg-neutral-800'
+              }`}
+              style={{ color: brandColor }}
+            >
+              Averages
+            </button>
+            <button
+              onClick={() => setViewMode('totals')}
+              className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${
+                viewMode === 'totals'
+                  ? 'bg-white dark:bg-neutral-700 shadow-sm'
+                  : 'hover:bg-white/50 dark:hover:bg-neutral-800'
+              }`}
+              style={{ color: brandColor }}
+            >
+              Totals
+            </button>
           </div>
         </div>
 
-        {/* Leaderboards Grid */}
-        {leaderboardStats && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-            <StatLeaderboard title="Scoring Leaders" players={leaderboardStats.points} />
-            <StatLeaderboard title="Rebounding Leaders" players={leaderboardStats.rebounds_total} />
-            <StatLeaderboard title="Assist Leaders" players={leaderboardStats.assists} />
-            <StatLeaderboard title="Steal Leaders" players={leaderboardStats.steals} />
-            <StatLeaderboard title="Block Leaders" players={leaderboardStats.blocks} />
-            <StatLeaderboard title="Field Goal %" players={leaderboardStats.field_goal_percentage} />
-            <StatLeaderboard title="Three Point %" players={leaderboardStats.three_point_percentage} />
-            <StatLeaderboard title="Free Throw %" players={leaderboardStats.free_throw_percentage} />
-            <StatLeaderboard title="Efficiency Leaders" players={leaderboardStats.efficiency} />
-            <StatLeaderboard title="Games Played" players={leaderboardStats.games_played} />
+        {/* Section Title */}
+        <div>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">{statCategory} stats</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            {uniqueGames > 0 ? `Based on ${uniqueGames} game${uniqueGames !== 1 ? 's' : ''}` : 'All games'}
+          </p>
+        </div>
+
+        {/* Stat Leader Sections */}
+        {leaderboards.length > 0 ? (
+          <div className="space-y-2">
+            {leaderboards.map(lb => (
+              <StatSection key={lb.key} title={lb.title} players={lb.players} />
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-12">
+            <p className="text-gray-500 dark:text-gray-400">No data available for the selected filters</p>
           </div>
         )}
 

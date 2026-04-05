@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Calendar, Trophy, User, TrendingUp, Camera, Brain, Sparkles, Filter, Upload, Loader2, Move, Check, X } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
@@ -94,6 +93,13 @@ interface PlayerRankings {
   ft_percentage: number;
 }
 
+const getTeamAbbreviation = (name: string): string => {
+  if (!name) return '—';
+  const words = name.trim().split(/\s+/);
+  if (words.length === 1) return words[0].substring(0, 3).toUpperCase();
+  return words.map(w => w[0]).join('').toUpperCase().substring(0, 4);
+};
+
 export default function PlayerStatsPage() {
   const [match, params] = useRoute("/player/:slug");
   const [, setLocation] = useLocation();
@@ -117,6 +123,7 @@ export default function PlayerStatsPage() {
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [leagueNames, setLeagueNames] = useState<Map<string, string>>(new Map());
   const [playerShotChartRange, setPlayerShotChartRange] = useState<string>("season");
+  const [careerStatsTab, setCareerStatsTab] = useState<string>("averages");
   const [photoUploading, setPhotoUploading] = useState(false);
   const [showFocusAdjuster, setShowFocusAdjuster] = useState(false);
   const [tempFocusY, setTempFocusY] = useState<number>(50);
@@ -880,6 +887,66 @@ export default function PlayerStatsPage() {
     return data.publicUrl || null;
   }, [playerInfo?.photoPath]);
 
+  const careerStats = useMemo(() => {
+    if (!playerStats || playerStats.length === 0) return [];
+    const leagueGroups = new Map<string, any[]>();
+    playerStats.forEach(stat => {
+      const leagueId = stat.players?.league_id || stat.league_id || 'unknown';
+      if (!leagueGroups.has(leagueId)) leagueGroups.set(leagueId, []);
+      leagueGroups.get(leagueId)!.push(stat);
+    });
+    const seasons: any[] = [];
+    leagueGroups.forEach((stats, leagueId) => {
+      const played = stats.filter((s: any) => parseMinutesPlayed(s) > 0);
+      if (played.length === 0) return;
+      const gp = played.length;
+      const totals = played.reduce((acc: any, g: any) => ({
+        pts: acc.pts + (g.spoints || g.points || 0),
+        reb: acc.reb + (g.sreboundstotal || g.rebounds_total || 0),
+        ast: acc.ast + (g.sassists || g.assists || 0),
+        stl: acc.stl + (g.ssteals || 0),
+        blk: acc.blk + (g.sblocks || 0),
+        fgm: acc.fgm + (g.sfieldgoalsmade || 0),
+        fga: acc.fga + (g.sfieldgoalsattempted || 0),
+        tpm: acc.tpm + (g.sthreepointersmade || 0),
+        tpa: acc.tpa + (g.sthreepointersattempted || 0),
+        ftm: acc.ftm + (g.sfreethrowsmade || 0),
+        fta: acc.fta + (g.sfreethrowsattempted || 0),
+        to: acc.to + (g.sturnovers || g.turnovers || 0),
+        min: acc.min + parseMinutesPlayed(g),
+      }), { pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0, to: 0, min: 0 });
+      const team = played[0].team_name || played[0].team || '';
+      seasons.push({
+        leagueId, season: leagueNames.get(leagueId) || leagueId, team, gp, ...totals,
+        fg_pct: totals.fga > 0 ? (totals.fgm / totals.fga) * 100 : 0,
+        tp_pct: totals.tpa > 0 ? (totals.tpm / totals.tpa) * 100 : 0,
+        ft_pct: totals.fta > 0 ? (totals.ftm / totals.fta) * 100 : 0,
+        eff: ((totals.pts + totals.reb + totals.ast + totals.stl + totals.blk) - (totals.fga - totals.fgm) - (totals.fta - totals.ftm) - totals.to) / gp,
+      });
+    });
+    return seasons;
+  }, [playerStats, leagueNames]);
+
+  const careerTotals = useMemo(() => {
+    if (careerStats.length === 0) return null;
+    const gp = careerStats.reduce((s, r) => s + r.gp, 0);
+    const t = careerStats.reduce((acc, r) => ({
+      pts: acc.pts + r.pts, reb: acc.reb + r.reb, ast: acc.ast + r.ast,
+      stl: acc.stl + r.stl, blk: acc.blk + r.blk, fgm: acc.fgm + r.fgm,
+      fga: acc.fga + r.fga, tpm: acc.tpm + r.tpm, tpa: acc.tpa + r.tpa,
+      ftm: acc.ftm + r.ftm, fta: acc.fta + r.fta, to: acc.to + r.to, min: acc.min + r.min,
+    }), { pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0, to: 0, min: 0 });
+    return {
+      gp, ...t,
+      fg_pct: t.fga > 0 ? (t.fgm / t.fga) * 100 : 0,
+      tp_pct: t.tpa > 0 ? (t.tpm / t.tpa) * 100 : 0,
+      ft_pct: t.fta > 0 ? (t.ftm / t.fta) * 100 : 0,
+      eff: ((t.pts + t.reb + t.ast + t.stl + t.blk) - (t.fga - t.fgm) - (t.fta - t.ftm) - t.to) / gp,
+    };
+  }, [careerStats]);
+
+  const formatMinutes = (min: number) => min.toFixed(1);
+
   // Search functionality
   useEffect(() => {
     if (!searchQuery.trim()) {
@@ -1051,76 +1118,57 @@ export default function PlayerStatsPage() {
         />
       </Helmet>
       
-      <div className="min-h-screen bg-white dark:bg-neutral-950">
-        <div className="container mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row items-start md:items-center gap-3 md:gap-4 mb-6 md:mb-8">
+      <div className="min-h-screen bg-gray-50 dark:bg-neutral-950">
+        <div className="container mx-auto px-4 py-6 max-w-4xl space-y-4 md:space-y-5">
+        <div className="flex flex-col md:flex-row items-start md:items-center gap-3 md:gap-4">
           <div className="w-full md:w-auto flex items-center gap-2">
             <Button 
               variant="outline" 
               size="sm"
               onClick={() => setLocation('/')}
-              className="group flex items-center gap-2 border-orange-200 dark:border-orange-500/30 hover:bg-white dark:hover:bg-neutral-800 hover:border-orange-300 dark:hover:border-orange-500/50 transition-all duration-300 hover:shadow-md w-full md:w-auto dark:bg-neutral-900"
+              className="group flex items-center gap-2 border-gray-200 dark:border-neutral-700 hover:bg-white dark:hover:bg-neutral-800 transition-all w-full md:w-auto dark:bg-neutral-900"
             >
-              <ArrowLeft className="h-4 w-4 group-hover:hidden transition-all duration-300 dark:text-orange-400" />
-              <div className="hidden group-hover:block transition-all duration-300">
+              <ArrowLeft className="h-4 w-4 group-hover:hidden dark:text-orange-400" />
+              <div className="hidden group-hover:block">
                 <img src={SwishLogoImg} alt="Swish Assistant" className="h-4 w-4 object-contain" />
               </div>
-              <span className="text-orange-700 dark:text-orange-400 group-hover:text-orange-800 dark:group-hover:text-orange-300">Back to Dashboard</span>
+              <span className="text-slate-700 dark:text-orange-400">Back to Dashboard</span>
             </Button>
             <ThemeToggle />
           </div>
           
-          {/* Search Bar in Header */}
           <div className="flex-1 w-full md:max-w-md lg:max-w-lg relative">
             <form
               onSubmit={handleSearchSubmit}
-              className="flex items-center shadow-md rounded-full border border-orange-100 dark:border-neutral-700 overflow-hidden bg-white dark:bg-neutral-900"
+              className="flex items-center rounded-full border border-gray-200 dark:border-neutral-700 overflow-hidden bg-white dark:bg-neutral-900 shadow-sm"
             >
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Find your league"
-                className="flex-1 px-3 md:px-4 py-2 text-sm text-orange-800 dark:text-white focus:outline-none bg-white dark:bg-neutral-900 dark:placeholder-slate-400"
+                className="flex-1 px-4 py-2 text-sm text-slate-800 dark:text-white focus:outline-none bg-white dark:bg-neutral-900 dark:placeholder-slate-400"
               />
-              <button
-                type="submit"
-                className="bg-orange-400 text-white font-semibold px-3 md:px-4 py-2 hover:bg-orange-500 transition text-sm"
-              >
+              <button type="submit" className="bg-orange-500 text-white font-semibold px-4 py-2 hover:bg-orange-600 transition text-sm">
                 Search
               </button>
             </form>
 
             {searchSuggestions.length > 0 && (
-              <ul className="absolute z-50 w-full bg-white dark:bg-neutral-800 border border-orange-200 dark:border-neutral-700 mt-1 rounded-md shadow-lg max-h-60 overflow-y-auto">
+              <ul className="absolute z-50 w-full bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 mt-1 rounded-lg shadow-lg max-h-60 overflow-y-auto">
                 {searchSuggestions.map((item, index) => (
                   <li
                     key={index}
                     onClick={() => handleSearchSelect(item)}
-                    className="px-4 py-3 cursor-pointer hover:bg-orange-50 dark:hover:bg-neutral-700 text-left border-b border-orange-100 dark:border-neutral-700 last:border-b-0 transition-colors duration-200"
+                    className="px-4 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-700 text-left border-b border-gray-100 dark:border-neutral-700 last:border-b-0"
                   >
                     <div className="flex items-center gap-3">
-                      {item.type === 'league' ? (
-                        <div className="h-8 w-8 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center">
-                          <span className="text-white text-sm">🏆</span>
-                        </div>
-                      ) : (
-                        <div className="h-8 w-8 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center">
-                          <span className="text-white text-sm">👤</span>
-                        </div>
-                      )}
-                      <div className="flex-1">
-                        <div className="font-medium text-orange-900 dark:text-white text-sm">{item.name}</div>
-                        {item.type === 'player' && (
-                          <div className="text-xs text-orange-600 dark:text-orange-400">{item.team}</div>
-                        )}
-                        {item.type === 'league' && (
-                          <div className="text-xs text-orange-600 dark:text-orange-400">League</div>
-                        )}
+                      <div className="h-8 w-8 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
+                        <span className="text-sm">{item.type === 'league' ? '🏆' : '👤'}</span>
                       </div>
-                      <div className="text-xs text-orange-700 dark:text-orange-300 capitalize bg-orange-100 dark:bg-orange-900/50 px-2 py-1 rounded-full font-medium">
-                        {item.type}
+                      <div className="flex-1">
+                        <div className="font-medium text-slate-900 dark:text-white text-sm">{item.name}</div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">{item.type === 'player' ? item.team : 'League'}</div>
                       </div>
                     </div>
                   </li>
@@ -1130,584 +1178,480 @@ export default function PlayerStatsPage() {
           </div>
         </div>
 
-        {/* Player Hero Section - Combined Info + Stats + Photo */}
         {playerInfo && (
-          <div className="mb-6 md:mb-8">
-            <Card className="border-orange-200 dark:border-orange-500/30 shadow-lg animate-slide-in-up bg-white dark:bg-neutral-900 overflow-hidden">
-              <CardContent className="p-0 relative">
-                <div className="flex flex-col lg:flex-row">
-                  {/* Left Side - Player Info + Season Averages */}
-                  <div className="flex-1 p-4 md:p-6 lg:pr-0 z-10">
-                    {/* Player Name and Team with Logo */}
-                    <div className="mb-4">
-                      <div className="flex items-start gap-4 mb-3">
-                        {/* Team Logo - Left Side */}
-                        {playerInfo.team && playerInfo.leagueId && (
-                          <TeamLogo 
-                            teamName={playerInfo.team} 
-                            leagueId={playerInfo.leagueId}
-                            size="xl"
-                            className="flex-shrink-0"
-                          />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-orange-900 dark:text-white mb-1 break-words" data-testid="text-player-name">
-                            {playerInfo.name}
-                          </h1>
-                          <p className="text-orange-700 dark:text-orange-400 flex items-center gap-2 text-base md:text-lg" data-testid="text-player-team">
-                            <Trophy className="h-5 w-5 flex-shrink-0" />
-                            <span className="break-words font-medium">{playerInfo.team}</span>
-                          </p>
-                          {playerInfo.previousTeams && playerInfo.previousTeams.length > 0 && (
-                            <p className="text-orange-600/80 dark:text-orange-500/70 text-sm mt-1 flex items-center gap-1.5">
-                              <span className="text-xs">↩</span>
-                              <span className="italic">Previously: {playerInfo.previousTeams.join(', ')}</span>
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                      
-                      {/* Name Variations Indicator */}
-                      {nameVariationsWithLeagues.length > 0 && (
-                        <div className="mb-2">
-                          <p className="text-xs md:text-sm text-orange-600 dark:text-orange-400 italic">
-                            <span className="font-semibold">Also known as: </span>
-                            {nameVariationsWithLeagues.map((variation, index) => (
-                              <span key={index}>
-                                {variation.name} ({variation.leagueName})
-                                {index < nameVariationsWithLeagues.length - 1 ? ', ' : ''}
-                              </span>
-                            ))}
-                          </p>
-                        </div>
-                      )}
-                      
-                      <div className="flex flex-wrap items-center gap-3 text-xs md:text-sm text-orange-600 dark:text-orange-500">
-                        <span className="flex items-center gap-1 whitespace-nowrap">
-                          <div className="h-2 w-2 bg-green-400 rounded-full animate-pulse"></div>
-                          Active Player
-                        </span>
-                        {playerInfo.position && (
-                          <span className="whitespace-nowrap">• {playerInfo.position}</span>
-                        )}
-                        {playerInfo.number && (
-                          <span className="whitespace-nowrap">• #{playerInfo.number}</span>
-                        )}
-                      </div>
-                    </div>
-                    
-                    {/* Placeholder for future content (bio, etc.) */}
-                    <div className="mt-4 pt-4 border-t border-orange-100 dark:border-neutral-700">
-                      {/* Future content area - can be used for bio, highlights, etc. */}
-                    </div>
-                    
-                    {/* Season Averages */}
-                    {filteredSeasonAverages && (
-                      <div className="mt-4 pt-4 border-t border-orange-100 dark:border-neutral-700">
-                        <div className="flex items-center gap-2 mb-3">
-                          <Trophy className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-                          <span className="text-sm font-semibold text-orange-800 dark:text-orange-300">
-                            Season Averages ({filteredSeasonAverages.games_played} GP)
-                          </span>
-                          {selectedLeagueFilter !== "all" && (
-                            <Badge variant="outline" className="text-xs bg-orange-50 dark:bg-orange-900/50 text-orange-700 dark:text-orange-400 border-orange-300 dark:border-orange-500/50">
-                              {leagueNames.get(selectedLeagueFilter) || 'Filtered'}
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="grid grid-cols-3 md:grid-cols-6 gap-3 md:gap-4">
-                          {/* Points */}
-                          <div className="text-center group">
-                            <div className="text-xl md:text-2xl lg:text-3xl font-bold text-orange-700 dark:text-orange-400 group-hover:scale-110 transition-transform">
-                              {filteredSeasonAverages.avg_points.toFixed(1)}
-                            </div>
-                            <div className="text-xs text-orange-600 dark:text-orange-500">PPG</div>
-                            {playerRankings && (
-                              <div className="text-[10px] text-orange-500 dark:text-orange-600">({getOrdinalSuffix(playerRankings.points)})</div>
-                            )}
-                          </div>
-                          {/* Rebounds */}
-                          <div className="text-center group">
-                            <div className="text-xl md:text-2xl lg:text-3xl font-bold text-orange-700 dark:text-orange-400 group-hover:scale-110 transition-transform">
-                              {filteredSeasonAverages.avg_rebounds.toFixed(1)}
-                            </div>
-                            <div className="text-xs text-orange-600 dark:text-orange-500">RPG</div>
-                            {playerRankings && (
-                              <div className="text-[10px] text-orange-500 dark:text-orange-600">({getOrdinalSuffix(playerRankings.rebounds)})</div>
-                            )}
-                          </div>
-                          {/* Assists */}
-                          <div className="text-center group">
-                            <div className="text-xl md:text-2xl lg:text-3xl font-bold text-orange-700 dark:text-orange-400 group-hover:scale-110 transition-transform">
-                              {filteredSeasonAverages.avg_assists.toFixed(1)}
-                            </div>
-                            <div className="text-xs text-orange-600 dark:text-orange-500">APG</div>
-                            {playerRankings && (
-                              <div className="text-[10px] text-orange-500 dark:text-orange-600">({getOrdinalSuffix(playerRankings.assists)})</div>
-                            )}
-                          </div>
-                          {/* Steals - hidden on mobile */}
-                          <div className="text-center group hidden md:block">
-                            <div className="text-xl md:text-2xl lg:text-3xl font-bold text-orange-700 dark:text-orange-400 group-hover:scale-110 transition-transform">
-                              {filteredSeasonAverages.avg_steals.toFixed(1)}
-                            </div>
-                            <div className="text-xs text-orange-600 dark:text-orange-500">SPG</div>
-                            {playerRankings && (
-                              <div className="text-[10px] text-orange-500 dark:text-orange-600">({getOrdinalSuffix(playerRankings.steals)})</div>
-                            )}
-                          </div>
-                          {/* Blocks - hidden on mobile */}
-                          <div className="text-center group hidden md:block">
-                            <div className="text-xl md:text-2xl lg:text-3xl font-bold text-orange-700 dark:text-orange-400 group-hover:scale-110 transition-transform">
-                              {filteredSeasonAverages.avg_blocks.toFixed(1)}
-                            </div>
-                            <div className="text-xs text-orange-600 dark:text-orange-500">BPG</div>
-                            {playerRankings && (
-                              <div className="text-[10px] text-orange-500 dark:text-orange-600">({getOrdinalSuffix(playerRankings.blocks)})</div>
-                            )}
-                          </div>
-                          {/* Efficiency - hidden on mobile */}
-                          <div className="text-center group hidden md:block">
-                            <div className="text-xl md:text-2xl lg:text-3xl font-bold text-orange-700 dark:text-orange-400 group-hover:scale-110 transition-transform">
-                              {filteredSeasonAverages.avg_efficiency.toFixed(1)}
-                            </div>
-                            <div className="text-xs text-orange-600 dark:text-orange-500">EFF</div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  
-                  {/* Right Side - Player Photo with Fade (larger) */}
-                  <div className="relative lg:w-96 xl:w-[28rem] h-64 lg:h-auto min-h-[280px] lg:min-h-[400px]">
-                    {/* Top edge cover - extends above container to hide seam on mobile */}
-                    <div className="absolute -top-4 left-0 right-0 h-8 bg-gradient-to-b from-white via-white to-white/80 dark:from-neutral-900 dark:via-neutral-900 dark:to-neutral-900/80 z-10 lg:hidden" />
-                    
-                    {/* Player Photo */}
-                    {playerInfo.playerId && playerPhotoUrl ? (
-                      <>
-                        <img
-                          src={playerPhotoUrl}
-                          alt={playerInfo.name}
-                          className="absolute inset-0 w-full h-full object-cover"
-                          style={{ objectPosition: `50% ${showFocusAdjuster ? tempFocusY : (playerInfo.photoFocusY ?? 50)}%` }}
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).style.display = 'none';
-                          }}
-                        />
-                        {/* Gradient fade from left */}
-                        <div className="absolute inset-0 bg-gradient-to-r from-white via-white/60 to-transparent dark:from-neutral-900 dark:via-neutral-900/60 lg:block hidden" />
-                        {/* Gradient fade from top on mobile - extended for seamless blend */}
-                        <div className="absolute inset-0 bg-gradient-to-b from-white from-0% via-white/70 via-20% to-transparent to-60% dark:from-neutral-900 dark:from-0% dark:via-neutral-900/70 dark:via-20% dark:to-transparent lg:hidden z-[5]" />
-                      </>
-                    ) : (
-                      <div className="absolute inset-0 bg-gradient-to-br from-orange-100 to-orange-200 dark:from-neutral-800 dark:to-neutral-700 flex items-center justify-center">
-                        <User className="w-24 h-24 text-orange-300 dark:text-neutral-600" />
-                        {/* Gradient fade from left */}
-                        <div className="absolute inset-0 bg-gradient-to-r from-white via-white/60 to-transparent dark:from-neutral-900 dark:via-neutral-900/60 lg:block hidden" />
-                        {/* Gradient fade from top on mobile - extended for seamless blend */}
-                        <div className="absolute inset-0 bg-gradient-to-b from-white from-0% via-white/70 via-20% to-transparent to-60% dark:from-neutral-900 dark:from-0% dark:via-neutral-900/70 dark:via-20% dark:to-transparent lg:hidden z-[5]" />
-                      </div>
-                    )}
-                    
-                    {/* Focus Adjuster UI - only visible when adjusting */}
-                    {showFocusAdjuster && playerInfo.photoPath && (
-                      <div className="absolute bottom-16 left-4 right-4 z-20 bg-white/95 dark:bg-neutral-800/95 rounded-lg p-3 shadow-lg">
-                        <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Adjust vertical focus (drag to show face)
-                        </div>
-                        <Slider
-                          value={[tempFocusY]}
-                          onValueChange={(value) => setTempFocusY(value[0])}
-                          min={0}
-                          max={100}
-                          step={1}
-                          className="mb-3"
-                          data-testid="slider-photo-focus"
-                        />
-                        <div className="flex gap-2">
-                          <Button
-                            onClick={handleSaveFocus}
-                            disabled={savingFocus}
-                            size="sm"
-                            className="flex-1 bg-green-600 hover:bg-green-700"
-                            data-testid="button-save-focus"
-                          >
-                            {savingFocus ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Check className="w-4 h-4 mr-1" />}
-                            Save
-                          </Button>
-                          <Button
-                            onClick={() => setShowFocusAdjuster(false)}
-                            variant="outline"
-                            size="sm"
-                            className="flex-1"
-                            data-testid="button-cancel-focus"
-                          >
-                            <X className="w-4 h-4 mr-1" />
-                            Cancel
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* Upload and Adjust buttons - only visible to authenticated users */}
-                    {user && playerInfo.playerId && !showFocusAdjuster && (
-                      <>
-                        <input
-                          ref={fileInputRef}
-                          type="file"
-                          accept="image/*"
-                          onChange={handlePhotoUpload}
-                          className="hidden"
-                          data-testid="input-player-photo"
-                        />
-                        <div className="absolute bottom-4 right-4 z-10 flex gap-2">
-                          {playerInfo.photoPath && (
-                            <Button
-                              onClick={() => {
-                                setTempFocusY(playerInfo.photoFocusY ?? 50);
-                                setShowFocusAdjuster(true);
-                              }}
-                              size="sm"
-                              variant="outline"
-                              className="bg-white/90 dark:bg-neutral-800/90 shadow-lg"
-                              data-testid="button-adjust-photo-focus"
-                            >
-                              <Move className="w-4 h-4 mr-2" />
-                              Adjust
-                            </Button>
-                          )}
-                          <Button
-                            onClick={() => fileInputRef.current?.click()}
-                            disabled={photoUploading}
-                            size="sm"
-                            className="bg-orange-600 hover:bg-orange-700 text-white shadow-lg"
-                            data-testid="button-upload-player-photo"
-                          >
-                            {photoUploading ? (
-                              <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                            ) : (
-                              <Upload className="w-4 h-4 mr-2" />
-                            )}
-                            {photoUploading ? 'Uploading...' : playerInfo.photoPath ? 'Change' : 'Add Photo'}
-                          </Button>
-                        </div>
-                      </>
-                    )}
+          <div className="relative rounded-xl overflow-hidden shadow-lg bg-gradient-to-br from-orange-50 to-orange-100/50 dark:from-neutral-900 dark:to-neutral-800">
+            <div className="relative min-h-[220px] md:min-h-[280px]">
+              {playerInfo.playerId && playerPhotoUrl ? (
+                <>
+                  <img
+                    src={playerPhotoUrl}
+                    alt={playerInfo.name}
+                    className="absolute right-0 bottom-0 h-full w-1/2 md:w-2/5 object-cover object-top"
+                    style={{ objectPosition: `50% ${showFocusAdjuster ? tempFocusY : (playerInfo.photoFocusY ?? 30)}%` }}
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                  <div className="absolute right-0 bottom-0 h-full w-1/2 md:w-2/5 bg-gradient-to-r from-orange-50/95 dark:from-neutral-900/95 via-transparent to-transparent" />
+                  <div className="absolute right-0 bottom-0 h-full w-1/2 md:w-2/5 bg-gradient-to-t from-orange-50/60 dark:from-neutral-900/60 via-transparent to-transparent" />
+                </>
+              ) : (
+                <div className="absolute right-4 bottom-4 opacity-10">
+                  <User className="w-32 h-32 text-orange-300 dark:text-neutral-600" />
+                </div>
+              )}
+
+              <div className="relative z-10 p-6 md:p-8 max-w-[65%] md:max-w-[60%]">
+                <div className="flex items-center gap-3 mb-3">
+                  {playerInfo.team && playerInfo.leagueId && (
+                    <TeamLogo teamName={playerInfo.team} leagueId={playerInfo.leagueId} size="lg" className="flex-shrink-0" />
+                  )}
+                  <div>
+                    <h1 className="text-xl md:text-3xl lg:text-4xl font-black text-slate-900 dark:text-white leading-tight" data-testid="text-player-name">
+                      {playerInfo.name}
+                    </h1>
+                    <p className="text-sm md:text-base font-medium text-orange-600 dark:text-orange-400 mt-0.5" data-testid="text-player-team">
+                      {playerInfo.team}
+                    </p>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+
+                <div className="flex flex-wrap items-center gap-2 mt-3">
+                  {playerInfo.position && (
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-white/80 dark:bg-neutral-800/80 text-slate-700 dark:text-slate-300 backdrop-blur-sm">
+                      {playerInfo.position}
+                    </span>
+                  )}
+                  {playerInfo.number && (
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-white/80 dark:bg-neutral-800/80 text-slate-700 dark:text-slate-300 backdrop-blur-sm">
+                      #{playerInfo.number}
+                    </span>
+                  )}
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100/80 dark:bg-green-900/30 text-green-700 dark:text-green-400 backdrop-blur-sm">
+                    <div className="h-1.5 w-1.5 bg-green-500 rounded-full animate-pulse"></div>
+                    Active
+                  </span>
+                </div>
+
+                {playerInfo.previousTeams && playerInfo.previousTeams.length > 0 && (
+                  <p className="text-slate-500 dark:text-slate-400 text-xs mt-2 italic">
+                    Previously: {playerInfo.previousTeams.join(', ')}
+                  </p>
+                )}
+              </div>
+
+              {showFocusAdjuster && playerInfo.photoPath && (
+                <div className="absolute bottom-4 right-4 left-4 md:left-auto md:w-72 z-20 bg-white/95 dark:bg-neutral-800/95 rounded-lg p-3 shadow-lg">
+                  <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Adjust vertical focus</div>
+                  <Slider value={[tempFocusY]} onValueChange={(value) => setTempFocusY(value[0])} min={0} max={100} step={1} className="mb-3" data-testid="slider-photo-focus" />
+                  <div className="flex gap-2">
+                    <Button onClick={handleSaveFocus} disabled={savingFocus} size="sm" className="flex-1 bg-green-600 hover:bg-green-700" data-testid="button-save-focus">
+                      {savingFocus ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Check className="w-4 h-4 mr-1" />} Save
+                    </Button>
+                    <Button onClick={() => setShowFocusAdjuster(false)} variant="outline" size="sm" className="flex-1" data-testid="button-cancel-focus">
+                      <X className="w-4 h-4 mr-1" /> Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {user && playerInfo.playerId && !showFocusAdjuster && (
+                <>
+                  <input ref={fileInputRef} type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" data-testid="input-player-photo" />
+                  <div className="absolute bottom-3 right-3 z-10 flex gap-2">
+                    {playerInfo.photoPath && (
+                      <Button onClick={() => { setTempFocusY(playerInfo.photoFocusY ?? 50); setShowFocusAdjuster(true); }} size="sm" variant="outline" className="bg-white/90 dark:bg-neutral-800/90 shadow-lg h-7 text-xs" data-testid="button-adjust-photo-focus">
+                        <Move className="w-3 h-3 mr-1" /> Adjust
+                      </Button>
+                    )}
+                    <Button onClick={() => fileInputRef.current?.click()} disabled={photoUploading} size="sm" className="bg-orange-600 hover:bg-orange-700 text-white shadow-lg h-7 text-xs" data-testid="button-upload-player-photo">
+                      {photoUploading ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Upload className="w-3 h-3 mr-1" />}
+                      {photoUploading ? 'Uploading...' : playerInfo.photoPath ? 'Change' : 'Add Photo'}
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         )}
 
-        {/* Player Leagues */}
-        {playerLeagues.length > 0 && (
-          <Card className="mb-6 border-orange-200 dark:border-orange-500/30 shadow-md animate-slide-in-up bg-white dark:bg-neutral-900">
-            <CardHeader className="bg-white dark:bg-neutral-900 text-orange-900 dark:text-white rounded-t-lg border-b border-orange-200 dark:border-neutral-700">
-              <CardTitle className="flex items-center gap-2">
-                <Trophy className="h-5 w-5 animate-float text-orange-700 dark:text-orange-400" />
-                Active Leagues ({playerLeagues.length})
-              </CardTitle>
-              <CardDescription className="text-orange-700 dark:text-orange-400">
-                Leagues where this player is currently active
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {playerLeagues.map((league, index) => (
-                  <div
-                    key={league.id}
-                    onClick={() => setLocation(`/league/${league.slug}`)}
-                    className="group cursor-pointer transform hover:scale-105 transition-all duration-300 animate-slide-in-up hover:animate-glow"
-                    style={{ animationDelay: `${index * 150}ms` }}
-                  >
-                    <Card className="border-orange-200 dark:border-orange-500/30 hover:border-orange-300 dark:hover:border-orange-500/50 transition-all duration-300 hover:shadow-md bg-white dark:bg-neutral-800">
-                      <CardContent className="p-4">
-                        <div className="flex items-center gap-3">
-                          <div className="h-12 w-12 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center group-hover:rotate-12 transition-transform duration-300">
-                            <Trophy className="h-6 w-6 text-white group-hover:animate-bounce" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <h3 className="font-semibold text-orange-800 dark:text-white group-hover:text-orange-700 dark:group-hover:text-orange-300 transition-colors duration-300 truncate">
-                              {league.name}
-                            </h3>
-                            <p className="text-sm text-orange-700 dark:text-orange-400 group-hover:text-orange-600 dark:group-hover:text-orange-300 transition-colors duration-300">
-                              Click to view league →
-                            </p>
-                          </div>
-                          <TrendingUp className="h-5 w-5 text-orange-600 dark:text-orange-400 group-hover:animate-bounce" />
-                        </div>
-                        <div className="mt-3 w-full bg-orange-50 dark:bg-neutral-700 h-1 rounded-full overflow-hidden">
-                          <div className="h-full bg-gradient-to-r from-orange-300 to-orange-400 rounded-full transform origin-left transition-transform duration-1000 group-hover:scale-x-110 w-full"></div>
-                        </div>
-                      </CardContent>
-                    </Card>
+        {filteredSeasonAverages && (
+          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Season Averages</span>
+              {selectedLeagueFilter !== "all" && (
+                <Badge variant="outline" className="text-[10px] border-orange-300 dark:border-orange-500/50 text-orange-600 dark:text-orange-400">
+                  {leagueNames.get(selectedLeagueFilter) || 'Filtered'}
+                </Badge>
+              )}
+            </div>
+            <div className="grid grid-cols-3 md:grid-cols-6 gap-2 md:gap-3">
+              {[
+                { value: filteredSeasonAverages.avg_points, label: "PTS", rank: playerRankings?.points },
+                { value: filteredSeasonAverages.avg_rebounds, label: "REB", rank: playerRankings?.rebounds },
+                { value: filteredSeasonAverages.avg_assists, label: "AST", rank: playerRankings?.assists },
+                { value: filteredSeasonAverages.avg_steals, label: "STL", rank: playerRankings?.steals },
+                { value: filteredSeasonAverages.avg_blocks, label: "BLK", rank: playerRankings?.blocks },
+                { value: filteredSeasonAverages.avg_efficiency, label: "EFF" },
+              ].map((stat, i) => (
+                <div key={i} className={`text-center py-2 ${i >= 3 ? 'hidden md:block' : ''}`}>
+                  <div className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-0.5">
+                    {stat.label} {stat.rank ? <span className="text-[10px] normal-case">{getOrdinalSuffix(stat.rank)}</span> : null}
                   </div>
+                  <div className="text-2xl md:text-3xl font-black text-orange-600 dark:text-orange-400 tabular-nums">
+                    {stat.value.toFixed(1)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {filteredSeasonAverages && (
+          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3 block">Shooting</span>
+            <div className="grid grid-cols-3 gap-4">
+              {[
+                { value: filteredSeasonAverages.fg_percentage, label: "FG%", rank: playerRankings?.fg_percentage },
+                { value: filteredSeasonAverages.three_point_percentage, label: "3PT%", rank: playerRankings?.three_point_percentage },
+                { value: filteredSeasonAverages.ft_percentage, label: "FT%", rank: playerRankings?.ft_percentage },
+              ].map((stat, i) => (
+                <div key={i} className="text-center">
+                  <div className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-0.5">
+                    {stat.label} {stat.rank ? <span className="text-[10px] normal-case">{getOrdinalSuffix(stat.rank)}</span> : null}
+                  </div>
+                  <div className="text-xl md:text-2xl font-black text-orange-600 dark:text-orange-400 tabular-nums">{formatPercentage(stat.value)}</div>
+                  <div className="mt-1.5 bg-gray-100 dark:bg-neutral-700 h-1 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full bg-orange-500 transition-all duration-500" style={{ width: `${Math.min(stat.value, 100)}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {careerStats.length > 0 && (
+          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 overflow-hidden">
+            <div className="p-4 pb-0 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+              <span className="text-base md:text-lg font-bold text-slate-800 dark:text-white">Career Stats</span>
+              <div className="flex rounded-lg overflow-hidden border border-gray-200 dark:border-neutral-700">
+                {["averages", "totals", "advanced"].map(tab => (
+                  <button
+                    key={tab}
+                    onClick={() => setCareerStatsTab(tab)}
+                    className={`px-3 md:px-4 py-1.5 text-xs md:text-sm font-medium transition-colors capitalize ${
+                      careerStatsTab === tab
+                        ? 'bg-orange-500 text-white'
+                        : 'text-slate-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-neutral-800'
+                    }`}
+                  >
+                    {tab}
+                  </button>
                 ))}
               </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Shooting Splits - Compact Display with Rankings */}
-        {filteredSeasonAverages && (
-          <Card className="mb-4 border-orange-200 dark:border-orange-500/30 shadow-md animate-slide-in-up bg-white dark:bg-neutral-900">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <TrendingUp className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-                <span className="text-sm font-semibold text-orange-800 dark:text-orange-300">Shooting Splits</span>
-              </div>
-              <div className="grid grid-cols-3 gap-4">
-                {/* FG% */}
-                <div className="text-center">
-                  <div className="text-lg md:text-xl font-bold text-orange-700 dark:text-orange-400">
-                    {formatPercentage(filteredSeasonAverages.fg_percentage)}
-                  </div>
-                  <div className="text-xs text-orange-600 dark:text-orange-500">FG%</div>
-                  {playerRankings && (
-                    <div className="text-[10px] text-orange-500 dark:text-orange-600">({getOrdinalSuffix(playerRankings.fg_percentage)})</div>
-                  )}
-                  <div className="mt-1 bg-orange-100 dark:bg-neutral-700 h-1.5 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-gradient-to-r from-orange-400 to-orange-500 rounded-full"
-                      style={{ width: `${filteredSeasonAverages.fg_percentage}%` }}
-                    />
-                  </div>
-                </div>
-                {/* 3P% */}
-                <div className="text-center">
-                  <div className="text-lg md:text-xl font-bold text-orange-700 dark:text-orange-400">
-                    {formatPercentage(filteredSeasonAverages.three_point_percentage)}
-                  </div>
-                  <div className="text-xs text-orange-600 dark:text-orange-500">3P%</div>
-                  {playerRankings && (
-                    <div className="text-[10px] text-orange-500 dark:text-orange-600">({getOrdinalSuffix(playerRankings.three_point_percentage)})</div>
-                  )}
-                  <div className="mt-1 bg-orange-100 dark:bg-neutral-700 h-1.5 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-gradient-to-r from-orange-400 to-orange-500 rounded-full"
-                      style={{ width: `${filteredSeasonAverages.three_point_percentage}%` }}
-                    />
-                  </div>
-                </div>
-                {/* FT% */}
-                <div className="text-center">
-                  <div className="text-lg md:text-xl font-bold text-orange-700 dark:text-orange-400">
-                    {formatPercentage(filteredSeasonAverages.ft_percentage)}
-                  </div>
-                  <div className="text-xs text-orange-600 dark:text-orange-500">FT%</div>
-                  {playerRankings && (
-                    <div className="text-[10px] text-orange-500 dark:text-orange-600">({getOrdinalSuffix(playerRankings.ft_percentage)})</div>
-                  )}
-                  <div className="mt-1 bg-orange-100 dark:bg-neutral-700 h-1.5 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-gradient-to-r from-orange-400 to-orange-500 rounded-full"
-                      style={{ width: `${filteredSeasonAverages.ft_percentage}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Shot Chart */}
-        <Card className="mb-4 border-orange-200 dark:border-orange-500/30 shadow-md animate-slide-in-up bg-white dark:bg-neutral-900">
-          <CardContent className="p-4">
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-                <span className="text-sm font-semibold text-orange-800 dark:text-orange-300">Shot Chart</span>
-              </div>
-              <Select value={playerShotChartRange} onValueChange={setPlayerShotChartRange}>
-                <SelectTrigger className="w-full md:w-48 h-8 text-sm border-orange-200 dark:border-neutral-600 focus:ring-orange-500 dark:bg-neutral-800 dark:text-white">
-                  <SelectValue placeholder="Select range" />
-                </SelectTrigger>
-                <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
-                  <SelectItem value="season">Full Season</SelectItem>
-                  <SelectItem value="last10">Last 10 Games</SelectItem>
-                  <SelectItem value="last5">Last 5 Games</SelectItem>
-                  {playerShotGamesWithKeys.map((g) => (
-                    <SelectItem key={g.game_key} value={`game:${g.game_key}`}>
-                      vs {g.opponent} ({new Date(g.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
-            <ShotChart
-              shots={playerShotData || []}
-              loading={playerShotsLoading}
-              compact
-              emptyMessage="No shot data available for this player."
-              filters={{
-                showQuarterFilter: true,
-                showResultFilter: true,
-              }}
-            />
-          </CardContent>
-        </Card>
+            <div className="overflow-x-auto mt-3">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-y border-gray-100 dark:border-neutral-800 text-slate-400 dark:text-slate-500 uppercase text-[10px] tracking-wider">
+                    <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">Season</th>
+                    <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">Team</th>
+                    {careerStatsTab === "averages" && (
+                      <>
+                        <th className="px-2 py-1.5 text-center font-semibold">GP</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">MIN</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">PTS</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">REB</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">AST</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">STL</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">BLK</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">TO</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">FG%</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">3P%</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">FT%</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">EFF</th>
+                      </>
+                    )}
+                    {careerStatsTab === "totals" && (
+                      <>
+                        <th className="px-2 py-1.5 text-center font-semibold">GP</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">MIN</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">PTS</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">REB</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">AST</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">STL</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">BLK</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">TO</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">FG</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">3P</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">FT</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">EFF</th>
+                      </>
+                    )}
+                    {careerStatsTab === "advanced" && (
+                      <>
+                        <th className="px-2 py-1.5 text-center font-semibold">GP</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">EFF</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">TO</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">FG%</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">3P%</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">FT%</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">PTS</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">REB</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">AST</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">STL</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">BLK</th>
+                      </>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {careerStats.map((row, idx) => {
+                    const gp = row.gp;
+                    const ct = "px-2 py-1.5 text-center text-xs whitespace-nowrap";
+                    return (
+                      <tr key={idx} className={`border-b border-gray-50 dark:border-neutral-800/50 text-slate-700 dark:text-slate-300 ${idx % 2 === 1 ? 'bg-gray-50/50 dark:bg-neutral-800/30' : ''}`}>
+                        <td className="px-2 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap max-w-[100px] truncate">{row.season}</td>
+                        <td className="px-2 py-1.5 text-xs whitespace-nowrap">
+                          <div className="flex items-center gap-1">
+                            <TeamLogo teamName={row.team} leagueId={row.leagueId} size="xs" className="flex-shrink-0" />
+                            <span className="truncate max-w-[50px]">{getTeamAbbreviation(row.team)}</span>
+                          </div>
+                        </td>
+                        {careerStatsTab === "averages" && (
+                          <>
+                            <td className={ct}>{gp}</td>
+                            <td className={ct}>{formatMinutes(row.min / gp)}</td>
+                            <td className={ct}>{(row.pts / gp).toFixed(1)}</td>
+                            <td className={ct}>{(row.reb / gp).toFixed(1)}</td>
+                            <td className={ct}>{(row.ast / gp).toFixed(1)}</td>
+                            <td className={ct}>{(row.stl / gp).toFixed(1)}</td>
+                            <td className={ct}>{(row.blk / gp).toFixed(1)}</td>
+                            <td className={ct}>{(row.to / gp).toFixed(1)}</td>
+                            <td className={ct}>{row.fg_pct.toFixed(1)}</td>
+                            <td className={ct}>{row.tp_pct.toFixed(1)}</td>
+                            <td className={ct}>{row.ft_pct.toFixed(1)}</td>
+                            <td className={`${ct} font-semibold`}>{row.eff.toFixed(1)}</td>
+                          </>
+                        )}
+                        {careerStatsTab === "totals" && (
+                          <>
+                            <td className={ct}>{gp}</td>
+                            <td className={ct}>{Math.round(row.min)}</td>
+                            <td className={ct}>{row.pts}</td>
+                            <td className={ct}>{row.reb}</td>
+                            <td className={ct}>{row.ast}</td>
+                            <td className={ct}>{row.stl}</td>
+                            <td className={ct}>{row.blk}</td>
+                            <td className={ct}>{row.to}</td>
+                            <td className={ct}>{row.fgm}-{row.fga}</td>
+                            <td className={ct}>{row.tpm}-{row.tpa}</td>
+                            <td className={ct}>{row.ftm}-{row.fta}</td>
+                            <td className={`${ct} font-semibold`}>{row.eff.toFixed(1)}</td>
+                          </>
+                        )}
+                        {careerStatsTab === "advanced" && (
+                          <>
+                            <td className={ct}>{gp}</td>
+                            <td className={ct}>{row.eff.toFixed(1)}</td>
+                            <td className={ct}>{(row.to / gp).toFixed(1)}</td>
+                            <td className={ct}>{row.fg_pct.toFixed(1)}</td>
+                            <td className={ct}>{row.tp_pct.toFixed(1)}</td>
+                            <td className={ct}>{row.ft_pct.toFixed(1)}</td>
+                            <td className={ct}>{(row.pts / gp).toFixed(1)}</td>
+                            <td className={ct}>{(row.reb / gp).toFixed(1)}</td>
+                            <td className={ct}>{(row.ast / gp).toFixed(1)}</td>
+                            <td className={ct}>{(row.stl / gp).toFixed(1)}</td>
+                            <td className={ct}>{(row.blk / gp).toFixed(1)}</td>
+                          </>
+                        )}
+                      </tr>
+                    );
+                  })}
+                  {careerTotals && careerStats.length > 1 && (() => {
+                    const ct = "px-2 py-1.5 text-center text-xs whitespace-nowrap";
+                    return (
+                      <tr className="font-bold text-slate-900 dark:text-white border-t-2 border-orange-300 dark:border-orange-500/40">
+                        <td className="px-2 py-1.5 text-xs uppercase text-orange-600 dark:text-orange-400">Career</td>
+                        <td className="px-2 py-1.5 text-xs"></td>
+                        {careerStatsTab === "averages" && (
+                          <>
+                            <td className={ct}>{careerTotals.gp}</td>
+                            <td className={ct}>{formatMinutes(careerTotals.min / careerTotals.gp)}</td>
+                            <td className={ct}>{(careerTotals.pts / careerTotals.gp).toFixed(1)}</td>
+                            <td className={ct}>{(careerTotals.reb / careerTotals.gp).toFixed(1)}</td>
+                            <td className={ct}>{(careerTotals.ast / careerTotals.gp).toFixed(1)}</td>
+                            <td className={ct}>{(careerTotals.stl / careerTotals.gp).toFixed(1)}</td>
+                            <td className={ct}>{(careerTotals.blk / careerTotals.gp).toFixed(1)}</td>
+                            <td className={ct}>{(careerTotals.to / careerTotals.gp).toFixed(1)}</td>
+                            <td className={ct}>{careerTotals.fg_pct.toFixed(1)}</td>
+                            <td className={ct}>{careerTotals.tp_pct.toFixed(1)}</td>
+                            <td className={ct}>{careerTotals.ft_pct.toFixed(1)}</td>
+                            <td className={`${ct} font-semibold`}>{careerTotals.eff.toFixed(1)}</td>
+                          </>
+                        )}
+                        {careerStatsTab === "totals" && (
+                          <>
+                            <td className={ct}>{careerTotals.gp}</td>
+                            <td className={ct}>{Math.round(careerTotals.min)}</td>
+                            <td className={ct}>{careerTotals.pts}</td>
+                            <td className={ct}>{careerTotals.reb}</td>
+                            <td className={ct}>{careerTotals.ast}</td>
+                            <td className={ct}>{careerTotals.stl}</td>
+                            <td className={ct}>{careerTotals.blk}</td>
+                            <td className={ct}>{careerTotals.to}</td>
+                            <td className={ct}>{careerTotals.fgm}-{careerTotals.fga}</td>
+                            <td className={ct}>{careerTotals.tpm}-{careerTotals.tpa}</td>
+                            <td className={ct}>{careerTotals.ftm}-{careerTotals.fta}</td>
+                            <td className={`${ct} font-semibold`}>{careerTotals.eff.toFixed(1)}</td>
+                          </>
+                        )}
+                        {careerStatsTab === "advanced" && (
+                          <>
+                            <td className={ct}>{careerTotals.gp}</td>
+                            <td className={ct}>{careerTotals.eff.toFixed(1)}</td>
+                            <td className={ct}>{(careerTotals.to / careerTotals.gp).toFixed(1)}</td>
+                            <td className={ct}>{careerTotals.fg_pct.toFixed(1)}</td>
+                            <td className={ct}>{careerTotals.tp_pct.toFixed(1)}</td>
+                            <td className={ct}>{careerTotals.ft_pct.toFixed(1)}</td>
+                            <td className={ct}>{(careerTotals.pts / careerTotals.gp).toFixed(1)}</td>
+                            <td className={ct}>{(careerTotals.reb / careerTotals.gp).toFixed(1)}</td>
+                            <td className={ct}>{(careerTotals.ast / careerTotals.gp).toFixed(1)}</td>
+                            <td className={ct}>{(careerTotals.stl / careerTotals.gp).toFixed(1)}</td>
+                            <td className={ct}>{(careerTotals.blk / careerTotals.gp).toFixed(1)}</td>
+                          </>
+                        )}
+                      </tr>
+                    );
+                  })()}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
-        {/* Competition Filter - Compact */}
+        {playerLeagues.length > 0 && (
+          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3 block">Active Leagues</span>
+            <div className="flex flex-wrap gap-2">
+              {playerLeagues.map((league) => (
+                <button
+                  key={league.id}
+                  onClick={() => setLocation(`/league/${league.slug}`)}
+                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-neutral-700 hover:border-orange-300 dark:hover:border-orange-500/50 bg-white dark:bg-neutral-800 hover:bg-orange-50 dark:hover:bg-neutral-700 transition-colors text-sm font-medium text-slate-700 dark:text-slate-300"
+                >
+                  <Trophy className="h-4 w-4 text-orange-500" />
+                  {league.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Shot Chart</span>
+            <Select value={playerShotChartRange} onValueChange={setPlayerShotChartRange}>
+              <SelectTrigger className="w-full md:w-48 h-8 text-sm border-gray-200 dark:border-neutral-600 dark:bg-neutral-800 dark:text-white">
+                <SelectValue placeholder="Select range" />
+              </SelectTrigger>
+              <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
+                <SelectItem value="season">Full Season</SelectItem>
+                <SelectItem value="last10">Last 10 Games</SelectItem>
+                <SelectItem value="last5">Last 5 Games</SelectItem>
+                {playerShotGamesWithKeys.map((g) => (
+                  <SelectItem key={g.game_key} value={`game:${g.game_key}`}>
+                    vs {g.opponent} ({new Date(g.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <ShotChart
+            shots={playerShotData || []}
+            loading={playerShotsLoading}
+            compact
+            emptyMessage="No shot data available for this player."
+            filters={{ showQuarterFilter: true, showResultFilter: true }}
+          />
+        </div>
+
         {playerMatches.length > 1 && (
-          <div className="mb-4 flex flex-wrap items-center gap-2 animate-slide-in-up">
-            <Filter className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-            <span className="text-sm text-orange-700 dark:text-orange-400">Competition:</span>
-            <Select 
-              value={selectedLeagueFilter} 
-              onValueChange={setSelectedLeagueFilter}
-            >
-              <SelectTrigger className="w-auto min-w-[160px] h-8 text-sm border-orange-200 dark:border-neutral-600 focus:ring-orange-500 dark:bg-neutral-800 dark:text-white" data-testid="select-league-filter">
+          <div className="flex flex-wrap items-center gap-2">
+            <Filter className="h-4 w-4 text-orange-500" />
+            <span className="text-sm text-slate-600 dark:text-slate-400">Competition:</span>
+            <Select value={selectedLeagueFilter} onValueChange={setSelectedLeagueFilter}>
+              <SelectTrigger className="w-auto min-w-[160px] h-8 text-sm border-gray-200 dark:border-neutral-600 dark:bg-neutral-800 dark:text-white" data-testid="select-league-filter">
                 <SelectValue placeholder="Select" />
               </SelectTrigger>
               <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
-                <SelectItem value="all" data-testid="select-league-all" className="dark:text-white dark:focus:bg-neutral-700">
-                  All Competitions
-                </SelectItem>
-                {Array.from(new Set(playerMatches.map(m => m.league_id)))
-                  .filter(Boolean)
-                  .map(leagueId => (
-                    <SelectItem 
-                      key={leagueId} 
-                      value={leagueId}
-                      data-testid={`select-league-${leagueId}`}
-                      className="dark:text-white dark:focus:bg-neutral-700"
-                    >
-                      {leagueNames.get(leagueId) || leagueId}
-                    </SelectItem>
-                  ))
-                }
+                <SelectItem value="all" data-testid="select-league-all" className="dark:text-white dark:focus:bg-neutral-700">All Competitions</SelectItem>
+                {Array.from(new Set(playerMatches.map(m => m.league_id))).filter(Boolean).map(leagueId => (
+                  <SelectItem key={leagueId} value={leagueId} data-testid={`select-league-${leagueId}`} className="dark:text-white dark:focus:bg-neutral-700">
+                    {leagueNames.get(leagueId) || leagueId}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
         )}
 
-        {/* Game Log */}
-        <Card className="border-orange-200 dark:border-orange-500/30 shadow-md bg-white dark:bg-neutral-900">
-          <CardHeader className="bg-white dark:bg-neutral-900 border-b border-orange-200 dark:border-neutral-700">
-            <CardTitle className="flex items-center gap-2 text-orange-800 dark:text-white text-base md:text-lg">
-              <Calendar className="h-4 w-4 md:h-5 md:w-5 dark:text-orange-400" />
-              Game Log
-            </CardTitle>
-            <CardDescription className="text-orange-700 dark:text-orange-400 text-xs md:text-sm">
-              Recent game performances
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="p-0">
-            {filteredStats.length === 0 ? (
-              <div className="p-6 md:p-8 text-center text-orange-600 dark:text-orange-400 text-sm md:text-base">
-                No game statistics found for this player{selectedLeagueFilter !== "all" ? " in the selected competition" : ""}.
-              </div>
-            ) : (
-              <>
-                {/* Mobile Card View */}
-                <div className="md:hidden border-t border-orange-200 dark:border-neutral-700">
+        <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100 dark:border-neutral-800">
+            <span className="text-base md:text-lg font-bold text-slate-800 dark:text-white">Game Log</span>
+          </div>
+          {filteredStats.length === 0 ? (
+            <div className="p-6 md:p-8 text-center text-slate-500 dark:text-slate-400 text-sm">
+              No game statistics found for this player{selectedLeagueFilter !== "all" ? " in the selected competition" : ""}.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-gray-100 dark:border-neutral-800 text-slate-400 dark:text-slate-500 uppercase text-[10px] tracking-wider">
+                    <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">Date</th>
+                    <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">OPP</th>
+                    <th className="px-2 py-1.5 text-center font-semibold">MIN</th>
+                    <th className="px-2 py-1.5 text-center font-semibold">FG</th>
+                    <th className="px-2 py-1.5 text-center font-semibold">3PT</th>
+                    <th className="px-2 py-1.5 text-center font-semibold">FT</th>
+                    <th className="px-2 py-1.5 text-center font-semibold">REB</th>
+                    <th className="px-2 py-1.5 text-center font-semibold">AST</th>
+                    <th className="px-2 py-1.5 text-center font-semibold">STL</th>
+                    <th className="px-2 py-1.5 text-center font-semibold">BLK</th>
+                    <th className="px-2 py-1.5 text-center font-semibold">TO</th>
+                    <th className="px-2 py-1.5 text-center font-semibold">PTS</th>
+                  </tr>
+                </thead>
+                <tbody>
                   {filteredStats.map((game, index) => {
                     const opponentName = (game.opponent && game.opponent.trim()) || 'TBD';
-                    
                     return (
-                      <div
+                      <tr
                         key={game.id}
-                        className={`p-4 border-b border-orange-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors ${
-                          index % 2 === 0 ? 'bg-white dark:bg-neutral-900' : 'bg-orange-25 dark:bg-neutral-800/50'
+                        className={`border-b border-gray-50 dark:border-neutral-800/50 text-slate-700 dark:text-slate-300 ${
+                          index % 2 === 1 ? 'bg-gray-50/50 dark:bg-neutral-800/30' : ''
                         }`}
-                        data-testid={`game-card-${game.id}`}
+                        data-testid={`game-row-${game.id}`}
                       >
-                        {/* Date and Opponent */}
-                        <div className="flex justify-between items-center mb-3">
-                          <div className="text-xs text-orange-800 dark:text-orange-400 font-medium">
-                            {formatDate(game.game_date || game.created_at)}
-                          </div>
-                          <Badge variant="outline" className="border-orange-300 dark:border-orange-500/50 text-orange-700 dark:text-orange-400 text-xs">
-                            vs {opponentName}
-                          </Badge>
-                        </div>
-                        
-                        {/* Stats Grid */}
-                        <div className="grid grid-cols-3 gap-3">
-                          <div className="text-center">
-                            <div className="text-xl font-bold text-orange-900 dark:text-white">{game.spoints || game.points || 0}</div>
-                            <div className="text-xs text-orange-600 dark:text-orange-500">PTS</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-xl font-bold text-orange-900 dark:text-white">{game.sreboundstotal || game.rebounds_total || 0}</div>
-                            <div className="text-xs text-orange-600 dark:text-orange-500">REB</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-xl font-bold text-orange-900 dark:text-white">{game.sassists || game.assists || 0}</div>
-                            <div className="text-xs text-orange-600 dark:text-orange-500">AST</div>
-                          </div>
-                        </div>
-                      </div>
+                        <td className="px-2 py-1.5 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">{formatDate(game.game_date || game.created_at)}</td>
+                        <td className="px-2 py-1.5 text-xs font-medium whitespace-nowrap">{opponentName}</td>
+                        <td className="px-2 py-1.5 text-xs text-center whitespace-nowrap">{game.sminutes || '—'}</td>
+                        <td className="px-2 py-1.5 text-xs text-center whitespace-nowrap">{game.sfieldgoalsmade || 0}-{game.sfieldgoalsattempted || 0}</td>
+                        <td className="px-2 py-1.5 text-xs text-center whitespace-nowrap">{game.sthreepointersmade || 0}-{game.sthreepointersattempted || 0}</td>
+                        <td className="px-2 py-1.5 text-xs text-center whitespace-nowrap">{game.sfreethrowsmade || 0}-{game.sfreethrowsattempted || 0}</td>
+                        <td className="px-2 py-1.5 text-xs text-center">{game.sreboundstotal || game.rebounds_total || 0}</td>
+                        <td className="px-2 py-1.5 text-xs text-center">{game.sassists || game.assists || 0}</td>
+                        <td className="px-2 py-1.5 text-xs text-center">{game.ssteals || 0}</td>
+                        <td className="px-2 py-1.5 text-xs text-center">{game.sblocks || 0}</td>
+                        <td className="px-2 py-1.5 text-xs text-center">{game.sturnovers || game.turnovers || 0}</td>
+                        <td className="px-2 py-1.5 text-xs text-center font-bold text-slate-900 dark:text-white">{game.spoints || game.points || 0}</td>
+                      </tr>
                     );
                   })}
-                </div>
-
-                {/* Desktop Table View */}
-                <div className="hidden md:block overflow-x-auto border-t border-orange-200 dark:border-neutral-700">
-                  <table className="w-full">
-                    <thead className="bg-orange-50 dark:bg-neutral-800 border-b border-orange-200 dark:border-neutral-700">
-                      <tr className="text-left">
-                        <th className="px-4 py-3 text-orange-900 dark:text-slate-200 font-semibold text-sm">Date</th>
-                        <th className="px-4 py-3 text-orange-900 dark:text-slate-200 font-semibold text-sm">OPP</th>
-                        <th className="hidden lg:table-cell px-4 py-3 text-orange-900 dark:text-slate-200 font-semibold text-sm">MIN</th>
-                        <th className="px-4 py-3 text-orange-900 dark:text-slate-200 font-semibold text-sm text-center">PTS</th>
-                        <th className="px-4 py-3 text-orange-900 dark:text-slate-200 font-semibold text-sm text-center">REB</th>
-                        <th className="px-4 py-3 text-orange-900 dark:text-slate-200 font-semibold text-sm text-center">AST</th>
-                        <th className="hidden lg:table-cell px-4 py-3 text-orange-900 dark:text-slate-200 font-semibold text-sm text-center">STL</th>
-                        <th className="hidden lg:table-cell px-4 py-3 text-orange-900 dark:text-slate-200 font-semibold text-sm text-center">BLK</th>
-                        <th className="hidden lg:table-cell px-4 py-3 text-orange-900 dark:text-slate-200 font-semibold text-sm text-center">FG</th>
-                        <th className="hidden lg:table-cell px-4 py-3 text-orange-900 dark:text-slate-200 font-semibold text-sm text-center">3P</th>
-                        <th className="hidden lg:table-cell px-4 py-3 text-orange-900 dark:text-slate-200 font-semibold text-sm text-center">FT</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredStats.map((game, index) => {
-                        const opponentName = (game.opponent && game.opponent.trim()) || 'TBD';
-
-
-                        return (
-                          <tr 
-                            key={game.id} 
-                            className={`border-b border-orange-100 dark:border-neutral-800 hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors cursor-pointer group ${
-                              index % 2 === 0 ? 'bg-white dark:bg-neutral-900' : 'bg-orange-25 dark:bg-neutral-800/50'
-                            }`}
-                            data-testid={`game-row-${game.id}`}
-                          >
-                            <td className="px-4 py-3 text-orange-800 dark:text-slate-200 text-sm font-medium">
-                              {formatDate(game.game_date || game.created_at)}
-                            </td>
-                            <td className="px-4 py-3">
-                              <Badge variant="outline" className="border-orange-300 dark:border-orange-500/50 text-orange-700 dark:text-orange-400 text-sm">
-                                vs {opponentName}
-                              </Badge>
-                            </td>
-                            <td className="hidden lg:table-cell px-4 py-3 text-orange-800 dark:text-slate-300 text-sm text-center">{game.sminutes || '0'}</td>
-                            <td className="px-4 py-3 font-bold text-orange-900 dark:text-white group-hover:text-orange-700 dark:group-hover:text-orange-400 transition-colors text-sm text-center">{game.spoints || game.points || 0}</td>
-                            <td className="px-4 py-3 text-orange-800 dark:text-slate-300 text-sm text-center font-medium">{game.sreboundstotal || game.rebounds_total || 0}</td>
-                            <td className="px-4 py-3 text-orange-800 dark:text-slate-300 text-sm text-center font-medium">{game.sassists || game.assists || 0}</td>
-                            <td className="hidden lg:table-cell px-4 py-3 text-orange-800 dark:text-slate-300 text-sm text-center">{game.ssteals || 0}</td>
-                            <td className="hidden lg:table-cell px-4 py-3 text-orange-800 dark:text-slate-300 text-sm text-center">{game.sblocks || 0}</td>
-                            <td className="hidden lg:table-cell px-4 py-3 text-orange-800 dark:text-slate-300 text-sm text-center">
-                              {game.sfieldgoalsmade || 0}/{game.sfieldgoalsattempted || 0}
-                            </td>
-                            <td className="hidden lg:table-cell px-4 py-3 text-orange-800 dark:text-slate-300 text-sm text-center">
-                              {game.sthreepointersmade || 0}/{game.sthreepointersattempted || 0}
-                            </td>
-                            <td className="hidden lg:table-cell px-4 py-3 text-orange-800 dark:text-slate-300 text-sm text-center">
-                              {game.sfreethrowsmade || 0}/{game.sfreethrowsattempted || 0}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
         </div>
       </div>
     </>

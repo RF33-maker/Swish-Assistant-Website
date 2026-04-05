@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { supabase, getSupabaseForLeague, getDataLeagueId } from "@/lib/supabase";
 import { TeamLogo } from "./TeamLogo";
-import { CheckCircle2, Clock, ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 interface GameItem {
   game_key: string;
@@ -38,8 +38,6 @@ interface GameResultsCarouselProps {
   childLeagueMap?: Map<string, string>;
 }
 
-type FilterTab = "results" | "live" | "upcoming";
-
 function formatDateUK(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleDateString('en-GB', { 
@@ -69,8 +67,6 @@ function formatRelativeDate(dateStr: string): string {
 
 export default function GameResultsCarousel({ leagueId, slug, onGameClick, childLeagueIds, childLeagueMap }: GameResultsCarouselProps) {
   const [allGames, setAllGames] = useState<GameItem[]>([]);
-  const [activeTab, setActiveTab] = useState<FilterTab>("results");
-  const [hasSetDefaultTab, setHasSetDefaultTab] = useState(false);
   const [loading, setLoading] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -283,19 +279,6 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
         });
       }
 
-      const finalLiveCount = combined.filter(g => g.status === 'LIVE').length;
-
-      if (!hasSetDefaultTab) {
-        if (finalLiveCount > 0) {
-          setActiveTab("live");
-        } else if (combined.some(g => g.status === 'FINAL')) {
-          setActiveTab("results");
-        } else {
-          setActiveTab("upcoming");
-        }
-        setHasSetDefaultTab(true);
-      }
-
       setAllGames(combined);
     } catch (error) {
       console.error("Error fetching games:", error);
@@ -318,34 +301,15 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
     return () => clearInterval(interval);
   }, [effectiveLeagueId, childIdsKey]);
 
-  const filteredGames = useMemo(() => {
-    const games = allGames.filter(g => {
-      if (activeTab === 'live') return g.status === 'LIVE';
-      if (activeTab === 'results') return g.status === 'FINAL';
-      return g.status === 'SCHEDULED';
-    });
-
-    if (activeTab === 'results') {
-      return games.sort((a, b) => new Date(b.game_date).getTime() - new Date(a.game_date).getTime());
-    }
-    return games.sort((a, b) => new Date(a.game_date).getTime() - new Date(b.game_date).getTime());
-  }, [allGames, activeTab]);
-
-  const tabCounts = useMemo(() => {
-    let results = 0, live = 0, upcoming = 0;
-    allGames.forEach(g => {
-      if (g.status === 'FINAL') results++;
-      else if (g.status === 'LIVE') live++;
-      else upcoming++;
-    });
-    return { results, live, upcoming };
+  const sortedGames = useMemo(() => {
+    const live = allGames.filter(g => g.status === 'LIVE')
+      .sort((a, b) => new Date(a.game_date).getTime() - new Date(b.game_date).getTime());
+    const upcoming = allGames.filter(g => g.status === 'SCHEDULED')
+      .sort((a, b) => new Date(a.game_date).getTime() - new Date(b.game_date).getTime());
+    const results = allGames.filter(g => g.status === 'FINAL')
+      .sort((a, b) => new Date(b.game_date).getTime() - new Date(a.game_date).getTime());
+    return [...live, ...upcoming, ...results];
   }, [allGames]);
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollLeft = 0;
-    }
-  }, [activeTab]);
 
   const scrollLeft = () => {
     if (scrollRef.current) {
@@ -359,12 +323,22 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
     }
   };
 
+  const formatGameTime = (dateStr: string): string => {
+    const date = new Date(dateStr);
+    return date.toLocaleTimeString('en-GB', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'Europe/London'
+    }).toUpperCase();
+  };
+
   if (loading) {
     return (
-      <div className="px-3 md:px-4">
-        <div className="flex gap-3 md:gap-4 animate-pulse py-3">
-          {[1,2,3,4].map(i => (
-            <div key={i} className="bg-white/10 rounded-xl h-28 w-64 md:w-72 flex-shrink-0"></div>
+      <div className="w-full border-b border-gray-200 dark:border-white/10 bg-white dark:bg-transparent">
+        <div className="flex items-center gap-0 animate-pulse px-1 py-1.5">
+          {[1,2,3,4,5].map(i => (
+            <div key={i} className="bg-gray-100 dark:bg-white/10 rounded h-[56px] w-[150px] flex-shrink-0 mx-0.5"></div>
           ))}
         </div>
       </div>
@@ -373,156 +347,131 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
 
   if (allGames.length === 0) {
     return (
-      <div className="text-center text-slate-400 py-6">
+      <div className="text-center text-slate-500 dark:text-slate-400 py-2.5 text-xs border-b border-gray-200 dark:border-white/10 bg-white dark:bg-transparent">
         No games available
       </div>
     );
   }
 
   return (
-    <div className="w-full">
-      <div className="flex items-center justify-between border-b border-white/10 px-3 md:px-4">
-        <div className="flex items-center">
-          <button
-            onClick={() => setActiveTab("results")}
-            className={`flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-medium transition-all border-b-2 whitespace-nowrap ${
-              activeTab === "results"
-                ? "border-orange-400 text-orange-400"
-                : "border-transparent text-white/50 hover:text-white/80"
-            }`}
-          >
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>Results</span>
-            {tabCounts.results > 0 && (
-              <span className={`text-[10px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center ${
-                activeTab === "results" ? "bg-orange-400/20 text-orange-400" : "bg-white/10"
-              }`}>{tabCounts.results}</span>
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab("live")}
-            className={`flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-medium transition-all border-b-2 whitespace-nowrap ${
-              activeTab === "live"
-                ? "border-red-400 text-red-400"
-                : "border-transparent text-white/50 hover:text-white/80"
-            }`}
-          >
-            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${tabCounts.live > 0 ? 'bg-red-500 animate-pulse' : 'bg-white/30'}`}></span>
-            <span>Live</span>
-            {tabCounts.live > 0 && (
-              <span className="text-[10px] bg-red-500/20 text-red-400 rounded-full px-1.5 py-0.5 min-w-[18px] text-center font-bold">{tabCounts.live}</span>
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab("upcoming")}
-            className={`flex items-center gap-1.5 px-3 sm:px-4 py-2.5 text-xs sm:text-sm font-medium transition-all border-b-2 whitespace-nowrap ${
-              activeTab === "upcoming"
-                ? "border-blue-400 text-blue-400"
-                : "border-transparent text-white/50 hover:text-white/80"
-            }`}
-          >
-            <Clock className="w-3.5 h-3.5" />
-            <span>Upcoming</span>
-            {tabCounts.upcoming > 0 && (
-              <span className={`text-[10px] rounded-full px-1.5 py-0.5 min-w-[18px] text-center ${
-                activeTab === "upcoming" ? "bg-blue-400/20 text-blue-400" : "bg-white/10"
-              }`}>{tabCounts.upcoming}</span>
-            )}
-          </button>
-        </div>
+    <div className="w-full border-b border-gray-200 dark:border-white/10 bg-white dark:bg-transparent">
+      <div className="flex items-center relative">
+        <button
+          onClick={scrollLeft}
+          className="hidden sm:flex items-center justify-center w-7 flex-shrink-0 bg-gradient-to-r from-white/80 dark:from-black/40 to-transparent hover:from-gray-100 dark:hover:from-black/60 transition-colors z-10 absolute left-0 top-0 bottom-0"
+        >
+          <ChevronLeft className="w-4 h-4 text-gray-400 dark:text-white/70" />
+        </button>
 
-        <div className="hidden sm:flex items-center gap-1">
-          <button onClick={scrollLeft} className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <button onClick={scrollRight} className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors">
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-
-      <div className="relative">
         <div
           ref={scrollRef}
-          className="overflow-x-auto pb-2 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/20 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb:hover]:bg-white/30"
+          className="overflow-x-auto flex-1 sm:px-7 [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:hidden"
+          style={{ scrollbarWidth: 'none' }}
         >
-          {filteredGames.length === 0 ? (
-            <div className="flex items-center justify-center py-6 px-4">
-              <span className="text-sm text-white/40">
-                {activeTab === "live" ? "No live games right now" : activeTab === "results" ? "No recent results" : "No upcoming games scheduled"}
-              </span>
-            </div>
-          ) : (
-            <div className="flex items-stretch gap-2 md:gap-3 px-3 md:px-4 py-3 min-w-max">
-              {filteredGames.map((game) => (
-                <div
-                  key={game.game_key}
-                  className={`rounded-xl p-3 flex-shrink-0 cursor-pointer transition-all w-[200px] sm:w-[240px] md:w-[280px] ${
-                    game.status === 'LIVE'
-                      ? 'bg-gradient-to-br from-red-500/20 to-orange-500/10 border border-red-500/40 hover:border-red-400'
-                      : 'bg-white/5 border border-white/10 hover:border-white/25 hover:bg-white/10'
-                  }`}
-                  onClick={() => onGameClick({
-                    gameKey: game.game_key,
-                    status: game.status,
-                    homeTeam: game.home_team,
-                    awayTeam: game.away_team,
-                    gameDate: game.game_date,
-                    homeScore: game.home_score,
-                    awayScore: game.away_score,
-                    hasGamePage: game.hasGamePage
-                  })}
-                >
-                  <div className="flex justify-between items-center mb-2">
+          <div className="flex items-stretch min-w-max">
+            {sortedGames.map((game, idx) => {
+              const prevGame = idx > 0 ? sortedGames[idx - 1] : null;
+              const showDivider = prevGame && prevGame.status !== game.status;
+
+              return (
+                <div key={game.game_key} className="flex items-stretch">
+                  {showDivider && (
+                    <div className="w-px bg-gray-200 dark:bg-white/20 my-2 flex-shrink-0" />
+                  )}
+                  <div
+                    className={`flex-shrink-0 cursor-pointer transition-all hover:bg-gray-50 dark:hover:bg-white/10 px-3 py-2 border-r border-gray-100 dark:border-white/5 relative ${
+                      game.status === 'LIVE' ? 'bg-red-50 dark:bg-red-500/8' : ''
+                    }`}
+                    onClick={() => onGameClick({
+                      gameKey: game.game_key,
+                      status: game.status,
+                      homeTeam: game.home_team,
+                      awayTeam: game.away_team,
+                      gameDate: game.game_date,
+                      homeScore: game.home_score,
+                      awayScore: game.away_score,
+                      hasGamePage: game.hasGamePage
+                    })}
+                  >
                     {game.status === 'LIVE' && (
-                      <span className="text-[10px] sm:text-xs font-bold text-red-400 uppercase tracking-wider flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>
-                        {game.current_period ? `Q${game.current_period}` : 'Live'}
-                        {game.current_clock ? ` ${game.current_clock}` : ''}
-                      </span>
-                    )}
-                    {game.status === 'FINAL' && (
-                      <span className="text-[10px] sm:text-xs font-semibold text-green-400/80 uppercase tracking-wider">Final</span>
+                      <div className="absolute top-0 left-0 right-0 h-[2px] bg-red-500 rounded-b" />
                     )}
                     {game.status === 'SCHEDULED' && (
-                      <span className="text-[10px] sm:text-xs font-semibold text-blue-400/80 uppercase tracking-wider">Scheduled</span>
+                      <div className="absolute top-0 left-0 right-0 h-[2px] bg-blue-400/50 rounded-b" />
                     )}
-                    <span className="text-[10px] sm:text-xs text-white/40">{formatRelativeDate(game.game_date)}</span>
-                    {game.age_group && (
-                      <span className="text-[9px] sm:text-[10px] font-medium text-amber-400/80 bg-amber-400/10 px-1.5 py-0.5 rounded">{game.age_group}</span>
-                    )}
-                  </div>
 
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <TeamLogo teamName={game.home_team} leagueId={leagueId} size="sm" />
-                        <span className="text-xs sm:text-sm font-semibold text-white truncate">{game.home_team}</span>
+                    <div className="flex items-center gap-2.5">
+                      <div className="text-center flex-shrink-0 w-[38px]">
+                        {game.status === 'LIVE' ? (
+                          <div className="flex flex-col items-center">
+                            <span className="text-[9px] font-bold text-red-500 dark:text-red-400 uppercase leading-tight flex items-center gap-0.5">
+                              <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>
+                              LIVE
+                            </span>
+                            {game.current_period && (
+                              <span className="text-[8px] text-red-400/60 mt-0.5">Q{game.current_period}</span>
+                            )}
+                          </div>
+                        ) : game.status === 'SCHEDULED' ? (
+                          <div className="flex flex-col items-center">
+                            <span className="text-[9px] text-blue-500 dark:text-blue-300/70 font-medium leading-tight">
+                              {formatGameTime(game.game_date)}
+                            </span>
+                            <span className="text-[8px] text-gray-400 dark:text-white/25 mt-0.5">{formatRelativeDate(game.game_date)}</span>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center">
+                            <span className="text-[9px] text-gray-400 dark:text-white/30 font-medium leading-tight uppercase">
+                              {formatRelativeDate(game.game_date)}
+                            </span>
+                            <span className="text-[8px] text-green-600/60 dark:text-green-400/50 mt-0.5">FT</span>
+                          </div>
+                        )}
                       </div>
-                      <span className={`text-base sm:text-lg font-bold tabular-nums ml-2 ${
-                        game.status === 'LIVE' ? 'text-red-400' : 'text-white'
-                      }`}>
-                        {game.status === 'SCHEDULED' ? '-' : (game.home_score ?? '-')}
-                      </span>
-                    </div>
 
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <TeamLogo teamName={game.away_team} leagueId={leagueId} size="sm" />
-                        <span className="text-xs sm:text-sm font-semibold text-white truncate">{game.away_team}</span>
+                      <div className="flex flex-col gap-1 min-w-[130px]">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                            <TeamLogo teamName={game.home_team} leagueId={leagueId} size="xs" />
+                            <span className="text-xs font-medium text-gray-800 dark:text-white/90 truncate max-w-[85px]">{game.home_team}</span>
+                          </div>
+                          <span className={`text-xs font-bold tabular-nums min-w-[20px] text-right ${
+                            game.status === 'LIVE' ? 'text-red-500 dark:text-red-400'
+                            : game.status === 'SCHEDULED' ? 'text-gray-300 dark:text-white/20'
+                            : game.home_score !== null && game.away_score !== null && game.home_score > game.away_score ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-white/40'
+                          }`}>
+                            {game.status === 'SCHEDULED' ? '-' : (game.home_score ?? '-')}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                            <TeamLogo teamName={game.away_team} leagueId={leagueId} size="xs" />
+                            <span className="text-xs font-medium text-gray-800 dark:text-white/90 truncate max-w-[85px]">{game.away_team}</span>
+                          </div>
+                          <span className={`text-xs font-bold tabular-nums min-w-[20px] text-right ${
+                            game.status === 'LIVE' ? 'text-red-500 dark:text-red-400'
+                            : game.status === 'SCHEDULED' ? 'text-gray-300 dark:text-white/20'
+                            : game.away_score !== null && game.home_score !== null && game.away_score > game.home_score ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-white/40'
+                          }`}>
+                            {game.status === 'SCHEDULED' ? '-' : (game.away_score ?? '-')}
+                          </span>
+                        </div>
                       </div>
-                      <span className={`text-base sm:text-lg font-bold tabular-nums ml-2 ${
-                        game.status === 'LIVE' ? 'text-red-400' : 'text-white'
-                      }`}>
-                        {game.status === 'SCHEDULED' ? '-' : (game.away_score ?? '-')}
-                      </span>
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
+              );
+            })}
+          </div>
         </div>
+
+        <button
+          onClick={scrollRight}
+          className="hidden sm:flex items-center justify-center w-7 flex-shrink-0 bg-gradient-to-l from-white/80 dark:from-black/40 to-transparent hover:from-gray-100 dark:hover:from-black/60 transition-colors z-10 absolute right-0 top-0 bottom-0"
+        >
+          <ChevronRight className="w-4 h-4 text-gray-400 dark:text-white/70" />
+        </button>
       </div>
     </div>
   );
