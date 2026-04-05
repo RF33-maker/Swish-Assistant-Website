@@ -3551,7 +3551,7 @@ export default function LeaguePage() {
         </div>
 
         <main className="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-10 grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
-          <section className="md:col-span-2 space-y-6">
+          <section className={`${activeSection === 'overview' ? 'md:col-span-2' : 'md:col-span-3'} space-y-6`}>
             
             {/* Standings Section */}
             {activeSection === 'standings' && (
@@ -5213,7 +5213,7 @@ export default function LeaguePage() {
           </section>
 
           {/* Sidebar */}
-          <aside className="space-y-6">
+          <aside className={`space-y-6 ${activeSection !== 'overview' ? 'hidden' : ''}`}>
             {/* League Admin Panel */}
             {isOwner && league?.league_id && (
               <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-6 border-l-4 border-blue-500">
