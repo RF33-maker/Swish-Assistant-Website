@@ -2474,10 +2474,17 @@ export default function LeaguePage() {
         // Step 5: Fetch slugs from players table
         debugLog("📊 Step 5: Fetching slugs from players table");
         
-        const { data: rosterData } = await supabase
+        let rosterQuery = supabase
           .from("players")
-          .select("id, full_name, slug")
-          .eq("league_id", statsLeagueId);
+          .select("id, full_name, slug");
+        
+        if (isParentFetch && parentChildIds.length > 0) {
+          rosterQuery = rosterQuery.in("league_id", parentChildIds);
+        } else {
+          rosterQuery = rosterQuery.eq("league_id", statsLeagueId);
+        }
+        
+        const { data: rosterData } = await rosterQuery;
 
         const slugLookup = new Map<string, string>();
         const nameLookup = new Map<string, string>();
@@ -4026,7 +4033,7 @@ export default function LeaguePage() {
                           >
                             <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 dark:text-slate-200 sticky left-0 bg-white dark:bg-neutral-900 hover:bg-orange-50 dark:hover:bg-neutral-800 z-10">
                               <div className="min-w-0">
-                                <div className="font-medium text-slate-900 dark:text-white text-xs md:text-sm truncate">{player.name}</div>
+                                <div className={`font-medium text-xs md:text-sm truncate ${player.slug ? 'text-orange-600 dark:text-orange-400 hover:underline cursor-pointer' : 'text-slate-900 dark:text-white'}`}>{player.name}</div>
                                 <div className="text-[10px] md:text-xs text-slate-500 dark:text-slate-400 truncate">{player.team}</div>
                               </div>
                             </td>
@@ -4811,8 +4818,16 @@ export default function LeaguePage() {
                       <ul className="space-y-1 text-xs md:text-sm text-slate-800 dark:text-white">
                         {Array.isArray(list) &&
                           list.map((p, i) => (
-                            <li key={`${title}-${p.name}-${i}`} className="flex justify-between">
-                              <span className="truncate mr-2">{p.name}</span>
+                            <li 
+                              key={`${title}-${p.name}-${i}`} 
+                              className={`flex justify-between ${p.slug ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700 rounded px-1 -mx-1 transition-colors' : ''}`}
+                              onClick={() => {
+                                if (p.slug) {
+                                  navigate(`/player/${p.slug}`);
+                                }
+                              }}
+                            >
+                              <span className={`truncate mr-2 ${p.slug ? 'text-orange-600 dark:text-orange-400 hover:underline' : ''}`}>{p.name}</span>
                               <span className="font-medium whitespace-nowrap" style={{ color: brandColor }}>
                                 {p.value} {leagueLeadersView === 'averages' ? avgLabel : totalLabel}
                               </span>
