@@ -3174,46 +3174,29 @@ export default function LeaguePage() {
           </>
         )}
         <div className="relative z-10">
-        <header className="bg-white dark:bg-neutral-900 shadow-sm sticky top-0 z-50 px-4 md:px-6 py-3 md:py-4">
-          <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
-            <div className="flex items-center justify-between md:justify-start">
+        <header className="bg-white dark:bg-neutral-900 shadow-sm sticky top-0 z-50 px-3 md:px-6 py-1.5 md:py-4">
+          <div className="flex items-center gap-2 md:flex-row md:gap-4">
+            <div className="flex items-center shrink-0">
               <img
                 src={SwishLogo}
                 alt="Swish Assistant"
-                className="h-8 md:h-9 cursor-pointer"
+                className="h-6 md:h-9 cursor-pointer"
                 onClick={() => navigate("/")}
               />
-              {currentUser && (
-                <div className="flex items-center gap-2 md:hidden">
-                  <button
-                    onClick={() => navigate("/coaches-hub")}
-                    className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1.5 rounded-lg font-medium transition-colors text-sm group relative overflow-hidden"
-                  >
-                    <span className="group-hover:opacity-0 transition-opacity duration-200">Coaches Hub</span>
-                    <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">Coming Soon</span>
-                  </button>
-                  <button
-                    onClick={() => navigate("/league-management")}
-                    className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1.5 rounded-lg font-medium transition-colors text-sm"
-                  >
-                    League Admin
-                  </button>
-                </div>
-              )}
             </div>
 
-            <div className="relative w-full md:max-w-md md:mx-6">
+            <div className="relative flex-1 md:max-w-md md:mx-6">
               <input
                 type="text"
                 placeholder="Find your league"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-neutral-700 rounded-full text-sm bg-white dark:bg-neutral-800 text-slate-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                className="w-full px-3 py-1 md:py-2 border border-gray-300 dark:border-neutral-700 rounded-full text-xs md:text-sm bg-white dark:bg-neutral-800 text-slate-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500"
               />
               <button
                 onClick={handleSearch}
-                className="absolute right-0 top-0 h-full px-3 md:px-4 bg-orange-500 hover:bg-orange-600 text-white rounded-full text-sm"
+                className="absolute right-0 top-0 h-full px-2.5 md:px-4 bg-orange-500 hover:bg-orange-600 text-white rounded-full text-xs md:text-sm"
               >
                 Go
               </button>
@@ -3237,25 +3220,25 @@ export default function LeaguePage() {
               )}
             </div>
 
-            <ThemeToggle />
-
             {currentUser && (
-              <div className="hidden md:flex items-center gap-2">
+              <div className="flex items-center gap-1 md:gap-2 shrink-0">
                 <button
                   onClick={() => navigate("/coaches-hub")}
-                  className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm whitespace-nowrap group relative overflow-hidden"
+                  className="bg-orange-500 hover:bg-orange-600 text-white px-2 py-1 md:px-4 md:py-2 rounded-lg font-medium transition-colors text-[10px] md:text-sm whitespace-nowrap group relative overflow-hidden"
                 >
                   <span className="group-hover:opacity-0 transition-opacity duration-200">Coaches Hub</span>
                   <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">Coming Soon</span>
                 </button>
                 <button
                   onClick={() => navigate("/league-management")}
-                  className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm whitespace-nowrap"
+                  className="bg-orange-500 hover:bg-orange-600 text-white px-2 py-1 md:px-4 md:py-2 rounded-lg font-medium transition-colors text-[10px] md:text-sm whitespace-nowrap"
                 >
                   League Admin
                 </button>
               </div>
             )}
+
+            <ThemeToggle />
           </div>
         </header>
 
