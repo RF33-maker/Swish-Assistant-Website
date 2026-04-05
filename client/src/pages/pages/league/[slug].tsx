@@ -3246,7 +3246,7 @@ export default function LeaguePage() {
 
         {/* Game Results / Live / Upcoming Carousel */}
         {league?.league_id && (
-          <section className="overflow-hidden">
+          <section className="sticky top-0 z-40 overflow-hidden shadow-sm">
             <GameResultsCarousel 
               leagueId={league.league_id}
               slug={slug}
