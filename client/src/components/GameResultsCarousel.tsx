@@ -335,10 +335,10 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
 
   if (loading) {
     return (
-      <div className="w-full border-b border-white/10">
+      <div className="w-full border-b border-gray-200 dark:border-white/10 bg-white dark:bg-transparent">
         <div className="flex items-center gap-0 animate-pulse px-1 py-1.5">
           {[1,2,3,4,5].map(i => (
-            <div key={i} className="bg-white/10 rounded h-[56px] w-[150px] flex-shrink-0 mx-0.5"></div>
+            <div key={i} className="bg-gray-100 dark:bg-white/10 rounded h-[56px] w-[150px] flex-shrink-0 mx-0.5"></div>
           ))}
         </div>
       </div>
@@ -347,20 +347,20 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
 
   if (allGames.length === 0) {
     return (
-      <div className="text-center text-slate-400 py-2.5 text-xs border-b border-white/10">
+      <div className="text-center text-slate-500 dark:text-slate-400 py-2.5 text-xs border-b border-gray-200 dark:border-white/10 bg-white dark:bg-transparent">
         No games available
       </div>
     );
   }
 
   return (
-    <div className="w-full border-b border-white/10">
+    <div className="w-full border-b border-gray-200 dark:border-white/10 bg-white dark:bg-transparent">
       <div className="flex items-center relative">
         <button
           onClick={scrollLeft}
-          className="hidden sm:flex items-center justify-center w-7 flex-shrink-0 bg-gradient-to-r from-black/40 to-transparent hover:from-black/60 transition-colors z-10 absolute left-0 top-0 bottom-0"
+          className="hidden sm:flex items-center justify-center w-7 flex-shrink-0 bg-gradient-to-r from-white/80 dark:from-black/40 to-transparent hover:from-gray-100 dark:hover:from-black/60 transition-colors z-10 absolute left-0 top-0 bottom-0"
         >
-          <ChevronLeft className="w-4 h-4 text-white/70" />
+          <ChevronLeft className="w-4 h-4 text-gray-400 dark:text-white/70" />
         </button>
 
         <div
@@ -376,11 +376,11 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
               return (
                 <div key={game.game_key} className="flex items-stretch">
                   {showDivider && (
-                    <div className="w-px bg-white/20 my-2 flex-shrink-0" />
+                    <div className="w-px bg-gray-200 dark:bg-white/20 my-2 flex-shrink-0" />
                   )}
                   <div
-                    className={`flex-shrink-0 cursor-pointer transition-all hover:bg-white/10 px-3 py-2 border-r border-white/5 relative ${
-                      game.status === 'LIVE' ? 'bg-red-500/8' : ''
+                    className={`flex-shrink-0 cursor-pointer transition-all hover:bg-gray-50 dark:hover:bg-white/10 px-3 py-2 border-r border-gray-100 dark:border-white/5 relative ${
+                      game.status === 'LIVE' ? 'bg-red-50 dark:bg-red-500/8' : ''
                     }`}
                     onClick={() => onGameClick({
                       gameKey: game.game_key,
@@ -404,7 +404,7 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
                       <div className="text-center flex-shrink-0 w-[38px]">
                         {game.status === 'LIVE' ? (
                           <div className="flex flex-col items-center">
-                            <span className="text-[9px] font-bold text-red-400 uppercase leading-tight flex items-center gap-0.5">
+                            <span className="text-[9px] font-bold text-red-500 dark:text-red-400 uppercase leading-tight flex items-center gap-0.5">
                               <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>
                               LIVE
                             </span>
@@ -414,17 +414,17 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
                           </div>
                         ) : game.status === 'SCHEDULED' ? (
                           <div className="flex flex-col items-center">
-                            <span className="text-[9px] text-blue-300/70 font-medium leading-tight">
+                            <span className="text-[9px] text-blue-500 dark:text-blue-300/70 font-medium leading-tight">
                               {formatGameTime(game.game_date)}
                             </span>
-                            <span className="text-[8px] text-white/25 mt-0.5">{formatRelativeDate(game.game_date)}</span>
+                            <span className="text-[8px] text-gray-400 dark:text-white/25 mt-0.5">{formatRelativeDate(game.game_date)}</span>
                           </div>
                         ) : (
                           <div className="flex flex-col items-center">
-                            <span className="text-[9px] text-white/30 font-medium leading-tight uppercase">
+                            <span className="text-[9px] text-gray-400 dark:text-white/30 font-medium leading-tight uppercase">
                               {formatRelativeDate(game.game_date)}
                             </span>
-                            <span className="text-[8px] text-green-400/50 mt-0.5">FT</span>
+                            <span className="text-[8px] text-green-600/60 dark:text-green-400/50 mt-0.5">FT</span>
                           </div>
                         )}
                       </div>
@@ -433,12 +433,12 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5 min-w-0 flex-1">
                             <TeamLogo teamName={game.home_team} leagueId={leagueId} size="xs" />
-                            <span className="text-xs font-medium text-white/90 truncate max-w-[85px]">{game.home_team}</span>
+                            <span className="text-xs font-medium text-gray-800 dark:text-white/90 truncate max-w-[85px]">{game.home_team}</span>
                           </div>
                           <span className={`text-xs font-bold tabular-nums min-w-[20px] text-right ${
-                            game.status === 'LIVE' ? 'text-red-400'
-                            : game.status === 'SCHEDULED' ? 'text-white/20'
-                            : game.home_score !== null && game.away_score !== null && game.home_score > game.away_score ? 'text-white' : 'text-white/40'
+                            game.status === 'LIVE' ? 'text-red-500 dark:text-red-400'
+                            : game.status === 'SCHEDULED' ? 'text-gray-300 dark:text-white/20'
+                            : game.home_score !== null && game.away_score !== null && game.home_score > game.away_score ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-white/40'
                           }`}>
                             {game.status === 'SCHEDULED' ? '-' : (game.home_score ?? '-')}
                           </span>
@@ -447,12 +447,12 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5 min-w-0 flex-1">
                             <TeamLogo teamName={game.away_team} leagueId={leagueId} size="xs" />
-                            <span className="text-xs font-medium text-white/90 truncate max-w-[85px]">{game.away_team}</span>
+                            <span className="text-xs font-medium text-gray-800 dark:text-white/90 truncate max-w-[85px]">{game.away_team}</span>
                           </div>
                           <span className={`text-xs font-bold tabular-nums min-w-[20px] text-right ${
-                            game.status === 'LIVE' ? 'text-red-400'
-                            : game.status === 'SCHEDULED' ? 'text-white/20'
-                            : game.away_score !== null && game.home_score !== null && game.away_score > game.home_score ? 'text-white' : 'text-white/40'
+                            game.status === 'LIVE' ? 'text-red-500 dark:text-red-400'
+                            : game.status === 'SCHEDULED' ? 'text-gray-300 dark:text-white/20'
+                            : game.away_score !== null && game.home_score !== null && game.away_score > game.home_score ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-white/40'
                           }`}>
                             {game.status === 'SCHEDULED' ? '-' : (game.away_score ?? '-')}
                           </span>
@@ -468,9 +468,9 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
 
         <button
           onClick={scrollRight}
-          className="hidden sm:flex items-center justify-center w-7 flex-shrink-0 bg-gradient-to-l from-black/40 to-transparent hover:from-black/60 transition-colors z-10 absolute right-0 top-0 bottom-0"
+          className="hidden sm:flex items-center justify-center w-7 flex-shrink-0 bg-gradient-to-l from-white/80 dark:from-black/40 to-transparent hover:from-gray-100 dark:hover:from-black/60 transition-colors z-10 absolute right-0 top-0 bottom-0"
         >
-          <ChevronRight className="w-4 h-4 text-white/70" />
+          <ChevronRight className="w-4 h-4 text-gray-400 dark:text-white/70" />
         </button>
       </div>
     </div>
