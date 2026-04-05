@@ -240,27 +240,28 @@ export default function LeagueAdmin() {
 
     setUploadingBanner(true);
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${league.league_id}_${Date.now()}.${fileExt}`;
-      
-      const { data, error } = await supabase.storage
-        .from('league-banners')
-        .upload(fileName, file);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Not authenticated');
+      }
 
-      if (error) throw error;
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('leagueId', league.league_id);
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('league-banners')
-        .getPublicUrl(fileName);
+      const response = await fetch('/api/league-banners/upload', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${session.access_token}` },
+        body: formData,
+      });
 
-      const { error: updateError } = await supabase
-        .from('leagues')
-        .update({ banner_url: publicUrl })
-        .eq('league_id', league.league_id);
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.error || 'Banner upload failed');
+      }
 
-      if (updateError) throw updateError;
-
-      setLeague({ ...league, banner_url: publicUrl });
+      const result = await response.json();
+      setLeague({ ...league, banner_url: result.publicUrl });
       
     } catch (error) {
       console.error("Error uploading banner:", error);
@@ -295,6 +296,11 @@ export default function LeagueAdmin() {
 
     setUploadingLogo(teamName);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('Not authenticated');
+      }
+
       const fileExt = file.name.split('.').pop();
       const fileName = `${league.league_id}_${teamName.replace(/\s+/g, '_')}.${fileExt}`;
 
@@ -306,6 +312,7 @@ export default function LeagueAdmin() {
 
       const response = await fetch('/api/team-logos/upload-direct', {
         method: 'POST',
+        headers: { 'Authorization': `Bearer ${session.access_token}` },
         body: formData,
       });
 
@@ -334,10 +341,18 @@ export default function LeagueAdmin() {
     if (!league || !currentUser) return;
 
     try {
-      // Use server-side endpoint to delete (bypasses RLS)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        console.error('Not authenticated');
+        return;
+      }
+
       const response = await fetch('/api/team-logos/delete', {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({
           leagueId: league.league_id,
           teamName: teamName

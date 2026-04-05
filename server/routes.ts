@@ -1,14 +1,32 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
-import { supabase } from "../client/src/lib/supabase";
+import { supabaseAdmin } from "./supabaseServiceClient";
 import multer from 'multer';
 import OpenAI from 'openai';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// Configure multer for memory storage
 const upload = multer({ storage: multer.memoryStorage() });
+
+async function authenticateSupabaseUser(req: Request): Promise<string | null> {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) return null;
+  const token = authHeader.slice(7);
+  const { data, error } = await supabaseAdmin.auth.getUser(token);
+  if (error || !data.user) return null;
+  return data.user.id;
+}
+
+async function verifyLeagueOwnership(userId: string, leagueId: string): Promise<boolean> {
+  const { data, error } = await supabaseAdmin
+    .from('leagues')
+    .select('user_id, created_by')
+    .eq('league_id', leagueId)
+    .single();
+  if (error || !data) return false;
+  return data.user_id === userId || data.created_by === userId;
+}
 
 const PYTHON_BACKEND = "http://localhost:8000";
 
@@ -133,16 +151,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Team logo save endpoint - Save logo association after upload
   app.post("/api/team-logos", async (req, res) => {
     try {
+      const userId = await authenticateSupabaseUser(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
       const { leagueId, teamName, logoUrl } = req.body;
 
       if (!leagueId || !teamName || !logoUrl) {
         return res.status(400).json({ error: "Missing required fields" });
       }
 
+      const isOwner = await verifyLeagueOwnership(userId, leagueId);
+      if (!isOwner) {
+        return res.status(403).json({ error: "Only league owners can save team logos" });
+      }
+
       const objectStorageService = new ObjectStorageService();
       const logoPath = objectStorageService.normalizeTeamLogoPath(logoUrl);
 
-      const { data: logoData, error: logoError } = await supabase
+      const { data: logoData, error: logoError } = await supabaseAdmin
         .from("team_logos")
         .upsert({
           league_id: leagueId,
@@ -166,7 +194,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (logoData) {
-        const { error: teamError } = await supabase
+        const { error: teamError } = await supabaseAdmin
           .from("teams")
           .upsert({
             league_id: leagueId,
@@ -212,7 +240,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Direct upload endpoint to bypass RLS policies
   app.post("/api/team-logos/upload-direct", upload.single('file'), async (req, res) => {
     try {
-      console.log("Direct upload request received");
+      const userId = await authenticateSupabaseUser(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
       
       const file = req.file;
       const { fileName, leagueId, teamName } = req.body;
@@ -221,10 +252,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Missing required fields" });
       }
 
+      const isOwner = await verifyLeagueOwnership(userId, leagueId);
+      if (!isOwner) {
+        return res.status(403).json({ error: "Only league owners can upload team logos" });
+      }
+
       console.log("Uploading:", fileName, "Size:", file.size);
 
       // Use service role client to upload (bypasses RLS)
-      const { data, error } = await supabase.storage
+      const { data, error } = await supabaseAdmin.storage
         .from('team-logos')
         .upload(fileName, file.buffer, {
           upsert: true,
@@ -236,13 +272,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ error: error.message });
       }
 
-      const { data: { publicUrl } } = supabase.storage
+      const { data: { publicUrl } } = supabaseAdmin.storage
         .from('team-logos')
         .getPublicUrl(fileName);
 
       console.log("Upload successful, public URL:", publicUrl);
 
-      const { error: dbError } = await supabase
+      const { error: dbError } = await supabaseAdmin
         .from("team_logos")
         .upsert({
           league_id: leagueId,
@@ -272,10 +308,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Delete team logo endpoint - uses service role to bypass RLS
   app.delete("/api/team-logos/delete", async (req, res) => {
     try {
+      const userId = await authenticateSupabaseUser(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
       const { leagueId, teamName } = req.body;
       
       if (!leagueId || !teamName) {
         return res.status(400).json({ error: "Missing required fields: leagueId, teamName" });
+      }
+
+      const isOwner = await verifyLeagueOwnership(userId, leagueId);
+      if (!isOwner) {
+        return res.status(403).json({ error: "Only league owners can delete team logos" });
       }
 
       console.log("Deleting logo for team:", teamName, "in league:", leagueId);
@@ -288,7 +334,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Try to delete files with all extensions
       for (const ext of extensions) {
         const fileName = `${baseFileName}.${ext}`;
-        const { error } = await supabase.storage
+        const { error } = await supabaseAdmin.storage
           .from('team-logos')
           .remove([fileName]);
         
@@ -318,7 +364,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { leagueId } = req.params;
       
       // Get all teams for this league from player_stats
-      const { data: playerStats, error: teamsError } = await supabase
+      const { data: playerStats, error: teamsError } = await supabaseAdmin
         .from('player_stats')
         .select('team')
         .eq('league_id', leagueId);
@@ -344,7 +390,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           for (const ext of extensions) {
             const fileName = `${leagueId}_${teamName.replace(/\s+/g, '_')}.${ext}`;
             
-            const { data } = supabase.storage
+            const { data } = supabaseAdmin.storage
               .from('team-logos')
               .getPublicUrl(fileName);
             
@@ -369,6 +415,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching team logos API:", error);
       res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/league-banners/upload", upload.single('file'), async (req, res) => {
+    try {
+      const userId = await authenticateSupabaseUser(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const file = req.file;
+      const { leagueId } = req.body;
+
+      if (!file || !leagueId) {
+        return res.status(400).json({ error: "Missing required fields: file and leagueId" });
+      }
+
+      const isOwner = await verifyLeagueOwnership(userId, leagueId);
+      if (!isOwner) {
+        return res.status(403).json({ error: "Only league owners can upload banners" });
+      }
+
+      const fileExt = file.originalname.split('.').pop();
+      const fileName = `${leagueId}_${Date.now()}.${fileExt}`;
+
+      const { data, error } = await supabaseAdmin.storage
+        .from('league-banners')
+        .upload(fileName, file.buffer, {
+          upsert: true,
+          contentType: file.mimetype,
+        });
+
+      if (error) {
+        console.error("Banner storage upload error:", error);
+        return res.status(500).json({ error: error.message });
+      }
+
+      const { data: { publicUrl } } = supabaseAdmin.storage
+        .from('league-banners')
+        .getPublicUrl(fileName);
+
+      const { error: updateError } = await supabaseAdmin
+        .from('leagues')
+        .update({ banner_url: publicUrl })
+        .eq('league_id', leagueId);
+
+      if (updateError) {
+        console.error("Error updating league banner_url:", updateError);
+        return res.status(500).json({ error: updateError.message });
+      }
+
+      res.json({ success: true, publicUrl });
+    } catch (error) {
+      console.error("Banner upload error:", error);
+      res.status(500).json({ error: "Banner upload failed" });
     }
   });
 

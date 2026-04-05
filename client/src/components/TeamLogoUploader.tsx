@@ -8,6 +8,7 @@ import "@uppy/dashboard/dist/style.min.css";
 import AwsS3 from "@uppy/aws-s3";
 import type { UploadResult } from "@uppy/core";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/lib/supabase";
 
 interface TeamLogoUploaderProps {
   leagueId: string;
@@ -74,10 +75,12 @@ export function TeamLogoUploader({
       const uploadedFile = result.successful?.[0];
       if (uploadedFile && uploadedFile.uploadURL) {
         // Save the logo assignment to the database
+        const { data: { session } } = await supabase.auth.getSession();
         const response = await fetch('/api/team-logos', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {}),
           },
           body: JSON.stringify({
             leagueId,

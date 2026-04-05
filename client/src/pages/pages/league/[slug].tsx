@@ -1820,73 +1820,35 @@ export default function LeaguePage() {
 
       setUploadingBanner(true);
       try {
-        
-        // Upload file to Supabase storage
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${league.league_id}_${Date.now()}.${fileExt}`;
-        
-        const { data, error: uploadError } = await supabase.storage
-          .from('league-banners')
-          .upload(fileName, file);
-
-        if (uploadError) {
-          console.error('Upload error:', uploadError);
-          alert(`Failed to upload banner: ${uploadError.message}`);
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) {
+          alert('Not authenticated');
           return;
         }
 
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('leagueId', league.league_id);
 
-        // Get public URL without cache-busting for database storage
-        const { data: { publicUrl } } = supabase.storage
-          .from('league-banners')
-          .getPublicUrl(fileName);
-        
+        const response = await fetch('/api/league-banners/upload', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${session.access_token}` },
+          body: formData,
+        });
 
-        // First check if banner_url column exists by trying a simple select
-        const { data: checkData, error: checkError } = await supabase
-          .from('leagues')
-          .select('banner_url')
-          .eq('league_id', league.league_id)
-          .single();
-        
-
-        // Try updating by slug instead of league_id
-        const { data: updateData, error: updateError } = await supabase
-          .from('leagues')
-          .update({ banner_url: publicUrl })
-          .eq('slug', slug)
-          .select();
-
-        if (updateError) {
-          console.error('Database update error:', updateError);
-          alert(`Failed to update banner in database: ${updateError.message}`);
-          return;
+        if (!response.ok) {
+          const result = await response.json();
+          throw new Error(result.error || 'Banner upload failed');
         }
 
-
-        // Update local state immediately with the new banner URL
-        const updatedLeagueData = { ...league, banner_url: publicUrl };
+        const result = await response.json();
+        const updatedLeagueData = { ...league, banner_url: result.publicUrl };
         setLeague(updatedLeagueData);
-        
-        // Force a refetch to ensure the banner persists
-        setTimeout(async () => {
-          const { data: updatedLeague, error: fetchError } = await supabase
-            .from('leagues')
-            .select('*')
-            .eq('slug', slug)
-            .single();
-          
-          if (fetchError) {
-            console.error('Refetch error:', fetchError);
-          } else {
-            setLeague(updatedLeague);
-          }
-        }, 1000);
         
         alert('Banner updated successfully!');
       } catch (error) {
         console.error('Banner upload error:', error);
-        alert(`Failed to upload banner: ${error.message}`);
+        alert(`Failed to upload banner: ${error instanceof Error ? error.message : 'Unknown error'}`);
       } finally {
         setUploadingBanner(false);
         // Reset file input
