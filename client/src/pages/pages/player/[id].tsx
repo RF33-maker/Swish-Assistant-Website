@@ -1342,51 +1342,56 @@ export default function PlayerStatsPage() {
               </div>
             </div>
             <div className="overflow-x-auto mt-3">
-              <table className="w-full text-sm">
+              <table className="w-full text-xs">
                 <thead>
-                  <tr className="border-y border-gray-100 dark:border-neutral-800 text-slate-400 dark:text-slate-500 uppercase text-[10px] md:text-xs tracking-wider">
-                    <th className="px-2 md:px-3 py-2 text-left font-semibold">Season</th>
-                    <th className="px-2 md:px-3 py-2 text-left font-semibold">Team</th>
+                  <tr className="border-y border-gray-100 dark:border-neutral-800 text-slate-400 dark:text-slate-500 uppercase text-[10px] tracking-wider">
+                    <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">Season</th>
+                    <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">Team</th>
                     {careerStatsTab === "averages" && (
                       <>
-                        <th className="px-2 md:px-3 py-2 text-center font-semibold">GP</th>
-                        <th className="px-2 md:px-3 py-2 text-center font-semibold">MIN</th>
-                        <th className="px-2 md:px-3 py-2 text-center font-semibold">FG%</th>
-                        <th className="px-2 md:px-3 py-2 text-center font-semibold">3P%</th>
-                        <th className="px-2 md:px-3 py-2 text-center font-semibold">FT%</th>
-                        <th className="px-2 md:px-3 py-2 text-center font-semibold">REB</th>
-                        <th className="px-2 md:px-3 py-2 text-center font-semibold">AST</th>
-                        <th className="hidden md:table-cell px-2 md:px-3 py-2 text-center font-semibold">STL</th>
-                        <th className="hidden md:table-cell px-2 md:px-3 py-2 text-center font-semibold">BLK</th>
-                        <th className="px-2 md:px-3 py-2 text-center font-semibold">PTS</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">GP</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">MIN</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">PTS</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">REB</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">AST</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">STL</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">BLK</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">TO</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">FG%</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">3P%</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">FT%</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">EFF</th>
                       </>
                     )}
                     {careerStatsTab === "totals" && (
                       <>
-                        <th className="px-2 md:px-3 py-2 text-center font-semibold">GP</th>
-                        <th className="px-2 md:px-3 py-2 text-center font-semibold">MIN</th>
-                        <th className="px-2 md:px-3 py-2 text-center font-semibold">FG</th>
-                        <th className="px-2 md:px-3 py-2 text-center font-semibold">3P</th>
-                        <th className="px-2 md:px-3 py-2 text-center font-semibold">FT</th>
-                        <th className="px-2 md:px-3 py-2 text-center font-semibold">REB</th>
-                        <th className="px-2 md:px-3 py-2 text-center font-semibold">AST</th>
-                        <th className="hidden md:table-cell px-2 md:px-3 py-2 text-center font-semibold">STL</th>
-                        <th className="hidden md:table-cell px-2 md:px-3 py-2 text-center font-semibold">BLK</th>
-                        <th className="px-2 md:px-3 py-2 text-center font-semibold">PTS</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">GP</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">MIN</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">PTS</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">REB</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">AST</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">STL</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">BLK</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">TO</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">FG</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">3P</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">FT</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">EFF</th>
                       </>
                     )}
                     {careerStatsTab === "advanced" && (
                       <>
-                        <th className="px-2 md:px-3 py-2 text-center font-semibold">GP</th>
-                        <th className="px-2 md:px-3 py-2 text-center font-semibold">EFF</th>
-                        <th className="px-2 md:px-3 py-2 text-center font-semibold">TO</th>
-                        <th className="px-2 md:px-3 py-2 text-center font-semibold">FG%</th>
-                        <th className="px-2 md:px-3 py-2 text-center font-semibold">3P%</th>
-                        <th className="px-2 md:px-3 py-2 text-center font-semibold">FT%</th>
-                        <th className="px-2 md:px-3 py-2 text-center font-semibold">REB</th>
-                        <th className="px-2 md:px-3 py-2 text-center font-semibold">AST</th>
-                        <th className="hidden md:table-cell px-2 md:px-3 py-2 text-center font-semibold">STL</th>
-                        <th className="hidden md:table-cell px-2 md:px-3 py-2 text-center font-semibold">BLK</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">GP</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">EFF</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">TO</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">FG%</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">3P%</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">FT%</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">PTS</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">REB</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">AST</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">STL</th>
+                        <th className="px-2 py-1.5 text-center font-semibold">BLK</th>
                       </>
                     )}
                   </tr>
@@ -1394,103 +1399,117 @@ export default function PlayerStatsPage() {
                 <tbody>
                   {careerStats.map((row, idx) => {
                     const gp = row.gp;
+                    const ct = "px-2 py-1.5 text-center text-xs whitespace-nowrap";
                     return (
                       <tr key={idx} className={`border-b border-gray-50 dark:border-neutral-800/50 text-slate-700 dark:text-slate-300 ${idx % 2 === 1 ? 'bg-gray-50/50 dark:bg-neutral-800/30' : ''}`}>
-                        <td className="px-2 md:px-3 py-2 text-xs md:text-sm font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap max-w-[100px] truncate">{row.season}</td>
-                        <td className="px-2 md:px-3 py-2 text-xs md:text-sm whitespace-nowrap max-w-[80px] truncate">{row.team}</td>
+                        <td className="px-2 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 whitespace-nowrap max-w-[100px] truncate">{row.season}</td>
+                        <td className="px-2 py-1.5 text-xs whitespace-nowrap max-w-[80px] truncate">{row.team}</td>
                         {careerStatsTab === "averages" && (
                           <>
-                            <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{gp}</td>
-                            <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{formatMinutes(row.min / gp)}</td>
-                            <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{row.fg_pct.toFixed(1)}</td>
-                            <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{row.tp_pct.toFixed(1)}</td>
-                            <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{row.ft_pct.toFixed(1)}</td>
-                            <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{(row.reb / gp).toFixed(1)}</td>
-                            <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{(row.ast / gp).toFixed(1)}</td>
-                            <td className="hidden md:table-cell px-2 md:px-3 py-2 text-center text-xs md:text-sm">{(row.stl / gp).toFixed(1)}</td>
-                            <td className="hidden md:table-cell px-2 md:px-3 py-2 text-center text-xs md:text-sm">{(row.blk / gp).toFixed(1)}</td>
-                            <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm font-semibold">{(row.pts / gp).toFixed(1)}</td>
+                            <td className={ct}>{gp}</td>
+                            <td className={ct}>{formatMinutes(row.min / gp)}</td>
+                            <td className={ct}>{(row.pts / gp).toFixed(1)}</td>
+                            <td className={ct}>{(row.reb / gp).toFixed(1)}</td>
+                            <td className={ct}>{(row.ast / gp).toFixed(1)}</td>
+                            <td className={ct}>{(row.stl / gp).toFixed(1)}</td>
+                            <td className={ct}>{(row.blk / gp).toFixed(1)}</td>
+                            <td className={ct}>{(row.to / gp).toFixed(1)}</td>
+                            <td className={ct}>{row.fg_pct.toFixed(1)}</td>
+                            <td className={ct}>{row.tp_pct.toFixed(1)}</td>
+                            <td className={ct}>{row.ft_pct.toFixed(1)}</td>
+                            <td className={`${ct} font-semibold`}>{row.eff.toFixed(1)}</td>
                           </>
                         )}
                         {careerStatsTab === "totals" && (
                           <>
-                            <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{gp}</td>
-                            <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{Math.round(row.min)}</td>
-                            <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{row.fgm}-{row.fga}</td>
-                            <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{row.tpm}-{row.tpa}</td>
-                            <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{row.ftm}-{row.fta}</td>
-                            <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{row.reb}</td>
-                            <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{row.ast}</td>
-                            <td className="hidden md:table-cell px-2 md:px-3 py-2 text-center text-xs md:text-sm">{row.stl}</td>
-                            <td className="hidden md:table-cell px-2 md:px-3 py-2 text-center text-xs md:text-sm">{row.blk}</td>
-                            <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm font-semibold">{row.pts}</td>
+                            <td className={ct}>{gp}</td>
+                            <td className={ct}>{Math.round(row.min)}</td>
+                            <td className={ct}>{row.pts}</td>
+                            <td className={ct}>{row.reb}</td>
+                            <td className={ct}>{row.ast}</td>
+                            <td className={ct}>{row.stl}</td>
+                            <td className={ct}>{row.blk}</td>
+                            <td className={ct}>{row.to}</td>
+                            <td className={ct}>{row.fgm}-{row.fga}</td>
+                            <td className={ct}>{row.tpm}-{row.tpa}</td>
+                            <td className={ct}>{row.ftm}-{row.fta}</td>
+                            <td className={`${ct} font-semibold`}>{row.eff.toFixed(1)}</td>
                           </>
                         )}
                         {careerStatsTab === "advanced" && (
                           <>
-                            <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{gp}</td>
-                            <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{row.eff.toFixed(1)}</td>
-                            <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{(row.to / gp).toFixed(1)}</td>
-                            <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{row.fg_pct.toFixed(1)}</td>
-                            <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{row.tp_pct.toFixed(1)}</td>
-                            <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{row.ft_pct.toFixed(1)}</td>
-                            <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{(row.reb / gp).toFixed(1)}</td>
-                            <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{(row.ast / gp).toFixed(1)}</td>
-                            <td className="hidden md:table-cell px-2 md:px-3 py-2 text-center text-xs md:text-sm">{(row.stl / gp).toFixed(1)}</td>
-                            <td className="hidden md:table-cell px-2 md:px-3 py-2 text-center text-xs md:text-sm">{(row.blk / gp).toFixed(1)}</td>
+                            <td className={ct}>{gp}</td>
+                            <td className={ct}>{row.eff.toFixed(1)}</td>
+                            <td className={ct}>{(row.to / gp).toFixed(1)}</td>
+                            <td className={ct}>{row.fg_pct.toFixed(1)}</td>
+                            <td className={ct}>{row.tp_pct.toFixed(1)}</td>
+                            <td className={ct}>{row.ft_pct.toFixed(1)}</td>
+                            <td className={ct}>{(row.pts / gp).toFixed(1)}</td>
+                            <td className={ct}>{(row.reb / gp).toFixed(1)}</td>
+                            <td className={ct}>{(row.ast / gp).toFixed(1)}</td>
+                            <td className={ct}>{(row.stl / gp).toFixed(1)}</td>
+                            <td className={ct}>{(row.blk / gp).toFixed(1)}</td>
                           </>
                         )}
                       </tr>
                     );
                   })}
-                  {careerTotals && careerStats.length > 1 && (
-                    <tr className="font-bold text-slate-900 dark:text-white border-t-2 border-orange-300 dark:border-orange-500/40">
-                      <td className="px-2 md:px-3 py-2 text-xs md:text-sm uppercase text-orange-600 dark:text-orange-400">Career</td>
-                      <td className="px-2 md:px-3 py-2 text-xs md:text-sm"></td>
-                      {careerStatsTab === "averages" && (
-                        <>
-                          <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{careerTotals.gp}</td>
-                          <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{formatMinutes(careerTotals.min / careerTotals.gp)}</td>
-                          <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{careerTotals.fg_pct.toFixed(1)}</td>
-                          <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{careerTotals.tp_pct.toFixed(1)}</td>
-                          <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{careerTotals.ft_pct.toFixed(1)}</td>
-                          <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{(careerTotals.reb / careerTotals.gp).toFixed(1)}</td>
-                          <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{(careerTotals.ast / careerTotals.gp).toFixed(1)}</td>
-                          <td className="hidden md:table-cell px-2 md:px-3 py-2 text-center text-xs md:text-sm">{(careerTotals.stl / careerTotals.gp).toFixed(1)}</td>
-                          <td className="hidden md:table-cell px-2 md:px-3 py-2 text-center text-xs md:text-sm">{(careerTotals.blk / careerTotals.gp).toFixed(1)}</td>
-                          <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{(careerTotals.pts / careerTotals.gp).toFixed(1)}</td>
-                        </>
-                      )}
-                      {careerStatsTab === "totals" && (
-                        <>
-                          <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{careerTotals.gp}</td>
-                          <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{Math.round(careerTotals.min)}</td>
-                          <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{careerTotals.fgm}-{careerTotals.fga}</td>
-                          <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{careerTotals.tpm}-{careerTotals.tpa}</td>
-                          <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{careerTotals.ftm}-{careerTotals.fta}</td>
-                          <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{careerTotals.reb}</td>
-                          <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{careerTotals.ast}</td>
-                          <td className="hidden md:table-cell px-2 md:px-3 py-2 text-center text-xs md:text-sm">{careerTotals.stl}</td>
-                          <td className="hidden md:table-cell px-2 md:px-3 py-2 text-center text-xs md:text-sm">{careerTotals.blk}</td>
-                          <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{careerTotals.pts}</td>
-                        </>
-                      )}
-                      {careerStatsTab === "advanced" && (
-                        <>
-                          <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{careerTotals.gp}</td>
-                          <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{careerTotals.eff.toFixed(1)}</td>
-                          <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{(careerTotals.to / careerTotals.gp).toFixed(1)}</td>
-                          <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{careerTotals.fg_pct.toFixed(1)}</td>
-                          <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{careerTotals.tp_pct.toFixed(1)}</td>
-                          <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{careerTotals.ft_pct.toFixed(1)}</td>
-                          <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{(careerTotals.reb / careerTotals.gp).toFixed(1)}</td>
-                          <td className="px-2 md:px-3 py-2 text-center text-xs md:text-sm">{(careerTotals.ast / careerTotals.gp).toFixed(1)}</td>
-                          <td className="hidden md:table-cell px-2 md:px-3 py-2 text-center text-xs md:text-sm">{(careerTotals.stl / careerTotals.gp).toFixed(1)}</td>
-                          <td className="hidden md:table-cell px-2 md:px-3 py-2 text-center text-xs md:text-sm">{(careerTotals.blk / careerTotals.gp).toFixed(1)}</td>
-                        </>
-                      )}
-                    </tr>
-                  )}
+                  {careerTotals && careerStats.length > 1 && (() => {
+                    const ct = "px-2 py-1.5 text-center text-xs whitespace-nowrap";
+                    return (
+                      <tr className="font-bold text-slate-900 dark:text-white border-t-2 border-orange-300 dark:border-orange-500/40">
+                        <td className="px-2 py-1.5 text-xs uppercase text-orange-600 dark:text-orange-400">Career</td>
+                        <td className="px-2 py-1.5 text-xs"></td>
+                        {careerStatsTab === "averages" && (
+                          <>
+                            <td className={ct}>{careerTotals.gp}</td>
+                            <td className={ct}>{formatMinutes(careerTotals.min / careerTotals.gp)}</td>
+                            <td className={ct}>{(careerTotals.pts / careerTotals.gp).toFixed(1)}</td>
+                            <td className={ct}>{(careerTotals.reb / careerTotals.gp).toFixed(1)}</td>
+                            <td className={ct}>{(careerTotals.ast / careerTotals.gp).toFixed(1)}</td>
+                            <td className={ct}>{(careerTotals.stl / careerTotals.gp).toFixed(1)}</td>
+                            <td className={ct}>{(careerTotals.blk / careerTotals.gp).toFixed(1)}</td>
+                            <td className={ct}>{(careerTotals.to / careerTotals.gp).toFixed(1)}</td>
+                            <td className={ct}>{careerTotals.fg_pct.toFixed(1)}</td>
+                            <td className={ct}>{careerTotals.tp_pct.toFixed(1)}</td>
+                            <td className={ct}>{careerTotals.ft_pct.toFixed(1)}</td>
+                            <td className={`${ct} font-semibold`}>{careerTotals.eff.toFixed(1)}</td>
+                          </>
+                        )}
+                        {careerStatsTab === "totals" && (
+                          <>
+                            <td className={ct}>{careerTotals.gp}</td>
+                            <td className={ct}>{Math.round(careerTotals.min)}</td>
+                            <td className={ct}>{careerTotals.pts}</td>
+                            <td className={ct}>{careerTotals.reb}</td>
+                            <td className={ct}>{careerTotals.ast}</td>
+                            <td className={ct}>{careerTotals.stl}</td>
+                            <td className={ct}>{careerTotals.blk}</td>
+                            <td className={ct}>{careerTotals.to}</td>
+                            <td className={ct}>{careerTotals.fgm}-{careerTotals.fga}</td>
+                            <td className={ct}>{careerTotals.tpm}-{careerTotals.tpa}</td>
+                            <td className={ct}>{careerTotals.ftm}-{careerTotals.fta}</td>
+                            <td className={`${ct} font-semibold`}>{careerTotals.eff.toFixed(1)}</td>
+                          </>
+                        )}
+                        {careerStatsTab === "advanced" && (
+                          <>
+                            <td className={ct}>{careerTotals.gp}</td>
+                            <td className={ct}>{careerTotals.eff.toFixed(1)}</td>
+                            <td className={ct}>{(careerTotals.to / careerTotals.gp).toFixed(1)}</td>
+                            <td className={ct}>{careerTotals.fg_pct.toFixed(1)}</td>
+                            <td className={ct}>{careerTotals.tp_pct.toFixed(1)}</td>
+                            <td className={ct}>{careerTotals.ft_pct.toFixed(1)}</td>
+                            <td className={ct}>{(careerTotals.pts / careerTotals.gp).toFixed(1)}</td>
+                            <td className={ct}>{(careerTotals.reb / careerTotals.gp).toFixed(1)}</td>
+                            <td className={ct}>{(careerTotals.ast / careerTotals.gp).toFixed(1)}</td>
+                            <td className={ct}>{(careerTotals.stl / careerTotals.gp).toFixed(1)}</td>
+                            <td className={ct}>{(careerTotals.blk / careerTotals.gp).toFixed(1)}</td>
+                          </>
+                        )}
+                      </tr>
+                    );
+                  })()}
                 </tbody>
               </table>
             </div>
@@ -1568,91 +1587,57 @@ export default function PlayerStatsPage() {
             <span className="text-base md:text-lg font-bold text-slate-800 dark:text-white">Game Log</span>
           </div>
           {filteredStats.length === 0 ? (
-            <div className="p-6 md:p-8 text-center text-slate-500 dark:text-slate-400 text-sm md:text-base">
+            <div className="p-6 md:p-8 text-center text-slate-500 dark:text-slate-400 text-sm">
               No game statistics found for this player{selectedLeagueFilter !== "all" ? " in the selected competition" : ""}.
             </div>
           ) : (
-            <>
-              <div className="md:hidden">
-                {filteredStats.map((game, index) => {
-                  const opponentName = (game.opponent && game.opponent.trim()) || 'TBD';
-                  return (
-                    <div
-                      key={game.id}
-                      className={`p-3 border-b border-gray-50 dark:border-neutral-800 ${
-                        index % 2 === 0 ? 'bg-white dark:bg-neutral-900' : 'bg-gray-50/50 dark:bg-neutral-800/30'
-                      }`}
-                      data-testid={`game-card-${game.id}`}
-                    >
-                      <div className="flex justify-between items-center mb-2">
-                        <div className="text-xs text-slate-500 dark:text-slate-400">{formatDate(game.game_date || game.created_at)}</div>
-                        <span className="text-xs font-medium text-slate-600 dark:text-slate-300">vs {opponentName}</span>
-                      </div>
-                      <div className="grid grid-cols-3 gap-3">
-                        <div className="text-center">
-                          <div className="text-lg font-bold text-slate-900 dark:text-white">{game.spoints || game.points || 0}</div>
-                          <div className="text-[10px] text-slate-400 dark:text-slate-500 uppercase">PTS</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-lg font-bold text-slate-900 dark:text-white">{game.sreboundstotal || game.rebounds_total || 0}</div>
-                          <div className="text-[10px] text-slate-400 dark:text-slate-500 uppercase">REB</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-lg font-bold text-slate-900 dark:text-white">{game.sassists || game.assists || 0}</div>
-                          <div className="text-[10px] text-slate-400 dark:text-slate-500 uppercase">AST</div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="hidden md:block overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-gray-100 dark:border-neutral-800 text-slate-400 dark:text-slate-500 uppercase text-[10px] md:text-xs tracking-wider">
-                      <th className="px-3 py-2 text-left font-semibold">Date</th>
-                      <th className="px-3 py-2 text-left font-semibold">OPP</th>
-                      <th className="hidden lg:table-cell px-3 py-2 font-semibold">MIN</th>
-                      <th className="px-3 py-2 text-center font-semibold">PTS</th>
-                      <th className="px-3 py-2 text-center font-semibold">REB</th>
-                      <th className="px-3 py-2 text-center font-semibold">AST</th>
-                      <th className="hidden lg:table-cell px-3 py-2 text-center font-semibold">STL</th>
-                      <th className="hidden lg:table-cell px-3 py-2 text-center font-semibold">BLK</th>
-                      <th className="hidden lg:table-cell px-3 py-2 text-center font-semibold">FG</th>
-                      <th className="hidden lg:table-cell px-3 py-2 text-center font-semibold">3P</th>
-                      <th className="hidden lg:table-cell px-3 py-2 text-center font-semibold">FT</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredStats.map((game, index) => {
-                      const opponentName = (game.opponent && game.opponent.trim()) || 'TBD';
-                      return (
-                        <tr 
-                          key={game.id} 
-                          className={`border-b border-gray-50 dark:border-neutral-800/50 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors ${
-                            index % 2 === 0 ? 'bg-white dark:bg-neutral-900' : 'bg-gray-50/50 dark:bg-neutral-800/30'
-                          }`}
-                          data-testid={`game-row-${game.id}`}
-                        >
-                          <td className="px-3 py-2 text-slate-600 dark:text-slate-300 text-sm">{formatDate(game.game_date || game.created_at)}</td>
-                          <td className="px-3 py-2 text-sm text-slate-700 dark:text-slate-300 font-medium">vs {opponentName}</td>
-                          <td className="hidden lg:table-cell px-3 py-2 text-slate-500 dark:text-slate-400 text-sm text-center">{game.sminutes || '0'}</td>
-                          <td className="px-3 py-2 font-bold text-slate-900 dark:text-white text-sm text-center">{game.spoints || game.points || 0}</td>
-                          <td className="px-3 py-2 text-slate-700 dark:text-slate-300 text-sm text-center">{game.sreboundstotal || game.rebounds_total || 0}</td>
-                          <td className="px-3 py-2 text-slate-700 dark:text-slate-300 text-sm text-center">{game.sassists || game.assists || 0}</td>
-                          <td className="hidden lg:table-cell px-3 py-2 text-slate-500 dark:text-slate-400 text-sm text-center">{game.ssteals || 0}</td>
-                          <td className="hidden lg:table-cell px-3 py-2 text-slate-500 dark:text-slate-400 text-sm text-center">{game.sblocks || 0}</td>
-                          <td className="hidden lg:table-cell px-3 py-2 text-slate-500 dark:text-slate-400 text-sm text-center">{game.sfieldgoalsmade || 0}/{game.sfieldgoalsattempted || 0}</td>
-                          <td className="hidden lg:table-cell px-3 py-2 text-slate-500 dark:text-slate-400 text-sm text-center">{game.sthreepointersmade || 0}/{game.sthreepointersattempted || 0}</td>
-                          <td className="hidden lg:table-cell px-3 py-2 text-slate-500 dark:text-slate-400 text-sm text-center">{game.sfreethrowsmade || 0}/{game.sfreethrowsattempted || 0}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-gray-100 dark:border-neutral-800 text-slate-400 dark:text-slate-500 uppercase text-[10px] tracking-wider">
+                    <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">Date</th>
+                    <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap">OPP</th>
+                    <th className="px-2 py-1.5 text-center font-semibold">MIN</th>
+                    <th className="px-2 py-1.5 text-center font-semibold">FG</th>
+                    <th className="px-2 py-1.5 text-center font-semibold">3PT</th>
+                    <th className="px-2 py-1.5 text-center font-semibold">FT</th>
+                    <th className="px-2 py-1.5 text-center font-semibold">REB</th>
+                    <th className="px-2 py-1.5 text-center font-semibold">AST</th>
+                    <th className="px-2 py-1.5 text-center font-semibold">STL</th>
+                    <th className="px-2 py-1.5 text-center font-semibold">BLK</th>
+                    <th className="px-2 py-1.5 text-center font-semibold">TO</th>
+                    <th className="px-2 py-1.5 text-center font-semibold">PTS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredStats.map((game, index) => {
+                    const opponentName = (game.opponent && game.opponent.trim()) || 'TBD';
+                    return (
+                      <tr
+                        key={game.id}
+                        className={`border-b border-gray-50 dark:border-neutral-800/50 text-slate-700 dark:text-slate-300 ${
+                          index % 2 === 1 ? 'bg-gray-50/50 dark:bg-neutral-800/30' : ''
+                        }`}
+                        data-testid={`game-row-${game.id}`}
+                      >
+                        <td className="px-2 py-1.5 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">{formatDate(game.game_date || game.created_at)}</td>
+                        <td className="px-2 py-1.5 text-xs font-medium whitespace-nowrap">{opponentName}</td>
+                        <td className="px-2 py-1.5 text-xs text-center whitespace-nowrap">{game.sminutes || '—'}</td>
+                        <td className="px-2 py-1.5 text-xs text-center whitespace-nowrap">{game.sfieldgoalsmade || 0}-{game.sfieldgoalsattempted || 0}</td>
+                        <td className="px-2 py-1.5 text-xs text-center whitespace-nowrap">{game.sthreepointersmade || 0}-{game.sthreepointersattempted || 0}</td>
+                        <td className="px-2 py-1.5 text-xs text-center whitespace-nowrap">{game.sfreethrowsmade || 0}-{game.sfreethrowsattempted || 0}</td>
+                        <td className="px-2 py-1.5 text-xs text-center">{game.sreboundstotal || game.rebounds_total || 0}</td>
+                        <td className="px-2 py-1.5 text-xs text-center">{game.sassists || game.assists || 0}</td>
+                        <td className="px-2 py-1.5 text-xs text-center">{game.ssteals || 0}</td>
+                        <td className="px-2 py-1.5 text-xs text-center">{game.sblocks || 0}</td>
+                        <td className="px-2 py-1.5 text-xs text-center">{game.sturnovers || game.turnovers || 0}</td>
+                        <td className="px-2 py-1.5 text-xs text-center font-bold text-slate-900 dark:text-white">{game.spoints || game.points || 0}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
         </div>
