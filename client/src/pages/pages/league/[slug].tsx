@@ -15,17 +15,10 @@ import LeagueChatbot from "@/components/LeagueChatbot";
 import { TeamLogo } from "@/components/TeamLogo";
 import { TeamLogoUploader } from "@/components/TeamLogoUploader";
 import { InstagramCarousel } from "@/components/InstagramCarousel";
-import { ChevronRight, Trophy, ArrowRight } from "lucide-react";
+import { ChevronRight, ChevronDown, Trophy, ArrowRight } from "lucide-react";
 import { Link } from "wouter";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { EditableDescription } from "@/components/EditableDescription";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { 
   LoadingSkeleton, 
   PlayerRowSkeleton, 
@@ -563,6 +556,8 @@ export default function LeaguePage() {
   const [scheduleView, setScheduleView] = useState<'upcoming' | 'results'>('upcoming');
   const [filterAgeGroup, setFilterAgeGroup] = useState<string>('all');
   const [filterRound, setFilterRound] = useState<string>('all');
+  const [playerCategoryDropdownOpen, setPlayerCategoryDropdownOpen] = useState(false);
+  const [teamCategoryDropdownOpen, setTeamCategoryDropdownOpen] = useState(false);
   const [statsSortColumn, setStatsSortColumn] = useState<string>('PTS'); // Column to sort by in Player Statistics
   const [statsSortDirection, setStatsSortDirection] = useState<'asc' | 'desc'>('desc'); // Sort direction
   const [teamStatsSortColumn, setTeamStatsSortColumn] = useState<string>('PTS'); // Column to sort by in Team Statistics
@@ -3866,85 +3861,121 @@ export default function LeaguePage() {
                   </div>
                 </div>
 
-                {!isParentLeague && (availableAgeGroups.length > 0 || availableRounds.length > 0) && (
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    {availableAgeGroups.length > 0 && (
-                      <select
-                        value={filterAgeGroup}
-                        onChange={(e) => setFilterAgeGroup(e.target.value)}
-                        className="px-3 py-1.5 text-xs md:text-sm rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
-                      >
-                        <option value="all">All Age Groups</option>
-                        {availableAgeGroups.map(ag => (
-                          <option key={ag} value={ag}>{ag}</option>
+                {/* Category Dropdown */}
+                <div className="relative mb-4">
+                  <button
+                    onClick={() => setPlayerCategoryDropdownOpen(!playerCategoryDropdownOpen)}
+                    className="flex items-center justify-between w-full max-w-xs px-4 py-2.5 rounded-xl border bg-white dark:bg-neutral-800 text-left text-base font-semibold text-slate-800 dark:text-white transition-all"
+                    style={{ borderColor: brandBorderLight }}
+                    data-testid="select-player-category"
+                  >
+                    <span>{playerStatsCategory}</span>
+                    <ChevronDown className={`h-5 w-5 text-gray-400 transition-transform ${playerCategoryDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  {playerCategoryDropdownOpen && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setPlayerCategoryDropdownOpen(false)} />
+                      <div className="absolute z-20 mt-1 w-full max-w-xs rounded-xl border bg-white dark:bg-neutral-800 shadow-lg overflow-hidden" style={{ borderColor: brandBorderLight }}>
+                        {(['Traditional', 'Advanced', 'Scoring', 'Misc'] as const).map(cat => (
+                          <button
+                            key={cat}
+                            onClick={() => { setPlayerStatsCategory(cat); setPlayerCategoryDropdownOpen(false); }}
+                            className={`w-full px-4 py-2.5 text-left text-sm font-medium transition-colors ${
+                              playerStatsCategory === cat
+                                ? 'bg-gray-100 dark:bg-neutral-700'
+                                : 'hover:bg-gray-50 dark:hover:bg-neutral-700'
+                            } text-slate-800 dark:text-white`}
+                            data-testid={`option-player-${cat.toLowerCase()}`}
+                          >
+                            {cat}
+                          </button>
                         ))}
-                      </select>
-                    )}
-                    {availableRounds.length > 0 && (
-                      <select
-                        value={filterRound}
-                        onChange={(e) => setFilterRound(e.target.value)}
-                        className="px-3 py-1.5 text-xs md:text-sm rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
-                      >
-                        <option value="all">All Rounds</option>
-                        {availableRounds.map(r => (
-                          <option key={r} value={r}>{r}</option>
-                        ))}
-                      </select>
-                    )}
-                    {(filterAgeGroup !== 'all' || filterRound !== 'all') && (
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Round Filter Tabs (non-parent leagues with rounds) */}
+                {!isParentLeague && availableRounds.length > 0 && (
+                  <div className="flex items-center gap-1 overflow-x-auto pb-1 mb-4 scrollbar-hide">
+                    <button
+                      onClick={() => setFilterRound('all')}
+                      className={`whitespace-nowrap px-3 py-1.5 text-sm font-medium transition-all ${
+                        filterRound === 'all' ? 'font-bold' : 'text-gray-500 dark:text-gray-400'
+                      }`}
+                      style={filterRound === 'all' ? { color: brandColor, borderBottom: `2px solid ${brandColor}` } : {}}
+                    >
+                      Season
+                    </button>
+                    {availableRounds.map(r => (
                       <button
-                        onClick={() => { setFilterAgeGroup('all'); setFilterRound('all'); }}
-                        className="px-3 py-1.5 text-xs md:text-sm rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40"
+                        key={r}
+                        onClick={() => setFilterRound(r)}
+                        className={`whitespace-nowrap px-3 py-1.5 text-sm font-medium transition-all ${
+                          filterRound === r ? 'font-bold' : 'text-gray-500 dark:text-gray-400'
+                        }`}
+                        style={filterRound === r ? { color: brandColor, borderBottom: `2px solid ${brandColor}` } : {}}
                       >
-                        Clear Filters
+                        {r}
                       </button>
-                    )}
+                    ))}
                   </div>
                 )}
 
-                {/* Category and Mode Selectors */}
-                <div className="flex flex-col md:flex-row gap-4 mb-6">
-                  <div className="flex-1">
-                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">Stat Category</label>
-                    <Select
-                      value={playerStatsCategory}
-                      onValueChange={(value) => setPlayerStatsCategory(value as typeof playerStatsCategory)}
+                {/* Age Group Filter Tabs (non-parent leagues with age groups) */}
+                {!isParentLeague && availableAgeGroups.length > 0 && (
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 mb-4 scrollbar-hide">
+                    <button
+                      onClick={() => setFilterAgeGroup('all')}
+                      className={`whitespace-nowrap px-3 py-1.5 text-xs md:text-sm font-medium rounded-full transition-all ${
+                        filterAgeGroup === 'all' ? 'text-white' : 'text-slate-600 dark:text-slate-400 bg-gray-100 dark:bg-neutral-800'
+                      }`}
+                      style={filterAgeGroup === 'all' ? { backgroundColor: brandColor } : {}}
                     >
-                      <SelectTrigger 
-                        className="w-full bg-white dark:bg-neutral-800 border-slate-200 dark:border-neutral-600 text-slate-700 dark:text-slate-200 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500"
-                        data-testid="select-player-category"
+                      All Ages
+                    </button>
+                    {availableAgeGroups.map(ag => (
+                      <button
+                        key={ag}
+                        onClick={() => setFilterAgeGroup(ag)}
+                        className={`whitespace-nowrap px-3 py-1.5 text-xs md:text-sm font-medium rounded-full transition-all ${
+                          filterAgeGroup === ag ? 'text-white' : 'text-slate-600 dark:text-slate-400 bg-gray-100 dark:bg-neutral-800'
+                        }`}
+                        style={filterAgeGroup === ag ? { backgroundColor: brandColor } : {}}
                       >
-                        <SelectValue placeholder="Select category" />
-                      </SelectTrigger>
-                      <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
-                        <SelectItem value="Traditional" data-testid="option-player-traditional">Traditional</SelectItem>
-                        <SelectItem value="Advanced" data-testid="option-player-advanced">Advanced</SelectItem>
-                        <SelectItem value="Scoring" data-testid="option-player-scoring">Scoring</SelectItem>
-                        <SelectItem value="Misc" data-testid="option-player-misc">Misc</SelectItem>
-                      </SelectContent>
-                    </Select>
+                        {ag}
+                      </button>
+                    ))}
                   </div>
+                )}
 
-                  <div className="flex-1">
-                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">Mode</label>
-                    <Select
-                      value={playerStatsView}
-                      onValueChange={(value) => setPlayerStatsView(value as typeof playerStatsView)}
-                    >
-                      <SelectTrigger 
-                        className="w-full bg-white dark:bg-neutral-800 border-slate-200 dark:border-neutral-600 text-slate-700 dark:text-slate-200 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500"
-                        data-testid="select-player-mode"
+                {/* Mode Tabs */}
+                <div className="flex items-center gap-2 mb-5">
+                  <div className="inline-flex rounded-lg border dark:border-neutral-700 p-1" style={{ borderColor: brandBorderLight, backgroundColor: brandBg50 }}>
+                    {(['Per Game', 'Total', 'Per 40'] as const).map(mode => (
+                      <button
+                        key={mode}
+                        onClick={() => setPlayerStatsView(mode)}
+                        className={`px-3 md:px-4 py-1.5 text-xs md:text-sm font-medium rounded-md transition-all ${
+                          playerStatsView === mode
+                            ? 'bg-white dark:bg-neutral-700 shadow-sm'
+                            : 'hover:bg-white/50 dark:hover:bg-neutral-800'
+                        }`}
+                        style={{ color: brandColor }}
+                        data-testid={`option-player-${mode.toLowerCase().replace(/\s/g, '-')}`}
                       >
-                        <SelectValue placeholder="Select mode" />
-                      </SelectTrigger>
-                      <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
-                        <SelectItem value="Per Game" data-testid="option-player-per-game">Per Game</SelectItem>
-                        <SelectItem value="Total" data-testid="option-player-total">Total</SelectItem>
-                        <SelectItem value="Per 40" data-testid="option-player-per-40">Per 40</SelectItem>
-                      </SelectContent>
-                    </Select>
+                        {mode}
+                      </button>
+                    ))}
                   </div>
+                  {(filterAgeGroup !== 'all' || filterRound !== 'all') && (
+                    <button
+                      onClick={() => { setFilterAgeGroup('all'); setFilterRound('all'); }}
+                      className="px-3 py-1.5 text-xs md:text-sm rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40"
+                    >
+                      Clear Filters
+                    </button>
+                  )}
                 </div>
                 
                 {isLoadingStats ? (
@@ -4208,48 +4239,58 @@ export default function LeaguePage() {
                   <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-4">Team Statistics - {league?.name}</h2>
                 </div>
 
-                {/* Dropdowns for Category and Mode */}
-                <div className="flex flex-col sm:flex-row gap-3 mb-6">
-                  <div className="flex-1">
-                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">Category</label>
-                    <Select
-                      value={teamStatsCategory}
-                      onValueChange={(value) => setTeamStatsCategory(value as typeof teamStatsCategory)}
-                    >
-                      <SelectTrigger 
-                        className="w-full bg-white dark:bg-neutral-800 border-slate-200 dark:border-neutral-600 text-slate-700 dark:text-slate-200 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500"
-                        data-testid="select-category"
-                      >
-                        <SelectValue placeholder="Select category" />
-                      </SelectTrigger>
-                      <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
-                        <SelectItem value="Traditional" data-testid="option-traditional">Traditional</SelectItem>
-                        <SelectItem value="Advanced" data-testid="option-advanced">Advanced</SelectItem>
-                        <SelectItem value="Four Factors" data-testid="option-four-factors">Four Factors</SelectItem>
-                        <SelectItem value="Scoring" data-testid="option-scoring">Scoring</SelectItem>
-                        <SelectItem value="Misc" data-testid="option-misc">Misc</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                {/* Category Dropdown */}
+                <div className="relative mb-4">
+                  <button
+                    onClick={() => setTeamCategoryDropdownOpen(!teamCategoryDropdownOpen)}
+                    className="flex items-center justify-between w-full max-w-xs px-4 py-2.5 rounded-xl border bg-white dark:bg-neutral-800 text-left text-base font-semibold text-slate-800 dark:text-white transition-all"
+                    style={{ borderColor: brandBorderLight }}
+                    data-testid="select-category"
+                  >
+                    <span>{teamStatsCategory}</span>
+                    <ChevronDown className={`h-5 w-5 text-gray-400 transition-transform ${teamCategoryDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  {teamCategoryDropdownOpen && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setTeamCategoryDropdownOpen(false)} />
+                      <div className="absolute z-20 mt-1 w-full max-w-xs rounded-xl border bg-white dark:bg-neutral-800 shadow-lg overflow-hidden" style={{ borderColor: brandBorderLight }}>
+                        {(['Traditional', 'Advanced', 'Four Factors', 'Scoring', 'Misc'] as const).map(cat => (
+                          <button
+                            key={cat}
+                            onClick={() => { setTeamStatsCategory(cat); setTeamCategoryDropdownOpen(false); }}
+                            className={`w-full px-4 py-2.5 text-left text-sm font-medium transition-colors ${
+                              teamStatsCategory === cat
+                                ? 'bg-gray-100 dark:bg-neutral-700'
+                                : 'hover:bg-gray-50 dark:hover:bg-neutral-700'
+                            } text-slate-800 dark:text-white`}
+                            data-testid={`option-${cat.toLowerCase().replace(/\s/g, '-')}`}
+                          >
+                            {cat}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
 
-                  <div className="flex-1">
-                    <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">Mode</label>
-                    <Select
-                      value={teamStatsMode}
-                      onValueChange={(value) => setTeamStatsMode(value as typeof teamStatsMode)}
-                    >
-                      <SelectTrigger 
-                        className="w-full bg-white dark:bg-neutral-800 border-slate-200 dark:border-neutral-600 text-slate-700 dark:text-slate-200 hover:border-orange-300 focus:border-orange-500 focus:ring-orange-500"
-                        data-testid="select-mode"
+                {/* Mode Tabs */}
+                <div className="flex items-center gap-2 mb-5">
+                  <div className="inline-flex rounded-lg border dark:border-neutral-700 p-1" style={{ borderColor: brandBorderLight, backgroundColor: brandBg50 }}>
+                    {(['Per Game', 'Totals', 'Per 100 Possessions'] as const).map(mode => (
+                      <button
+                        key={mode}
+                        onClick={() => setTeamStatsMode(mode)}
+                        className={`px-3 md:px-4 py-1.5 text-xs md:text-sm font-medium rounded-md transition-all ${
+                          teamStatsMode === mode
+                            ? 'bg-white dark:bg-neutral-700 shadow-sm'
+                            : 'hover:bg-white/50 dark:hover:bg-neutral-800'
+                        }`}
+                        style={{ color: brandColor }}
+                        data-testid={`option-${mode.toLowerCase().replace(/\s/g, '-')}`}
                       >
-                        <SelectValue placeholder="Select mode" />
-                      </SelectTrigger>
-                      <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
-                        <SelectItem value="Per Game" data-testid="option-per-game">Per Game</SelectItem>
-                        <SelectItem value="Totals" data-testid="option-totals">Totals</SelectItem>
-                        <SelectItem value="Per 100 Possessions" data-testid="option-per-100">Per 100 Possessions</SelectItem>
-                      </SelectContent>
-                    </Select>
+                        {mode === 'Per 100 Possessions' ? 'Per 100 Poss' : mode}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
