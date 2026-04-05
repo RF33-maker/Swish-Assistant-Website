@@ -68,3 +68,6 @@ The application utilizes Supabase database views to simplify data fetching:
 -   **OpenAI (Node SDK)**: Integrated directly into the Express backend for the league chatbot.
 -   **Python Flask Backend**: Used for coaching chatbot and player scouting analysis.
 -   **Instagram**: Enhanced carousel integration for displaying Instagram posts and reels on league pages, with auto-scrolling, navigation controls, and video playback.
+
+## Known Bug Fixes
+-   **Player Stats/Leaders Race Condition (Fixed)**: The `fetchAllPlayerAverages` useEffect in `[slug].tsx` had a race condition where setting `childCompetitions` to a new empty array triggered cleanup (cancelling the fetch) while the deduplication check prevented re-fetching. This caused leagues with large datasets and no child competitions (NBL, WNBL) to show empty player stats/leaders. Fixed by moving `playerAveragesCancelledRef.current = false` before the deduplication check.

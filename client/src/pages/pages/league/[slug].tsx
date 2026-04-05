@@ -1722,9 +1722,10 @@ export default function LeaguePage() {
       const childIds = childCompetitions.map(c => c.league_id).sort().join(',');
       const fetchKey = `${leagueId}:${childIds}`;
       
+      playerAveragesCancelledRef.current = false;
+      
       if (lastFetchedLeagueRef.current === fetchKey) return;
       
-      playerAveragesCancelledRef.current = false;
       lastFetchedLeagueRef.current = fetchKey;
       
       debugLog("🔄 Player averages useEffect triggered, league_id:", leagueId, "childIds:", childIds);
