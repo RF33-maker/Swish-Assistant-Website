@@ -34,6 +34,7 @@ import { normalizeTeamName } from "@/lib/teamUtils";
 import { namesMatch, getMostCompleteName } from "@/lib/fuzzyMatch";
 import { DEBUG, debugLog } from "@/utils/debug";
 import { useLeagueBranding } from "@/hooks/useLeagueBranding";
+import { InlinePlayerProfile } from "@/components/InlinePlayerProfile";
 
 type GameSchedule = {
   game_id: string;
@@ -531,6 +532,8 @@ export default function LeaguePage() {
   const [isEditingYoutube, setIsEditingYoutube] = useState(false);
   const [updatingYoutube, setUpdatingYoutube] = useState(false);
   const [activeSection, setActiveSection] = useState('overview'); // 'overview', 'stats', 'teams', 'schedule'
+  const [selectedPlayerSlug, setSelectedPlayerSlug] = useState<string | null>(null);
+  const [previousSection, setPreviousSection] = useState<string>('overview');
   const [comparisonMode, setComparisonMode] = useState<'player' | 'team'>('player'); // Toggle between player and team comparison
   const [allPlayerAverages, setAllPlayerAverages] = useState<any[]>([]);
   const [filteredPlayerAverages, setFilteredPlayerAverages] = useState<any[]>([]);
@@ -3387,13 +3390,13 @@ export default function LeaguePage() {
             <div className="flex flex-col gap-3 py-3 md:py-4">
               {/* Navigation Links */}
               <div className="flex gap-4 md:gap-6 text-sm font-medium text-slate-600 dark:text-slate-400 overflow-x-auto pb-1 md:pb-0">
-                <a 
-                  href="#" 
-                  className={`cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'teams' ? 'font-semibold border-b-2' : ''}`}
+                <button 
+                  className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'teams' ? 'font-semibold border-b-2' : ''}`}
                   style={activeSection === 'teams' ? { color: brandColor, borderBottomColor: brandColor } : {}}
                   onMouseEnter={(e) => { if (activeSection !== 'teams') (e.target as HTMLElement).style.color = brandColor; }}
                   onMouseLeave={(e) => { if (activeSection !== 'teams') (e.target as HTMLElement).style.color = ''; }}
                   onClick={() => {
+                    setSelectedPlayerSlug(null);
                     setActiveSection('teams');
                     if (league?.league_id && fullLeagueStandings.length === 0 && standings.length === 0) {
                       calculatePoolStandings(league.league_id);
@@ -3401,14 +3404,14 @@ export default function LeaguePage() {
                   }}
                 >
                   Teams
-                </a>
-              <a 
-                href="#" 
-                className={`cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'standings' ? 'font-semibold border-b-2' : ''}`}
+                </button>
+              <button 
+                className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'standings' ? 'font-semibold border-b-2' : ''}`}
                 style={activeSection === 'standings' ? { color: brandColor, borderBottomColor: brandColor } : {}}
                 onMouseEnter={(e) => { if (activeSection !== 'standings') (e.target as HTMLElement).style.color = brandColor; }}
                 onMouseLeave={(e) => { if (activeSection !== 'standings') (e.target as HTMLElement).style.color = ''; }}
                 onClick={() => {
+                  setSelectedPlayerSlug(null);
                   setActiveSection('standings');
                   if (league?.league_id && fullLeagueStandings.length === 0) {
                     calculatePoolStandings(league.league_id);
@@ -3416,14 +3419,14 @@ export default function LeaguePage() {
                 }}
               >
                 Standings
-              </a>
-              <a 
-                href="#" 
-                className={`cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'stats' ? 'font-semibold border-b-2' : ''}`}
+              </button>
+              <button 
+                className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'stats' ? 'font-semibold border-b-2' : ''}`}
                 style={activeSection === 'stats' ? { color: brandColor, borderBottomColor: brandColor } : {}}
                 onMouseEnter={(e) => { if (activeSection !== 'stats') (e.target as HTMLElement).style.color = brandColor; }}
                 onMouseLeave={(e) => { if (activeSection !== 'stats') (e.target as HTMLElement).style.color = ''; }}
                 onClick={() => {
+                  setSelectedPlayerSlug(null);
                   setActiveSection('stats');
                   setDisplayedPlayerCount(20);
                   setStatsSearch("");
@@ -3433,14 +3436,14 @@ export default function LeaguePage() {
                 }}
               >
                 Player Stats
-              </a>
-              <a 
-                href="#" 
-                className={`cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'teamstats' ? 'font-semibold border-b-2' : ''}`}
+              </button>
+              <button 
+                className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'teamstats' ? 'font-semibold border-b-2' : ''}`}
                 style={activeSection === 'teamstats' ? { color: brandColor, borderBottomColor: brandColor } : {}}
                 onMouseEnter={(e) => { if (activeSection !== 'teamstats') (e.target as HTMLElement).style.color = brandColor; }}
                 onMouseLeave={(e) => { if (activeSection !== 'teamstats') (e.target as HTMLElement).style.color = ''; }}
                 onClick={() => {
+                  setSelectedPlayerSlug(null);
                   setActiveSection('teamstats');
                   if (teamStatsData.length === 0) {
                     fetchTeamStats();
@@ -3448,24 +3451,23 @@ export default function LeaguePage() {
                 }}
               >
                 Team Stats
-              </a>
-              <a 
-                href="#" 
-                className={`cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'schedule' ? 'font-semibold border-b-2' : ''}`}
+              </button>
+              <button 
+                className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'schedule' ? 'font-semibold border-b-2' : ''}`}
                 style={activeSection === 'schedule' ? { color: brandColor, borderBottomColor: brandColor } : {}}
                 onMouseEnter={(e) => { if (activeSection !== 'schedule') (e.target as HTMLElement).style.color = brandColor; }}
                 onMouseLeave={(e) => { if (activeSection !== 'schedule') (e.target as HTMLElement).style.color = ''; }}
-                onClick={() => setActiveSection('schedule')}
+                onClick={() => { setSelectedPlayerSlug(null); setActiveSection('schedule'); }}
               >
                 Schedule
-              </a>
-              <a 
-                href="#" 
-                className={`cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'leaders' ? 'font-semibold border-b-2' : ''}`}
+              </button>
+              <button 
+                className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'leaders' ? 'font-semibold border-b-2' : ''}`}
                 style={activeSection === 'leaders' ? { color: brandColor, borderBottomColor: brandColor } : {}}
                 onMouseEnter={(e) => { if (activeSection !== 'leaders') (e.target as HTMLElement).style.color = brandColor; }}
                 onMouseLeave={(e) => { if (activeSection !== 'leaders') (e.target as HTMLElement).style.color = ''; }}
                 onClick={() => {
+                  setSelectedPlayerSlug(null);
                   setActiveSection('leaders');
                   if (allPlayerAverages.length === 0) {
                     fetchAllPlayerAverages();
@@ -3473,14 +3475,14 @@ export default function LeaguePage() {
                 }}
               >
                 Leaders
-              </a>
-              <a 
-                href="#" 
-                className={`cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'comparison' ? 'font-semibold border-b-2' : ''}`}
+              </button>
+              <button 
+                className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'comparison' ? 'font-semibold border-b-2' : ''}`}
                 style={activeSection === 'comparison' ? { color: brandColor, borderBottomColor: brandColor } : {}}
                 onMouseEnter={(e) => { if (activeSection !== 'comparison') (e.target as HTMLElement).style.color = brandColor; }}
                 onMouseLeave={(e) => { if (activeSection !== 'comparison') (e.target as HTMLElement).style.color = ''; }}
                 onClick={() => {
+                  setSelectedPlayerSlug(null);
                   setActiveSection('comparison');
                   if (allPlayerAverages.length === 0) {
                     fetchAllPlayerAverages();
@@ -3491,14 +3493,14 @@ export default function LeaguePage() {
                 }}
               >
                 Compare
-              </a>
-              <a 
-                href="#" 
-                className={`cursor-pointer whitespace-nowrap pb-1 ${activeSection === 'overview' ? 'font-semibold border-b-2' : ''}`}
+              </button>
+              <button 
+                className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'overview' ? 'font-semibold border-b-2' : ''}`}
                 style={activeSection === 'overview' ? { color: brandColor, borderBottomColor: brandColor } : {}}
                 onMouseEnter={(e) => { if (activeSection !== 'overview') (e.target as HTMLElement).style.color = brandColor; }}
                 onMouseLeave={(e) => { if (activeSection !== 'overview') (e.target as HTMLElement).style.color = ''; }}
                 onClick={() => {
+                  setSelectedPlayerSlug(null);
                   setActiveSection('overview');
                   if (teamStatsData.length === 0) {
                     fetchTeamStats();
@@ -3506,7 +3508,7 @@ export default function LeaguePage() {
                 }}
               >
                 Overview
-              </a>
+              </button>
               </div>
 
               {/* Age Group Tab Bar for Parent Leagues */}
@@ -4079,7 +4081,10 @@ export default function LeaguePage() {
                             className={`border-b border-gray-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors ${player.slug ? 'cursor-pointer' : ''}`}
                             onClick={() => {
                               if (player.slug) {
-                                navigate(`/player/${player.slug}`);
+                                setPreviousSection(activeSection);
+                                setSelectedPlayerSlug(player.slug);
+                                setActiveSection('player');
+                                window.scrollTo({ top: 0, behavior: 'smooth' });
                               }
                             }}
                             data-testid={`player-row-${player.id}`}
@@ -4780,6 +4785,20 @@ export default function LeaguePage() {
             )}
 
             {/* Inline Leaders Section */}
+            {activeSection === 'player' && selectedPlayerSlug && (
+              <div className="md:col-span-3">
+                <InlinePlayerProfile
+                  playerSlug={selectedPlayerSlug}
+                  brandColor={brandColor}
+                  leagueSlug={slug}
+                  onBack={() => {
+                    setSelectedPlayerSlug(null);
+                    setActiveSection(previousSection);
+                  }}
+                />
+              </div>
+            )}
+
             {activeSection === 'leaders' && (
               <div className="space-y-4 md:space-y-6">
                 <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
@@ -4946,7 +4965,12 @@ export default function LeaguePage() {
                                     key={`${title}-${player.slug || player.name}-${idx}`}
                                     className="flex items-center justify-between py-2 px-2 rounded-md hover:bg-gray-100 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
                                     onClick={() => {
-                                      if (player.slug) navigate(`/player/${player.slug}`);
+                                      if (player.slug) {
+                                        setPreviousSection(activeSection);
+                                        setSelectedPlayerSlug(player.slug);
+                                        setActiveSection('player');
+                                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                                      }
                                     }}
                                   >
                                     <div className="flex items-center gap-2.5 min-w-0 flex-1">
@@ -5031,7 +5055,10 @@ export default function LeaguePage() {
                                   className={`flex justify-between ${p.slug ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700 rounded px-1 -mx-1 transition-colors' : ''}`}
                                   onClick={() => {
                                     if (p.slug) {
-                                      navigate(`/player/${p.slug}`);
+                                      setPreviousSection(activeSection);
+                                      setSelectedPlayerSlug(p.slug);
+                                      setActiveSection('player');
+                                      window.scrollTo({ top: 0, behavior: 'smooth' });
                                     }
                                   }}
                                 >
