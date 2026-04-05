@@ -544,6 +544,7 @@ export default function LeaguePage() {
   const [isLoadingStats, setIsLoadingStats] = useState(false);
   const [isLoadingStandings, setIsLoadingStandings] = useState(false);
   const [isLoadingLeaders, setIsLoadingLeaders] = useState(false);
+  const [isLoadingSchedule, setIsLoadingSchedule] = useState(false);
   const [teamStatsData, setTeamStatsData] = useState<any[]>([]);
   const [isLoadingTeamStats, setIsLoadingTeamStats] = useState(false);
   const [teamStatsCategory, setTeamStatsCategory] = useState<'Traditional' | 'Advanced' | 'Four Factors' | 'Scoring' | 'Misc'>('Traditional'); // Category dropdown
@@ -1581,6 +1582,7 @@ export default function LeaguePage() {
           };
           
           const fetchTopStats = async () => {
+            setIsLoadingSchedule(true);
             const { data: scorerRows } = await applyLeagueFilter(
               db.from("player_stats").select("firstname, familyname, spoints")
             ).order("spoints", { ascending: false }).limit(1);
@@ -1693,12 +1695,14 @@ export default function LeaguePage() {
             
             setIsLoadingLeaders(false);
             setIsLoadingStandings(false);
+            setIsLoadingSchedule(false);
           };
 
           fetchTopStats().catch(err => {
             console.error("Error in fetchTopStats:", err);
             setIsLoadingLeaders(false);
             setIsLoadingStandings(false);
+            setIsLoadingSchedule(false);
           });
         }
       };
@@ -2051,13 +2055,18 @@ export default function LeaguePage() {
     }, [league?.youtube_embed_url, getYoutubeEmbedUrl]);
 
     const fetchAllPlayerAverages = async () => {
+      console.log("📊 TRACE: fetchAllPlayerAverages called, league_id:", league?.league_id);
       debugLog("📊 fetchAllPlayerAverages called, league_id:", league?.league_id);
       if (!league?.league_id) {
+        console.log("📊 TRACE: No league_id, returning early");
         debugLog("📊 No league_id, returning early");
         return;
       }
 
-      if (playerAveragesCancelledRef.current) return;
+      if (playerAveragesCancelledRef.current) {
+        console.log("📊 TRACE: Cancelled, returning early");
+        return;
+      }
       setIsLoadingStats(true);
       try {
         // Helper to check cancellation
@@ -2087,21 +2096,41 @@ export default function LeaguePage() {
         
         let allPlayerStats: any[] = [];
         let page = 0;
-        const pageSize = 1000;
+        const pageSize = 500;
         let hasMore = true;
+        const maxRetries = 2;
         
         while (hasMore) {
-          let query = db.from("player_stats").select("*");
-          if (isParentFetch) {
-            query = query.in("league_id", parentChildIds);
-          } else {
-            query = query.eq("league_id", statsLeagueId);
-          }
-          const { data: pageData, error: pageError } = await query
-            .range(page * pageSize, (page + 1) * pageSize - 1);
+          let pageData: any[] | null = null;
+          let lastError: any = null;
           
-          if (pageError) {
-            console.error("Error fetching player stats page", page, ":", pageError);
+          for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            let query = db.from("player_stats").select("*");
+            if (isParentFetch) {
+              query = query.in("league_id", parentChildIds);
+            } else {
+              query = query.eq("league_id", statsLeagueId);
+            }
+            const { data, error } = await query
+              .order("player_id", { ascending: true, nullsFirst: false })
+              .range(page * pageSize, (page + 1) * pageSize - 1);
+            
+            if (error) {
+              lastError = error;
+              debugLog("📊 Step 1: Retry", attempt, "failed for page", page, ":", error.message);
+              if (attempt < maxRetries) {
+                await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+                continue;
+              }
+            } else {
+              pageData = data;
+              lastError = null;
+              break;
+            }
+          }
+          
+          if (lastError) {
+            console.error("Error fetching player stats page", page, "after retries:", lastError);
             break;
           }
           
@@ -2194,8 +2223,14 @@ export default function LeaguePage() {
           // Parse minutes to check if player actually played
           const minutesPlayed = parseMinutesPlayed(stat);
           
-          // Skip stats where player didn't play (0 minutes)
-          const didPlay = minutesPlayed > 0;
+          // Consider a player as having played if they have minutes > 0 OR any meaningful stat values
+          // This handles leagues where minutes data isn't stored (null/0 for all rows)
+          const hasAnyStats = (stat.spoints || 0) > 0 || (stat.sreboundstotal || 0) > 0 || 
+            (stat.sassists || 0) > 0 || (stat.ssteals || 0) > 0 || (stat.sblocks || 0) > 0 || 
+            (stat.sfieldgoalsattempted || 0) > 0 || (stat.sfreethrowsattempted || 0) > 0 ||
+            (stat.sthreepointersattempted || 0) > 0 || (stat.stwopointersattempted || 0) > 0 ||
+            (stat.sturnovers || 0) > 0 || (stat.sfoulspersonal || 0) > 0;
+          const didPlay = minutesPlayed > 0 || hasAnyStats;
           
           if (stat.player_id) {
             if (!byPlayerId.has(stat.player_id)) {
@@ -4522,7 +4557,25 @@ export default function LeaguePage() {
                   );
                 })()}
 
-                {schedule.length > 0 ? (
+                {isLoadingSchedule ? (
+                  <div className="space-y-3">
+                    {[...Array(5)].map((_, i) => (
+                      <div key={i} className="animate-pulse">
+                        <div className="flex items-center justify-between py-3">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-6 h-6 bg-gray-200 dark:bg-neutral-700 rounded-full"></div>
+                            <div className="h-4 bg-gray-200 dark:bg-neutral-700 rounded w-24"></div>
+                          </div>
+                          <div className="h-4 bg-gray-200 dark:bg-neutral-700 rounded w-8 mx-2"></div>
+                          <div className="flex items-center gap-2 flex-1 justify-end">
+                            <div className="h-4 bg-gray-200 dark:bg-neutral-700 rounded w-24"></div>
+                            <div className="w-6 h-6 bg-gray-200 dark:bg-neutral-700 rounded-full"></div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : schedule.length > 0 ? (
                   <>
                     {(() => {
                       const now = new Date();
@@ -4992,7 +5045,7 @@ export default function LeaguePage() {
                     <button
                       onClick={() => {
                         setActiveSection('leaders');
-                        if (allPlayerAverages.length === 0) {
+                        if (allPlayerAverages.length === 0 && !isLoadingStats) {
                           fetchAllPlayerAverages();
                         }
                       }}
