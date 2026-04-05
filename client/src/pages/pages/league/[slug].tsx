@@ -4076,7 +4076,6 @@ export default function LeaguePage() {
                                 setPreviousSection(activeSection);
                                 setSelectedPlayerSlug(player.slug);
                                 setActiveSection('player');
-                                window.scrollTo({ top: 0, behavior: 'smooth' });
                               }
                             }}
                             data-testid={`player-row-${player.id}`}
@@ -4394,7 +4393,6 @@ export default function LeaguePage() {
                               setPreviousSection(activeSection);
                               setSelectedTeamName(team.teamName);
                               setActiveSection('team');
-                              window.scrollTo({ top: 0, behavior: 'smooth' });
                             }}
                             data-testid={`row-team-${team.teamName}`}
                           >
@@ -4468,7 +4466,6 @@ export default function LeaguePage() {
                           setPreviousSection(activeSection);
                           setSelectedTeamName(teamData.team);
                           setActiveSection('team');
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
                         }}
                       >
                         <div className="flex items-center gap-2 md:gap-4">
@@ -4818,7 +4815,6 @@ export default function LeaguePage() {
                     setPreviousSection('team');
                     setSelectedPlayerSlug(playerSlug);
                     setActiveSection('player');
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
                 />
               </div>
@@ -4994,7 +4990,6 @@ export default function LeaguePage() {
                                         setPreviousSection(activeSection);
                                         setSelectedPlayerSlug(player.slug);
                                         setActiveSection('player');
-                                        window.scrollTo({ top: 0, behavior: 'smooth' });
                                       }
                                     }}
                                   >
@@ -5083,7 +5078,6 @@ export default function LeaguePage() {
                                       setPreviousSection(activeSection);
                                       setSelectedPlayerSlug(p.slug);
                                       setActiveSection('player');
-                                      window.scrollTo({ top: 0, behavior: 'smooth' });
                                     }
                                   }}
                                 >
