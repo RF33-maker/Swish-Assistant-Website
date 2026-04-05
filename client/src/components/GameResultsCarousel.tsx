@@ -488,9 +488,6 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
                       <span className="text-[10px] sm:text-xs font-semibold text-blue-400/80 uppercase tracking-wider">Scheduled</span>
                     )}
                     <span className="text-[10px] sm:text-xs text-white/40">{formatRelativeDate(game.game_date)}</span>
-                    {game.age_group && (
-                      <span className="text-[9px] sm:text-[10px] font-medium text-amber-400/80 bg-amber-400/10 px-1.5 py-0.5 rounded">{game.age_group}</span>
-                    )}
                   </div>
 
                   <div className="space-y-1.5">
