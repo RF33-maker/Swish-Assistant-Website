@@ -3186,13 +3186,21 @@ export default function LeaguePage() {
                 onClick={() => navigate("/")}
               />
               {currentUser && (
-                <button
-                  onClick={() => navigate("/coaches-hub")}
-                  className="md:hidden bg-orange-500 hover:bg-orange-600 text-white px-3 py-1.5 rounded-lg font-medium transition-colors text-sm group relative overflow-hidden"
-                >
-                  <span className="group-hover:opacity-0 transition-opacity duration-200">Coaches Hub</span>
-                  <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">Coming Soon</span>
-                </button>
+                <div className="flex items-center gap-2 md:hidden">
+                  <button
+                    onClick={() => navigate("/coaches-hub")}
+                    className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1.5 rounded-lg font-medium transition-colors text-sm group relative overflow-hidden"
+                  >
+                    <span className="group-hover:opacity-0 transition-opacity duration-200">Coaches Hub</span>
+                    <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">Coming Soon</span>
+                  </button>
+                  <button
+                    onClick={() => navigate("/league-management")}
+                    className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1.5 rounded-lg font-medium transition-colors text-sm"
+                  >
+                    League Admin
+                  </button>
+                </div>
               )}
             </div>
 
@@ -3234,13 +3242,21 @@ export default function LeaguePage() {
             <ThemeToggle />
 
             {currentUser && (
-              <button
-                onClick={() => navigate("/coaches-hub")}
-                className="hidden md:block bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm whitespace-nowrap group relative overflow-hidden"
-              >
-                <span className="group-hover:opacity-0 transition-opacity duration-200">Coaches Hub</span>
-                <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">Coming Soon</span>
-              </button>
+              <div className="hidden md:flex items-center gap-2">
+                <button
+                  onClick={() => navigate("/coaches-hub")}
+                  className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm whitespace-nowrap group relative overflow-hidden"
+                >
+                  <span className="group-hover:opacity-0 transition-opacity duration-200">Coaches Hub</span>
+                  <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">Coming Soon</span>
+                </button>
+                <button
+                  onClick={() => navigate("/league-management")}
+                  className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm whitespace-nowrap"
+                >
+                  League Admin
+                </button>
+              </div>
             )}
           </div>
         </header>
