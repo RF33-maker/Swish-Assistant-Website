@@ -3,12 +3,12 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Calendar, Trophy, User, TrendingUp, Camera, Upload, Loader2, Move, Check, X, Filter } from "lucide-react";
-import { Slider } from "@/components/ui/slider";
+import { ArrowLeft, Calendar, Trophy, TrendingUp, Filter } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { generatePlayerAnalysis, type PlayerAnalysisData } from "@/lib/ai-analysis";
 import { TeamLogo } from "@/components/TeamLogo";
+import { PlayerBanner } from "@/components/PlayerBanner";
 import { namesMatch, getMostCompleteName, slugToName, type PlayerMatch } from "@/lib/fuzzyMatch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import ShotChart, { type ShotData } from "@/components/ShotChart";
@@ -110,7 +110,7 @@ export function InlinePlayerProfile({ playerSlug, brandColor, onBack, leagueSlug
   const [playerStats, setPlayerStats] = useState<PlayerStat[]>([]);
   const [seasonAverages, setSeasonAverages] = useState<SeasonAverages | null>(null);
   const [playerRankings, setPlayerRankings] = useState<PlayerRankings | null>(null);
-  const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string; position?: string; number?: number; leagueId?: string; playerId?: string; photoPath?: string | null; photoFocusY?: number | null; previousTeams?: string[] } | null>(null);
+  const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string; position?: string; number?: number; leagueId?: string; playerId?: string; photoPath?: string | null; photoFocusY?: number | null; previousTeams?: string[]; height?: string | null; dateOfBirth?: string | null } | null>(null);
   const [playerMatches, setPlayerMatches] = useState<PlayerMatch[]>([]);
   const [nameVariations, setNameVariations] = useState<string[]>([]);
   const [selectedLeagueFilter, setSelectedLeagueFilter] = useState<string>("all");
@@ -341,7 +341,8 @@ export function InlinePlayerProfile({ playerSlug, brandColor, onBack, leagueSlug
           name: canonicalName, team: initialPlayer.team,
           position: initialPlayer.position, number: initialPlayer.number,
           leagueId: initialPlayer.league_id, playerId: initialPlayer.id,
-          photoPath: initialPlayer.photo_path, photoFocusY: initialPlayer.photo_focus_y
+          photoPath: initialPlayer.photo_path, photoFocusY: initialPlayer.photo_focus_y,
+          height: initialPlayer.height || null, dateOfBirth: initialPlayer.date_of_birth || null,
         };
 
         const playerIds = matches.map(m => m.id);
@@ -420,7 +421,8 @@ export function InlinePlayerProfile({ playerSlug, brandColor, onBack, leagueSlug
             team: currentTeam, position: mostRecentStat.position, number: mostRecentStat.number,
             leagueId: mostRecentStat.league_id, playerId: pInfo.playerId,
             photoPath: pInfo.photoPath, photoFocusY: pInfo.photoFocusY,
-            previousTeams: previousTeams.length > 0 ? previousTeams : undefined
+            previousTeams: previousTeams.length > 0 ? previousTeams : undefined,
+            height: pInfo.height, dateOfBirth: pInfo.dateOfBirth,
           };
         }
 
@@ -746,98 +748,20 @@ export function InlinePlayerProfile({ playerSlug, brandColor, onBack, leagueSlug
       </button>
 
       {playerInfo && (
-        <div className="relative rounded-xl overflow-hidden shadow-lg" style={{ borderColor: brandColor + '40' }}>
-          <div className="relative min-h-[200px] md:min-h-[260px]" style={{ background: `linear-gradient(135deg, ${brandColor}22 0%, ${brandColor}44 100%)` }}>
-            {playerInfo.playerId && playerPhotoUrl ? (
-              <>
-                <img
-                  src={playerPhotoUrl}
-                  alt={playerInfo.name}
-                  className="absolute right-0 bottom-0 h-full w-1/2 md:w-2/5 object-cover object-top"
-                  style={{ objectPosition: `50% ${showFocusAdjuster ? tempFocusY : (playerInfo.photoFocusY ?? 30)}%` }}
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                />
-                <div className="absolute right-0 bottom-0 h-full w-1/2 md:w-2/5 bg-gradient-to-r from-white/90 dark:from-neutral-900/90 via-transparent to-transparent" />
-                <div className="absolute right-0 bottom-0 h-full w-1/2 md:w-2/5 bg-gradient-to-t from-white/60 dark:from-neutral-900/60 via-transparent to-transparent" />
-              </>
-            ) : (
-              <div className="absolute right-4 bottom-4 opacity-10">
-                <User className="w-32 h-32" style={{ color: brandColor }} />
-              </div>
-            )}
-
-            <div className="relative z-10 p-5 md:p-8 max-w-[65%] md:max-w-[60%]">
-              <div className="flex items-center gap-3 mb-3">
-                {playerInfo.team && playerInfo.leagueId && (
-                  <TeamLogo teamName={playerInfo.team} leagueId={playerInfo.leagueId} size="lg" className="flex-shrink-0" />
-                )}
-                <div>
-                  <h1 className="text-xl md:text-3xl lg:text-4xl font-black text-slate-900 dark:text-white leading-tight">
-                    {playerInfo.name}
-                  </h1>
-                  <p className="text-sm md:text-base font-medium mt-0.5" style={{ color: brandColor }}>
-                    {playerInfo.team}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2 mt-3">
-                {playerInfo.position && (
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-white/80 dark:bg-neutral-800/80 text-slate-700 dark:text-slate-300 backdrop-blur-sm">
-                    {playerInfo.position}
-                  </span>
-                )}
-                {playerInfo.number && (
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-white/80 dark:bg-neutral-800/80 text-slate-700 dark:text-slate-300 backdrop-blur-sm">
-                    #{playerInfo.number}
-                  </span>
-                )}
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100/80 dark:bg-green-900/30 text-green-700 dark:text-green-400 backdrop-blur-sm">
-                  <div className="h-1.5 w-1.5 bg-green-500 rounded-full animate-pulse"></div>
-                  Active
-                </span>
-              </div>
-
-              {playerInfo.previousTeams && playerInfo.previousTeams.length > 0 && (
-                <p className="text-slate-500 dark:text-slate-400 text-xs mt-2 italic">
-                  Previously: {playerInfo.previousTeams.join(', ')}
-                </p>
-              )}
-            </div>
-
-            {showFocusAdjuster && playerInfo.photoPath && (
-              <div className="absolute bottom-4 right-4 left-4 md:left-auto md:w-72 z-20 bg-white/95 dark:bg-neutral-800/95 rounded-lg p-3 shadow-lg">
-                <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Adjust vertical focus</div>
-                <Slider value={[tempFocusY]} onValueChange={(value) => setTempFocusY(value[0])} min={0} max={100} step={1} className="mb-3" />
-                <div className="flex gap-2">
-                  <Button onClick={handleSaveFocus} disabled={savingFocus} size="sm" className="flex-1 bg-green-600 hover:bg-green-700">
-                    {savingFocus ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Check className="w-4 h-4 mr-1" />} Save
-                  </Button>
-                  <Button onClick={() => setShowFocusAdjuster(false)} variant="outline" size="sm" className="flex-1">
-                    <X className="w-4 h-4 mr-1" /> Cancel
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {user && playerInfo.playerId && !showFocusAdjuster && (
-              <>
-                <input ref={fileInputRef} type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
-                <div className="absolute bottom-3 right-3 z-10 flex gap-2">
-                  {playerInfo.photoPath && (
-                    <Button onClick={() => { setTempFocusY(playerInfo.photoFocusY ?? 50); setShowFocusAdjuster(true); }} size="sm" variant="outline" className="bg-white/90 dark:bg-neutral-800/90 shadow-lg h-7 text-xs">
-                      <Move className="w-3 h-3 mr-1" /> Adjust
-                    </Button>
-                  )}
-                  <Button onClick={() => fileInputRef.current?.click()} disabled={photoUploading} size="sm" className="text-white shadow-lg h-7 text-xs" style={{ backgroundColor: brandColor }}>
-                    {photoUploading ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Upload className="w-3 h-3 mr-1" />}
-                    {photoUploading ? 'Uploading...' : playerInfo.photoPath ? 'Change' : 'Add Photo'}
-                  </Button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
+        <PlayerBanner
+          playerInfo={playerInfo}
+          playerPhotoUrl={playerPhotoUrl}
+          showFocusAdjuster={showFocusAdjuster}
+          setShowFocusAdjuster={setShowFocusAdjuster}
+          tempFocusY={tempFocusY}
+          setTempFocusY={setTempFocusY}
+          handleSaveFocus={handleSaveFocus}
+          savingFocus={savingFocus}
+          handlePhotoUpload={handlePhotoUpload}
+          photoUploading={photoUploading}
+          fileInputRef={fileInputRef}
+          isAuthenticated={!!user}
+        />
       )}
 
       {filteredSeasonAverages && (
