@@ -428,12 +428,12 @@ export default function PlayerStatsPage() {
         
         const matches: PlayerMatch[] = matchingPlayers.map(p => ({
           id: p.id,
-          name: p.name,
+          name: p.name || p.full_name,
           full_name: p.full_name,
-          team: p.team,
+          team: p.team_name || p.team,
           league_id: p.league_id,
           position: p.position,
-          number: p.number,
+          number: p.shirtNumber ?? p.number,
           slug: p.slug,
           matchScore: 1.0
         }));
@@ -450,9 +450,9 @@ export default function PlayerStatsPage() {
         // Set player info from initial player
         let playerInfo = {
           name: canonicalName,
-          team: initialPlayer.team,
+          team: initialPlayer.team_name || initialPlayer.team,
           position: initialPlayer.position,
-          number: initialPlayer.number,
+          number: initialPlayer.shirtNumber ?? initialPlayer.number,
           leagueId: initialPlayer.league_id,
           playerId: initialPlayer.id,
           photoPath: initialPlayer.photo_path_bg_removed,
@@ -623,8 +623,8 @@ export default function PlayerStatsPage() {
           playerInfo = {
             name: mostRecentStat.players?.full_name || mostRecentStat.full_name || mostRecentStat.name || `${mostRecentStat.firstname || ''} ${mostRecentStat.familyname || ''}`.trim() || 'Unknown Player',
             team: currentTeam,
-            position: mostRecentStat.position,
-            number: mostRecentStat.number,
+            position: playerInfo.position || mostRecentStat.playingposition || mostRecentStat.position,
+            number: playerInfo.number ?? mostRecentStat.shirtnumber ?? mostRecentStat.number,
             leagueId: mostRecentStat.league_id,
             playerId: playerInfo.playerId,
             photoPath: playerInfo.photoPath,
@@ -673,8 +673,8 @@ export default function PlayerStatsPage() {
             setPlayerInfo({
               name: fallbackName,
               team: fallbackTeam,
-              position: gamesPlayed[0].position,
-              number: gamesPlayed[0].number,
+              position: playerInfo.position || gamesPlayed[0].playingposition || gamesPlayed[0].position,
+              number: playerInfo.number ?? gamesPlayed[0].shirtnumber ?? gamesPlayed[0].number,
               leagueId: gamesPlayed[0].league_id,
               playerId: playerInfo.playerId,
               photoPath: playerInfo.photoPath,
