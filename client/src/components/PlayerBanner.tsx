@@ -1,4 +1,4 @@
-import { User, Upload, Loader2, Move, Check, X, ArrowLeft } from "lucide-react";
+import { User, Upload, Loader2, Move, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { TeamLogo } from "@/components/TeamLogo";
@@ -32,7 +32,6 @@ interface PlayerBannerProps {
   fileInputRef: React.RefObject<HTMLInputElement>;
   isAuthenticated: boolean;
   brandColorOverride?: string;
-  onBack?: () => void;
   className?: string;
 }
 
@@ -77,7 +76,6 @@ export function PlayerBanner({
   fileInputRef,
   isAuthenticated,
   brandColorOverride,
-  onBack,
   className,
 }: PlayerBannerProps) {
   const { primaryColor, colors } = useTeamBranding({
@@ -109,22 +107,8 @@ export function PlayerBanner({
       />
 
       <div className="relative min-h-[200px] md:min-h-[300px]">
-        {onBack && (
-          <button
-            onClick={onBack}
-            className="absolute top-3 left-3 md:top-5 md:left-5 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all hover:scale-105 backdrop-blur-sm"
-            style={{
-              color: textColor,
-              backgroundColor: textColor === '#ffffff' ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.3)',
-            }}
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Back
-          </button>
-        )}
-
         {playerInfo.team && playerInfo.leagueId && (
-          <div className={`absolute ${onBack ? 'top-12 left-3 md:top-16 md:left-5' : 'top-3 left-3 md:top-6 md:left-6'} z-10`}>
+          <div className="absolute top-3 left-3 md:top-6 md:left-6 z-10">
             <TeamLogo
               teamName={playerInfo.team}
               leagueId={playerInfo.leagueId}

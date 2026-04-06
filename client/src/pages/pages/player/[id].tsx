@@ -1137,7 +1137,6 @@ export default function PlayerStatsPage() {
             photoUploading={photoUploading}
             fileInputRef={fileInputRef}
             isAuthenticated={!!user}
-            onBack={() => setLocation('/')}
           />
         )}
 

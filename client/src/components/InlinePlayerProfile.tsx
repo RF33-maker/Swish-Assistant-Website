@@ -753,7 +753,6 @@ export function InlinePlayerProfile({ playerSlug, brandColor, onBack, leagueSlug
             photoUploading={photoUploading}
             fileInputRef={fileInputRef}
             isAuthenticated={!!user}
-            onBack={onBack}
           />
         </div>
       )}

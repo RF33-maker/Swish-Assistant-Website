@@ -3369,7 +3369,7 @@ export default function LeaguePage() {
         )}
 
         {/* Navigation Tabs - Moved below carousel */}
-        <div className="bg-white dark:bg-neutral-900 border-b border-gray-200 dark:border-neutral-800">
+        <div className={`bg-white dark:bg-neutral-900 border-b border-gray-200 dark:border-neutral-800 ${(activeSection === 'player' && selectedPlayerSlug) || (activeSection === 'team' && selectedTeamName) ? 'hidden' : ''}`}>
           <div className="max-w-7xl mx-auto px-4 md:px-6">
             <div className="flex flex-col gap-3 py-3 md:py-4">
               {/* Navigation Links */}
