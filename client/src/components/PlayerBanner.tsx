@@ -91,8 +91,8 @@ export function PlayerBanner({
   const age = playerInfo.dateOfBirth ? calculateAge(playerInfo.dateOfBirth) : null;
 
   const statItems: { label: string; value: string }[] = [];
-  if (playerInfo.height) statItems.push({ label: "Height", value: playerInfo.height });
   if (age !== null) statItems.push({ label: "Age", value: String(age) });
+  if (playerInfo.height) statItems.push({ label: "Height", value: playerInfo.height });
   if (playerInfo.position) statItems.push({ label: "Position", value: playerInfo.position });
   if (playerInfo.number !== undefined && playerInfo.number !== null) statItems.push({ label: "Number", value: `#${playerInfo.number}` });
 
