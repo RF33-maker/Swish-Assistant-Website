@@ -122,7 +122,7 @@ export function PlayerBanner({
           <img
             src={playerPhotoUrl}
             alt={playerInfo.name}
-            className="absolute right-0 bottom-0 h-[85%] w-auto max-w-[40%] md:max-w-[35%] object-contain object-bottom z-[5]"
+            className="absolute right-0 bottom-0 h-full w-auto max-w-[50%] md:max-w-[45%] object-contain object-bottom z-[5]"
             style={{
               objectPosition: `center ${showFocusAdjuster ? tempFocusY : (playerInfo.photoFocusY ?? 100)}%`,
             }}
