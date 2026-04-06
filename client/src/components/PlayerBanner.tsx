@@ -106,9 +106,9 @@ export function PlayerBanner({
         style={{ mixBlendMode: "multiply" }}
       />
 
-      <div className="relative min-h-[200px] md:min-h-[300px]">
+      <div className="relative min-h-[220px] md:min-h-[320px]">
         {playerInfo.team && playerInfo.leagueId && (
-          <div className="absolute top-3 left-3 md:top-6 md:left-6 z-10">
+          <div className="absolute top-3 left-3 md:top-5 md:left-6 z-10">
             <TeamLogo
               teamName={playerInfo.team}
               leagueId={playerInfo.leagueId}
@@ -122,8 +122,10 @@ export function PlayerBanner({
           <img
             src={playerPhotoUrl}
             alt={playerInfo.name}
-            className="absolute right-0 bottom-0 h-full w-auto max-w-[50%] md:max-w-[45%] object-contain object-bottom z-[5]"
+            className="absolute right-[5%] md:right-[10%] bottom-0 w-auto object-contain object-bottom z-[5]"
             style={{
+              height: '115%',
+              maxWidth: '55%',
               objectPosition: `center ${showFocusAdjuster ? tempFocusY : (playerInfo.photoFocusY ?? 100)}%`,
             }}
             onError={(e) => {
@@ -136,39 +138,27 @@ export function PlayerBanner({
           </div>
         )}
 
-        <div className="relative z-10 px-4 pt-16 pb-6 md:px-8 md:pt-28 md:pb-12">
-          <div className="flex flex-col md:flex-row md:items-end md:gap-12">
-            <div className="flex flex-col gap-0.5 max-w-[55%] md:max-w-[45%]">
-              <div className="mb-1 md:mb-0 md:order-2">
-                {firstName && (
-                  <div
-                    className="text-xl md:text-4xl lg:text-5xl font-medium leading-tight"
-                    style={{ color: textColor }}
-                  >
-                    {firstName}
-                  </div>
-                )}
-                <div
-                  className="text-2xl md:text-5xl lg:text-6xl font-black leading-tight uppercase tracking-tight"
-                  style={{ color: textColor }}
-                  data-testid="text-player-name"
-                >
-                  {lastName}
-                </div>
-              </div>
-
+        <div className="relative z-10 px-4 pt-20 pb-6 md:px-8 md:pt-24 md:pb-10">
+          <div className="flex items-end justify-between">
+            <div className="flex flex-col gap-1 max-w-[45%] md:max-w-[40%]">
               {statItems.length > 0 && (
-                <div className="flex flex-wrap gap-x-3 gap-y-0 mt-1 md:mt-2">
+                <div className="flex flex-col gap-0.5">
                   {statItems.map((item) => (
-                    <div key={item.label} className="flex items-center gap-1">
+                    <div key={item.label} className="flex items-center gap-2">
                       <span
-                        className="text-[10px] md:text-sm font-semibold uppercase tracking-wider opacity-70"
+                        className="text-sm md:text-xl font-black tracking-wide"
                         style={{ color: textColor }}
                       >
                         {item.label}
                       </span>
                       <span
-                        className="text-xs md:text-sm font-bold"
+                        className="text-sm md:text-xl font-black"
+                        style={{ color: textColor }}
+                      >
+                        –
+                      </span>
+                      <span
+                        className="text-sm md:text-xl font-black"
                         style={{ color: textColor }}
                       >
                         {item.value}
@@ -186,6 +176,24 @@ export function PlayerBanner({
                   Previously: {playerInfo.previousTeams.join(", ")}
                 </p>
               )}
+            </div>
+
+            <div className="text-center md:text-center flex-1 z-10 pointer-events-none">
+              {firstName && (
+                <div
+                  className="text-2xl md:text-5xl lg:text-6xl font-medium leading-tight"
+                  style={{ color: textColor }}
+                >
+                  {firstName}
+                </div>
+              )}
+              <div
+                className="text-3xl md:text-6xl lg:text-7xl font-black leading-none uppercase tracking-tight"
+                style={{ color: textColor }}
+                data-testid="text-player-name"
+              >
+                {lastName}
+              </div>
             </div>
           </div>
         </div>
