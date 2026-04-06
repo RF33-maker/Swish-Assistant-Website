@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, smallint, boolean, timestamp, varchar, jsonb, uuid } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, smallint, boolean, timestamp, varchar, jsonb, uuid, date } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -62,6 +62,10 @@ export const players = pgTable("players", {
   position: varchar("position", { length: 10 }),
   number: integer("number"),
   league_id: varchar("league_id", { length: 255 }).notNull(),
+  height: varchar("height", { length: 20 }),
+  height_cm: integer("height_cm"),
+  date_of_birth: date("date_of_birth"),
+  photo_path_bg_removed: varchar("photo_path_bg_removed", { length: 500 }),
   is_active: boolean("is_active").default(true),
   created_at: timestamp("created_at").defaultNow(),
   updated_at: timestamp("updated_at").defaultNow(),
@@ -202,6 +206,8 @@ export const insertPlayersSchema = createInsertSchema(players).pick({
   position: true,
   number: true,
   league_id: true,
+  height: true,
+  date_of_birth: true,
   is_active: true,
 });
 

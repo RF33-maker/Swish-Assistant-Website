@@ -4,17 +4,15 @@ import { useRoute, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Calendar, Trophy, User, TrendingUp, Camera, Brain, Sparkles, Filter, Upload, Loader2, Move, Check, X } from "lucide-react";
-import { Slider } from "@/components/ui/slider";
+import { Calendar, Trophy, TrendingUp, Brain, Sparkles, Filter } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { generatePlayerAnalysis, type PlayerAnalysisData } from "@/lib/ai-analysis";
-import SwishLogoImg from "@/assets/Swish Assistant Logo.png";
 import { TeamLogo } from "@/components/TeamLogo";
+import { PlayerBanner } from "@/components/PlayerBanner";
 import { Helmet } from "react-helmet-async";
 import { namesMatch, getMostCompleteName, slugToName, type PlayerMatch } from "@/lib/fuzzyMatch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import ShotChart, { type ShotData } from "@/components/ShotChart";
 
 interface PlayerStat {
@@ -111,7 +109,7 @@ export default function PlayerStatsPage() {
   const [playerStats, setPlayerStats] = useState<PlayerStat[]>([]);
   const [seasonAverages, setSeasonAverages] = useState<SeasonAverages | null>(null);
   const [playerRankings, setPlayerRankings] = useState<PlayerRankings | null>(null);
-  const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string; position?: string; number?: number; leagueId?: string; playerId?: string; photoPath?: string | null; photoFocusY?: number | null; previousTeams?: string[] } | null>(null);
+  const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string; position?: string; number?: number; leagueId?: string; playerId?: string; photoPath?: string | null; photoFocusY?: number | null; previousTeams?: string[]; height?: string | null; heightCm?: number | null; dateOfBirth?: string | null } | null>(null);
   const [playerLeagues, setPlayerLeagues] = useState<{ id: string; name: string; slug: string }[]>([]);
   const [playerMatches, setPlayerMatches] = useState<PlayerMatch[]>([]);
   const [nameVariations, setNameVariations] = useState<string[]>([]);
@@ -149,7 +147,7 @@ export default function PlayerStatsPage() {
 
       const { error: updateError } = await supabase
         .from('players')
-        .update({ photo_path: filePath })
+        .update({ photo_path_bg_removed: filePath })
         .eq('id', playerInfo.playerId);
 
       if (updateError) {
@@ -430,12 +428,12 @@ export default function PlayerStatsPage() {
         
         const matches: PlayerMatch[] = matchingPlayers.map(p => ({
           id: p.id,
-          name: p.name,
+          name: p.name || p.full_name,
           full_name: p.full_name,
-          team: p.team,
+          team: p.team_name || p.team,
           league_id: p.league_id,
           position: p.position,
-          number: p.number,
+          number: p.shirtNumber ?? p.number,
           slug: p.slug,
           matchScore: 1.0
         }));
@@ -452,13 +450,16 @@ export default function PlayerStatsPage() {
         // Set player info from initial player
         let playerInfo = {
           name: canonicalName,
-          team: initialPlayer.team,
+          team: initialPlayer.team_name || initialPlayer.team,
           position: initialPlayer.position,
-          number: initialPlayer.number,
+          number: initialPlayer.shirtNumber ?? initialPlayer.number,
           leagueId: initialPlayer.league_id,
           playerId: initialPlayer.id,
-          photoPath: initialPlayer.photo_path,
-          photoFocusY: initialPlayer.photo_focus_y
+          photoPath: initialPlayer.photo_path_bg_removed,
+          photoFocusY: initialPlayer.photo_focus_y,
+          height: initialPlayer.height || null,
+          heightCm: initialPlayer.height_cm || null,
+          dateOfBirth: initialPlayer.date_of_birth || null,
         };
 
         // Step 3: Get ALL stats for ALL matching player IDs
@@ -622,13 +623,15 @@ export default function PlayerStatsPage() {
           playerInfo = {
             name: mostRecentStat.players?.full_name || mostRecentStat.full_name || mostRecentStat.name || `${mostRecentStat.firstname || ''} ${mostRecentStat.familyname || ''}`.trim() || 'Unknown Player',
             team: currentTeam,
-            position: mostRecentStat.position,
-            number: mostRecentStat.number,
+            position: playerInfo.position || mostRecentStat.playingposition || mostRecentStat.position,
+            number: playerInfo.number ?? mostRecentStat.shirtnumber ?? mostRecentStat.number,
             leagueId: mostRecentStat.league_id,
             playerId: playerInfo.playerId,
             photoPath: playerInfo.photoPath,
             photoFocusY: playerInfo.photoFocusY,
-            previousTeams: previousTeams.length > 0 ? previousTeams : undefined
+            previousTeams: previousTeams.length > 0 ? previousTeams : undefined,
+            height: playerInfo.height, heightCm: playerInfo.heightCm,
+            dateOfBirth: playerInfo.dateOfBirth,
           };
         }
         
@@ -670,13 +673,15 @@ export default function PlayerStatsPage() {
             setPlayerInfo({
               name: fallbackName,
               team: fallbackTeam,
-              position: gamesPlayed[0].position,
-              number: gamesPlayed[0].number,
+              position: playerInfo.position || gamesPlayed[0].playingposition || gamesPlayed[0].position,
+              number: playerInfo.number ?? gamesPlayed[0].shirtnumber ?? gamesPlayed[0].number,
               leagueId: gamesPlayed[0].league_id,
               playerId: playerInfo.playerId,
               photoPath: playerInfo.photoPath,
               photoFocusY: playerInfo.photoFocusY,
-              previousTeams: previousTeamsFallback.length > 0 ? previousTeamsFallback : undefined
+              previousTeams: previousTeamsFallback.length > 0 ? previousTeamsFallback : undefined,
+              height: playerInfo.height, heightCm: playerInfo.heightCm,
+              dateOfBirth: playerInfo.dateOfBirth,
             });
           }
 
@@ -1119,160 +1124,24 @@ export default function PlayerStatsPage() {
       </Helmet>
       
       <div className="min-h-screen bg-gray-50 dark:bg-neutral-950">
-        <div className="container mx-auto px-4 py-6 max-w-4xl space-y-4 md:space-y-5">
-        <div className="flex flex-col md:flex-row items-start md:items-center gap-3 md:gap-4">
-          <div className="w-full md:w-auto flex items-center gap-2">
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => setLocation('/')}
-              className="group flex items-center gap-2 border-gray-200 dark:border-neutral-700 hover:bg-white dark:hover:bg-neutral-800 transition-all w-full md:w-auto dark:bg-neutral-900"
-            >
-              <ArrowLeft className="h-4 w-4 group-hover:hidden dark:text-orange-400" />
-              <div className="hidden group-hover:block">
-                <img src={SwishLogoImg} alt="Swish Assistant" className="h-4 w-4 object-contain" />
-              </div>
-              <span className="text-slate-700 dark:text-orange-400">Back to Dashboard</span>
-            </Button>
-            <ThemeToggle />
-          </div>
-          
-          <div className="flex-1 w-full md:max-w-md lg:max-w-lg relative">
-            <form
-              onSubmit={handleSearchSubmit}
-              className="flex items-center rounded-full border border-gray-200 dark:border-neutral-700 overflow-hidden bg-white dark:bg-neutral-900 shadow-sm"
-            >
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Find your league"
-                className="flex-1 px-4 py-2 text-sm text-slate-800 dark:text-white focus:outline-none bg-white dark:bg-neutral-900 dark:placeholder-slate-400"
-              />
-              <button type="submit" className="bg-orange-500 text-white font-semibold px-4 py-2 hover:bg-orange-600 transition text-sm">
-                Search
-              </button>
-            </form>
-
-            {searchSuggestions.length > 0 && (
-              <ul className="absolute z-50 w-full bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 mt-1 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                {searchSuggestions.map((item, index) => (
-                  <li
-                    key={index}
-                    onClick={() => handleSearchSelect(item)}
-                    className="px-4 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-700 text-left border-b border-gray-100 dark:border-neutral-700 last:border-b-0"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="h-8 w-8 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
-                        <span className="text-sm">{item.type === 'league' ? '🏆' : '👤'}</span>
-                      </div>
-                      <div className="flex-1">
-                        <div className="font-medium text-slate-900 dark:text-white text-sm">{item.name}</div>
-                        <div className="text-xs text-slate-500 dark:text-slate-400">{item.type === 'player' ? item.team : 'League'}</div>
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
-
         {playerInfo && (
-          <div className="relative rounded-xl overflow-hidden shadow-lg bg-gradient-to-br from-orange-50 to-orange-100/50 dark:from-neutral-900 dark:to-neutral-800">
-            <div className="relative min-h-[220px] md:min-h-[280px]">
-              {playerInfo.playerId && playerPhotoUrl ? (
-                <>
-                  <img
-                    src={playerPhotoUrl}
-                    alt={playerInfo.name}
-                    className="absolute right-0 bottom-0 h-full w-1/2 md:w-2/5 object-cover object-top"
-                    style={{ objectPosition: `50% ${showFocusAdjuster ? tempFocusY : (playerInfo.photoFocusY ?? 30)}%` }}
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                  />
-                  <div className="absolute right-0 bottom-0 h-full w-1/2 md:w-2/5 bg-gradient-to-r from-orange-50/95 dark:from-neutral-900/95 via-transparent to-transparent" />
-                  <div className="absolute right-0 bottom-0 h-full w-1/2 md:w-2/5 bg-gradient-to-t from-orange-50/60 dark:from-neutral-900/60 via-transparent to-transparent" />
-                </>
-              ) : (
-                <div className="absolute right-4 bottom-4 opacity-10">
-                  <User className="w-32 h-32 text-orange-300 dark:text-neutral-600" />
-                </div>
-              )}
-
-              <div className="relative z-10 p-6 md:p-8 max-w-[65%] md:max-w-[60%]">
-                <div className="flex items-center gap-3 mb-3">
-                  {playerInfo.team && playerInfo.leagueId && (
-                    <TeamLogo teamName={playerInfo.team} leagueId={playerInfo.leagueId} size="lg" className="flex-shrink-0" />
-                  )}
-                  <div>
-                    <h1 className="text-xl md:text-3xl lg:text-4xl font-black text-slate-900 dark:text-white leading-tight" data-testid="text-player-name">
-                      {playerInfo.name}
-                    </h1>
-                    <p className="text-sm md:text-base font-medium text-orange-600 dark:text-orange-400 mt-0.5" data-testid="text-player-team">
-                      {playerInfo.team}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2 mt-3">
-                  {playerInfo.position && (
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-white/80 dark:bg-neutral-800/80 text-slate-700 dark:text-slate-300 backdrop-blur-sm">
-                      {playerInfo.position}
-                    </span>
-                  )}
-                  {playerInfo.number && (
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-white/80 dark:bg-neutral-800/80 text-slate-700 dark:text-slate-300 backdrop-blur-sm">
-                      #{playerInfo.number}
-                    </span>
-                  )}
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100/80 dark:bg-green-900/30 text-green-700 dark:text-green-400 backdrop-blur-sm">
-                    <div className="h-1.5 w-1.5 bg-green-500 rounded-full animate-pulse"></div>
-                    Active
-                  </span>
-                </div>
-
-                {playerInfo.previousTeams && playerInfo.previousTeams.length > 0 && (
-                  <p className="text-slate-500 dark:text-slate-400 text-xs mt-2 italic">
-                    Previously: {playerInfo.previousTeams.join(', ')}
-                  </p>
-                )}
-              </div>
-
-              {showFocusAdjuster && playerInfo.photoPath && (
-                <div className="absolute bottom-4 right-4 left-4 md:left-auto md:w-72 z-20 bg-white/95 dark:bg-neutral-800/95 rounded-lg p-3 shadow-lg">
-                  <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Adjust vertical focus</div>
-                  <Slider value={[tempFocusY]} onValueChange={(value) => setTempFocusY(value[0])} min={0} max={100} step={1} className="mb-3" data-testid="slider-photo-focus" />
-                  <div className="flex gap-2">
-                    <Button onClick={handleSaveFocus} disabled={savingFocus} size="sm" className="flex-1 bg-green-600 hover:bg-green-700" data-testid="button-save-focus">
-                      {savingFocus ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Check className="w-4 h-4 mr-1" />} Save
-                    </Button>
-                    <Button onClick={() => setShowFocusAdjuster(false)} variant="outline" size="sm" className="flex-1" data-testid="button-cancel-focus">
-                      <X className="w-4 h-4 mr-1" /> Cancel
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {user && playerInfo.playerId && !showFocusAdjuster && (
-                <>
-                  <input ref={fileInputRef} type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" data-testid="input-player-photo" />
-                  <div className="absolute bottom-3 right-3 z-10 flex gap-2">
-                    {playerInfo.photoPath && (
-                      <Button onClick={() => { setTempFocusY(playerInfo.photoFocusY ?? 50); setShowFocusAdjuster(true); }} size="sm" variant="outline" className="bg-white/90 dark:bg-neutral-800/90 shadow-lg h-7 text-xs" data-testid="button-adjust-photo-focus">
-                        <Move className="w-3 h-3 mr-1" /> Adjust
-                      </Button>
-                    )}
-                    <Button onClick={() => fileInputRef.current?.click()} disabled={photoUploading} size="sm" className="bg-orange-600 hover:bg-orange-700 text-white shadow-lg h-7 text-xs" data-testid="button-upload-player-photo">
-                      {photoUploading ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Upload className="w-3 h-3 mr-1" />}
-                      {photoUploading ? 'Uploading...' : playerInfo.photoPath ? 'Change' : 'Add Photo'}
-                    </Button>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
+          <PlayerBanner
+            playerInfo={playerInfo}
+            playerPhotoUrl={playerPhotoUrl}
+            showFocusAdjuster={showFocusAdjuster}
+            setShowFocusAdjuster={setShowFocusAdjuster}
+            tempFocusY={tempFocusY}
+            setTempFocusY={setTempFocusY}
+            handleSaveFocus={handleSaveFocus}
+            savingFocus={savingFocus}
+            handlePhotoUpload={handlePhotoUpload}
+            photoUploading={photoUploading}
+            fileInputRef={fileInputRef}
+            isAuthenticated={!!user}
+          />
         )}
 
+        <div className="container mx-auto px-4 py-4 max-w-4xl space-y-4 md:space-y-5">
         {filteredSeasonAverages && (
           <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
             <div className="flex items-center justify-between mb-3">

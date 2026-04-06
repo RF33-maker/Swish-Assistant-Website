@@ -6,6 +6,7 @@ import { TeamLogo } from "@/components/TeamLogo";
 import { GameSwitcherBar } from "@/components/GameSwitcherBar";
 import { isGameSlug, parseGameSlug } from "@/lib/gameSlug";
 import { ArrowLeft, Clock, MapPin, Calendar, Users, TrendingUp } from "lucide-react";
+import { useLeagueBranding } from "@/hooks/useLeagueBranding";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import LeagueChatbot from "@/components/LeagueChatbot";
@@ -308,7 +309,7 @@ export default function GamePage() {
       if (!gameData?.league_id) return null;
       const { data, error } = await db
         .from('leagues')
-        .select('slug')
+        .select('slug, banner_url, logo_url, primary_color, secondary_color, accent_color')
         .eq('league_id', gameData.league_id)
         .single();
       
@@ -317,6 +318,21 @@ export default function GamePage() {
     },
     enabled: !!gameData?.league_id
   });
+
+  const { colors: leagueBrandColors } = useLeagueBranding({
+    slug: leagueData?.slug,
+    bannerUrl: leagueData?.banner_url,
+    logoUrl: leagueData?.logo_url,
+    manualPrimaryColor: leagueData?.primary_color,
+    manualSecondaryColor: leagueData?.secondary_color,
+    manualAccentColor: leagueData?.accent_color,
+    enabled: !!leagueData,
+  });
+
+  const brandColor = leagueBrandColors?.primary || 'rgb(249, 115, 22)';
+  const brandColorHover = leagueBrandColors
+    ? `rgb(${Math.max(0, leagueBrandColors.primaryRgb.r - 20)}, ${Math.max(0, leagueBrandColors.primaryRgb.g - 20)}, ${Math.max(0, leagueBrandColors.primaryRgb.b - 20)})`
+    : 'rgb(234, 88, 12)';
 
   const { data: playerStats, isLoading: statsLoading } = useQuery({
     queryKey: ['game-player-stats', gameKey, isTestMode],
@@ -521,14 +537,14 @@ export default function GamePage() {
       if (playerIds.length > 0) {
         const { data: playersData } = await db
           .from('players')
-          .select('id, full_name, photo_path, photo_focus_y')
+          .select('id, full_name, photo_path_bg_removed, photo_focus_y')
           .in('id', playerIds);
         if (playersData) {
           playersData.forEach(p => {
             const entry = playerMap.get(p.id);
             if (entry) {
               if (p.full_name) entry.name = p.full_name;
-              entry.photoPath = p.photo_path;
+              entry.photoPath = p.photo_path_bg_removed;
               entry.photoFocusY = p.photo_focus_y ?? 30;
             }
           });
@@ -600,14 +616,14 @@ export default function GamePage() {
       if (playerIds.length > 0) {
         const { data: playersData } = await db
           .from('players')
-          .select('id, full_name, photo_path, photo_focus_y')
+          .select('id, full_name, photo_path_bg_removed, photo_focus_y')
           .in('id', playerIds);
         if (playersData) {
           playersData.forEach(p => {
             const entry = playerMap.get(p.id);
             if (entry) {
               if (p.full_name) entry.name = p.full_name;
-              entry.photoPath = p.photo_path;
+              entry.photoPath = p.photo_path_bg_removed;
               entry.photoFocusY = p.photo_focus_y ?? 30;
             }
           });
@@ -879,7 +895,9 @@ export default function GamePage() {
       <div className="max-w-6xl mx-auto px-4 py-6">
         <button 
           onClick={() => navigate(leagueData?.slug ? `/league/${leagueData.slug}` : '/')}
-          className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-orange-600 dark:hover:text-orange-400 mb-6 transition-colors cursor-pointer"
+          className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 mb-6 transition-colors cursor-pointer"
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = brandColorHover; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = ''; }}
         >
           <ArrowLeft className="w-4 h-4" />
           {leagueData?.slug ? 'Back to League' : 'Back to Home'}

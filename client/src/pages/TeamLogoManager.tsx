@@ -183,10 +183,18 @@ export default function TeamLogoManager() {
     if (!league) return;
 
     try {
-      // Use server-side endpoint to delete (bypasses RLS)
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        console.error('Not authenticated');
+        return;
+      }
+
       const response = await fetch('/api/team-logos/delete', {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({
           leagueId: league.league_id,
           teamName: teamName

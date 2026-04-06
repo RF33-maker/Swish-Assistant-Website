@@ -5,6 +5,36 @@ const logoCache = new Map<string, string | null>();
 const inFlight = new Map<string, Promise<string | null>>();
 const dbLogosCache = new Map<string, Map<string, string>>();
 const dbLogosFetching = new Map<string, Promise<Map<string, string>>>();
+const parentLeagueCache = new Map<string, string | null>();
+const parentLeagueFetching = new Map<string, Promise<string | null>>();
+
+async function getParentLeagueId(leagueId: string): Promise<string | null> {
+  if (parentLeagueCache.has(leagueId)) {
+    return parentLeagueCache.get(leagueId)!;
+  }
+  if (parentLeagueFetching.has(leagueId)) {
+    return parentLeagueFetching.get(leagueId)!;
+  }
+  const fetchPromise = (async () => {
+    try {
+      const { data, error } = await supabase
+        .from("leagues")
+        .select("parent_league_id")
+        .eq("league_id", leagueId)
+        .single();
+      const parentId = (!error && data?.parent_league_id) ? data.parent_league_id : null;
+      parentLeagueCache.set(leagueId, parentId);
+      parentLeagueFetching.delete(leagueId);
+      return parentId;
+    } catch {
+      parentLeagueCache.set(leagueId, null);
+      parentLeagueFetching.delete(leagueId);
+      return null;
+    }
+  })();
+  parentLeagueFetching.set(leagueId, fetchPromise);
+  return fetchPromise;
+}
 
 export function normalizeTeamName(name: string): string {
   if (!name) return "";
@@ -118,30 +148,38 @@ export async function getTeamLogoCached(
         debugLog(`[TeamLogoCache] Trying filenames for "${teamName}":`, uniqueFilenames);
       }
 
-      for (const baseFileName of uniqueFilenames) {
-        for (const ext of extensions) {
-          const fileName = `${leagueId}_${baseFileName}.${ext}`;
+      const leagueIdsToTry = [leagueId];
+      const parentId = await getParentLeagueId(leagueId);
+      if (parentId && parentId !== leagueId) {
+        leagueIdsToTry.push(parentId);
+      }
 
-          const { data } = supabase.storage
-            .from(bucket)
-            .getPublicUrl(fileName);
+      for (const tryLeagueId of leagueIdsToTry) {
+        for (const baseFileName of uniqueFilenames) {
+          for (const ext of extensions) {
+            const fileName = `${tryLeagueId}_${baseFileName}.${ext}`;
 
-          try {
-            const response = await fetch(data.publicUrl, { method: "HEAD" });
-            if (response.ok) {
-              const lastModified = response.headers.get("last-modified");
-              const cacheBuster = lastModified
-                ? new Date(lastModified).getTime()
-                : Date.now();
-              const urlWithCacheBuster = `${data.publicUrl}?t=${cacheBuster}`;
+            const { data } = supabase.storage
+              .from(bucket)
+              .getPublicUrl(fileName);
 
-              debugLog(`[TeamLogoCache] Found logo: ${fileName}`);
+            try {
+              const response = await fetch(data.publicUrl, { method: "HEAD" });
+              if (response.ok) {
+                const lastModified = response.headers.get("last-modified");
+                const cacheBuster = lastModified
+                  ? new Date(lastModified).getTime()
+                  : Date.now();
+                const urlWithCacheBuster = `${data.publicUrl}?t=${cacheBuster}`;
 
-              logoCache.set(cacheKey, urlWithCacheBuster);
-              inFlight.delete(cacheKey);
-              return urlWithCacheBuster;
+                debugLog(`[TeamLogoCache] Found logo: ${fileName}`);
+
+                logoCache.set(cacheKey, urlWithCacheBuster);
+                inFlight.delete(cacheKey);
+                return urlWithCacheBuster;
+              }
+            } catch {
             }
-          } catch {
           }
         }
       }

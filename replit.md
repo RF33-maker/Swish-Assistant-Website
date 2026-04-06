@@ -59,6 +59,7 @@ The application utilizes Supabase database views to simplify data fetching:
 
 **Server Architecture**
 -   **Primary server**: `tsx server/index.ts` (Express with Vite) handles API routes and serves the React frontend on port 5000.
+-   **Supabase Service Role Client**: `server/supabaseServiceClient.ts` creates a Supabase client using `SUPABASE_SERVICE_ROLE_KEY` to bypass RLS for storage uploads and privileged database operations (team logos, league banners). The frontend anon-key client (`client/src/lib/supabase.ts`) is used only for client-side auth and reads.
 -   **League AI chatbot**: Handled directly in `server/routes.ts` using the OpenAI Node SDK.
 -   **Python Backend** (optional, port 8000): Handles a secondary coaching chatbot and player scouting analysis, proxied via `proxyToPython` in `server/routes.ts`.
 
@@ -67,3 +68,6 @@ The application utilizes Supabase database views to simplify data fetching:
 -   **OpenAI (Node SDK)**: Integrated directly into the Express backend for the league chatbot.
 -   **Python Flask Backend**: Used for coaching chatbot and player scouting analysis.
 -   **Instagram**: Enhanced carousel integration for displaying Instagram posts and reels on league pages, with auto-scrolling, navigation controls, and video playback.
+
+## Known Bug Fixes
+-   **Player Stats/Leaders Race Condition (Fixed)**: The `fetchAllPlayerAverages` useEffect in `[slug].tsx` had a race condition where setting `childCompetitions` to a new empty array triggered cleanup (cancelling the fetch) while the deduplication check prevented re-fetching. This caused leagues with large datasets and no child competitions (NBL, WNBL) to show empty player stats/leaders. Fixed by moving `playerAveragesCancelledRef.current = false` before the deduplication check.
