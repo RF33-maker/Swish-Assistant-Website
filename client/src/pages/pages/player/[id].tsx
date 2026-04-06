@@ -147,7 +147,7 @@ export default function PlayerStatsPage() {
 
       const { error: updateError } = await supabase
         .from('players')
-        .update({ photo_path: filePath })
+        .update({ photo_path_bg_removed: filePath })
         .eq('id', playerInfo.playerId);
 
       if (updateError) {
@@ -455,7 +455,7 @@ export default function PlayerStatsPage() {
           number: initialPlayer.number,
           leagueId: initialPlayer.league_id,
           playerId: initialPlayer.id,
-          photoPath: initialPlayer.photo_path,
+          photoPath: initialPlayer.photo_path_bg_removed,
           photoFocusY: initialPlayer.photo_focus_y,
           height: initialPlayer.height || null,
           dateOfBirth: initialPlayer.date_of_birth || null,

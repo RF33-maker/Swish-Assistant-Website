@@ -145,7 +145,7 @@ export function InlinePlayerProfile({ playerSlug, brandColor, onBack, leagueSlug
 
       const { error: updateError } = await supabase
         .from('players')
-        .update({ photo_path: filePath })
+        .update({ photo_path_bg_removed: filePath })
         .eq('id', playerInfo.playerId);
 
       if (updateError) throw updateError;
@@ -341,7 +341,7 @@ export function InlinePlayerProfile({ playerSlug, brandColor, onBack, leagueSlug
           name: canonicalName, team: initialPlayer.team,
           position: initialPlayer.position, number: initialPlayer.number,
           leagueId: initialPlayer.league_id, playerId: initialPlayer.id,
-          photoPath: initialPlayer.photo_path, photoFocusY: initialPlayer.photo_focus_y,
+          photoPath: initialPlayer.photo_path_bg_removed, photoFocusY: initialPlayer.photo_focus_y,
           height: initialPlayer.height || null, dateOfBirth: initialPlayer.date_of_birth || null,
         };
 

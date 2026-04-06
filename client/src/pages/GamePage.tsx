@@ -521,14 +521,14 @@ export default function GamePage() {
       if (playerIds.length > 0) {
         const { data: playersData } = await db
           .from('players')
-          .select('id, full_name, photo_path, photo_focus_y')
+          .select('id, full_name, photo_path_bg_removed, photo_focus_y')
           .in('id', playerIds);
         if (playersData) {
           playersData.forEach(p => {
             const entry = playerMap.get(p.id);
             if (entry) {
               if (p.full_name) entry.name = p.full_name;
-              entry.photoPath = p.photo_path;
+              entry.photoPath = p.photo_path_bg_removed;
               entry.photoFocusY = p.photo_focus_y ?? 30;
             }
           });
@@ -600,14 +600,14 @@ export default function GamePage() {
       if (playerIds.length > 0) {
         const { data: playersData } = await db
           .from('players')
-          .select('id, full_name, photo_path, photo_focus_y')
+          .select('id, full_name, photo_path_bg_removed, photo_focus_y')
           .in('id', playerIds);
         if (playersData) {
           playersData.forEach(p => {
             const entry = playerMap.get(p.id);
             if (entry) {
               if (p.full_name) entry.name = p.full_name;
-              entry.photoPath = p.photo_path;
+              entry.photoPath = p.photo_path_bg_removed;
               entry.photoFocusY = p.photo_focus_y ?? 30;
             }
           });

@@ -64,6 +64,7 @@ export const players = pgTable("players", {
   league_id: varchar("league_id", { length: 255 }).notNull(),
   height: varchar("height", { length: 20 }),
   date_of_birth: date("date_of_birth"),
+  photo_path_bg_removed: varchar("photo_path_bg_removed", { length: 500 }),
   is_active: boolean("is_active").default(true),
   created_at: timestamp("created_at").defaultNow(),
   updated_at: timestamp("updated_at").defaultNow(),

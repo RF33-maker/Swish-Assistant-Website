@@ -96,7 +96,7 @@ export default function LandingPage() {
 
       const playersResponse = await supabase
         .from("players")
-        .select("id, full_name, slug, photo_path, league_id")
+        .select("id, full_name, slug, photo_path_bg_removed, league_id")
         .ilike("full_name", `%${query}%`)
         .limit(30);
 
@@ -157,8 +157,8 @@ export default function LandingPage() {
 
       const uniquePlayers = playerGroups.map((group: any[]) => {
         group.sort((a: any, b: any) => {
-          if (a.photo_path && !b.photo_path) return -1;
-          if (!a.photo_path && b.photo_path) return 1;
+          if (a.photo_path_bg_removed && !b.photo_path_bg_removed) return -1;
+          if (!a.photo_path_bg_removed && b.photo_path_bg_removed) return 1;
           const aAbbr = isAbbreviated(a.full_name);
           const bAbbr = isAbbreviated(b.full_name);
           if (!aAbbr && bAbbr) return -1;
@@ -168,8 +168,8 @@ export default function LandingPage() {
         });
         const best = group[0];
         let photoUrl: string | null = null;
-        if (best.photo_path) {
-          const { data: urlData } = supabase.storage.from('player-photos').getPublicUrl(best.photo_path);
+        if (best.photo_path_bg_removed) {
+          const { data: urlData } = supabase.storage.from('player-photos').getPublicUrl(best.photo_path_bg_removed);
           photoUrl = urlData?.publicUrl || null;
         }
         return {
