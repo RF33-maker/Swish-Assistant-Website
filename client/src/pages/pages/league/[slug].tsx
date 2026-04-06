@@ -542,6 +542,8 @@ export default function LeaguePage() {
   const [statsSearch, setStatsSearch] = useState("");
   const [displayedPlayerCount, setDisplayedPlayerCount] = useState(20); // For pagination
   const [isLoadingStats, setIsLoadingStats] = useState(false);
+  const [isLoadingMoreStats, setIsLoadingMoreStats] = useState(false);
+  const isFetchingStatsRef = useRef(false);
   const [isLoadingStandings, setIsLoadingStandings] = useState(false);
   const [isLoadingLeaders, setIsLoadingLeaders] = useState(false);
   const [isLoadingSchedule, setIsLoadingSchedule] = useState(false);
@@ -1734,6 +1736,7 @@ export default function LeaguePage() {
       
       return () => {
         playerAveragesCancelledRef.current = true;
+        isFetchingStatsRef.current = false;
       };
     }, [league?.league_id, childCompetitions]);
 
@@ -2055,6 +2058,283 @@ export default function LeaguePage() {
       return league?.youtube_embed_url ? getYoutubeEmbedUrl(league.youtube_embed_url) : null;
     }, [league?.youtube_embed_url, getYoutubeEmbedUrl]);
 
+    type PlayerAggregate = {
+      name: string;
+      team: string;
+      shirtnumber: string | null;
+      playerIds: Set<string>;
+      games: number;
+      totalPoints: number;
+      totalRebounds: number;
+      totalAssists: number;
+      totalSteals: number;
+      totalBlocks: number;
+      totalTurnovers: number;
+      totalFGM: number;
+      totalFGA: number;
+      total2PM: number;
+      total2PA: number;
+      total3PM: number;
+      total3PA: number;
+      totalFTM: number;
+      totalFTA: number;
+      totalORB: number;
+      totalDRB: number;
+      totalMinutes: number;
+      totalPersonalFouls: number;
+      totalPlusMinus: number;
+      rawStats: any[];
+    };
+
+    const parseMinutesPlayed = (stat: any): number => {
+      const minutes = stat.sminutes || stat.minutes_played;
+      if (!minutes) return 0;
+      if (typeof minutes === 'number') return minutes;
+      if (typeof minutes === 'string') {
+        const parts = minutes.split(':');
+        if (parts.length === 2) {
+          return parseInt(parts[0]) + parseInt(parts[1]) / 60;
+        }
+        return parseFloat(minutes) || 0;
+      }
+      return 0;
+    };
+
+    const areSimilarNames = (name1: string, name2: string): boolean => {
+      if (!name1 || !name2) return false;
+      return namesMatch(name1, name2);
+    };
+
+    const aggregatePlayerStats = (playerStats: any[], slugLookup: Map<string, string>, nameLookup: Map<string, string>): any[] => {
+      if (!playerStats || playerStats.length === 0) return [];
+
+      const byPlayerId = new Map<string, PlayerAggregate>();
+      const noPlayerId: any[] = [];
+
+      playerStats.forEach(stat => {
+        const playerName = stat.full_name || stat.name || 'Unknown Player';
+        const team = stat.team || stat.team_name || 'Unknown';
+        const minutesPlayed = parseMinutesPlayed(stat);
+        const hasAnyStats = (stat.spoints || 0) > 0 || (stat.sreboundstotal || 0) > 0 || 
+          (stat.sassists || 0) > 0 || (stat.ssteals || 0) > 0 || (stat.sblocks || 0) > 0 || 
+          (stat.sfieldgoalsattempted || 0) > 0 || (stat.sfreethrowsattempted || 0) > 0 ||
+          (stat.sthreepointersattempted || 0) > 0 || (stat.stwopointersattempted || 0) > 0 ||
+          (stat.sturnovers || 0) > 0 || (stat.sfoulspersonal || 0) > 0;
+        const didPlay = minutesPlayed > 0 || hasAnyStats;
+        
+        if (stat.player_id) {
+          if (!byPlayerId.has(stat.player_id)) {
+            byPlayerId.set(stat.player_id, {
+              name: playerName,
+              team: team,
+              shirtnumber: stat.shirtnumber || null,
+              playerIds: new Set([stat.player_id]),
+              games: 0,
+              totalPoints: 0, totalRebounds: 0, totalAssists: 0,
+              totalSteals: 0, totalBlocks: 0, totalTurnovers: 0,
+              totalFGM: 0, totalFGA: 0, total2PM: 0, total2PA: 0,
+              total3PM: 0, total3PA: 0, totalFTM: 0, totalFTA: 0,
+              totalORB: 0, totalDRB: 0, totalMinutes: 0,
+              totalPersonalFouls: 0, totalPlusMinus: 0, rawStats: []
+            });
+          }
+          const agg = byPlayerId.get(stat.player_id)!;
+          if (didPlay) {
+            agg.games += 1;
+            agg.totalPoints += stat.spoints || 0;
+            agg.totalRebounds += stat.sreboundstotal || 0;
+            agg.totalAssists += stat.sassists || 0;
+            agg.totalSteals += stat.ssteals || 0;
+            agg.totalBlocks += stat.sblocks || 0;
+            agg.totalTurnovers += stat.sturnovers || 0;
+            agg.totalFGM += stat.sfieldgoalsmade || 0;
+            agg.totalFGA += stat.sfieldgoalsattempted || 0;
+            agg.total2PM += stat.stwopointersmade || 0;
+            agg.total2PA += stat.stwopointersattempted || 0;
+            agg.total3PM += stat.sthreepointersmade || 0;
+            agg.total3PA += stat.sthreepointersattempted || 0;
+            agg.totalFTM += stat.sfreethrowsmade || 0;
+            agg.totalFTA += stat.sfreethrowsattempted || 0;
+            agg.totalORB += stat.sreboundsoffensive || 0;
+            agg.totalDRB += stat.sreboundsdefensive || 0;
+            agg.totalPersonalFouls += stat.sfoulspersonal || 0;
+            agg.totalPlusMinus += stat.splusminuspoints || 0;
+            agg.totalMinutes += minutesPlayed;
+            agg.rawStats.push(stat);
+          }
+          if (playerName.length > agg.name.length) {
+            agg.name = playerName;
+          }
+        } else {
+          if (didPlay) {
+            noPlayerId.push(stat);
+          }
+        }
+      });
+
+      const mergedPlayers: PlayerAggregate[] = [];
+      const processedIds = new Set<string>();
+
+      for (const [playerId, player] of byPlayerId.entries()) {
+        if (processedIds.has(playerId)) continue;
+        
+        const playerTeamNormalized = normalizeTeamName(player.team);
+        const similarPlayers: [string, PlayerAggregate][] = [];
+        for (const [otherId, otherPlayer] of byPlayerId.entries()) {
+          if (otherId !== playerId && !processedIds.has(otherId)) {
+            const otherTeamNormalized = normalizeTeamName(otherPlayer.team);
+            const sameTeam = playerTeamNormalized === otherTeamNormalized;
+            if (sameTeam && areSimilarNames(player.name, otherPlayer.name)) {
+              similarPlayers.push([otherId, otherPlayer]);
+            }
+          }
+        }
+        
+        if (similarPlayers.length > 0) {
+          for (const [otherId, other] of similarPlayers) {
+            player.playerIds.add(otherId);
+            player.games += other.games;
+            player.totalPoints += other.totalPoints;
+            player.totalRebounds += other.totalRebounds;
+            player.totalAssists += other.totalAssists;
+            player.totalSteals += other.totalSteals;
+            player.totalBlocks += other.totalBlocks;
+            player.totalTurnovers += other.totalTurnovers;
+            player.totalFGM += other.totalFGM;
+            player.totalFGA += other.totalFGA;
+            player.total2PM += other.total2PM;
+            player.total2PA += other.total2PA;
+            player.total3PM += other.total3PM;
+            player.total3PA += other.total3PA;
+            player.totalFTM += other.totalFTM;
+            player.totalFTA += other.totalFTA;
+            player.totalORB += other.totalORB;
+            player.totalDRB += other.totalDRB;
+            player.totalMinutes += other.totalMinutes;
+            player.totalPersonalFouls += other.totalPersonalFouls;
+            player.totalPlusMinus += other.totalPlusMinus;
+            player.rawStats.push(...other.rawStats);
+            player.name = getMostCompleteName([player.name, other.name]);
+            processedIds.add(otherId);
+          }
+        }
+        
+        processedIds.add(playerId);
+        mergedPlayers.push(player);
+      }
+
+      noPlayerId.forEach(stat => {
+        const playerName = stat.full_name || stat.name || 'Unknown Player';
+        const team = stat.team || stat.team_name || 'Unknown';
+        let existingPlayer = mergedPlayers.find(p => areSimilarNames(p.name, playerName));
+        
+        if (existingPlayer) {
+          existingPlayer.games += 1;
+          existingPlayer.totalPoints += stat.spoints || 0;
+          existingPlayer.totalRebounds += stat.sreboundstotal || 0;
+          existingPlayer.totalAssists += stat.sassists || 0;
+          existingPlayer.totalSteals += stat.ssteals || 0;
+          existingPlayer.totalBlocks += stat.sblocks || 0;
+          existingPlayer.totalTurnovers += stat.sturnovers || 0;
+          existingPlayer.totalFGM += stat.sfieldgoalsmade || 0;
+          existingPlayer.totalFGA += stat.sfieldgoalsattempted || 0;
+          existingPlayer.total2PM += stat.stwopointersmade || 0;
+          existingPlayer.total2PA += stat.stwopointersattempted || 0;
+          existingPlayer.total3PM += stat.sthreepointersmade || 0;
+          existingPlayer.total3PA += stat.sthreepointersattempted || 0;
+          existingPlayer.totalFTM += stat.sfreethrowsmade || 0;
+          existingPlayer.totalFTA += stat.sfreethrowsattempted || 0;
+          existingPlayer.totalORB += stat.sreboundsoffensive || 0;
+          existingPlayer.totalDRB += stat.sreboundsdefensive || 0;
+          existingPlayer.totalPersonalFouls += stat.sfoulspersonal || 0;
+          existingPlayer.totalPlusMinus += stat.splusminuspoints || 0;
+          existingPlayer.rawStats.push(stat);
+          const minutesParts = stat.sminutes?.split(':');
+          if (minutesParts && minutesParts.length === 2) {
+            existingPlayer.totalMinutes += parseInt(minutesParts[0]) + parseInt(minutesParts[1]) / 60;
+          }
+        } else {
+          const newPlayer: PlayerAggregate = {
+            name: playerName, team: team,
+            shirtnumber: stat.shirtnumber || null,
+            playerIds: new Set<string>(), games: 1,
+            totalPoints: stat.spoints || 0, totalRebounds: stat.sreboundstotal || 0,
+            totalAssists: stat.sassists || 0, totalSteals: stat.ssteals || 0,
+            totalBlocks: stat.sblocks || 0, totalTurnovers: stat.sturnovers || 0,
+            totalFGM: stat.sfieldgoalsmade || 0, totalFGA: stat.sfieldgoalsattempted || 0,
+            total2PM: stat.stwopointersmade || 0, total2PA: stat.stwopointersattempted || 0,
+            total3PM: stat.sthreepointersmade || 0, total3PA: stat.sthreepointersattempted || 0,
+            totalFTM: stat.sfreethrowsmade || 0, totalFTA: stat.sfreethrowsattempted || 0,
+            totalORB: stat.sreboundsoffensive || 0, totalDRB: stat.sreboundsdefensive || 0,
+            totalMinutes: 0, totalPersonalFouls: stat.sfoulspersonal || 0,
+            totalPlusMinus: stat.splusminuspoints || 0, rawStats: [stat]
+          };
+          const minutesParts = stat.sminutes?.split(':');
+          if (minutesParts && minutesParts.length === 2) {
+            newPlayer.totalMinutes = parseInt(minutesParts[0]) + parseInt(minutesParts[1]) / 60;
+          }
+          mergedPlayers.push(newPlayer);
+        }
+      });
+
+      const playersWithGames = mergedPlayers.filter(player => player.games > 0);
+      
+      return playersWithGames.map((player) => {
+        let playerSlug: string | null = null;
+        for (const pid of player.playerIds) {
+          if (slugLookup.has(pid)) {
+            playerSlug = slugLookup.get(pid)!;
+            break;
+          }
+        }
+        if (!playerSlug) {
+          playerSlug = nameLookup.get(player.name.toLowerCase().trim()) || null;
+        }
+        if (!playerSlug) {
+          for (const [name, s] of nameLookup.entries()) {
+            if (areSimilarNames(player.name, name)) {
+              playerSlug = s;
+              break;
+            }
+          }
+        }
+        
+        const firstId = player.playerIds.size > 0 
+          ? Array.from(player.playerIds)[0] 
+          : `name_${player.name.toLowerCase().replace(/\s+/g, '_')}`;
+        
+        return {
+          ...player,
+          id: firstId,
+          playerKey: firstId,
+          slug: playerSlug,
+          avgPoints: (player.totalPoints / player.games).toFixed(1),
+          avgRebounds: (player.totalRebounds / player.games).toFixed(1),
+          avgAssists: (player.totalAssists / player.games).toFixed(1),
+          avgSteals: (player.totalSteals / player.games).toFixed(1),
+          avgBlocks: (player.totalBlocks / player.games).toFixed(1),
+          avgTurnovers: (player.totalTurnovers / player.games).toFixed(1),
+          avgMinutes: (player.totalMinutes / player.games).toFixed(1),
+          avgFGM: (player.totalFGM / player.games).toFixed(1),
+          avgFGA: (player.totalFGA / player.games).toFixed(1),
+          avg2PM: (player.total2PM / player.games).toFixed(1),
+          avg2PA: (player.total2PA / player.games).toFixed(1),
+          avg3PM: (player.total3PM / player.games).toFixed(1),
+          avg3PA: (player.total3PA / player.games).toFixed(1),
+          avgFTM: (player.totalFTM / player.games).toFixed(1),
+          avgFTA: (player.totalFTA / player.games).toFixed(1),
+          avgORB: (player.totalORB / player.games).toFixed(1),
+          avgDRB: (player.totalDRB / player.games).toFixed(1),
+          avgPersonalFouls: (player.totalPersonalFouls / player.games).toFixed(1),
+          avgPlusMinus: (player.totalPlusMinus / player.games).toFixed(1),
+          fgPercentage: player.totalFGA > 0 ? ((player.totalFGM / player.totalFGA) * 100).toFixed(1) : '0.0',
+          twoPercentage: player.total2PA > 0 ? ((player.total2PM / player.total2PA) * 100).toFixed(1) : '0.0',
+          threePercentage: player.total3PA > 0 ? ((player.total3PM / player.total3PA) * 100).toFixed(1) : '0.0',
+          ftPercentage: player.totalFTA > 0 ? ((player.totalFTM / player.totalFTA) * 100).toFixed(1) : '0.0'
+        };
+      }).sort((a, b) => parseFloat(b.avgPoints) - parseFloat(a.avgPoints));
+    };
+
     const fetchAllPlayerAverages = async () => {
       console.log("📊 TRACE: fetchAllPlayerAverages called, league_id:", league?.league_id);
       debugLog("📊 fetchAllPlayerAverages called, league_id:", league?.league_id);
@@ -2068,21 +2348,17 @@ export default function LeaguePage() {
         console.log("📊 TRACE: Cancelled, returning early");
         return;
       }
+
+      if (isFetchingStatsRef.current) {
+        console.log("📊 TRACE: Already fetching stats, returning early");
+        return;
+      }
+
+      isFetchingStatsRef.current = true;
       setIsLoadingStats(true);
       try {
-        // Helper to check cancellation
         const isCancelled = () => playerAveragesCancelledRef.current;
-        
-        // Use shared fuzzy matching from fuzzyMatch.ts
-        // namesMatch handles: number stripping, initial matching (R Farrell vs Rhys Farrell), 
-        // Jaro-Winkler similarity at 0.85 threshold for typo tolerance
-        const areSimilarNames = (name1: string, name2: string): boolean => {
-          if (!name1 || !name2) return false;
-          return namesMatch(name1, name2);
-        };
 
-        // ========== STATS-FIRST APPROACH ==========
-        // Step 1: Fetch ALL player_stats for the league (paginated to bypass 1000 row limit)
         const statsLeagueId = getDataLeagueId(slug, league.league_id);
         const parentChildIds = childCompetitions.map(c => c.league_id);
         const isParentFetch = parentChildIds.length > 0;
@@ -2094,6 +2370,30 @@ export default function LeaguePage() {
           });
         }
         debugLog("📊 Step 1: Fetching all player_stats for league_id:", statsLeagueId, "isParent:", isParentFetch);
+
+        let rosterQuery = supabase
+          .from("players")
+          .select("id, full_name, slug");
+        
+        if (isParentFetch && parentChildIds.length > 0) {
+          rosterQuery = rosterQuery.in("league_id", parentChildIds);
+        } else {
+          rosterQuery = rosterQuery.eq("league_id", statsLeagueId);
+        }
+        
+        const { data: rosterData } = await rosterQuery;
+
+        const slugLookup = new Map<string, string>();
+        const nameLookup = new Map<string, string>();
+        
+        rosterData?.forEach(p => {
+          if (p.slug) {
+            slugLookup.set(p.id, p.slug);
+            if (p.full_name) {
+              nameLookup.set(p.full_name.toLowerCase().trim(), p.slug);
+            }
+          }
+        });
         
         let allPlayerStats: any[] = [];
         let page = 0;
@@ -2102,6 +2402,8 @@ export default function LeaguePage() {
         const maxRetries = 2;
         
         while (hasMore) {
+          if (isCancelled()) return;
+
           let pageData: any[] | null = null;
           let lastError: any = null;
           
@@ -2147,6 +2449,21 @@ export default function LeaguePage() {
             debugLog("📊 Step 1: Fetched page", page, "with", pageData.length, "records, total:", allPlayerStats.length);
             hasMore = pageData.length === pageSize;
             page++;
+
+            if (!isCancelled()) {
+              const intermediateResults = aggregatePlayerStats(allPlayerStats, slugLookup, nameLookup);
+              if (intermediateResults.length > 0) {
+                setAllPlayerAverages(intermediateResults);
+                setFilteredPlayerAverages(intermediateResults);
+                setDisplayedPlayerCount(20);
+                if (page === 1) {
+                  setIsLoadingStats(false);
+                }
+                if (hasMore) {
+                  setIsLoadingMoreStats(true);
+                }
+              }
+            }
           } else {
             hasMore = false;
           }
@@ -2154,11 +2471,9 @@ export default function LeaguePage() {
         
         if (isCancelled()) return;
         
-        const playerStats = allPlayerStats;
+        debugLog("📊 Step 1: Fetched", allPlayerStats.length, "total stat records");
 
-        debugLog("📊 Step 1: Fetched", playerStats?.length || 0, "total stat records");
-
-        if (!playerStats || playerStats.length === 0) {
+        if (allPlayerStats.length === 0) {
           debugLog("📊 No stats found for this league");
           if (!isCancelled()) {
             setAllPlayerAverages([]);
@@ -2167,412 +2482,20 @@ export default function LeaguePage() {
           return;
         }
 
-        // Step 2: Group stats by player_id first
-        debugLog("📊 Step 2: Grouping stats by player_id");
-        
-        type PlayerAggregate = {
-          name: string;
-          team: string;
-          shirtnumber: string | null;
-          playerIds: Set<string>;
-          games: number;
-          totalPoints: number;
-          totalRebounds: number;
-          totalAssists: number;
-          totalSteals: number;
-          totalBlocks: number;
-          totalTurnovers: number;
-          totalFGM: number;
-          totalFGA: number;
-          total2PM: number;
-          total2PA: number;
-          total3PM: number;
-          total3PA: number;
-          totalFTM: number;
-          totalFTA: number;
-          totalORB: number;
-          totalDRB: number;
-          totalMinutes: number;
-          totalPersonalFouls: number;
-          totalPlusMinus: number;
-          rawStats: any[];
-        };
-
-        // First pass: group by player_id
-        const byPlayerId = new Map<string, PlayerAggregate>();
-        const noPlayerId: any[] = [];
-
-        // Helper function to parse minutes from various formats
-        const parseMinutesPlayed = (stat: any): number => {
-          const minutes = stat.sminutes || stat.minutes_played;
-          if (!minutes) return 0;
-          if (typeof minutes === 'number') return minutes;
-          if (typeof minutes === 'string') {
-            const parts = minutes.split(':');
-            if (parts.length === 2) {
-              return parseInt(parts[0]) + parseInt(parts[1]) / 60;
-            }
-            return parseFloat(minutes) || 0;
-          }
-          return 0;
-        };
-
-        playerStats.forEach(stat => {
-          const playerName = stat.full_name || stat.name || 'Unknown Player';
-          const team = stat.team || stat.team_name || 'Unknown';
-          
-          // Parse minutes to check if player actually played
-          const minutesPlayed = parseMinutesPlayed(stat);
-          
-          // Consider a player as having played if they have minutes > 0 OR any meaningful stat values
-          // This handles leagues where minutes data isn't stored (null/0 for all rows)
-          const hasAnyStats = (stat.spoints || 0) > 0 || (stat.sreboundstotal || 0) > 0 || 
-            (stat.sassists || 0) > 0 || (stat.ssteals || 0) > 0 || (stat.sblocks || 0) > 0 || 
-            (stat.sfieldgoalsattempted || 0) > 0 || (stat.sfreethrowsattempted || 0) > 0 ||
-            (stat.sthreepointersattempted || 0) > 0 || (stat.stwopointersattempted || 0) > 0 ||
-            (stat.sturnovers || 0) > 0 || (stat.sfoulspersonal || 0) > 0;
-          const didPlay = minutesPlayed > 0 || hasAnyStats;
-          
-          if (stat.player_id) {
-            if (!byPlayerId.has(stat.player_id)) {
-              byPlayerId.set(stat.player_id, {
-                name: playerName,
-                team: team,
-                shirtnumber: stat.shirtnumber || null,
-                playerIds: new Set([stat.player_id]),
-                games: 0,
-                totalPoints: 0,
-                totalRebounds: 0,
-                totalAssists: 0,
-                totalSteals: 0,
-                totalBlocks: 0,
-                totalTurnovers: 0,
-                totalFGM: 0,
-                totalFGA: 0,
-                total2PM: 0,
-                total2PA: 0,
-                total3PM: 0,
-                total3PA: 0,
-                totalFTM: 0,
-                totalFTA: 0,
-                totalORB: 0,
-                totalDRB: 0,
-                totalMinutes: 0,
-                totalPersonalFouls: 0,
-                totalPlusMinus: 0,
-                rawStats: []
-              });
-            }
-            const agg = byPlayerId.get(stat.player_id)!;
-            // Only count as a game played if they had minutes
-            if (didPlay) {
-              agg.games += 1;
-            }
-            // Only add stats if player actually played
-            if (didPlay) {
-              agg.totalPoints += stat.spoints || 0;
-              agg.totalRebounds += stat.sreboundstotal || 0;
-              agg.totalAssists += stat.sassists || 0;
-              agg.totalSteals += stat.ssteals || 0;
-              agg.totalBlocks += stat.sblocks || 0;
-              agg.totalTurnovers += stat.sturnovers || 0;
-              agg.totalFGM += stat.sfieldgoalsmade || 0;
-              agg.totalFGA += stat.sfieldgoalsattempted || 0;
-              agg.total2PM += stat.stwopointersmade || 0;
-              agg.total2PA += stat.stwopointersattempted || 0;
-              agg.total3PM += stat.sthreepointersmade || 0;
-              agg.total3PA += stat.sthreepointersattempted || 0;
-              agg.totalFTM += stat.sfreethrowsmade || 0;
-              agg.totalFTA += stat.sfreethrowsattempted || 0;
-              agg.totalORB += stat.sreboundsoffensive || 0;
-              agg.totalDRB += stat.sreboundsdefensive || 0;
-              agg.totalPersonalFouls += stat.sfoulspersonal || 0;
-              agg.totalPlusMinus += stat.splusminuspoints || 0;
-              agg.totalMinutes += minutesPlayed;
-              agg.rawStats.push(stat);
-            }
-            
-            // Use longer name if available
-            if (playerName.length > agg.name.length) {
-              agg.name = playerName;
-            }
-          } else {
-            // Only add to noPlayerId if they actually played
-            if (didPlay) {
-              noPlayerId.push(stat);
-            }
-          }
-        });
-
-        debugLog("📊 Step 2: Grouped into", byPlayerId.size, "players by ID,", noPlayerId.length, "without ID");
-
-        // Step 3: Merge player_id groups that have similar names (same player, different IDs)
-        const mergedPlayers: PlayerAggregate[] = [];
-        const processedIds = new Set<string>();
-        
-        // Debug: Check for Hamza players before merge
-        const hamzasBefore = Array.from(byPlayerId.values()).filter(p => 
-          p.name.toLowerCase().includes('hamza')
-        );
-        if (hamzasBefore.length > 0) {
-          debugLog("📊 DEBUG: Hamza players BEFORE merge:", hamzasBefore.map(p => ({
-            name: p.name,
-            team: p.team,
-            games: p.games
-          })));
-        }
-
-        for (const [playerId, player] of byPlayerId.entries()) {
-          if (processedIds.has(playerId)) continue;
-          
-          // Find all other players with similar names (with team normalization)
-          const playerTeamNormalized = normalizeTeamName(player.team);
-          const similarPlayers: [string, PlayerAggregate][] = [];
-          for (const [otherId, otherPlayer] of byPlayerId.entries()) {
-            if (otherId !== playerId && !processedIds.has(otherId)) {
-              // Check if names match AND teams match (after normalization)
-              const otherTeamNormalized = normalizeTeamName(otherPlayer.team);
-              const sameTeam = playerTeamNormalized === otherTeamNormalized;
-              if (sameTeam && areSimilarNames(player.name, otherPlayer.name)) {
-                // Debug: Log when Hamza players are about to be merged
-                if (player.name.toLowerCase().includes('hamza') || otherPlayer.name.toLowerCase().includes('hamza')) {
-                  debugLog("📊 DEBUG: Merging Hamza:", player.name, "with", otherPlayer.name, 
-                    "| Teams:", player.team, "vs", otherPlayer.team);
-                }
-                similarPlayers.push([otherId, otherPlayer]);
-              }
-            }
-          }
-          
-          // Merge all similar players into this one
-          if (similarPlayers.length > 0) {
-            for (const [otherId, other] of similarPlayers) {
-              player.playerIds.add(otherId);
-              player.games += other.games;
-              player.totalPoints += other.totalPoints;
-              player.totalRebounds += other.totalRebounds;
-              player.totalAssists += other.totalAssists;
-              player.totalSteals += other.totalSteals;
-              player.totalBlocks += other.totalBlocks;
-              player.totalTurnovers += other.totalTurnovers;
-              player.totalFGM += other.totalFGM;
-              player.totalFGA += other.totalFGA;
-              player.total2PM += other.total2PM;
-              player.total2PA += other.total2PA;
-              player.total3PM += other.total3PM;
-              player.total3PA += other.total3PA;
-              player.totalFTM += other.totalFTM;
-              player.totalFTA += other.totalFTA;
-              player.totalORB += other.totalORB;
-              player.totalDRB += other.totalDRB;
-              player.totalMinutes += other.totalMinutes;
-              player.totalPersonalFouls += other.totalPersonalFouls;
-              player.totalPlusMinus += other.totalPlusMinus;
-              player.rawStats.push(...other.rawStats);
-              
-              // Use the most complete name (prefers full names over initials)
-              player.name = getMostCompleteName([player.name, other.name]);
-              
-              processedIds.add(otherId);
-            }
-          }
-          
-          processedIds.add(playerId);
-          mergedPlayers.push(player);
-        }
-
-        debugLog("📊 Step 3: After merging:", mergedPlayers.length, "unique players");
-        
-        // Debug: Check for Hamza players after merge
-        const hamzasAfter = mergedPlayers.filter(p => p.name.toLowerCase().includes('hamza'));
-        if (hamzasAfter.length > 0) {
-          debugLog("📊 DEBUG: Hamza players AFTER merge:", hamzasAfter.map(p => ({
-            name: p.name,
-            team: p.team,
-            games: p.games
-          })));
-        }
-
-        // Step 4: Handle stats without player_id by grouping by name
-        debugLog("📊 Step 4: Processing", noPlayerId.length, "stats without player_id");
-        
-        noPlayerId.forEach(stat => {
-          const playerName = stat.full_name || stat.name || 'Unknown Player';
-          const team = stat.team || stat.team_name || 'Unknown';
-          
-          // Try to find existing player by name
-          let existingPlayer = mergedPlayers.find(p => areSimilarNames(p.name, playerName));
-          
-          if (existingPlayer) {
-            existingPlayer.games += 1;
-            existingPlayer.totalPoints += stat.spoints || 0;
-            existingPlayer.totalRebounds += stat.sreboundstotal || 0;
-            existingPlayer.totalAssists += stat.sassists || 0;
-            existingPlayer.totalSteals += stat.ssteals || 0;
-            existingPlayer.totalBlocks += stat.sblocks || 0;
-            existingPlayer.totalTurnovers += stat.sturnovers || 0;
-            existingPlayer.totalFGM += stat.sfieldgoalsmade || 0;
-            existingPlayer.totalFGA += stat.sfieldgoalsattempted || 0;
-            existingPlayer.total2PM += stat.stwopointersmade || 0;
-            existingPlayer.total2PA += stat.stwopointersattempted || 0;
-            existingPlayer.total3PM += stat.sthreepointersmade || 0;
-            existingPlayer.total3PA += stat.sthreepointersattempted || 0;
-            existingPlayer.totalFTM += stat.sfreethrowsmade || 0;
-            existingPlayer.totalFTA += stat.sfreethrowsattempted || 0;
-            existingPlayer.totalORB += stat.sreboundsoffensive || 0;
-            existingPlayer.totalDRB += stat.sreboundsdefensive || 0;
-            existingPlayer.totalPersonalFouls += stat.sfoulspersonal || 0;
-            existingPlayer.totalPlusMinus += stat.splusminuspoints || 0;
-            existingPlayer.rawStats.push(stat);
-            
-            const minutesParts = stat.sminutes?.split(':');
-            if (minutesParts && minutesParts.length === 2) {
-              existingPlayer.totalMinutes += parseInt(minutesParts[0]) + parseInt(minutesParts[1]) / 60;
-            }
-          } else {
-            // Create new player entry
-            const newPlayer: PlayerAggregate = {
-              name: playerName,
-              team: team,
-              shirtnumber: stat.shirtnumber || null,
-              playerIds: new Set<string>(),
-              games: 1,
-              totalPoints: stat.spoints || 0,
-              totalRebounds: stat.sreboundstotal || 0,
-              totalAssists: stat.sassists || 0,
-              totalSteals: stat.ssteals || 0,
-              totalBlocks: stat.sblocks || 0,
-              totalTurnovers: stat.sturnovers || 0,
-              totalFGM: stat.sfieldgoalsmade || 0,
-              totalFGA: stat.sfieldgoalsattempted || 0,
-              total2PM: stat.stwopointersmade || 0,
-              total2PA: stat.stwopointersattempted || 0,
-              total3PM: stat.sthreepointersmade || 0,
-              total3PA: stat.sthreepointersattempted || 0,
-              totalFTM: stat.sfreethrowsmade || 0,
-              totalFTA: stat.sfreethrowsattempted || 0,
-              totalORB: stat.sreboundsoffensive || 0,
-              totalDRB: stat.sreboundsdefensive || 0,
-              totalMinutes: 0,
-              totalPersonalFouls: stat.sfoulspersonal || 0,
-              totalPlusMinus: stat.splusminuspoints || 0,
-              rawStats: [stat]
-            };
-            
-            const minutesParts = stat.sminutes?.split(':');
-            if (minutesParts && minutesParts.length === 2) {
-              newPlayer.totalMinutes = parseInt(minutesParts[0]) + parseInt(minutesParts[1]) / 60;
-            }
-            
-            mergedPlayers.push(newPlayer);
-          }
-        });
-
-        debugLog("📊 Step 4: Total players after processing null IDs:", mergedPlayers.length);
-
-        // Step 5: Fetch slugs from players table
-        debugLog("📊 Step 5: Fetching slugs from players table");
-        
-        let rosterQuery = supabase
-          .from("players")
-          .select("id, full_name, slug");
-        
-        if (isParentFetch && parentChildIds.length > 0) {
-          rosterQuery = rosterQuery.in("league_id", parentChildIds);
-        } else {
-          rosterQuery = rosterQuery.eq("league_id", statsLeagueId);
-        }
-        
-        const { data: rosterData } = await rosterQuery;
-
-        const slugLookup = new Map<string, string>();
-        const nameLookup = new Map<string, string>();
-        
-        rosterData?.forEach(p => {
-          if (p.slug) {
-            slugLookup.set(p.id, p.slug);
-            if (p.full_name) {
-              nameLookup.set(p.full_name.toLowerCase().trim(), p.slug);
-            }
-          }
-        });
-
-        debugLog("📊 Step 5: Found", slugLookup.size, "slugs by ID,", nameLookup.size, "by name");
-
-        // Step 6: Calculate averages and build final list
-        debugLog("📊 Step 6: Calculating averages");
-        
-        // Filter out players with 0 games played (never actually played)
-        const playersWithGames = mergedPlayers.filter(player => player.games > 0);
-        
-        const averagesList = playersWithGames.map((player) => {
-          // Try to find slug by player_id first, then by name
-          let slug: string | null = null;
-          for (const pid of player.playerIds) {
-            if (slugLookup.has(pid)) {
-              slug = slugLookup.get(pid)!;
-              break;
-            }
-          }
-          if (!slug) {
-            slug = nameLookup.get(player.name.toLowerCase().trim()) || null;
-          }
-          
-          // Also try fuzzy name match for slug
-          if (!slug) {
-            for (const [name, s] of nameLookup.entries()) {
-              if (areSimilarNames(player.name, name)) {
-                slug = s;
-                break;
-              }
-            }
-          }
-          
-          const firstId = player.playerIds.size > 0 
-            ? Array.from(player.playerIds)[0] 
-            : `name_${player.name.toLowerCase().replace(/\s+/g, '_')}`;
-          
-          return {
-            ...player,
-            id: firstId,
-            playerKey: firstId,
-            slug: slug,
-            avgPoints: (player.totalPoints / player.games).toFixed(1),
-            avgRebounds: (player.totalRebounds / player.games).toFixed(1),
-            avgAssists: (player.totalAssists / player.games).toFixed(1),
-            avgSteals: (player.totalSteals / player.games).toFixed(1),
-            avgBlocks: (player.totalBlocks / player.games).toFixed(1),
-            avgTurnovers: (player.totalTurnovers / player.games).toFixed(1),
-            avgMinutes: (player.totalMinutes / player.games).toFixed(1),
-            avgFGM: (player.totalFGM / player.games).toFixed(1),
-            avgFGA: (player.totalFGA / player.games).toFixed(1),
-            avg2PM: (player.total2PM / player.games).toFixed(1),
-            avg2PA: (player.total2PA / player.games).toFixed(1),
-            avg3PM: (player.total3PM / player.games).toFixed(1),
-            avg3PA: (player.total3PA / player.games).toFixed(1),
-            avgFTM: (player.totalFTM / player.games).toFixed(1),
-            avgFTA: (player.totalFTA / player.games).toFixed(1),
-            avgORB: (player.totalORB / player.games).toFixed(1),
-            avgDRB: (player.totalDRB / player.games).toFixed(1),
-            avgPersonalFouls: (player.totalPersonalFouls / player.games).toFixed(1),
-            avgPlusMinus: (player.totalPlusMinus / player.games).toFixed(1),
-            fgPercentage: player.totalFGA > 0 ? ((player.totalFGM / player.totalFGA) * 100).toFixed(1) : '0.0',
-            twoPercentage: player.total2PA > 0 ? ((player.total2PM / player.total2PA) * 100).toFixed(1) : '0.0',
-            threePercentage: player.total3PA > 0 ? ((player.total3PM / player.total3PA) * 100).toFixed(1) : '0.0',
-            ftPercentage: player.totalFTA > 0 ? ((player.totalFTM / player.totalFTA) * 100).toFixed(1) : '0.0'
-          };
-        }).sort((a, b) => parseFloat(b.avgPoints) - parseFloat(a.avgPoints));
-
-        debugLog("📊 Step 6: Final player list has", averagesList.length, "players");
+        const finalResults = aggregatePlayerStats(allPlayerStats, slugLookup, nameLookup);
+        debugLog("📊 Final player list has", finalResults.length, "players");
 
         if (isCancelled()) return;
-        setAllPlayerAverages(averagesList);
-        setFilteredPlayerAverages(averagesList);
+        setAllPlayerAverages(finalResults);
+        setFilteredPlayerAverages(finalResults);
+        setDisplayedPlayerCount(20);
       } catch (error) {
         console.error("Error in fetchAllPlayerAverages:", error);
       } finally {
+        isFetchingStatsRef.current = false;
         if (!playerAveragesCancelledRef.current) {
           setIsLoadingStats(false);
+          setIsLoadingMoreStats(false);
         }
       }
     };
@@ -3417,7 +3340,7 @@ export default function LeaguePage() {
                   setActiveSection('stats');
                   setDisplayedPlayerCount(20);
                   setStatsSearch("");
-                  if (allPlayerAverages.length === 0) {
+                  if (allPlayerAverages.length === 0 && !isFetchingStatsRef.current) {
                     fetchAllPlayerAverages();
                   }
                 }}
@@ -3458,7 +3381,7 @@ export default function LeaguePage() {
                   setSelectedPlayerSlug(null);
                   setSelectedTeamName(null);
                   setActiveSection('leaders');
-                  if (allPlayerAverages.length === 0 && !isLoadingStats) {
+                  if (allPlayerAverages.length === 0 && !isFetchingStatsRef.current) {
                     fetchAllPlayerAverages();
                   }
                 }}
@@ -3474,7 +3397,7 @@ export default function LeaguePage() {
                   setSelectedPlayerSlug(null);
                   setSelectedTeamName(null);
                   setActiveSection('comparison');
-                  if (allPlayerAverages.length === 0) {
+                  if (allPlayerAverages.length === 0 && !isFetchingStatsRef.current) {
                     fetchAllPlayerAverages();
                   }
                   if (teamStatsData.length === 0) {
@@ -3825,6 +3748,15 @@ export default function LeaguePage() {
                   <div className="text-xs md:text-sm text-gray-500 dark:text-gray-400">
                     Showing {Math.min(displayedPlayerCount, filteredPlayerAverages.length)} of {filteredPlayerAverages.length} players
                     {(statsSearch || filterAgeGroup !== 'all' || filterRound !== 'all') && ` (filtered from ${allPlayerAverages.length})`}
+                    {isLoadingMoreStats && (
+                      <span className="ml-2 inline-flex items-center gap-1 text-orange-500 dark:text-orange-400">
+                        <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        loading more stats...
+                      </span>
+                    )}
                   </div>
                 </div>
                 
@@ -4841,7 +4773,18 @@ export default function LeaguePage() {
               <div className="space-y-4 md:space-y-6">
                 <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
                   <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-4 md:mb-6">
-                    <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">League Leaders</h2>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">League Leaders</h2>
+                      {isLoadingMoreStats && (
+                        <span className="inline-flex items-center gap-1 text-xs text-orange-500 dark:text-orange-400">
+                          <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          </svg>
+                          refining...
+                        </span>
+                      )}
+                    </div>
                     <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
                       {!isParentLeague && (availableAgeGroups.length > 0 || availableRounds.length > 0) && (
                         <div className="flex gap-1.5">
@@ -5046,7 +4989,7 @@ export default function LeaguePage() {
                     <button
                       onClick={() => {
                         setActiveSection('leaders');
-                        if (allPlayerAverages.length === 0 && !isLoadingStats) {
+                        if (allPlayerAverages.length === 0 && !isFetchingStatsRef.current) {
                           fetchAllPlayerAverages();
                         }
                       }}

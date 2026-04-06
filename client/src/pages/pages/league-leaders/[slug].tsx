@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useParams, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import Header from "@/components/layout/header";
@@ -46,6 +46,7 @@ export default function LeagueLeadersPage() {
   const [rawPlayerStats, setRawPlayerStats] = useState<any[]>([]);
   const [childLeagues, setChildLeagues] = useState<ChildLeague[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isLoadingMoreStats, setIsLoadingMoreStats] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'averages' | 'totals'>('averages');
   const [selectedAgeGroup, setSelectedAgeGroup] = useState<string>('all');
@@ -53,6 +54,7 @@ export default function LeagueLeadersPage() {
   const [selectedMonth, setSelectedMonth] = useState<string>('season');
   const [statCategory, setStatCategory] = useState<StatCategory>('Traditional');
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
+  const fetchCancelledRef = useRef(false);
 
   const { colors: leagueBrandColors } = useLeagueBranding({
     slug,
@@ -135,6 +137,8 @@ export default function LeagueLeadersPage() {
   }, [rawPlayerStats, isParentLeague]);
 
   useEffect(() => {
+    fetchCancelledRef.current = false;
+
     const fetchLeagueAndStats = async () => {
       if (!slug) return;
 
@@ -179,12 +183,16 @@ export default function LeagueLeadersPage() {
         let hasMore = true;
         
         while (hasMore) {
+          if (fetchCancelledRef.current) return;
+
           const { data: pageData, error: pageError } = await supabase
             .from("player_stats")
             .select("*, players:player_id(full_name, slug)")
             .in("league_id", leagueIdsToQuery)
             .range(page * pageSize, (page + 1) * pageSize - 1);
           
+          if (fetchCancelledRef.current) return;
+
           if (pageError) {
             console.error("Error fetching player stats page", page, ":", pageError);
             break;
@@ -194,27 +202,43 @@ export default function LeagueLeadersPage() {
             allPlayerStats = [...allPlayerStats, ...pageData];
             hasMore = pageData.length === pageSize;
             page++;
+
+            if (!fetchCancelledRef.current) {
+              setRawPlayerStats([...allPlayerStats]);
+              if (page === 1) {
+                setLoading(false);
+              }
+              if (hasMore) {
+                setIsLoadingMoreStats(true);
+              }
+            }
           } else {
             hasMore = false;
           }
         }
         
-        if (!allPlayerStats || allPlayerStats.length === 0) {
+        if (allPlayerStats.length === 0) {
           setError("No player statistics found for this league");
           return;
         }
 
         setRawPlayerStats(allPlayerStats);
+        setIsLoadingMoreStats(false);
 
       } catch (err) {
         console.error("Error fetching league leaders:", err);
         setError("An unexpected error occurred");
       } finally {
         setLoading(false);
+        setIsLoadingMoreStats(false);
       }
     };
 
     fetchLeagueAndStats();
+
+    return () => {
+      fetchCancelledRef.current = true;
+    };
   }, [slug]);
 
   const getTraditionalDefs = (vm: 'averages' | 'totals'): StatLeaderDef[] => [
@@ -808,6 +832,16 @@ export default function LeagueLeadersPage() {
             {uniqueGames > 0 ? `Based on ${uniqueGames} game${uniqueGames !== 1 ? 's' : ''}` : 'All games'}
           </p>
         </div>
+
+        {isLoadingMoreStats && (
+          <div className="flex items-center justify-center gap-2 py-3 px-4 mb-4 rounded-lg text-sm" style={{ backgroundColor: brandBg50, color: brandColor }}>
+            <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+            </svg>
+            Loading more stats... results will refine as data loads
+          </div>
+        )}
 
         {/* Stat Leader Sections */}
         {leaderboards.length > 0 ? (
