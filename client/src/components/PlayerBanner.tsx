@@ -122,10 +122,10 @@ export function PlayerBanner({
           <img
             src={playerPhotoUrl}
             alt={playerInfo.name}
-            className="absolute right-0 bottom-0 w-auto object-contain object-bottom z-[5]"
+            className="absolute -right-[5%] bottom-0 w-auto object-contain object-bottom z-[5]"
             style={{
-              height: '160%',
-              maxWidth: '65%',
+              height: '180%',
+              maxWidth: '70%',
               objectPosition: `center ${showFocusAdjuster ? tempFocusY : (playerInfo.photoFocusY ?? 100)}%`,
             }}
             onError={(e) => {
