@@ -124,8 +124,8 @@ export function PlayerBanner({
             alt={playerInfo.name}
             className="absolute right-[5%] md:right-[10%] bottom-0 w-auto object-contain object-bottom z-[5]"
             style={{
-              height: '140%',
-              maxWidth: '60%',
+              height: '160%',
+              maxWidth: '65%',
               objectPosition: `center ${showFocusAdjuster ? tempFocusY : (playerInfo.photoFocusY ?? 100)}%`,
             }}
             onError={(e) => {
