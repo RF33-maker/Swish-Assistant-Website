@@ -104,9 +104,9 @@ export function PlayerBanner({
         style={{ mixBlendMode: "multiply" }}
       />
 
-      <div className="relative min-h-[220px] md:min-h-[300px]">
+      <div className="relative min-h-[200px] md:min-h-[300px]">
         {playerInfo.team && playerInfo.leagueId && (
-          <div className="absolute top-4 left-4 md:top-6 md:left-6 z-10">
+          <div className="absolute top-3 left-3 md:top-6 md:left-6 z-10">
             <TeamLogo
               teamName={playerInfo.team}
               leagueId={playerInfo.leagueId}
@@ -117,46 +117,56 @@ export function PlayerBanner({
         )}
 
         {playerInfo.playerId && playerPhotoUrl ? (
-          <>
-            <img
-              src={playerPhotoUrl}
-              alt={playerInfo.name}
-              className="absolute right-0 bottom-0 h-[90%] w-auto max-w-[45%] md:max-w-[35%] object-contain object-bottom z-[5]"
-              style={{
-                objectPosition: `center ${showFocusAdjuster ? tempFocusY : (playerInfo.photoFocusY ?? 100)}%`,
-              }}
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = "none";
-              }}
-            />
-          </>
+          <img
+            src={playerPhotoUrl}
+            alt={playerInfo.name}
+            className="absolute right-0 bottom-0 h-[85%] w-auto max-w-[40%] md:max-w-[35%] object-contain object-bottom z-[5]"
+            style={{
+              objectPosition: `center ${showFocusAdjuster ? tempFocusY : (playerInfo.photoFocusY ?? 100)}%`,
+            }}
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = "none";
+            }}
+          />
         ) : (
           <div className="absolute right-8 bottom-8 opacity-10 z-[1]">
             <User className="w-32 h-32" style={{ color: textColor }} />
           </div>
         )}
 
-        <div className="relative z-10 px-4 pt-24 pb-10 md:px-8 md:pt-28 md:pb-12">
+        <div className="relative z-10 px-4 pt-16 pb-6 md:px-8 md:pt-28 md:pb-12">
           <div className="flex flex-col md:flex-row md:items-end md:gap-12">
-            <div className="flex flex-col gap-1 max-w-[55%] md:max-w-[45%]">
+            <div className="flex flex-col gap-0.5 max-w-[55%] md:max-w-[45%]">
+              <div className="mb-1 md:mb-0 md:order-2">
+                {firstName && (
+                  <div
+                    className="text-xl md:text-4xl lg:text-5xl font-medium leading-tight"
+                    style={{ color: textColor }}
+                  >
+                    {firstName}
+                  </div>
+                )}
+                <div
+                  className="text-2xl md:text-5xl lg:text-6xl font-black leading-tight uppercase tracking-tight"
+                  style={{ color: textColor }}
+                  data-testid="text-player-name"
+                >
+                  {lastName}
+                </div>
+              </div>
+
               {statItems.length > 0 && (
-                <div className="flex flex-col gap-0.5 mb-2">
+                <div className="flex flex-wrap gap-x-3 gap-y-0 mt-1 md:mt-2">
                   {statItems.map((item) => (
-                    <div key={item.label} className="flex items-center gap-2">
+                    <div key={item.label} className="flex items-center gap-1">
                       <span
-                        className="text-sm md:text-lg font-bold tracking-wide"
+                        className="text-[10px] md:text-sm font-semibold uppercase tracking-wider opacity-70"
                         style={{ color: textColor }}
                       >
                         {item.label}
                       </span>
                       <span
-                        className="text-sm md:text-lg font-bold"
-                        style={{ color: textColor }}
-                      >
-                        –
-                      </span>
-                      <span
-                        className="text-sm md:text-lg font-bold"
+                        className="text-xs md:text-sm font-bold"
                         style={{ color: textColor }}
                       >
                         {item.value}
@@ -168,30 +178,12 @@ export function PlayerBanner({
 
               {playerInfo.previousTeams && playerInfo.previousTeams.length > 0 && (
                 <p
-                  className="text-xs mt-1 italic"
+                  className="text-[10px] md:text-xs mt-1 italic"
                   style={{ color: textColor, opacity: 0.7 }}
                 >
                   Previously: {playerInfo.previousTeams.join(", ")}
                 </p>
               )}
-            </div>
-
-            <div className="mt-2 md:mt-0 md:ml-auto md:mr-[38%] md:text-right">
-              {firstName && (
-                <div
-                  className="text-2xl md:text-4xl lg:text-5xl font-medium leading-tight"
-                  style={{ color: textColor }}
-                >
-                  {firstName}
-                </div>
-              )}
-              <div
-                className="text-3xl md:text-5xl lg:text-6xl font-black leading-tight uppercase tracking-tight"
-                style={{ color: textColor }}
-                data-testid="text-player-name"
-              >
-                {lastName}
-              </div>
             </div>
           </div>
         </div>

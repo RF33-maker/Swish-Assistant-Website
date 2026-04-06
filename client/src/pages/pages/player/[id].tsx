@@ -1125,7 +1125,7 @@ export default function PlayerStatsPage() {
       </Helmet>
       
       <div className="min-h-screen bg-gray-50 dark:bg-neutral-950">
-        <div className="container mx-auto px-4 py-6 max-w-4xl space-y-4 md:space-y-5">
+        <div className="container mx-auto px-4 py-4 max-w-4xl">
         <div className="flex flex-col md:flex-row items-start md:items-center gap-3 md:gap-4">
           <div className="w-full md:w-auto flex items-center gap-2">
             <Button 
@@ -1183,6 +1183,7 @@ export default function PlayerStatsPage() {
             )}
           </div>
         </div>
+        </div>
 
         {playerInfo && (
           <PlayerBanner
@@ -1201,6 +1202,7 @@ export default function PlayerStatsPage() {
           />
         )}
 
+        <div className="container mx-auto px-4 py-4 max-w-4xl space-y-4 md:space-y-5">
         {filteredSeasonAverages && (
           <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
             <div className="flex items-center justify-between mb-3">
