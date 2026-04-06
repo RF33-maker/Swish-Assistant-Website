@@ -4,17 +4,15 @@ import { useRoute, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Calendar, Trophy, TrendingUp, Brain, Sparkles, Filter } from "lucide-react";
+import { Calendar, Trophy, TrendingUp, Brain, Sparkles, Filter } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { generatePlayerAnalysis, type PlayerAnalysisData } from "@/lib/ai-analysis";
-import SwishLogoImg from "@/assets/Swish Assistant Logo.png";
 import { TeamLogo } from "@/components/TeamLogo";
 import { PlayerBanner } from "@/components/PlayerBanner";
 import { Helmet } from "react-helmet-async";
 import { namesMatch, getMostCompleteName, slugToName, type PlayerMatch } from "@/lib/fuzzyMatch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import ShotChart, { type ShotData } from "@/components/ShotChart";
 
 interface PlayerStat {
@@ -1125,66 +1123,6 @@ export default function PlayerStatsPage() {
       </Helmet>
       
       <div className="min-h-screen bg-gray-50 dark:bg-neutral-950">
-        <div className="container mx-auto px-4 py-4 max-w-4xl">
-        <div className="flex flex-col md:flex-row items-start md:items-center gap-3 md:gap-4">
-          <div className="w-full md:w-auto flex items-center gap-2">
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => setLocation('/')}
-              className="group flex items-center gap-2 border-gray-200 dark:border-neutral-700 hover:bg-white dark:hover:bg-neutral-800 transition-all w-full md:w-auto dark:bg-neutral-900"
-            >
-              <ArrowLeft className="h-4 w-4 group-hover:hidden dark:text-orange-400" />
-              <div className="hidden group-hover:block">
-                <img src={SwishLogoImg} alt="Swish Assistant" className="h-4 w-4 object-contain" />
-              </div>
-              <span className="text-slate-700 dark:text-orange-400">Back to Dashboard</span>
-            </Button>
-            <ThemeToggle />
-          </div>
-          
-          <div className="flex-1 w-full md:max-w-md lg:max-w-lg relative">
-            <form
-              onSubmit={handleSearchSubmit}
-              className="flex items-center rounded-full border border-gray-200 dark:border-neutral-700 overflow-hidden bg-white dark:bg-neutral-900 shadow-sm"
-            >
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Find your league"
-                className="flex-1 px-4 py-2 text-sm text-slate-800 dark:text-white focus:outline-none bg-white dark:bg-neutral-900 dark:placeholder-slate-400"
-              />
-              <button type="submit" className="bg-orange-500 text-white font-semibold px-4 py-2 hover:bg-orange-600 transition text-sm">
-                Search
-              </button>
-            </form>
-
-            {searchSuggestions.length > 0 && (
-              <ul className="absolute z-50 w-full bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-700 mt-1 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                {searchSuggestions.map((item, index) => (
-                  <li
-                    key={index}
-                    onClick={() => handleSearchSelect(item)}
-                    className="px-4 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-700 text-left border-b border-gray-100 dark:border-neutral-700 last:border-b-0"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="h-8 w-8 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
-                        <span className="text-sm">{item.type === 'league' ? '🏆' : '👤'}</span>
-                      </div>
-                      <div className="flex-1">
-                        <div className="font-medium text-slate-900 dark:text-white text-sm">{item.name}</div>
-                        <div className="text-xs text-slate-500 dark:text-slate-400">{item.type === 'player' ? item.team : 'League'}</div>
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
-        </div>
-
         {playerInfo && (
           <PlayerBanner
             playerInfo={playerInfo}
@@ -1199,6 +1137,7 @@ export default function PlayerStatsPage() {
             photoUploading={photoUploading}
             fileInputRef={fileInputRef}
             isAuthenticated={!!user}
+            onBack={() => setLocation('/')}
           />
         )}
 

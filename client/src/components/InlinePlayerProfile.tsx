@@ -737,32 +737,28 @@ export function InlinePlayerProfile({ playerSlug, brandColor, onBack, leagueSlug
   };
 
   return (
-    <div className="space-y-4 md:space-y-5 animate-fade-in-up">
-      <button
-        onClick={onBack}
-        className="inline-flex items-center gap-2 text-sm font-medium transition-colors hover:underline"
-        style={{ color: brandColor }}
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back
-      </button>
-
+    <div className="animate-fade-in-up">
       {playerInfo && (
-        <PlayerBanner
-          playerInfo={playerInfo}
-          playerPhotoUrl={playerPhotoUrl}
-          showFocusAdjuster={showFocusAdjuster}
-          setShowFocusAdjuster={setShowFocusAdjuster}
-          tempFocusY={tempFocusY}
-          setTempFocusY={setTempFocusY}
-          handleSaveFocus={handleSaveFocus}
-          savingFocus={savingFocus}
-          handlePhotoUpload={handlePhotoUpload}
-          photoUploading={photoUploading}
-          fileInputRef={fileInputRef}
-          isAuthenticated={!!user}
-        />
+        <div className="w-screen relative" style={{ marginLeft: 'calc(-50vw + 50%)', marginRight: 'calc(-50vw + 50%)' }}>
+          <PlayerBanner
+            playerInfo={playerInfo}
+            playerPhotoUrl={playerPhotoUrl}
+            showFocusAdjuster={showFocusAdjuster}
+            setShowFocusAdjuster={setShowFocusAdjuster}
+            tempFocusY={tempFocusY}
+            setTempFocusY={setTempFocusY}
+            handleSaveFocus={handleSaveFocus}
+            savingFocus={savingFocus}
+            handlePhotoUpload={handlePhotoUpload}
+            photoUploading={photoUploading}
+            fileInputRef={fileInputRef}
+            isAuthenticated={!!user}
+            onBack={onBack}
+          />
+        </div>
       )}
+
+      <div className="space-y-4 md:space-y-5 mt-4 md:mt-5">
 
       {filteredSeasonAverages && (
         <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
@@ -1025,6 +1021,7 @@ export function InlinePlayerProfile({ playerSlug, brandColor, onBack, leagueSlug
             </table>
           </div>
         )}
+      </div>
       </div>
     </div>
   );
