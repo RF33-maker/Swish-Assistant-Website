@@ -122,7 +122,7 @@ export function PlayerBanner({
           <img
             src={playerPhotoUrl}
             alt={playerInfo.name}
-            className="absolute -right-[12%] bottom-0 w-auto object-contain object-bottom z-[5]"
+            className="absolute -right-[20%] bottom-0 w-auto object-contain object-bottom z-[5]"
             style={{
               height: '180%',
               maxWidth: '70%',
