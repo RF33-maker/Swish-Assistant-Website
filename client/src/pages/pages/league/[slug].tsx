@@ -4013,7 +4013,12 @@ export default function LeaguePage() {
                           >
                             <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 dark:text-slate-200 sticky left-0 bg-white dark:bg-neutral-900 hover:bg-orange-50 dark:hover:bg-neutral-800 z-10">
                               <div className="min-w-0">
-                                <div className={`font-medium text-xs md:text-sm truncate ${player.slug ? 'text-orange-600 dark:text-orange-400 hover:underline cursor-pointer' : 'text-slate-900 dark:text-white'}`}>{player.name}</div>
+                                <div
+                                  className={`font-medium text-xs md:text-sm truncate ${player.slug ? 'hover:underline cursor-pointer' : 'text-slate-900 dark:text-white'}`}
+                                  style={player.slug ? { color: brandColor } : undefined}
+                                  onMouseEnter={(e) => { if (player.slug) (e.target as HTMLElement).style.color = brandColorHover; }}
+                                  onMouseLeave={(e) => { if (player.slug) (e.target as HTMLElement).style.color = brandColor; }}
+                                >{player.name}</div>
                                 <div className="text-[10px] md:text-xs text-slate-500 dark:text-slate-400 truncate">{player.team}</div>
                               </div>
                             </td>
@@ -5041,7 +5046,12 @@ export default function LeaguePage() {
                                     }
                                   }}
                                 >
-                                  <span className={`truncate mr-2 ${p.slug ? 'text-orange-600 dark:text-orange-400 hover:underline' : ''}`}>{p.name}</span>
+                                  <span
+                                    className={`truncate mr-2 ${p.slug ? 'hover:underline' : ''}`}
+                                    style={p.slug ? { color: brandColor } : undefined}
+                                    onMouseEnter={(e) => { if (p.slug) (e.target as HTMLElement).style.color = brandColorHover; }}
+                                    onMouseLeave={(e) => { if (p.slug) (e.target as HTMLElement).style.color = brandColor; }}
+                                  >{p.name}</span>
                                   <span className="font-medium whitespace-nowrap" style={{ color: brandColor }}>
                                     {p.value} {leagueLeadersView === 'averages' ? avgLabel : totalLabel}
                                   </span>
