@@ -18,6 +18,7 @@ interface PlayerBannerProps {
     photoFocusY?: number | null;
     previousTeams?: string[];
     height?: string | null;
+    heightCm?: number | null;
     dateOfBirth?: string | null;
   };
   playerPhotoUrl: string | null;
@@ -92,7 +93,10 @@ export function PlayerBanner({
 
   const statItems: { label: string; value: string }[] = [];
   if (age !== null) statItems.push({ label: "Age", value: String(age) });
-  if (playerInfo.height) statItems.push({ label: "Height", value: playerInfo.height });
+  const heightDisplay = playerInfo.heightCm
+    ? `${Math.floor(playerInfo.heightCm / 30.48)}'${Math.round((playerInfo.heightCm / 2.54) % 12)}"`
+    : playerInfo.height || null;
+  if (heightDisplay) statItems.push({ label: "Height", value: heightDisplay });
   if (playerInfo.position) statItems.push({ label: "Position", value: playerInfo.position });
   if (playerInfo.number !== undefined && playerInfo.number !== null) statItems.push({ label: "Number", value: `#${playerInfo.number}` });
 

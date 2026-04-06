@@ -109,7 +109,7 @@ export default function PlayerStatsPage() {
   const [playerStats, setPlayerStats] = useState<PlayerStat[]>([]);
   const [seasonAverages, setSeasonAverages] = useState<SeasonAverages | null>(null);
   const [playerRankings, setPlayerRankings] = useState<PlayerRankings | null>(null);
-  const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string; position?: string; number?: number; leagueId?: string; playerId?: string; photoPath?: string | null; photoFocusY?: number | null; previousTeams?: string[]; height?: string | null; dateOfBirth?: string | null } | null>(null);
+  const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string; position?: string; number?: number; leagueId?: string; playerId?: string; photoPath?: string | null; photoFocusY?: number | null; previousTeams?: string[]; height?: string | null; heightCm?: number | null; dateOfBirth?: string | null } | null>(null);
   const [playerLeagues, setPlayerLeagues] = useState<{ id: string; name: string; slug: string }[]>([]);
   const [playerMatches, setPlayerMatches] = useState<PlayerMatch[]>([]);
   const [nameVariations, setNameVariations] = useState<string[]>([]);
@@ -458,6 +458,7 @@ export default function PlayerStatsPage() {
           photoPath: initialPlayer.photo_path_bg_removed,
           photoFocusY: initialPlayer.photo_focus_y,
           height: initialPlayer.height || null,
+          heightCm: initialPlayer.height_cm || null,
           dateOfBirth: initialPlayer.date_of_birth || null,
         };
 
@@ -629,7 +630,7 @@ export default function PlayerStatsPage() {
             photoPath: playerInfo.photoPath,
             photoFocusY: playerInfo.photoFocusY,
             previousTeams: previousTeams.length > 0 ? previousTeams : undefined,
-            height: playerInfo.height,
+            height: playerInfo.height, heightCm: playerInfo.heightCm,
             dateOfBirth: playerInfo.dateOfBirth,
           };
         }
@@ -679,7 +680,7 @@ export default function PlayerStatsPage() {
               photoPath: playerInfo.photoPath,
               photoFocusY: playerInfo.photoFocusY,
               previousTeams: previousTeamsFallback.length > 0 ? previousTeamsFallback : undefined,
-              height: playerInfo.height,
+              height: playerInfo.height, heightCm: playerInfo.heightCm,
               dateOfBirth: playerInfo.dateOfBirth,
             });
           }

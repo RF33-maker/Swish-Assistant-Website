@@ -110,7 +110,7 @@ export function InlinePlayerProfile({ playerSlug, brandColor, onBack, leagueSlug
   const [playerStats, setPlayerStats] = useState<PlayerStat[]>([]);
   const [seasonAverages, setSeasonAverages] = useState<SeasonAverages | null>(null);
   const [playerRankings, setPlayerRankings] = useState<PlayerRankings | null>(null);
-  const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string; position?: string; number?: number; leagueId?: string; playerId?: string; photoPath?: string | null; photoFocusY?: number | null; previousTeams?: string[]; height?: string | null; dateOfBirth?: string | null } | null>(null);
+  const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string; position?: string; number?: number; leagueId?: string; playerId?: string; photoPath?: string | null; photoFocusY?: number | null; previousTeams?: string[]; height?: string | null; heightCm?: number | null; dateOfBirth?: string | null } | null>(null);
   const [playerMatches, setPlayerMatches] = useState<PlayerMatch[]>([]);
   const [nameVariations, setNameVariations] = useState<string[]>([]);
   const [selectedLeagueFilter, setSelectedLeagueFilter] = useState<string>("all");
@@ -342,7 +342,7 @@ export function InlinePlayerProfile({ playerSlug, brandColor, onBack, leagueSlug
           position: initialPlayer.position, number: initialPlayer.number,
           leagueId: initialPlayer.league_id, playerId: initialPlayer.id,
           photoPath: initialPlayer.photo_path_bg_removed, photoFocusY: initialPlayer.photo_focus_y,
-          height: initialPlayer.height || null, dateOfBirth: initialPlayer.date_of_birth || null,
+          height: initialPlayer.height || null, heightCm: initialPlayer.height_cm || null, dateOfBirth: initialPlayer.date_of_birth || null,
         };
 
         const playerIds = matches.map(m => m.id);
@@ -422,7 +422,7 @@ export function InlinePlayerProfile({ playerSlug, brandColor, onBack, leagueSlug
             leagueId: mostRecentStat.league_id, playerId: pInfo.playerId,
             photoPath: pInfo.photoPath, photoFocusY: pInfo.photoFocusY,
             previousTeams: previousTeams.length > 0 ? previousTeams : undefined,
-            height: pInfo.height, dateOfBirth: pInfo.dateOfBirth,
+            height: pInfo.height, heightCm: pInfo.heightCm, dateOfBirth: pInfo.dateOfBirth,
           };
         }
 
