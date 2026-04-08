@@ -6,7 +6,7 @@ import { TeamLogo } from "@/components/TeamLogo";
 import { GameSwitcherBar } from "@/components/GameSwitcherBar";
 import { isGameSlug, parseGameSlug } from "@/lib/gameSlug";
 import { ArrowLeft, Clock, MapPin, Calendar, Users, TrendingUp } from "lucide-react";
-import { useLeagueBranding } from "@/hooks/useLeagueBranding";
+import { usePublicLeagueBrandingById } from "@/hooks/usePublicLeagueBranding";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import LeagueChatbot from "@/components/LeagueChatbot";
@@ -319,15 +319,13 @@ export default function GamePage() {
     enabled: !!gameData?.league_id
   });
 
-  const { colors: leagueBrandColors } = useLeagueBranding({
-    slug: leagueData?.slug,
-    bannerUrl: leagueData?.banner_url,
-    logoUrl: leagueData?.logo_url,
-    manualPrimaryColor: leagueData?.primary_color,
-    manualSecondaryColor: leagueData?.secondary_color,
-    manualAccentColor: leagueData?.accent_color,
-    enabled: !!leagueData,
+  const { colors: leagueBrandColors, brandingData: publicBrandingData } = usePublicLeagueBrandingById({
+    leagueId: gameData?.league_id,
+    fallbackLeague: leagueData,
+    enabled: !!gameData?.league_id,
   });
+
+  const leagueSlug = leagueData?.slug || publicBrandingData?.slug;
 
   const brandColor = leagueBrandColors?.primary || 'rgb(249, 115, 22)';
   const brandColorHover = leagueBrandColors
@@ -894,13 +892,13 @@ export default function GamePage() {
       )}
       <div className="max-w-6xl mx-auto px-4 py-6">
         <button 
-          onClick={() => navigate(leagueData?.slug ? `/league/${leagueData.slug}` : '/')}
+          onClick={() => navigate(leagueSlug ? `/league/${leagueSlug}` : '/')}
           className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 mb-6 transition-colors cursor-pointer"
           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = brandColorHover; }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = ''; }}
         >
           <ArrowLeft className="w-4 h-4" />
-          {leagueData?.slug ? 'Back to League' : 'Back to Home'}
+          {leagueSlug ? 'Back to League' : 'Back to Home'}
         </button>
 
         <div className="bg-white dark:bg-neutral-900 rounded-xl overflow-hidden shadow-lg border border-orange-100 dark:border-neutral-800">
@@ -1704,7 +1702,7 @@ export default function GamePage() {
           isFloatingWidget
           leagueId={gameData.league_id}
           leagueName={gameData.competitionname || 'League'}
-          leagueSlug={leagueData?.slug}
+          leagueSlug={leagueSlug}
           suggestedQuestions={gameSuggestions}
         />
       )}

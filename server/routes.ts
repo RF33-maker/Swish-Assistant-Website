@@ -473,6 +473,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/public/league-branding/:slug", async (req: Request, res: Response) => {
+    try {
+      const { slug } = req.params;
+      if (!slug) return res.status(400).json({ error: "slug is required" });
+
+      const { data, error } = await supabaseAdmin
+        .from("leagues")
+        .select("league_id, name, slug, primary_color, secondary_color, accent_color, banner_url, logo_url")
+        .eq("slug", slug)
+        .eq("is_public", true)
+        .single();
+
+      if (error || !data) {
+        return res.status(404).json({ error: "League not found" });
+      }
+
+      res.json(data);
+    } catch (err: any) {
+      console.error("Error fetching public league branding:", err.message);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/public/league-branding-by-id/:leagueId", async (req: Request, res: Response) => {
+    try {
+      const { leagueId } = req.params;
+      if (!leagueId) return res.status(400).json({ error: "leagueId is required" });
+
+      const { data, error } = await supabaseAdmin
+        .from("leagues")
+        .select("league_id, name, slug, primary_color, secondary_color, accent_color, banner_url, logo_url")
+        .eq("league_id", leagueId)
+        .eq("is_public", true)
+        .single();
+
+      if (error || !data) {
+        return res.status(404).json({ error: "League not found" });
+      }
+
+      res.json(data);
+    } catch (err: any) {
+      console.error("Error fetching public league branding by id:", err.message);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/public/league-logo/:leagueId", async (req: Request, res: Response) => {
+    try {
+      const { leagueId } = req.params;
+      if (!leagueId) return res.status(400).json({ error: "leagueId is required" });
+
+      const { data, error } = await supabaseAdmin
+        .from("leagues")
+        .select("logo_url, parent_league_id, is_public")
+        .eq("league_id", leagueId)
+        .eq("is_public", true)
+        .single();
+
+      if (error || !data) {
+        return res.status(404).json({ error: "League not found" });
+      }
+
+      if (data.logo_url) {
+        return res.json({ logo_url: data.logo_url });
+      }
+
+      if (data.parent_league_id) {
+        const { data: parentData } = await supabaseAdmin
+          .from("leagues")
+          .select("logo_url")
+          .eq("league_id", data.parent_league_id)
+          .eq("is_public", true)
+          .single();
+
+        return res.json({ logo_url: parentData?.logo_url || null });
+      }
+
+      res.json({ logo_url: null });
+    } catch (err: any) {
+      console.error("Error fetching public league logo:", err.message);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

@@ -33,7 +33,7 @@ import { TournamentBracket } from "@/components/TournamentBracket";
 import { normalizeTeamName } from "@/lib/teamUtils";
 import { namesMatch, getMostCompleteName } from "@/lib/fuzzyMatch";
 import { DEBUG, debugLog } from "@/utils/debug";
-import { useLeagueBranding } from "@/hooks/useLeagueBranding";
+import { usePublicLeagueBrandingBySlug } from "@/hooks/usePublicLeagueBranding";
 import { InlinePlayerProfile } from "@/components/InlinePlayerProfile";
 import { InlineTeamProfile } from "@/components/InlineTeamProfile";
 
@@ -583,15 +583,15 @@ export default function LeaguePage() {
     return teamLogoMap.get(normalized);
   };
 
-  const { colors: leagueBrandColors } = useLeagueBranding({
+  const { colors: leagueBrandColors, brandingData: publicBrandingData } = usePublicLeagueBrandingBySlug({
     slug,
-    bannerUrl: league?.banner_url,
-    logoUrl: league?.logo_url,
-    manualPrimaryColor: league?.primary_color,
-    manualSecondaryColor: league?.secondary_color,
-    manualAccentColor: league?.accent_color,
-    enabled: !!league,
+    fallbackLeague: league,
+    enabled: !!slug,
   });
+
+  const displayBannerUrl = league?.banner_url || publicBrandingData?.banner_url;
+  const displayLogoUrl = league?.logo_url || publicBrandingData?.logo_url;
+  const displayLeagueName = league?.name || publicBrandingData?.name;
 
   const brandColor = leagueBrandColors?.primary || 'rgb(249, 115, 22)';
   const brandColorHover = leagueBrandColors 
@@ -3183,14 +3183,14 @@ export default function LeaguePage() {
           <div
             className="rounded-xl overflow-hidden shadow relative h-52 sm:h-64 md:h-80 bg-gray-200"
             style={{
-              backgroundImage: `url(${league?.banner_url || LeagueDefaultImage})`,
+              backgroundImage: `url(${displayBannerUrl || LeagueDefaultImage})`,
               backgroundSize: "cover",
               backgroundPosition: "center",
             }}
           >
             <div className="absolute inset-0 bg-black/40 flex flex-col justify-end p-6">
               <h2 className="text-3xl sm:text-4xl font-bold text-white drop-shadow-md">
-                {league?.name || "League Name"}
+                {displayLeagueName || "League Name"}
               </h2>
               <p className="text-sm text-white/90 mt-1">
             
@@ -3266,10 +3266,10 @@ export default function LeaguePage() {
           <div className="w-full bg-gradient-to-b from-transparent to-[#fffaf5] dark:to-neutral-900 pt-3 pb-5 px-4 animate-fade-in-up">
             <div className="max-w-4xl mx-auto bg-white dark:bg-neutral-900 rounded-lg shadow-sm p-4 md:p-5 dark:border-neutral-800" style={{ border: `1px solid ${brandBorderLight}` }}>
               <div className="flex items-center gap-3 mb-3">
-                {league?.logo_url && (
+                {displayLogoUrl && (
                   <img
-                    src={league.logo_url}
-                    alt={`${league.name} logo`}
+                    src={displayLogoUrl}
+                    alt={`${displayLeagueName || league?.name || ''} logo`}
                     className="h-8 w-auto drop-shadow-sm"
                   />
                 )}

@@ -6,7 +6,7 @@ import Footer from "@/components/layout/footer";
 import { ArrowLeft, ChevronDown } from "lucide-react";
 import { namesMatch, getMostCompleteName } from "@/lib/fuzzyMatch";
 import { normalizeTeamName } from "@/lib/teamUtils";
-import { useLeagueBranding } from "@/hooks/useLeagueBranding";
+import { usePublicLeagueBrandingBySlug } from "@/hooks/usePublicLeagueBranding";
 import LeagueDefaultImage from "@/assets/league-default.png";
 
 interface ChildLeague {
@@ -56,15 +56,14 @@ export default function LeagueLeadersPage() {
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
   const fetchCancelledRef = useRef(false);
 
-  const { colors: leagueBrandColors } = useLeagueBranding({
+  const { colors: leagueBrandColors, brandingData: publicBrandingData } = usePublicLeagueBrandingBySlug({
     slug,
-    bannerUrl: league?.banner_url,
-    logoUrl: league?.logo_url,
-    manualPrimaryColor: league?.primary_color,
-    manualSecondaryColor: league?.secondary_color,
-    manualAccentColor: league?.accent_color,
-    enabled: !!league,
+    fallbackLeague: league,
+    enabled: !!slug,
   });
+
+  const displayBannerUrl = league?.banner_url || publicBrandingData?.banner_url;
+  const displayLogoUrl = league?.logo_url || publicBrandingData?.logo_url;
 
   const brandColor = leagueBrandColors?.primary || 'rgb(249, 115, 22)';
   const brandColorHover = leagueBrandColors
@@ -635,15 +634,15 @@ export default function LeagueLeadersPage() {
         <div
           className="rounded-xl overflow-hidden shadow relative h-40 sm:h-52 md:h-64 bg-gray-200 mx-4 md:mx-6 mt-4"
           style={{
-            backgroundImage: `url(${league?.banner_url || LeagueDefaultImage})`,
+            backgroundImage: `url(${displayBannerUrl || LeagueDefaultImage})`,
             backgroundSize: "cover",
             backgroundPosition: "center",
           }}
         >
           <div className="absolute inset-0 bg-black/40 flex flex-col justify-end p-6">
             <div className="flex items-center gap-3">
-              {league?.logo_url && (
-                <img src={league.logo_url} alt={league.name} className="h-10 w-10 md:h-14 md:w-14 object-contain rounded-lg bg-white/20 p-1" />
+              {displayLogoUrl && (
+                <img src={displayLogoUrl} alt={league?.name || ''} className="h-10 w-10 md:h-14 md:w-14 object-contain rounded-lg bg-white/20 p-1" />
               )}
               <div>
                 <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white drop-shadow-md">

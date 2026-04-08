@@ -21,6 +21,33 @@ const DEFAULT_SECONDARY = 'rgb(59, 130, 246)';
 const leagueLogoCache = new Map<string, string | null>();
 const leagueLogoFetching = new Map<string, Promise<string | null>>();
 
+async function getLeagueLogoViaSupabase(leagueId: string): Promise<string | null> {
+  try {
+    const { data, error } = await supabase
+      .from('leagues')
+      .select('logo_url, parent_league_id')
+      .eq('league_id', leagueId)
+      .single();
+
+    if (error || !data) return null;
+
+    if (data.logo_url) return data.logo_url;
+
+    if (data.parent_league_id) {
+      const { data: parentData } = await supabase
+        .from('leagues')
+        .select('logo_url')
+        .eq('league_id', data.parent_league_id)
+        .single();
+      return parentData?.logo_url || null;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 async function getLeagueLogoUrl(leagueId: string): Promise<string | null> {
   if (leagueLogoCache.has(leagueId)) {
     return leagueLogoCache.get(leagueId)!;
@@ -32,36 +59,19 @@ async function getLeagueLogoUrl(leagueId: string): Promise<string | null> {
 
   const fetchPromise = (async (): Promise<string | null> => {
     try {
-      const { data, error } = await supabase
-        .from('leagues')
-        .select('logo_url, parent_league_id')
-        .eq('league_id', leagueId)
-        .single();
-
-      if (error || !data) {
-        leagueLogoCache.set(leagueId, null);
-        return null;
+      const res = await fetch(`/api/public/league-logo/${encodeURIComponent(leagueId)}`);
+      if (res.ok) {
+        const data = await res.json();
+        const logoUrl = data?.logo_url || null;
+        if (logoUrl) {
+          leagueLogoCache.set(leagueId, logoUrl);
+          return logoUrl;
+        }
       }
 
-      if (data.logo_url) {
-        leagueLogoCache.set(leagueId, data.logo_url);
-        return data.logo_url;
-      }
-
-      if (data.parent_league_id) {
-        const { data: parentData } = await supabase
-          .from('leagues')
-          .select('logo_url')
-          .eq('league_id', data.parent_league_id)
-          .single();
-
-        const parentLogo = parentData?.logo_url || null;
-        leagueLogoCache.set(leagueId, parentLogo);
-        return parentLogo;
-      }
-
-      leagueLogoCache.set(leagueId, null);
-      return null;
+      const supabaseLogo = await getLeagueLogoViaSupabase(leagueId);
+      leagueLogoCache.set(leagueId, supabaseLogo);
+      return supabaseLogo;
     } catch {
       leagueLogoCache.set(leagueId, null);
       return null;
