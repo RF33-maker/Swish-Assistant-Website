@@ -4761,6 +4761,7 @@ export default function LeaguePage() {
                   brandColor={brandColor}
                   leagueSlug={slug}
                   leagueId={league?.league_id || ""}
+                  childLeagueIds={isParentLeague ? childCompetitions.map(c => c.league_id) : undefined}
                   onBack={() => {
                     setSelectedTeamName(null);
                     setActiveSection(previousSection);

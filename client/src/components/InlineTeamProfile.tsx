@@ -19,6 +19,7 @@ interface InlineTeamProfileProps {
   brandColor: string;
   leagueSlug: string;
   leagueId: string;
+  childLeagueIds?: string[];
   onBack: () => void;
   onPlayerClick?: (slug: string) => void;
 }
@@ -86,7 +87,7 @@ const applyPlayerMode = (
   return value;
 };
 
-export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, onBack, onPlayerClick }: InlineTeamProfileProps) {
+export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, childLeagueIds, onBack, onPlayerClick }: InlineTeamProfileProps) {
   const [, navigate] = useLocation();
   const [activeTab, setActiveTab] = useState<'overview' | 'playerStats' | 'shotChart'>('overview');
   const [playerStatsCategory, setPlayerStatsCategory] = useState<'Traditional' | 'Advanced' | 'Scoring'>('Traditional');
@@ -97,13 +98,15 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
 
   const normalizedTeamName = useMemo(() => normalizeTeamName(decodeURIComponent(teamName)), [teamName]);
 
+  const effectiveLeagueIds = childLeagueIds && childLeagueIds.length > 0 ? childLeagueIds : [leagueId];
+
   const { data: teamData, isLoading } = useQuery({
-    queryKey: ['inline-team-profile', normalizedTeamName, leagueId],
+    queryKey: ['inline-team-profile', normalizedTeamName, leagueId, childLeagueIds?.join(',')],
     queryFn: async () => {
       const { data: allTeamStats, error } = await supabase
         .from("player_stats")
         .select("*, players:player_id(slug)")
-        .eq("league_id", leagueId)
+        .in("league_id", effectiveLeagueIds)
         .ilike("team_name", `%${normalizedTeamName}%`);
 
       if (error) throw error;
