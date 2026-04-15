@@ -120,7 +120,16 @@ export async function getTeamLogoCached(
   const fetchPromise = (async (): Promise<string | null> => {
     try {
       const dbLogos = await getDbLogosForLeague(leagueId);
-      const dbUrl = dbLogos.get(teamName) || dbLogos.get(normalizeTeamName(teamName));
+      let dbUrl = dbLogos.get(teamName) || dbLogos.get(normalizeTeamName(teamName));
+
+      if (!dbUrl) {
+        const parentId = await getParentLeagueId(leagueId);
+        if (parentId && parentId !== leagueId) {
+          const parentDbLogos = await getDbLogosForLeague(parentId);
+          dbUrl = parentDbLogos.get(teamName) || parentDbLogos.get(normalizeTeamName(teamName));
+        }
+      }
+
       if (dbUrl) {
         debugLog(`[TeamLogoCache] Found logo in DB for "${teamName}"`);
         logoCache.set(cacheKey, dbUrl);
