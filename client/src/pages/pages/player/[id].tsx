@@ -238,8 +238,7 @@ export default function PlayerStatsPage() {
       const { data: allStats } = await supabase
         .from('player_stats')
         .select('*')
-        .eq('league_id', leagueId)
-        .eq('is_public', true);
+        .eq('league_id', leagueId);
 
       if (!allStats || allStats.length === 0) return null;
 
@@ -251,7 +250,9 @@ export default function PlayerStatsPage() {
       // Calculate totals for each player (only counting games they played)
       const playerTotals = new Map<string, any>();
       playedStats.forEach(stat => {
-        const key = `${stat.firstname || ''}_${stat.familyname || ''}`.trim();
+        const key = stat.full_name?.trim() ||
+          `${stat.firstname || ''} ${stat.familyname || ''}`.trim() ||
+          'unknown';
         if (!playerTotals.has(key)) {
           playerTotals.set(key, {
             points: 0, rebounds: 0, assists: 0, steals: 0, blocks: 0,
