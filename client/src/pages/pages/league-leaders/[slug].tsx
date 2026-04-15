@@ -6,12 +6,13 @@ import Footer from "@/components/layout/footer";
 import { ArrowLeft, ChevronDown } from "lucide-react";
 import { namesMatch, getMostCompleteName } from "@/lib/fuzzyMatch";
 import { normalizeTeamName } from "@/lib/teamUtils";
-import { useLeagueBranding } from "@/hooks/useLeagueBranding";
+import { usePublicLeagueBrandingBySlug } from "@/hooks/usePublicLeagueBranding";
 import LeagueDefaultImage from "@/assets/league-default.png";
 
 interface ChildLeague {
   league_id: string;
   name: string;
+  age_group?: string | null;
 }
 
 interface League {
@@ -56,15 +57,14 @@ export default function LeagueLeadersPage() {
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
   const fetchCancelledRef = useRef(false);
 
-  const { colors: leagueBrandColors } = useLeagueBranding({
+  const { colors: leagueBrandColors, brandingData: publicBrandingData } = usePublicLeagueBrandingBySlug({
     slug,
-    bannerUrl: league?.banner_url,
-    logoUrl: league?.logo_url,
-    manualPrimaryColor: league?.primary_color,
-    manualSecondaryColor: league?.secondary_color,
-    manualAccentColor: league?.accent_color,
-    enabled: !!league,
+    fallbackLeague: league,
+    enabled: !!slug,
   });
+
+  const displayBannerUrl = league?.banner_url || publicBrandingData?.banner_url;
+  const displayLogoUrl = league?.logo_url || publicBrandingData?.logo_url;
 
   const brandColor = leagueBrandColors?.primary || 'rgb(249, 115, 22)';
   const brandColorHover = leagueBrandColors
@@ -99,13 +99,33 @@ export default function LeagueLeadersPage() {
 
   const ageGroupOptions = useMemo(() => {
     if (!isParentLeague || !league) return [];
-    return childLeagues
-      .map(c => ({
-        league_id: c.league_id,
-        label: league.name ? c.name.replace(league.name, '').trim() || c.name : c.name,
-      }))
-      .sort((a, b) => a.label.localeCompare(b.label));
+    const groupMap = new Map<string, string[]>();
+    childLeagues.forEach(c => {
+      const ag = c.age_group || (league.name ? c.name.replace(league.name, '').trim() || c.name : c.name);
+      if (!groupMap.has(ag)) groupMap.set(ag, []);
+      groupMap.get(ag)!.push(c.league_id);
+    });
+    return Array.from(groupMap.entries())
+      .map(([ag, ids]) => ({ age_group: ag, league_ids: ids, displayLabel: ag }))
+      .sort((a, b) => {
+        const numA = parseInt(a.age_group.replace(/\D/g, ''));
+        const numB = parseInt(b.age_group.replace(/\D/g, ''));
+        if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+        return a.age_group.localeCompare(b.age_group);
+      });
   }, [childLeagues, league, isParentLeague]);
+
+  useEffect(() => {
+    if (isParentLeague && ageGroupOptions.length > 0 && selectedAgeGroup === 'all') {
+      setSelectedAgeGroup(ageGroupOptions[0].age_group);
+    }
+  }, [isParentLeague, ageGroupOptions]);
+
+  const selectedLeagueIdsForAgeGroup = useMemo(() => {
+    if (selectedAgeGroup === 'all') return childLeagues.map(c => c.league_id);
+    const found = ageGroupOptions.find(o => o.age_group === selectedAgeGroup);
+    return found ? found.league_ids : [];
+  }, [selectedAgeGroup, ageGroupOptions, childLeagues]);
 
   const availableRounds = useMemo(() => {
     if (!isParentLeague) return [];
@@ -167,7 +187,7 @@ export default function LeagueLeadersPage() {
         let leagueIdsToQuery = [leagueData.league_id];
         const { data: childLeagueData } = await supabase
           .from("leagues")
-          .select("league_id, name")
+          .select("league_id, name, age_group")
           .eq("parent_league_id", leagueData.league_id);
         
         if (childLeagueData && childLeagueData.length > 0) {
@@ -361,7 +381,7 @@ export default function LeagueLeadersPage() {
     let stats = rawPlayerStats;
 
     if (isParentLeague && selectedAgeGroup !== 'all') {
-      stats = stats.filter(s => s.league_id === selectedAgeGroup);
+      stats = stats.filter(s => selectedLeagueIdsForAgeGroup.includes(s.league_id));
     }
 
     if (isParentLeague && selectedRound !== 'all') {
@@ -379,7 +399,7 @@ export default function LeagueLeadersPage() {
     }
 
     return stats;
-  }, [rawPlayerStats, isParentLeague, selectedAgeGroup, selectedRound, selectedMonth]);
+  }, [rawPlayerStats, isParentLeague, selectedAgeGroup, selectedLeagueIdsForAgeGroup, selectedRound, selectedMonth]);
 
   const aggregatedPlayers = useMemo(() => {
     if (filteredStats.length === 0) return [];
@@ -635,15 +655,15 @@ export default function LeagueLeadersPage() {
         <div
           className="rounded-xl overflow-hidden shadow relative h-40 sm:h-52 md:h-64 bg-gray-200 mx-4 md:mx-6 mt-4"
           style={{
-            backgroundImage: `url(${league?.banner_url || LeagueDefaultImage})`,
+            backgroundImage: `url(${displayBannerUrl || LeagueDefaultImage})`,
             backgroundSize: "cover",
             backgroundPosition: "center",
           }}
         >
           <div className="absolute inset-0 bg-black/40 flex flex-col justify-end p-6">
             <div className="flex items-center gap-3">
-              {league?.logo_url && (
-                <img src={league.logo_url} alt={league.name} className="h-10 w-10 md:h-14 md:w-14 object-contain rounded-lg bg-white/20 p-1" />
+              {displayLogoUrl && (
+                <img src={displayLogoUrl} alt={league?.name || ''} className="h-10 w-10 md:h-14 md:w-14 object-contain rounded-lg bg-white/20 p-1" />
               )}
               <div>
                 <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white drop-shadow-md">
@@ -703,62 +723,33 @@ export default function LeagueLeadersPage() {
           <div className="space-y-3">
             {/* Age Group Filter */}
             {ageGroupOptions.length > 0 && (
-              <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
-                <button
-                  onClick={() => setSelectedAgeGroup('all')}
-                  className={`filter-tab whitespace-nowrap px-3 py-1.5 text-sm font-medium rounded-full transition-all ${
-                    selectedAgeGroup === 'all'
-                      ? 'text-white'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                  }`}
-                  style={selectedAgeGroup === 'all' ? { backgroundColor: brandColor } : {}}
+              <div>
+                <select
+                  value={selectedAgeGroup}
+                  onChange={(e) => setSelectedAgeGroup(e.target.value)}
+                  className="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
+                  style={{ borderColor: brandColor }}
                 >
-                  All Ages
-                </button>
-                {ageGroupOptions.map(opt => (
-                  <button
-                    key={opt.league_id}
-                    onClick={() => setSelectedAgeGroup(opt.league_id)}
-                    className={`filter-tab whitespace-nowrap px-3 py-1.5 text-sm font-medium rounded-full transition-all ${
-                      selectedAgeGroup === opt.league_id
-                        ? 'text-white'
-                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                    }`}
-                    style={selectedAgeGroup === opt.league_id ? { backgroundColor: brandColor } : {}}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
+                  {ageGroupOptions.map(opt => (
+                    <option key={opt.age_group} value={opt.age_group}>{opt.displayLabel}</option>
+                  ))}
+                </select>
               </div>
             )}
             {/* Round Filter */}
             {availableRounds.length > 0 && (
-              <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
-                <button
-                  onClick={() => setSelectedRound('all')}
-                  className={`filter-tab whitespace-nowrap px-3 py-1.5 text-sm font-medium transition-all ${
-                    selectedRound === 'all'
-                      ? 'font-bold'
-                      : 'text-gray-500 dark:text-gray-400'
-                  }`}
-                  style={selectedRound === 'all' ? { color: brandColor, borderBottom: `2px solid ${brandColor}` } : {}}
+              <div>
+                <select
+                  value={selectedRound}
+                  onChange={(e) => setSelectedRound(e.target.value)}
+                  className="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
+                  style={selectedRound !== 'all' ? { borderColor: brandColor } : {}}
                 >
-                  Season
-                </button>
-                {availableRounds.map(round => (
-                  <button
-                    key={round}
-                    onClick={() => setSelectedRound(round)}
-                    className={`filter-tab whitespace-nowrap px-3 py-1.5 text-sm font-medium transition-all ${
-                      selectedRound === round
-                        ? 'font-bold'
-                        : 'text-gray-500 dark:text-gray-400'
-                    }`}
-                    style={selectedRound === round ? { color: brandColor, borderBottom: `2px solid ${brandColor}` } : {}}
-                  >
-                    {round}
-                  </button>
-                ))}
+                  <option value="all">All Rounds</option>
+                  {availableRounds.map(round => (
+                    <option key={round} value={round}>{round}</option>
+                  ))}
+                </select>
               </div>
             )}
           </div>

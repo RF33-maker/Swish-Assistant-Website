@@ -29,6 +29,8 @@ export const leagues = pgTable("leagues", {
   secondary_color: text("secondary_color"),
   accent_color: text("accent_color"),
   trending_position: smallint("trending_position"),
+  age_group: varchar("age_group", { length: 50 }),
+  stop: smallint("stop"),
   created_at: timestamp("created_at").defaultNow(),
   updated_at: timestamp("updated_at").defaultNow(),
 });

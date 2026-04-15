@@ -238,8 +238,7 @@ export default function PlayerStatsPage() {
       const { data: allStats } = await supabase
         .from('player_stats')
         .select('*')
-        .eq('league_id', leagueId)
-        .eq('is_public', true);
+        .eq('league_id', leagueId);
 
       if (!allStats || allStats.length === 0) return null;
 
@@ -251,7 +250,11 @@ export default function PlayerStatsPage() {
       // Calculate totals for each player (only counting games they played)
       const playerTotals = new Map<string, any>();
       playedStats.forEach(stat => {
-        const key = `${stat.firstname || ''}_${stat.familyname || ''}`.trim();
+        const key = (
+          stat.full_name?.trim().replace(/\s+/g, ' ') ||
+          `${stat.firstname || ''} ${stat.familyname || ''}`.trim().replace(/\s+/g, ' ') ||
+          'unknown'
+        ).toLowerCase();
         if (!playerTotals.has(key)) {
           playerTotals.set(key, {
             points: 0, rebounds: 0, assists: 0, steals: 0, blocks: 0,
@@ -470,20 +473,53 @@ export default function PlayerStatsPage() {
           .in('player_id', playerIds)
           .order('created_at', { ascending: false });
 
-        // Fetch league names for all unique league_ids from playerMatches
-        const uniqueLeagueIds = Array.from(new Set(matches.map(m => m.league_id).filter(Boolean)));
+        // Fetch league info for all unique league_ids (from both matches and stats)
+        const uniqueLeagueIds = Array.from(new Set([
+          ...matches.map(m => m.league_id),
+          ...(stats || []).map((s: any) => s.league_id),
+        ].filter(Boolean)));
+
+        // Local map used to enrich stat rows before setPlayerStats — no state needed
+        const leagueInfoLocal = new Map<string, { name: string; parent_league_id?: string | null; age_group?: string | null; stop?: number | null }>();
+        const leagueMapLocal = new Map<string, string>();
+
         if (uniqueLeagueIds.length > 0) {
           const { data: leaguesData } = await supabase
             .from('leagues')
-            .select('league_id, name')
+            .select('league_id, name, parent_league_id, age_group, stop')
             .in('league_id', uniqueLeagueIds);
-          
+
           if (leaguesData) {
-            const leagueMap = new Map<string, string>();
+            const parentIds: string[] = [];
+
             leaguesData.forEach(league => {
-              leagueMap.set(league.league_id, league.name);
+              leagueMapLocal.set(league.league_id, league.name);
+              leagueInfoLocal.set(league.league_id, {
+                name: league.name,
+                parent_league_id: league.parent_league_id,
+                age_group: league.age_group,
+                stop: league.stop,
+              });
+              if (league.parent_league_id && !uniqueLeagueIds.includes(league.parent_league_id)) {
+                parentIds.push(league.parent_league_id);
+              }
             });
-            setLeagueNames(leagueMap);
+
+            // Fetch names for parent leagues not already in our set
+            const uniqueParentIds = Array.from(new Set(parentIds));
+            if (uniqueParentIds.length > 0) {
+              const { data: parentLeagues } = await supabase
+                .from('leagues')
+                .select('league_id, name')
+                .in('league_id', uniqueParentIds);
+              if (parentLeagues) {
+                parentLeagues.forEach(pl => {
+                  leagueMapLocal.set(pl.league_id, pl.name);
+                });
+              }
+            }
+
+            setLeagueNames(leagueMapLocal);
           }
         }
 
@@ -583,6 +619,28 @@ export default function PlayerStatsPage() {
           }
         }
         
+        // Enrich each stat with pre-computed group key and label so careerStats
+        // useMemo doesn't need a separate leagueInfoMap state (avoids timing race)
+        statsWithOpponents = statsWithOpponents.map((stat: any) => {
+          const lid = stat.league_id || '';
+          const info = leagueInfoLocal.get(lid);
+          let groupKey: string;
+          let groupLabel: string;
+          if (info?.parent_league_id) {
+            const stopPart = info.stop != null ? `::stop${info.stop}` : '';
+            const agePart = info.age_group ? `::${info.age_group}` : '';
+            groupKey = `${info.parent_league_id}${agePart}${stopPart}`;
+            const parentName = leagueMapLocal.get(info.parent_league_id) || info.parent_league_id;
+            const ageSuffix = info.age_group ? ` ${info.age_group}` : '';
+            const stopSuffix = info.stop != null ? ` Stop ${info.stop}` : '';
+            groupLabel = `${parentName}${ageSuffix}${stopSuffix}`;
+          } else {
+            groupKey = lid;
+            groupLabel = leagueMapLocal.get(lid) || lid;
+          }
+          return { ...stat, _groupKey: groupKey, _groupLabel: groupLabel };
+        });
+
         setPlayerStats(statsWithOpponents);
         
         // If we have stats with joined players data, use that for player info
@@ -721,11 +779,40 @@ export default function PlayerStatsPage() {
           };
           setSeasonAverages(averages);
 
-          // Calculate player rankings
-          if (gamesPlayed[0].league_id) {
-            const ranks = await calculateRankings(gamesPlayed[0].league_id, averages);
-            if (ranks) {
-              setPlayerRankings(ranks);
+          // Calculate player rankings using only the games in the primary league
+          // so the comparison is apples-to-apples with the pool
+          const rankingLeagueId = gamesPlayed[0].league_id;
+          if (rankingLeagueId) {
+            const leagueOnlyGames = gamesPlayed.filter((g: any) => g.league_id === rankingLeagueId);
+            if (leagueOnlyGames.length > 0) {
+              const lt = leagueOnlyGames.reduce((acc: any, g: any) => ({
+                points: acc.points + (g.spoints || 0),
+                rebounds: acc.rebounds + (g.sreboundstotal || 0),
+                assists: acc.assists + (g.sassists || 0),
+                steals: acc.steals + (g.ssteals || 0),
+                blocks: acc.blocks + (g.sblocks || 0),
+                fg_made: acc.fg_made + (g.sfieldgoalsmade || 0),
+                fg_att: acc.fg_att + (g.sfieldgoalsattempted || 0),
+                three_made: acc.three_made + (g.sthreepointersmade || 0),
+                three_att: acc.three_att + (g.sthreepointersattempted || 0),
+                ft_made: acc.ft_made + (g.sfreethrowsmade || 0),
+                ft_att: acc.ft_att + (g.sfreethrowsattempted || 0),
+              }), { points:0, rebounds:0, assists:0, steals:0, blocks:0, fg_made:0, fg_att:0, three_made:0, three_att:0, ft_made:0, ft_att:0 });
+              const lg = leagueOnlyGames.length;
+              const rankAverages: SeasonAverages = {
+                games_played: lg,
+                avg_points: lt.points / lg,
+                avg_rebounds: lt.rebounds / lg,
+                avg_assists: lt.assists / lg,
+                avg_steals: lt.steals / lg,
+                avg_blocks: lt.blocks / lg,
+                fg_percentage: lt.fg_att > 0 ? (lt.fg_made / lt.fg_att) * 100 : 0,
+                three_point_percentage: lt.three_att > 0 ? (lt.three_made / lt.three_att) * 100 : 0,
+                ft_percentage: lt.ft_att > 0 ? (lt.ft_made / lt.ft_att) * 100 : 0,
+                avg_efficiency: 0,
+              };
+              const ranks = await calculateRankings(rankingLeagueId, rankAverages);
+              if (ranks) setPlayerRankings(ranks);
             }
           }
 
@@ -894,14 +981,18 @@ export default function PlayerStatsPage() {
 
   const careerStats = useMemo(() => {
     if (!playerStats || playerStats.length === 0) return [];
+
+    // Group by pre-computed _groupKey embedded on each stat during data fetch
     const leagueGroups = new Map<string, any[]>();
-    playerStats.forEach(stat => {
-      const leagueId = stat.players?.league_id || stat.league_id || 'unknown';
-      if (!leagueGroups.has(leagueId)) leagueGroups.set(leagueId, []);
-      leagueGroups.get(leagueId)!.push(stat);
+
+    playerStats.forEach((stat: any) => {
+      const key = stat._groupKey || stat.league_id || 'unknown';
+      if (!leagueGroups.has(key)) leagueGroups.set(key, []);
+      leagueGroups.get(key)!.push(stat);
     });
+
     const seasons: any[] = [];
-    leagueGroups.forEach((stats, leagueId) => {
+    leagueGroups.forEach((stats) => {
       const played = stats.filter((s: any) => parseMinutesPlayed(s) > 0);
       if (played.length === 0) return;
       const gp = played.length;
@@ -920,9 +1011,12 @@ export default function PlayerStatsPage() {
         to: acc.to + (g.sturnovers || g.turnovers || 0),
         min: acc.min + parseMinutesPlayed(g),
       }), { pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0, to: 0, min: 0 });
-      const team = played[0].team_name || played[0].team || '';
+      const first = played[0] as any;
+      const team = first.team_name || first.team || '';
+      const leagueId = first.league_id || first._groupKey || '';
+      const season = first._groupLabel || leagueNames.get(leagueId) || leagueId;
       seasons.push({
-        leagueId, season: leagueNames.get(leagueId) || leagueId, team, gp, ...totals,
+        leagueId, season, team, gp, ...totals,
         fg_pct: totals.fga > 0 ? (totals.fgm / totals.fga) * 100 : 0,
         tp_pct: totals.tpa > 0 ? (totals.tpm / totals.tpa) * 100 : 0,
         ft_pct: totals.fta > 0 ? (totals.ftm / totals.fta) * 100 : 0,
