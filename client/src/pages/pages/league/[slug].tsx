@@ -3822,7 +3822,7 @@ export default function LeaguePage() {
                     >
                       <option value="all">All Ages</option>
                       {availableAgeGroups.map(ag => (
-                        <option key={ag} value={ag}>{ag}</option>
+                        <option key={ag} value={ag}>{shortenAgeLabel(ag)}</option>
                       ))}
                     </select>
                   </div>
@@ -4446,7 +4446,7 @@ export default function LeaguePage() {
                           >
                             <option value="all">All Ages</option>
                             {ageGroups.sort().map(ag => (
-                              <option key={ag} value={ag}>{ag}</option>
+                              <option key={ag} value={ag}>{shortenAgeLabel(ag)}</option>
                             ))}
                           </select>
                         </div>
@@ -4778,7 +4778,7 @@ export default function LeaguePage() {
                             >
                               <option value="all">All Ages</option>
                               {availableAgeGroups.map(ag => (
-                                <option key={ag} value={ag}>{ag}</option>
+                                <option key={ag} value={ag}>{shortenAgeLabel(ag)}</option>
                               ))}
                             </select>
                           )}
