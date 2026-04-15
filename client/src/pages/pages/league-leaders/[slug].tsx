@@ -99,10 +99,12 @@ export default function LeagueLeadersPage() {
   const ageGroupOptions = useMemo(() => {
     if (!isParentLeague || !league) return [];
     return childLeagues
-      .map(c => ({
-        league_id: c.league_id,
-        label: league.name ? c.name.replace(league.name, '').trim() || c.name : c.name,
-      }))
+      .map(c => {
+        let label = league.name ? c.name.replace(league.name, '').trim() || c.name : c.name;
+        const ageMatch = label.match(/\d+U/i);
+        if (ageMatch) label = ageMatch[0].toUpperCase();
+        return { league_id: c.league_id, label };
+      })
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [childLeagues, league, isParentLeague]);
 

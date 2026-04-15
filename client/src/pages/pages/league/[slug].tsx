@@ -612,7 +612,9 @@ export default function LeaguePage() {
   const childLeagueMap = useMemo(() => {
     const map = new Map<string, string>();
     childCompetitions.forEach(c => {
-      const label = league?.name ? c.name.replace(league.name, '').trim() || c.name : c.name;
+      let label = league?.name ? c.name.replace(league.name, '').trim() || c.name : c.name;
+      const ageMatch = label.match(/\d+U/i);
+      if (ageMatch) label = ageMatch[0].toUpperCase();
       map.set(c.league_id, label);
     });
     return map;
@@ -3806,7 +3808,24 @@ export default function LeaguePage() {
                   )}
                 </div>
 
-                {/* Round Filter Dropdown (non-parent leagues with rounds) */}
+                {/* Age Group Filter Dropdown (non-parent leagues with age groups) */}
+                {!isParentLeague && availableAgeGroups.length > 0 && (
+                  <div className="mb-2">
+                    <select
+                      value={filterAgeGroup}
+                      onChange={(e) => setFilterAgeGroup(e.target.value)}
+                      className="px-3 py-1.5 text-xs md:text-sm font-medium rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
+                      style={filterAgeGroup !== 'all' ? { borderColor: brandColor, color: brandColor } : {}}
+                    >
+                      <option value="all">All Ages</option>
+                      {availableAgeGroups.map(ag => (
+                        <option key={ag} value={ag}>{ag}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Round Filter Dropdown (non-parent leagues with rounds) — secondary below age group */}
                 {!isParentLeague && availableRounds.length > 0 && (
                   <div className="mb-4">
                     <select
@@ -3818,23 +3837,6 @@ export default function LeaguePage() {
                       <option value="all">All Rounds</option>
                       {availableRounds.map(r => (
                         <option key={r} value={r}>{r}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {/* Age Group Filter Dropdown (non-parent leagues with age groups) */}
-                {!isParentLeague && availableAgeGroups.length > 0 && (
-                  <div className="mb-4">
-                    <select
-                      value={filterAgeGroup}
-                      onChange={(e) => setFilterAgeGroup(e.target.value)}
-                      className="px-3 py-1.5 text-xs md:text-sm font-medium rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
-                      style={filterAgeGroup !== 'all' ? { borderColor: brandColor, color: brandColor } : {}}
-                    >
-                      <option value="all">All Ages</option>
-                      {availableAgeGroups.map(ag => (
-                        <option key={ag} value={ag}>{ag}</option>
                       ))}
                     </select>
                   </div>
@@ -4424,38 +4426,42 @@ export default function LeaguePage() {
                   </button>
                 </div>
 
-                {/* Age Group & Round Filters - hidden for parent leagues since tab bar handles it */}
+                {/* Age Group & Round Filters - hidden for parent leagues since dropdown handles it */}
                 {!isParentLeague && (() => {
                   const ageGroups = [...new Set(schedule.map(g => g.age_group).filter(Boolean))] as string[];
                   const rounds = [...new Set(schedule.map(g => g.round).filter(Boolean))] as string[];
                   if (ageGroups.length === 0 && rounds.length === 0) return null;
                   return (
-                    <div className="flex flex-wrap gap-2 mb-4">
+                    <div className="flex flex-col gap-2 mb-4">
                       {ageGroups.length > 0 && (
-                        <select
-                          value={filterAgeGroup}
-                          onChange={(e) => setFilterAgeGroup(e.target.value)}
-                          className="px-3 py-1.5 text-xs md:text-sm rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
-                          style={{ focusRingColor: brandColor } as any}
-                        >
-                          <option value="all">All Age Groups</option>
-                          {ageGroups.sort().map(ag => (
-                            <option key={ag} value={ag}>{ag}</option>
-                          ))}
-                        </select>
+                        <div>
+                          <select
+                            value={filterAgeGroup}
+                            onChange={(e) => setFilterAgeGroup(e.target.value)}
+                            className="px-3 py-1.5 text-xs md:text-sm font-medium rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
+                            style={filterAgeGroup !== 'all' ? { borderColor: brandColor, color: brandColor } : {}}
+                          >
+                            <option value="all">All Ages</option>
+                            {ageGroups.sort().map(ag => (
+                              <option key={ag} value={ag}>{ag}</option>
+                            ))}
+                          </select>
+                        </div>
                       )}
                       {rounds.length > 0 && (
-                        <select
-                          value={filterRound}
-                          onChange={(e) => setFilterRound(e.target.value)}
-                          className="px-3 py-1.5 text-xs md:text-sm rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
-                          style={{ focusRingColor: brandColor } as any}
-                        >
-                          <option value="all">All Rounds</option>
-                          {rounds.sort().map(r => (
-                            <option key={r} value={r}>{r}</option>
-                          ))}
-                        </select>
+                        <div>
+                          <select
+                            value={filterRound}
+                            onChange={(e) => setFilterRound(e.target.value)}
+                            className="px-3 py-1.5 text-xs md:text-sm font-medium rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
+                            style={filterRound !== 'all' ? { borderColor: brandColor, color: brandColor } : {}}
+                          >
+                            <option value="all">All Rounds</option>
+                            {rounds.sort().map(r => (
+                              <option key={r} value={r}>{r}</option>
+                            ))}
+                          </select>
+                        </div>
                       )}
                     </div>
                   );
@@ -4759,12 +4765,13 @@ export default function LeaguePage() {
                     </div>
                     <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
                       {!isParentLeague && (availableAgeGroups.length > 0 || availableRounds.length > 0) && (
-                        <div className="flex gap-1.5">
+                        <div className="flex flex-col gap-1.5">
                           {availableAgeGroups.length > 0 && (
                             <select
                               value={filterAgeGroup}
                               onChange={(e) => setFilterAgeGroup(e.target.value)}
                               className="px-2 py-1 text-[11px] md:text-xs rounded-md border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300"
+                              style={filterAgeGroup !== 'all' ? { borderColor: brandColor, color: brandColor } : {}}
                             >
                               <option value="all">All Ages</option>
                               {availableAgeGroups.map(ag => (
@@ -4777,6 +4784,7 @@ export default function LeaguePage() {
                               value={filterRound}
                               onChange={(e) => setFilterRound(e.target.value)}
                               className="px-2 py-1 text-[11px] md:text-xs rounded-md border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300"
+                              style={filterRound !== 'all' ? { borderColor: brandColor, color: brandColor } : {}}
                             >
                               <option value="all">All Rounds</option>
                               {availableRounds.map(r => (
