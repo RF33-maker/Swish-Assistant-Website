@@ -702,62 +702,34 @@ export default function LeagueLeadersPage() {
           <div className="space-y-3">
             {/* Age Group Filter */}
             {ageGroupOptions.length > 0 && (
-              <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
-                <button
-                  onClick={() => setSelectedAgeGroup('all')}
-                  className={`filter-tab whitespace-nowrap px-3 py-1.5 text-sm font-medium rounded-full transition-all ${
-                    selectedAgeGroup === 'all'
-                      ? 'text-white'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                  }`}
-                  style={selectedAgeGroup === 'all' ? { backgroundColor: brandColor } : {}}
+              <div>
+                <select
+                  value={selectedAgeGroup}
+                  onChange={(e) => setSelectedAgeGroup(e.target.value)}
+                  className="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
+                  style={selectedAgeGroup !== 'all' ? { borderColor: brandColor, color: brandColor } : {}}
                 >
-                  All Ages
-                </button>
-                {ageGroupOptions.map(opt => (
-                  <button
-                    key={opt.league_id}
-                    onClick={() => setSelectedAgeGroup(opt.league_id)}
-                    className={`filter-tab whitespace-nowrap px-3 py-1.5 text-sm font-medium rounded-full transition-all ${
-                      selectedAgeGroup === opt.league_id
-                        ? 'text-white'
-                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-                    }`}
-                    style={selectedAgeGroup === opt.league_id ? { backgroundColor: brandColor } : {}}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
+                  <option value="all">All Ages</option>
+                  {ageGroupOptions.map(opt => (
+                    <option key={opt.league_id} value={opt.league_id}>{opt.label}</option>
+                  ))}
+                </select>
               </div>
             )}
             {/* Round Filter */}
             {availableRounds.length > 0 && (
-              <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
-                <button
-                  onClick={() => setSelectedRound('all')}
-                  className={`filter-tab whitespace-nowrap px-3 py-1.5 text-sm font-medium transition-all ${
-                    selectedRound === 'all'
-                      ? 'font-bold'
-                      : 'text-gray-500 dark:text-gray-400'
-                  }`}
-                  style={selectedRound === 'all' ? { color: brandColor, borderBottom: `2px solid ${brandColor}` } : {}}
+              <div>
+                <select
+                  value={selectedRound}
+                  onChange={(e) => setSelectedRound(e.target.value)}
+                  className="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
+                  style={selectedRound !== 'all' ? { borderColor: brandColor, color: brandColor } : {}}
                 >
-                  Season
-                </button>
-                {availableRounds.map(round => (
-                  <button
-                    key={round}
-                    onClick={() => setSelectedRound(round)}
-                    className={`filter-tab whitespace-nowrap px-3 py-1.5 text-sm font-medium transition-all ${
-                      selectedRound === round
-                        ? 'font-bold'
-                        : 'text-gray-500 dark:text-gray-400'
-                    }`}
-                    style={selectedRound === round ? { color: brandColor, borderBottom: `2px solid ${brandColor}` } : {}}
-                  >
-                    {round}
-                  </button>
-                ))}
+                  <option value="all">All Rounds</option>
+                  {availableRounds.map(round => (
+                    <option key={round} value={round}>{round}</option>
+                  ))}
+                </select>
               </div>
             )}
           </div>
