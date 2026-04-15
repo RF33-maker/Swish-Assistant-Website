@@ -233,7 +233,7 @@ export default function PlayerStatsPage() {
   };
 
   // Function to calculate player rankings in the league
-  const calculateRankings = async (leagueId: string, currentAverages: SeasonAverages): Promise<PlayerRankings | null> => {
+  const calculateRankings = async (leagueId: string, currentAverages: SeasonAverages, playerName: string, knownPlayerIds: string[] = []): Promise<PlayerRankings | null> => {
     try {
       const { data: allStats } = await supabase
         .from('player_stats')
@@ -247,14 +247,23 @@ export default function PlayerStatsPage() {
 
       if (playedStats.length === 0) return null;
 
-      // Calculate totals for each player (only counting games they played)
+      // Calculate totals for each player (only counting games they played).
+      // Each stat row is keyed by its player_id when available, otherwise by
+      // normalized display name, so identity is as deterministic as possible.
       const playerTotals = new Map<string, any>();
+      // Map player_id → the key used in playerTotals (for later lookup)
+      const playerIdToKey = new Map<string, string>();
+
       playedStats.forEach(stat => {
-        const key = (
+        // Prefer player_id as the grouping key; fall back to display name
+        const pid: string | undefined = stat.player_id;
+        const nameKey = (
           stat.full_name?.trim().replace(/\s+/g, ' ') ||
           `${stat.firstname || ''} ${stat.familyname || ''}`.trim().replace(/\s+/g, ' ') ||
           'unknown'
         ).toLowerCase();
+        const key = pid || nameKey;
+
         if (!playerTotals.has(key)) {
           playerTotals.set(key, {
             points: 0, rebounds: 0, assists: 0, steals: 0, blocks: 0,
@@ -262,6 +271,8 @@ export default function PlayerStatsPage() {
             ft_made: 0, ft_attempted: 0, games: 0
           });
         }
+        if (pid) playerIdToKey.set(pid, key);
+
         const totals = playerTotals.get(key);
         totals.points += stat.spoints || 0;
         totals.rebounds += stat.sreboundstotal || 0;
@@ -277,6 +288,70 @@ export default function PlayerStatsPage() {
         totals.games += 1;
       });
 
+      // Find the current player's pool key.
+      // Priority 1: match by known player_id (deterministic, no ambiguity).
+      // Priority 2: exact normalized name match.
+      // Priority 3: all name tokens present in pool key.
+      // Priority 4: last-name token contained in pool key.
+      let currentPlayerKey: string | null = null;
+
+      for (const pid of knownPlayerIds) {
+        if (playerIdToKey.has(pid)) {
+          currentPlayerKey = playerIdToKey.get(pid)!;
+          break;
+        }
+      }
+
+      if (!currentPlayerKey) {
+        const normalizedPlayerName = playerName.trim().replace(/\s+/g, ' ').toLowerCase();
+        for (const key of playerTotals.keys()) {
+          if (key === normalizedPlayerName) {
+            currentPlayerKey = key;
+            break;
+          }
+        }
+        if (!currentPlayerKey) {
+          const nameParts = normalizedPlayerName.split(' ').filter(p => p.length > 1);
+          for (const key of playerTotals.keys()) {
+            if (nameParts.every(part => key.includes(part))) {
+              currentPlayerKey = key;
+              break;
+            }
+          }
+        }
+        if (!currentPlayerKey) {
+          const lastName = normalizedPlayerName.split(' ').pop() || '';
+          if (lastName.length > 1) {
+            for (const key of playerTotals.keys()) {
+              if (key.includes(lastName)) {
+                currentPlayerKey = key;
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      // Derive the current player's averages from the pool so they are comparable
+      // to every other player in the rankings array.
+      let poolAverages = currentAverages;
+      if (currentPlayerKey) {
+        const ct = playerTotals.get(currentPlayerKey)!;
+        const cg = ct.games || 1;
+        poolAverages = {
+          games_played: cg,
+          avg_points: ct.points / cg,
+          avg_rebounds: ct.rebounds / cg,
+          avg_assists: ct.assists / cg,
+          avg_steals: ct.steals / cg,
+          avg_blocks: ct.blocks / cg,
+          fg_percentage: ct.fg_attempted > 0 ? (ct.fg_made / ct.fg_attempted) * 100 : 0,
+          three_point_percentage: ct.three_attempted > 0 ? (ct.three_made / ct.three_attempted) * 100 : 0,
+          ft_percentage: ct.ft_attempted > 0 ? (ct.ft_made / ct.ft_attempted) * 100 : 0,
+          avg_efficiency: 0,
+        };
+      }
+
       // Convert totals to averages and rank
       const rankings: { [key: string]: number[] } = {
         points: [],
@@ -289,7 +364,7 @@ export default function PlayerStatsPage() {
         ft_percentage: []
       };
 
-      playerTotals.forEach((totals, playerKey) => {
+      playerTotals.forEach((totals) => {
         const games = totals.games || 1;
         rankings.points.push(totals.points / games);
         rankings.rebounds.push(totals.rebounds / games);
@@ -301,20 +376,34 @@ export default function PlayerStatsPage() {
         rankings.ft_percentage.push(totals.ft_attempted > 0 ? (totals.ft_made / totals.ft_attempted) * 100 : 0);
       });
 
+      // If the current player was not found in the pool at all, inject their
+      // averages so the pool includes them (prevents a false rank-1 caused by
+      // comparing against a pool that simply doesn't contain this player).
+      if (!currentPlayerKey) {
+        rankings.points.push(currentAverages.avg_points);
+        rankings.rebounds.push(currentAverages.avg_rebounds);
+        rankings.assists.push(currentAverages.avg_assists);
+        rankings.steals.push(currentAverages.avg_steals);
+        rankings.blocks.push(currentAverages.avg_blocks);
+        rankings.fg_percentage.push(currentAverages.fg_percentage);
+        rankings.three_point_percentage.push(currentAverages.three_point_percentage);
+        rankings.ft_percentage.push(currentAverages.ft_percentage);
+      }
+
       // Calculate ranks by counting how many players are ahead
       const calculateRank = (values: number[], current: number): number => {
         return values.filter(val => val > current).length + 1;
       };
 
       const ranks: PlayerRankings = {
-        points: calculateRank(rankings.points, currentAverages.avg_points),
-        rebounds: calculateRank(rankings.rebounds, currentAverages.avg_rebounds),
-        assists: calculateRank(rankings.assists, currentAverages.avg_assists),
-        steals: calculateRank(rankings.steals, currentAverages.avg_steals),
-        blocks: calculateRank(rankings.blocks, currentAverages.avg_blocks),
-        fg_percentage: calculateRank(rankings.fg_percentage, currentAverages.fg_percentage),
-        three_point_percentage: calculateRank(rankings.three_point_percentage, currentAverages.three_point_percentage),
-        ft_percentage: calculateRank(rankings.ft_percentage, currentAverages.ft_percentage)
+        points: calculateRank(rankings.points, poolAverages.avg_points),
+        rebounds: calculateRank(rankings.rebounds, poolAverages.avg_rebounds),
+        assists: calculateRank(rankings.assists, poolAverages.avg_assists),
+        steals: calculateRank(rankings.steals, poolAverages.avg_steals),
+        blocks: calculateRank(rankings.blocks, poolAverages.avg_blocks),
+        fg_percentage: calculateRank(rankings.fg_percentage, poolAverages.fg_percentage),
+        three_point_percentage: calculateRank(rankings.three_point_percentage, poolAverages.three_point_percentage),
+        ft_percentage: calculateRank(rankings.ft_percentage, poolAverages.ft_percentage)
       };
 
       return ranks;
@@ -811,7 +900,7 @@ export default function PlayerStatsPage() {
                 ft_percentage: lt.ft_att > 0 ? (lt.ft_made / lt.ft_att) * 100 : 0,
                 avg_efficiency: 0,
               };
-              const ranks = await calculateRankings(rankingLeagueId, rankAverages);
+              const ranks = await calculateRankings(rankingLeagueId, rankAverages, playerInfo.name, playerIds);
               if (ranks) setPlayerRankings(ranks);
             }
           }
@@ -1246,7 +1335,7 @@ export default function PlayerStatsPage() {
                 </Badge>
               )}
             </div>
-            <div className="grid grid-cols-3 md:grid-cols-6 gap-2 md:gap-3">
+            <div className="grid grid-cols-3 gap-2 md:gap-3">
               {[
                 { value: filteredSeasonAverages.avg_points, label: "PTS", rank: playerRankings?.points },
                 { value: filteredSeasonAverages.avg_rebounds, label: "REB", rank: playerRankings?.rebounds },
@@ -1255,7 +1344,7 @@ export default function PlayerStatsPage() {
                 { value: filteredSeasonAverages.avg_blocks, label: "BLK", rank: playerRankings?.blocks },
                 { value: filteredSeasonAverages.avg_efficiency, label: "EFF" },
               ].map((stat, i) => (
-                <div key={i} className={`text-center py-2 ${i >= 3 ? 'hidden md:block' : ''}`}>
+                <div key={i} className="text-center py-2">
                   <div className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-0.5">
                     {stat.label} {stat.rank ? <span className="text-[10px] normal-case">{getOrdinalSuffix(stat.rank)}</span> : null}
                   </div>
