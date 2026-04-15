@@ -627,6 +627,14 @@ export default function LeaguePage() {
     return match ? match[0].toUpperCase() : label;
   };
 
+  useEffect(() => {
+    if (isParentLeague && ageGroupLabels.length > 0 && selectedAgeGroup === 'all') {
+      const first = ageGroupLabels[0];
+      setSelectedAgeGroup(first);
+      setFilterAgeGroup(first);
+    }
+  }, [isParentLeague, ageGroupLabels]);
+
   const [brandFadedIn, setBrandFadedIn] = useState(false);
   useEffect(() => {
     if (leagueBrandColors) {
@@ -3437,9 +3445,8 @@ export default function LeaguePage() {
                     value={selectedAgeGroup}
                     onChange={(e) => { const v = e.target.value; setSelectedAgeGroup(v); setFilterAgeGroup(v); setStandingsView('full'); }}
                     className="px-3 py-1.5 text-xs md:text-sm font-medium rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
-                    style={selectedAgeGroup !== 'all' ? { borderColor: brandColor, color: brandColor } : {}}
+                    style={{ borderColor: brandColor, color: brandColor }}
                   >
-                    <option value="all">All Ages</option>
                     {ageGroupLabels.map((label) => (
                       <option key={label} value={label}>{shortenAgeLabel(label)}</option>
                     ))}

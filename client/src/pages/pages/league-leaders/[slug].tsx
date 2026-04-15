@@ -108,6 +108,12 @@ export default function LeagueLeadersPage() {
       .sort((a, b) => a.displayLabel.localeCompare(b.displayLabel));
   }, [childLeagues, league, isParentLeague]);
 
+  useEffect(() => {
+    if (isParentLeague && ageGroupOptions.length > 0 && selectedAgeGroup === 'all') {
+      setSelectedAgeGroup(ageGroupOptions[0].league_id);
+    }
+  }, [isParentLeague, ageGroupOptions]);
+
   const availableRounds = useMemo(() => {
     if (!isParentLeague) return [];
     const rounds = new Set<string>();
@@ -709,9 +715,8 @@ export default function LeagueLeadersPage() {
                   value={selectedAgeGroup}
                   onChange={(e) => setSelectedAgeGroup(e.target.value)}
                   className="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
-                  style={selectedAgeGroup !== 'all' ? { borderColor: brandColor, color: brandColor } : {}}
+                  style={{ borderColor: brandColor, color: brandColor }}
                 >
-                  <option value="all">All Ages</option>
                   {ageGroupOptions.map(opt => (
                     <option key={opt.league_id} value={opt.league_id}>{opt.displayLabel}</option>
                   ))}
