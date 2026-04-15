@@ -250,9 +250,11 @@ export default function PlayerStatsPage() {
       // Calculate totals for each player (only counting games they played)
       const playerTotals = new Map<string, any>();
       playedStats.forEach(stat => {
-        const key = stat.full_name?.trim() ||
-          `${stat.firstname || ''} ${stat.familyname || ''}`.trim() ||
-          'unknown';
+        const key = (
+          stat.full_name?.trim().replace(/\s+/g, ' ') ||
+          `${stat.firstname || ''} ${stat.familyname || ''}`.trim().replace(/\s+/g, ' ') ||
+          'unknown'
+        ).toLowerCase();
         if (!playerTotals.has(key)) {
           playerTotals.set(key, {
             points: 0, rebounds: 0, assists: 0, steals: 0, blocks: 0,
@@ -777,11 +779,40 @@ export default function PlayerStatsPage() {
           };
           setSeasonAverages(averages);
 
-          // Calculate player rankings
-          if (gamesPlayed[0].league_id) {
-            const ranks = await calculateRankings(gamesPlayed[0].league_id, averages);
-            if (ranks) {
-              setPlayerRankings(ranks);
+          // Calculate player rankings using only the games in the primary league
+          // so the comparison is apples-to-apples with the pool
+          const rankingLeagueId = gamesPlayed[0].league_id;
+          if (rankingLeagueId) {
+            const leagueOnlyGames = gamesPlayed.filter((g: any) => g.league_id === rankingLeagueId);
+            if (leagueOnlyGames.length > 0) {
+              const lt = leagueOnlyGames.reduce((acc: any, g: any) => ({
+                points: acc.points + (g.spoints || 0),
+                rebounds: acc.rebounds + (g.sreboundstotal || 0),
+                assists: acc.assists + (g.sassists || 0),
+                steals: acc.steals + (g.ssteals || 0),
+                blocks: acc.blocks + (g.sblocks || 0),
+                fg_made: acc.fg_made + (g.sfieldgoalsmade || 0),
+                fg_att: acc.fg_att + (g.sfieldgoalsattempted || 0),
+                three_made: acc.three_made + (g.sthreepointersmade || 0),
+                three_att: acc.three_att + (g.sthreepointersattempted || 0),
+                ft_made: acc.ft_made + (g.sfreethrowsmade || 0),
+                ft_att: acc.ft_att + (g.sfreethrowsattempted || 0),
+              }), { points:0, rebounds:0, assists:0, steals:0, blocks:0, fg_made:0, fg_att:0, three_made:0, three_att:0, ft_made:0, ft_att:0 });
+              const lg = leagueOnlyGames.length;
+              const rankAverages: SeasonAverages = {
+                games_played: lg,
+                avg_points: lt.points / lg,
+                avg_rebounds: lt.rebounds / lg,
+                avg_assists: lt.assists / lg,
+                avg_steals: lt.steals / lg,
+                avg_blocks: lt.blocks / lg,
+                fg_percentage: lt.fg_att > 0 ? (lt.fg_made / lt.fg_att) * 100 : 0,
+                three_point_percentage: lt.three_att > 0 ? (lt.three_made / lt.three_att) * 100 : 0,
+                ft_percentage: lt.ft_att > 0 ? (lt.ft_made / lt.ft_att) * 100 : 0,
+                avg_efficiency: 0,
+              };
+              const ranks = await calculateRankings(rankingLeagueId, rankAverages);
+              if (ranks) setPlayerRankings(ranks);
             }
           }
 
