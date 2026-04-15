@@ -100,12 +100,12 @@ export default function LeagueLeadersPage() {
     if (!isParentLeague || !league) return [];
     return childLeagues
       .map(c => {
-        let label = league.name ? c.name.replace(league.name, '').trim() || c.name : c.name;
+        const label = league.name ? c.name.replace(league.name, '').trim() || c.name : c.name;
         const ageMatch = label.match(/\d+U/i);
-        if (ageMatch) label = ageMatch[0].toUpperCase();
-        return { league_id: c.league_id, label };
+        const displayLabel = ageMatch ? ageMatch[0].toUpperCase() : label;
+        return { league_id: c.league_id, label, displayLabel };
       })
-      .sort((a, b) => a.label.localeCompare(b.label));
+      .sort((a, b) => a.displayLabel.localeCompare(b.displayLabel));
   }, [childLeagues, league, isParentLeague]);
 
   const availableRounds = useMemo(() => {
@@ -713,7 +713,7 @@ export default function LeagueLeadersPage() {
                 >
                   <option value="all">All Ages</option>
                   {ageGroupOptions.map(opt => (
-                    <option key={opt.league_id} value={opt.league_id}>{opt.label}</option>
+                    <option key={opt.league_id} value={opt.league_id}>{opt.displayLabel}</option>
                   ))}
                 </select>
               </div>

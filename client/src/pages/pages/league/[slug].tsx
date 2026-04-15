@@ -612,9 +612,7 @@ export default function LeaguePage() {
   const childLeagueMap = useMemo(() => {
     const map = new Map<string, string>();
     childCompetitions.forEach(c => {
-      let label = league?.name ? c.name.replace(league.name, '').trim() || c.name : c.name;
-      const ageMatch = label.match(/\d+U/i);
-      if (ageMatch) label = ageMatch[0].toUpperCase();
+      const label = league?.name ? c.name.replace(league.name, '').trim() || c.name : c.name;
       map.set(c.league_id, label);
     });
     return map;
@@ -623,6 +621,11 @@ export default function LeaguePage() {
   const ageGroupLabels = useMemo(() => {
     return Array.from(childLeagueMap.values()).sort();
   }, [childLeagueMap]);
+
+  const shortenAgeLabel = (label: string): string => {
+    const match = label.match(/\d+U/i);
+    return match ? match[0].toUpperCase() : label;
+  };
 
   const [brandFadedIn, setBrandFadedIn] = useState(false);
   useEffect(() => {
@@ -3438,7 +3441,7 @@ export default function LeaguePage() {
                   >
                     <option value="all">All Ages</option>
                     {ageGroupLabels.map((label) => (
-                      <option key={label} value={label}>{label}</option>
+                      <option key={label} value={label}>{shortenAgeLabel(label)}</option>
                     ))}
                   </select>
                 </div>
