@@ -3375,7 +3375,7 @@ export default function LeaguePage() {
                 >
                   Teams
                 </button>
-              <button 
+              {slug?.toUpperCase() !== 'REBA-SL' && <button 
                 className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'standings' ? 'font-semibold border-b-2' : ''}`}
                 style={activeSection === 'standings' ? { color: brandColor, borderBottomColor: brandColor } : {}}
                 onMouseEnter={(e) => { if (activeSection !== 'standings') (e.target as HTMLElement).style.color = brandColor; }}
@@ -3390,7 +3390,7 @@ export default function LeaguePage() {
                 }}
               >
                 Standings
-              </button>
+              </button>}
               <button 
                 className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'stats' ? 'font-semibold border-b-2' : ''}`}
                 style={activeSection === 'stats' ? { color: brandColor, borderBottomColor: brandColor } : {}}
@@ -3525,7 +3525,7 @@ export default function LeaguePage() {
           <section className={`${activeSection === 'overview' ? 'md:col-span-2' : 'md:col-span-3'} space-y-6`}>
             
             {/* Standings Section */}
-            {activeSection === 'standings' && (
+            {activeSection === 'standings' && slug?.toUpperCase() !== 'REBA-SL' && (
               <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
                 <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-4 md:mb-6">
                   <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">League Standings</h2>
