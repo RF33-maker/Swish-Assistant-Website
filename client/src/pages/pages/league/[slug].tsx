@@ -575,6 +575,7 @@ export default function LeaguePage() {
   const [isDividerVisible, setIsDividerVisible] = useState(false); // Track if orange divider is in view
   const dividerRef = useRef<HTMLDivElement>(null); // Ref for the orange divider
   const [selectedAgeGroup, setSelectedAgeGroup] = useState<string>('all');
+  const [selectedStop, setSelectedStop] = useState<string>('all');
   const [parentStandingsGroups, setParentStandingsGroups] = useState<{ageGroup: string, standings: any[], poolAStandings: any[], poolBStandings: any[], hasPools: boolean}[]>([]);
 
   const getTeamLogoUrl = (teamName: string): string | undefined => {
@@ -638,10 +639,34 @@ export default function LeaguePage() {
     });
   }, [ageGroupToLeagueIds]);
 
+  const availableStopsForAgeGroup = useMemo(() => {
+    const leagueIdsForAg = selectedAgeGroup === 'all'
+      ? childCompetitions
+      : childCompetitions.filter(c => {
+          const ag = c.age_group || (league?.name ? c.name.replace(league.name, '').trim() || c.name : c.name);
+          return ag === selectedAgeGroup;
+        });
+    const stops = new Set<number>();
+    leagueIdsForAg.forEach(c => { if (c.stop != null) stops.add(c.stop); });
+    return Array.from(stops).sort((a, b) => a - b);
+  }, [selectedAgeGroup, childCompetitions, league?.name]);
+
   const selectedAgeGroupLeagueIds = useMemo(() => {
-    if (selectedAgeGroup === 'all') return childCompetitions.map(c => c.league_id);
-    return ageGroupToLeagueIds.get(selectedAgeGroup) || [];
-  }, [selectedAgeGroup, ageGroupToLeagueIds, childCompetitions]);
+    let candidates = selectedAgeGroup === 'all'
+      ? childCompetitions
+      : childCompetitions.filter(c => {
+          const ag = c.age_group || (league?.name ? c.name.replace(league.name, '').trim() || c.name : c.name);
+          return ag === selectedAgeGroup;
+        });
+    if (selectedStop !== 'all') {
+      candidates = candidates.filter(c => c.stop != null && String(c.stop) === selectedStop);
+    }
+    return candidates.map(c => c.league_id);
+  }, [selectedAgeGroup, selectedStop, childCompetitions, league?.name]);
+
+  useEffect(() => {
+    setSelectedStop('all');
+  }, [selectedAgeGroup]);
 
   useEffect(() => {
     if (isParentLeague && ageGroupLabels.length > 0 && selectedAgeGroup === 'all') {
@@ -716,8 +741,12 @@ export default function LeaguePage() {
     const sortedTeamStats = useMemo(() => {
       if (teamStatsData.length === 0) return [];
       
-      const filtered = isParentLeague && filterAgeGroup !== 'all'
-        ? teamStatsData.filter((t: any) => t.age_group === filterAgeGroup)
+      const filtered = isParentLeague && (filterAgeGroup !== 'all' || selectedStop !== 'all')
+        ? teamStatsData.filter((t: any) => {
+            if (filterAgeGroup !== 'all' && t.age_group !== filterAgeGroup) return false;
+            if (selectedStop !== 'all' && !selectedAgeGroupLeagueIds.includes(t.league_id)) return false;
+            return true;
+          })
         : teamStatsData;
       
       return [...filtered].sort((a, b) => {
@@ -1004,7 +1033,7 @@ export default function LeaguePage() {
         
         return teamStatsSortDirection === 'desc' ? valueB - valueA : valueA - valueB;
       });
-    }, [teamStatsData, teamStatsSortColumn, teamStatsSortDirection, teamStatsMode, isParentLeague, filterAgeGroup]);
+    }, [teamStatsData, teamStatsSortColumn, teamStatsSortDirection, teamStatsMode, isParentLeague, filterAgeGroup, selectedStop, selectedAgeGroupLeagueIds]);
 
     // Get active columns based on selected category
     const activeTeamStatColumns = useMemo(() => {
@@ -1037,13 +1066,17 @@ export default function LeaguePage() {
     }, [allPlayerAverages]);
 
     const filteredByAgeGroupRound = useMemo(() => {
-      if (filterAgeGroup === 'all' && filterRound === 'all') return allPlayerAverages;
+      const agFilter = filterAgeGroup !== 'all';
+      const stopFilter = isParentLeague && selectedStop !== 'all';
+      const roundFilter = filterRound !== 'all';
+      if (!agFilter && !stopFilter && !roundFilter) return allPlayerAverages;
 
       return allPlayerAverages
         .map(player => {
           const matchingStats = (player.rawStats || []).filter((s: any) => {
-            if (filterAgeGroup !== 'all' && s.age_group !== filterAgeGroup) return false;
-            if (filterRound !== 'all' && s.round !== filterRound) return false;
+            if (agFilter && s.age_group !== filterAgeGroup) return false;
+            if (stopFilter && !selectedAgeGroupLeagueIds.includes(s.league_id)) return false;
+            if (roundFilter && s.round !== filterRound) return false;
             return true;
           });
           if (matchingStats.length === 0) return null;
@@ -1112,7 +1145,7 @@ export default function LeaguePage() {
           };
         })
         .filter(Boolean) as any[];
-    }, [allPlayerAverages, filterAgeGroup, filterRound]);
+    }, [allPlayerAverages, filterAgeGroup, filterRound, selectedStop, selectedAgeGroupLeagueIds, isParentLeague]);
 
     useEffect(() => {
       debugLog("🔍 Filtering players. Search term:", statsSearch);
@@ -3454,19 +3487,32 @@ export default function LeaguePage() {
               </button>
               </div>
 
-              {/* Age Group Dropdown for Parent Leagues */}
+              {/* Age Group + Stop Dropdowns for Parent Leagues */}
               {isParentLeague && ageGroupLabels.length > 0 && !(activeSection === 'player' && selectedPlayerSlug) && !(activeSection === 'team' && selectedTeamName) && (
-                <div className="flex-shrink-0" data-testid="age-group-tabs">
+                <div className="flex items-center gap-2 flex-shrink-0" data-testid="age-group-tabs">
                   <select
                     value={selectedAgeGroup}
                     onChange={(e) => { const v = e.target.value; setSelectedAgeGroup(v); setFilterAgeGroup(v); setStandingsView('full'); }}
-                    className="px-3 py-1.5 text-xs md:text-sm font-medium rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
-                    style={{ borderColor: brandColor, color: brandColor }}
+                    className="px-3 py-1.5 text-xs md:text-sm font-medium rounded-lg border-2 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
+                    style={{ borderColor: brandColor }}
                   >
                     {ageGroupLabels.map((label) => (
                       <option key={label} value={label}>{label}</option>
                     ))}
                   </select>
+                  {availableStopsForAgeGroup.length > 1 && (
+                    <select
+                      value={selectedStop}
+                      onChange={(e) => setSelectedStop(e.target.value)}
+                      className="px-3 py-1.5 text-xs md:text-sm font-medium rounded-lg border-2 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
+                      style={{ borderColor: selectedStop !== 'all' ? brandColor : '#e5e7eb' }}
+                    >
+                      <option value="all">All Stops</option>
+                      {availableStopsForAgeGroup.map(stop => (
+                        <option key={stop} value={String(stop)}>Stop {stop}</option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               )}
 
@@ -3841,7 +3887,7 @@ export default function LeaguePage() {
                       value={filterAgeGroup}
                       onChange={(e) => setFilterAgeGroup(e.target.value)}
                       className="px-3 py-1.5 text-xs md:text-sm font-medium rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
-                      style={filterAgeGroup !== 'all' ? { borderColor: brandColor, color: brandColor } : {}}
+                      style={filterAgeGroup !== 'all' ? { borderColor: brandColor } : {}}
                     >
                       <option value="all">All Ages</option>
                       {availableAgeGroups.map(ag => (
@@ -3858,7 +3904,7 @@ export default function LeaguePage() {
                       value={filterRound}
                       onChange={(e) => setFilterRound(e.target.value)}
                       className="px-3 py-1.5 text-xs md:text-sm font-medium rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
-                      style={filterRound !== 'all' ? { borderColor: brandColor, color: brandColor } : {}}
+                      style={filterRound !== 'all' ? { borderColor: brandColor } : {}}
                     >
                       <option value="all">All Rounds</option>
                       {availableRounds.map(r => (
@@ -4465,7 +4511,7 @@ export default function LeaguePage() {
                             value={filterAgeGroup}
                             onChange={(e) => setFilterAgeGroup(e.target.value)}
                             className="px-3 py-1.5 text-xs md:text-sm font-medium rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
-                            style={filterAgeGroup !== 'all' ? { borderColor: brandColor, color: brandColor } : {}}
+                            style={filterAgeGroup !== 'all' ? { borderColor: brandColor } : {}}
                           >
                             <option value="all">All Ages</option>
                             {ageGroups.sort().map(ag => (
@@ -4480,7 +4526,7 @@ export default function LeaguePage() {
                             value={filterRound}
                             onChange={(e) => setFilterRound(e.target.value)}
                             className="px-3 py-1.5 text-xs md:text-sm font-medium rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
-                            style={filterRound !== 'all' ? { borderColor: brandColor, color: brandColor } : {}}
+                            style={filterRound !== 'all' ? { borderColor: brandColor } : {}}
                           >
                             <option value="all">All Rounds</option>
                             {rounds.sort().map(r => (
@@ -4517,6 +4563,7 @@ export default function LeaguePage() {
                       const now = new Date();
                       const filtered = schedule.filter(game => {
                         if (filterAgeGroup !== 'all' && game.age_group !== filterAgeGroup) return false;
+                        if (isParentLeague && selectedStop !== 'all' && !selectedAgeGroupLeagueIds.includes(game.league_id)) return false;
                         if (filterRound !== 'all' && game.round !== filterRound) return false;
                         return true;
                       });
@@ -4797,7 +4844,7 @@ export default function LeaguePage() {
                               value={filterAgeGroup}
                               onChange={(e) => setFilterAgeGroup(e.target.value)}
                               className="px-2 py-1 text-[11px] md:text-xs rounded-md border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300"
-                              style={filterAgeGroup !== 'all' ? { borderColor: brandColor, color: brandColor } : {}}
+                              style={filterAgeGroup !== 'all' ? { borderColor: brandColor } : {}}
                             >
                               <option value="all">All Ages</option>
                               {availableAgeGroups.map(ag => (
@@ -4810,7 +4857,7 @@ export default function LeaguePage() {
                               value={filterRound}
                               onChange={(e) => setFilterRound(e.target.value)}
                               className="px-2 py-1 text-[11px] md:text-xs rounded-md border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300"
-                              style={filterRound !== 'all' ? { borderColor: brandColor, color: brandColor } : {}}
+                              style={filterRound !== 'all' ? { borderColor: brandColor } : {}}
                             >
                               <option value="all">All Rounds</option>
                               {availableRounds.map(r => (

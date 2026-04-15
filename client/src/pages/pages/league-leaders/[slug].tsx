@@ -728,7 +728,7 @@ export default function LeagueLeadersPage() {
                   value={selectedAgeGroup}
                   onChange={(e) => setSelectedAgeGroup(e.target.value)}
                   className="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
-                  style={{ borderColor: brandColor, color: brandColor }}
+                  style={{ borderColor: brandColor }}
                 >
                   {ageGroupOptions.map(opt => (
                     <option key={opt.age_group} value={opt.age_group}>{opt.displayLabel}</option>
@@ -743,7 +743,7 @@ export default function LeagueLeadersPage() {
                   value={selectedRound}
                   onChange={(e) => setSelectedRound(e.target.value)}
                   className="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
-                  style={selectedRound !== 'all' ? { borderColor: brandColor, color: brandColor } : {}}
+                  style={selectedRound !== 'all' ? { borderColor: brandColor } : {}}
                 >
                   <option value="all">All Rounds</option>
                   {availableRounds.map(round => (
