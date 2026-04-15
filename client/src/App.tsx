@@ -50,6 +50,7 @@ function Router() {
       <Route path="/auth" component={AuthPage} />
       <Route path="/test" component={TestConnections} />
       <Route path="/league/:slug" component={LeaguePage} />
+      <Route path="/league/:slug/player/:playerSlug" component={LeaguePage} />
       <Route path="/league/:slug/teams" component={LeagueTeams} />
       <Route path="/league/:slug/team-logos" component={TeamLogoManager} />
       <Route path="/league-leaders/:slug" component={LeagueLeadersPage} />

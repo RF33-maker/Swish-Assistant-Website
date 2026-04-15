@@ -492,7 +492,7 @@ const PLAYER_STAT_LEGENDS: Record<string, string[]> = {
 };
 
 export default function LeaguePage() {
-  const { slug } = useParams();
+  const { slug, playerSlug: urlPlayerSlug } = useParams();
   const db = useMemo(() => getSupabaseForLeague(slug), [slug]);
     // SEO formatting helper for title
     const formatTitle = (text?: string) =>
@@ -532,10 +532,24 @@ export default function LeaguePage() {
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [isEditingYoutube, setIsEditingYoutube] = useState(false);
   const [updatingYoutube, setUpdatingYoutube] = useState(false);
-  const [activeSection, setActiveSection] = useState('overview'); // 'overview', 'stats', 'teams', 'schedule'
-  const [selectedPlayerSlug, setSelectedPlayerSlug] = useState<string | null>(null);
+  const [activeSection, setActiveSection] = useState(urlPlayerSlug ? 'player' : 'overview');
+  const [selectedPlayerSlug, setSelectedPlayerSlug] = useState<string | null>(urlPlayerSlug || null);
   const [selectedTeamName, setSelectedTeamName] = useState<string | null>(null);
   const [previousSection, setPreviousSection] = useState<string>('overview');
+
+  const handleSelectPlayer = useCallback((playerSlug: string, fromSection: string) => {
+    setPreviousSection(fromSection);
+    setSelectedPlayerSlug(playerSlug);
+    setActiveSection('player');
+    navigate(`/league/${slug}/player/${playerSlug}`);
+  }, [slug, navigate]);
+
+  const handlePlayerBack = useCallback(() => {
+    setSelectedPlayerSlug(null);
+    setActiveSection(previousSection);
+    navigate(`/league/${slug}`);
+  }, [slug, navigate, previousSection]);
+
   const [comparisonMode, setComparisonMode] = useState<'player' | 'team'>('player'); // Toggle between player and team comparison
   const [allPlayerAverages, setAllPlayerAverages] = useState<any[]>([]);
   const [filteredPlayerAverages, setFilteredPlayerAverages] = useState<any[]>([]);
@@ -4044,9 +4058,7 @@ export default function LeaguePage() {
                             className={`border-b border-gray-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors ${player.slug ? 'cursor-pointer' : ''}`}
                             onClick={() => {
                               if (player.slug) {
-                                setPreviousSection(activeSection);
-                                setSelectedPlayerSlug(player.slug);
-                                setActiveSection('player');
+                                handleSelectPlayer(player.slug, activeSection);
                               }
                             }}
                             data-testid={`player-row-${player.id}`}
@@ -4791,10 +4803,7 @@ export default function LeaguePage() {
                   playerSlug={selectedPlayerSlug}
                   brandColor={brandColor}
                   leagueSlug={slug}
-                  onBack={() => {
-                    setSelectedPlayerSlug(null);
-                    setActiveSection(previousSection);
-                  }}
+                  onBack={handlePlayerBack}
                 />
               </div>
             )}
@@ -4812,9 +4821,7 @@ export default function LeaguePage() {
                     setActiveSection(previousSection);
                   }}
                   onPlayerClick={(playerSlug) => {
-                    setPreviousSection('team');
-                    setSelectedPlayerSlug(playerSlug);
-                    setActiveSection('player');
+                    handleSelectPlayer(playerSlug, 'team');
                   }}
                 />
               </div>
@@ -5000,9 +5007,7 @@ export default function LeaguePage() {
                                     className="flex items-center justify-between py-2 px-2 rounded-md hover:bg-gray-100 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
                                     onClick={() => {
                                       if (player.slug) {
-                                        setPreviousSection(activeSection);
-                                        setSelectedPlayerSlug(player.slug);
-                                        setActiveSection('player');
+                                        handleSelectPlayer(player.slug, activeSection);
                                       }
                                     }}
                                   >
@@ -5088,9 +5093,7 @@ export default function LeaguePage() {
                                   className={`flex justify-between ${p.slug ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700 rounded px-1 -mx-1 transition-colors' : ''}`}
                                   onClick={() => {
                                     if (p.slug) {
-                                      setPreviousSection(activeSection);
-                                      setSelectedPlayerSlug(p.slug);
-                                      setActiveSection('player');
+                                      handleSelectPlayer(p.slug, activeSection);
                                     }
                                   }}
                                 >
