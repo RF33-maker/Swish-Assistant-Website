@@ -570,7 +570,7 @@ export default function LeaguePage() {
   const [statsSortDirection, setStatsSortDirection] = useState<'asc' | 'desc'>('desc'); // Sort direction
   const [teamStatsSortColumn, setTeamStatsSortColumn] = useState<string>('PTS'); // Column to sort by in Team Statistics
   const [teamStatsSortDirection, setTeamStatsSortDirection] = useState<'asc' | 'desc'>('desc'); // Sort direction for team stats
-  const [childCompetitions, setChildCompetitions] = useState<Pick<League, 'league_id' | 'name' | 'slug' | 'logo_url'>[]>([]); // Child leagues/competitions
+  const [childCompetitions, setChildCompetitions] = useState<Pick<League, 'league_id' | 'name' | 'slug' | 'logo_url'> & { age_group?: string | null; stop?: number | null }[]>([]);
   const [parentLeague, setParentLeague] = useState<Pick<League, 'league_id' | 'name' | 'slug' | 'logo_url'> | null>(null); // Parent league for breadcrumb
   const [isDividerVisible, setIsDividerVisible] = useState(false); // Track if orange divider is in view
   const dividerRef = useRef<HTMLDivElement>(null); // Ref for the orange divider
@@ -612,20 +612,36 @@ export default function LeaguePage() {
   const childLeagueMap = useMemo(() => {
     const map = new Map<string, string>();
     childCompetitions.forEach(c => {
-      const label = league?.name ? c.name.replace(league.name, '').trim() || c.name : c.name;
+      const label = c.age_group || (league?.name ? c.name.replace(league.name, '').trim() || c.name : c.name);
       map.set(c.league_id, label);
     });
     return map;
   }, [childCompetitions, league?.name]);
 
-  const ageGroupLabels = useMemo(() => {
-    return Array.from(childLeagueMap.values()).sort();
-  }, [childLeagueMap]);
+  const ageGroupToLeagueIds = useMemo(() => {
+    const map = new Map<string, string[]>();
+    childCompetitions.forEach(c => {
+      const ag = c.age_group || (league?.name ? c.name.replace(league.name, '').trim() || c.name : c.name);
+      if (!map.has(ag)) map.set(ag, []);
+      map.get(ag)!.push(c.league_id);
+    });
+    return map;
+  }, [childCompetitions, league?.name]);
 
-  const shortenAgeLabel = (label: string): string => {
-    const match = label.match(/\d+U/i);
-    return match ? match[0].toUpperCase() : label;
-  };
+  const ageGroupLabels = useMemo(() => {
+    const labels = Array.from(ageGroupToLeagueIds.keys());
+    return labels.sort((a, b) => {
+      const numA = parseInt(a.replace(/\D/g, ''));
+      const numB = parseInt(b.replace(/\D/g, ''));
+      if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+      return a.localeCompare(b);
+    });
+  }, [ageGroupToLeagueIds]);
+
+  const selectedAgeGroupLeagueIds = useMemo(() => {
+    if (selectedAgeGroup === 'all') return childCompetitions.map(c => c.league_id);
+    return ageGroupToLeagueIds.get(selectedAgeGroup) || [];
+  }, [selectedAgeGroup, ageGroupToLeagueIds, childCompetitions]);
 
   useEffect(() => {
     if (isParentLeague && ageGroupLabels.length > 0 && selectedAgeGroup === 'all') {
@@ -1214,7 +1230,7 @@ export default function LeaguePage() {
         const parentChildNameMapForTeamStats = new Map<string, string>();
         if (isParentTeamStatsFetch) {
           childCompetitions.forEach(c => {
-            const label = league?.name ? c.name.replace(league.name, '').trim() || c.name : c.name;
+            const label = c.age_group || (league?.name ? c.name.replace(league.name, '').trim() || c.name : c.name);
             parentChildNameMapForTeamStats.set(c.league_id, label);
           });
         }
@@ -1516,7 +1532,7 @@ export default function LeaguePage() {
           
           const { data: competitions, error: competitionsError } = await supabase
             .from("leagues")
-            .select("league_id, name, slug, logo_url")
+            .select("league_id, name, slug, logo_url, age_group, stop")
             .eq("parent_league_id", data.league_id)
             .eq("is_public", true);
           
@@ -1587,7 +1603,7 @@ export default function LeaguePage() {
           const childNameMap = new Map<string, string>();
           if (isParent) {
             fetchedChildCompetitions.forEach((c: any) => {
-              const label = data.name ? c.name.replace(data.name, '').trim() || c.name : c.name;
+              const label = c.age_group || (data.name ? c.name.replace(data.name, '').trim() || c.name : c.name);
               childNameMap.set(c.league_id, label);
             });
           }
@@ -2378,7 +2394,7 @@ export default function LeaguePage() {
         const parentChildNameMap = new Map<string, string>();
         if (isParentFetch) {
           childCompetitions.forEach(c => {
-            const label = league?.name ? c.name.replace(league.name, '').trim() || c.name : c.name;
+            const label = c.age_group || (league?.name ? c.name.replace(league.name, '').trim() || c.name : c.name);
             parentChildNameMap.set(c.league_id, label);
           });
         }
@@ -3448,7 +3464,7 @@ export default function LeaguePage() {
                     style={{ borderColor: brandColor, color: brandColor }}
                   >
                     {ageGroupLabels.map((label) => (
-                      <option key={label} value={label}>{shortenAgeLabel(label)}</option>
+                      <option key={label} value={label}>{label}</option>
                     ))}
                   </select>
                 </div>

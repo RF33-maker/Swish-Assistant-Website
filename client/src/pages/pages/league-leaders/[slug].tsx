@@ -12,6 +12,7 @@ import LeagueDefaultImage from "@/assets/league-default.png";
 interface ChildLeague {
   league_id: string;
   name: string;
+  age_group?: string | null;
 }
 
 interface League {
@@ -98,21 +99,33 @@ export default function LeagueLeadersPage() {
 
   const ageGroupOptions = useMemo(() => {
     if (!isParentLeague || !league) return [];
-    return childLeagues
-      .map(c => {
-        const label = league.name ? c.name.replace(league.name, '').trim() || c.name : c.name;
-        const ageMatch = label.match(/\d+U/i);
-        const displayLabel = ageMatch ? ageMatch[0].toUpperCase() : label;
-        return { league_id: c.league_id, label, displayLabel };
-      })
-      .sort((a, b) => a.displayLabel.localeCompare(b.displayLabel));
+    const groupMap = new Map<string, string[]>();
+    childLeagues.forEach(c => {
+      const ag = c.age_group || (league.name ? c.name.replace(league.name, '').trim() || c.name : c.name);
+      if (!groupMap.has(ag)) groupMap.set(ag, []);
+      groupMap.get(ag)!.push(c.league_id);
+    });
+    return Array.from(groupMap.entries())
+      .map(([ag, ids]) => ({ age_group: ag, league_ids: ids, displayLabel: ag }))
+      .sort((a, b) => {
+        const numA = parseInt(a.age_group.replace(/\D/g, ''));
+        const numB = parseInt(b.age_group.replace(/\D/g, ''));
+        if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+        return a.age_group.localeCompare(b.age_group);
+      });
   }, [childLeagues, league, isParentLeague]);
 
   useEffect(() => {
     if (isParentLeague && ageGroupOptions.length > 0 && selectedAgeGroup === 'all') {
-      setSelectedAgeGroup(ageGroupOptions[0].league_id);
+      setSelectedAgeGroup(ageGroupOptions[0].age_group);
     }
   }, [isParentLeague, ageGroupOptions]);
+
+  const selectedLeagueIdsForAgeGroup = useMemo(() => {
+    if (selectedAgeGroup === 'all') return childLeagues.map(c => c.league_id);
+    const found = ageGroupOptions.find(o => o.age_group === selectedAgeGroup);
+    return found ? found.league_ids : [];
+  }, [selectedAgeGroup, ageGroupOptions, childLeagues]);
 
   const availableRounds = useMemo(() => {
     if (!isParentLeague) return [];
@@ -174,7 +187,7 @@ export default function LeagueLeadersPage() {
         let leagueIdsToQuery = [leagueData.league_id];
         const { data: childLeagueData } = await supabase
           .from("leagues")
-          .select("league_id, name")
+          .select("league_id, name, age_group")
           .eq("parent_league_id", leagueData.league_id);
         
         if (childLeagueData && childLeagueData.length > 0) {
@@ -368,7 +381,7 @@ export default function LeagueLeadersPage() {
     let stats = rawPlayerStats;
 
     if (isParentLeague && selectedAgeGroup !== 'all') {
-      stats = stats.filter(s => s.league_id === selectedAgeGroup);
+      stats = stats.filter(s => selectedLeagueIdsForAgeGroup.includes(s.league_id));
     }
 
     if (isParentLeague && selectedRound !== 'all') {
@@ -386,7 +399,7 @@ export default function LeagueLeadersPage() {
     }
 
     return stats;
-  }, [rawPlayerStats, isParentLeague, selectedAgeGroup, selectedRound, selectedMonth]);
+  }, [rawPlayerStats, isParentLeague, selectedAgeGroup, selectedLeagueIdsForAgeGroup, selectedRound, selectedMonth]);
 
   const aggregatedPlayers = useMemo(() => {
     if (filteredStats.length === 0) return [];
@@ -718,7 +731,7 @@ export default function LeagueLeadersPage() {
                   style={{ borderColor: brandColor, color: brandColor }}
                 >
                   {ageGroupOptions.map(opt => (
-                    <option key={opt.league_id} value={opt.league_id}>{opt.displayLabel}</option>
+                    <option key={opt.age_group} value={opt.age_group}>{opt.displayLabel}</option>
                   ))}
                 </select>
               </div>
