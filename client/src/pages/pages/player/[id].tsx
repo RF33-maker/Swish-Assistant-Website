@@ -1346,7 +1346,7 @@ export default function PlayerStatsPage() {
               ].map((stat, i) => (
                 <div key={i} className="text-center py-2">
                   <div className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-0.5">
-                    {stat.label} {stat.rank ? <span className="text-[10px] normal-case">{getOrdinalSuffix(stat.rank)}</span> : null}
+                    {stat.label}
                   </div>
                   <div className="text-2xl md:text-3xl font-black text-orange-600 dark:text-orange-400 tabular-nums">
                     {stat.value.toFixed(1)}
@@ -1368,7 +1368,7 @@ export default function PlayerStatsPage() {
               ].map((stat, i) => (
                 <div key={i} className="text-center">
                   <div className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-0.5">
-                    {stat.label} {stat.rank ? <span className="text-[10px] normal-case">{getOrdinalSuffix(stat.rank)}</span> : null}
+                    {stat.label}
                   </div>
                   <div className="text-xl md:text-2xl font-black text-orange-600 dark:text-orange-400 tabular-nums">{formatPercentage(stat.value)}</div>
                   <div className="mt-1.5 bg-gray-100 dark:bg-neutral-700 h-1 rounded-full overflow-hidden">
