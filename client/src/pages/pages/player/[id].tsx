@@ -120,7 +120,6 @@ export default function PlayerStatsPage() {
   const [aiAnalysis, setAiAnalysis] = useState<string>("");
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [leagueNames, setLeagueNames] = useState<Map<string, string>>(new Map());
-  const [leagueInfoMap, setLeagueInfoMap] = useState<Map<string, { name: string; parent_league_id?: string | null; age_group?: string | null; stop?: number | null }>>(new Map());
   const [playerShotChartRange, setPlayerShotChartRange] = useState<string>("season");
   const [careerStatsTab, setCareerStatsTab] = useState<string>("averages");
   const [photoUploading, setPhotoUploading] = useState(false);
@@ -477,6 +476,10 @@ export default function PlayerStatsPage() {
           ...(stats || []).map((s: any) => s.league_id),
         ].filter(Boolean)));
 
+        // Local map used to enrich stat rows before setPlayerStats — no state needed
+        const leagueInfoLocal = new Map<string, { name: string; parent_league_id?: string | null; age_group?: string | null; stop?: number | null }>();
+        const leagueMapLocal = new Map<string, string>();
+
         if (uniqueLeagueIds.length > 0) {
           const { data: leaguesData } = await supabase
             .from('leagues')
@@ -484,13 +487,11 @@ export default function PlayerStatsPage() {
             .in('league_id', uniqueLeagueIds);
 
           if (leaguesData) {
-            const infoMap = new Map<string, { name: string; parent_league_id?: string | null; age_group?: string | null; stop?: number | null }>();
-            const leagueMap = new Map<string, string>();
             const parentIds: string[] = [];
 
             leaguesData.forEach(league => {
-              leagueMap.set(league.league_id, league.name);
-              infoMap.set(league.league_id, {
+              leagueMapLocal.set(league.league_id, league.name);
+              leagueInfoLocal.set(league.league_id, {
                 name: league.name,
                 parent_league_id: league.parent_league_id,
                 age_group: league.age_group,
@@ -501,7 +502,7 @@ export default function PlayerStatsPage() {
               }
             });
 
-            // Also fetch names for parent leagues not already in our set
+            // Fetch names for parent leagues not already in our set
             const uniqueParentIds = Array.from(new Set(parentIds));
             if (uniqueParentIds.length > 0) {
               const { data: parentLeagues } = await supabase
@@ -510,13 +511,12 @@ export default function PlayerStatsPage() {
                 .in('league_id', uniqueParentIds);
               if (parentLeagues) {
                 parentLeagues.forEach(pl => {
-                  leagueMap.set(pl.league_id, pl.name);
+                  leagueMapLocal.set(pl.league_id, pl.name);
                 });
               }
             }
 
-            setLeagueNames(leagueMap);
-            setLeagueInfoMap(infoMap);
+            setLeagueNames(leagueMapLocal);
           }
         }
 
@@ -616,6 +616,28 @@ export default function PlayerStatsPage() {
           }
         }
         
+        // Enrich each stat with pre-computed group key and label so careerStats
+        // useMemo doesn't need a separate leagueInfoMap state (avoids timing race)
+        statsWithOpponents = statsWithOpponents.map((stat: any) => {
+          const lid = stat.league_id || '';
+          const info = leagueInfoLocal.get(lid);
+          let groupKey: string;
+          let groupLabel: string;
+          if (info?.parent_league_id) {
+            const stopPart = info.stop != null ? `::stop${info.stop}` : '';
+            const agePart = info.age_group ? `::${info.age_group}` : '';
+            groupKey = `${info.parent_league_id}${agePart}${stopPart}`;
+            const parentName = leagueMapLocal.get(info.parent_league_id) || info.parent_league_id;
+            const ageSuffix = info.age_group ? ` ${info.age_group}` : '';
+            const stopSuffix = info.stop != null ? ` Stop ${info.stop}` : '';
+            groupLabel = `${parentName}${ageSuffix}${stopSuffix}`;
+          } else {
+            groupKey = lid;
+            groupLabel = leagueMapLocal.get(lid) || lid;
+          }
+          return { ...stat, _groupKey: groupKey, _groupLabel: groupLabel };
+        });
+
         setPlayerStats(statsWithOpponents);
         
         // If we have stats with joined players data, use that for player info
@@ -928,42 +950,17 @@ export default function PlayerStatsPage() {
   const careerStats = useMemo(() => {
     if (!playerStats || playerStats.length === 0) return [];
 
-    // Group stats by parent_league + age_group + stop (or raw league_id if no parent)
+    // Group by pre-computed _groupKey embedded on each stat during data fetch
     const leagueGroups = new Map<string, any[]>();
-    const groupKeyToLabel = new Map<string, string>();
-    const groupKeyToLeagueId = new Map<string, string>();
 
-    playerStats.forEach(stat => {
-      const leagueId = stat.league_id || stat.players?.league_id || 'unknown';
-      const info = leagueInfoMap.get(leagueId);
-
-      let groupKey: string;
-      let label: string;
-
-      if (info?.parent_league_id) {
-        // Group by parent + age_group + stop so multiple child leagues merge
-        const stopPart = info.stop != null ? `::stop${info.stop}` : '';
-        const agePart = info.age_group ? `::${info.age_group}` : '';
-        groupKey = `${info.parent_league_id}${agePart}${stopPart}`;
-
-        // Build display label: "REBA SL 14U Stop 1"
-        const parentName = leagueNames.get(info.parent_league_id) || info.parent_league_id;
-        const ageSuffix = info.age_group ? ` ${info.age_group}` : '';
-        const stopSuffix = info.stop != null ? ` Stop ${info.stop}` : '';
-        label = `${parentName}${ageSuffix}${stopSuffix}`;
-      } else {
-        groupKey = leagueId;
-        label = leagueNames.get(leagueId) || leagueId;
-      }
-
-      if (!leagueGroups.has(groupKey)) leagueGroups.set(groupKey, []);
-      leagueGroups.get(groupKey)!.push(stat);
-      groupKeyToLabel.set(groupKey, label);
-      groupKeyToLeagueId.set(groupKey, leagueId);
+    playerStats.forEach((stat: any) => {
+      const key = stat._groupKey || stat.league_id || 'unknown';
+      if (!leagueGroups.has(key)) leagueGroups.set(key, []);
+      leagueGroups.get(key)!.push(stat);
     });
 
     const seasons: any[] = [];
-    leagueGroups.forEach((stats, groupKey) => {
+    leagueGroups.forEach((stats) => {
       const played = stats.filter((s: any) => parseMinutesPlayed(s) > 0);
       if (played.length === 0) return;
       const gp = played.length;
@@ -982,12 +979,12 @@ export default function PlayerStatsPage() {
         to: acc.to + (g.sturnovers || g.turnovers || 0),
         min: acc.min + parseMinutesPlayed(g),
       }), { pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0, to: 0, min: 0 });
-      const team = played[0].team_name || played[0].team || '';
-      const leagueId = groupKeyToLeagueId.get(groupKey) || groupKey;
+      const first = played[0] as any;
+      const team = first.team_name || first.team || '';
+      const leagueId = first.league_id || first._groupKey || '';
+      const season = first._groupLabel || leagueNames.get(leagueId) || leagueId;
       seasons.push({
-        leagueId,
-        season: groupKeyToLabel.get(groupKey) || leagueId,
-        team, gp, ...totals,
+        leagueId, season, team, gp, ...totals,
         fg_pct: totals.fga > 0 ? (totals.fgm / totals.fga) * 100 : 0,
         tp_pct: totals.tpa > 0 ? (totals.tpm / totals.tpa) * 100 : 0,
         ft_pct: totals.fta > 0 ? (totals.ftm / totals.fta) * 100 : 0,
@@ -995,7 +992,7 @@ export default function PlayerStatsPage() {
       });
     });
     return seasons;
-  }, [playerStats, leagueNames, leagueInfoMap]);
+  }, [playerStats, leagueNames]);
 
   const careerTotals = useMemo(() => {
     if (careerStats.length === 0) return null;
