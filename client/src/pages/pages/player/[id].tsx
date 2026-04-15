@@ -120,6 +120,7 @@ export default function PlayerStatsPage() {
   const [aiAnalysis, setAiAnalysis] = useState<string>("");
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [leagueNames, setLeagueNames] = useState<Map<string, string>>(new Map());
+  const [leagueInfoMap, setLeagueInfoMap] = useState<Map<string, { name: string; parent_league_id?: string | null; age_group?: string | null; stop?: number | null }>>(new Map());
   const [playerShotChartRange, setPlayerShotChartRange] = useState<string>("season");
   const [careerStatsTab, setCareerStatsTab] = useState<string>("averages");
   const [photoUploading, setPhotoUploading] = useState(false);
@@ -470,20 +471,52 @@ export default function PlayerStatsPage() {
           .in('player_id', playerIds)
           .order('created_at', { ascending: false });
 
-        // Fetch league names for all unique league_ids from playerMatches
-        const uniqueLeagueIds = Array.from(new Set(matches.map(m => m.league_id).filter(Boolean)));
+        // Fetch league info for all unique league_ids (from both matches and stats)
+        const uniqueLeagueIds = Array.from(new Set([
+          ...matches.map(m => m.league_id),
+          ...(stats || []).map((s: any) => s.league_id),
+        ].filter(Boolean)));
+
         if (uniqueLeagueIds.length > 0) {
           const { data: leaguesData } = await supabase
             .from('leagues')
-            .select('league_id, name')
+            .select('league_id, name, parent_league_id, age_group, stop')
             .in('league_id', uniqueLeagueIds);
-          
+
           if (leaguesData) {
+            const infoMap = new Map<string, { name: string; parent_league_id?: string | null; age_group?: string | null; stop?: number | null }>();
             const leagueMap = new Map<string, string>();
+            const parentIds: string[] = [];
+
             leaguesData.forEach(league => {
               leagueMap.set(league.league_id, league.name);
+              infoMap.set(league.league_id, {
+                name: league.name,
+                parent_league_id: league.parent_league_id,
+                age_group: league.age_group,
+                stop: league.stop,
+              });
+              if (league.parent_league_id && !uniqueLeagueIds.includes(league.parent_league_id)) {
+                parentIds.push(league.parent_league_id);
+              }
             });
+
+            // Also fetch names for parent leagues not already in our set
+            const uniqueParentIds = Array.from(new Set(parentIds));
+            if (uniqueParentIds.length > 0) {
+              const { data: parentLeagues } = await supabase
+                .from('leagues')
+                .select('league_id, name')
+                .in('league_id', uniqueParentIds);
+              if (parentLeagues) {
+                parentLeagues.forEach(pl => {
+                  leagueMap.set(pl.league_id, pl.name);
+                });
+              }
+            }
+
             setLeagueNames(leagueMap);
+            setLeagueInfoMap(infoMap);
           }
         }
 
@@ -894,14 +927,43 @@ export default function PlayerStatsPage() {
 
   const careerStats = useMemo(() => {
     if (!playerStats || playerStats.length === 0) return [];
+
+    // Group stats by parent_league + age_group + stop (or raw league_id if no parent)
     const leagueGroups = new Map<string, any[]>();
+    const groupKeyToLabel = new Map<string, string>();
+    const groupKeyToLeagueId = new Map<string, string>();
+
     playerStats.forEach(stat => {
-      const leagueId = stat.players?.league_id || stat.league_id || 'unknown';
-      if (!leagueGroups.has(leagueId)) leagueGroups.set(leagueId, []);
-      leagueGroups.get(leagueId)!.push(stat);
+      const leagueId = stat.league_id || stat.players?.league_id || 'unknown';
+      const info = leagueInfoMap.get(leagueId);
+
+      let groupKey: string;
+      let label: string;
+
+      if (info?.parent_league_id) {
+        // Group by parent + age_group + stop so multiple child leagues merge
+        const stopPart = info.stop != null ? `::stop${info.stop}` : '';
+        const agePart = info.age_group ? `::${info.age_group}` : '';
+        groupKey = `${info.parent_league_id}${agePart}${stopPart}`;
+
+        // Build display label: "REBA SL 14U Stop 1"
+        const parentName = leagueNames.get(info.parent_league_id) || info.parent_league_id;
+        const ageSuffix = info.age_group ? ` ${info.age_group}` : '';
+        const stopSuffix = info.stop != null ? ` Stop ${info.stop}` : '';
+        label = `${parentName}${ageSuffix}${stopSuffix}`;
+      } else {
+        groupKey = leagueId;
+        label = leagueNames.get(leagueId) || leagueId;
+      }
+
+      if (!leagueGroups.has(groupKey)) leagueGroups.set(groupKey, []);
+      leagueGroups.get(groupKey)!.push(stat);
+      groupKeyToLabel.set(groupKey, label);
+      groupKeyToLeagueId.set(groupKey, leagueId);
     });
+
     const seasons: any[] = [];
-    leagueGroups.forEach((stats, leagueId) => {
+    leagueGroups.forEach((stats, groupKey) => {
       const played = stats.filter((s: any) => parseMinutesPlayed(s) > 0);
       if (played.length === 0) return;
       const gp = played.length;
@@ -921,8 +983,11 @@ export default function PlayerStatsPage() {
         min: acc.min + parseMinutesPlayed(g),
       }), { pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0, to: 0, min: 0 });
       const team = played[0].team_name || played[0].team || '';
+      const leagueId = groupKeyToLeagueId.get(groupKey) || groupKey;
       seasons.push({
-        leagueId, season: leagueNames.get(leagueId) || leagueId, team, gp, ...totals,
+        leagueId,
+        season: groupKeyToLabel.get(groupKey) || leagueId,
+        team, gp, ...totals,
         fg_pct: totals.fga > 0 ? (totals.fgm / totals.fga) * 100 : 0,
         tp_pct: totals.tpa > 0 ? (totals.tpm / totals.tpa) * 100 : 0,
         ft_pct: totals.fta > 0 ? (totals.ftm / totals.fta) * 100 : 0,
@@ -930,7 +995,7 @@ export default function PlayerStatsPage() {
       });
     });
     return seasons;
-  }, [playerStats, leagueNames]);
+  }, [playerStats, leagueNames, leagueInfoMap]);
 
   const careerTotals = useMemo(() => {
     if (careerStats.length === 0) return null;
