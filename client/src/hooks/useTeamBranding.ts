@@ -1,6 +1,32 @@
 import { useState, useEffect } from 'react';
-import { extractTeamColors, extractColorsFromImage, TeamColors } from '@/lib/colorExtractor';
+import { extractTeamColors, extractColorsFromImage, TeamColors, getContrastColor } from '@/lib/colorExtractor';
 import { supabase } from '@/lib/supabase';
+
+function parseColorToRgb(color: string): { r: number; g: number; b: number } | null {
+  const hex = color.trim();
+  if (hex.startsWith('#')) {
+    const h = hex.slice(1);
+    if (h.length === 6) {
+      return {
+        r: parseInt(h.slice(0, 2), 16),
+        g: parseInt(h.slice(2, 4), 16),
+        b: parseInt(h.slice(4, 6), 16),
+      };
+    }
+    if (h.length === 3) {
+      return {
+        r: parseInt(h[0] + h[0], 16),
+        g: parseInt(h[1] + h[1], 16),
+        b: parseInt(h[2] + h[2], 16),
+      };
+    }
+  }
+  const rgbMatch = hex.match(/^rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/i);
+  if (rgbMatch) {
+    return { r: parseInt(rgbMatch[1]), g: parseInt(rgbMatch[2]), b: parseInt(rgbMatch[3]) };
+  }
+  return null;
+}
 
 interface UseTeamBrandingOptions {
   teamName: string;
@@ -127,7 +153,34 @@ export function useTeamBranding({
           }
         }
 
-        setColors(null);
+        // Final fallback: check brand_primary_colour stored on the league record
+        try {
+          const { data: leagueData } = await supabase
+            .from('leagues')
+            .select('brand_primary_colour')
+            .eq('league_id', leagueId)
+            .single();
+
+          if (!cancelled && leagueData?.brand_primary_colour) {
+            const rgb = parseColorToRgb(leagueData.brand_primary_colour);
+            if (rgb) {
+              setColors({
+                primary: leagueData.brand_primary_colour,
+                secondary: leagueData.brand_primary_colour,
+                accent: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.1)`,
+                primaryRgb: rgb,
+                secondaryRgb: rgb,
+                textContrast: getContrastColor(rgb),
+                textSecondaryContrast: getContrastColor(rgb),
+              });
+              return;
+            }
+          }
+        } catch {
+          // ignore — fall through to null
+        }
+
+        if (!cancelled) setColors(null);
       } catch (error) {
         console.error('Failed to extract team colors:', error);
         if (!cancelled) setColors(null);

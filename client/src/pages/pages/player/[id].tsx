@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { generatePlayerAnalysis, type PlayerAnalysisData } from "@/lib/ai-analysis";
 import { TeamLogo } from "@/components/TeamLogo";
 import { PlayerBanner } from "@/components/PlayerBanner";
+import { useTeamBranding } from "@/hooks/useTeamBranding";
 import { Helmet } from "react-helmet-async";
 import { namesMatch, getMostCompleteName, slugToName, type PlayerMatch } from "@/lib/fuzzyMatch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -127,6 +128,20 @@ export default function PlayerStatsPage() {
   const [tempFocusY, setTempFocusY] = useState<number>(50);
   const [savingFocus, setSavingFocus] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { primaryColor, colors: brandColors } = useTeamBranding({
+    teamName: playerInfo?.team || "",
+    leagueId: playerInfo?.leagueId || "",
+    enabled: !!playerInfo?.team && !!playerInfo?.leagueId,
+  });
+
+  const primaryColorAlpha = (opacity: number) => {
+    if (brandColors?.primaryRgb) {
+      const { r, g, b } = brandColors.primaryRgb;
+      return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+    }
+    return primaryColor;
+  };
 
   const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -1330,7 +1345,7 @@ export default function PlayerStatsPage() {
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Season Averages</span>
               {selectedLeagueFilter !== "all" && (
-                <Badge variant="outline" className="text-[10px] border-orange-300 dark:border-orange-500/50 text-orange-600 dark:text-orange-400">
+                <Badge variant="outline" className="text-[10px]" style={{ borderColor: primaryColorAlpha(0.5), color: primaryColor }}>
                   {leagueNames.get(selectedLeagueFilter) || 'Filtered'}
                 </Badge>
               )}
@@ -1348,7 +1363,7 @@ export default function PlayerStatsPage() {
                   <div className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-0.5">
                     {stat.label}
                   </div>
-                  <div className="text-2xl md:text-3xl font-black text-orange-600 dark:text-orange-400 tabular-nums">
+                  <div className="text-2xl md:text-3xl font-black tabular-nums" style={{ color: primaryColor }}>
                     {stat.value.toFixed(1)}
                   </div>
                 </div>
@@ -1370,9 +1385,9 @@ export default function PlayerStatsPage() {
                   <div className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-0.5">
                     {stat.label}
                   </div>
-                  <div className="text-xl md:text-2xl font-black text-orange-600 dark:text-orange-400 tabular-nums">{formatPercentage(stat.value)}</div>
+                  <div className="text-xl md:text-2xl font-black tabular-nums" style={{ color: primaryColor }}>{formatPercentage(stat.value)}</div>
                   <div className="mt-1.5 bg-gray-100 dark:bg-neutral-700 h-1 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full bg-orange-500 transition-all duration-500" style={{ width: `${Math.min(stat.value, 100)}%` }} />
+                    <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(stat.value, 100)}%`, backgroundColor: primaryColor }} />
                   </div>
                 </div>
               ))}
@@ -1391,9 +1406,10 @@ export default function PlayerStatsPage() {
                     onClick={() => setCareerStatsTab(tab)}
                     className={`px-3 md:px-4 py-1.5 text-xs md:text-sm font-medium transition-colors capitalize ${
                       careerStatsTab === tab
-                        ? 'bg-orange-500 text-white'
+                        ? 'text-white'
                         : 'text-slate-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-neutral-800'
                     }`}
+                  style={careerStatsTab === tab ? { backgroundColor: primaryColor } : {}}
                   >
                     {tab}
                   </button>
@@ -1521,8 +1537,8 @@ export default function PlayerStatsPage() {
                   {careerTotals && careerStats.length > 1 && (() => {
                     const ct = "px-2 py-1.5 text-center text-xs whitespace-nowrap";
                     return (
-                      <tr className="font-bold text-slate-900 dark:text-white border-t-2 border-orange-300 dark:border-orange-500/40">
-                        <td className="px-2 py-1.5 text-xs uppercase text-orange-600 dark:text-orange-400">Career</td>
+                      <tr className="font-bold text-slate-900 dark:text-white border-t-2" style={{ borderColor: primaryColorAlpha(0.4) }}>
+                        <td className="px-2 py-1.5 text-xs uppercase" style={{ color: primaryColor }}>Career</td>
                         <td className="px-2 py-1.5 text-xs"></td>
                         {careerStatsTab === "averages" && (
                           <>
