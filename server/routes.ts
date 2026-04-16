@@ -480,7 +480,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { data, error } = await supabaseAdmin
         .from("leagues")
-        .select("league_id, name, slug, primary_color, secondary_color, accent_color, banner_url, logo_url")
+        .select("league_id, name, slug, primary_color, secondary_color, accent_color, brand_primary_colour, banner_url, logo_url")
         .eq("slug", slug)
         .eq("is_public", true)
         .single();
@@ -489,7 +489,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "League not found" });
       }
 
-      res.json(data);
+      const responseData = {
+        ...data,
+        primary_color: data.brand_primary_colour || data.primary_color,
+      };
+
+      res.json(responseData);
     } catch (err: any) {
       console.error("Error fetching public league branding:", err.message);
       res.status(500).json({ error: "Internal server error" });
@@ -503,7 +508,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { data, error } = await supabaseAdmin
         .from("leagues")
-        .select("league_id, name, slug, primary_color, secondary_color, accent_color, banner_url, logo_url")
+        .select("league_id, name, slug, primary_color, secondary_color, accent_color, brand_primary_colour, banner_url, logo_url")
         .eq("league_id", leagueId)
         .eq("is_public", true)
         .single();
@@ -512,7 +517,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "League not found" });
       }
 
-      res.json(data);
+      const responseData = {
+        ...data,
+        primary_color: data.brand_primary_colour || data.primary_color,
+      };
+
+      res.json(responseData);
     } catch (err: any) {
       console.error("Error fetching public league branding by id:", err.message);
       res.status(500).json({ error: "Internal server error" });
