@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
+import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -1262,10 +1263,22 @@ export default function PlayerStatsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-white dark:bg-neutral-950 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto mb-4"></div>
-          <p className="text-orange-800 dark:text-orange-400">Loading player stats...</p>
+      <div className="min-h-screen bg-white dark:bg-neutral-950">
+        <header className="bg-white dark:bg-neutral-900 shadow-sm sticky top-0 z-50 px-3 md:px-6 py-1.5 md:py-3">
+          <div className="flex items-center gap-2 md:gap-4">
+            <img
+              src={SwishLogo}
+              alt="Swish Assistant"
+              className="h-6 md:h-9 cursor-pointer"
+              onClick={() => setLocation("/")}
+            />
+          </div>
+        </header>
+        <div className="flex items-center justify-center" style={{ minHeight: 'calc(100vh - 56px)' }}>
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto mb-4"></div>
+            <p className="text-orange-800 dark:text-orange-400">Loading player stats...</p>
+          </div>
         </div>
       </div>
     );
@@ -1322,6 +1335,53 @@ export default function PlayerStatsPage() {
       </Helmet>
       
       <div className="min-h-screen bg-gray-50 dark:bg-neutral-950">
+        <header className="bg-white dark:bg-neutral-900 shadow-sm sticky top-0 z-50 px-3 md:px-6 py-1.5 md:py-3">
+          <div className="flex items-center gap-2 md:gap-4">
+            <div className="flex items-center shrink-0">
+              <img
+                src={SwishLogo}
+                alt="Swish Assistant"
+                className="h-6 md:h-9 cursor-pointer"
+                onClick={() => setLocation("/")}
+              />
+            </div>
+
+            <form onSubmit={handleSearchSubmit} className="relative flex-1 md:max-w-md md:mx-6">
+              <input
+                type="text"
+                placeholder="Search leagues or players"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full px-3 py-1 md:py-2 border border-gray-300 dark:border-neutral-700 rounded-full text-xs md:text-sm bg-white dark:bg-neutral-800 text-slate-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500"
+              />
+              <button
+                type="submit"
+                className="absolute right-0 top-0 h-full px-2.5 md:px-4 bg-orange-500 hover:bg-orange-600 text-white rounded-full text-xs md:text-sm"
+              >
+                Go
+              </button>
+
+              {searchSuggestions.length > 0 && (
+                <ul className="absolute z-50 mt-2 w-full bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                  {searchSuggestions.map((item, index) => (
+                    <li
+                      key={index}
+                      onClick={() => handleSearchSelect(item)}
+                      className="px-4 py-2 cursor-pointer hover:bg-orange-100 dark:hover:bg-neutral-800 text-left text-slate-800 dark:text-slate-200 text-sm"
+                    >
+                      <span className="font-medium">{item.name}</span>
+                      {item.type === 'player' && item.team && (
+                        <span className="text-xs text-slate-400 ml-2">{item.team}</span>
+                      )}
+                      <span className="text-xs text-slate-400 ml-2 capitalize">{item.type}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </form>
+          </div>
+        </header>
+
         {playerInfo && (
           <PlayerBanner
             playerInfo={playerInfo}
