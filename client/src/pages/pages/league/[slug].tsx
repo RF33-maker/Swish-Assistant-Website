@@ -608,19 +608,19 @@ export default function LeaguePage() {
   const displayLogoUrl = league?.logo_url || publicBrandingData?.logo_url;
   const displayLeagueName = league?.name || publicBrandingData?.name;
 
-  const brandColor = leagueBrandColors?.primary || 'rgb(249, 115, 22)';
+  const brandColor = leagueBrandColors?.primary || 'rgb(100, 100, 100)';
   const brandColorHover = leagueBrandColors 
     ? `rgb(${Math.max(0, leagueBrandColors.primaryRgb.r - 20)}, ${Math.max(0, leagueBrandColors.primaryRgb.g - 20)}, ${Math.max(0, leagueBrandColors.primaryRgb.b - 20)})`
-    : 'rgb(234, 88, 12)';
+    : 'rgb(70, 70, 70)';
   const brandBorderLight = leagueBrandColors 
     ? `rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.2)` 
-    : 'rgb(255, 237, 213)';
+    : 'rgba(100, 100, 100, 0.2)';
   const brandBg10 = leagueBrandColors
     ? `rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.1)`
-    : 'rgba(249, 115, 22, 0.1)';
+    : 'rgba(100, 100, 100, 0.1)';
   const brandBg50 = leagueBrandColors
     ? `rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.05)`
-    : 'rgba(249, 115, 22, 0.05)';
+    : 'rgba(100, 100, 100, 0.05)';
 
   const isParentLeague = childCompetitions.length > 0;
 
