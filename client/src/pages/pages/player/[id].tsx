@@ -1350,7 +1350,7 @@ export default function PlayerStatsPage() {
                 </Badge>
               )}
             </div>
-            <div className="grid grid-cols-3 gap-2 md:gap-3">
+            <div className="grid grid-cols-3 md:grid-cols-6 gap-2 md:gap-3">
               {[
                 { value: filteredSeasonAverages.avg_points, label: "PTS", rank: playerRankings?.points },
                 { value: filteredSeasonAverages.avg_rebounds, label: "REB", rank: playerRankings?.rebounds },
@@ -1359,9 +1359,9 @@ export default function PlayerStatsPage() {
                 { value: filteredSeasonAverages.avg_blocks, label: "BLK", rank: playerRankings?.blocks },
                 { value: filteredSeasonAverages.avg_efficiency, label: "EFF" },
               ].map((stat, i) => (
-                <div key={i} className="text-center py-2">
+                <div key={i} className={`text-center py-2 ${i >= 3 ? 'hidden md:block' : ''}`}>
                   <div className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-0.5">
-                    {stat.label}
+                    {stat.label} {stat.rank ? <span className="text-[10px] normal-case">{getOrdinalSuffix(stat.rank)}</span> : null}
                   </div>
                   <div className="text-2xl md:text-3xl font-black tabular-nums" style={{ color: primaryColor }}>
                     {stat.value.toFixed(1)}
@@ -1383,7 +1383,7 @@ export default function PlayerStatsPage() {
               ].map((stat, i) => (
                 <div key={i} className="text-center">
                   <div className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-0.5">
-                    {stat.label}
+                    {stat.label} {stat.rank ? <span className="text-[10px] normal-case">{getOrdinalSuffix(stat.rank)}</span> : null}
                   </div>
                   <div className="text-xl md:text-2xl font-black tabular-nums" style={{ color: primaryColor }}>{formatPercentage(stat.value)}</div>
                   <div className="mt-1.5 bg-gray-100 dark:bg-neutral-700 h-1 rounded-full overflow-hidden">
