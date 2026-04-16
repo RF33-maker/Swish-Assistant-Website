@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
+import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { generatePlayerAnalysis, type PlayerAnalysisData } from "@/lib/ai-analysis";
 import { TeamLogo } from "@/components/TeamLogo";
 import { PlayerBanner } from "@/components/PlayerBanner";
+import { useTeamBranding } from "@/hooks/useTeamBranding";
 import { Helmet } from "react-helmet-async";
 import { namesMatch, getMostCompleteName, slugToName, type PlayerMatch } from "@/lib/fuzzyMatch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -127,6 +129,20 @@ export default function PlayerStatsPage() {
   const [tempFocusY, setTempFocusY] = useState<number>(50);
   const [savingFocus, setSavingFocus] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { primaryColor, colors: brandColors } = useTeamBranding({
+    teamName: playerInfo?.team || "",
+    leagueId: playerInfo?.leagueId || "",
+    enabled: !!playerInfo?.team && !!playerInfo?.leagueId,
+  });
+
+  const primaryColorAlpha = (opacity: number) => {
+    if (brandColors?.primaryRgb) {
+      const { r, g, b } = brandColors.primaryRgb;
+      return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+    }
+    return primaryColor;
+  };
 
   const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -1247,10 +1263,22 @@ export default function PlayerStatsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-white dark:bg-neutral-950 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto mb-4"></div>
-          <p className="text-orange-800 dark:text-orange-400">Loading player stats...</p>
+      <div className="min-h-screen bg-white dark:bg-neutral-950">
+        <header className="bg-white dark:bg-neutral-900 shadow-sm sticky top-0 z-50 px-3 md:px-6 py-1.5 md:py-3">
+          <div className="flex items-center gap-2 md:gap-4">
+            <img
+              src={SwishLogo}
+              alt="Swish Assistant"
+              className="h-6 md:h-9 cursor-pointer"
+              onClick={() => setLocation("/")}
+            />
+          </div>
+        </header>
+        <div className="flex items-center justify-center" style={{ minHeight: 'calc(100vh - 56px)' }}>
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto mb-4"></div>
+            <p className="text-orange-800 dark:text-orange-400">Loading player stats...</p>
+          </div>
         </div>
       </div>
     );
@@ -1307,6 +1335,53 @@ export default function PlayerStatsPage() {
       </Helmet>
       
       <div className="min-h-screen bg-gray-50 dark:bg-neutral-950">
+        <header className="bg-white dark:bg-neutral-900 shadow-sm sticky top-0 z-50 px-3 md:px-6 py-1.5 md:py-3">
+          <div className="flex items-center gap-2 md:gap-4">
+            <div className="flex items-center shrink-0">
+              <img
+                src={SwishLogo}
+                alt="Swish Assistant"
+                className="h-6 md:h-9 cursor-pointer"
+                onClick={() => setLocation("/")}
+              />
+            </div>
+
+            <form onSubmit={handleSearchSubmit} className="relative flex-1 md:max-w-md md:mx-6">
+              <input
+                type="text"
+                placeholder="Search leagues or players"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full px-3 py-1 md:py-2 border border-gray-300 dark:border-neutral-700 rounded-full text-xs md:text-sm bg-white dark:bg-neutral-800 text-slate-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500"
+              />
+              <button
+                type="submit"
+                className="absolute right-0 top-0 h-full px-2.5 md:px-4 bg-orange-500 hover:bg-orange-600 text-white rounded-full text-xs md:text-sm"
+              >
+                Go
+              </button>
+
+              {searchSuggestions.length > 0 && (
+                <ul className="absolute z-50 mt-2 w-full bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                  {searchSuggestions.map((item, index) => (
+                    <li
+                      key={index}
+                      onClick={() => handleSearchSelect(item)}
+                      className="px-4 py-2 cursor-pointer hover:bg-orange-100 dark:hover:bg-neutral-800 text-left text-slate-800 dark:text-slate-200 text-sm"
+                    >
+                      <span className="font-medium">{item.name}</span>
+                      {item.type === 'player' && item.team && (
+                        <span className="text-xs text-slate-400 ml-2">{item.team}</span>
+                      )}
+                      <span className="text-xs text-slate-400 ml-2 capitalize">{item.type}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </form>
+          </div>
+        </header>
+
         {playerInfo && (
           <PlayerBanner
             playerInfo={playerInfo}
@@ -1330,12 +1405,12 @@ export default function PlayerStatsPage() {
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Season Averages</span>
               {selectedLeagueFilter !== "all" && (
-                <Badge variant="outline" className="text-[10px] border-orange-300 dark:border-orange-500/50 text-orange-600 dark:text-orange-400">
+                <Badge variant="outline" className="text-[10px]" style={{ borderColor: primaryColorAlpha(0.5), color: primaryColor }}>
                   {leagueNames.get(selectedLeagueFilter) || 'Filtered'}
                 </Badge>
               )}
             </div>
-            <div className="grid grid-cols-3 gap-2 md:gap-3">
+            <div className="grid grid-cols-3 md:grid-cols-6 gap-2 md:gap-3">
               {[
                 { value: filteredSeasonAverages.avg_points, label: "PTS", rank: playerRankings?.points },
                 { value: filteredSeasonAverages.avg_rebounds, label: "REB", rank: playerRankings?.rebounds },
@@ -1344,11 +1419,11 @@ export default function PlayerStatsPage() {
                 { value: filteredSeasonAverages.avg_blocks, label: "BLK", rank: playerRankings?.blocks },
                 { value: filteredSeasonAverages.avg_efficiency, label: "EFF" },
               ].map((stat, i) => (
-                <div key={i} className="text-center py-2">
+                <div key={i} className={`text-center py-2 ${i >= 3 ? 'hidden md:block' : ''}`}>
                   <div className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-0.5">
-                    {stat.label}
+                    {stat.label} {stat.rank ? <span className="text-[10px] normal-case">{getOrdinalSuffix(stat.rank)}</span> : null}
                   </div>
-                  <div className="text-2xl md:text-3xl font-black text-orange-600 dark:text-orange-400 tabular-nums">
+                  <div className="text-2xl md:text-3xl font-black tabular-nums" style={{ color: primaryColor }}>
                     {stat.value.toFixed(1)}
                   </div>
                 </div>
@@ -1368,11 +1443,11 @@ export default function PlayerStatsPage() {
               ].map((stat, i) => (
                 <div key={i} className="text-center">
                   <div className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-0.5">
-                    {stat.label}
+                    {stat.label} {stat.rank ? <span className="text-[10px] normal-case">{getOrdinalSuffix(stat.rank)}</span> : null}
                   </div>
-                  <div className="text-xl md:text-2xl font-black text-orange-600 dark:text-orange-400 tabular-nums">{formatPercentage(stat.value)}</div>
+                  <div className="text-xl md:text-2xl font-black tabular-nums" style={{ color: primaryColor }}>{formatPercentage(stat.value)}</div>
                   <div className="mt-1.5 bg-gray-100 dark:bg-neutral-700 h-1 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full bg-orange-500 transition-all duration-500" style={{ width: `${Math.min(stat.value, 100)}%` }} />
+                    <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(stat.value, 100)}%`, backgroundColor: primaryColor }} />
                   </div>
                 </div>
               ))}
@@ -1391,9 +1466,10 @@ export default function PlayerStatsPage() {
                     onClick={() => setCareerStatsTab(tab)}
                     className={`px-3 md:px-4 py-1.5 text-xs md:text-sm font-medium transition-colors capitalize ${
                       careerStatsTab === tab
-                        ? 'bg-orange-500 text-white'
+                        ? 'text-white'
                         : 'text-slate-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-neutral-800'
                     }`}
+                  style={careerStatsTab === tab ? { backgroundColor: primaryColor } : {}}
                   >
                     {tab}
                   </button>
@@ -1521,8 +1597,8 @@ export default function PlayerStatsPage() {
                   {careerTotals && careerStats.length > 1 && (() => {
                     const ct = "px-2 py-1.5 text-center text-xs whitespace-nowrap";
                     return (
-                      <tr className="font-bold text-slate-900 dark:text-white border-t-2 border-orange-300 dark:border-orange-500/40">
-                        <td className="px-2 py-1.5 text-xs uppercase text-orange-600 dark:text-orange-400">Career</td>
+                      <tr className="font-bold text-slate-900 dark:text-white border-t-2" style={{ borderColor: primaryColorAlpha(0.4) }}>
+                        <td className="px-2 py-1.5 text-xs uppercase" style={{ color: primaryColor }}>Career</td>
                         <td className="px-2 py-1.5 text-xs"></td>
                         {careerStatsTab === "averages" && (
                           <>

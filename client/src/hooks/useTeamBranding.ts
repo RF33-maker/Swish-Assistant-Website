@@ -1,6 +1,32 @@
 import { useState, useEffect } from 'react';
-import { extractTeamColors, extractColorsFromImage, TeamColors } from '@/lib/colorExtractor';
+import { extractTeamColors, extractColorsFromImage, TeamColors, getContrastColor } from '@/lib/colorExtractor';
 import { supabase } from '@/lib/supabase';
+
+function parseColorToRgb(color: string): { r: number; g: number; b: number } | null {
+  const hex = color.trim();
+  if (hex.startsWith('#')) {
+    const h = hex.slice(1);
+    if (h.length === 6) {
+      return {
+        r: parseInt(h.slice(0, 2), 16),
+        g: parseInt(h.slice(2, 4), 16),
+        b: parseInt(h.slice(4, 6), 16),
+      };
+    }
+    if (h.length === 3) {
+      return {
+        r: parseInt(h[0] + h[0], 16),
+        g: parseInt(h[1] + h[1], 16),
+        b: parseInt(h[2] + h[2], 16),
+      };
+    }
+  }
+  const rgbMatch = hex.match(/^rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/i);
+  if (rgbMatch) {
+    return { r: parseInt(rgbMatch[1]), g: parseInt(rgbMatch[2]), b: parseInt(rgbMatch[3]) };
+  }
+  return null;
+}
 
 interface UseTeamBrandingOptions {
   teamName: string;
@@ -18,37 +44,51 @@ interface UseTeamBrandingResult {
 const DEFAULT_PRIMARY = 'rgb(251, 146, 60)';
 const DEFAULT_SECONDARY = 'rgb(59, 130, 246)';
 
-const leagueLogoCache = new Map<string, string | null>();
-const leagueLogoFetching = new Map<string, Promise<string | null>>();
+interface LeagueLogoData {
+  logoUrl: string | null;
+  brandPrimaryColour: string | null;
+}
 
-async function getLeagueLogoViaSupabase(leagueId: string): Promise<string | null> {
+const leagueLogoCache = new Map<string, LeagueLogoData>();
+const leagueLogoFetching = new Map<string, Promise<LeagueLogoData>>();
+
+async function getLeagueLogoViaSupabase(leagueId: string): Promise<LeagueLogoData> {
   try {
     const { data, error } = await supabase
       .from('leagues')
-      .select('logo_url, parent_league_id')
+      .select('logo_url, parent_league_id, brand_primary_colour')
       .eq('league_id', leagueId)
       .single();
 
-    if (error || !data) return null;
+    if (error || !data) {
+      if (error) console.warn('useTeamBranding: Supabase league fetch failed for', leagueId, error.message);
+      return { logoUrl: null, brandPrimaryColour: null };
+    }
 
-    if (data.logo_url) return data.logo_url;
+    const brandPrimaryColour = data.brand_primary_colour || null;
+
+    if (data.logo_url) return { logoUrl: data.logo_url, brandPrimaryColour };
 
     if (data.parent_league_id) {
       const { data: parentData } = await supabase
         .from('leagues')
-        .select('logo_url')
+        .select('logo_url, brand_primary_colour')
         .eq('league_id', data.parent_league_id)
         .single();
-      return parentData?.logo_url || null;
+      return {
+        logoUrl: parentData?.logo_url || null,
+        brandPrimaryColour: brandPrimaryColour || parentData?.brand_primary_colour || null,
+      };
     }
 
-    return null;
-  } catch {
-    return null;
+    return { logoUrl: null, brandPrimaryColour };
+  } catch (err) {
+    console.warn('useTeamBranding: unexpected error fetching league data for', leagueId, err);
+    return { logoUrl: null, brandPrimaryColour: null };
   }
 }
 
-async function getLeagueLogoUrl(leagueId: string): Promise<string | null> {
+async function getLeagueLogoData(leagueId: string): Promise<LeagueLogoData> {
   if (leagueLogoCache.has(leagueId)) {
     return leagueLogoCache.get(leagueId)!;
   }
@@ -57,24 +97,31 @@ async function getLeagueLogoUrl(leagueId: string): Promise<string | null> {
     return leagueLogoFetching.get(leagueId)!;
   }
 
-  const fetchPromise = (async (): Promise<string | null> => {
+  const fetchPromise = (async (): Promise<LeagueLogoData> => {
     try {
       const res = await fetch(`/api/public/league-logo/${encodeURIComponent(leagueId)}`);
       if (res.ok) {
-        const data = await res.json();
-        const logoUrl = data?.logo_url || null;
+        const apiData = await res.json();
+        const logoUrl = apiData?.logo_url || null;
         if (logoUrl) {
-          leagueLogoCache.set(leagueId, logoUrl);
-          return logoUrl;
+          // API only returns the logo URL; fetch brand colour from Supabase alongside
+          const supabaseData = await getLeagueLogoViaSupabase(leagueId);
+          const result: LeagueLogoData = {
+            logoUrl,
+            brandPrimaryColour: supabaseData.brandPrimaryColour,
+          };
+          leagueLogoCache.set(leagueId, result);
+          return result;
         }
       }
 
-      const supabaseLogo = await getLeagueLogoViaSupabase(leagueId);
-      leagueLogoCache.set(leagueId, supabaseLogo);
-      return supabaseLogo;
+      const supabaseData = await getLeagueLogoViaSupabase(leagueId);
+      leagueLogoCache.set(leagueId, supabaseData);
+      return supabaseData;
     } catch {
-      leagueLogoCache.set(leagueId, null);
-      return null;
+      const empty: LeagueLogoData = { logoUrl: null, brandPrimaryColour: null };
+      leagueLogoCache.set(leagueId, empty);
+      return empty;
     } finally {
       leagueLogoFetching.delete(leagueId);
     }
@@ -82,6 +129,23 @@ async function getLeagueLogoUrl(leagueId: string): Promise<string | null> {
 
   leagueLogoFetching.set(leagueId, fetchPromise);
   return fetchPromise;
+}
+
+function buildColorsFromBrandColour(brandColour: string): TeamColors | null {
+  const rgb = parseColorToRgb(brandColour);
+  if (!rgb) {
+    console.error('useTeamBranding: brand_primary_colour is in an unrecognised format:', brandColour);
+    return null;
+  }
+  return {
+    primary: brandColour,
+    secondary: brandColour,
+    accent: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.1)`,
+    primaryRgb: rgb,
+    secondaryRgb: rgb,
+    textContrast: getContrastColor(rgb),
+    textSecondaryContrast: getContrastColor(rgb),
+  };
 }
 
 export function useTeamBranding({ 
@@ -111,13 +175,13 @@ export function useTeamBranding({
           return;
         }
 
-        const leagueLogoUrl = await getLeagueLogoUrl(leagueId);
+        const leagueData = await getLeagueLogoData(leagueId);
         if (cancelled) return;
 
-        if (leagueLogoUrl) {
-          const fullUrl = leagueLogoUrl.startsWith('http')
-            ? leagueLogoUrl
-            : `${window.location.origin}${leagueLogoUrl}`;
+        if (leagueData.logoUrl) {
+          const fullUrl = leagueData.logoUrl.startsWith('http')
+            ? leagueData.logoUrl
+            : `${window.location.origin}${leagueData.logoUrl}`;
           const leagueColors = await extractColorsFromImage(fullUrl);
           if (cancelled) return;
 
@@ -127,7 +191,17 @@ export function useTeamBranding({
           }
         }
 
-        setColors(null);
+        // Image extraction failed — use brand_primary_colour fetched alongside the logo
+        if (leagueData.brandPrimaryColour) {
+          console.warn('useTeamBranding: image color extraction unavailable, using Supabase brand_primary_colour for league', leagueId);
+          const brandColors = buildColorsFromBrandColour(leagueData.brandPrimaryColour);
+          if (!cancelled) {
+            setColors(brandColors);
+          }
+          return;
+        }
+
+        if (!cancelled) setColors(null);
       } catch (error) {
         console.error('Failed to extract team colors:', error);
         if (!cancelled) setColors(null);
