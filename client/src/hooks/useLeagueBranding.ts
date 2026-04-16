@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { extractColorsFromImage, TeamColors } from '@/lib/colorExtractor';
 
 const CACHE_KEY = 'league_branding_cache';
-const CACHE_VERSION = '2';
+const CACHE_VERSION = '3';
 const CACHE_DURATION = 7 * 24 * 60 * 60 * 1000;
 
 const DEFAULT_BRAND_COLORS: TeamColors = {

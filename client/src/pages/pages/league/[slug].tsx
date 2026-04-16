@@ -600,7 +600,10 @@ export default function LeaguePage() {
 
   const { colors: leagueBrandColors, brandingData: publicBrandingData } = usePublicLeagueBrandingBySlug({
     slug,
-    fallbackLeague: league,
+    fallbackLeague: league ? {
+      ...league,
+      brand_primary_colour: (league as any).brand_primary_colour ?? null,
+    } : null,
     enabled: !!slug,
   });
 

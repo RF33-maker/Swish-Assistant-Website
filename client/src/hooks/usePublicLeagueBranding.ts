@@ -10,6 +10,7 @@ interface LeagueBrandingData {
   accent_color: string | null;
   banner_url: string | null;
   logo_url: string | null;
+  brand_primary_colour: string | null;
 }
 
 const brandingCache = new Map<string, LeagueBrandingData | null>();
@@ -22,6 +23,7 @@ interface UsePublicLeagueBrandingBySlugOptions {
     primary_color?: string | null;
     secondary_color?: string | null;
     accent_color?: string | null;
+    brand_primary_colour?: string | null;
   } | null;
   enabled?: boolean;
 }
@@ -35,8 +37,7 @@ export function usePublicLeagueBrandingBySlug({
   const [isLoadingBranding, setIsLoadingBranding] = useState(false);
 
   const hasSufficientFallback = !!(fallbackLeague && (
-    (fallbackLeague.primary_color && fallbackLeague.secondary_color) ||
-    (fallbackLeague.banner_url || fallbackLeague.logo_url)
+    fallbackLeague.brand_primary_colour || fallbackLeague.primary_color
   ));
 
   useEffect(() => {
@@ -74,12 +75,13 @@ export function usePublicLeagueBrandingBySlug({
   }, [slug, enabled, hasSufficientFallback]);
 
   const source = brandingData || fallbackLeague;
+  const manualPrimary = source?.brand_primary_colour || source?.primary_color;
 
   const { colors, isLoading: isExtractingColors } = useLeagueBranding({
     slug,
     bannerUrl: source?.banner_url,
     logoUrl: source?.logo_url,
-    manualPrimaryColor: source?.primary_color,
+    manualPrimaryColor: manualPrimary,
     manualSecondaryColor: source?.secondary_color,
     manualAccentColor: source?.accent_color,
     enabled: !!source,
@@ -101,6 +103,7 @@ interface UsePublicLeagueBrandingByIdOptions {
     primary_color?: string | null;
     secondary_color?: string | null;
     accent_color?: string | null;
+    brand_primary_colour?: string | null;
   } | null;
   enabled?: boolean;
 }
@@ -114,8 +117,7 @@ export function usePublicLeagueBrandingById({
   const [isLoadingBranding, setIsLoadingBranding] = useState(false);
 
   const hasSufficientFallback = !!(fallbackLeague && (
-    (fallbackLeague.primary_color && fallbackLeague.secondary_color) ||
-    (fallbackLeague.banner_url || fallbackLeague.logo_url)
+    fallbackLeague.brand_primary_colour || fallbackLeague.primary_color
   ));
 
   useEffect(() => {
@@ -154,12 +156,13 @@ export function usePublicLeagueBrandingById({
 
   const source = brandingData || fallbackLeague;
   const slug = brandingData?.slug || fallbackLeague?.slug || undefined;
+  const manualPrimary = source?.brand_primary_colour || source?.primary_color;
 
   const { colors, isLoading: isExtractingColors } = useLeagueBranding({
     slug,
     bannerUrl: source?.banner_url,
     logoUrl: source?.logo_url,
-    manualPrimaryColor: source?.primary_color,
+    manualPrimaryColor: manualPrimary,
     manualSecondaryColor: source?.secondary_color,
     manualAccentColor: source?.accent_color,
     enabled: !!source,
