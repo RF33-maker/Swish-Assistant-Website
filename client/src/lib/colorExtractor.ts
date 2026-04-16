@@ -48,8 +48,8 @@ export async function extractColorsFromImage(imageUrl: string): Promise<TeamColo
         try {
           imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         } catch (err) {
-          console.warn("CORS error getting image data, using defaults:", imageUrl);
-          resolve(DEFAULT_COLORS);
+          console.warn("CORS error getting image data, falling back to Supabase brand colour:", imageUrl);
+          resolve(null);
           return;
         }
         
@@ -80,8 +80,8 @@ export async function extractColorsFromImage(imageUrl: string): Promise<TeamColo
         }
         
         if (colorMap.size === 0) {
-          console.warn("No qualifying colors found in image, using defaults:", imageUrl);
-          resolve(DEFAULT_COLORS);
+          console.warn("No qualifying colors found in image, falling back to Supabase brand colour:", imageUrl);
+          resolve(null);
           return;
         }
         
