@@ -283,6 +283,34 @@ export function namesMatch(name1: string, name2: string, threshold: number = 0.8
 }
 
 /**
+ * Strict name match for use when merging records across different teams.
+ *
+ * Reuses the structured rules in `namesMatch` for multi-word names (full last
+ * name match plus first name / initial / nickname compatibility) but tightens
+ * the single-word case: when either side is a single token (e.g. just a last
+ * name from a stripped jersey number), require an exact normalized match
+ * rather than a Jaro-Winkler similarity threshold. This prevents unrelated
+ * players who happen to share a similar last name from being merged together.
+ */
+export function strictNamesMatch(name1: string, name2: string): boolean {
+  const n1 = normalizeName(name1);
+  const n2 = normalizeName(name2);
+
+  if (!n1 || !n2) return false;
+
+  const parts1 = n1.split(' ').filter(p => p.length > 0);
+  const parts2 = n2.split(' ').filter(p => p.length > 0);
+
+  // For single-word names on either side, require exact normalized match.
+  if (parts1.length <= 1 || parts2.length <= 1) {
+    return n1 === n2;
+  }
+
+  // Otherwise defer to the existing structured multi-word rules.
+  return namesMatch(name1, name2);
+}
+
+/**
  * Find all player records that match a given player
  * Uses fuzzy name matching + team validation
  */

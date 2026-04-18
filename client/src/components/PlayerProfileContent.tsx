@@ -917,11 +917,32 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
         min: acc.min + parseMinutesPlayed(g),
       }), { pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0, to: 0, min: 0 });
       const first = played[0] as any;
-      const team = first.team_name || first.team || '';
+
+      // Pick the most-recent team as the current team for this league/season,
+      // and collect any other teams played for as previous teams. This handles
+      // mid-season team-switchers within the same league.
+      const playedSortedDesc = [...played].sort((a: any, b: any) => {
+        const da = a.game_date ? new Date(a.game_date).getTime() : 0;
+        const db = b.game_date ? new Date(b.game_date).getTime() : 0;
+        return db - da;
+      });
+      const mostRecent = playedSortedDesc[0] || first;
+      const team = mostRecent.team_name || mostRecent.team || first.team_name || first.team || '';
+      const normalizeTeam = (t: string) => (t || '').trim().toLowerCase();
+      const teamMap = new Map<string, string>();
+      played.forEach((g: any) => {
+        const t = g.team_name || g.team;
+        if (!t) return;
+        const norm = normalizeTeam(t);
+        if (!teamMap.has(norm)) teamMap.set(norm, t);
+      });
+      const currentTeamNorm = normalizeTeam(team);
+      const previousTeams = Array.from(teamMap.values()).filter(t => normalizeTeam(t) !== currentTeamNorm);
+
       const leagueId = first.league_id || first._groupKey || '';
       const season = first._groupLabel || leagueNames.get(leagueId) || leagueId;
       seasons.push({
-        leagueId, season, team, gp, ...totals,
+        leagueId, season, team, previousTeams, gp, ...totals,
         fg_pct: totals.fga > 0 ? (totals.fgm / totals.fga) * 100 : 0,
         tp_pct: totals.tpa > 0 ? (totals.tpm / totals.tpa) * 100 : 0,
         ft_pct: totals.fta > 0 ? (totals.ftm / totals.fta) * 100 : 0,
@@ -1190,6 +1211,14 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
                         <div className="flex items-center gap-1">
                           <TeamLogo teamName={row.team} leagueId={row.leagueId} size="xs" className="flex-shrink-0" />
                           <span className="truncate max-w-[50px]">{getTeamAbbreviation(row.team)}</span>
+                          {row.previousTeams && row.previousTeams.length > 0 && (
+                            <span
+                              className="text-[10px] text-slate-400 dark:text-slate-500 truncate max-w-[120px]"
+                              title={`Previous teams: ${row.previousTeams.join(', ')}`}
+                            >
+                              (prev: {row.previousTeams.map((t: string) => getTeamAbbreviation(t)).join(', ')})
+                            </span>
+                          )}
                         </div>
                       </td>
                       {renderCareerRow(row)}
