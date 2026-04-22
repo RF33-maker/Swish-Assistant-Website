@@ -305,21 +305,89 @@ export default function LandingPage() {
       {/* Gradient Top Border */}
       <div className="h-[1px] bg-gradient-to-r from-orange-400 to-amber-400"></div>
 
-      {/* Top header: logo + hamburger sidebar trigger */}
+      {/* Top header: logo (clickable home) + search bar + hamburger sidebar trigger */}
       <header className="bg-[#0a0a0f] border-b border-neutral-800">
-        <div className="max-w-7xl mx-auto flex items-center justify-between px-4 md:px-6 py-3">
+        <div className="max-w-7xl mx-auto flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3">
+          <button
+            type="button"
+            aria-label="Go to home"
+            onClick={() => setLocation('/')}
+            className="flex items-center flex-shrink-0 hover:opacity-90 transition-opacity"
+            data-testid="header-logo-home"
+          >
+            <img src={SwishLogo} alt="Swish Logo" className="h-9 md:h-10" />
+          </button>
+
+          <div className="flex-1 relative max-w-2xl">
+            <form
+              onSubmit={handleSubmit}
+              className="flex items-center bg-neutral-900 hover:bg-neutral-800 focus-within:bg-neutral-800 border border-neutral-700 focus-within:border-orange-500 rounded-full overflow-hidden transition-colors"
+            >
+              <Search className="ml-3 md:ml-4 h-4 w-4 md:h-5 md:w-5 text-neutral-400 flex-shrink-0" />
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search league, team or player"
+                className="flex-1 min-w-0 px-3 py-2 md:py-2.5 text-sm md:text-base text-white bg-transparent placeholder:text-neutral-500 focus:outline-none"
+                data-testid="header-search-input"
+              />
+            </form>
+
+            {suggestions.length > 0 && (
+              <ul className="absolute z-50 left-0 right-0 mt-1 bg-white dark:bg-neutral-900 border border-orange-200 dark:border-neutral-700 rounded-md shadow-lg max-h-72 overflow-y-auto">
+                {suggestions.map((item, index) => (
+                  <li
+                    key={index}
+                    onClick={() => handleSelect(item)}
+                    className="px-4 py-2.5 cursor-pointer hover:bg-orange-50 dark:hover:bg-neutral-800 text-left border-b border-orange-100 dark:border-neutral-800 last:border-b-0 transition-colors duration-200"
+                  >
+                    <div className="flex items-center gap-3">
+                      {item.type === 'league' ? (
+                        <div className="h-8 w-8 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center flex-shrink-0">
+                          <Trophy className="h-4 w-4 text-white" />
+                        </div>
+                      ) : item.type === 'team' ? (
+                        <div className="h-8 w-8 rounded-full bg-white dark:bg-neutral-800 border border-orange-200 dark:border-neutral-600 flex items-center justify-center overflow-hidden flex-shrink-0">
+                          <TeamLogo teamName={item.name} leagueId={item.league_id} size="sm" />
+                        </div>
+                      ) : (
+                        <PlayerSearchAvatar name={item.name} photoUrl={item.photo_url} />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-orange-900 dark:text-orange-300 text-sm truncate">{item.name}</div>
+                        {item.type === 'player' && (
+                          <div className="text-xs text-orange-600 dark:text-orange-400 truncate">{item.team}</div>
+                        )}
+                        {item.type === 'team' && (
+                          <div className="text-xs text-orange-600 dark:text-orange-400 truncate">{item.league_name}</div>
+                        )}
+                        {item.type === 'league' && (
+                          <div className="text-xs text-orange-600 dark:text-orange-400">League</div>
+                        )}
+                      </div>
+                      <div className="text-xs text-orange-700 dark:text-orange-300 capitalize bg-orange-100 dark:bg-orange-900/50 px-2 py-1 rounded-full font-medium flex-shrink-0">
+                        {item.type}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
           <Sheet>
             <SheetTrigger asChild>
               <button
                 type="button"
                 aria-label="Open menu"
                 data-testid="sidebar-trigger"
-                className="inline-flex items-center justify-center h-10 w-10 rounded-md text-white hover:bg-neutral-800 transition-colors"
+                className="inline-flex items-center justify-center h-10 w-10 flex-shrink-0 rounded-md text-white hover:bg-neutral-800 transition-colors"
               >
                 <Menu className="h-6 w-6" />
               </button>
             </SheetTrigger>
-            <SheetContent side="left" className="w-72 bg-neutral-950 text-white border-r border-neutral-800 p-0">
+            <SheetContent side="right" className="w-72 bg-neutral-950 text-white border-l border-neutral-800 p-0">
               <div className="flex items-center gap-2 px-5 py-4 border-b border-neutral-800">
                 <img src={SwishLogo} alt="Swish Logo" className="h-8" />
                 <span className="font-semibold">Swish Assistant</span>
@@ -350,12 +418,6 @@ export default function LandingPage() {
               </nav>
             </SheetContent>
           </Sheet>
-
-          <div className="flex items-center">
-            <img src={SwishLogo} alt="Swish Logo" className="h-8" />
-          </div>
-
-          <div className="h-10 w-10" aria-hidden="true" />
         </div>
       </header>
 
@@ -365,69 +427,8 @@ export default function LandingPage() {
       {/* Hero Section with Gradient Background */}
       <div className="bg-gradient-to-b from-[#fffaf5] to-white dark:from-neutral-950 dark:to-neutral-900 pt-4 md:pt-6 lg:pt-8 pb-12 md:pb-16 lg:pb-20">
         <main className="flex flex-col items-center justify-center px-6 text-center">
-          {/* Search Bar with Suggestions */}
-          <div className="w-full max-w-2xl relative">
-          <div className="search-bar-animated-border transition-all duration-300 focus-within:scale-[1.02] animate-fade-in-up" style={{ animationDelay: '0.6s' }}>
-            <form
-              onSubmit={handleSubmit}
-              className="flex items-center shadow-lg rounded-full overflow-hidden bg-white dark:bg-neutral-900 relative z-10"
-            >
-              <Search className="ml-5 h-5 w-5 text-slate-400 dark:text-slate-500" />
-              <input
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search for league, team or player"
-                className="flex-1 px-4 py-4 text-base text-slate-900 dark:text-white focus:outline-none bg-transparent placeholder:text-slate-400 dark:placeholder:text-slate-500"
-              />
-            </form>
-          </div>
-
-          {suggestions.length > 0 && (
-            <ul className="absolute z-50 w-full bg-white dark:bg-neutral-900 border border-orange-200 dark:border-neutral-700 mt-1 rounded-md shadow-lg max-h-60 overflow-y-auto">
-              {suggestions.map((item, index) => (
-                <li
-                  key={index}
-                  onClick={() => handleSelect(item)}
-                  className="px-5 py-3 cursor-pointer hover:bg-orange-50 dark:hover:bg-neutral-800 text-left border-b border-orange-100 dark:border-neutral-800 last:border-b-0 transition-colors duration-200"
-                >
-                  <div className="flex items-center gap-3">
-                    {item.type === 'league' ? (
-                      <div className="h-8 w-8 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center flex-shrink-0">
-                        <Trophy className="h-4 w-4 text-white" />
-                      </div>
-                    ) : item.type === 'team' ? (
-                      <div className="h-8 w-8 rounded-full bg-white dark:bg-neutral-800 border border-orange-200 dark:border-neutral-600 flex items-center justify-center overflow-hidden flex-shrink-0">
-                        <TeamLogo teamName={item.name} leagueId={item.league_id} size="sm" />
-                      </div>
-                    ) : (
-                      <PlayerSearchAvatar name={item.name} photoUrl={item.photo_url} />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-orange-900 dark:text-orange-300 text-sm truncate">{item.name}</div>
-                      {item.type === 'player' && (
-                        <div className="text-xs text-orange-600 dark:text-orange-400 truncate">{item.team}</div>
-                      )}
-                      {item.type === 'team' && (
-                        <div className="text-xs text-orange-600 dark:text-orange-400 truncate">{item.league_name}</div>
-                      )}
-                      {item.type === 'league' && (
-                        <div className="text-xs text-orange-600 dark:text-orange-400">League</div>
-                      )}
-                    </div>
-                    <div className="text-xs text-orange-700 dark:text-orange-300 capitalize bg-orange-100 dark:bg-orange-900/50 px-2 py-1 rounded-full font-medium flex-shrink-0">
-                      {item.type}
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-
-        </div>
-
         {/* Suggestions */}
-        <div className="mt-4 md:mt-6 w-full max-w-xl">
+        <div className="w-full max-w-xl">
           <h3 className="text-sm font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider mb-3 animate-slide-in-left" style={{ animationDelay: '0.75s', opacity: 0, animationFillMode: 'forwards' }}>Trending</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {(trendingLeagues.length > 0
