@@ -873,7 +873,7 @@ export default function LandingPage() {
               <Button 
                 size="lg"
                 className="w-full bg-orange-500 hover:bg-orange-600 hover:shadow-[0_0_20px_rgba(249,115,22,0.5)] text-white transition-all duration-300"
-                onClick={() => window.location.href = '/contact-sales'}
+                onClick={() => setLocation('/contact-sales')}
               >
                 Contact Us
               </Button>

@@ -2415,21 +2415,17 @@ export default function LeaguePage() {
     };
 
     const fetchAllPlayerAverages = async () => {
-      console.log("📊 TRACE: fetchAllPlayerAverages called, league_id:", league?.league_id);
       debugLog("📊 fetchAllPlayerAverages called, league_id:", league?.league_id);
       if (!league?.league_id) {
-        console.log("📊 TRACE: No league_id, returning early");
         debugLog("📊 No league_id, returning early");
         return;
       }
 
       if (playerAveragesCancelledRef.current) {
-        console.log("📊 TRACE: Cancelled, returning early");
         return;
       }
 
       if (isFetchingStatsRef.current) {
-        console.log("📊 TRACE: Already fetching stats, returning early");
         return;
       }
 
