@@ -19,6 +19,7 @@ import { TeamLogo } from "@/components/TeamLogo"
 import LatestScoresSection from "@/components/home/LatestScoresSection"
 import LatestNewsSection from "@/components/home/LatestNewsSection"
 import TopPlayersSection from "@/components/home/TopPlayersSection"
+import TrendingPerformanceSection from "@/components/home/TrendingPerformanceSection"
 
 function LeagueLogosCarousel() {
   const logos = [Ballpark, NBLBE, BCB, SLB]
@@ -429,6 +430,8 @@ export default function LandingPage() {
       {/* Hero Section with Gradient Background */}
       <div className="bg-gradient-to-b from-[#fffaf5] to-white dark:from-neutral-950 dark:to-neutral-900 pt-4 md:pt-6 lg:pt-8 pb-12 md:pb-16 lg:pb-20">
         <main className="flex flex-col items-center justify-center px-6 text-center">
+        {/* Trending Performance */}
+        <TrendingPerformanceSection />
         {/* Suggestions */}
         <div className="w-full max-w-xl">
           <h3 className="text-sm font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider mb-3 animate-slide-in-left" style={{ animationDelay: '0.75s', opacity: 0, animationFillMode: 'forwards' }}>Trending</h3>
