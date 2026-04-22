@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -30,11 +30,12 @@ interface PlayerMetaRow {
   photo_path_bg_removed: string | null;
 }
 
-interface TeamMetaRow {
-  team_id: string;
-  team_name: string;
-  logo_url: string | null;
+interface LeagueMetaRow {
+  league_id: string;
+  name: string | null;
 }
+
+const ROTATE_MS = 6000;
 
 function formatDate(s: string | null) {
   if (!s) return "";
@@ -60,16 +61,19 @@ function Stat({ label, value }: { label: string; value: string | number }) {
 
 export default function TrendingPerformanceSection() {
   const [, setLocation] = useLocation();
-  const [perf, setPerf] = useState<PerfRow | null>(null);
-  const [playerSlug, setPlayerSlug] = useState<string | null>(null);
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [perfs, setPerfs] = useState<PerfRow[]>([]);
+  const [leagueNames, setLeagueNames] = useState<Record<string, string>>({});
+  const [playerMeta, setPlayerMeta] = useState<
+    Record<string, { slug: string | null; photoUrl: string | null }>
+  >({});
   const [loading, setLoading] = useState(true);
+  const [index, setIndex] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       try {
-        // Top game_score from the most recent week (single query)
+        // Pull recent top games — fetch enough rows to cover all leagues
         const { data: rows } = await supabase
           .from("vw_player_game_scores")
           .select(
@@ -77,40 +81,72 @@ export default function TrendingPerformanceSection() {
           )
           .order("week_start", { ascending: false })
           .order("game_score", { ascending: false })
-          .limit(1);
+          .limit(500);
 
-        const top = (rows as PerfRow[] | null)?.[0] || null;
         if (cancelled) return;
 
-        if (!top) {
-          setPerf(null);
-          setLoading(false);
-          return;
+        const all = (rows as PerfRow[] | null) || [];
+        // Take the top performance per league_id (rows already sorted by week desc, gs desc)
+        const byLeague = new Map<string, PerfRow>();
+        for (const r of all) {
+          if (!r.league_id) continue;
+          if (!byLeague.has(r.league_id)) byLeague.set(r.league_id, r);
         }
+        const top = Array.from(byLeague.values());
+        // Sort league cards by recency, then by game_score
+        top.sort((a, b) => {
+          const aw = a.week_start || "";
+          const bw = b.week_start || "";
+          if (aw !== bw) return aw < bw ? 1 : -1;
+          return (b.game_score ?? 0) - (a.game_score ?? 0);
+        });
 
-        setPerf(top);
+        setPerfs(top);
         setLoading(false);
 
-        // Player meta (slug + photo) — progressive enhancement, don't gate UI
-        supabase
-          .from("players")
-          .select("id, slug, photo_path_bg_removed")
-          .eq("id", top.player_id)
-          .limit(1)
-          .then(({ data: players }) => {
-            const p = (players as PlayerMetaRow[] | null)?.[0];
-            if (cancelled || !p) return;
-            setPlayerSlug(p.slug);
-            if (p.photo_path_bg_removed) {
-              const { data } = supabase.storage
-                .from("player-photos")
-                .getPublicUrl(p.photo_path_bg_removed);
-              setPhotoUrl(data?.publicUrl || null);
-            }
-          });
+        // Progressive enhancement: league names
+        const leagueIds = top.map((t) => t.league_id);
+        if (leagueIds.length) {
+          supabase
+            .from("leagues")
+            .select("league_id, name")
+            .in("league_id", leagueIds)
+            .then(({ data }) => {
+              if (cancelled) return;
+              const map: Record<string, string> = {};
+              for (const l of (data as LeagueMetaRow[] | null) || []) {
+                if (l.name) map[l.league_id] = l.name;
+              }
+              setLeagueNames(map);
+            });
+        }
+
+        // Progressive enhancement: player meta (slug + photo) for all featured players
+        const playerIds = top.map((t) => t.player_id);
+        if (playerIds.length) {
+          supabase
+            .from("players")
+            .select("id, slug, photo_path_bg_removed")
+            .in("id", playerIds)
+            .then(({ data }) => {
+              if (cancelled) return;
+              const map: Record<string, { slug: string | null; photoUrl: string | null }> = {};
+              for (const p of (data as PlayerMetaRow[] | null) || []) {
+                let photoUrl: string | null = null;
+                if (p.photo_path_bg_removed) {
+                  const { data: pub } = supabase.storage
+                    .from("player-photos")
+                    .getPublicUrl(p.photo_path_bg_removed);
+                  photoUrl = pub?.publicUrl || null;
+                }
+                map[p.id] = { slug: p.slug, photoUrl };
+              }
+              setPlayerMeta(map);
+            });
+        }
       } catch {
         if (!cancelled) {
-          setPerf(null);
+          setPerfs([]);
           setLoading(false);
         }
       }
@@ -120,6 +156,28 @@ export default function TrendingPerformanceSection() {
       cancelled = true;
     };
   }, []);
+
+  // Auto-rotate carousel
+  useEffect(() => {
+    if (perfs.length <= 1) return;
+    const id = setInterval(() => {
+      setIndex((i) => (i + 1) % perfs.length);
+    }, ROTATE_MS);
+    return () => clearInterval(id);
+  }, [perfs.length]);
+
+  const perf = perfs[index] || null;
+  const meta = perf ? playerMeta[perf.player_id] : undefined;
+  const photoUrl = meta?.photoUrl || null;
+  const playerSlug = meta?.slug || null;
+  const leagueName = perf ? leagueNames[perf.league_id] : undefined;
+
+  const tsPct = useMemo(() => {
+    if (!perf) return "—";
+    return perf.ts_pct !== null && perf.ts_pct !== undefined
+      ? `${(Number(perf.ts_pct) * 100).toFixed(1)}`
+      : "—";
+  }, [perf]);
 
   const goToPerformance = () => {
     if (!perf) return;
@@ -155,13 +213,6 @@ export default function TrendingPerformanceSection() {
     );
   }
 
-  if (!perf) return null;
-
-  const tsPct =
-    perf.ts_pct !== null && perf.ts_pct !== undefined
-      ? `${(Number(perf.ts_pct) * 100).toFixed(1)}`
-      : "—";
-
   return (
     <div className="w-full max-w-xl mb-6 md:mb-8 text-left">
       <button
@@ -172,10 +223,17 @@ export default function TrendingPerformanceSection() {
       >
         {/* Header */}
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-base md:text-lg font-bold text-slate-900 dark:text-white">
-            Trending Performance
-          </h3>
-          <ChevronRight className="h-5 w-5 text-slate-400 dark:text-slate-500 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
+          <div className="flex items-baseline gap-2 min-w-0">
+            <h3 className="text-base md:text-lg font-bold text-slate-900 dark:text-white">
+              Trending Performance
+            </h3>
+            {leagueName && (
+              <span className="text-[10px] md:text-xs uppercase tracking-wide text-orange-600 dark:text-orange-400 font-semibold truncate">
+                {leagueName}
+              </span>
+            )}
+          </div>
+          <ChevronRight className="h-5 w-5 text-slate-400 dark:text-slate-500 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
         </div>
 
         {/* Player + meta */}
@@ -225,6 +283,29 @@ export default function TrendingPerformanceSection() {
           <Stat label="TS%" value={tsPct} />
         </div>
       </button>
+
+      {/* Carousel dots */}
+      {perfs.length > 1 && (
+        <div className="flex items-center justify-center gap-1.5 mt-3">
+          {perfs.map((p, i) => (
+            <button
+              key={p.league_id}
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIndex(i);
+              }}
+              aria-label={`Show ${leagueNames[p.league_id] || "league"} top performance`}
+              className={`h-1.5 rounded-full transition-all ${
+                i === index
+                  ? "w-6 bg-orange-500"
+                  : "w-1.5 bg-slate-300 dark:bg-neutral-700 hover:bg-slate-400 dark:hover:bg-neutral-600"
+              }`}
+              data-testid={`trending-perf-dot-${i}`}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
