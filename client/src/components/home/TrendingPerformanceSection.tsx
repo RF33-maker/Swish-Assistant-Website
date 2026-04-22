@@ -73,27 +73,52 @@ export default function TrendingPerformanceSection() {
     let cancelled = false;
     const load = async () => {
       try {
-        // Pull recent top games — fetch enough rows to cover all leagues
-        const { data: rows } = await supabase
-          .from("vw_player_game_scores")
-          .select(
-            "league_id, game_key, game_date, week_start, player_id, full_name, team_id, team_name, pts, reb, ast, stl, blk, tov, fga, fta, ts_pct, game_score"
-          )
-          .order("week_start", { ascending: false })
-          .order("game_score", { ascending: false })
-          .limit(500);
+        // Step 1: list trending public leagues (capped)
+        const { data: leagueRows, error: lErr } = await supabase
+          .from("leagues")
+          .select("league_id, name, trending_position")
+          .eq("is_public", true)
+          .order("trending_position", { ascending: true, nullsFirst: false })
+          .limit(12);
+
+        if (cancelled) return;
+        if (lErr) {
+          console.error("[TrendingPerf] leagues error", lErr);
+          setPerfs([]);
+          setLoading(false);
+          return;
+        }
+
+        const leagues = (leagueRows as LeagueMetaRow[] | null) || [];
+        const namesMap: Record<string, string> = {};
+        for (const l of leagues) {
+          if (l.name) namesMap[l.league_id] = l.name;
+        }
+        setLeagueNames(namesMap);
+
+        // Step 2: top-1 perf per league in parallel — each query indexed and tiny
+        const results = await Promise.all(
+          leagues.map(async (l) => {
+            const { data, error } = await supabase
+              .from("vw_player_game_scores")
+              .select(
+                "league_id, game_key, game_date, week_start, player_id, full_name, team_id, team_name, pts, reb, ast, stl, blk, tov, fga, fta, ts_pct, game_score"
+              )
+              .eq("league_id", l.league_id)
+              .order("week_start", { ascending: false })
+              .order("game_score", { ascending: false })
+              .limit(1);
+            if (error) {
+              console.error("[TrendingPerf] perf error", l.league_id, error);
+              return null;
+            }
+            return ((data as PerfRow[] | null) || [])[0] || null;
+          })
+        );
 
         if (cancelled) return;
 
-        const all = (rows as PerfRow[] | null) || [];
-        // Take the top performance per league_id (rows already sorted by week desc, gs desc)
-        const byLeague = new Map<string, PerfRow>();
-        for (const r of all) {
-          if (!r.league_id) continue;
-          if (!byLeague.has(r.league_id)) byLeague.set(r.league_id, r);
-        }
-        const top = Array.from(byLeague.values());
-        // Sort league cards by recency, then by game_score
+        const top = results.filter((r): r is PerfRow => !!r);
         top.sort((a, b) => {
           const aw = a.week_start || "";
           const bw = b.week_start || "";
@@ -104,32 +129,19 @@ export default function TrendingPerformanceSection() {
         setPerfs(top);
         setLoading(false);
 
-        // Progressive enhancement: league names
-        const leagueIds = top.map((t) => t.league_id);
-        if (leagueIds.length) {
-          supabase
-            .from("leagues")
-            .select("league_id, name")
-            .in("league_id", leagueIds)
-            .then(({ data }) => {
-              if (cancelled) return;
-              const map: Record<string, string> = {};
-              for (const l of (data as LeagueMetaRow[] | null) || []) {
-                if (l.name) map[l.league_id] = l.name;
-              }
-              setLeagueNames(map);
-            });
-        }
-
-        // Progressive enhancement: player meta (slug + photo) for all featured players
+        // Progressive enhancement: player meta
         const playerIds = top.map((t) => t.player_id);
         if (playerIds.length) {
           supabase
             .from("players")
             .select("id, slug, photo_path_bg_removed")
             .in("id", playerIds)
-            .then(({ data }) => {
+            .then(({ data, error: pErr }) => {
               if (cancelled) return;
+              if (pErr) {
+                console.error("[TrendingPerf] players error", pErr);
+                return;
+              }
               const map: Record<string, { slug: string | null; photoUrl: string | null }> = {};
               for (const p of (data as PlayerMetaRow[] | null) || []) {
                 let photoUrl: string | null = null;
@@ -144,7 +156,8 @@ export default function TrendingPerformanceSection() {
               setPlayerMeta(map);
             });
         }
-      } catch {
+      } catch (e) {
+        console.error("[TrendingPerf] load error", e);
         if (!cancelled) {
           setPerfs([]);
           setLoading(false);
