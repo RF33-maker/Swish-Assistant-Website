@@ -319,20 +319,22 @@ export default function LandingPage() {
           </button>
 
           <div className="flex-1 relative max-w-2xl">
-            <form
-              onSubmit={handleSubmit}
-              className="flex items-center bg-neutral-900 hover:bg-neutral-800 focus-within:bg-neutral-800 border border-neutral-700 focus-within:border-orange-500 rounded-full overflow-hidden transition-colors"
-            >
-              <Search className="ml-3 md:ml-4 h-4 w-4 md:h-5 md:w-5 text-neutral-400 flex-shrink-0" />
-              <input
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search league, team or player"
-                className="flex-1 min-w-0 px-3 py-2 md:py-2.5 text-sm md:text-base text-white bg-transparent placeholder:text-neutral-500 focus:outline-none"
-                data-testid="header-search-input"
-              />
-            </form>
+            <div className="search-bar-animated-border" style={{ background: '#0a0a0f' }}>
+              <form
+                onSubmit={handleSubmit}
+                className="flex items-center bg-neutral-900 rounded-full overflow-hidden relative z-10"
+              >
+                <Search className="ml-3 md:ml-4 h-4 w-4 md:h-5 md:w-5 text-neutral-400 flex-shrink-0" />
+                <input
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search league, team or player"
+                  className="flex-1 min-w-0 px-3 py-2 md:py-2.5 text-sm md:text-base text-white bg-transparent placeholder:text-neutral-500 focus:outline-none"
+                  data-testid="header-search-input"
+                />
+              </form>
+            </div>
 
             {suggestions.length > 0 && (
               <ul className="absolute z-50 left-0 right-0 mt-1 bg-white dark:bg-neutral-900 border border-orange-200 dark:border-neutral-700 rounded-md shadow-lg max-h-72 overflow-y-auto">
