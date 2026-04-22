@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { TeamLogo } from "@/components/TeamLogo";
 
 interface PerfRow {
   league_id: string;
@@ -272,9 +273,20 @@ export default function TrendingPerformanceSection() {
             <div className="font-semibold text-slate-900 dark:text-white truncate">
               {perf.full_name}
             </div>
-            <div className="text-xs md:text-sm text-slate-500 dark:text-slate-400 truncate">
-              {formatDate(perf.game_date)}
-              {perf.team_name ? ` • ${perf.team_name}` : ""}
+            <div className="flex items-center gap-1.5 text-xs md:text-sm text-slate-500 dark:text-slate-400 truncate">
+              <span>{formatDate(perf.game_date)}</span>
+              {perf.team_name && (
+                <>
+                  <span aria-hidden="true">•</span>
+                  <TeamLogo
+                    teamName={perf.team_name}
+                    leagueId={perf.league_id}
+                    size="xs"
+                    className="!w-5 !h-5"
+                  />
+                  <span className="sr-only">{perf.team_name}</span>
+                </>
+              )}
             </div>
           </div>
         </div>
