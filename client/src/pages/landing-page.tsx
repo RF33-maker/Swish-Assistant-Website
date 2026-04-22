@@ -12,9 +12,13 @@ import LeaguePage from "@/assets/League-page.png"
 import ChatbotExample from "@/assets/Chatbotexample.png"
 import { Button } from "@/components/ui/button"
 import { Analytics } from "@vercel/analytics/next"
-import { Search, ChevronDown, BarChart3, Zap, Clock, MessageSquare, Sparkles, TrendingUp, Trophy, FileText, Users } from "lucide-react"
+import { Search, ChevronDown, BarChart3, Zap, Clock, MessageSquare, Sparkles, TrendingUp, Trophy, FileText, Users, Menu } from "lucide-react"
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import { TeamLogo } from "@/components/TeamLogo"
+import LatestScoresSection from "@/components/home/LatestScoresSection"
+import LatestNewsSection from "@/components/home/LatestNewsSection"
+import TopPlayersSection from "@/components/home/TopPlayersSection"
 
 function LeagueLogosCarousel() {
   const logos = [Ballpark, NBLBE, BCB, SLB]
@@ -300,35 +304,63 @@ export default function LandingPage() {
     <div className="min-h-screen bg-white dark:bg-neutral-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors duration-300">
       {/* Gradient Top Border */}
       <div className="h-[1px] bg-gradient-to-r from-orange-400 to-amber-400"></div>
-      
-      {/* Header */}
-      <header className="flex justify-between items-center px-6 py-4 bg-gradient-to-b from-[#fffaf5] to-transparent dark:from-neutral-950 dark:to-transparent">
-        <div className="flex items-center gap-2">
-          <img src={SwishLogo} alt="Swish Logo" className="h-8" />
-          <span className="font-bold text-xl text-orange-600"></span>
+
+      {/* Top header: logo + hamburger sidebar trigger */}
+      <header className="bg-[#0a0a0f] border-b border-neutral-800">
+        <div className="max-w-7xl mx-auto flex items-center justify-between px-4 md:px-6 py-3">
+          <Sheet>
+            <SheetTrigger asChild>
+              <button
+                type="button"
+                aria-label="Open menu"
+                data-testid="sidebar-trigger"
+                className="inline-flex items-center justify-center h-10 w-10 rounded-md text-white hover:bg-neutral-800 transition-colors"
+              >
+                <Menu className="h-6 w-6" />
+              </button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-72 bg-neutral-950 text-white border-r border-neutral-800 p-0">
+              <div className="flex items-center gap-2 px-5 py-4 border-b border-neutral-800">
+                <img src={SwishLogo} alt="Swish Logo" className="h-8" />
+                <span className="font-semibold">Swish Assistant</span>
+              </div>
+              <nav className="flex flex-col p-3 gap-1">
+                <div className="flex items-center justify-between px-3 py-2 rounded-md hover:bg-neutral-900">
+                  <span className="text-sm">Theme</span>
+                  <ThemeToggle />
+                </div>
+                <a
+                  href="/auth"
+                  data-testid="sidebar-login"
+                  className="px-3 py-2 rounded-md text-sm hover:bg-neutral-900 transition-colors"
+                >
+                  Login
+                </a>
+                <a
+                  href="#subscribe"
+                  data-testid="sidebar-subscribe"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    document.getElementById('subscribe')?.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  className="mt-2 text-center bg-gradient-to-r from-orange-500 to-amber-500 text-white px-4 py-2.5 rounded-md font-semibold hover:shadow-lg transition-all"
+                >
+                  Subscribe
+                </a>
+              </nav>
+            </SheetContent>
+          </Sheet>
+
+          <div className="flex items-center">
+            <img src={SwishLogo} alt="Swish Logo" className="h-8" />
+          </div>
+
+          <div className="h-10 w-10" aria-hidden="true" />
         </div>
-        <nav className="flex items-center gap-4 text-sm font-medium">
-          <ThemeToggle />
-          <a 
-            href="/auth" 
-            className="text-slate-600 dark:text-slate-300 hover:text-orange-600 dark:hover:text-orange-400 transition-colors relative group"
-            data-testid="login-button"
-          >
-            Login
-            <span className="absolute bottom-0 left-0 w-0 h-[2px] bg-orange-500 transition-all duration-300 group-hover:w-full"></span>
-          </a>
-          <a 
-            href="#subscribe" 
-            className="bg-gradient-to-r from-orange-500 to-amber-500 text-white px-5 py-2 rounded-lg hover:shadow-lg hover:scale-105 transition-all duration-300 drop-shadow-md"
-            onClick={(e) => {
-              e.preventDefault();
-              document.getElementById('subscribe')?.scrollIntoView({ behavior: 'smooth' });
-            }}
-          >
-            Subscribe
-          </a>
-        </nav>
       </header>
+
+      {/* Live scores ticker (BR-style) */}
+      <LatestScoresSection />
 
       {/* Hero Section with Gradient Background */}
       <div className="bg-gradient-to-b from-[#fffaf5] to-white dark:from-neutral-950 dark:to-neutral-900 pt-4 md:pt-6 lg:pt-8 pb-12 md:pb-16 lg:pb-20">
@@ -486,6 +518,10 @@ export default function LandingPage() {
         </div>
         </main>
       </div>
+
+      {/* News & top players sections (scores ticker is rendered above the hero) */}
+      <LatestNewsSection />
+      <TopPlayersSection />
 
        {/*What is Swish Assistant?*/}
 
