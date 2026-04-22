@@ -369,9 +369,7 @@ export default function LandingPage() {
         />
         <main className="flex flex-col items-center justify-center px-6 text-center">
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-semibold text-slate-900 dark:text-white max-w-3xl leading-tight tracking-tight mb-6 md:mb-8 lg:mb-10 animate-fade-in-up" style={{ animationDelay: '0.2s', opacity: 0, animationFillMode: 'forwards' }}>
-            The Home of Basketball Stats, Advanced Metrics & League Insights
-            <br />
-            <span className="text-orange-500 font-bold drop-shadow-sm text-2xl sm:text-3xl lg:text-4xl mt-2 inline-block">Search below.</span>
+            <span className="text-orange-500 font-bold drop-shadow-sm text-2xl sm:text-3xl lg:text-4xl inline-block">Search below.</span>
           </h1>
 
           {/* Search Bar with Suggestions */}
