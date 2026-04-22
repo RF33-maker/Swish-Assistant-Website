@@ -364,9 +364,6 @@ export default function LandingPage() {
 
       {/* Hero Section with Gradient Background */}
       <div className="bg-gradient-to-b from-[#fffaf5] to-white dark:from-neutral-950 dark:to-neutral-900 pt-4 md:pt-6 lg:pt-8 pb-12 md:pb-16 lg:pb-20">
-        <img src={SwishLogo} alt="Swish Logo"
-          className="mx-auto w-32 h-32 md:w-40 md:h-40 lg:w-44 lg:h-44 drop-shadow-lg mb-4 md:mb-6 lg:mb-8 animate-fade-in-up"
-        />
         <main className="flex flex-col items-center justify-center px-6 text-center">
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-semibold text-slate-900 dark:text-white max-w-3xl leading-tight tracking-tight mb-6 md:mb-8 lg:mb-10 animate-fade-in-up" style={{ animationDelay: '0.2s', opacity: 0, animationFillMode: 'forwards' }}>
             <span className="text-orange-500 font-bold drop-shadow-sm text-2xl sm:text-3xl lg:text-4xl inline-block">Search below.</span>
