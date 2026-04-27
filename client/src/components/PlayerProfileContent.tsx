@@ -91,6 +91,48 @@ interface PlayerRankings {
   ft_percentage: number;
 }
 
+interface PlayerOnOffRow {
+  player_id: string;
+  player_name: string;
+  team_id: string | null;
+  game_key: string;
+  on_seconds: number | null;
+  off_seconds: number | null;
+  on_ortg: number | null;
+  off_ortg: number | null;
+  on_drtg: number | null;
+  off_drtg: number | null;
+  on_nrtg: number | null;
+  off_nrtg: number | null;
+  on_oreb_pct: number | null;
+  off_oreb_pct: number | null;
+  on_dreb_pct: number | null;
+  off_dreb_pct: number | null;
+  on_reb_pct: number | null;
+  off_reb_pct: number | null;
+  on_ast_pct: number | null;
+  off_ast_pct: number | null;
+  on_blk_pct: number | null;
+  off_blk_pct: number | null;
+  on_stl_pct: number | null;
+  off_stl_pct: number | null;
+  on_tov_pct: number | null;
+  off_tov_pct: number | null;
+}
+
+const ON_OFF_METRICS: { key: string; label: string; isPercent: boolean; higherIsBetter: boolean }[] = [
+  { key: 'ortg', label: 'ORTG', isPercent: false, higherIsBetter: true },
+  { key: 'drtg', label: 'DRTG', isPercent: false, higherIsBetter: false },
+  { key: 'nrtg', label: 'NRTG', isPercent: false, higherIsBetter: true },
+  { key: 'oreb_pct', label: 'OREB%', isPercent: true, higherIsBetter: true },
+  { key: 'dreb_pct', label: 'DREB%', isPercent: true, higherIsBetter: true },
+  { key: 'reb_pct', label: 'REB%', isPercent: true, higherIsBetter: true },
+  { key: 'ast_pct', label: 'AST%', isPercent: true, higherIsBetter: true },
+  { key: 'blk_pct', label: 'BLK%', isPercent: true, higherIsBetter: true },
+  { key: 'stl_pct', label: 'STL%', isPercent: true, higherIsBetter: true },
+  { key: 'tov_pct', label: 'TOV%', isPercent: true, higherIsBetter: false },
+];
+
 interface PlayerProfileContentProps {
   playerSlug: string;
   brandColorOverride?: string;
@@ -871,6 +913,93 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
     enabled: playerIdsForShots.length > 0 && playerShotGameKeys.length > 0,
   });
 
+  const { data: playerOnOffRows = [] } = useQuery<PlayerOnOffRow[]>({
+    queryKey: ['player-on-off', playerIdsForShots],
+    queryFn: async () => {
+      if (playerIdsForShots.length === 0) return [];
+      // The player_on_off Supabase view is expensive on a cold plan cache
+      // and can exceed the 30s statement_timeout when hit directly from
+      // the browser. We proxy through `/api/player-on-off/:id`, which
+      // caches results in-memory on the server and retries transient
+      // statement_timeout errors. Issue one request per linked player id
+      // in parallel and merge/dedupe the rows.
+      const results = await Promise.all(
+        playerIdsForShots.map(async (pid) => {
+          try {
+            const res = await fetch(`/api/player-on-off/${pid}`);
+            if (!res.ok) {
+              console.error('player_on_off endpoint error for', pid, res.status);
+              return [] as PlayerOnOffRow[];
+            }
+            const j = await res.json();
+            return (j.rows || []) as PlayerOnOffRow[];
+          } catch (err) {
+            console.error('player_on_off fetch failed for', pid, err);
+            return [] as PlayerOnOffRow[];
+          }
+        })
+      );
+      const seen = new Set<string>();
+      const merged: PlayerOnOffRow[] = [];
+      for (const arr of results) {
+        for (const row of arr) {
+          const key = `${row.player_id}::${row.game_key}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          merged.push(row);
+        }
+      }
+      return merged;
+    },
+    enabled: playerIdsForShots.length > 0,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const onOffSummary = useMemo(() => {
+    if (!playerOnOffRows || playerOnOffRows.length === 0 || !playerInfo?.name) return null;
+
+    const canonicalName = playerInfo.name;
+    const allowedGameKeys = new Set(
+      filteredStats.map(s => s.game_key).filter((k): k is string => Boolean(k))
+    );
+
+    const rows = playerOnOffRows.filter(r => {
+      const nameOk = r.player_name && namesMatch(canonicalName, r.player_name);
+      const keyOk = allowedGameKeys.size === 0 || allowedGameKeys.has(r.game_key);
+      return nameOk && keyOk;
+    });
+
+    if (rows.length === 0) return null;
+
+    const summary = ON_OFF_METRICS.map(m => {
+      let onSum = 0;
+      let onWeight = 0;
+      let offSum = 0;
+      let offWeight = 0;
+      for (const r of rows) {
+        const onSec = r.on_seconds || 0;
+        const offSec = r.off_seconds || 0;
+        const onVal = (r as any)[`on_${m.key}`];
+        const offVal = (r as any)[`off_${m.key}`];
+        if (onVal != null && onSec > 0) {
+          onSum += onVal * onSec;
+          onWeight += onSec;
+        }
+        if (offVal != null && offSec > 0) {
+          offSum += offVal * offSec;
+          offWeight += offSec;
+        }
+      }
+      const on = onWeight > 0 ? onSum / onWeight : null;
+      const off = offWeight > 0 ? offSum / offWeight : null;
+      const diff = on != null && off != null ? on - off : null;
+      return { ...m, on, off, diff };
+    });
+
+    if (summary.every(m => m.on == null && m.off == null)) return null;
+    return summary;
+  }, [playerOnOffRows, playerInfo?.name, filteredStats]);
+
   const playerShotGamesWithKeys = useMemo(() => {
     if (!playerStats) return [];
     return playerStats
@@ -1126,6 +1255,56 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {onOffSummary && (
+          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4" data-testid="player-on-off-card">
+            <span className="text-base md:text-lg font-bold text-slate-800 dark:text-white mb-3 block">Team on/off impact</span>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-y border-gray-100 dark:border-neutral-800 text-slate-400 dark:text-slate-500 uppercase text-[10px] tracking-wider">
+                    <th className="px-2 py-2 text-left font-semibold"></th>
+                    <th className="px-2 py-2 text-right font-semibold">ON</th>
+                    <th className="px-2 py-2 text-right font-semibold">OFF</th>
+                    <th className="px-2 py-2 text-right font-semibold">DIFF</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {onOffSummary.map((m, idx) => {
+                    const fmtVal = (v: number | null) => {
+                      if (v == null) return '—';
+                      return m.isPercent ? `${v.toFixed(1)}%` : v.toFixed(1);
+                    };
+                    const fmtDiff = (v: number | null) => {
+                      if (v == null) return '—';
+                      const abs = m.isPercent ? `${Math.abs(v).toFixed(1)}%` : Math.abs(v).toFixed(1);
+                      const sign = v < 0 ? '\u2212' : '+';
+                      return `${sign}${abs}`;
+                    };
+                    let diffColor = 'text-slate-700 dark:text-slate-300';
+                    if (m.diff != null && m.diff !== 0) {
+                      const better = m.higherIsBetter ? m.diff > 0 : m.diff < 0;
+                      diffColor = better ? 'text-emerald-500 dark:text-emerald-400' : 'text-red-500 dark:text-red-400';
+                    }
+                    return (
+                      <tr
+                        key={m.key}
+                        className={`border-b border-gray-50 dark:border-neutral-800/50 ${idx % 2 === 1 ? 'bg-gray-50/50 dark:bg-neutral-800/30' : ''}`}
+                        data-testid={`on-off-row-${m.key}`}
+                      >
+                        <td className="px-2 py-2 font-semibold uppercase tracking-wide text-xs text-slate-500 dark:text-slate-400">{m.label}</td>
+                        <td className="px-2 py-2 text-right font-semibold text-slate-800 dark:text-white tabular-nums">{fmtVal(m.on)}</td>
+                        <td className="px-2 py-2 text-right font-semibold text-slate-800 dark:text-white tabular-nums">{fmtVal(m.off)}</td>
+                        <td className={`px-2 py-2 text-right font-semibold tabular-nums ${diffColor}`}>{fmtDiff(m.diff)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-3">How a player's team performs when they are on vs. off court.</p>
           </div>
         )}
 

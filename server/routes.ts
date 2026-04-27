@@ -567,6 +567,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ---- Player on/off impact (cached + retried) ----
+  // The Supabase `player_on_off` view is expensive to compute on a cold
+  // plan cache and frequently exceeds the 30s statement timeout when the
+  // browser hits it directly. This endpoint proxies the query through the
+  // server with a small in-memory TTL cache and a retry on transient
+  // timeout errors (Postgres SQLSTATE 57014).
+  type OnOffRow = Record<string, any>;
+  const PLAYER_ON_OFF_TTL_MS = 60 * 60 * 1000; // 1 hour
+  const playerOnOffCache = new Map<string, { at: number; rows: OnOffRow[] }>();
+
+  async function fetchPlayerOnOffOnce(playerId: string): Promise<OnOffRow[]> {
+    const { data, error } = await supabaseAdmin
+      .from('player_on_off')
+      .select('*')
+      .eq('player_id', playerId);
+    if (error) throw Object.assign(new Error(error.message), { code: error.code });
+    return (data || []) as OnOffRow[];
+  }
+
+  async function fetchPlayerOnOffWithRetry(playerId: string): Promise<OnOffRow[]> {
+    let lastErr: any = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        return await fetchPlayerOnOffOnce(playerId);
+      } catch (err: any) {
+        lastErr = err;
+        // 57014 = statement_timeout. Retry these; they often succeed once
+        // the Postgres plan/buffer cache is warm.
+        if (err?.code !== '57014') break;
+        await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+      }
+    }
+    throw lastErr;
+  }
+
+  app.get('/api/player-on-off/:playerId', async (req: Request, res: Response) => {
+    const playerId = req.params.playerId;
+    if (!/^[0-9a-f-]{36}$/i.test(playerId)) {
+      return res.status(400).json({ error: 'Invalid playerId' });
+    }
+    const now = Date.now();
+    const cached = playerOnOffCache.get(playerId);
+    if (cached && now - cached.at < PLAYER_ON_OFF_TTL_MS) {
+      return res.json({ rows: cached.rows, cached: true });
+    }
+    try {
+      const rows = await fetchPlayerOnOffWithRetry(playerId);
+      playerOnOffCache.set(playerId, { at: now, rows });
+      // Bound the cache to ~500 entries.
+      if (playerOnOffCache.size > 500) {
+        const oldestKey = playerOnOffCache.keys().next().value;
+        if (oldestKey) playerOnOffCache.delete(oldestKey);
+      }
+      res.json({ rows, cached: false });
+    } catch (err: any) {
+      console.error('player_on_off endpoint error for', playerId, err?.code, err?.message);
+      // Serve stale cache if available so the UI degrades gracefully.
+      if (cached) {
+        return res.json({ rows: cached.rows, cached: true, stale: true });
+      }
+      res.status(503).json({ error: 'player_on_off unavailable', code: err?.code });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
