@@ -281,13 +281,53 @@ export default function ShareableCard({
               <div ref={captureRef} className="bg-white" data-share-card="true">
                 {/* Header band */}
                 <div
-                  className="relative px-5 py-5"
-                  style={{ ...bandStyle, minHeight: 116 }}
+                  className="relative px-5 pt-5 pb-4 overflow-hidden"
+                  style={{ ...bandStyle, minHeight: 150 }}
                 >
                   <DiagonalStripes position="tl" color={BRAND_ORANGE} />
 
-                  <div className="relative flex items-center gap-4">
-                    <PlayerAvatar player={player} size={64} />
+                  {/* Player photo cutout — anchored to bottom-left so the
+                      transparent player image stands tall in the band, like
+                      the profile banner. Falls back to the circular initials
+                      avatar when no photo is set. */}
+                  {player.photoUrl ? (
+                    <div
+                      className="absolute left-3 bottom-0 pointer-events-none z-[2]"
+                      style={{ width: 120, height: 150 }}
+                    >
+                      {/* Soft circular spotlight behind the cutout */}
+                      <div
+                        aria-hidden="true"
+                        className="absolute rounded-full"
+                        style={{
+                          width: 96,
+                          height: 96,
+                          left: 12,
+                          top: 18,
+                          background:
+                            "radial-gradient(circle, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 70%)",
+                        }}
+                      />
+                      <img
+                        src={player.photoUrl}
+                        alt={player.name}
+                        crossOrigin="anonymous"
+                        className="absolute inset-0 w-full h-full object-contain object-bottom"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).style.display = "none";
+                        }}
+                      />
+                    </div>
+                  ) : null}
+
+                  <div
+                    className="relative flex items-center gap-4 h-full"
+                    style={{
+                      paddingLeft: player.photoUrl ? 128 : 0,
+                      minHeight: 110,
+                    }}
+                  >
+                    {!player.photoUrl && <PlayerAvatar player={player} size={64} />}
                     <div className="flex-1 min-w-0">
                       <div
                         className="text-[10px] font-bold tracking-[0.2em] uppercase mb-0.5"
