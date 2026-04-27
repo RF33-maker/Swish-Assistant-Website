@@ -167,6 +167,9 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
   const [playerShotChartRange, setPlayerShotChartRange] = useState<string>("season");
   const [careerStatsTab, setCareerStatsTab] = useState<string>("averages");
   const [photoUploading, setPhotoUploading] = useState(false);
+  // Cache-buster bumped after every photo upload so the browser/CDN
+  // doesn't serve a stale (cached) version of the same storage URL.
+  const [photoCacheBuster, setPhotoCacheBuster] = useState(0);
   const [showFocusAdjuster, setShowFocusAdjuster] = useState(false);
   const [tempFocusY, setTempFocusY] = useState<number>(50);
   const [savingFocus, setSavingFocus] = useState(false);
@@ -199,7 +202,14 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
 
       const { error: uploadError } = await supabase.storage
         .from('player-photos')
-        .upload(filePath, file, { upsert: true });
+        .upload(filePath, file, {
+          upsert: true,
+          // Short cache so subsequent uploads aren't served from the CDN cache.
+          cacheControl: '60',
+          // Explicit content type preserves the PNG MIME (and its alpha channel)
+          // even if the browser's File.type is empty for some reason.
+          contentType: file.type || (fileExtension === 'png' ? 'image/png' : undefined),
+        });
 
       if (uploadError) throw uploadError;
 
@@ -211,6 +221,8 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
       if (updateError) throw updateError;
 
       setPlayerInfo(prev => prev ? { ...prev, photoPath: filePath } : null);
+      // Bust browser/CDN cache so the freshly uploaded image is shown immediately.
+      setPhotoCacheBuster(Date.now());
       setShowFocusAdjuster(true);
       setTempFocusY(50);
 
@@ -1014,8 +1026,9 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
   const playerPhotoUrl = useMemo(() => {
     if (!playerInfo?.photoPath) return null;
     const { data } = supabase.storage.from('player-photos').getPublicUrl(playerInfo.photoPath);
-    return data.publicUrl || null;
-  }, [playerInfo?.photoPath]);
+    if (!data.publicUrl) return null;
+    return photoCacheBuster ? `${data.publicUrl}?v=${photoCacheBuster}` : data.publicUrl;
+  }, [playerInfo?.photoPath, photoCacheBuster]);
 
   // Separate photo for share/social graphics — uses photo_path (original/non-bg-removed).
   // Falls back to the bg-removed banner photo if no original is set so existing players
@@ -1023,10 +1036,13 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
   const playerSharePhotoUrl = useMemo(() => {
     if (playerInfo?.sharePhotoPath) {
       const { data } = supabase.storage.from('player-photos').getPublicUrl(playerInfo.sharePhotoPath);
-      return data.publicUrl || playerPhotoUrl;
+      if (data.publicUrl) {
+        return photoCacheBuster ? `${data.publicUrl}?v=${photoCacheBuster}` : data.publicUrl;
+      }
+      return playerPhotoUrl;
     }
     return playerPhotoUrl;
-  }, [playerInfo?.sharePhotoPath, playerPhotoUrl]);
+  }, [playerInfo?.sharePhotoPath, playerPhotoUrl, photoCacheBuster]);
 
   const careerStats = useMemo(() => {
     if (!playerStats || playerStats.length === 0) return [];
