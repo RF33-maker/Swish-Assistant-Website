@@ -167,9 +167,11 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
   const [playerShotChartRange, setPlayerShotChartRange] = useState<string>("season");
   const [careerStatsTab, setCareerStatsTab] = useState<string>("averages");
   const [photoUploading, setPhotoUploading] = useState(false);
-  // Cache-buster bumped after every photo upload so the browser/CDN
-  // doesn't serve a stale (cached) version of the same storage URL.
-  const [photoCacheBuster, setPhotoCacheBuster] = useState(0);
+  // Cache-buster appended to photo URLs so the browser/CDN doesn't serve a
+  // stale (cached) version of the same storage path. Initialized on mount so
+  // every page load gets a fresh URL (avoids cross-session staleness from
+  // pre-bg-removal uploads), and bumped after every successful upload.
+  const [photoCacheBuster, setPhotoCacheBuster] = useState<number>(() => Date.now());
   const [showFocusAdjuster, setShowFocusAdjuster] = useState(false);
   const [tempFocusY, setTempFocusY] = useState<number>(50);
   const [savingFocus, setSavingFocus] = useState(false);
