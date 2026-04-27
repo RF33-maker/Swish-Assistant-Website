@@ -529,9 +529,15 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
         };
 
         const playerIds = matches.map(m => m.id);
+        // Note: previously this query joined `players:player_id(full_name, league_id)`
+        // which forced a costly nested lookup and frequently triggered Supabase
+        // statement timeouts (code 57014) on players with many games. Both fields
+        // are already denormalized onto each player_stats row (`full_name`,
+        // `league_id`), so the join is redundant — the existing fallback chains
+        // (`stat.players?.full_name || stat.full_name || …`) still resolve cleanly.
         const { data: stats, error: statsError } = await supabase
           .from('player_stats')
-          .select('*, players:player_id(full_name, league_id)')
+          .select('*')
           .in('player_id', playerIds)
           .order('created_at', { ascending: false });
 
