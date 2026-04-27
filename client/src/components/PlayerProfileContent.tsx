@@ -1239,7 +1239,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
             player={{
               name: playerInfo?.name || "Player",
               team: playerInfo?.team || "",
-              photoUrl: playerSharePhotoUrl,
+              photoUrl: playerPhotoUrl,
               primaryColor,
             }}
           >
@@ -1282,7 +1282,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
             player={{
               name: playerInfo?.name || "Player",
               team: playerInfo?.team || "",
-              photoUrl: playerSharePhotoUrl,
+              photoUrl: playerPhotoUrl,
               primaryColor,
             }}
           >
@@ -1316,7 +1316,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
             player={{
               name: playerInfo?.name || "Player",
               team: playerInfo?.team || "",
-              photoUrl: playerSharePhotoUrl,
+              photoUrl: playerPhotoUrl,
               primaryColor,
             }}
           >
@@ -1502,7 +1502,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
           player={{
             name: playerInfo?.name || "Player",
             team: playerInfo?.team || "",
-            photoUrl: playerSharePhotoUrl,
+            photoUrl: playerPhotoUrl,
             primaryColor,
           }}
           shareCaption={(() => {
