@@ -1477,6 +1477,29 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
             photoUrl: playerPhotoUrl,
             primaryColor,
           }}
+          shareCaption={(() => {
+            if (playerShotChartRange === "season") return "Full Season";
+            if (playerShotChartRange === "last10") return "Last 10 Games";
+            if (playerShotChartRange === "last5") return "Last 5 Games";
+            if (playerShotChartRange.startsWith("game:")) {
+              const key = playerShotChartRange.replace("game:", "");
+              const g = playerShotGamesWithKeys.find((g) => g.game_key === key);
+              return g
+                ? `vs ${g.opponent} • ${new Date(g.date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}`
+                : "Selected Game";
+            }
+            return undefined;
+          })()}
+          shareContent={
+            <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-100 dark:border-neutral-800 p-4">
+              <ShotChart
+                shots={playerShotData || []}
+                loading={playerShotsLoading}
+                compact
+                emptyMessage="No shot data available for this player."
+              />
+            </div>
+          }
         >
         <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">

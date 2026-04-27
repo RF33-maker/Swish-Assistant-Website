@@ -22,11 +22,31 @@ interface ShareableCardProps {
   title: string;
   player: SharePlayer;
   fileSlug?: string;
+  /** Children rendered in-page. */
   children: ReactNode;
+  /** Optional content rendered inside the share modal instead of children. */
+  shareContent?: ReactNode;
+  /** Optional caption shown beneath the title in the share modal header. */
+  shareCaption?: string;
 }
 
 const BRAND_ORANGE = "#f97316";
-const BRAND_NAVY = "#0f1f33";
+const FALLBACK_NAVY = "#0f1f33";
+
+/** Darken a #rrggbb hex by `amount` (0-1). Falls back to input on invalid hex. */
+function shadeHex(hex: string, amount: number): string {
+  const m = hex.replace("#", "").match(/^([0-9a-f]{6})$/i);
+  if (!m) return hex;
+  const num = parseInt(m[1], 16);
+  let r = (num >> 16) & 0xff;
+  let g = (num >> 8) & 0xff;
+  let b = num & 0xff;
+  const factor = 1 - amount;
+  r = Math.max(0, Math.min(255, Math.round(r * factor)));
+  g = Math.max(0, Math.min(255, Math.round(g * factor)));
+  b = Math.max(0, Math.min(255, Math.round(b * factor)));
+  return `#${[r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+}
 
 function DiagonalStripes({
   position,
@@ -72,7 +92,7 @@ function DiagonalStripes({
   );
 }
 
-function PlayerAvatar({ player, size = 76 }: { player: SharePlayer; size?: number }) {
+function PlayerAvatar({ player, size = 64 }: { player: SharePlayer; size?: number }) {
   const initials = player.name
     .split(" ")
     .filter(Boolean)
@@ -83,11 +103,11 @@ function PlayerAvatar({ player, size = 76 }: { player: SharePlayer; size?: numbe
 
   return (
     <div
-      className="flex-shrink-0 rounded-full overflow-hidden flex items-center justify-center font-bold text-white"
+      className="flex-shrink-0 rounded-full overflow-hidden flex items-center justify-center font-bold text-white border-2 border-white/30"
       style={{
         width: size,
         height: size,
-        backgroundColor: player.primaryColor || BRAND_ORANGE,
+        backgroundColor: shadeHex(player.primaryColor || BRAND_ORANGE, 0.25),
         boxShadow: "0 4px 16px rgba(0,0,0,0.18)",
       }}
     >
@@ -113,6 +133,8 @@ export default function ShareableCard({
   player,
   fileSlug,
   children,
+  shareContent,
+  shareCaption,
 }: ShareableCardProps) {
   const [open, setOpen] = useState(false);
   const [working, setWorking] = useState(false);
@@ -127,6 +149,13 @@ export default function ShareableCard({
   const fileName = `swish-${player.name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")}-${slug}.png`;
+
+  // Use team primary color (with darker shade for the gradient end).
+  const bandBase = player.primaryColor || FALLBACK_NAVY;
+  const bandDark = shadeHex(bandBase, 0.25);
+  const bandStyle = {
+    background: `linear-gradient(135deg, ${bandBase} 0%, ${bandDark} 100%)`,
+  } as const;
 
   const generatePngBlob = async (): Promise<Blob | null> => {
     if (!captureRef.current) return null;
@@ -188,7 +217,6 @@ export default function ShareableCard({
         });
         toast({ title: "Shared" });
       } else {
-        // Fallback: copy to clipboard if supported
         if (navigator.clipboard && "write" in navigator.clipboard) {
           try {
             await (navigator.clipboard as Clipboard).write([
@@ -203,7 +231,6 @@ export default function ShareableCard({
             // fall through to download
           }
         }
-        // Last resort: trigger download
         await handleDownload();
       }
     } catch (e) {
@@ -222,7 +249,7 @@ export default function ShareableCard({
     <div className="relative group">
       {children}
 
-      {/* Share button — overlay on the corner of the card */}
+      {/* Share button overlay */}
       <button
         type="button"
         onClick={(e) => {
@@ -238,84 +265,100 @@ export default function ShareableCard({
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-2xl p-0 bg-transparent border-none shadow-none [&>button]:bg-white/90 [&>button]:rounded-full [&>button]:p-1.5 [&>button]:right-2 [&>button]:top-2 [&>button]:text-slate-700">
+        <DialogContent
+          className="max-w-lg p-0 bg-transparent border-none shadow-none max-h-[92vh] overflow-hidden flex flex-col [&>button]:bg-white/95 [&>button]:rounded-full [&>button]:p-1.5 [&>button]:right-2 [&>button]:top-2 [&>button]:text-slate-700 [&>button]:shadow-md [&>button]:z-20"
+        >
           <DialogTitle className="sr-only">
             Share {title} for {player.name}
           </DialogTitle>
           <DialogDescription className="sr-only">
-            Preview a shareable image of {title} and download it as a PNG or
-            share it directly.
+            Preview a shareable image of {title} and download or share it.
           </DialogDescription>
 
-          {/* The capture target — this exact element gets rasterized */}
-          <div className="rounded-xl overflow-hidden bg-white shadow-2xl">
-            <div ref={captureRef} className="bg-white" data-share-card="true">
-              {/* Header band */}
-              <div
-                className="relative px-5 py-4 md:px-6 md:py-5"
-                style={{
-                  background: `linear-gradient(135deg, ${BRAND_NAVY} 0%, #182b46 100%)`,
-                }}
-              >
-                <DiagonalStripes position="tl" color={BRAND_ORANGE} />
+          <div className="rounded-xl overflow-hidden bg-white shadow-2xl flex flex-col min-h-0">
+            {/* Scrollable preview area */}
+            <div className="overflow-y-auto bg-slate-100 flex-1 min-h-0">
+              <div ref={captureRef} className="bg-white" data-share-card="true">
+                {/* Header band */}
+                <div
+                  className="relative px-5 py-5"
+                  style={{ ...bandStyle, minHeight: 116 }}
+                >
+                  <DiagonalStripes position="tl" color={BRAND_ORANGE} />
 
-                <div className="relative flex items-center gap-4">
-                  <PlayerAvatar player={player} size={68} />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[10px] md:text-xs font-bold tracking-[0.18em] text-orange-400 uppercase">
-                      {title}
-                    </div>
-                    <div className="text-xl md:text-2xl font-black text-white leading-tight truncate">
-                      {player.name}
-                    </div>
-                    {player.team && (
-                      <div className="text-xs md:text-sm text-slate-300 truncate mt-0.5">
-                        {player.team}
+                  <div className="relative flex items-center gap-4">
+                    <PlayerAvatar player={player} size={64} />
+                    <div className="flex-1 min-w-0">
+                      <div
+                        className="text-[10px] font-bold tracking-[0.2em] uppercase mb-0.5"
+                        style={{ color: BRAND_ORANGE }}
+                      >
+                        {title}
                       </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Card content (children) */}
-              <div className="p-4 md:p-5 bg-gradient-to-b from-white to-slate-50 dark:from-neutral-900 dark:to-neutral-950">
-                <div className="share-content">{children}</div>
-              </div>
-
-              {/* Footer band */}
-              <div
-                className="relative px-5 py-3 md:px-6 md:py-4 flex items-center justify-between"
-                style={{
-                  background: `linear-gradient(135deg, ${BRAND_NAVY} 0%, #182b46 100%)`,
-                }}
-              >
-                <DiagonalStripes position="br" color={BRAND_ORANGE} />
-
-                <div className="relative flex items-center gap-2">
-                  <img
-                    src={SwishLogo}
-                    alt="Swish Assistant"
-                    className="h-7 w-7 object-contain"
-                    crossOrigin="anonymous"
-                  />
-                  <div className="leading-tight">
-                    <div className="text-white font-bold text-sm md:text-base">
-                      Swish Assistant
-                    </div>
-                    <div className="text-orange-400 text-[10px] md:text-xs font-medium tracking-wide">
-                      swishassistant.com
+                      <div
+                        className="text-xl font-black text-white leading-tight"
+                        style={{ wordBreak: "break-word" }}
+                      >
+                        {player.name}
+                      </div>
+                      {player.team && (
+                        <div
+                          className="text-[11px] text-white/85 leading-snug mt-1"
+                          style={{ wordBreak: "break-word" }}
+                        >
+                          {player.team}
+                        </div>
+                      )}
+                      {shareCaption && (
+                        <div className="text-[10px] text-white/70 uppercase tracking-wider mt-1.5">
+                          {shareCaption}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
 
-                <div className="relative text-right text-[10px] md:text-xs text-slate-400 uppercase tracking-wider">
-                  Stats &amp; insights
+                {/* Card content */}
+                <div className="p-4 bg-gradient-to-b from-white to-slate-50 dark:from-neutral-900 dark:to-neutral-950">
+                  <div className="share-content">{shareContent ?? children}</div>
+                </div>
+
+                {/* Footer band */}
+                <div
+                  className="relative px-5 py-3 flex items-center justify-between"
+                  style={{ ...bandStyle, minHeight: 56 }}
+                >
+                  <DiagonalStripes position="br" color={BRAND_ORANGE} />
+
+                  <div className="relative flex items-center gap-2">
+                    <img
+                      src={SwishLogo}
+                      alt="Swish Assistant"
+                      className="h-7 w-7 object-contain"
+                      crossOrigin="anonymous"
+                    />
+                    <div className="leading-tight">
+                      <div className="text-white font-bold text-sm">
+                        Swish Assistant
+                      </div>
+                      <div
+                        className="text-[10px] font-medium tracking-wide"
+                        style={{ color: BRAND_ORANGE }}
+                      >
+                        swishassistant.com
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="relative text-right text-[10px] text-white/70 uppercase tracking-wider">
+                    Stats &amp; insights
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Action bar (NOT inside captureRef) */}
-            <div className="grid grid-cols-2 gap-2 p-3 bg-white border-t border-slate-200">
+            {/* Sticky action bar (NOT inside captureRef) */}
+            <div className="grid grid-cols-2 gap-2 p-3 bg-white border-t border-slate-200 flex-shrink-0">
               <Button
                 variant="outline"
                 onClick={handleDownload}
