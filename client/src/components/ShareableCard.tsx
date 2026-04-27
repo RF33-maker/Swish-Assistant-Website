@@ -377,16 +377,10 @@ export default function ShareableCard({
                       className="h-7 w-7 object-contain"
                       crossOrigin="anonymous"
                     />
-                    <div className="leading-tight">
-                      <div className="text-white font-bold text-sm">
-                        Swish Assistant
-                      </div>
-                      <div
-                        className="text-[10px] font-medium tracking-wide"
-                        style={{ color: BRAND_ORANGE }}
-                      >
-                        swishassistant.com
-                      </div>
+                    <div
+                      className="text-white font-bold text-sm tracking-wide"
+                    >
+                      swishassistant.com
                     </div>
                   </div>
 
