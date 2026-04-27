@@ -298,10 +298,40 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
 
   const calculateRankings = async (leagueId: string, currentAverages: SeasonAverages, playerName: string, knownPlayerIds: string[] = []): Promise<PlayerRankings | null> => {
     try {
-      const { data: allStats } = await supabase
-        .from('player_stats')
-        .select('*')
-        .eq('league_id', leagueId);
+      // Narrow column set + pagination. A `select('*')` over an entire
+      // league's player_stats (often 5k+ rows for full-season leagues like
+      // NBL Division One) frequently exceeds the 30s Supabase
+      // statement_timeout, which previously left the player profile stuck
+      // on the "Loading…" spinner. Selecting only the box-score fields the
+      // ranking math actually consumes drops query weight by ~10x and lets
+      // us page through past the default 1000-row cap.
+      const RANK_COLUMNS = [
+        'player_id', 'full_name', 'firstname', 'familyname',
+        'sminutes',
+        'spoints', 'sreboundstotal', 'sassists', 'ssteals', 'sblocks',
+        'sfieldgoalsmade', 'sfieldgoalsattempted',
+        'sthreepointersmade', 'sthreepointersattempted',
+        'sfreethrowsmade', 'sfreethrowsattempted',
+      ].join(',');
+      const PAGE_SIZE = 1000;
+      const MAX_PAGES = 20; // hard ceiling: 20k rows
+      const allStats: any[] = [];
+      for (let page = 0; page < MAX_PAGES; page++) {
+        const from = page * PAGE_SIZE;
+        const to = from + PAGE_SIZE - 1;
+        const { data, error } = await supabase
+          .from('player_stats')
+          .select(RANK_COLUMNS)
+          .eq('league_id', leagueId)
+          .range(from, to);
+        if (error) {
+          console.warn('[Rankings] page', page, 'error:', error.message);
+          break;
+        }
+        if (!data || data.length === 0) break;
+        allStats.push(...data);
+        if (data.length < PAGE_SIZE) break;
+      }
 
       if (!allStats || allStats.length === 0) return null;
 
@@ -535,11 +565,43 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
         // are already denormalized onto each player_stats row (`full_name`,
         // `league_id`), so the join is redundant — the existing fallback chains
         // (`stat.players?.full_name || stat.full_name || …`) still resolve cleanly.
-        const { data: stats, error: statsError } = await supabase
-          .from('player_stats')
-          .select('*')
-          .in('player_id', playerIds)
-          .order('created_at', { ascending: false });
+        //
+        // Additional optimisation: fetch each player_id in its own request and
+        // merge client-side. Postgres picks a much cheaper plan for `eq` than
+        // for `in (...)` against the wide player_stats row when the
+        // `player_id` filter is a single value (~600ms vs ~2.5s in our
+        // testing, and on cold cache the `in()` variant routinely tripped the
+        // 30s statement_timeout for players in larger leagues like NBL D1).
+        // Most player profiles only have one canonical id, so the loop runs
+        // once; multi-id career profiles still resolve in parallel.
+        const statsResults = await Promise.all(
+          playerIds.map(async (pid) => {
+            const { data, error } = await supabase
+              .from('player_stats')
+              .select('*')
+              .eq('player_id', pid)
+              .order('created_at', { ascending: false });
+            return { data, error };
+          })
+        );
+        const firstError = statsResults.find(r => r.error)?.error || null;
+        const seenStatIds = new Set<string>();
+        const mergedStats: any[] = [];
+        for (const r of statsResults) {
+          for (const row of (r.data || [])) {
+            const k = row.id || `${row.player_id}::${row.game_key}`;
+            if (seenStatIds.has(k)) continue;
+            seenStatIds.add(k);
+            mergedStats.push(row);
+          }
+        }
+        mergedStats.sort((a, b) => {
+          const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+          const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+          return tb - ta;
+        });
+        const stats = mergedStats;
+        const statsError = firstError;
 
         const uniqueLeagueIds = Array.from(new Set([
           ...matches.map(m => m.league_id),
@@ -803,8 +865,15 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
                 ft_percentage: lt.ft_att > 0 ? (lt.ft_made / lt.ft_att) * 100 : 0,
                 avg_efficiency: 0,
               };
-              const ranks = await calculateRankings(rankingLeagueId, rankAverages, pInfo.name, playerIds);
-              if (ranks) setPlayerRankings(ranks);
+              // Fire-and-forget: ranking math walks every player_stats row
+              // in the league (5k+ for full-season leagues) and would
+              // otherwise hold the "Loading…" spinner up for ~5–10s.
+              // Letting it resolve in the background lets the profile
+              // render immediately and the rank chips fill in shortly
+              // after.
+              calculateRankings(rankingLeagueId, rankAverages, pInfo.name, playerIds)
+                .then((ranks) => { if (ranks) setPlayerRankings(ranks); })
+                .catch((err) => console.warn('[Rankings] background error:', err));
             }
           }
 
