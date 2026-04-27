@@ -14,6 +14,7 @@ import { useTeamBranding } from "@/hooks/useTeamBranding";
 import { namesMatch, getMostCompleteName, slugToName, type PlayerMatch } from "@/lib/fuzzyMatch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import ShotChart, { type ShotData } from "@/components/ShotChart";
+import ShareableCard from "@/components/ShareableCard";
 
 interface PlayerStat {
   id: string;
@@ -1204,6 +1205,16 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
 
       <div className="space-y-4 md:space-y-5 mt-4 md:mt-5">
         {filteredSeasonAverages && (
+          <ShareableCard
+            title="Season Averages"
+            fileSlug="season-averages"
+            player={{
+              name: playerInfo?.name || "Player",
+              team: playerInfo?.team || "",
+              photoUrl: playerPhotoUrl,
+              primaryColor,
+            }}
+          >
           <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Season Averages</span>
@@ -1233,9 +1244,20 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
               ))}
             </div>
           </div>
+          </ShareableCard>
         )}
 
         {filteredSeasonAverages && (
+          <ShareableCard
+            title="Shooting Splits"
+            fileSlug="shooting"
+            player={{
+              name: playerInfo?.name || "Player",
+              team: playerInfo?.team || "",
+              photoUrl: playerPhotoUrl,
+              primaryColor,
+            }}
+          >
           <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3 block">Shooting</span>
             <div className="grid grid-cols-3 gap-4">
@@ -1256,9 +1278,20 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
               ))}
             </div>
           </div>
+          </ShareableCard>
         )}
 
         {onOffSummary && (
+          <ShareableCard
+            title="Team On/Off Impact"
+            fileSlug="on-off-impact"
+            player={{
+              name: playerInfo?.name || "Player",
+              team: playerInfo?.team || "",
+              photoUrl: playerPhotoUrl,
+              primaryColor,
+            }}
+          >
           <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4" data-testid="player-on-off-card">
             <span className="text-base md:text-lg font-bold text-slate-800 dark:text-white mb-3 block">Team on/off impact</span>
             <div className="overflow-x-auto">
@@ -1306,6 +1339,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
             </div>
             <p className="text-xs text-slate-400 dark:text-slate-500 mt-3">How a player's team performs when they are on vs. off court.</p>
           </div>
+          </ShareableCard>
         )}
 
         {careerStats.length > 0 && (
@@ -1434,6 +1468,16 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
           </div>
         )}
 
+        <ShareableCard
+          title="Shot Chart"
+          fileSlug="shot-chart"
+          player={{
+            name: playerInfo?.name || "Player",
+            team: playerInfo?.team || "",
+            photoUrl: playerPhotoUrl,
+            primaryColor,
+          }}
+        >
         <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Shot Chart</span>
@@ -1461,6 +1505,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
             filters={{ showQuarterFilter: true, showResultFilter: true }}
           />
         </div>
+        </ShareableCard>
 
         {playerMatches.length > 1 && (
           <div className="flex flex-wrap items-center gap-2">
