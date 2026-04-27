@@ -81,9 +81,20 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
     try {
       const now = new Date();
       
+      // Bound this read: the carousel only displays recent finals plus the
+      // upcoming-7-day window, so the historical sweep of v_game_results
+      // doesn't need to extend further than a couple of weeks. Keeping the
+      // window tight lets Postgres use the time index and keeps payload
+      // size predictable per league.
+      const recentResultsCutoff = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
       let gameResultsQuery = db
         .from('v_game_results')
-        .select('*');
+        .select(
+          'game_key, league_id, match_time, home_team, away_team, home_score, away_score, age_group, round'
+        )
+        .gte('match_time', recentResultsCutoff.toISOString())
+        .order('match_time', { ascending: false })
+        .limit(120);
       gameResultsQuery = isParent
         ? gameResultsQuery.in('league_id', childLeagueIds)
         : gameResultsQuery.eq('league_id', effectiveLeagueId);
@@ -137,7 +148,8 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
       const { data: scheduleData, error: scheduleError } = await scheduleQuery
         .gte("matchtime", sevenDaysAgo.toISOString())
         .lte("matchtime", sevenDaysAhead.toISOString())
-        .order("matchtime", { ascending: true });
+        .order("matchtime", { ascending: true })
+        .limit(200);
 
       if (scheduleError) {
         console.error("Error fetching schedule:", scheduleError);
@@ -293,13 +305,59 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
     }
   }, [effectiveLeagueId, childIdsKey]);
 
+  // Polling for live updates: only run when (a) the tab is visible AND
+  // (b) there is currently at least one LIVE game on screen. When neither
+  // condition holds, no polling means no Supabase reads.
+  const hasLiveGames = useMemo(
+    () => allGames.some(g => g.status === 'LIVE'),
+    [allGames]
+  );
+
   useEffect(() => {
     if (!effectiveLeagueId) return;
-    const interval = setInterval(() => {
-      fetchGames(true);
-    }, 15000);
-    return () => clearInterval(interval);
-  }, [effectiveLeagueId, childIdsKey]);
+    if (!hasLiveGames) return;
+
+    const POLL_MS = 60_000;
+    let interval: number | null = null;
+
+    const start = () => {
+      if (interval !== null) return;
+      interval = window.setInterval(() => {
+        fetchGames(true);
+      }, POLL_MS);
+    };
+
+    const stop = () => {
+      if (interval !== null) {
+        window.clearInterval(interval);
+        interval = null;
+      }
+    };
+
+    const onVisibility = () => {
+      if (document.hidden) {
+        stop();
+      } else {
+        // Refresh once on regaining focus, then resume the interval.
+        fetchGames(true);
+        start();
+      }
+    };
+
+    if (typeof document !== 'undefined' && !document.hidden) {
+      start();
+    }
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', onVisibility);
+    }
+
+    return () => {
+      stop();
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', onVisibility);
+      }
+    };
+  }, [effectiveLeagueId, childIdsKey, hasLiveGames]);
 
   const sortedGames = useMemo(() => {
     const live = allGames.filter(g => g.status === 'LIVE')

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { TeamLogo } from "@/components/TeamLogo";
@@ -51,8 +52,6 @@ function isFinal(s: string | null | undefined) {
 }
 
 function shortTeam(name: string): string {
-  // Pull a 3–4 letter abbreviation from the team name (uppercase initials,
-  // capped at 4 chars). Falls back to first 4 letters if no spaces.
   const cleaned = name.replace(/[^A-Za-z\s]/g, "").trim();
   if (!cleaned) return name.slice(0, 4).toUpperCase();
   const parts = cleaned.split(/\s+/);
@@ -105,92 +104,71 @@ function ScoreCardSkeleton() {
   );
 }
 
+const LATEST_SCORES_LIMIT = 80;
+
 export default function LatestScoresSection() {
   const [, setLocation] = useLocation();
-  const [groups, setGroups] = useState<LeagueGroup[]>([]);
-  const [loading, setLoading] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      try {
-        const { data: leagues } = await supabase
-          .from("leagues")
-          .select("league_id, name, slug, trending_position")
-          .eq("is_public", true)
-          .order("trending_position", { ascending: true, nullsFirst: false })
-          .returns<LeagueRow[]>();
+  const { data: groups = [], isLoading: loading } = useQuery<LeagueGroup[]>({
+    queryKey: ["supabase", "home", "latest-scores", LATEST_SCORES_LIMIT],
+    queryFn: async () => {
+      const { data: leagues } = await supabase
+        .from("leagues")
+        .select("league_id, name, slug, trending_position")
+        .eq("is_public", true)
+        .order("trending_position", { ascending: true, nullsFirst: false })
+        .returns<LeagueRow[]>();
 
-        if (!leagues || leagues.length === 0) {
-          if (!cancelled) {
-            setGroups([]);
-            setLoading(false);
-          }
-          return;
-        }
+      if (!leagues || leagues.length === 0) return [];
 
-        const leagueMap: Record<string, LeagueRow> = {};
-        leagues.forEach((l) => { leagueMap[l.league_id] = l; });
-        const leagueIds = leagues.map((l) => l.league_id);
+      const leagueIds = leagues.map((l) => l.league_id);
+      const { data: games } = await supabase
+        .from("v_game_results")
+        .select("game_key, league_id, match_time, home_team, away_team, home_score, away_score, game_status")
+        .in("league_id", leagueIds)
+        .not("home_score", "is", null)
+        .not("away_score", "is", null)
+        .order("match_time", { ascending: false })
+        .limit(LATEST_SCORES_LIMIT)
+        .returns<GameRow[]>();
 
-        const { data: games } = await supabase
-          .from("v_game_results")
-          .select("game_key, league_id, match_time, home_team, away_team, home_score, away_score, game_status")
-          .in("league_id", leagueIds)
-          .not("home_score", "is", null)
-          .not("away_score", "is", null)
-          .order("match_time", { ascending: false })
-          .limit(300)
-          .returns<GameRow[]>();
+      const byLeague: Record<string, GameRow[]> = {};
+      (games || []).forEach((g) => {
+        if (!g.home_team || !g.away_team) return;
+        if (g.home_score === null || g.away_score === null) return;
+        if (!isFinal(g.game_status)) return;
+        if (!byLeague[g.league_id]) byLeague[g.league_id] = [];
+        byLeague[g.league_id].push(g);
+      });
 
-        if (cancelled) return;
-
-        // Bucket by league preserving recency order
-        const byLeague: Record<string, GameRow[]> = {};
-        (games || []).forEach((g) => {
-          if (!g.home_team || !g.away_team) return;
-          if (g.home_score === null || g.away_score === null) return;
-          if (!isFinal(g.game_status)) return;
-          if (!byLeague[g.league_id]) byLeague[g.league_id] = [];
-          byLeague[g.league_id].push(g);
+      const result: LeagueGroup[] = [];
+      leagues.forEach((l) => {
+        const ls = byLeague[l.league_id];
+        if (!ls || ls.length === 0) return;
+        const records = buildRecords(ls);
+        const items: ScoreItem[] = ls.slice(0, 4).map((g) => ({
+          game_key: g.game_key,
+          league_id: g.league_id,
+          match_time: g.match_time,
+          home_team: g.home_team as string,
+          away_team: g.away_team as string,
+          home_score: g.home_score as number,
+          away_score: g.away_score as number,
+          home_record: records[g.home_team as string] || "",
+          away_record: records[g.away_team as string] || "",
+        }));
+        result.push({
+          league_id: l.league_id,
+          league_name: l.name,
+          league_slug: l.slug,
+          games: items,
         });
+      });
 
-        // Build groups in league order, including only those with at least 1 game
-        const result: LeagueGroup[] = [];
-        leagues.forEach((l) => {
-          const ls = byLeague[l.league_id];
-          if (!ls || ls.length === 0) return;
-          const records = buildRecords(ls);
-          const items: ScoreItem[] = ls.slice(0, 4).map((g) => ({
-            game_key: g.game_key,
-            league_id: g.league_id,
-            match_time: g.match_time,
-            home_team: g.home_team as string,
-            away_team: g.away_team as string,
-            home_score: g.home_score as number,
-            away_score: g.away_score as number,
-            home_record: records[g.home_team as string] || "",
-            away_record: records[g.away_team as string] || "",
-          }));
-          result.push({
-            league_id: l.league_id,
-            league_name: l.name,
-            league_slug: l.slug,
-            games: items,
-          });
-        });
-
-        setGroups(result);
-      } catch {
-        if (!cancelled) setGroups([]);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    load();
-    return () => { cancelled = true; };
-  }, []);
+      return result;
+    },
+  });
 
   const scrollBy = (dir: 1 | -1) => {
     const el = scrollRef.current;

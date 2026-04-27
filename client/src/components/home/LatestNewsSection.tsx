@@ -1,7 +1,10 @@
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import type { NewsArticle } from "@shared/schema";
 import { Newspaper, ExternalLink } from "lucide-react";
+
+const NEWS_COLUMNS =
+  "id, title, summary, image_url, source_url, league, published_at, is_published";
 
 function NewsCardSkeleton() {
   return (
@@ -17,34 +20,19 @@ function NewsCardSkeleton() {
 }
 
 export default function LatestNewsSection() {
-  const [articles, setArticles] = useState<NewsArticle[] | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      try {
-        const { data, error } = await supabase
-          .from("news_articles")
-          .select("*")
-          .eq("is_published", true)
-          .order("published_at", { ascending: false })
-          .limit(6);
-        if (cancelled) return;
-        if (error) {
-          setArticles([]);
-        } else {
-          setArticles((data || []) as NewsArticle[]);
-        }
-      } catch {
-        if (!cancelled) setArticles([]);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    load();
-    return () => { cancelled = true; };
-  }, []);
+  const { data: articles = null, isLoading: loading } = useQuery<NewsArticle[]>({
+    queryKey: ["supabase", "news_articles", "latest", 6],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("news_articles")
+        .select(NEWS_COLUMNS)
+        .eq("is_published", true)
+        .order("published_at", { ascending: false })
+        .limit(6);
+      if (error) return [];
+      return (data || []) as NewsArticle[];
+    },
+  });
 
   const formatDate = (s: string | Date | null) => {
     if (!s) return "";

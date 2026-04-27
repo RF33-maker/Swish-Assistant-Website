@@ -15,6 +15,20 @@ import { namesMatch, getMostCompleteName, slugToName, type PlayerMatch } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import ShotChart, { type ShotData } from "@/components/ShotChart";
 import ShareableCard from "@/components/ShareableCard";
+import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
+
+// Only the columns actually consumed by this profile view, so we never
+// pull every column of the (wide) players table on a cold load.
+//
+// IMPORTANT: every entry must be a real column on the `players` table.
+// An earlier draft listed aliased fields (`name`, `team`, `number`,
+// `height`) that don't exist on the table, which caused the slug
+// lookup to silently fail with "column does not exist" and render
+// "Player Not Found". Downstream code already falls back to
+// `team_name`, `shirtNumber`, and `height_cm` when alias fields are
+// absent.
+const PLAYER_PROFILE_COLUMNS =
+  "id, slug, full_name, team_name, position, shirtNumber, league_id, photo_path_bg_removed, photo_path, photo_focus_y, height_cm, date_of_birth";
 
 interface PlayerStat {
   id: string;
@@ -479,25 +493,37 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
         const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(playerSlug);
 
         if (isUUID) {
-          const { data, error } = await supabase.from('players').select('*').eq('id', playerSlug).single();
+          const { data, error } = await supabase.from('players').select(PLAYER_PROFILE_COLUMNS).eq('id', playerSlug).single();
           if (data && !error) initialPlayer = data;
         } else {
-          const { data, error } = await supabase.from('players').select('*').eq('slug', playerSlug).single();
+          const { data, error } = await supabase.from('players').select(PLAYER_PROFILE_COLUMNS).eq('slug', playerSlug).single();
           if (data && !error) initialPlayer = data;
 
           if (!initialPlayer) {
             const searchName = slugToName(playerSlug);
+            // Slug lookup failed — fall back to a small prefix-bounded
+            // search.
+            //
+            // The previous code paged through `players` with
+            // `.limit(10000)` when no direct ilike match was found,
+            // scanning the whole table on every cold profile load. We
+            // now:
+            //   * use a prefix `ilike('full_name', '${name}%')` so an
+            //     index on `full_name` can serve the lookup instead of
+            //     a full sequential scan, and
+            //   * project only the columns this component actually
+            //     consumes via PLAYER_PROFILE_COLUMNS.
+            //
+            // The slug column is the canonical identifier; this
+            // fallback only exists for legacy human-readable URLs.
             const { data: directMatch, error: directError } = await supabase
-              .from('players').select('*').ilike('full_name', `%${searchName}%`).limit(10);
+              .from('players')
+              .select(PLAYER_PROFILE_COLUMNS)
+              .ilike('full_name', `${searchName}%`)
+              .limit(10);
 
             if (directMatch && directMatch.length > 0 && !directError) {
               initialPlayer = directMatch.find(player => namesMatch(player.full_name, searchName)) || directMatch[0];
-            } else {
-              const { data: allPlayers, error: allPlayersError } = await supabase
-                .from('players').select('*').limit(10000);
-              if (allPlayers && !allPlayersError) {
-                initialPlayer = allPlayers.find(player => namesMatch(player.full_name, searchName)) || null;
-              }
             }
           }
         }
@@ -516,11 +542,33 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
         const searchTerms = initialPlayer.full_name.split(' ').filter((t: string) => t.length > 2);
         const searchQuery = searchTerms[searchTerms.length - 1] || initialPlayer.full_name;
 
+        // Fetch only the small set of name-variant players we'll match
+        // against. We use a contains-style match here intentionally: this
+        // path needs to find variants with extra middle initials, suffixes,
+        // accent stripping, etc. that the namesMatch dedupe handles. The
+        // search term is the *last* significant token (typically a
+        // surname), and we cap the fetch at 20 rows + only the columns
+        // PLAYER_PROFILE_COLUMNS exposes — the previous `.limit(100)` with
+        // `select('*')` was wasteful for what is essentially a dedupe loop.
         const { data: allPlayersData, error: allPlayersError } = await supabase
-          .from('players').select('*').ilike('full_name', `%${searchQuery}%`).limit(100);
+          .from('players').select(PLAYER_PROFILE_COLUMNS).ilike('full_name', `%${searchQuery}%`).limit(20);
 
-        let allPlayers = [initialPlayer];
-        if (!allPlayersError && allPlayersData) allPlayers = allPlayersData;
+        // Always keep the slug-resolved `initialPlayer` in the candidate set —
+        // with the tighter limit, a common surname could push the canonical
+        // record off the ilike result, breaking the namesMatch dedupe and
+        // leaving `playerIds` empty for the stats fetch below.
+        let allPlayers: any[] = [initialPlayer];
+        if (!allPlayersError && allPlayersData && allPlayersData.length > 0) {
+          const seen = new Set<string>([initialPlayer.id]);
+          allPlayers = [
+            initialPlayer,
+            ...allPlayersData.filter((p: any) => {
+              if (!p?.id || seen.has(p.id)) return false;
+              seen.add(p.id);
+              return true;
+            }),
+          ];
+        }
 
         const matchingPlayers = allPlayers.filter(player => namesMatch(player.full_name, initialPlayer.full_name));
 
@@ -574,13 +622,20 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
         // 30s statement_timeout for players in larger leagues like NBL D1).
         // Most player profiles only have one canonical id, so the loop runs
         // once; multi-id career profiles still resolve in parallel.
+        // Bound each per-player_id fetch — the profile UI only ever
+        // surfaces the most recent ~few hundred games (career stats,
+        // game log, shot chart). 1000 is enough headroom for a long
+        // career while preventing unbounded scans on players with
+        // anomalously large rowsets.
+        const STATS_PER_PLAYER_LIMIT = 1000;
         const statsResults = await Promise.all(
           playerIds.map(async (pid) => {
             const { data, error } = await supabase
               .from('player_stats')
               .select('*')
               .eq('player_id', pid)
-              .order('created_at', { ascending: false });
+              .order('created_at', { ascending: false })
+              .limit(STATS_PER_PLAYER_LIMIT);
             return { data, error };
           })
         );
@@ -1100,23 +1155,21 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
       .filter((g, i, arr) => arr.findIndex(x => x.game_key === g.game_key) === i);
   }, [playerStats]);
 
-  const playerPhotoUrl = useMemo(() => {
-    if (!playerInfo?.photoPath) return null;
-    const { data } = supabase.storage.from('player-photos').getPublicUrl(playerInfo.photoPath);
-    if (!data.publicUrl) return null;
-    return photoCacheBuster ? `${data.publicUrl}?v=${photoCacheBuster}` : data.publicUrl;
-  }, [playerInfo?.photoPath, photoCacheBuster]);
+  const playerPhotoUrl = useMemo(
+    () => getPlayerPhotoUrlCached(playerInfo?.photoPath ?? null, photoCacheBuster || undefined),
+    [playerInfo?.photoPath, photoCacheBuster]
+  );
 
   // Separate photo for share/social graphics — uses photo_path (original/non-bg-removed).
   // Falls back to the bg-removed banner photo if no original is set so existing players
   // still get a player image on shareable cards.
   const playerSharePhotoUrl = useMemo(() => {
     if (playerInfo?.sharePhotoPath) {
-      const { data } = supabase.storage.from('player-photos').getPublicUrl(playerInfo.sharePhotoPath);
-      if (data.publicUrl) {
-        return photoCacheBuster ? `${data.publicUrl}?v=${photoCacheBuster}` : data.publicUrl;
-      }
-      return playerPhotoUrl;
+      const url = getPlayerPhotoUrlCached(
+        playerInfo.sharePhotoPath,
+        photoCacheBuster || undefined
+      );
+      return url ?? playerPhotoUrl;
     }
     return playerPhotoUrl;
   }, [playerInfo?.sharePhotoPath, playerPhotoUrl, photoCacheBuster]);

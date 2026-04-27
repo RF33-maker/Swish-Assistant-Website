@@ -8,6 +8,55 @@ import { useAuth } from '@/hooks/use-auth';
 import { supabase } from '@/lib/supabase';
 import { useLocation } from 'wouter';
 import { getPythonBackendUrl } from '@/lib/backendUrl';
+import { queryClient } from '@/lib/queryClient';
+
+// Per-leagueId snapshot cache keys. The snapshot (players, games, teams)
+// rarely changes within a chat session, so we use TanStack Query's cache
+// (configured with `staleTime: Infinity`) to avoid refetching the same
+// three Supabase views on every chat turn.
+const leagueSnapshotKey = (leagueId: string) =>
+  ['supabase', 'league-chatbot', 'snapshot', leagueId] as const;
+
+interface LeagueSnapshot {
+  playersData: any[];
+  gamesData: any[];
+  teamsData: any[];
+}
+
+async function fetchLeagueSnapshot(leagueId: string): Promise<LeagueSnapshot> {
+  const [playersDataResult, gamesDataResult, teamsDataResult] = await Promise.all([
+    supabase
+      .from('v_player_season_averages')
+      .select('player_name, team_name, league_id, games_played, total_pts, total_reb, total_ast, total_stl, total_blk, total_tpm, total_tpa, total_fgm, total_fga, total_ftm, total_fta, season_fg_pct, season_tp_pct, season_ft_pct, avg_pts, avg_reb, avg_ast, avg_stl, avg_blk, avg_tpm')
+      .eq('league_id', leagueId)
+      .order('total_pts', { ascending: false })
+      .limit(100),
+    supabase
+      .from('games')
+      .select('game_date, home_team, away_team, home_score, away_score')
+      .eq('league_id', leagueId)
+      .order('game_date', { ascending: false })
+      .limit(30),
+    supabase
+      .from('v_team_season_averages')
+      .select('team_name, team_id, league_id, games_played, avg_pts, avg_ast, avg_reb, avg_stl, avg_blk, avg_tov, avg_tpm, avg_tpa, season_tp_pct, avg_fgm, avg_fga, season_fg_pct, avg_ftm, avg_fta, avg_pitp, avg_fastbreak_pts')
+      .eq('league_id', leagueId)
+      .order('avg_pts', { ascending: false })
+  ]);
+
+  return {
+    playersData: (playersDataResult.data || []) as any[],
+    gamesData: (gamesDataResult.data || []) as any[],
+    teamsData: (teamsDataResult.data || []) as any[],
+  };
+}
+
+async function getLeagueSnapshot(leagueId: string): Promise<LeagueSnapshot> {
+  return queryClient.fetchQuery({
+    queryKey: leagueSnapshotKey(leagueId),
+    queryFn: () => fetchLeagueSnapshot(leagueId),
+  });
+}
 
 const LOADING_PHRASES = [
   'Checking the statbook…',
@@ -182,29 +231,10 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
   const queryLeagueData = async (question: string, leagueId: string): Promise<{ content: string; suggestions?: string[]; navigationButtons?: { label: string; id: string; type: 'player' | 'team' }[] } | string> => {
     try {
       // ── Step 1: Fetch real league data from Supabase views ───────────
-      const [playersDataResult, gamesDataResult, teamsDataResult] = await Promise.all([
-        supabase
-          .from('v_player_season_averages')
-          .select('player_name, team_name, league_id, games_played, total_pts, total_reb, total_ast, total_stl, total_blk, total_tpm, total_tpa, total_fgm, total_fga, total_ftm, total_fta, season_fg_pct, season_tp_pct, season_ft_pct, avg_pts, avg_reb, avg_ast, avg_stl, avg_blk, avg_tpm')
-          .eq('league_id', leagueId)
-          .order('total_pts', { ascending: false })
-          .limit(100),
-        supabase
-          .from('games')
-          .select('game_date, home_team, away_team, home_score, away_score')
-          .eq('league_id', leagueId)
-          .order('game_date', { ascending: false })
-          .limit(30),
-        supabase
-          .from('v_team_season_averages')
-          .select('team_name, team_id, league_id, games_played, avg_pts, avg_ast, avg_reb, avg_stl, avg_blk, avg_tov, avg_tpm, avg_tpa, season_tp_pct, avg_fgm, avg_fga, season_fg_pct, avg_ftm, avg_fta, avg_pitp, avg_fastbreak_pts')
-          .eq('league_id', leagueId)
-          .order('avg_pts', { ascending: false })
-      ]);
-
-      const playersData = (playersDataResult.data || []) as any[];
-      const gamesData = (gamesDataResult.data || []) as any[];
-      const teamsData = (teamsDataResult.data || []) as any[];
+      // Cached per-leagueId via TanStack Query so multi-turn chat reuses
+      // a single network round-trip instead of refetching all three views
+      // on every user question.
+      const { playersData, gamesData, teamsData } = await getLeagueSnapshot(leagueId);
       // Derive unique team names from player data for team scanning
       const uniqueTeamNames = [...new Set(playersData.map((p: any) => p.team_name).filter(Boolean))] as string[];
 
