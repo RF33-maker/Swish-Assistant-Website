@@ -155,7 +155,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
   const [playerStats, setPlayerStats] = useState<PlayerStat[]>([]);
   const [seasonAverages, setSeasonAverages] = useState<SeasonAverages | null>(null);
   const [playerRankings, setPlayerRankings] = useState<PlayerRankings | null>(null);
-  const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string; position?: string; number?: number; leagueId?: string; playerId?: string; photoPath?: string | null; photoFocusY?: number | null; previousTeams?: string[]; height?: string | null; heightCm?: number | null; dateOfBirth?: string | null } | null>(null);
+  const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string; position?: string; number?: number; leagueId?: string; playerId?: string; photoPath?: string | null; sharePhotoPath?: string | null; photoFocusY?: number | null; previousTeams?: string[]; height?: string | null; heightCm?: number | null; dateOfBirth?: string | null } | null>(null);
   const [playerLeagues, setPlayerLeagues] = useState<{ id: string; name: string; slug: string }[]>([]);
   const [playerMatches, setPlayerMatches] = useState<PlayerMatch[]>([]);
   const [nameVariations, setNameVariations] = useState<string[]>([]);
@@ -507,6 +507,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
           leagueId: initialPlayer.league_id,
           playerId: initialPlayer.id,
           photoPath: initialPlayer.photo_path_bg_removed,
+          sharePhotoPath: initialPlayer.photo_path,
           photoFocusY: initialPlayer.photo_focus_y,
           height: initialPlayer.height || null,
           heightCm: initialPlayer.height_cm || null,
@@ -1016,6 +1017,17 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
     return data.publicUrl || null;
   }, [playerInfo?.photoPath]);
 
+  // Separate photo for share/social graphics — uses photo_path (original/non-bg-removed).
+  // Falls back to the bg-removed banner photo if no original is set so existing players
+  // still get a player image on shareable cards.
+  const playerSharePhotoUrl = useMemo(() => {
+    if (playerInfo?.sharePhotoPath) {
+      const { data } = supabase.storage.from('player-photos').getPublicUrl(playerInfo.sharePhotoPath);
+      return data.publicUrl || playerPhotoUrl;
+    }
+    return playerPhotoUrl;
+  }, [playerInfo?.sharePhotoPath, playerPhotoUrl]);
+
   const careerStats = useMemo(() => {
     if (!playerStats || playerStats.length === 0) return [];
 
@@ -1211,7 +1223,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
             player={{
               name: playerInfo?.name || "Player",
               team: playerInfo?.team || "",
-              photoUrl: playerPhotoUrl,
+              photoUrl: playerSharePhotoUrl,
               primaryColor,
             }}
           >
@@ -1254,7 +1266,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
             player={{
               name: playerInfo?.name || "Player",
               team: playerInfo?.team || "",
-              photoUrl: playerPhotoUrl,
+              photoUrl: playerSharePhotoUrl,
               primaryColor,
             }}
           >
@@ -1288,7 +1300,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
             player={{
               name: playerInfo?.name || "Player",
               team: playerInfo?.team || "",
-              photoUrl: playerPhotoUrl,
+              photoUrl: playerSharePhotoUrl,
               primaryColor,
             }}
           >
@@ -1474,7 +1486,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
           player={{
             name: playerInfo?.name || "Player",
             team: playerInfo?.team || "",
-            photoUrl: playerPhotoUrl,
+            photoUrl: playerSharePhotoUrl,
             primaryColor,
           }}
           shareCaption={(() => {
