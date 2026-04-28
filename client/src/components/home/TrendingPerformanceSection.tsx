@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { ChevronRight } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { TeamLogo } from "@/components/TeamLogo";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
+import ShareableCard from "@/components/ShareableCard";
+import { useTeamBranding } from "@/hooks/useTeamBranding";
 
 interface PerfRow {
   league_id: string;
@@ -45,6 +46,8 @@ interface TrendingData {
 }
 
 const ROTATE_MS = 6000;
+const FEATURED_LEAGUE_LIMIT = 4;
+const PERFS_PER_LEAGUE = 2;
 
 function formatDate(s: string | null) {
   if (!s) return "";
@@ -68,6 +71,23 @@ function Stat({ label, value }: { label: string; value: string | number }) {
   );
 }
 
+function StatBlock({ perf, tsPct }: { perf: PerfRow; tsPct: string }) {
+  return (
+    <div className="grid grid-cols-5 gap-y-3 gap-x-2">
+      <Stat label="GS" value={perf.game_score ?? 0} />
+      <Stat label="PTS" value={perf.pts ?? 0} />
+      <Stat label="REB" value={perf.reb ?? 0} />
+      <Stat label="AST" value={perf.ast ?? 0} />
+      <Stat label="STL" value={perf.stl ?? 0} />
+      <Stat label="BLK" value={perf.blk ?? 0} />
+      <Stat label="TOV" value={perf.tov ?? 0} />
+      <Stat label="FGA" value={perf.fga ?? 0} />
+      <Stat label="FTA" value={perf.fta ?? 0} />
+      <Stat label="TS%" value={tsPct} />
+    </div>
+  );
+}
+
 export default function TrendingPerformanceSection() {
   const [, setLocation] = useLocation();
   const [index, setIndex] = useState(0);
@@ -76,15 +96,20 @@ export default function TrendingPerformanceSection() {
   );
 
   const { data, isLoading } = useQuery<TrendingData>({
-    queryKey: ["supabase", "home", "trending-performance"],
+    queryKey: ["supabase", "home", "trending-performance", "v3"],
     queryFn: async () => {
       const empty: TrendingData = { perfs: [], leagueNames: {}, playerMeta: {} };
+
+      // Stick to the top 4 trending leagues (those with a trending_position
+      // assigned, ordered ascending). This keeps the carousel focused on the
+      // featured leagues only.
       const { data: leagueRows, error: lErr } = await supabase
         .from("leagues")
         .select("league_id, name, trending_position")
         .eq("is_public", true)
+        .not("trending_position", "is", null)
         .order("trending_position", { ascending: true, nullsFirst: false })
-        .limit(12);
+        .limit(FEATURED_LEAGUE_LIMIT);
 
       if (lErr) {
         console.error("[TrendingPerf] leagues error", lErr);
@@ -97,39 +122,44 @@ export default function TrendingPerformanceSection() {
         if (l.name) leagueNames[l.league_id] = l.name;
       }
 
-      // Single batched query across all featured leagues. Previously this
-      // ran one `.eq('league_id', X).limit(1)` per league which produced
-      // N+1 round-trips and consistently tripped Supabase statement
-      // timeouts (Postgres 57014). One ordered .in(...) query lets the
-      // server pick a single plan and we dedupe to one row per league
-      // client-side. The hard cap on row count keeps the response small.
+      // Run one tightly-scoped query per featured league in parallel. A
+      // single batched .in() across all leagues used to time out
+      // (Postgres 57014) because the view scan was unbounded; per-league
+      // queries with a hard LIMIT let the planner pick a much cheaper
+      // plan and keep the response small.
       const leagueIds = leagues.map((l) => l.league_id);
-      let perfs: PerfRow[] = [];
+      const perfs: PerfRow[] = [];
       if (leagueIds.length > 0) {
-        const fetchCap = Math.min(leagueIds.length * 25, 200);
-        const { data: rows, error } = await supabase
-          .from("vw_player_game_scores")
-          .select(
-            "league_id, game_key, game_date, week_start, player_id, full_name, team_id, team_name, pts, reb, ast, stl, blk, tov, fga, fta, ts_pct, game_score"
-          )
-          .in("league_id", leagueIds)
-          .order("week_start", { ascending: false })
-          .order("game_score", { ascending: false })
-          .limit(fetchCap)
-          .returns<PerfRow[]>();
-
-        if (error) {
-          console.error("[TrendingPerf] perf error", error);
-        } else {
-          const seen = new Set<string>();
-          for (const r of rows || []) {
-            if (!r?.league_id || seen.has(r.league_id)) continue;
-            seen.add(r.league_id);
+        const perLeagueResults = await Promise.all(
+          leagueIds.map(async (lid) => {
+            const { data: rows, error } = await supabase
+              .from("vw_player_game_scores")
+              .select(
+                "league_id, game_key, game_date, week_start, player_id, full_name, team_id, team_name, pts, reb, ast, stl, blk, tov, fga, fta, ts_pct, game_score"
+              )
+              .eq("league_id", lid)
+              .order("week_start", { ascending: false })
+              .order("game_score", { ascending: false })
+              .limit(PERFS_PER_LEAGUE)
+              .returns<PerfRow[]>();
+            if (error) {
+              console.error("[TrendingPerf] perf error", lid, error);
+              return [] as PerfRow[];
+            }
+            return rows || [];
+          })
+        );
+        for (const rows of perLeagueResults) {
+          for (const r of rows) {
+            if (!r?.league_id) continue;
             perfs.push(r);
           }
         }
       }
 
+      // Final sort: latest week first, then highest game score within that
+      // week. This guarantees the carousel always leads with the freshest
+      // performances across the featured leagues.
       perfs.sort((a, b) => {
         const aw = a.week_start || "";
         const bw = b.week_start || "";
@@ -164,6 +194,13 @@ export default function TrendingPerformanceSection() {
   const leagueNames = data?.leagueNames ?? {};
   const playerMeta = data?.playerMeta ?? {};
 
+  // Reset index if the perf list shrinks (e.g. when data refetches).
+  useEffect(() => {
+    if (index >= perfs.length && perfs.length > 0) {
+      setIndex(0);
+    }
+  }, [perfs.length, index]);
+
   // Visibility-aware: stop rotation when tab hidden so polling/render churn stops.
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -186,6 +223,14 @@ export default function TrendingPerformanceSection() {
   const photoUrl = meta?.photoUrl || null;
   const playerSlug = meta?.slug || null;
   const leagueName = perf ? leagueNames[perf.league_id] : undefined;
+
+  // Pull team brand colour for the currently displayed perf so the share
+  // card header band matches the team look (same as PlayerProfileContent).
+  const { primaryColor } = useTeamBranding({
+    teamName: perf?.team_name || "",
+    leagueId: perf?.league_id || "",
+    enabled: !!(perf?.team_name && perf?.league_id),
+  });
 
   const tsPct = useMemo(() => {
     if (!perf) return "—";
@@ -228,100 +273,125 @@ export default function TrendingPerformanceSection() {
     );
   }
 
+  // Content rendered inside the share dialog. The ShareableCard chrome
+  // already supplies the player photo / name / team header band, so the
+  // share content only needs the meta + stats body.
+  const shareBody = (
+    <div className="bg-white">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+          {leagueName || "Featured League"}
+        </span>
+        <span className="text-xs font-semibold text-slate-700">
+          {formatDate(perf.game_date)}
+        </span>
+      </div>
+      <StatBlock perf={perf} tsPct={tsPct} />
+    </div>
+  );
+
   return (
     <div className="w-full max-w-xl mb-6 md:mb-8 text-left">
-      <button
-        type="button"
-        onClick={goToPerformance}
-        className="group block w-full text-left rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 shadow-sm hover:shadow-md hover:border-orange-300 dark:hover:border-orange-500/50 transition-all p-4 md:p-5"
-        data-testid="trending-performance-card"
+      <ShareableCard
+        title="Top Performance"
+        fileSlug={`trending-${perf.player_id}-${perf.game_key}`}
+        player={{
+          name: perf.full_name,
+          team: perf.team_name || leagueName || "",
+          photoUrl,
+          primaryColor,
+        }}
+        shareCaption={leagueName ? `${leagueName} • ${formatDate(perf.game_date)}` : formatDate(perf.game_date)}
+        shareContent={shareBody}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-baseline gap-2 min-w-0">
-            <h3 className="text-base md:text-lg font-bold text-slate-900 dark:text-white">
-              Trending Performance
-            </h3>
-            {leagueName && (
-              <span className="text-[10px] md:text-xs uppercase tracking-wide text-orange-600 dark:text-orange-400 font-semibold truncate">
-                {leagueName}
-              </span>
-            )}
-          </div>
-          <ChevronRight className="h-5 w-5 text-slate-400 dark:text-slate-500 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all flex-shrink-0" />
-        </div>
-
-        {/* Player + meta */}
-        <div className="flex items-center gap-3 mb-4">
-          <div className="h-12 w-12 md:h-14 md:w-14 rounded-full overflow-hidden bg-gradient-to-br from-orange-100 to-amber-100 dark:from-neutral-800 dark:to-neutral-800 flex items-center justify-center flex-shrink-0">
-            {photoUrl ? (
-              <img
-                src={photoUrl}
-                alt={perf.full_name}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <span className="text-orange-600 dark:text-orange-300 font-bold text-sm">
-                {perf.full_name
-                  .split(" ")
-                  .map((n) => n[0])
-                  .slice(0, 2)
-                  .join("")}
-              </span>
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="font-semibold text-slate-900 dark:text-white truncate">
-              {perf.full_name}
-            </div>
-            <div className="flex items-center gap-1.5 text-xs md:text-sm text-slate-500 dark:text-slate-400 truncate">
-              <span>{formatDate(perf.game_date)}</span>
-              {perf.team_name && (
-                <>
-                  <span aria-hidden="true">•</span>
-                  <TeamLogo
-                    teamName={perf.team_name}
-                    leagueId={perf.league_id}
-                    size="xs"
-                    className="!w-5 !h-5"
-                  />
-                  <span className="sr-only">{perf.team_name}</span>
-                </>
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={goToPerformance}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              goToPerformance();
+            }
+          }}
+          className="group block w-full text-left rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 shadow-sm hover:shadow-md hover:border-orange-300 dark:hover:border-orange-500/50 transition-all p-4 md:p-5 cursor-pointer focus:outline-none focus:ring-2 focus:ring-orange-400"
+          data-testid="trending-performance-card"
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between mb-3 pr-10">
+            <div className="flex items-baseline gap-2 min-w-0">
+              <h3 className="text-base md:text-lg font-bold text-slate-900 dark:text-white">
+                Trending Performance
+              </h3>
+              {leagueName && (
+                <span className="text-[10px] md:text-xs uppercase tracking-wide text-orange-600 dark:text-orange-400 font-semibold truncate">
+                  {leagueName}
+                </span>
               )}
             </div>
           </div>
-        </div>
 
-        {/* Divider */}
-        <div className="border-t border-slate-200 dark:border-neutral-800 mb-3" />
+          {/* Player + meta */}
+          <div className="flex items-center gap-3 mb-4">
+            <div className="h-12 w-12 md:h-14 md:w-14 rounded-full overflow-hidden bg-gradient-to-br from-orange-100 to-amber-100 dark:from-neutral-800 dark:to-neutral-800 flex items-center justify-center flex-shrink-0">
+              {photoUrl ? (
+                <img
+                  src={photoUrl}
+                  alt={perf.full_name}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <span className="text-orange-600 dark:text-orange-300 font-bold text-sm">
+                  {perf.full_name
+                    .split(" ")
+                    .map((n) => n[0])
+                    .slice(0, 2)
+                    .join("")}
+                </span>
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-slate-900 dark:text-white truncate">
+                {perf.full_name}
+              </div>
+              <div className="flex items-center gap-1.5 text-xs md:text-sm text-slate-500 dark:text-slate-400 truncate">
+                <span>{formatDate(perf.game_date)}</span>
+                {perf.team_name && (
+                  <>
+                    <span aria-hidden="true">•</span>
+                    <TeamLogo
+                      teamName={perf.team_name}
+                      leagueId={perf.league_id}
+                      size="xs"
+                      className="!w-5 !h-5"
+                    />
+                    <span className="sr-only">{perf.team_name}</span>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
 
-        {/* Stats grid */}
-        <div className="grid grid-cols-5 gap-y-3 gap-x-2">
-          <Stat label="GS" value={perf.game_score ?? 0} />
-          <Stat label="PTS" value={perf.pts ?? 0} />
-          <Stat label="REB" value={perf.reb ?? 0} />
-          <Stat label="AST" value={perf.ast ?? 0} />
-          <Stat label="STL" value={perf.stl ?? 0} />
-          <Stat label="BLK" value={perf.blk ?? 0} />
-          <Stat label="TOV" value={perf.tov ?? 0} />
-          <Stat label="FGA" value={perf.fga ?? 0} />
-          <Stat label="FTA" value={perf.fta ?? 0} />
-          <Stat label="TS%" value={tsPct} />
+          {/* Divider */}
+          <div className="border-t border-slate-200 dark:border-neutral-800 mb-3" />
+
+          {/* Stats grid */}
+          <StatBlock perf={perf} tsPct={tsPct} />
         </div>
-      </button>
+      </ShareableCard>
 
       {/* Carousel dots */}
       {perfs.length > 1 && (
         <div className="flex items-center justify-center gap-1.5 mt-3">
           {perfs.map((p, i) => (
             <button
-              key={p.league_id}
+              key={`${p.league_id}-${p.player_id}-${p.game_key}`}
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 setIndex(i);
               }}
-              aria-label={`Show ${leagueNames[p.league_id] || "league"} top performance`}
+              aria-label={`Show performance ${i + 1} of ${perfs.length}`}
               className={`h-1.5 rounded-full transition-all ${
                 i === index
                   ? "w-6 bg-orange-500"
