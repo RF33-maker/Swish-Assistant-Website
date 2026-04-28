@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { useLocation } from "wouter"
 import { supabase } from "@/lib/supabase"
 import SwishLogo from "@/assets/Swish Assistant Logo.png"
@@ -7,12 +7,9 @@ import UL from "@/assets/uploadimage.png"
 import BCB from "@/assets/BCB Logo.jpg"
 import SLB from "@/assets/Super-League-Basketball-Logo.png"
 import NBLBE from "@/assets/NBLBE.jpg"
-import Chatbot from "@/assets/Chatbotimage.png"
-import LeaguePage from "@/assets/League-page.png"
-import ChatbotExample from "@/assets/Chatbotexample.png"
 import { Button } from "@/components/ui/button"
 import { Analytics } from "@vercel/analytics/next"
-import { Search, ChevronDown, BarChart3, Zap, Clock, MessageSquare, Sparkles, TrendingUp, Trophy, FileText, Users, Menu } from "lucide-react"
+import { Search, ChevronDown, Trophy, Users, Menu } from "lucide-react"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import { TeamLogo } from "@/components/TeamLogo"
@@ -76,8 +73,6 @@ export default function LandingPage() {
   const [suggestions, setSuggestions] = useState<any[]>([])
   const [, setLocation] = useLocation()
   const [trendingLeagues, setTrendingLeagues] = useState<any[]>([]);
-  const chatbotHeadingRef = useRef<HTMLHeadingElement>(null);
-  const coachesHeadingRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
     const fetchSuggestions = async () => {
@@ -272,33 +267,6 @@ export default function LandingPage() {
     };
 
     fetchTrending();
-  }, []);
-
-  // IntersectionObserver for animated underlines
-  useEffect(() => {
-    const options = {
-      threshold: 0.5,
-      rootMargin: '0px'
-    };
-
-    const callback = (entries: IntersectionObserverEntry[]) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('in-view');
-        }
-      });
-    };
-
-    const observer = new IntersectionObserver(callback, options);
-
-    if (chatbotHeadingRef.current) {
-      observer.observe(chatbotHeadingRef.current);
-    }
-    if (coachesHeadingRef.current) {
-      observer.observe(coachesHeadingRef.current);
-    }
-
-    return () => observer.disconnect();
   }, []);
 
   return (
@@ -519,164 +487,6 @@ export default function LandingPage() {
       {/* News & top players sections (scores ticker is rendered above the hero) */}
       <LatestNewsSection />
       <TopPlayersSection />
-
-       {/*What is Swish Assistant?*/}
-
-      <section className="py-20 bg-gradient-to-b from-orange-50 to-[#fffaf5] dark:from-neutral-900 dark:to-neutral-900">
-        <div className="max-w-6xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 items-center gap-12">
-
-          {/* Left: Visual */}
-          <div className="w-full flex justify-center">
-            <img
-              src={LeaguePage}
-              alt="League Page Example"
-              className="rounded-xl shadow-xl w-full max-w-md transition-all duration-300 hover:scale-105 hover:-translate-y-2"
-            />
-          </div>
-
-          {/* Right: Text Content */}
-          <div>
-            <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">
-              Find your league and discover all the stats
-            </h3>
-            <div className="w-16 h-1 bg-orange-500 rounded-full mb-6"></div>
-            <p className="text-slate-700 dark:text-slate-300 leading-relaxed mb-6">
-              Find the information you need quickly in just a few clicks. Access comprehensive stats and insights with even greater detail than ever before.
-            </p>
-            <ul className="text-left text-slate-700 dark:text-slate-300 space-y-3">
-              <li className="flex items-start gap-3">
-                <BarChart3 className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
-                <span>Browse all hosted leagues in one place</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <Zap className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
-                <span>Quick and easy access to top performances and player stats</span>
-              </li>
-              <li className="flex items-start gap-3">
-                <Search className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
-                <span>Discover detailed insights and compare players across teams</span>
-              </li>
-            </ul>
-          </div>
-        </div>
-      </section>
-
-      {/* Unified AI Features Section */}
-      <section className="bg-gradient-to-b from-[#fffaf5] to-[#fffaf5] dark:from-neutral-900 dark:to-neutral-900 relative overflow-hidden shadow-[inset_0_-20px_40px_-20px_rgba(251,146,60,0.1)] dark:shadow-none">
-        
-        {/* AI-Powered Chatbot */}
-        <div className="py-20">
-          <div className="max-w-6xl mx-auto px-8 md:px-16 grid grid-cols-1 md:grid-cols-2 items-center gap-12 md:gap-16">
-
-            {/* Left: Text Content */}
-            <div>
-              <div className="flex items-center gap-3 mb-6">
-                <h3 ref={chatbotHeadingRef} className="text-2xl font-bold text-slate-900 dark:text-white underline-animate">
-                  AI-Powered Chatbot
-                </h3>
-                <span className="bg-orange-500 text-white text-xs font-semibold px-3 py-1 rounded-full hover:scale-110 hover:shadow-[0_0_10px_rgba(255,102,0,0.4)] transition-all duration-300 ease-out">
-                  Coming Soon
-                </span>
-              </div>
-              <p className="text-slate-700 dark:text-slate-300 leading-relaxed mb-6">
-                We're building an AI-powered chatbot to make it super quick and easy to find what you need. Ask questions and get instant answers about players, teams, and stats.
-              </p>
-              <ul className="text-left text-slate-700 dark:text-slate-300 space-y-3">
-                <li className="flex items-start gap-3 animate-fade-in-up" style={{ animationDelay: '0.1s', opacity: 0, animationFillMode: 'forwards' }}>
-                  <Clock className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
-                  <span>Find information in seconds, not minutes</span>
-                </li>
-                <li className="flex items-start gap-3 animate-fade-in-up" style={{ animationDelay: '0.2s', opacity: 0, animationFillMode: 'forwards' }}>
-                  <MessageSquare className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
-                  <span>Natural language queries about any league data</span>
-                </li>
-                <li className="flex items-start gap-3 animate-fade-in-up" style={{ animationDelay: '0.3s', opacity: 0, animationFillMode: 'forwards' }}>
-                  <Sparkles className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
-                  <span>Coming soon to streamline your workflow</span>
-                </li>
-              </ul>
-            </div>
-
-            {/* Right: Visual */}
-            <div className="w-full flex justify-center">
-              <img
-                src={Chatbot}
-                alt="Chatbot Example"
-                className="rounded-xl w-full max-w-lg transition-all duration-300 hover:scale-105"
-                style={{ filter: 'drop-shadow(0 0 40px rgba(251, 146, 60, 0.3))' }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Basketball Court Texture Pattern */}
-        <div 
-          className="absolute bottom-0 inset-x-0 h-1/2 opacity-[0.03] pointer-events-none dark:opacity-[0.02]"
-          style={{
-            backgroundImage: `repeating-linear-gradient(
-              0deg,
-              transparent,
-              transparent 50px,
-              #fb923c 50px,
-              #fb923c 51px
-            ),
-            repeating-linear-gradient(
-              90deg,
-              transparent,
-              transparent 50px,
-              #fb923c 50px,
-              #fb923c 51px
-            )`
-          }}
-        />
-        
-        {/* Coaches Hub */}
-        <div className="py-20 relative z-10">
-          <div className="max-w-6xl mx-auto px-8 md:px-16 grid grid-cols-1 md:grid-cols-2 items-center gap-12">
-
-            {/* Left: Text Content */}
-            <div>
-              <div className="flex items-center gap-3 mb-6">
-                <h3 ref={coachesHeadingRef} className="text-2xl font-bold text-slate-900 dark:text-white underline-animate">
-                  Coaches Hub
-                </h3>
-                <span className="bg-orange-500 text-white text-xs font-semibold px-3 py-1 rounded-full hover:scale-110 hover:shadow-[0_0_10px_rgba(255,102,0,0.4)] transition-all duration-300 ease-out">
-                  Coming Soon
-                </span>
-              </div>
-              <p className="text-orange-600 dark:text-orange-400 font-medium text-sm mb-4">
-                Scouting simplified with AI insights.
-              </p>
-              <p className="text-gray-600 dark:text-slate-300 mb-6">
-                A dedicated space for coaches to access detailed insights to help prep for your next game. See team trends, discover top players, and build your scouting reports with ease.
-              </p>
-              <ul className="text-left text-gray-600 dark:text-slate-300 space-y-3">
-                <li className="flex items-start gap-3">
-                  <TrendingUp className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
-                  <span><strong className="text-slate-900 dark:text-white">Detailed insights</strong> on team performance and trends</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <Trophy className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
-                  <span>Quickly identify <strong className="text-slate-900 dark:text-white">top players</strong> and key matchups</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <FileText className="h-5 w-5 text-orange-500 flex-shrink-0 mt-0.5" />
-                  <span><strong className="text-slate-900 dark:text-white">Build comprehensive</strong> scouting reports effortlessly</span>
-                </li>
-              </ul>
-            </div>
-
-            {/* Right: Visual */}
-            <div className="w-full flex justify-center">
-              <img
-                src={ChatbotExample}
-                alt="Coaches Hub Example"
-                className="rounded-xl w-full max-w-md shadow-[0_10px_40px_-10px_rgba(0,0,0,0.3)]"
-              />
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* Newsletter Signup Section */}
       <section id="subscribe" className="py-20 bg-gradient-to-br from-orange-50 to-orange-100 dark:from-neutral-800 dark:to-neutral-900 relative overflow-hidden flex items-center">
