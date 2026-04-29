@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { Search } from "lucide-react";
 import { normalizeTeamName } from "@/lib/teamUtils";
+import ShareableCard from "@/components/ShareableCard";
 import {
   Select,
   SelectContent,
@@ -14,6 +15,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 interface PlayerComparisonProps {
   leagueId: string;
   allPlayers: any[];
+  brandColor?: string;
 }
 
 const areSimilarNames = (name1: string, name2: string): boolean => {
@@ -218,7 +220,7 @@ function getPlayerComparisonRows(
   }
 }
 
-export function PlayerComparison({ leagueId, allPlayers }: PlayerComparisonProps) {
+export function PlayerComparison({ leagueId, allPlayers, brandColor }: PlayerComparisonProps) {
   const [player1Id, setPlayer1Id] = useState<string>("");
   const [player2Id, setPlayer2Id] = useState<string>("");
   const [player1Stats, setPlayer1Stats] = useState<any>(null);
@@ -236,6 +238,9 @@ export function PlayerComparison({ leagueId, allPlayers }: PlayerComparisonProps
   const [search2, setSearch2] = useState("");
   const [showDropdown1, setShowDropdown1] = useState(false);
   const [showDropdown2, setShowDropdown2] = useState(false);
+  const [player1PhotoUrl, setPlayer1PhotoUrl] = useState<string | null>(null);
+  const [player2PhotoUrl, setPlayer2PhotoUrl] = useState<string | null>(null);
+  const [teamGameScores, setTeamGameScores] = useState<Map<string, Map<string, number>>>(new Map());
 
   const dropdown1Ref = useRef<HTMLDivElement>(null);
   const dropdown2Ref = useRef<HTMLDivElement>(null);
@@ -290,6 +295,24 @@ export function PlayerComparison({ leagueId, allPlayers }: PlayerComparisonProps
       setPlayer2Display(p2.displayName);
       setPlayer1Stats(aggregatePlayerStats(p1.raw, p1.displayName, p1.teamName));
       setPlayer2Stats(aggregatePlayerStats(p2.raw, p2.displayName, p2.teamName));
+
+      // Build team-points-per-game map so we can determine head-to-head winners.
+      const scoresByGame = new Map<string, Map<string, number>>();
+      allStats.forEach((row: any) => {
+        const gid = row.game_id ?? row.game_key ?? null;
+        const teamId = row.team_id ?? row.team_name ?? row.team ?? null;
+        const pts = Number(row.spoints) || 0;
+        if (gid == null || teamId == null) return;
+        const gKey = String(gid);
+        const tKey = String(teamId);
+        let teamMap = scoresByGame.get(gKey);
+        if (!teamMap) {
+          teamMap = new Map<string, number>();
+          scoresByGame.set(gKey, teamMap);
+        }
+        teamMap.set(tKey, (teamMap.get(tKey) || 0) + pts);
+      });
+      setTeamGameScores(scoresByGame);
     } catch (error) {
       console.error("Error comparing players:", error);
       setFetchError("We couldn't load the comparison data. Please try again.");
@@ -297,10 +320,44 @@ export function PlayerComparison({ leagueId, allPlayers }: PlayerComparisonProps
       setPlayer2Raw([]);
       setPlayer1Stats(null);
       setPlayer2Stats(null);
+      setTeamGameScores(new Map());
     } finally {
       setIsLoading(false);
     }
   };
+
+  // Resolve player photos (where available) for the share card.
+  useEffect(() => {
+    let cancelled = false;
+    const fetchPhoto = async (playerId: string): Promise<string | null> => {
+      if (!playerId || playerId.startsWith('name_')) return null;
+      try {
+        const { data, error } = await supabase
+          .from('players')
+          .select('photo_path, photo_path_bg_removed')
+          .eq('id', playerId)
+          .maybeSingle();
+        if (error || !data) return null;
+        const path = data.photo_path_bg_removed || data.photo_path;
+        if (!path) return null;
+        const { data: pub } = supabase.storage.from('player-photos').getPublicUrl(path);
+        return pub?.publicUrl || null;
+      } catch {
+        return null;
+      }
+    };
+    if (player1Id) {
+      fetchPhoto(player1Id).then((url) => { if (!cancelled) setPlayer1PhotoUrl(url); });
+    } else {
+      setPlayer1PhotoUrl(null);
+    }
+    if (player2Id) {
+      fetchPhoto(player2Id).then((url) => { if (!cancelled) setPlayer2PhotoUrl(url); });
+    } else {
+      setPlayer2PhotoUrl(null);
+    }
+    return () => { cancelled = true; };
+  }, [player1Id, player2Id]);
 
   useEffect(() => {
     if (player1Id && player2Id) {
@@ -342,15 +399,20 @@ export function PlayerComparison({ leagueId, allPlayers }: PlayerComparisonProps
     team2Name: string;
     p1Line: PlayerH2HLine;
     p2Line: PlayerH2HLine;
+    p1TeamScore: number | null;
+    p2TeamScore: number | null;
+    winner: 'p1' | 'p2' | 'tie' | null;
   };
   type PlayerH2H = {
     games: PlayerH2HGame[];
     p1Stats: ReturnType<typeof aggregatePlayerStats>;
     p2Stats: ReturnType<typeof aggregatePlayerStats>;
+    p1Wins: number;
+    p2Wins: number;
   };
   const h2h = useMemo<PlayerH2H>(() => {
     if (!player1Raw.length || !player2Raw.length) {
-      return { games: [], p1Stats: null, p2Stats: null };
+      return { games: [], p1Stats: null, p2Stats: null, p1Wins: 0, p2Wins: 0 };
     }
     // Index player2's rows by game_id (fallback to game_key)
     const gameIdOf = (s: any) => s.game_id ?? s.game_key ?? null;
@@ -390,6 +452,18 @@ export function PlayerComparison({ leagueId, allPlayers }: PlayerComparisonProps
         return '—';
       };
 
+      const teamScoreMap = teamGameScores.get(String(gid));
+      const teamKey1 = String(s1.team_id ?? s1.team_name ?? s1.team ?? '');
+      const teamKey2 = String(s2.team_id ?? s2.team_name ?? s2.team ?? '');
+      const p1TeamScore = teamScoreMap?.get(teamKey1) ?? null;
+      const p2TeamScore = teamScoreMap?.get(teamKey2) ?? null;
+      let winner: 'p1' | 'p2' | 'tie' | null = null;
+      if (p1TeamScore != null && p2TeamScore != null) {
+        if (p1TeamScore > p2TeamScore) winner = 'p1';
+        else if (p2TeamScore > p1TeamScore) winner = 'p2';
+        else winner = 'tie';
+      }
+
       games.push({
         game_id: gid,
         date: s1.game_date || s2.game_date || s1.created_at || s2.created_at || null,
@@ -407,6 +481,9 @@ export function PlayerComparison({ leagueId, allPlayers }: PlayerComparisonProps
           ast: s2.sassists ?? 0,
           min: minutesToStr(s2.sminutes),
         },
+        p1TeamScore,
+        p2TeamScore,
+        winner,
       });
     });
 
@@ -420,8 +497,10 @@ export function PlayerComparison({ leagueId, allPlayers }: PlayerComparisonProps
       games,
       p1Stats: aggregatePlayerStats(sharedP1, player1Display, sharedP1[0]?.team_name || sharedP1[0]?.team || ''),
       p2Stats: aggregatePlayerStats(sharedP2, player2Display, sharedP2[0]?.team_name || sharedP2[0]?.team || ''),
+      p1Wins: games.filter((g) => g.winner === 'p1').length,
+      p2Wins: games.filter((g) => g.winner === 'p2').length,
     };
-  }, [player1Raw, player2Raw, player1Display, player2Display]);
+  }, [player1Raw, player2Raw, player1Display, player2Display, teamGameScores]);
 
   const ComparisonRow = ({
     label,
@@ -512,6 +591,203 @@ export function PlayerComparison({ leagueId, allPlayers }: PlayerComparisonProps
     const d = new Date(raw);
     if (isNaN(d.getTime())) return '—';
     return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+
+  // Share-card layout (renders cleanly inside ShareableCard's modal).
+  const renderShareAvatar = (name: string, accent: 'orange' | 'slate', photoUrl: string | null) => {
+    const isOrange = accent === 'orange';
+    const ringClass = isOrange ? 'border-orange-300' : 'border-slate-300';
+    if (photoUrl) {
+      return (
+        <div className={`w-16 h-16 rounded-full overflow-hidden shadow border-2 ${ringClass} bg-white`}>
+          <img
+            src={photoUrl}
+            alt={name}
+            crossOrigin="anonymous"
+            className="w-full h-full object-cover"
+          />
+        </div>
+      );
+    }
+    const initials = name
+      .split(' ')
+      .filter(Boolean)
+      .map((n) => n[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase();
+    return (
+      <div
+        className={`w-16 h-16 rounded-full flex items-center justify-center font-bold text-xl shadow border-2 ${
+          isOrange
+            ? 'bg-gradient-to-br from-orange-100 to-orange-200 border-orange-300 text-orange-700'
+            : 'bg-gradient-to-br from-slate-100 to-slate-200 border-slate-300 text-slate-700'
+        }`}
+      >
+        {initials || '?'}
+      </div>
+    );
+  };
+
+  const renderShareVsHeader = (s1: any, s2: any) => (
+    <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-col items-center gap-1.5 flex-1 min-w-0">
+        {renderShareAvatar(s1.name, 'orange', player1PhotoUrl)}
+        <div className="text-center min-w-0 w-full">
+          <div className="text-xs font-bold text-slate-800 leading-tight truncate" title={s1.name}>{s1.name}</div>
+          {s1.team && (
+            <div className="text-[10px] text-slate-500 truncate" title={s1.team}>{s1.team}</div>
+          )}
+          <div className="text-[10px] text-slate-500">{s1.games} games</div>
+        </div>
+      </div>
+      <div className="text-lg font-black text-orange-500 tracking-wider px-1 flex-shrink-0">VS</div>
+      <div className="flex flex-col items-center gap-1.5 flex-1 min-w-0">
+        {renderShareAvatar(s2.name, 'slate', player2PhotoUrl)}
+        <div className="text-center min-w-0 w-full">
+          <div className="text-xs font-bold text-slate-800 leading-tight truncate" title={s2.name}>{s2.name}</div>
+          {s2.team && (
+            <div className="text-[10px] text-slate-500 truncate" title={s2.team}>{s2.team}</div>
+          )}
+          <div className="text-[10px] text-slate-500">{s2.games} games</div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderShareTable = (s1: any, s2: any) => {
+    const rows = getPlayerComparisonRows(comparisonCategory, s1, s2);
+    return (
+      <div className="rounded-lg border border-slate-200 overflow-hidden bg-white">
+        <table className="w-full text-xs">
+          <thead className="bg-slate-50">
+            <tr>
+              <th className="py-1.5 px-2 text-right font-bold text-slate-700 truncate max-w-[40%]">{s1.name}</th>
+              <th className="py-1.5 px-2 text-center font-semibold text-slate-500 uppercase tracking-wider text-[10px]">Stat</th>
+              <th className="py-1.5 px-2 text-left font-bold text-slate-700 truncate max-w-[40%]">{s2.name}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, i) => {
+              const num1 = parseFloat(String(row.value1));
+              const num2 = parseFloat(String(row.value2));
+              const p1Better = row.lowerIsBetter ? num1 < num2 : num1 > num2;
+              const p2Better = row.lowerIsBetter ? num2 < num1 : num2 > num1;
+              return (
+                <tr key={i} className={`border-t border-slate-100 ${i % 2 === 1 ? 'bg-slate-50/50' : ''}`}>
+                  <td className={`py-1 px-2 text-right tabular-nums font-semibold ${p1Better ? 'text-orange-600' : 'text-slate-700'}`}>
+                    {row.value1}
+                  </td>
+                  <td className="py-1 px-2 text-center font-semibold text-slate-600 text-[10px] uppercase tracking-wider">
+                    {row.label}
+                  </td>
+                  <td className={`py-1 px-2 text-left tabular-nums font-semibold ${p2Better ? 'text-orange-600' : 'text-slate-700'}`}>
+                    {row.value2}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  const renderShareContent = () => {
+    if (!player1Stats || !player2Stats) return null;
+    if (view === 'season') {
+      return (
+        <div className="space-y-3">
+          {renderShareVsHeader(player1Stats, player2Stats)}
+          <div className="text-center">
+            <span className="inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">
+              {comparisonCategory} • Season Averages
+            </span>
+          </div>
+          {renderShareTable(player1Stats, player2Stats)}
+        </div>
+      );
+    }
+    // Head-to-Head
+    if (h2h.games.length === 0) {
+      return (
+        <div className="space-y-3">
+          {renderShareVsHeader(player1Stats, player2Stats)}
+          <div className="rounded-lg bg-slate-50 border border-slate-200 p-4 text-center">
+            <p className="text-sm font-semibold text-slate-700">No head-to-head matchups yet</p>
+            <p className="text-xs text-slate-500 mt-1">{player1Stats.name} and {player2Stats.name} haven't faced each other on opposing teams.</p>
+          </div>
+        </div>
+      );
+    }
+    const hasRecord = h2h.p1Wins + h2h.p2Wins > 0;
+    return (
+      <div className="space-y-3">
+        {renderShareVsHeader(player1Stats, player2Stats)}
+        <div className="text-center rounded-lg bg-orange-50 border border-orange-200 py-2 px-3">
+          <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
+            {hasRecord ? 'Series Record' : 'Times Faced Off'}
+          </div>
+          {hasRecord ? (
+            <div className="flex items-center justify-center gap-3 mt-0.5">
+              <div className="flex flex-col items-center">
+                <div className="text-[9px] text-slate-500 truncate max-w-[80px]" title={player1Stats.name}>{player1Stats.name}</div>
+                <div className="text-xl font-black text-orange-600 tabular-nums">{h2h.p1Wins}</div>
+              </div>
+              <div className="text-base font-bold text-slate-400">—</div>
+              <div className="flex flex-col items-center">
+                <div className="text-[9px] text-slate-500 truncate max-w-[80px]" title={player2Stats.name}>{player2Stats.name}</div>
+                <div className="text-xl font-black text-slate-700 tabular-nums">{h2h.p2Wins}</div>
+              </div>
+              <div className="text-[10px] text-slate-500 ml-2">in {h2h.games.length} game{h2h.games.length !== 1 ? 's' : ''}</div>
+            </div>
+          ) : (
+            <div className="text-base font-black text-slate-800 mt-0.5">
+              {h2h.games.length} game{h2h.games.length !== 1 ? 's' : ''}
+            </div>
+          )}
+        </div>
+        <div className="rounded-lg border border-slate-200 overflow-hidden bg-white">
+          <table className="w-full text-[11px]">
+            <thead className="bg-slate-50">
+              <tr>
+                <th className="py-1.5 px-2 text-left font-semibold text-slate-600">Date</th>
+                <th className="py-1.5 px-2 text-center font-semibold text-slate-600 truncate">{player1Stats.name}</th>
+                <th className="py-1.5 px-2 text-center font-semibold text-slate-600 truncate">{player2Stats.name}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {h2h.games.slice(0, 6).map((g, idx) => (
+                <tr key={`${g.game_id}-${idx}`} className={`border-t border-slate-100 ${idx % 2 === 1 ? 'bg-slate-50/50' : ''}`}>
+                  <td className="py-1 px-2 text-slate-700 whitespace-nowrap">{formatDate(g.date)}</td>
+                  <td className="py-1 px-2 text-center tabular-nums text-slate-800">
+                    <span className="font-semibold">{g.p1Line.pts}</span>p / {g.p1Line.reb}r / {g.p1Line.ast}a
+                  </td>
+                  <td className="py-1 px-2 text-center tabular-nums text-slate-800">
+                    <span className="font-semibold">{g.p2Line.pts}</span>p / {g.p2Line.reb}r / {g.p2Line.ast}a
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {h2h.games.length > 6 && (
+            <div className="text-center text-[10px] text-slate-500 py-1 bg-slate-50">
+              +{h2h.games.length - 6} more game{h2h.games.length - 6 !== 1 ? 's' : ''}
+            </div>
+          )}
+        </div>
+        {h2h.p1Stats && h2h.p2Stats && (
+          <>
+            <div className="text-center">
+              <span className="inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">
+                {comparisonCategory} • H2H Only
+              </span>
+            </div>
+            {renderShareTable(h2h.p1Stats, h2h.p2Stats)}
+          </>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -655,7 +931,18 @@ export function PlayerComparison({ leagueId, allPlayers }: PlayerComparisonProps
           )}
         </div>
       ) : player1Stats && player2Stats ? (
-        <div className="max-w-5xl mx-auto">
+        <ShareableCard
+          title={view === 'season' ? 'Season Averages' : 'Head-to-Head'}
+          fileSlug={`player-compare-${view}-${comparisonCategory.toLowerCase()}`}
+          player={{
+            name: `${player1Stats.name} vs ${player2Stats.name}`,
+            team: 'Player Comparison',
+            primaryColor: brandColor,
+          }}
+          shareCaption={comparisonCategory.toUpperCase()}
+          shareContent={renderShareContent()}
+        >
+        <div className="max-w-5xl mx-auto pt-6">
           <Tabs value={view} onValueChange={(v) => setView(v as 'season' | 'h2h')}>
             <TabsContent value="season" className="mt-0">
               {renderHeaderRow(player1Stats, player2Stats)}
@@ -742,6 +1029,7 @@ export function PlayerComparison({ leagueId, allPlayers }: PlayerComparisonProps
             </TabsContent>
           </Tabs>
         </div>
+        </ShareableCard>
       ) : (
         <div className="text-center py-8 text-gray-500 dark:text-gray-400">
           <p className="text-sm">Search and select two players to compare their stats</p>

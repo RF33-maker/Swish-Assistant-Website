@@ -612,6 +612,13 @@ export default function LeaguePage() {
   const displayLeagueName = league?.name || publicBrandingData?.name;
 
   const brandColor = leagueBrandColors?.primary || 'rgb(100, 100, 100)';
+  const brandColorHex = leagueBrandColors
+    ? `#${[
+        leagueBrandColors.primaryRgb.r,
+        leagueBrandColors.primaryRgb.g,
+        leagueBrandColors.primaryRgb.b,
+      ].map((n) => Math.max(0, Math.min(255, n)).toString(16).padStart(2, '0')).join('')}`
+    : '#646464';
   const brandColorHover = leagueBrandColors 
     ? `rgb(${Math.max(0, leagueBrandColors.primaryRgb.r - 20)}, ${Math.max(0, leagueBrandColors.primaryRgb.g - 20)}, ${Math.max(0, leagueBrandColors.primaryRgb.b - 20)})`
     : 'rgb(70, 70, 70)';
@@ -4785,11 +4792,13 @@ export default function LeaguePage() {
                   <PlayerComparison 
                     leagueId={league?.league_id || ""} 
                     allPlayers={allPlayerAverages}
+                    brandColor={brandColorHex}
                   />
                 ) : (
                   <TeamComparison 
                     leagueId={league?.league_id || ""} 
                     allTeams={teamStatsData}
+                    brandColor={brandColorHex}
                   />
                 )}
               </div>

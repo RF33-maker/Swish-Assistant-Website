@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import { Search } from "lucide-react";
 import { TeamLogo } from "@/components/TeamLogo";
+import ShareableCard from "@/components/ShareableCard";
 import { normalizeTeamName } from "@/lib/teamUtils";
 import {
   Select,
@@ -15,6 +16,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 interface TeamComparisonProps {
   leagueId: string;
   allTeams: any[];
+  brandColor?: string;
 }
 
 function aggregateTeamStats(filteredStats: any[], teamName: string) {
@@ -199,7 +201,7 @@ function getTeamComparisonRows(
   }
 }
 
-export function TeamComparison({ leagueId, allTeams }: TeamComparisonProps) {
+export function TeamComparison({ leagueId, allTeams, brandColor }: TeamComparisonProps) {
   const [team1Name, setTeam1Name] = useState<string>("");
   const [team2Name, setTeam2Name] = useState<string>("");
   const [team1Stats, setTeam1Stats] = useState<any>(null);
@@ -475,6 +477,165 @@ export function TeamComparison({ leagueId, allTeams }: TeamComparisonProps) {
     return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   };
 
+  // Share-card layout (renders cleanly inside ShareableCard's modal).
+  const renderShareVsHeader = (s1: any, s2: any) => (
+    <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-col items-center gap-1.5 flex-1 min-w-0">
+        <div className="w-16 h-16 rounded-full bg-white border-2 border-orange-300 shadow flex items-center justify-center overflow-hidden p-1">
+          <TeamLogo
+            teamName={s1.name}
+            leagueId={leagueId}
+            size={56}
+            className="!w-14 !h-14"
+            crossOrigin="anonymous"
+          />
+        </div>
+        <div className="text-center min-w-0 w-full">
+          <div className="text-xs font-bold text-slate-800 leading-tight truncate" title={s1.name}>{s1.name}</div>
+          <div className="text-[10px] text-slate-500">{s1.games} games</div>
+        </div>
+      </div>
+      <div className="text-lg font-black text-orange-500 tracking-wider px-1 flex-shrink-0">VS</div>
+      <div className="flex flex-col items-center gap-1.5 flex-1 min-w-0">
+        <div className="w-16 h-16 rounded-full bg-white border-2 border-slate-300 shadow flex items-center justify-center overflow-hidden p-1">
+          <TeamLogo
+            teamName={s2.name}
+            leagueId={leagueId}
+            size={56}
+            className="!w-14 !h-14"
+            crossOrigin="anonymous"
+          />
+        </div>
+        <div className="text-center min-w-0 w-full">
+          <div className="text-xs font-bold text-slate-800 leading-tight truncate" title={s2.name}>{s2.name}</div>
+          <div className="text-[10px] text-slate-500">{s2.games} games</div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderShareTable = (s1: any, s2: any) => {
+    const rows = getTeamComparisonRows(comparisonCategory, s1, s2);
+    return (
+      <div className="rounded-lg border border-slate-200 overflow-hidden bg-white">
+        <table className="w-full text-xs">
+          <thead className="bg-slate-50">
+            <tr>
+              <th className="py-1.5 px-2 text-right font-bold text-slate-700 truncate max-w-[40%]">{s1.name}</th>
+              <th className="py-1.5 px-2 text-center font-semibold text-slate-500 uppercase tracking-wider text-[10px]">Stat</th>
+              <th className="py-1.5 px-2 text-left font-bold text-slate-700 truncate max-w-[40%]">{s2.name}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, i) => {
+              const num1 = parseFloat(String(row.value1));
+              const num2 = parseFloat(String(row.value2));
+              const t1Better = row.lowerIsBetter ? num1 < num2 : num1 > num2;
+              const t2Better = row.lowerIsBetter ? num2 < num1 : num2 > num1;
+              return (
+                <tr key={i} className={`border-t border-slate-100 ${i % 2 === 1 ? 'bg-slate-50/50' : ''}`}>
+                  <td className={`py-1 px-2 text-right tabular-nums font-semibold ${t1Better ? 'text-orange-600' : 'text-slate-700'}`}>
+                    {row.value1}
+                  </td>
+                  <td className="py-1 px-2 text-center font-semibold text-slate-600 text-[10px] uppercase tracking-wider">
+                    {row.label}
+                  </td>
+                  <td className={`py-1 px-2 text-left tabular-nums font-semibold ${t2Better ? 'text-orange-600' : 'text-slate-700'}`}>
+                    {row.value2}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  const renderShareContent = () => {
+    if (!team1Stats || !team2Stats) return null;
+    if (view === 'season') {
+      return (
+        <div className="space-y-3">
+          {renderShareVsHeader(team1Stats, team2Stats)}
+          <div className="text-center">
+            <span className="inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">
+              {comparisonCategory} • Season Averages
+            </span>
+          </div>
+          {renderShareTable(team1Stats, team2Stats)}
+        </div>
+      );
+    }
+    // Head-to-Head
+    if (h2h.games.length === 0) {
+      return (
+        <div className="space-y-3">
+          {renderShareVsHeader(team1Stats, team2Stats)}
+          <div className="rounded-lg bg-slate-50 border border-slate-200 p-4 text-center">
+            <p className="text-sm font-semibold text-slate-700">No head-to-head matchups yet</p>
+            <p className="text-xs text-slate-500 mt-1">{team1Stats.name} and {team2Stats.name} haven't played each other.</p>
+          </div>
+        </div>
+      );
+    }
+    const recordText = h2h.team1Wins > h2h.team2Wins
+      ? `${team1Stats.name} leads ${h2h.team1Wins}-${h2h.team2Wins}`
+      : h2h.team2Wins > h2h.team1Wins
+        ? `${team2Stats.name} leads ${h2h.team2Wins}-${h2h.team1Wins}`
+        : `Series tied ${h2h.team1Wins}-${h2h.team2Wins}`;
+    return (
+      <div className="space-y-3">
+        {renderShareVsHeader(team1Stats, team2Stats)}
+        <div className="text-center rounded-lg bg-orange-50 border border-orange-200 py-2 px-3">
+          <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Series Record</div>
+          <div className="text-base font-black text-slate-800 mt-0.5">{recordText}</div>
+          <div className="text-[10px] text-slate-500">{h2h.games.length} game{h2h.games.length !== 1 ? 's' : ''} played</div>
+        </div>
+        <div className="rounded-lg border border-slate-200 overflow-hidden bg-white">
+          <table className="w-full text-[11px]">
+            <thead className="bg-slate-50">
+              <tr>
+                <th className="py-1.5 px-2 text-left font-semibold text-slate-600">Date</th>
+                <th className="py-1.5 px-2 text-center font-semibold text-slate-600">Score</th>
+                <th className="py-1.5 px-2 text-left font-semibold text-slate-600">Winner</th>
+              </tr>
+            </thead>
+            <tbody>
+              {h2h.games.slice(0, 6).map((g, idx) => {
+                const scoreText = g.homeIsTeam1
+                  ? `${g.score1} - ${g.score2}`
+                  : `${g.score2} - ${g.score1}`;
+                return (
+                  <tr key={g.game_key || idx} className={`border-t border-slate-100 ${idx % 2 === 1 ? 'bg-slate-50/50' : ''}`}>
+                    <td className="py-1 px-2 text-slate-700 whitespace-nowrap">{formatDate(g.date)}</td>
+                    <td className="py-1 px-2 text-center font-semibold tabular-nums text-slate-800">{scoreText}</td>
+                    <td className="py-1 px-2 font-medium text-orange-600 truncate">{g.winner ?? 'Tie'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {h2h.games.length > 6 && (
+            <div className="text-center text-[10px] text-slate-500 py-1 bg-slate-50">
+              +{h2h.games.length - 6} more game{h2h.games.length - 6 !== 1 ? 's' : ''}
+            </div>
+          )}
+        </div>
+        {h2h.team1Stats && h2h.team2Stats && (
+          <>
+            <div className="text-center">
+              <span className="inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">
+                {comparisonCategory} • H2H Only
+              </span>
+            </div>
+            {renderShareTable(h2h.team1Stats, h2h.team2Stats)}
+          </>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-6">
       <h2 className="text-lg font-semibold text-slate-800 dark:text-white mb-6">Team Comparison</h2>
@@ -616,7 +777,18 @@ export function TeamComparison({ leagueId, allTeams }: TeamComparisonProps) {
           )}
         </div>
       ) : team1Stats && team2Stats ? (
-        <div className="max-w-5xl mx-auto">
+        <ShareableCard
+          title={view === 'season' ? 'Season Averages' : 'Head-to-Head'}
+          fileSlug={`team-compare-${view}-${comparisonCategory.toLowerCase()}`}
+          player={{
+            name: `${team1Stats.name} vs ${team2Stats.name}`,
+            team: 'Team Comparison',
+            primaryColor: brandColor,
+          }}
+          shareCaption={comparisonCategory.toUpperCase()}
+          shareContent={renderShareContent()}
+        >
+        <div className="max-w-5xl mx-auto pt-6">
           <Tabs value={view} onValueChange={(v) => setView(v as 'season' | 'h2h')}>
             <TabsContent value="season" className="mt-0">
               {renderHeaderRow(team1Stats, team2Stats)}
@@ -715,6 +887,7 @@ export function TeamComparison({ leagueId, allTeams }: TeamComparisonProps) {
             </TabsContent>
           </Tabs>
         </div>
+        </ShareableCard>
       ) : (
         <div className="text-center py-8 text-gray-500 dark:text-gray-400">
           <p className="text-sm">Search and select two teams to compare their stats</p>

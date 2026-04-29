@@ -8,6 +8,7 @@ interface TeamLogoProps {
   size?: "xs" | "sm" | "md" | "lg" | "xl" | number;
   className?: string;
   logoUrl?: string;
+  crossOrigin?: "" | "anonymous" | "use-credentials";
 }
 
 export const LOGO_CACHE_INVALIDATE_EVENT = 'teamLogoCacheInvalidate';
@@ -29,7 +30,7 @@ const sizeClasses = {
   xl: "w-24 h-24"
 };
 
-export function TeamLogo({ teamName, leagueId, size = "md", className = "", logoUrl: providedLogoUrl }: TeamLogoProps) {
+export function TeamLogo({ teamName, leagueId, size = "md", className = "", logoUrl: providedLogoUrl, crossOrigin }: TeamLogoProps) {
   const [logoUrl, setLogoUrl] = useState<string | null>(providedLogoUrl || null);
   const [isLoading, setIsLoading] = useState(!providedLogoUrl);
   const [hasError, setHasError] = useState(false);
@@ -126,6 +127,7 @@ export function TeamLogo({ teamName, leagueId, size = "md", className = "", logo
           alt={`${teamName} logo`}
           className="max-w-full max-h-full object-contain"
           onError={handleImageError}
+          crossOrigin={crossOrigin}
         />
       </div>
     );
