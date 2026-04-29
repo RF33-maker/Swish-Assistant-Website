@@ -80,29 +80,41 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
     
     try {
       const now = new Date();
-      
-      // Bound this read: the carousel only displays recent finals plus the
-      // upcoming-7-day window, so the historical sweep of v_game_results
-      // doesn't need to extend further than a couple of weeks. Keeping the
-      // window tight lets Postgres use the time index and keeps payload
-      // size predictable per league.
-      const recentResultsCutoff = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
-      let gameResultsQuery = db
-        .from('v_game_results')
-        .select(
-          'game_key, league_id, match_time, home_team, away_team, home_score, away_score, age_group, round'
-        )
-        .gte('match_time', recentResultsCutoff.toISOString())
-        .order('match_time', { ascending: false })
-        .limit(120);
-      gameResultsQuery = isParent
-        ? gameResultsQuery.in('league_id', childLeagueIds)
-        : gameResultsQuery.eq('league_id', effectiveLeagueId);
-      const { data: gameResults, error: gameResultsError } = await gameResultsQuery;
 
-      if (gameResultsError) {
-        console.error("Error fetching v_game_results:", gameResultsError);
-      }
+      // Pull the most recent finals for this league, with no time cutoff so
+      // off-season and gap weeks still surface the last games played. We bound
+      // by row count instead of by time window to keep payload small and let
+      // Postgres use the (league_id, match_time DESC) ordering efficiently.
+      // For parent leagues that aggregate child leagues we query each child
+      // separately and merge, otherwise a global limit could starve any
+      // child whose most recent finals are older than its siblings'.
+      const FINALS_PER_LEAGUE = 30;
+
+      // Note: age_group / round are intentionally not selected here. The
+      // public v_game_results view does not currently expose those columns
+      // in production, and the carousel doesn't render them — for parent
+      // leagues the age group is resolved via childLeagueMap below.
+      const fetchFinalsForLeague = async (leagueId: string) => {
+        const { data, error } = await db
+          .from('v_game_results')
+          .select(
+            'game_key, league_id, match_time, home_team, away_team, home_score, away_score'
+          )
+          .eq('league_id', leagueId)
+          .not('home_score', 'is', null)
+          .not('away_score', 'is', null)
+          .order('match_time', { ascending: false })
+          .limit(FINALS_PER_LEAGUE);
+        if (error) {
+          console.error("Error fetching v_game_results:", error);
+          return [];
+        }
+        return data || [];
+      };
+
+      const gameResults = isParent
+        ? (await Promise.all(childLeagueIds!.map(fetchFinalsForLeague))).flat()
+        : await fetchFinalsForLeague(effectiveLeagueId);
 
       const gamesWithStats: GameItem[] = [];
       const processedGameKeys = new Set<string>();
