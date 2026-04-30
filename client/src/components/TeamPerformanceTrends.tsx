@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TrendingUp, TrendingDown, Minus, BarChart3, Activity } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { getTeamLogoCached } from '@/utils/teamLogoCache';
 
 interface GamePerformance {
   date: string;
@@ -139,36 +139,21 @@ export default function TeamPerformanceTrends({ playerStats, leagueId }: TeamPer
       return;
     }
 
-    const uniqueTeams = Array.from(new Set(playerStats.map(stat => stat.team).filter(Boolean)));
+    const uniqueTeams = Array.from(new Set(playerStats.map(stat => stat.team).filter(Boolean))) as string[];
+
+    // Use the shared logo cache so we don't repeat per-extension HEAD fetches
+    // for teams whose logo was already resolved elsewhere on the page.
+    const entries = await Promise.all(
+      uniqueTeams.map(async (teamName) => {
+        const url = await getTeamLogoCached({ leagueId, teamName });
+        return [teamName, url] as const;
+      })
+    );
+
     const logoMap: Record<string, string> = {};
-
-    // Try multiple file extensions for each team
-    const extensions = ['png', 'jpg', 'jpeg', 'webp'];
-
-    for (const teamName of uniqueTeams) {
-      let foundLogo = false;
-      
-      for (const ext of extensions) {
-        try {
-          const fileName = `${leagueId}_${teamName.replace(/\s+/g, '_')}.${ext}`;
-          
-          const { data } = supabase.storage
-            .from('team-logos')
-            .getPublicUrl(fileName);
-            
-          // Check if file exists by trying to fetch it
-          const response = await fetch(data.publicUrl, { method: 'HEAD' });
-          if (response.ok) {
-            logoMap[teamName] = data.publicUrl;
-            foundLogo = true;
-            break;
-          }
-        } catch (error) {
-          // Continue to next extension
-        }
-      }
+    for (const [teamName, url] of entries) {
+      if (url) logoMap[teamName] = url;
     }
-
     setTeamLogos(logoMap);
   };
 

@@ -37,77 +37,191 @@ interface ShotChartProps {
   pulseRecent?: boolean;
 }
 
-const CW = 940;
-const CH = 500;
+const CW = 500;
+const CH = 470;
 
-function BasketballCourt() {
-  const basketL = 52.5;
-  const basketR = 887.5;
-  const cy = 250;
+const COLOR_BG = "#152234";
+const COLOR_LINE = "#3a5878";
+const COLOR_LINE_SOFT = "#2c4763";
+const COLOR_PAINT = "rgba(58,88,120,0.18)";
+const COLOR_MADE = "#f59e3b";
+const COLOR_AVG = "#7a8b9c";
+const COLOR_MISSED = "#5b9fbf";
 
-  const paintL = 190;
-  const paintR = 750;
-  const paintTop = 170;
-  const paintBot = 330;
+function HalfCourt() {
+  const baselineY = 0;
+  const halfCourtY = CH;
+  const centerX = CW / 2;
 
-  const ftRadius = 60;
-
-  const bbL = 40;
-  const bbR = 900;
-  const bbTop = 220;
-  const bbBot = 280;
-
+  const basketCY = 47;
   const rimR = 7.5;
+
+  const bbHalf = 30;
+  const bbY = basketCY - rimR - 4;
 
   const raR = 40;
 
+  const paintW = 160;
+  const paintTop = baselineY;
+  const paintBot = 190;
+  const paintL = centerX - paintW / 2;
+  const paintR = centerX + paintW / 2;
+
+  const ftRadius = 60;
+
   const tpR = 221.5;
-  const cornerY_top = 30;
-  const cornerY_bot = 470;
-  const arcStartL = 78;
-  const arcStartR = 862;
+  const cornerLineX_L = centerX - tpR;
+  const cornerLineX_R = centerX + tpR;
+  const cornerEndY = 140;
 
-  const centerX = 470;
-  const centerR = 60;
-
-  const lineColor = "#b8956a";
-  const courtFill = "#e8d5b7";
-  const paintFill = "rgba(184,149,106,0.08)";
-  const lw = 2;
+  const lw = 1.5;
 
   return (
     <>
-      <rect x="0" y="0" width={CW} height={CH} fill={courtFill} rx="3" />
-      <rect x="0" y="0" width={CW} height={CH} fill="none" stroke={lineColor} strokeWidth={lw + 1} rx="3" />
+      {/* Court background */}
+      <rect x="0" y="0" width={CW} height={CH} fill={COLOR_BG} rx="6" />
 
-      <rect x="0" y={paintTop} width={paintL} height={paintBot - paintTop} fill={paintFill} stroke={lineColor} strokeWidth={lw} />
-      <rect x={paintR} y={paintTop} width={CW - paintR} height={paintBot - paintTop} fill={paintFill} stroke={lineColor} strokeWidth={lw} />
+      {/* Outer boundary */}
+      <rect
+        x="1"
+        y="1"
+        width={CW - 2}
+        height={CH - 2}
+        fill="none"
+        stroke={COLOR_LINE}
+        strokeWidth={lw}
+        rx="6"
+      />
 
-      <circle cx={paintL} cy={cy} r={ftRadius} fill="none" stroke={lineColor} strokeWidth={lw} />
-      <circle cx={paintR} cy={cy} r={ftRadius} fill="none" stroke={lineColor} strokeWidth={lw} />
+      {/* Half court line */}
+      <line x1="0" y1={halfCourtY - 1} x2={CW} y2={halfCourtY - 1} stroke={COLOR_LINE} strokeWidth={lw} />
 
-      <line x1={bbL} y1={bbTop} x2={bbL} y2={bbBot} stroke={lineColor} strokeWidth={lw + 1} />
-      <line x1={bbR} y1={bbTop} x2={bbR} y2={bbBot} stroke={lineColor} strokeWidth={lw + 1} />
+      {/* Half-court arc (top half visible from below) */}
+      <path
+        d={`M ${centerX - 60} ${halfCourtY} A 60 60 0 0 1 ${centerX + 60} ${halfCourtY}`}
+        fill="none"
+        stroke={COLOR_LINE_SOFT}
+        strokeWidth={lw}
+      />
 
-      <circle cx={basketL} cy={cy} r={rimR} fill="none" stroke={lineColor} strokeWidth={lw} />
-      <circle cx={basketR} cy={cy} r={rimR} fill="none" stroke={lineColor} strokeWidth={lw} />
+      {/* Paint */}
+      <rect
+        x={paintL}
+        y={paintTop}
+        width={paintW}
+        height={paintBot - paintTop}
+        fill={COLOR_PAINT}
+        stroke={COLOR_LINE}
+        strokeWidth={lw}
+      />
 
-      <path d={`M ${basketL + raR} ${cy - raR} A ${raR} ${raR} 0 0 1 ${basketL + raR} ${cy + raR}`} fill="none" stroke={lineColor} strokeWidth={lw} strokeDasharray="4,3" />
-      <path d={`M ${basketR - raR} ${cy - raR} A ${raR} ${raR} 0 0 0 ${basketR - raR} ${cy + raR}`} fill="none" stroke={lineColor} strokeWidth={lw} strokeDasharray="4,3" />
+      {/* Free throw circle (top arc - solid) */}
+      <path
+        d={`M ${centerX - ftRadius} ${paintBot} A ${ftRadius} ${ftRadius} 0 0 1 ${centerX + ftRadius} ${paintBot}`}
+        fill={COLOR_PAINT}
+        stroke={COLOR_LINE}
+        strokeWidth={lw}
+      />
+      {/* Free throw circle (bottom arc - dashed) */}
+      <path
+        d={`M ${centerX - ftRadius} ${paintBot} A ${ftRadius} ${ftRadius} 0 0 0 ${centerX + ftRadius} ${paintBot}`}
+        fill="none"
+        stroke={COLOR_LINE_SOFT}
+        strokeWidth={lw}
+        strokeDasharray="4,4"
+      />
 
-      <line x1="0" y1={cornerY_top} x2={arcStartL} y2={cornerY_top} stroke={lineColor} strokeWidth={lw} />
-      <line x1="0" y1={cornerY_bot} x2={arcStartL} y2={cornerY_bot} stroke={lineColor} strokeWidth={lw} />
-      <path d={`M ${arcStartL} ${cornerY_top} A ${tpR} ${tpR} 0 0 1 ${arcStartL} ${cornerY_bot}`} fill="none" stroke={lineColor} strokeWidth={lw} />
+      {/* Three point line - corners */}
+      <line x1={cornerLineX_L} y1={baselineY} x2={cornerLineX_L} y2={cornerEndY} stroke={COLOR_LINE} strokeWidth={lw} />
+      <line x1={cornerLineX_R} y1={baselineY} x2={cornerLineX_R} y2={cornerEndY} stroke={COLOR_LINE} strokeWidth={lw} />
 
-      <line x1={CW} y1={cornerY_top} x2={arcStartR} y2={cornerY_top} stroke={lineColor} strokeWidth={lw} />
-      <line x1={CW} y1={cornerY_bot} x2={arcStartR} y2={cornerY_bot} stroke={lineColor} strokeWidth={lw} />
-      <path d={`M ${arcStartR} ${cornerY_top} A ${tpR} ${tpR} 0 0 0 ${arcStartR} ${cornerY_bot}`} fill="none" stroke={lineColor} strokeWidth={lw} />
+      {/* Three point arc */}
+      <path
+        d={`M ${cornerLineX_L} ${cornerEndY} A ${tpR} ${tpR} 0 0 0 ${cornerLineX_R} ${cornerEndY}`}
+        fill="none"
+        stroke={COLOR_LINE}
+        strokeWidth={lw}
+      />
 
-      <line x1={centerX} y1="0" x2={centerX} y2={CH} stroke={lineColor} strokeWidth={lw} />
-      <circle cx={centerX} cy={cy} r={centerR} fill="none" stroke={lineColor} strokeWidth={lw} />
-      <circle cx={centerX} cy={cy} r="4" fill={lineColor} />
+      {/* Backboard */}
+      <line x1={centerX - bbHalf} y1={bbY} x2={centerX + bbHalf} y2={bbY} stroke={COLOR_LINE} strokeWidth={lw + 1} />
+
+      {/* Rim */}
+      <circle cx={centerX} cy={basketCY} r={rimR} fill="none" stroke={COLOR_LINE} strokeWidth={lw} />
+
+      {/* Restricted area */}
+      <path
+        d={`M ${centerX - raR} ${basketCY} A ${raR} ${raR} 0 0 0 ${centerX + raR} ${basketCY}`}
+        fill="none"
+        stroke={COLOR_LINE_SOFT}
+        strokeWidth={lw}
+      />
     </>
   );
+}
+
+interface ZoneInfo {
+  key: string;
+  label: string;
+}
+
+const ZONES: ZoneInfo[] = [
+  { key: "ra", label: "Restricted" },
+  { key: "paint", label: "Paint (non-RA)" },
+  { key: "mid", label: "Mid-range" },
+  { key: "arc3", label: "Arc 3" },
+  { key: "lc3", label: "L Corner 3" },
+  { key: "rc3", label: "R Corner 3" },
+];
+
+/**
+ * Fold a shot from the legacy full-court coordinate space (0-100 horizontal,
+ * 0-100 vertical, two baskets at x≈5 and x≈95) into a vertical half-court
+ * view (basket at top center). Returns x/y in viewBox units plus zone key.
+ */
+function projectShot(shot: ShotData): { sx: number; sy: number; zone: string } {
+  let fx = shot.x;
+  if (fx > 50) fx = 100 - fx;
+
+  const sx = (shot.y / 100) * CW;
+  const sy = (fx / 50) * CH;
+
+  // Compute zone using folded coords
+  const centerX = CW / 2;
+  const basketCY = 47;
+  const dx = sx - centerX;
+  const dy = sy - basketCY;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+
+  const tpR = 221.5;
+  const cornerLineX_L = centerX - tpR;
+  const cornerLineX_R = centerX + tpR;
+  const cornerEndY = 140;
+  const raR = 40;
+  const paintHalfW = 80;
+  const paintBot = 190;
+
+  // Three-point shot?
+  const isThree =
+    shot.shot_type === "3pt" ||
+    sx < cornerLineX_L ||
+    sx > cornerLineX_R ||
+    dist > tpR;
+
+  let zone = "mid";
+  if (isThree) {
+    if (sy <= cornerEndY && sx < cornerLineX_L + 5) zone = "lc3";
+    else if (sy <= cornerEndY && sx > cornerLineX_R - 5) zone = "rc3";
+    else zone = "arc3";
+  } else if (dist <= raR) {
+    zone = "ra";
+  } else if (Math.abs(dx) <= paintHalfW && sy <= paintBot) {
+    zone = "paint";
+  } else {
+    zone = "mid";
+  }
+
+  return { sx, sy, zone };
 }
 
 export default function ShotChart({
@@ -169,6 +283,16 @@ export default function ShotChart({
     });
   }, [shots, playerFilter, quarterFilter, teamFilter, resultFilter, shotTypeFilter, subTypeFilter]);
 
+  const projected = useMemo(
+    () =>
+      filteredShots.map((shot, idx) => ({
+        shot,
+        idx,
+        ...projectShot(shot),
+      })),
+    [filteredShots]
+  );
+
   const recentIds = useMemo(() => {
     if (!pulseRecent || filteredShots.length === 0) return new Set<number | string>();
     const sorted = [...filteredShots]
@@ -186,7 +310,22 @@ export default function ShotChart({
   const total = filteredShots.length;
   const percentage = total > 0 ? ((makes / total) * 100).toFixed(1) : "0.0";
 
-  const hasFilters = showPlayerFilter || showQuarterFilter || showTeamFilter || showResultFilter || showShotTypeFilter || showSubTypeFilter;
+  const overallPct = total > 0 ? makes / total : 0;
+
+  const zoneStats = useMemo(() => {
+    const totals: Record<string, { made: number; total: number }> = {};
+    ZONES.forEach((z) => (totals[z.key] = { made: 0, total: 0 }));
+    projected.forEach((p) => {
+      const z = totals[p.zone];
+      if (!z) return;
+      z.total += 1;
+      if (p.shot.success) z.made += 1;
+    });
+    return totals;
+  }, [projected]);
+
+  const hasFilters =
+    showPlayerFilter || showQuarterFilter || showTeamFilter || showResultFilter || showShotTypeFilter || showSubTypeFilter;
 
   if (loading) {
     return (
@@ -209,6 +348,8 @@ export default function ShotChart({
 
   const formatSubType = (st: string) =>
     st.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase()).trim();
+
+  const dotR = compact ? 4 : 5;
 
   return (
     <div className="space-y-4">
@@ -317,108 +458,160 @@ export default function ShotChart({
         </div>
       )}
 
-      <div className="bg-white dark:bg-neutral-800 rounded-lg p-3 md:p-4 border border-gray-200 dark:border-neutral-700">
-        <div className={compact ? "max-w-lg mx-auto" : "max-w-3xl mx-auto"}>
-          <svg viewBox={`0 0 ${CW} ${CH}`} className="w-full h-auto" style={{ maxHeight: "60vh" }}>
-            <defs>
-              <filter id="glow-green" x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur stdDeviation="3" result="coloredBlur" />
-                <feMerge>
-                  <feMergeNode in="coloredBlur" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
-              <filter id="glow-red" x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur stdDeviation="2.5" result="coloredBlur" />
-                <feMerge>
-                  <feMergeNode in="coloredBlur" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
-            </defs>
+      <div className="rounded-xl p-4 md:p-5 border border-slate-700/50" style={{ backgroundColor: COLOR_BG }}>
+        {/* Header inside the dark panel */}
+        <div className="flex items-baseline justify-between mb-3 md:mb-4">
+          <div>
+            <div className="text-white font-bold text-base md:text-lg leading-tight">Shot chart</div>
+            <div className="text-slate-400 text-xs md:text-sm mt-0.5 tabular-nums">
+              {makes}-{total} FG ({percentage}%)
+            </div>
+          </div>
+        </div>
 
-            <BasketballCourt />
+        <div className="flex flex-col lg:flex-row gap-4 md:gap-6">
+          {/* Court */}
+          <div className="flex-1 min-w-0">
+            <div className="mx-auto" style={{ maxWidth: compact ? 420 : 560 }}>
+              <svg viewBox={`0 0 ${CW} ${CH}`} className="w-full h-auto">
+                <defs>
+                  <filter id="shotGlowMade" x="-50%" y="-50%" width="200%" height="200%">
+                    <feGaussianBlur stdDeviation="1.2" result="b" />
+                    <feMerge>
+                      <feMergeNode in="b" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
+                </defs>
 
-            {filteredShots.map((shot, idx) => {
-              const sx = (shot.x / 100) * CW;
-              const sy = (shot.y / 100) * CH;
-              const isRecent = pulseRecent && shot.id != null && recentIds.has(shot.id);
-              const dotR = compact ? 5 : 6;
+                <HalfCourt />
 
+                {projected.map(({ shot, sx, sy, idx }) => {
+                  const isRecent = pulseRecent && shot.id != null && recentIds.has(shot.id);
+                  const fill = shot.success ? COLOR_MADE : COLOR_MISSED;
+                  const r = dotR;
+
+                  return (
+                    <g
+                      key={shot.id ?? idx}
+                      transform={`translate(${sx} ${sy}) rotate(45)`}
+                      style={{
+                        animation: `shotFadeIn 0.4s ease-out ${Math.min(idx * 0.006, 1.4)}s both`,
+                      }}
+                    >
+                      {isRecent && (
+                        <rect
+                          x={-r - 3}
+                          y={-r - 3}
+                          width={(r + 3) * 2}
+                          height={(r + 3) * 2}
+                          fill="none"
+                          stroke={fill}
+                          strokeWidth="1.5"
+                          opacity="0.55"
+                          className="shot-pulse"
+                        />
+                      )}
+                      <rect
+                        x={-r}
+                        y={-r}
+                        width={r * 2}
+                        height={r * 2}
+                        fill={fill}
+                        opacity={shot.success ? 0.92 : 0.78}
+                        stroke={shot.success ? "#fff" : "transparent"}
+                        strokeWidth={shot.success ? 0.4 : 0}
+                        filter={shot.success ? "url(#shotGlowMade)" : undefined}
+                        className="shot-dot"
+                      >
+                        <title>
+                          {[
+                            shot.player_name,
+                            shot.success ? "Made" : "Missed",
+                            shot.shot_type?.toUpperCase(),
+                            shot.sub_type ? formatSubType(shot.sub_type) : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" - ")}
+                        </title>
+                      </rect>
+                    </g>
+                  );
+                })}
+              </svg>
+
+              {/* Legend */}
+              <div className="flex items-center justify-center gap-4 md:gap-6 mt-3 text-[11px] md:text-xs">
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className="inline-block w-2.5 h-2.5"
+                    style={{ background: COLOR_MISSED, transform: "rotate(45deg)" }}
+                  />
+                  <span className="text-slate-300">Missed</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className="inline-block w-2.5 h-2.5"
+                    style={{ background: COLOR_AVG, transform: "rotate(45deg)" }}
+                  />
+                  <span className="text-slate-300">Avg</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className="inline-block w-2.5 h-2.5"
+                    style={{ background: COLOR_MADE, transform: "rotate(45deg)" }}
+                  />
+                  <span className="text-slate-300">Made</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Zone breakdown */}
+          <div className="lg:w-44 flex-shrink-0 grid grid-cols-2 lg:grid-cols-1 gap-x-4 gap-y-3 lg:gap-y-4">
+            {ZONES.map((z) => {
+              const s = zoneStats[z.key];
+              const pct = s.total > 0 ? (s.made / s.total) * 100 : null;
+              const color =
+                pct === null
+                  ? "text-slate-500"
+                  : overallPct > 0 && pct / 100 > overallPct + 0.03
+                  ? "text-orange-400"
+                  : overallPct > 0 && pct / 100 < overallPct - 0.03
+                  ? "text-sky-400"
+                  : "text-slate-200";
               return (
-                <g key={shot.id ?? idx}>
-                  {isRecent && (
-                    <circle
-                      cx={sx}
-                      cy={sy}
-                      r={dotR + 4}
-                      fill="none"
-                      stroke={shot.success ? "#22c55e" : "#ef4444"}
-                      strokeWidth="2"
-                      opacity="0.6"
-                      className="shot-pulse"
-                    />
-                  )}
-                  <circle
-                    cx={sx}
-                    cy={sy}
-                    r={dotR}
-                    fill={shot.success ? "#22c55e" : "transparent"}
-                    opacity="0.85"
-                    stroke={shot.success ? "#15803d" : "#ef4444"}
-                    strokeWidth={shot.success ? 1.5 : 2.5}
-                    filter={shot.success ? "url(#glow-green)" : "url(#glow-red)"}
-                    className="shot-dot"
-                    style={{
-                      animation: `shotFadeIn 0.4s ease-out ${Math.min(idx * 0.008, 2)}s both`,
-                    }}
-                  >
-                    <title>
-                      {[
-                        shot.player_name,
-                        shot.success ? "Made" : "Missed",
-                        shot.shot_type?.toUpperCase(),
-                        shot.sub_type ? formatSubType(shot.sub_type) : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" - ")}
-                    </title>
-                  </circle>
-                </g>
+                <div key={z.key} className="leading-tight">
+                  <div className={`font-bold tabular-nums text-xl md:text-2xl ${color}`}>
+                    {pct === null ? "—" : pct.toFixed(1)}
+                    {pct !== null && <span className="text-sm md:text-base">%</span>}
+                  </div>
+                  <div className="text-[10px] md:text-[11px] uppercase tracking-wide text-slate-400 mt-0.5">
+                    {z.label}
+                    {s.total > 0 && (
+                      <span className="text-slate-500 normal-case tracking-normal"> · {s.made}-{s.total}</span>
+                    )}
+                  </div>
+                </div>
               );
             })}
-          </svg>
-
-          <div className="flex items-center justify-center gap-6 mt-4 text-sm">
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded-full bg-green-500 border-2 border-green-700 shadow-[0_0_6px_rgba(34,197,94,0.5)]"></div>
-              <span className="text-slate-600 dark:text-slate-400">Made ({makes})</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded-full border-[2.5px] border-red-500 shadow-[0_0_6px_rgba(239,68,68,0.4)]"></div>
-              <span className="text-slate-600 dark:text-slate-400">Missed ({total - makes})</span>
-            </div>
           </div>
         </div>
       </div>
 
       <style>{`
         @keyframes shotFadeIn {
-          from {
-            opacity: 0;
-            transform: scale(0.3);
-          }
-          to {
-            opacity: 0.85;
-            transform: scale(1);
-          }
+          from { opacity: 0; }
+          to   { opacity: 1; }
         }
         @keyframes shotPulse {
-          0%, 100% { opacity: 0.6; r: ${compact ? 9 : 10}; }
-          50% { opacity: 0.15; r: ${compact ? 16 : 18}; }
+          0%, 100% { opacity: 0.55; }
+          50% { opacity: 0.15; }
         }
         .shot-pulse {
           animation: shotPulse 2s ease-in-out infinite;
+          transform-box: fill-box;
+          transform-origin: center;
         }
       `}</style>
     </div>

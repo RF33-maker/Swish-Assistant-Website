@@ -4,6 +4,8 @@ import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { supabaseAdmin } from "./supabaseServiceClient";
 import multer from 'multer';
 import OpenAI from 'openai';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -564,6 +566,115 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err: any) {
       console.error("Error fetching public league logo:", err.message);
       res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // ---- Player on/off impact (disk-cached + retried) ----
+  // The Supabase `player_on_off` view is expensive to compute on a cold
+  // plan cache and frequently exceeds the 30s statement timeout when the
+  // browser hits it directly. This endpoint proxies the query through the
+  // server, caches successful responses both in memory AND on disk (so
+  // results survive workflow restarts and HMR), and retries on transient
+  // timeout errors (Postgres SQLSTATE 57014). When all retries fail we
+  // serve any previously-saved snapshot rather than 503-ing — the on/off
+  // numbers don't change minute-to-minute, so an hours-old cache is still
+  // far more useful than an empty card.
+  type OnOffRow = Record<string, any>;
+  const PLAYER_ON_OFF_TTL_MS = 60 * 60 * 1000; // 1h fresh window
+  const PLAYER_ON_OFF_DISK_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7d stale ceiling
+  const playerOnOffCache = new Map<string, { at: number; rows: OnOffRow[] }>();
+  const ON_OFF_CACHE_DIR = path.join(process.cwd(), '.cache', 'player_on_off');
+  try { fs.mkdirSync(ON_OFF_CACHE_DIR, { recursive: true }); } catch {}
+
+  function diskPathFor(playerId: string) {
+    return path.join(ON_OFF_CACHE_DIR, `${playerId}.json`);
+  }
+  function readDiskCache(playerId: string): { at: number; rows: OnOffRow[] } | null {
+    try {
+      const fp = diskPathFor(playerId);
+      if (!fs.existsSync(fp)) return null;
+      const raw = fs.readFileSync(fp, 'utf8');
+      const parsed = JSON.parse(raw);
+      if (!parsed || !Array.isArray(parsed.rows)) return null;
+      return { at: Number(parsed.at) || 0, rows: parsed.rows as OnOffRow[] };
+    } catch (err) {
+      console.warn('player_on_off disk read failed for', playerId, (err as any)?.message);
+      return null;
+    }
+  }
+  function writeDiskCache(playerId: string, entry: { at: number; rows: OnOffRow[] }) {
+    try {
+      fs.writeFileSync(diskPathFor(playerId), JSON.stringify(entry));
+    } catch (err) {
+      console.warn('player_on_off disk write failed for', playerId, (err as any)?.message);
+    }
+  }
+
+  async function fetchPlayerOnOffOnce(playerId: string): Promise<OnOffRow[]> {
+    const { data, error } = await supabaseAdmin
+      .from('player_on_off')
+      .select('*')
+      .eq('player_id', playerId);
+    if (error) throw Object.assign(new Error(error.message), { code: error.code });
+    return (data || []) as OnOffRow[];
+  }
+
+  async function fetchPlayerOnOffWithRetry(playerId: string): Promise<OnOffRow[]> {
+    let lastErr: any = null;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        return await fetchPlayerOnOffOnce(playerId);
+      } catch (err: any) {
+        lastErr = err;
+        // 57014 = statement_timeout. Retry these; they often succeed once
+        // the Postgres plan/buffer cache is warm.
+        if (err?.code !== '57014') break;
+        await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
+      }
+    }
+    throw lastErr;
+  }
+
+  app.get('/api/player-on-off/:playerId', async (req: Request, res: Response) => {
+    const playerId = req.params.playerId;
+    if (!/^[0-9a-f-]{36}$/i.test(playerId)) {
+      return res.status(400).json({ error: 'Invalid playerId' });
+    }
+    const now = Date.now();
+
+    // 1. In-memory cache (fastest)
+    let cached = playerOnOffCache.get(playerId);
+
+    // 2. Hydrate from disk on first request after restart
+    if (!cached) {
+      const fromDisk = readDiskCache(playerId);
+      if (fromDisk) {
+        playerOnOffCache.set(playerId, fromDisk);
+        cached = fromDisk;
+      }
+    }
+
+    if (cached && now - cached.at < PLAYER_ON_OFF_TTL_MS) {
+      return res.json({ rows: cached.rows, cached: true });
+    }
+
+    try {
+      const rows = await fetchPlayerOnOffWithRetry(playerId);
+      const entry = { at: now, rows };
+      playerOnOffCache.set(playerId, entry);
+      writeDiskCache(playerId, entry);
+      if (playerOnOffCache.size > 500) {
+        const oldestKey = playerOnOffCache.keys().next().value;
+        if (oldestKey) playerOnOffCache.delete(oldestKey);
+      }
+      res.json({ rows, cached: false });
+    } catch (err: any) {
+      console.error('player_on_off endpoint error for', playerId, err?.code, err?.message);
+      // Serve stale cache (memory or disk) so the UI degrades gracefully.
+      if (cached && now - cached.at < PLAYER_ON_OFF_DISK_TTL_MS) {
+        return res.json({ rows: cached.rows, cached: true, stale: true });
+      }
+      res.status(503).json({ error: 'player_on_off unavailable', code: err?.code });
     }
   });
 

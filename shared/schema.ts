@@ -341,6 +341,25 @@ export const scoutingReports = pgTable("scouting_reports", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const newsArticles = pgTable("news_articles", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  title: text("title").notNull(),
+  summary: text("summary"),
+  body: text("body"),
+  image_url: text("image_url"),
+  source_url: text("source_url"),
+  league: text("league"),
+  published_at: timestamp("published_at", { withTimezone: true }).defaultNow().notNull(),
+  is_published: boolean("is_published").default(true).notNull(),
+});
+
+export const insertNewsArticleSchema = createInsertSchema(newsArticles).omit({
+  id: true,
+  published_at: true,
+});
+export type InsertNewsArticle = z.infer<typeof insertNewsArticleSchema>;
+export type NewsArticle = typeof newsArticles.$inferSelect;
+
 export const insertScoutingDocumentSchema = createInsertSchema(scoutingDocuments).pick({
   title: true,
   content: true,

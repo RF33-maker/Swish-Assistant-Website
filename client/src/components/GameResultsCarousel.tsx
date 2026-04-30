@@ -80,18 +80,41 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
     
     try {
       const now = new Date();
-      
-      let gameResultsQuery = db
-        .from('v_game_results')
-        .select('*');
-      gameResultsQuery = isParent
-        ? gameResultsQuery.in('league_id', childLeagueIds)
-        : gameResultsQuery.eq('league_id', effectiveLeagueId);
-      const { data: gameResults, error: gameResultsError } = await gameResultsQuery;
 
-      if (gameResultsError) {
-        console.error("Error fetching v_game_results:", gameResultsError);
-      }
+      // Pull the most recent finals for this league, with no time cutoff so
+      // off-season and gap weeks still surface the last games played. We bound
+      // by row count instead of by time window to keep payload small and let
+      // Postgres use the (league_id, match_time DESC) ordering efficiently.
+      // For parent leagues that aggregate child leagues we query each child
+      // separately and merge, otherwise a global limit could starve any
+      // child whose most recent finals are older than its siblings'.
+      const FINALS_PER_LEAGUE = 30;
+
+      // Note: age_group / round are intentionally not selected here. The
+      // public v_game_results view does not currently expose those columns
+      // in production, and the carousel doesn't render them — for parent
+      // leagues the age group is resolved via childLeagueMap below.
+      const fetchFinalsForLeague = async (leagueId: string) => {
+        const { data, error } = await db
+          .from('v_game_results')
+          .select(
+            'game_key, league_id, match_time, home_team, away_team, home_score, away_score'
+          )
+          .eq('league_id', leagueId)
+          .not('home_score', 'is', null)
+          .not('away_score', 'is', null)
+          .order('match_time', { ascending: false })
+          .limit(FINALS_PER_LEAGUE);
+        if (error) {
+          console.error("Error fetching v_game_results:", error);
+          return [];
+        }
+        return data || [];
+      };
+
+      const gameResults = isParent
+        ? (await Promise.all(childLeagueIds!.map(fetchFinalsForLeague))).flat()
+        : await fetchFinalsForLeague(effectiveLeagueId);
 
       const gamesWithStats: GameItem[] = [];
       const processedGameKeys = new Set<string>();
@@ -137,7 +160,8 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
       const { data: scheduleData, error: scheduleError } = await scheduleQuery
         .gte("matchtime", sevenDaysAgo.toISOString())
         .lte("matchtime", sevenDaysAhead.toISOString())
-        .order("matchtime", { ascending: true });
+        .order("matchtime", { ascending: true })
+        .limit(200);
 
       if (scheduleError) {
         console.error("Error fetching schedule:", scheduleError);
@@ -293,13 +317,59 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
     }
   }, [effectiveLeagueId, childIdsKey]);
 
+  // Polling for live updates: only run when (a) the tab is visible AND
+  // (b) there is currently at least one LIVE game on screen. When neither
+  // condition holds, no polling means no Supabase reads.
+  const hasLiveGames = useMemo(
+    () => allGames.some(g => g.status === 'LIVE'),
+    [allGames]
+  );
+
   useEffect(() => {
     if (!effectiveLeagueId) return;
-    const interval = setInterval(() => {
-      fetchGames(true);
-    }, 15000);
-    return () => clearInterval(interval);
-  }, [effectiveLeagueId, childIdsKey]);
+    if (!hasLiveGames) return;
+
+    const POLL_MS = 60_000;
+    let interval: number | null = null;
+
+    const start = () => {
+      if (interval !== null) return;
+      interval = window.setInterval(() => {
+        fetchGames(true);
+      }, POLL_MS);
+    };
+
+    const stop = () => {
+      if (interval !== null) {
+        window.clearInterval(interval);
+        interval = null;
+      }
+    };
+
+    const onVisibility = () => {
+      if (document.hidden) {
+        stop();
+      } else {
+        // Refresh once on regaining focus, then resume the interval.
+        fetchGames(true);
+        start();
+      }
+    };
+
+    if (typeof document !== 'undefined' && !document.hidden) {
+      start();
+    }
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', onVisibility);
+    }
+
+    return () => {
+      stop();
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', onVisibility);
+      }
+    };
+  }, [effectiveLeagueId, childIdsKey, hasLiveGames]);
 
   const sortedGames = useMemo(() => {
     const live = allGames.filter(g => g.status === 'LIVE')

@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabase";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
 import { ArrowLeft, ChevronDown } from "lucide-react";
-import { namesMatch, getMostCompleteName } from "@/lib/fuzzyMatch";
+import { namesMatch, strictNamesMatch, getMostCompleteName } from "@/lib/fuzzyMatch";
 import { normalizeTeamName } from "@/lib/teamUtils";
 import { usePublicLeagueBrandingBySlug } from "@/hooks/usePublicLeagueBranding";
 import LeagueDefaultImage from "@/assets/league-default.png";
@@ -417,9 +417,11 @@ export default function LeagueLeadersPage() {
       if (!playerStatsMap.has(playerKey)) {
         playerStatsMap.set(playerKey, {
           player_id: stat.player_id || stat.id,
+          player_ids: new Set<string>([stat.player_id || stat.id]),
           player_slug: stat.players?.slug || null,
           name: playerName,
           team_name: teamName,
+          latest_game_ts: 0,
           total_points: 0,
           total_rebounds: 0,
           total_assists: 0,
@@ -437,6 +439,13 @@ export default function LeagueLeadersPage() {
       }
 
       const playerData = playerStatsMap.get(playerKey);
+      const gameTs = stat.game_date ? new Date(stat.game_date).getTime() : 0;
+      if (gameTs && gameTs > playerData.latest_game_ts) {
+        playerData.latest_game_ts = gameTs;
+        // If the same player_id itself spans multiple teams (intra-id team
+        // switch), make sure the displayed team reflects the most recent game.
+        if (teamName) playerData.team_name = teamName;
+      }
       playerData.total_points += stat.spoints || 0;
       playerData.total_rebounds += stat.sreboundstotal || 0;
       playerData.total_assists += stat.sassists || 0;
@@ -454,9 +463,32 @@ export default function LeagueLeadersPage() {
 
     const playersByIdArray = Array.from(playerStatsMap.values());
     playersByIdArray.sort((a, b) => b.games_played - a.games_played);
-    
+
+    const accumulateInto = (target: any, source: any) => {
+      target.games_played += source.games_played;
+      target.total_points += source.total_points;
+      target.total_rebounds += source.total_rebounds;
+      target.total_assists += source.total_assists;
+      target.total_steals += source.total_steals;
+      target.total_blocks += source.total_blocks;
+      target.total_field_goals_made += source.total_field_goals_made;
+      target.total_field_goals_attempted += source.total_field_goals_attempted;
+      target.total_three_points_made += source.total_three_points_made;
+      target.total_three_points_attempted += source.total_three_points_attempted;
+      target.total_free_throws_made += source.total_free_throws_made;
+      target.total_free_throws_attempted += source.total_free_throws_attempted;
+      target.total_turnovers += source.total_turnovers;
+      target.name = getMostCompleteName([target.name, source.name]);
+      if (!target.player_slug && source.player_slug) {
+        target.player_slug = source.player_slug;
+      }
+      if (source.player_ids) {
+        (source.player_ids as Set<string>).forEach((id: string) => (target.player_ids as Set<string>).add(id));
+      }
+    };
+
     const mergedPlayers: typeof playersByIdArray = [];
-    
+
     playersByIdArray.forEach((player) => {
       const playerTeamNormalized = normalizeTeamName(player.team_name);
       let foundMatch = false;
@@ -464,34 +496,54 @@ export default function LeagueLeadersPage() {
         const existingTeamNormalized = normalizeTeamName(existingPlayer.team_name);
         const sameTeam = existingTeamNormalized === playerTeamNormalized;
         if (sameTeam && namesMatch(player.name, existingPlayer.name)) {
-          existingPlayer.games_played += player.games_played;
-          existingPlayer.total_points += player.total_points;
-          existingPlayer.total_rebounds += player.total_rebounds;
-          existingPlayer.total_assists += player.total_assists;
-          existingPlayer.total_steals += player.total_steals;
-          existingPlayer.total_blocks += player.total_blocks;
-          existingPlayer.total_field_goals_made += player.total_field_goals_made;
-          existingPlayer.total_field_goals_attempted += player.total_field_goals_attempted;
-          existingPlayer.total_three_points_made += player.total_three_points_made;
-          existingPlayer.total_three_points_attempted += player.total_three_points_attempted;
-          existingPlayer.total_free_throws_made += player.total_free_throws_made;
-          existingPlayer.total_free_throws_attempted += player.total_free_throws_attempted;
-          existingPlayer.total_turnovers += player.total_turnovers;
-          existingPlayer.name = getMostCompleteName([existingPlayer.name, player.name]);
-          if (!existingPlayer.player_slug && player.player_slug) {
-            existingPlayer.player_slug = player.player_slug;
+          accumulateInto(existingPlayer, player);
+          if (player.latest_game_ts > existingPlayer.latest_game_ts) {
+            existingPlayer.latest_game_ts = player.latest_game_ts;
+            existingPlayer.team_name = player.team_name;
           }
           foundMatch = true;
           break;
         }
       }
-      
+
       if (!foundMatch) {
-        mergedPlayers.push({ ...player });
+        mergedPlayers.push({ ...player, player_ids: new Set(player.player_ids) });
       }
     });
 
-    return mergedPlayers;
+    // Second pass: merge records across different teams within the same scope
+    // when names match strictly and the underlying player_ids are different.
+    // This auto-handles mid-season team-switchers (e.g. James Harvey moving
+    // from "18U Team 1" to "18U Team 2" within the same league/age-group).
+    const crossTeamMerged: typeof mergedPlayers = [];
+    mergedPlayers.forEach((player) => {
+      let foundMatch = false;
+      for (const existingPlayer of crossTeamMerged) {
+        // Skip if the underlying player_id sets overlap — same record, would double-count.
+        let overlaps = false;
+        (player.player_ids as Set<string>).forEach((id: string) => {
+          if ((existingPlayer.player_ids as Set<string>).has(id)) overlaps = true;
+        });
+        if (overlaps) continue;
+
+        if (strictNamesMatch(player.name, existingPlayer.name)) {
+          accumulateInto(existingPlayer, player);
+          // Pick the most-recent team as the displayed (current) team.
+          if (player.latest_game_ts > existingPlayer.latest_game_ts) {
+            existingPlayer.latest_game_ts = player.latest_game_ts;
+            existingPlayer.team_name = player.team_name;
+          }
+          foundMatch = true;
+          break;
+        }
+      }
+
+      if (!foundMatch) {
+        crossTeamMerged.push({ ...player, player_ids: new Set(player.player_ids) });
+      }
+    });
+
+    return crossTeamMerged;
   }, [filteredStats]);
 
   const leaderboards = useMemo(() => {

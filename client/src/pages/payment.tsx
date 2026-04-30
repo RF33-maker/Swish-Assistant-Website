@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle, ArrowLeft } from "lucide-react";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
+import { apiRequest } from "@/lib/queryClient";
 
 interface PlanDetails {
   name: string;
@@ -62,26 +63,11 @@ export default function PaymentPage() {
     setLoading(true);
     
     try {
-      // This would integrate with your backend to create Stripe checkout session
-      const response = await fetch('/api/create-checkout-session', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          priceId: planDetails.stripeProductId,
-          successUrl: `${window.location.origin}/payment-success`,
-          cancelUrl: `${window.location.origin}/payment`,
-        }),
+      await apiRequest('POST', '/api/create-checkout-session', {
+        priceId: planDetails.stripeProductId,
+        successUrl: `${window.location.origin}/payment-success`,
+        cancelUrl: `${window.location.origin}/payment`,
       });
-
-      const { sessionId } = await response.json();
-      
-      // Redirect to Stripe Checkout
-      // Note: You'll need to load Stripe.js library first
-      // const stripe = await loadStripe('your_stripe_publishable_key');
-      // stripe.redirectToCheckout({ sessionId });
-      
     } catch (error) {
       console.error('Payment error:', error);
     } finally {

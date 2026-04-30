@@ -34,6 +34,7 @@ The application features a React frontend and integrates with external backend s
     -   **Parent League Aggregation**: Parent leagues (e.g., REBA SL) that have child age-group sub-leagues automatically aggregate data from all children. A pill-style age group tab bar allows filtering all sections (standings, player stats, schedule, top performers) by age group. Standings are displayed as independent tables per age group.
     -   **Player Statistics Table**: Comprehensive, sortable table with 25 columns, search filtering, and mobile-responsive design.
     -   **Team Statistics Table**: Comprehensive table with 27 columns including advanced metrics, and mobile-responsive design.
+    -   **Compare Share Cards**: Both `TeamComparison` and `PlayerComparison` wrap their results section in the existing `ShareableCard` component. The Share button (top-right of the results card) opens a downloadable, league-branded preview that includes entity names/logos (or initials for players), the active stat category, the stats table, and (for Head-to-Head views) the W-L record + matchup list. The league page passes the brand color as a hex string via the new `brandColor` prop.
 
 **Embeddable Widget System**
 -   **Widget Builder**: A protected page (`/api-widgets`) provides a form-based editor with live iframe preview and embed code generation.
