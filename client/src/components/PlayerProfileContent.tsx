@@ -16,6 +16,7 @@ import { namesMatch, getMostCompleteName, slugToName, type PlayerMatch } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import ShotChart, { type ShotData } from "@/components/ShotChart";
 import ShareableCard from "@/components/ShareableCard";
+import { withAlpha } from "@/lib/colorContrast";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
 
 // Only the columns actually consumed by this profile view, so we never
@@ -1356,82 +1357,204 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
       )}
 
       <div className="space-y-4 md:space-y-5 mt-4 md:mt-5">
-        {filteredSeasonAverages && (
-          <ShareableCard
-            title="Season Averages"
-            fileSlug="season-averages"
-            player={{
-              name: playerInfo?.name || "Player",
-              team: playerInfo?.team || "",
-              photoUrl: playerPhotoUrl,
-              primaryColor,
-            }}
-          >
-          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Season Averages</span>
-              {selectedLeagueFilter !== "all" && (
-                <Badge variant="outline" className="text-[10px]" style={{ borderColor: readablePrimary.accent, color: readablePrimary.body }}>
-                  {leagueNames.get(selectedLeagueFilter) || 'Filtered'}
-                </Badge>
-              )}
-            </div>
-            <div className="grid grid-cols-3 md:grid-cols-6 gap-2 md:gap-3">
-              {[
-                { value: filteredSeasonAverages.avg_points, label: "PTS", rank: playerRankings?.points },
-                { value: filteredSeasonAverages.avg_rebounds, label: "REB", rank: playerRankings?.rebounds },
-                { value: filteredSeasonAverages.avg_assists, label: "AST", rank: playerRankings?.assists },
-                { value: filteredSeasonAverages.avg_steals, label: "STL", rank: playerRankings?.steals },
-                { value: filteredSeasonAverages.avg_blocks, label: "BLK", rank: playerRankings?.blocks },
-                { value: filteredSeasonAverages.avg_efficiency, label: "EFF" },
-              ].map((stat, i) => (
-                <div key={i} className={`text-center py-2 ${i >= 3 ? 'hidden md:block' : ''}`}>
-                  <div className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-0.5">
-                    {stat.label} {stat.rank ? <span className="text-[10px] normal-case">{getOrdinalSuffix(stat.rank)}</span> : null}
-                  </div>
-                  <div className="text-2xl md:text-3xl font-black tabular-nums" style={{ color: readablePrimary.body }}>
-                    {stat.value.toFixed(1)}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-          </ShareableCard>
-        )}
+        {filteredSeasonAverages && (() => {
+          type StatTile = { value: number; label: string; rank?: number };
+          const seasonStats: StatTile[] = [
+            { value: filteredSeasonAverages.avg_points, label: "PTS", rank: playerRankings?.points },
+            { value: filteredSeasonAverages.avg_rebounds, label: "REB", rank: playerRankings?.rebounds },
+            { value: filteredSeasonAverages.avg_assists, label: "AST", rank: playerRankings?.assists },
+            { value: filteredSeasonAverages.avg_steals, label: "STL", rank: playerRankings?.steals },
+            { value: filteredSeasonAverages.avg_blocks, label: "BLK", rank: playerRankings?.blocks },
+            { value: filteredSeasonAverages.avg_efficiency, label: "EFF" },
+          ];
+          // Derive border / pill / track colours from the contrast-safe
+          // `onWhite` accent so very light team colours (white, pale yellow)
+          // still produce a visible tinted border, badge and progress track
+          // instead of vanishing into the white tile.
+          const shareAccent = readablePrimary.onWhite;
+          const shareTileBorder = withAlpha(shareAccent, 0.18);
+          const sharePillBg = withAlpha(shareAccent, 0.12);
+          const filterLabel = selectedLeagueFilter !== "all"
+            ? (leagueNames.get(selectedLeagueFilter) || 'Filtered')
+            : null;
 
-        {filteredSeasonAverages && (
-          <ShareableCard
-            title="Shooting Splits"
-            fileSlug="shooting"
-            player={{
-              name: playerInfo?.name || "Player",
-              team: playerInfo?.team || "",
-              photoUrl: playerPhotoUrl,
-              primaryColor,
-            }}
-          >
-          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3 block">Shooting</span>
-            <div className="grid grid-cols-3 gap-4">
-              {[
-                { value: filteredSeasonAverages.fg_percentage, label: "FG%", rank: playerRankings?.fg_percentage },
-                { value: filteredSeasonAverages.three_point_percentage, label: "3PT%", rank: playerRankings?.three_point_percentage },
-                { value: filteredSeasonAverages.ft_percentage, label: "FT%", rank: playerRankings?.ft_percentage },
-              ].map((stat, i) => (
-                <div key={i} className="text-center">
-                  <div className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-0.5">
-                    {stat.label} {stat.rank ? <span className="text-[10px] normal-case">{getOrdinalSuffix(stat.rank)}</span> : null}
+          const shareBlock = (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                  Season Averages
+                </span>
+                {filterLabel && (
+                  <span
+                    className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
+                    style={{ backgroundColor: sharePillBg, color: shareAccent }}
+                  >
+                    {filterLabel}
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-3 gap-2.5">
+                {seasonStats.map((stat, i) => (
+                  <div
+                    key={i}
+                    className="rounded-xl px-2 py-3 flex flex-col items-center text-center bg-white"
+                    style={{ border: `1px solid ${shareTileBorder}`, boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)" }}
+                  >
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                      {stat.label}
+                    </div>
+                    <div
+                      className="text-3xl font-black tabular-nums leading-none"
+                      style={{ color: shareAccent }}
+                    >
+                      {stat.value.toFixed(1)}
+                    </div>
+                    <div className="mt-2 h-[18px] flex items-center">
+                      {stat.rank ? (
+                        <span
+                          className="px-1.5 py-0.5 rounded-full text-[9px] font-bold tracking-wide tabular-nums"
+                          style={{ backgroundColor: sharePillBg, color: shareAccent }}
+                        >
+                          {getOrdinalSuffix(stat.rank)}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
-                  <div className="text-xl md:text-2xl font-black tabular-nums" style={{ color: readablePrimary.body }}>{formatPercentage(stat.value)}</div>
-                  <div className="mt-1.5 bg-gray-100 dark:bg-neutral-700 h-1 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(stat.value, 100)}%`, backgroundColor: readablePrimary.accent }} />
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-          </ShareableCard>
-        )}
+          );
+
+          return (
+            <ShareableCard
+              title="Season Averages"
+              fileSlug="season-averages"
+              player={{
+                name: playerInfo?.name || "Player",
+                team: playerInfo?.team || "",
+                photoUrl: playerPhotoUrl,
+                primaryColor,
+              }}
+              shareContent={shareBlock}
+            >
+              <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Season Averages</span>
+                  {selectedLeagueFilter !== "all" && (
+                    <Badge variant="outline" className="text-[10px]" style={{ borderColor: readablePrimary.accent, color: readablePrimary.body }}>
+                      {leagueNames.get(selectedLeagueFilter) || 'Filtered'}
+                    </Badge>
+                  )}
+                </div>
+                <div className="grid grid-cols-3 md:grid-cols-6 gap-2 md:gap-3">
+                  {seasonStats.map((stat, i) => (
+                    <div key={i} className={`text-center py-2 ${i >= 3 ? 'hidden md:block' : ''}`}>
+                      <div className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-0.5">
+                        {stat.label} {stat.rank ? <span className="text-[10px] normal-case">{getOrdinalSuffix(stat.rank)}</span> : null}
+                      </div>
+                      <div className="text-2xl md:text-3xl font-black tabular-nums" style={{ color: readablePrimary.body }}>
+                        {stat.value.toFixed(1)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </ShareableCard>
+          );
+        })()}
+
+        {filteredSeasonAverages && (() => {
+          type ShootingTile = { value: number; label: string; rank?: number };
+          const shootingStats: ShootingTile[] = [
+            { value: filteredSeasonAverages.fg_percentage, label: "FG%", rank: playerRankings?.fg_percentage },
+            { value: filteredSeasonAverages.three_point_percentage, label: "3PT%", rank: playerRankings?.three_point_percentage },
+            { value: filteredSeasonAverages.ft_percentage, label: "FT%", rank: playerRankings?.ft_percentage },
+          ];
+          // Derive accents from the contrast-safe `onWhite` variant so light
+          // team colours (white / pale yellow) still produce a visible
+          // border, rank pill and progress track on the white tile.
+          const shareAccent = readablePrimary.onWhite;
+          const shareTileBorder = withAlpha(shareAccent, 0.18);
+          const sharePillBg = withAlpha(shareAccent, 0.12);
+          const shareTrackBg = withAlpha(shareAccent, 0.15);
+
+          const shareBlock = (
+            <div>
+              <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 mb-3 block">
+                Shooting
+              </span>
+              <div className="grid grid-cols-3 gap-2.5">
+                {shootingStats.map((stat, i) => (
+                  <div
+                    key={i}
+                    className="rounded-xl px-2 pt-3 pb-3 flex flex-col items-center text-center bg-white"
+                    style={{ border: `1px solid ${shareTileBorder}`, boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)" }}
+                  >
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                      {stat.label}
+                    </div>
+                    <div
+                      className="text-3xl font-black tabular-nums leading-none"
+                      style={{ color: shareAccent }}
+                    >
+                      {formatPercentage(stat.value)}
+                    </div>
+                    <div className="mt-2 h-[18px] flex items-center">
+                      {stat.rank ? (
+                        <span
+                          className="px-1.5 py-0.5 rounded-full text-[9px] font-bold tracking-wide tabular-nums"
+                          style={{ backgroundColor: sharePillBg, color: shareAccent }}
+                        >
+                          {getOrdinalSuffix(stat.rank)}
+                        </span>
+                      ) : null}
+                    </div>
+                    <div
+                      className="w-full mt-2.5 h-1.5 rounded-full overflow-hidden"
+                      style={{ backgroundColor: shareTrackBg }}
+                    >
+                      <div
+                        className="h-full rounded-full"
+                        style={{ width: `${Math.min(stat.value, 100)}%`, backgroundColor: shareAccent }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+
+          return (
+            <ShareableCard
+              title="Shooting Splits"
+              fileSlug="shooting"
+              player={{
+                name: playerInfo?.name || "Player",
+                team: playerInfo?.team || "",
+                photoUrl: playerPhotoUrl,
+                primaryColor,
+              }}
+              shareContent={shareBlock}
+            >
+              <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3 block">Shooting</span>
+                <div className="grid grid-cols-3 gap-4">
+                  {shootingStats.map((stat, i) => (
+                    <div key={i} className="text-center">
+                      <div className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-0.5">
+                        {stat.label} {stat.rank ? <span className="text-[10px] normal-case">{getOrdinalSuffix(stat.rank)}</span> : null}
+                      </div>
+                      <div className="text-xl md:text-2xl font-black tabular-nums" style={{ color: readablePrimary.body }}>{formatPercentage(stat.value)}</div>
+                      <div className="mt-1.5 bg-gray-100 dark:bg-neutral-700 h-1 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(stat.value, 100)}%`, backgroundColor: readablePrimary.accent }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </ShareableCard>
+          );
+        })()}
 
         {onOffSummary && (
           <ShareableCard
