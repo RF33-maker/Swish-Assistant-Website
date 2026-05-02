@@ -40,47 +40,49 @@ interface ShotChartProps {
 const CW = 500;
 const CH = 470;
 
-const COLOR_BG = "#152234";
-const COLOR_LINE = "#3a5878";
-const COLOR_LINE_SOFT = "#2c4763";
-const COLOR_PAINT = "rgba(58,88,120,0.18)";
+// Court geometry. The half-court SVG is 500x470 and shots come in as fx,fy
+// in 0-100 (folded so fx<=50 = our half). BASKET_CY/TP_R/CORNER_LINE_X_L
+// must keep the basket inside the arc and 3-point shots outside it; tweak
+// here if shots stop landing in the right zone.
+const CENTER_X = CW / 2;
+const BASKET_CY = 60;
+const RIM_R = 7.5;
+const BB_HALF = 30;
+const BB_Y = BASKET_CY - RIM_R - 4;
+const RA_R = 42;
+const PAINT_W = 163;
+const PAINT_TOP = 0;
+const PAINT_BOT = 195;
+const PAINT_L = CENTER_X - PAINT_W / 2;
+const FT_RADIUS = 60;
+const TP_R = 222;
+const CORNER_LINE_X_L = 30;
+const CORNER_LINE_X_R = CW - CORNER_LINE_X_L;
+const CORNER_END_Y =
+  BASKET_CY +
+  Math.sqrt(Math.max(0, TP_R * TP_R - (CENTER_X - CORNER_LINE_X_L) ** 2));
+
 const COLOR_MADE = "#f59e3b";
 const COLOR_AVG = "#7a8b9c";
 const COLOR_MISSED = "#5b9fbf";
 
+// Court line/paint colors are CSS custom properties defined in index.css
+// (`--court-line`, `--court-line-soft`, `--court-paint`,
+// `--court-made-stroke`) that flip on the `.dark` class. Driving them via
+// CSS — instead of via a JS theme hook — means the share/download flow in
+// ShareableCard, which strips `.dark` from the cloned document before
+// html2canvas captures it, will also flip these SVG colors at capture time.
+const LINE = "var(--court-line)";
+const LINE_SOFT = "var(--court-line-soft)";
+const PAINT_FILL = "var(--court-paint)";
+const MADE_STROKE = "var(--court-made-stroke)";
+
 function HalfCourt() {
-  const baselineY = 0;
   const halfCourtY = CH;
-  const centerX = CW / 2;
-
-  const basketCY = 47;
-  const rimR = 7.5;
-
-  const bbHalf = 30;
-  const bbY = basketCY - rimR - 4;
-
-  const raR = 40;
-
-  const paintW = 160;
-  const paintTop = baselineY;
-  const paintBot = 190;
-  const paintL = centerX - paintW / 2;
-  const paintR = centerX + paintW / 2;
-
-  const ftRadius = 60;
-
-  const tpR = 221.5;
-  const cornerLineX_L = centerX - tpR;
-  const cornerLineX_R = centerX + tpR;
-  const cornerEndY = 140;
-
   const lw = 1.5;
 
   return (
     <>
-      {/* Court background */}
-      <rect x="0" y="0" width={CW} height={CH} fill={COLOR_BG} rx="6" />
-
       {/* Outer boundary */}
       <rect
         x="1"
@@ -88,72 +90,72 @@ function HalfCourt() {
         width={CW - 2}
         height={CH - 2}
         fill="none"
-        stroke={COLOR_LINE}
+        stroke={LINE}
         strokeWidth={lw}
         rx="6"
       />
 
       {/* Half court line */}
-      <line x1="0" y1={halfCourtY - 1} x2={CW} y2={halfCourtY - 1} stroke={COLOR_LINE} strokeWidth={lw} />
+      <line x1="0" y1={halfCourtY - 1} x2={CW} y2={halfCourtY - 1} stroke={LINE} strokeWidth={lw} />
 
       {/* Half-court arc (top half visible from below) */}
       <path
-        d={`M ${centerX - 60} ${halfCourtY} A 60 60 0 0 1 ${centerX + 60} ${halfCourtY}`}
+        d={`M ${CENTER_X - 60} ${halfCourtY} A 60 60 0 0 1 ${CENTER_X + 60} ${halfCourtY}`}
         fill="none"
-        stroke={COLOR_LINE_SOFT}
+        stroke={LINE_SOFT}
         strokeWidth={lw}
       />
 
       {/* Paint */}
       <rect
-        x={paintL}
-        y={paintTop}
-        width={paintW}
-        height={paintBot - paintTop}
-        fill={COLOR_PAINT}
-        stroke={COLOR_LINE}
+        x={PAINT_L}
+        y={PAINT_TOP}
+        width={PAINT_W}
+        height={PAINT_BOT - PAINT_TOP}
+        fill={PAINT_FILL}
+        stroke={LINE}
         strokeWidth={lw}
       />
 
       {/* Free throw circle (top arc - solid) */}
       <path
-        d={`M ${centerX - ftRadius} ${paintBot} A ${ftRadius} ${ftRadius} 0 0 1 ${centerX + ftRadius} ${paintBot}`}
-        fill={COLOR_PAINT}
-        stroke={COLOR_LINE}
+        d={`M ${CENTER_X - FT_RADIUS} ${PAINT_BOT} A ${FT_RADIUS} ${FT_RADIUS} 0 0 1 ${CENTER_X + FT_RADIUS} ${PAINT_BOT}`}
+        fill={PAINT_FILL}
+        stroke={LINE}
         strokeWidth={lw}
       />
       {/* Free throw circle (bottom arc - dashed) */}
       <path
-        d={`M ${centerX - ftRadius} ${paintBot} A ${ftRadius} ${ftRadius} 0 0 0 ${centerX + ftRadius} ${paintBot}`}
+        d={`M ${CENTER_X - FT_RADIUS} ${PAINT_BOT} A ${FT_RADIUS} ${FT_RADIUS} 0 0 0 ${CENTER_X + FT_RADIUS} ${PAINT_BOT}`}
         fill="none"
-        stroke={COLOR_LINE_SOFT}
+        stroke={LINE_SOFT}
         strokeWidth={lw}
         strokeDasharray="4,4"
       />
 
       {/* Three point line - corners */}
-      <line x1={cornerLineX_L} y1={baselineY} x2={cornerLineX_L} y2={cornerEndY} stroke={COLOR_LINE} strokeWidth={lw} />
-      <line x1={cornerLineX_R} y1={baselineY} x2={cornerLineX_R} y2={cornerEndY} stroke={COLOR_LINE} strokeWidth={lw} />
+      <line x1={CORNER_LINE_X_L} y1={0} x2={CORNER_LINE_X_L} y2={CORNER_END_Y} stroke={LINE} strokeWidth={lw} />
+      <line x1={CORNER_LINE_X_R} y1={0} x2={CORNER_LINE_X_R} y2={CORNER_END_Y} stroke={LINE} strokeWidth={lw} />
 
       {/* Three point arc */}
       <path
-        d={`M ${cornerLineX_L} ${cornerEndY} A ${tpR} ${tpR} 0 0 0 ${cornerLineX_R} ${cornerEndY}`}
+        d={`M ${CORNER_LINE_X_L} ${CORNER_END_Y} A ${TP_R} ${TP_R} 0 0 0 ${CORNER_LINE_X_R} ${CORNER_END_Y}`}
         fill="none"
-        stroke={COLOR_LINE}
+        stroke={LINE}
         strokeWidth={lw}
       />
 
       {/* Backboard */}
-      <line x1={centerX - bbHalf} y1={bbY} x2={centerX + bbHalf} y2={bbY} stroke={COLOR_LINE} strokeWidth={lw + 1} />
+      <line x1={CENTER_X - BB_HALF} y1={BB_Y} x2={CENTER_X + BB_HALF} y2={BB_Y} stroke={LINE} strokeWidth={lw + 1} />
 
       {/* Rim */}
-      <circle cx={centerX} cy={basketCY} r={rimR} fill="none" stroke={COLOR_LINE} strokeWidth={lw} />
+      <circle cx={CENTER_X} cy={BASKET_CY} r={RIM_R} fill="none" stroke={LINE} strokeWidth={lw} />
 
       {/* Restricted area */}
       <path
-        d={`M ${centerX - raR} ${basketCY} A ${raR} ${raR} 0 0 0 ${centerX + raR} ${basketCY}`}
+        d={`M ${CENTER_X - RA_R} ${BASKET_CY} A ${RA_R} ${RA_R} 0 0 0 ${CENTER_X + RA_R} ${BASKET_CY}`}
         fill="none"
-        stroke={COLOR_LINE_SOFT}
+        stroke={LINE_SOFT}
         strokeWidth={lw}
       />
     </>
@@ -186,36 +188,27 @@ function projectShot(shot: ShotData): { sx: number; sy: number; zone: string } {
   const sx = (shot.y / 100) * CW;
   const sy = (fx / 50) * CH;
 
-  // Compute zone using folded coords
-  const centerX = CW / 2;
-  const basketCY = 47;
-  const dx = sx - centerX;
-  const dy = sy - basketCY;
+  const dx = sx - CENTER_X;
+  const dy = sy - BASKET_CY;
   const dist = Math.sqrt(dx * dx + dy * dy);
 
-  const tpR = 221.5;
-  const cornerLineX_L = centerX - tpR;
-  const cornerLineX_R = centerX + tpR;
-  const cornerEndY = 140;
-  const raR = 40;
-  const paintHalfW = 80;
-  const paintBot = 190;
+  const paintHalfW = PAINT_W / 2;
 
   // Three-point shot?
   const isThree =
     shot.shot_type === "3pt" ||
-    sx < cornerLineX_L ||
-    sx > cornerLineX_R ||
-    dist > tpR;
+    sx < CORNER_LINE_X_L ||
+    sx > CORNER_LINE_X_R ||
+    dist > TP_R;
 
   let zone = "mid";
   if (isThree) {
-    if (sy <= cornerEndY && sx < cornerLineX_L + 5) zone = "lc3";
-    else if (sy <= cornerEndY && sx > cornerLineX_R - 5) zone = "rc3";
+    if (sy <= CORNER_END_Y && sx < CORNER_LINE_X_L + 5) zone = "lc3";
+    else if (sy <= CORNER_END_Y && sx > CORNER_LINE_X_R - 5) zone = "rc3";
     else zone = "arc3";
-  } else if (dist <= raR) {
+  } else if (dist <= RA_R) {
     zone = "ra";
-  } else if (Math.abs(dx) <= paintHalfW && sy <= paintBot) {
+  } else if (Math.abs(dx) <= paintHalfW && sy <= PAINT_BOT) {
     zone = "paint";
   } else {
     zone = "mid";
@@ -458,12 +451,12 @@ export default function ShotChart({
         </div>
       )}
 
-      <div className="rounded-xl p-4 md:p-5 border border-slate-700/50" style={{ backgroundColor: COLOR_BG }}>
-        {/* Header inside the dark panel */}
+      <div className="rounded-xl p-4 md:p-5 border bg-white border-slate-200 dark:bg-black dark:border-slate-700/50">
+        {/* Header inside the panel */}
         <div className="flex items-baseline justify-between mb-3 md:mb-4">
           <div>
-            <div className="text-white font-bold text-base md:text-lg leading-tight">Shot chart</div>
-            <div className="text-slate-400 text-xs md:text-sm mt-0.5 tabular-nums">
+            <div className="text-slate-900 dark:text-white font-bold text-base md:text-lg leading-tight">Shot chart</div>
+            <div className="text-slate-500 dark:text-slate-400 text-xs md:text-sm mt-0.5 tabular-nums">
               {makes}-{total} FG ({percentage}%)
             </div>
           </div>
@@ -519,7 +512,7 @@ export default function ShotChart({
                         height={r * 2}
                         fill={fill}
                         opacity={shot.success ? 0.92 : 0.78}
-                        stroke={shot.success ? "#fff" : "transparent"}
+                        stroke={shot.success ? MADE_STROKE : "transparent"}
                         strokeWidth={shot.success ? 0.4 : 0}
                         filter={shot.success ? "url(#shotGlowMade)" : undefined}
                         className="shot-dot"
@@ -547,21 +540,21 @@ export default function ShotChart({
                     className="inline-block w-2.5 h-2.5"
                     style={{ background: COLOR_MISSED, transform: "rotate(45deg)" }}
                   />
-                  <span className="text-slate-300">Missed</span>
+                  <span className="text-slate-600 dark:text-slate-300">Missed</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <span
                     className="inline-block w-2.5 h-2.5"
                     style={{ background: COLOR_AVG, transform: "rotate(45deg)" }}
                   />
-                  <span className="text-slate-300">Avg</span>
+                  <span className="text-slate-600 dark:text-slate-300">Avg</span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <span
                     className="inline-block w-2.5 h-2.5"
                     style={{ background: COLOR_MADE, transform: "rotate(45deg)" }}
                   />
-                  <span className="text-slate-300">Made</span>
+                  <span className="text-slate-600 dark:text-slate-300">Made</span>
                 </div>
               </div>
             </div>
@@ -574,22 +567,22 @@ export default function ShotChart({
               const pct = s.total > 0 ? (s.made / s.total) * 100 : null;
               const color =
                 pct === null
-                  ? "text-slate-500"
+                  ? "text-slate-400 dark:text-slate-500"
                   : overallPct > 0 && pct / 100 > overallPct + 0.03
-                  ? "text-orange-400"
+                  ? "text-orange-500 dark:text-orange-400"
                   : overallPct > 0 && pct / 100 < overallPct - 0.03
-                  ? "text-sky-400"
-                  : "text-slate-200";
+                  ? "text-sky-600 dark:text-sky-400"
+                  : "text-slate-700 dark:text-slate-200";
               return (
                 <div key={z.key} className="leading-tight">
                   <div className={`font-bold tabular-nums text-xl md:text-2xl ${color}`}>
                     {pct === null ? "—" : pct.toFixed(1)}
                     {pct !== null && <span className="text-sm md:text-base">%</span>}
                   </div>
-                  <div className="text-[10px] md:text-[11px] uppercase tracking-wide text-slate-400 mt-0.5">
+                  <div className="text-[10px] md:text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400 mt-0.5">
                     {z.label}
                     {s.total > 0 && (
-                      <span className="text-slate-500 normal-case tracking-normal"> · {s.made}-{s.total}</span>
+                      <span className="text-slate-400 dark:text-slate-500 normal-case tracking-normal"> · {s.made}-{s.total}</span>
                     )}
                   </div>
                 </div>
