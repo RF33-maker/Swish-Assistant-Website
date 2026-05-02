@@ -5140,55 +5140,61 @@ export default function LeaguePage() {
                       View All Leaders →
                     </button>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
-                    {(isLoadingLeaders || isLoadingStats) ? (
-                      Array.from({ length: 3 }).map((_, i) => (
-                        <LeaderCardSkeleton key={`leader-skeleton-${i}`} />
-                      ))
-                    ) : (
-                      ([
-                        { 
-                          title: "Top Scorers", 
-                          list: topScorers, 
-                          avgLabel: "PPG", 
-                          totalLabel: "PTS",
-                        },
-                        { 
-                          title: "Top Rebounders", 
-                          list: topRebounders, 
-                          avgLabel: "RPG", 
-                          totalLabel: "REB",
-                        },
-                        { 
-                          title: "Top Playmakers", 
-                          list: topAssistsList, 
-                          avgLabel: "APG", 
-                          totalLabel: "AST",
-                        },
-                      ] as const).map(({ title, list, avgLabel, totalLabel }) => {
-                        const unitLabel = leagueLeadersView === 'averages' ? avgLabel : totalLabel;
-                        const shareLeaders = (Array.isArray(list) ? list : []).map((p: any) => ({
+                  {(() => {
+                    const isLoading = isLoadingLeaders || isLoadingStats;
+                    const quickCategories = [
+                      { title: "Top Scorers", list: topScorers, avgLabel: "PPG", totalLabel: "PTS" },
+                      { title: "Top Rebounders", list: topRebounders, avgLabel: "RPG", totalLabel: "REB" },
+                      { title: "Top Playmakers", list: topAssistsList, avgLabel: "APG", totalLabel: "AST" },
+                    ] as const;
+
+                    const qvContextParts: string[] = [];
+                    if (filterAgeGroup !== 'all') qvContextParts.push(shortenAgeLabel(filterAgeGroup));
+                    if (filterRound !== 'all') qvContextParts.push(`Round ${filterRound}`);
+                    if (isParentLeague && selectedStop !== 'all') qvContextParts.push(`Stop ${selectedStop}`);
+                    qvContextParts.push(leagueLeadersView === 'totals' ? 'Season Totals' : 'Season Averages');
+                    const quickContextLabel = qvContextParts.join(' · ');
+
+                    let quickFootnote: string | undefined;
+                    if (leagueLeadersView === 'averages') {
+                      const qualifiedPool = filteredByAgeGroupRound.filter((p: any) => (p.games || 0) >= leadersMinGames);
+                      const usedFallback =
+                        leadersMinGames > 1 &&
+                        qualifiedPool.length === 0 &&
+                        filteredByAgeGroupRound.length > 0;
+                      if (usedFallback) {
+                        quickFootnote = 'Showing all players — season just started';
+                      } else if (leadersMinGames > 1) {
+                        quickFootnote = `Min ${leadersMinGames} games played`;
+                      }
+                    }
+
+                    const shareGroups = quickCategories.map(({ title, list, avgLabel, totalLabel }) => {
+                      const unitLabel = leagueLeadersView === 'averages' ? avgLabel : totalLabel;
+                      return {
+                        title,
+                        unitLabel,
+                        leaders: (Array.isArray(list) ? list : []).slice(0, 5).map((p: any) => ({
                           name: p.name,
                           team: p.team,
-                          value: `${p.value} ${unitLabel}`,
-                        }));
-                        const quickFootnote = leagueLeadersView === 'averages' && leadersMinGames > 1
-                          ? `Min ${leadersMinGames} games played`
-                          : undefined;
-                        return (
-                          <LeagueLeadersShareCard
-                            key={title}
-                            title={title}
-                            leaders={shareLeaders}
-                            leagueName={displayLeagueName || 'League Leaders'}
-                            contextLabel={leagueLeadersView === 'totals' ? 'Season Totals' : 'Season Averages'}
-                            brandColor={brandColorHex}
-                            leagueLogoUrl={displayLogoUrl}
-                            footnote={quickFootnote}
-                            fileSlug={`league-${slug}-quick-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
-                          >
-                            <div className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4 shadow-inner">
-                              <h3 className="text-xs md:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 md:mb-3 text-center pr-8">{title}</h3>
+                          value: String(p.value),
+                        })),
+                      };
+                    });
+
+                    const gridContent = isLoading ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+                        {Array.from({ length: 3 }).map((_, i) => (
+                          <LeaderCardSkeleton key={`leader-skeleton-${i}`} />
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+                        {quickCategories.map(({ title, list, avgLabel, totalLabel }) => {
+                          const unitLabel = leagueLeadersView === 'averages' ? avgLabel : totalLabel;
+                          return (
+                            <div key={title} className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4 shadow-inner">
+                              <h3 className="text-xs md:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 md:mb-3 text-center">{title}</h3>
                               <ul className="space-y-1 text-xs md:text-sm text-slate-800 dark:text-white">
                                 {Array.isArray(list) &&
                                   list.map((p, i) => (
@@ -5214,11 +5220,28 @@ export default function LeaguePage() {
                                   ))}
                               </ul>
                             </div>
-                          </LeagueLeadersShareCard>
-                        );
-                      })
-                    )}
-                  </div>
+                          );
+                        })}
+                      </div>
+                    );
+
+                    if (isLoading) return gridContent;
+
+                    return (
+                      <LeagueLeadersShareCard
+                        title="League Leaders"
+                        groups={shareGroups}
+                        leagueName={displayLeagueName || 'League Leaders'}
+                        contextLabel={quickContextLabel}
+                        brandColor={brandColorHex}
+                        leagueLogoUrl={displayLogoUrl}
+                        footnote={quickFootnote}
+                        fileSlug={`league-${slug}-quick-league-leaders`}
+                      >
+                        {gridContent}
+                      </LeagueLeadersShareCard>
+                    );
+                  })()}
                 </div>
 
                 {/* Team League Leaders */}
