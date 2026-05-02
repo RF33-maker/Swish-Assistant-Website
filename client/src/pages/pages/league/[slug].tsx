@@ -38,6 +38,15 @@ import { usePublicLeagueBrandingBySlug } from "@/hooks/usePublicLeagueBranding";
 import { InlinePlayerProfile } from "@/components/InlinePlayerProfile";
 import { InlineTeamProfile } from "@/components/InlineTeamProfile";
 
+// Compact label for age group filter UI ("Under 18 Boys" -> "U18 Boys").
+function shortenAgeLabel(label: string): string {
+  if (!label) return label;
+  return label
+    .replace(/^Under\s*-?\s*/i, "U")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 type GameSchedule = {
   game_id: string;
   game_date: string;
