@@ -482,8 +482,24 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
   useEffect(() => {
     if (!playerSlug) return;
 
+    // Track a scheduled transient-retry timeout so we can cancel it
+    // when the slug changes or the component unmounts (avoids stale
+    // state updates and orphaned retry churn).
+    let pendingRetryTimeout: number | null = null;
+    let cancelled = false;
+    // Bound transient retries — three attempts (the original call + two
+    // re-queues) is enough to ride out an auth/RLS bootstrap race
+    // without spinning forever on a persistent backend outage.
+    const MAX_TRANSIENT_RETRIES = 2;
+    let transientRetryCount = 0;
+
     const fetchPlayerData = async () => {
+      if (cancelled) return;
       setLoading(true);
+      // When a transient retry is scheduled below we set this flag so
+      // the function-level finally does not flip loading to false and
+      // briefly render an empty profile shell between attempts.
+      let scheduledTransientRetry = false;
       try {
         let initialPlayer: any = null;
         const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(playerSlug);
@@ -582,28 +598,35 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
         }
 
         if (!initialPlayer) {
-          if (lookupTransient) {
-            // Both retry attempts failed with non-deterministic errors.
-            // Keep the skeleton up (loading stays true) so the user just
-            // sees the existing loading state instead of an alarming
-            // toast or a blank profile shell. Schedule a single retry
-            // shortly after so a brief auth/RLS bootstrap glitch
-            // recovers without requiring a manual refresh.
-            console.warn('Player lookup transient failure, retrying shortly:', playerSlug);
-            window.setTimeout(() => {
-              fetchPlayerData();
+          if (lookupTransient && transientRetryCount < MAX_TRANSIENT_RETRIES) {
+            // Non-deterministic failure (5xx / network / timeout) on
+            // both attempts inside this call. Keep the existing
+            // loading skeleton visible (we set scheduledTransientRetry
+            // so the finally block does NOT flip loading to false)
+            // and re-queue another fetch after a short delay so a
+            // brief auth/RLS bootstrap glitch recovers without
+            // requiring a manual refresh. Capped by MAX_TRANSIENT_RETRIES
+            // so a persistent outage falls through to the toast below.
+            transientRetryCount++;
+            scheduledTransientRetry = true;
+            console.warn(
+              `Player lookup transient failure (attempt ${transientRetryCount}/${MAX_TRANSIENT_RETRIES}), retrying shortly:`,
+              playerSlug,
+            );
+            pendingRetryTimeout = window.setTimeout(() => {
+              pendingRetryTimeout = null;
+              if (!cancelled) fetchPlayerData();
             }, 1500);
             return;
           }
-          // Definitive miss after the retry: the slug really doesn't map
-          // to a player. Surface the toast once.
+          // Definitive miss (or exhausted transient retries): the slug
+          // really doesn't map to a player. Surface the toast once.
           console.error('❌ Could not find player:', playerSlug);
           toast({
             title: "Player Not Found",
             description: "Could not find player with the specified identifier",
             variant: "destructive",
           });
-          setLoading(false);
           return;
         }
 
@@ -1094,11 +1117,24 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
           variant: "destructive",
         });
       } finally {
-        setLoading(false);
+        // Don't drop the skeleton when a transient retry is queued —
+        // we want the user to keep seeing the existing loading state
+        // rather than a blank profile shell between retry attempts.
+        if (!scheduledTransientRetry && !cancelled) {
+          setLoading(false);
+        }
       }
     };
 
     fetchPlayerData();
+
+    return () => {
+      cancelled = true;
+      if (pendingRetryTimeout !== null) {
+        window.clearTimeout(pendingRetryTimeout);
+        pendingRetryTimeout = null;
+      }
+    };
   }, [playerSlug]);
 
   const filteredStats = useMemo(() => {
