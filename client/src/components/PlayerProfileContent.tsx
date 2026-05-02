@@ -1558,19 +1558,28 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
         <td className={`${ct} font-semibold`}>{row.eff.toFixed(1)}</td>
       </>
     );
+    // Advanced metrics
+    const tsDen = 2 * (row.fga + 0.44 * row.fta);
+    const ts = tsDen > 0 ? (row.pts / tsDen) * 100 : 0;
+    const efg = row.fga > 0 ? ((row.fgm + 0.5 * row.tpm) / row.fga) * 100 : 0;
+    const pps = row.fga > 0 ? row.pts / row.fga : 0;
+    const astTo = row.to > 0 ? row.ast / row.to : (row.ast > 0 ? Infinity : 0);
+    const tpar = row.fga > 0 ? row.tpa / row.fga : 0;
+    const ftr = row.fga > 0 ? row.fta / row.fga : 0;
+    const stk = (row.stl + row.blk) / gp;
+    const fmtRatio = (v: number) => (v === Infinity ? '∞' : v.toFixed(2));
     return (
       <>
         <td className={ct}>{gp}</td>
-        <td className={ct}>{row.eff.toFixed(1)}</td>
-        <td className={ct}>{(row.to / gp).toFixed(1)}</td>
-        <td className={ct}>{row.fg_pct.toFixed(1)}</td>
-        <td className={ct}>{row.tp_pct.toFixed(1)}</td>
-        <td className={ct}>{row.ft_pct.toFixed(1)}</td>
-        <td className={ct}>{(row.pts / gp).toFixed(1)}</td>
-        <td className={ct}>{(row.reb / gp).toFixed(1)}</td>
-        <td className={ct}>{(row.ast / gp).toFixed(1)}</td>
-        <td className={ct}>{(row.stl / gp).toFixed(1)}</td>
-        <td className={ct}>{(row.blk / gp).toFixed(1)}</td>
+        <td className={ct}>{formatMinutes(row.min / gp)}</td>
+        <td className={ct}>{ts.toFixed(1)}</td>
+        <td className={ct}>{efg.toFixed(1)}</td>
+        <td className={ct}>{pps.toFixed(2)}</td>
+        <td className={ct}>{fmtRatio(astTo)}</td>
+        <td className={ct}>{tpar.toFixed(2)}</td>
+        <td className={ct}>{ftr.toFixed(2)}</td>
+        <td className={ct}>{stk.toFixed(1)}</td>
+        <td className={`${ct} font-semibold`}>{row.eff.toFixed(1)}</td>
       </>
     );
   };
@@ -2011,17 +2020,16 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
                     )}
                     {careerStatsTab === "advanced" && (
                       <>
-                        <th className="px-2 py-1.5 text-center font-semibold">GP</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">EFF</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">TO</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">FG%</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">3P%</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">FT%</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">PTS</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">REB</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">AST</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">STL</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">BLK</th>
+                        <th className="px-2 py-1.5 text-center font-semibold" title="Games Played">GP</th>
+                        <th className="px-2 py-1.5 text-center font-semibold" title="Minutes Per Game">MPG</th>
+                        <th className="px-2 py-1.5 text-center font-semibold" title="True Shooting %">TS%</th>
+                        <th className="px-2 py-1.5 text-center font-semibold" title="Effective Field Goal %">eFG%</th>
+                        <th className="px-2 py-1.5 text-center font-semibold" title="Points Per Shot (PTS / FGA)">PPS</th>
+                        <th className="px-2 py-1.5 text-center font-semibold" title="Assist to Turnover Ratio">AST/TO</th>
+                        <th className="px-2 py-1.5 text-center font-semibold" title="3-Point Attempt Rate (3PA / FGA)">3PAr</th>
+                        <th className="px-2 py-1.5 text-center font-semibold" title="Free Throw Rate (FTA / FGA)">FTr</th>
+                        <th className="px-2 py-1.5 text-center font-semibold" title="Stocks per game (STL + BLK)">STK</th>
+                        <th className="px-2 py-1.5 text-center font-semibold" title="Efficiency per game">EFF</th>
                       </>
                     )}
                   </tr>
