@@ -488,14 +488,49 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
         let initialPlayer: any = null;
         const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(playerSlug);
 
-        if (isUUID) {
-          const { data, error } = await supabase.from('players').select(PLAYER_PROFILE_COLUMNS).eq('id', playerSlug).single();
-          if (data && !error) initialPlayer = data;
-        } else {
-          const { data, error } = await supabase.from('players').select(PLAYER_PROFILE_COLUMNS).eq('slug', playerSlug).single();
-          if (data && !error) initialPlayer = data;
+        // Postgrest returns code "PGRST116" when `.single()` finds zero rows.
+        // Anything else (network drop, 5xx, statement timeout, RLS being
+        // bootstrapped alongside the auth session, etc.) is a transient
+        // error and should be retried before surfacing the noisy
+        // "Player Not Found" toast — direct slug navigation otherwise
+        // races with auth/session bootstrap and flashes the toast even
+        // for valid slugs.
+        const isNoRowError = (err: any) =>
+          !!err && (err.code === 'PGRST116' || /no rows|0 rows/i.test(err?.message || ''));
+        const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
 
-          if (!initialPlayer) {
+        // Resolves to { row, transientError } and retries transient errors
+        // once. Returns { row: null, transientError: false } only when the
+        // lookup definitively returned no row.
+        const lookupOnce = async <T,>(
+          run: () => Promise<{ data: T | null; error: any }>,
+        ): Promise<{ data: T | null; transient: boolean }> => {
+          for (let attempt = 0; attempt < 2; attempt++) {
+            const { data, error } = await run();
+            if (data) return { data, transient: false };
+            if (!error || isNoRowError(error)) return { data: null, transient: false };
+            // Transient: back off briefly and retry once.
+            if (attempt === 0) await sleep(400);
+          }
+          return { data: null, transient: true };
+        };
+
+        let lookupTransient = false;
+
+        if (isUUID) {
+          const r = await lookupOnce<any>(() =>
+            supabase.from('players').select(PLAYER_PROFILE_COLUMNS).eq('id', playerSlug).single()
+          );
+          if (r.data) initialPlayer = r.data;
+          if (r.transient) lookupTransient = true;
+        } else {
+          const r = await lookupOnce<any>(() =>
+            supabase.from('players').select(PLAYER_PROFILE_COLUMNS).eq('slug', playerSlug).single()
+          );
+          if (r.data) initialPlayer = r.data;
+          if (r.transient) lookupTransient = true;
+
+          if (!initialPlayer && !lookupTransient) {
             const searchName = slugToName(playerSlug);
             // Slug lookup failed — fall back to a small prefix-bounded
             // search.
@@ -512,25 +547,37 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
             //
             // The slug column is the canonical identifier; this
             // fallback only exists for legacy human-readable URLs.
-            const { data: directMatch, error: directError } = await supabase
-              .from('players')
-              .select(PLAYER_PROFILE_COLUMNS)
-              .ilike('full_name', `${searchName}%`)
-              .limit(10);
-
-            if (directMatch && directMatch.length > 0 && !directError) {
-              initialPlayer = directMatch.find(player => namesMatch(player.full_name, searchName)) || directMatch[0];
+            const fallback = await lookupOnce<any[]>(() =>
+              supabase
+                .from('players')
+                .select(PLAYER_PROFILE_COLUMNS)
+                .ilike('full_name', `${searchName}%`)
+                .limit(10)
+                .then(({ data, error }) => ({ data: data && data.length > 0 ? data : null, error })) as any
+            );
+            if (fallback.transient) lookupTransient = true;
+            if (fallback.data && fallback.data.length > 0) {
+              initialPlayer = fallback.data.find((player: any) => namesMatch(player.full_name, searchName)) || fallback.data[0];
             }
           }
         }
 
         if (!initialPlayer) {
-          console.error('❌ Could not find player:', playerSlug);
-          toast({
-            title: "Player Not Found",
-            description: "Could not find player with the specified identifier",
-            variant: "destructive",
-          });
+          // Only surface the "Player Not Found" toast when the lookup
+          // definitively returned no rows. If both attempts hit a
+          // transient error, leave the page in its loading skeleton —
+          // a subsequent navigation/refresh will retry without
+          // alarming the user mid-bootstrap.
+          if (!lookupTransient) {
+            console.error('❌ Could not find player:', playerSlug);
+            toast({
+              title: "Player Not Found",
+              description: "Could not find player with the specified identifier",
+              variant: "destructive",
+            });
+          } else {
+            console.warn('Player lookup transient failure, suppressing toast:', playerSlug);
+          }
           setLoading(false);
           return;
         }
