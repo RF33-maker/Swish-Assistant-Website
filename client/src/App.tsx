@@ -25,6 +25,7 @@ import LeagueAdmin from "@/pages/LeagueAdmin";
 import LeagueManagement from "@/pages/LeagueManagement";
 import SocialToolsPage from "@/pages/social-tools";
 import WidgetBuilder from "@/pages/widget-builder";
+import NewsManager from "@/pages/NewsManager";
 import WidgetPage from "@/pages/widgets/WidgetPage";
 import WidgetDemo from "@/pages/widget-demo";
 import GamePage from "@/pages/GamePage";
@@ -80,6 +81,7 @@ function Router() {
       <ProtectedRoute path="/payment" component={PaymentPage} />
       <ProtectedRoute path="/social-tools" component={SocialToolsPage} />
       <ProtectedRoute path="/api-widgets" component={WidgetBuilder} />
+      <ProtectedRoute path="/news-manager" component={NewsManager} />
 
 
       {/* Fallback */}
