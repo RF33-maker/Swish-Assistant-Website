@@ -1849,16 +1849,28 @@ export default function LeaguePage() {
     // Adaptive minimum-games qualifier — keeps per-game leaderboards meaningful
     // without locking new-season leagues out. Cumulative "totals" view never
     // applies this filter.
-    const leadersMinGames = useMemo(() => {
-      if (!filteredByAgeGroupRound.length) return 0;
+    const leadersQualifier = useMemo(() => {
+      if (!filteredByAgeGroupRound.length) {
+        return { minGames: 0, isEarlySeason: false };
+      }
       const maxGames = filteredByAgeGroupRound.reduce(
         (m: number, p: any) => Math.max(m, p.games || 0),
         0,
       );
-      if (maxGames <= 0) return 0;
-      const floor = Math.min(3, maxGames);
-      return Math.max(floor, Math.ceil(maxGames * 0.4));
+      // Early-season: when no player has yet played 3+ games, don't filter
+      // anyone out — the section would otherwise look empty for new leagues.
+      if (maxGames < 3) {
+        return { minGames: 1, isEarlySeason: true };
+      }
+      // Established season: require at least 3 games, scaling up to ~40% of
+      // the leading player's GP for older / fuller seasons.
+      return {
+        minGames: Math.max(3, Math.ceil(maxGames * 0.4)),
+        isEarlySeason: false,
+      };
     }, [filteredByAgeGroupRound]);
+    const leadersMinGames = leadersQualifier.minGames;
+    const leadersIsEarlySeason = leadersQualifier.isEarlySeason;
 
     const getTopList = useMemo(() => (statKey: string) => {
       const statToFields: Record<string, { avgField: string; totalField: string }> = {
@@ -5046,14 +5058,15 @@ export default function LeaguePage() {
                           // Apply adaptive games qualifier:
                           //  - Always for percentage leaders
                           //  - For per-game leaders only when in averages view
-                          const applyMin = leadersMinGames > 1 && (isPercentage || (isPerGame && leagueLeadersView === 'averages'));
+                          const qualifierApplies = isPercentage || (isPerGame && leagueLeadersView === 'averages');
+                          const applyMin = qualifierApplies && leadersMinGames > 1;
                           const qualified = applyMin
                             ? baseFiltered.filter((p: any) => (p.games || 0) >= leadersMinGames)
                             : baseFiltered;
                           const usedFallback = applyMin && qualified.length === 0 && baseFiltered.length > 0;
                           const pool = qualified.length > 0 ? qualified : baseFiltered;
                           const sorted = [...pool].sort(sortFn).slice(0, 10);
-                          const footnote = usedFallback
+                          const footnote = usedFallback || (qualifierApplies && leadersIsEarlySeason && baseFiltered.length > 0)
                             ? 'Showing all players — season just started'
                             : applyMin
                               ? `Min ${leadersMinGames} games played`
@@ -5156,13 +5169,12 @@ export default function LeaguePage() {
                     const quickContextLabel = qvContextParts.join(' · ');
 
                     let quickFootnote: string | undefined;
-                    if (leagueLeadersView === 'averages') {
-                      const qualifiedPool = filteredByAgeGroupRound.filter((p: any) => (p.games || 0) >= leadersMinGames);
-                      const usedFallback =
-                        leadersMinGames > 1 &&
-                        qualifiedPool.length === 0 &&
-                        filteredByAgeGroupRound.length > 0;
-                      if (usedFallback) {
+                    if (leagueLeadersView === 'averages' && filteredByAgeGroupRound.length > 0) {
+                      const qualifiedPool = leadersMinGames > 1
+                        ? filteredByAgeGroupRound.filter((p: any) => (p.games || 0) >= leadersMinGames)
+                        : filteredByAgeGroupRound;
+                      const usedFallback = leadersMinGames > 1 && qualifiedPool.length === 0;
+                      if (leadersIsEarlySeason || usedFallback) {
                         quickFootnote = 'Showing all players — season just started';
                       } else if (leadersMinGames > 1) {
                         quickFootnote = `Min ${leadersMinGames} games played`;
@@ -5227,6 +5239,17 @@ export default function LeaguePage() {
 
                     if (isLoading) return gridContent;
 
+                    const inPageContent = (
+                      <>
+                        {gridContent}
+                        {quickFootnote && (
+                          <p className="text-[10px] text-slate-400 dark:text-slate-500 text-center mt-3">
+                            {quickFootnote}
+                          </p>
+                        )}
+                      </>
+                    );
+
                     return (
                       <LeagueLeadersShareCard
                         title="League Leaders"
@@ -5238,7 +5261,7 @@ export default function LeaguePage() {
                         footnote={quickFootnote}
                         fileSlug={`league-${slug}-quick-league-leaders`}
                       >
-                        {gridContent}
+                        {inPageContent}
                       </LeagueLeadersShareCard>
                     );
                   })()}
