@@ -26,6 +26,13 @@ interface SharePlayer {
   team: string;
   photoUrl?: string | null;
   primaryColor?: string;
+  /** Optional resolved team-logo URL shown in the share-card header band. */
+  teamLogoUrl?: string | null;
+}
+
+interface ShareTeamLogo {
+  name: string;
+  logoUrl?: string | null;
 }
 
 interface ShareableCardProps {
@@ -38,6 +45,13 @@ interface ShareableCardProps {
   shareContent?: ReactNode;
   /** Optional caption shown beneath the title in the share modal header. */
   shareCaption?: string;
+  /**
+   * Two-team variant for head-to-head share cards. When provided, the header
+   * band renders both team logos side-by-side instead of the single-player
+   * team logo / photo. The first entry is shown on the left, the second on
+   * the right with a "VS" separator.
+   */
+  teamLogos?: ShareTeamLogo[];
 }
 
 const BRAND_ORANGE = "#f97316";
@@ -129,6 +143,7 @@ export default function ShareableCard({
   children,
   shareContent,
   shareCaption,
+  teamLogos,
 }: ShareableCardProps) {
   const [open, setOpen] = useState(false);
   const [working, setWorking] = useState(false);
@@ -309,6 +324,82 @@ export default function ShareableCard({
                 >
                   <DiagonalStripes position="tl" color={BRAND_ORANGE} />
 
+                  {/* Two-team variant: render the pair of team logos with a
+                      "VS" in between, in place of the single player photo /
+                      avatar. Used by Team & Player head-to-head share cards. */}
+                  {teamLogos && teamLogos.length >= 2 ? (
+                    <div className="relative flex items-center gap-3 h-full" style={{ minHeight: 110 }}>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {[teamLogos[0], teamLogos[1]].map((tl, i) => (
+                          <div key={i} className="flex flex-col items-center gap-1">
+                            <div
+                              className="rounded-full bg-white/95 flex items-center justify-center overflow-hidden border-2 border-white/40 shadow"
+                              style={{ width: 56, height: 56 }}
+                            >
+                              {tl.logoUrl ? (
+                                <img
+                                  src={tl.logoUrl}
+                                  alt={tl.name}
+                                  crossOrigin="anonymous"
+                                  className="w-full h-full object-contain p-1"
+                                  onError={(e) => {
+                                    (e.currentTarget as HTMLImageElement).style.display = "none";
+                                  }}
+                                  data-testid={`share-team-logo-${i}`}
+                                />
+                              ) : (
+                                <span
+                                  className="font-bold text-base"
+                                  style={{ color: shadeHex(player.primaryColor || BRAND_ORANGE, 0.25) }}
+                                >
+                                  {(tl.name || "?").charAt(0).toUpperCase()}
+                                </span>
+                              )}
+                            </div>
+                            {i === 0 && (
+                              <div
+                                className="text-[9px] font-black tracking-wider"
+                                style={{ color: titleColor }}
+                              >
+                                VS
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div
+                          className="text-[10px] font-bold tracking-[0.2em] uppercase mb-0.5"
+                          style={{ color: titleColor }}
+                        >
+                          {title}
+                        </div>
+                        <div
+                          className="text-lg font-black leading-tight"
+                          style={{ wordBreak: "break-word", color: bandTextColor }}
+                        >
+                          {player.name}
+                        </div>
+                        {player.team && (
+                          <div
+                            className="text-[11px] leading-snug mt-1"
+                            style={{ wordBreak: "break-word", color: bandTextSubtle }}
+                          >
+                            {player.team}
+                          </div>
+                        )}
+                        {shareCaption && (
+                          <div
+                            className="text-[10px] uppercase tracking-wider mt-1.5"
+                            style={{ color: bandTextMuted }}
+                          >
+                            {shareCaption}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                  <>
                   {/* Player photo cutout — anchored to bottom-left so the
                       transparent player image stands tall in the band, like
                       the profile banner. Falls back to the circular initials
@@ -366,10 +457,29 @@ export default function ShareableCard({
                       </div>
                       {player.team && (
                         <div
-                          className="text-[11px] leading-snug mt-1"
+                          className="text-[11px] leading-snug mt-1 flex items-center gap-1.5"
                           style={{ wordBreak: "break-word", color: bandTextSubtle }}
                         >
-                          {player.team}
+                          {player.teamLogoUrl && (
+                            <span
+                              className="inline-flex items-center justify-center rounded-full bg-white/95 border border-white/40 overflow-hidden flex-shrink-0"
+                              style={{ width: 20, height: 20 }}
+                            >
+                              <img
+                                src={player.teamLogoUrl}
+                                alt={player.team}
+                                crossOrigin="anonymous"
+                                className="w-full h-full object-contain p-[1px]"
+                                onError={(e) => {
+                                  const img = e.currentTarget as HTMLImageElement;
+                                  const wrap = img.parentElement;
+                                  if (wrap) wrap.style.display = "none";
+                                }}
+                                data-testid="share-team-logo"
+                              />
+                            </span>
+                          )}
+                          <span>{player.team}</span>
                         </div>
                       )}
                       {shareCaption && (
@@ -382,6 +492,8 @@ export default function ShareableCard({
                       )}
                     </div>
                   </div>
+                  </>
+                  )}
                 </div>
 
                 {/* Team-colour accent strip bridging the header band into the

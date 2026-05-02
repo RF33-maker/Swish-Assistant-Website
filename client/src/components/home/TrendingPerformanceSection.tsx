@@ -10,6 +10,7 @@ import ShareableCard, {
   tintHex,
 } from "@/components/ShareableCard";
 import { useTeamBranding } from "@/hooks/useTeamBranding";
+import { getTeamLogoCached } from "@/utils/teamLogoCache";
 
 interface PerfRow {
   league_id: string;
@@ -302,6 +303,24 @@ export default function TrendingPerformanceSection() {
     enabled: !!(perf?.team_name && perf?.league_id),
   });
 
+  // Resolve the team logo URL for the share-card header band. Uses the same
+  // cached lookup as the in-page <TeamLogo> so it's typically a cache hit.
+  const [shareTeamLogoUrl, setShareTeamLogoUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setShareTeamLogoUrl(null);
+    if (!perf?.team_name || !perf?.league_id) return;
+    void getTeamLogoCached({
+      leagueId: perf.league_id,
+      teamName: perf.team_name,
+    }).then((url) => {
+      if (!cancelled) setShareTeamLogoUrl(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [perf?.team_name, perf?.league_id]);
+
   const tsPct = useMemo(() => {
     if (!perf) return "—";
     return perf.ts_pct !== null && perf.ts_pct !== undefined
@@ -406,6 +425,7 @@ export default function TrendingPerformanceSection() {
           team: perf.team_name || leagueName || "",
           photoUrl,
           primaryColor,
+          teamLogoUrl: shareTeamLogoUrl,
         }}
         shareCaption={leagueName ? `${leagueName} • ${formatDate(perf.game_date)}` : formatDate(perf.game_date)}
         shareContent={shareBody}

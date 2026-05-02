@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { Search } from "lucide-react";
 import { normalizeTeamName } from "@/lib/teamUtils";
 import ShareableCard from "@/components/ShareableCard";
+import { getTeamLogoCached } from "@/utils/teamLogoCache";
 import {
   Select,
   SelectContent,
@@ -240,7 +241,35 @@ export function PlayerComparison({ leagueId, allPlayers, brandColor }: PlayerCom
   const [showDropdown2, setShowDropdown2] = useState(false);
   const [player1PhotoUrl, setPlayer1PhotoUrl] = useState<string | null>(null);
   const [player2PhotoUrl, setPlayer2PhotoUrl] = useState<string | null>(null);
+  const [player1TeamLogoUrl, setPlayer1TeamLogoUrl] = useState<string | null>(null);
+  const [player2TeamLogoUrl, setPlayer2TeamLogoUrl] = useState<string | null>(null);
   const [teamGameScores, setTeamGameScores] = useState<Map<string, Map<string, number>>>(new Map());
+
+  // Resolve each player's team logo for the share-card header band.
+  useEffect(() => {
+    let cancelled = false;
+    setPlayer1TeamLogoUrl(null);
+    const teamName = player1Stats?.team;
+    if (!teamName || !leagueId) return;
+    void getTeamLogoCached({ leagueId, teamName }).then((url) => {
+      if (!cancelled) setPlayer1TeamLogoUrl(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [player1Stats?.team, leagueId]);
+  useEffect(() => {
+    let cancelled = false;
+    setPlayer2TeamLogoUrl(null);
+    const teamName = player2Stats?.team;
+    if (!teamName || !leagueId) return;
+    void getTeamLogoCached({ leagueId, teamName }).then((url) => {
+      if (!cancelled) setPlayer2TeamLogoUrl(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [player2Stats?.team, leagueId]);
 
   const dropdown1Ref = useRef<HTMLDivElement>(null);
   const dropdown2Ref = useRef<HTMLDivElement>(null);
@@ -941,6 +970,10 @@ export function PlayerComparison({ leagueId, allPlayers, brandColor }: PlayerCom
           }}
           shareCaption={comparisonCategory.toUpperCase()}
           shareContent={renderShareContent()}
+          teamLogos={[
+            { name: player1Stats.team || player1Stats.name, logoUrl: player1TeamLogoUrl },
+            { name: player2Stats.team || player2Stats.name, logoUrl: player2TeamLogoUrl },
+          ]}
         >
         <div className="max-w-5xl mx-auto pt-6">
           <Tabs value={view} onValueChange={(v) => setView(v as 'season' | 'h2h')}>

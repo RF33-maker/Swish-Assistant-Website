@@ -4,6 +4,7 @@ import { Search } from "lucide-react";
 import { TeamLogo } from "@/components/TeamLogo";
 import ShareableCard from "@/components/ShareableCard";
 import { normalizeTeamName } from "@/lib/teamUtils";
+import { getTeamLogoCached } from "@/utils/teamLogoCache";
 import {
   Select,
   SelectContent,
@@ -212,6 +213,33 @@ export function TeamComparison({ leagueId, allTeams, brandColor }: TeamCompariso
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [comparisonCategory, setComparisonCategory] = useState<'Traditional' | 'Advanced' | 'Scoring' | 'Misc'>('Traditional');
   const [view, setView] = useState<'season' | 'h2h'>('season');
+  const [team1LogoUrl, setTeam1LogoUrl] = useState<string | null>(null);
+  const [team2LogoUrl, setTeam2LogoUrl] = useState<string | null>(null);
+
+  // Resolve team-logo URLs for the share-card header band whenever the
+  // selected teams change. Uses the same cached lookup as in-page <TeamLogo>.
+  useEffect(() => {
+    let cancelled = false;
+    setTeam1LogoUrl(null);
+    if (!team1Stats?.name || !leagueId) return;
+    void getTeamLogoCached({ leagueId, teamName: team1Stats.name }).then((url) => {
+      if (!cancelled) setTeam1LogoUrl(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [team1Stats?.name, leagueId]);
+  useEffect(() => {
+    let cancelled = false;
+    setTeam2LogoUrl(null);
+    if (!team2Stats?.name || !leagueId) return;
+    void getTeamLogoCached({ leagueId, teamName: team2Stats.name }).then((url) => {
+      if (!cancelled) setTeam2LogoUrl(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [team2Stats?.name, leagueId]);
 
   const [search1, setSearch1] = useState("");
   const [search2, setSearch2] = useState("");
@@ -787,6 +815,10 @@ export function TeamComparison({ leagueId, allTeams, brandColor }: TeamCompariso
           }}
           shareCaption={comparisonCategory.toUpperCase()}
           shareContent={renderShareContent()}
+          teamLogos={[
+            { name: team1Stats.name, logoUrl: team1LogoUrl },
+            { name: team2Stats.name, logoUrl: team2LogoUrl },
+          ]}
         >
         <div className="max-w-5xl mx-auto pt-6">
           <Tabs value={view} onValueChange={(v) => setView(v as 'season' | 'h2h')}>

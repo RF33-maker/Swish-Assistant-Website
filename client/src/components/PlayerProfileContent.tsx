@@ -17,6 +17,7 @@ import ShotChart, { type ShotData } from "@/components/ShotChart";
 import ShareableCard from "@/components/ShareableCard";
 import { withAlpha } from "@/lib/colorContrast";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
+import { getTeamLogoCached } from "@/utils/teamLogoCache";
 
 // Only the columns actually consumed by this profile view, so we never
 // pull every column of the (wide) players table on a cold load.
@@ -1389,6 +1390,25 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
     [playerInfo?.photoPath, photoCacheBuster]
   );
 
+  // Resolve the team logo URL once for the share-card header band on all
+  // four ShareableCards rendered below (Season Averages, Shooting Splits,
+  // On/Off Impact, Shot Chart). Uses the same cached lookup as in-page
+  // <TeamLogo>, so it's typically a cache hit.
+  const [shareTeamLogoUrl, setShareTeamLogoUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setShareTeamLogoUrl(null);
+    const teamName = playerInfo?.team;
+    const leagueId = playerInfo?.leagueId;
+    if (!teamName || !leagueId) return;
+    void getTeamLogoCached({ leagueId, teamName }).then((url) => {
+      if (!cancelled) setShareTeamLogoUrl(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [playerInfo?.team, playerInfo?.leagueId]);
+
   // Separate photo for share/social graphics — uses photo_path (original/non-bg-removed).
   // Falls back to the bg-removed banner photo if no original is set so existing players
   // still get a player image on shareable cards.
@@ -1668,6 +1688,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
                 team: playerInfo?.team || "",
                 photoUrl: playerPhotoUrl,
                 primaryColor,
+                teamLogoUrl: shareTeamLogoUrl,
               }}
               shareContent={shareBlock}
             >
@@ -1796,6 +1817,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
                 team: playerInfo?.team || "",
                 photoUrl: playerPhotoUrl,
                 primaryColor,
+                teamLogoUrl: shareTeamLogoUrl,
               }}
               shareContent={shareBlock}
             >
@@ -1877,6 +1899,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
               team: playerInfo?.team || "",
               photoUrl: playerPhotoUrl,
               primaryColor,
+              teamLogoUrl: shareTeamLogoUrl,
             }}
           >
           <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4" data-testid="player-on-off-card">
@@ -2063,6 +2086,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
             team: playerInfo?.team || "",
             photoUrl: playerPhotoUrl,
             primaryColor,
+            teamLogoUrl: shareTeamLogoUrl,
           }}
           shareCaption={(() => {
             if (playerShotChartRange === "season") return "Full Season";
