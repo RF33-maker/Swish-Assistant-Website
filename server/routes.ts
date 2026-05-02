@@ -580,37 +580,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // numbers don't change minute-to-minute, so an hours-old cache is still
   // far more useful than an empty card.
   type OnOffRow = Record<string, any>;
-  const PLAYER_ON_OFF_TTL_MS = 60 * 60 * 1000; // 1h fresh window
-  const PLAYER_ON_OFF_DISK_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7d stale ceiling
-  const playerOnOffCache = new Map<string, { at: number; rows: OnOffRow[] }>();
+  type OnOffEntry = { at: number; rows: OnOffRow[] };
+  const PLAYER_ON_OFF_TTL_MS = 60 * 60 * 1000;
+  const PLAYER_ON_OFF_DISK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+  const byIdCache = new Map<string, OnOffEntry>();
+  const byNamesCache = new Map<string, OnOffEntry>();
   const ON_OFF_CACHE_DIR = path.join(process.cwd(), '.cache', 'player_on_off');
   try { fs.mkdirSync(ON_OFF_CACHE_DIR, { recursive: true }); } catch {}
 
   function diskPathFor(playerId: string) {
     return path.join(ON_OFF_CACHE_DIR, `${playerId}.json`);
   }
-  function readDiskCache(playerId: string): { at: number; rows: OnOffRow[] } | null {
+  function readDiskCache(playerId: string): OnOffEntry | null {
     try {
       const fp = diskPathFor(playerId);
       if (!fs.existsSync(fp)) return null;
-      const raw = fs.readFileSync(fp, 'utf8');
-      const parsed = JSON.parse(raw);
+      const parsed = JSON.parse(fs.readFileSync(fp, 'utf8'));
       if (!parsed || !Array.isArray(parsed.rows)) return null;
       return { at: Number(parsed.at) || 0, rows: parsed.rows as OnOffRow[] };
     } catch (err) {
-      console.warn('player_on_off disk read failed for', playerId, (err as any)?.message);
+      console.warn('player_on_off disk read failed for', playerId, (err as Error)?.message);
       return null;
     }
   }
-  function writeDiskCache(playerId: string, entry: { at: number; rows: OnOffRow[] }) {
+  function writeDiskCache(playerId: string, entry: OnOffEntry) {
     try {
       fs.writeFileSync(diskPathFor(playerId), JSON.stringify(entry));
     } catch (err) {
-      console.warn('player_on_off disk write failed for', playerId, (err as any)?.message);
+      console.warn('player_on_off disk write failed for', playerId, (err as Error)?.message);
     }
   }
 
-  async function fetchPlayerOnOffOnce(playerId: string): Promise<OnOffRow[]> {
+  async function fetchByIdOnce(playerId: string): Promise<OnOffRow[]> {
     const { data, error } = await supabaseAdmin
       .from('player_on_off')
       .select('*')
@@ -619,20 +620,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return (data || []) as OnOffRow[];
   }
 
-  async function fetchPlayerOnOffWithRetry(playerId: string): Promise<OnOffRow[]> {
+  async function fetchByNamesOnce(names: string[]): Promise<OnOffRow[]> {
+    if (names.length === 0) return [];
+    const { data, error } = await supabaseAdmin
+      .from('player_on_off')
+      .select('*')
+      .in('player_name', names);
+    if (error) throw Object.assign(new Error(error.message), { code: error.code });
+    return (data || []) as OnOffRow[];
+  }
+
+  async function withTimeoutRetry<T>(fn: () => Promise<T>): Promise<T> {
     let lastErr: any = null;
     for (let attempt = 0; attempt < 4; attempt++) {
       try {
-        return await fetchPlayerOnOffOnce(playerId);
+        return await fn();
       } catch (err: any) {
         lastErr = err;
-        // 57014 = statement_timeout. Retry these; they often succeed once
-        // the Postgres plan/buffer cache is warm.
         if (err?.code !== '57014') break;
         await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
       }
     }
     throw lastErr;
+  }
+
+  function dedupeRows(rows: OnOffRow[]): OnOffRow[] {
+    const seen = new Set<string>();
+    const out: OnOffRow[] = [];
+    for (const r of rows) {
+      const key = `${r.player_id || ''}::${r.game_key || ''}::${r.player_name || ''}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(r);
+    }
+    return out;
+  }
+
+  function evictOldest(map: Map<string, OnOffEntry>, max: number) {
+    if (map.size <= max) return;
+    const oldestKey = map.keys().next().value;
+    if (oldestKey) map.delete(oldestKey);
   }
 
   app.get('/api/player-on-off/:playerId', async (req: Request, res: Response) => {
@@ -642,40 +669,113 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     const now = Date.now();
 
-    // 1. In-memory cache (fastest)
-    let cached = playerOnOffCache.get(playerId);
+    const namesParam = req.query.names;
+    let names: string[] = [];
+    if (typeof namesParam === 'string' && namesParam.length > 0) {
+      names = namesParam
+        .split('|')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0 && s.length <= 100);
+      names = Array.from(new Set(names)).slice(0, 10);
+    }
+    const namesKey = names.length
+      ? names.map((n) => n.toLowerCase()).sort().join('|')
+      : '';
 
-    // 2. Hydrate from disk on first request after restart
-    if (!cached) {
+    let idCached = byIdCache.get(playerId);
+    if (!idCached) {
       const fromDisk = readDiskCache(playerId);
       if (fromDisk) {
-        playerOnOffCache.set(playerId, fromDisk);
-        cached = fromDisk;
+        byIdCache.set(playerId, fromDisk);
+        idCached = fromDisk;
       }
     }
+    const namesCached = namesKey ? byNamesCache.get(namesKey) : undefined;
 
-    if (cached && now - cached.at < PLAYER_ON_OFF_TTL_MS) {
-      return res.json({ rows: cached.rows, cached: true });
+    const idFresh = idCached && now - idCached.at < PLAYER_ON_OFF_TTL_MS;
+    const namesFresh = !namesKey || (namesCached && now - namesCached.at < PLAYER_ON_OFF_TTL_MS);
+
+    if (idFresh && namesFresh) {
+      const merged = dedupeRows([
+        ...(idCached?.rows || []),
+        ...(namesCached?.rows || []),
+      ]);
+      return res.json({ rows: merged, cached: true });
     }
 
-    try {
-      const rows = await fetchPlayerOnOffWithRetry(playerId);
-      const entry = { at: now, rows };
-      playerOnOffCache.set(playerId, entry);
+    type BranchResult =
+      | { ok: true; rows: OnOffRow[]; fromCache: boolean }
+      | { ok: false; err: any };
+
+    const idPromise: Promise<BranchResult> = idFresh
+      ? Promise.resolve({ ok: true, rows: idCached!.rows, fromCache: true })
+      : withTimeoutRetry(() => fetchByIdOnce(playerId)).then(
+          (rows): BranchResult => ({ ok: true, rows, fromCache: false }),
+          (err): BranchResult => ({ ok: false, err })
+        );
+
+    const namesPromise: Promise<BranchResult> = namesFresh
+      ? Promise.resolve({ ok: true, rows: namesCached?.rows || [], fromCache: true })
+      : withTimeoutRetry(() => fetchByNamesOnce(names)).then(
+          (rows): BranchResult => ({ ok: true, rows, fromCache: false }),
+          (err): BranchResult => ({ ok: false, err })
+        );
+
+    const [idResult, namesResult] = await Promise.all([idPromise, namesPromise]);
+
+    if (idResult.ok && !idResult.fromCache) {
+      const entry = { at: now, rows: idResult.rows };
+      byIdCache.set(playerId, entry);
       writeDiskCache(playerId, entry);
-      if (playerOnOffCache.size > 500) {
-        const oldestKey = playerOnOffCache.keys().next().value;
-        if (oldestKey) playerOnOffCache.delete(oldestKey);
-      }
-      res.json({ rows, cached: false });
-    } catch (err: any) {
-      console.error('player_on_off endpoint error for', playerId, err?.code, err?.message);
-      // Serve stale cache (memory or disk) so the UI degrades gracefully.
-      if (cached && now - cached.at < PLAYER_ON_OFF_DISK_TTL_MS) {
-        return res.json({ rows: cached.rows, cached: true, stale: true });
-      }
-      res.status(503).json({ error: 'player_on_off unavailable', code: err?.code });
+      evictOldest(byIdCache, 500);
     }
+    if (namesResult.ok && !namesResult.fromCache && namesKey) {
+      byNamesCache.set(namesKey, { at: now, rows: namesResult.rows });
+      evictOldest(byNamesCache, 1000);
+    }
+
+    // Track cache *existence* (within disk TTL) separately from row
+    // count: a successful cached snapshot of "no rows" is a valid
+    // fallback and means the branch is NOT lost on a later live
+    // failure. Without this distinction we'd misreport unavailable
+    // for players who genuinely have no on/off rows.
+    const idCacheUsable = !!(idCached && now - idCached.at < PLAYER_ON_OFF_DISK_TTL_MS);
+    const namesCacheUsable = !!(namesCached && now - namesCached.at < PLAYER_ON_OFF_DISK_TTL_MS);
+
+    const idRows = idResult.ok
+      ? idResult.rows
+      : (idCacheUsable ? idCached!.rows : []);
+    const nameRows = namesResult.ok
+      ? namesResult.rows
+      : (namesCacheUsable ? namesCached!.rows : []);
+    const merged = dedupeRows([...idRows, ...nameRows]);
+
+    // A branch is "lost" when its live fetch failed AND no within-TTL
+    // cache snapshot exists at all. An empty-but-fresh cache is a
+    // valid snapshot and preserves the genuine "no data" path. The
+    // names branch only counts when the caller actually supplied
+    // names — without them, that branch cannot contribute or fail.
+    const idLost = !idResult.ok && !idCacheUsable;
+    const namesLost = namesKey !== '' && !namesResult.ok && !namesCacheUsable;
+
+    if (merged.length === 0 && (idLost || namesLost)) {
+      const errCode =
+        (!idResult.ok ? idResult.err?.code : undefined) ??
+        (!namesResult.ok ? namesResult.err?.code : undefined);
+      console.error('player_on_off endpoint unavailable for', playerId, errCode);
+      return res.json({ rows: [], unavailable: true, code: errCode });
+    }
+
+    const partial = !idResult.ok || (namesKey !== '' && !namesResult.ok);
+    const stale =
+      (!idResult.ok && idRows.length > 0) ||
+      (namesKey !== '' && !namesResult.ok && nameRows.length > 0);
+    res.json({
+      rows: merged,
+      cached: stale,
+      ...(partial ? { partial: true } : {}),
+      ...(stale ? { stale: true } : {}),
+    });
   });
 
   const httpServer = createServer(app);

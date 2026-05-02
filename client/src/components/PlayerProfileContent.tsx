@@ -183,10 +183,12 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
   const [careerStatsTab, setCareerStatsTab] = useState<string>("averages");
   const [photoUploading, setPhotoUploading] = useState(false);
   // Cache-buster appended to photo URLs so the browser/CDN doesn't serve a
-  // stale (cached) version of the same storage path. Initialized on mount so
-  // every page load gets a fresh URL (avoids cross-session staleness from
-  // pre-bg-removal uploads), and bumped after every successful upload.
-  const [photoCacheBuster, setPhotoCacheBuster] = useState<number>(() => Date.now());
+  // stale (cached) version of the same storage path. Initialized to 0 so a
+  // normal page visit reuses the existing CDN cache (Date.now() on every
+  // mount was forcing a fresh fetch on every visit and noticeably delaying
+  // the banner photo). Only bumped after a successful upload so the freshly
+  // uploaded image appears immediately.
+  const [photoCacheBuster, setPhotoCacheBuster] = useState<number>(0);
   const [showFocusAdjuster, setShowFocusAdjuster] = useState(false);
   const [tempFocusY, setTempFocusY] = useState<number>(50);
   const [savingFocus, setSavingFocus] = useState(false);
@@ -622,80 +624,81 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
         // career while preventing unbounded scans on players with
         // anomalously large rowsets.
         const STATS_PER_PLAYER_LIMIT = 1000;
-        const statsResults = await Promise.all(
-          playerIds.map(async (pid) => {
-            const { data, error } = await supabase
+        // Project only the columns the profile, career stats, shot
+        // chart and on/off filtering actually consume. `select('*')`
+        // pulls the entire (very wide) player_stats row including
+        // sequence numbers, raw FIBA payload fields, period splits,
+        // etc. that the UI never uses — that wasted ~5x bytes per row
+        // on the wire and made cold-cache loads noticeably slower.
+        //
+        // NOTE: `game_date` and `opponent` are deliberately NOT in
+        // this projection. They do not exist in the live Supabase
+        // `player_stats` schema (verified: requesting them returns
+        // PostgREST 42703 "column does not exist"). The UI handles
+        // their absence gracefully:
+        //   - sort/display fallback: `stat.game_date || stat.created_at`
+        //   - opponent is hydrated from `game_schedule` in the
+        //     background enrichment (gameKeyMap lookup) using the
+        //     player's `team_name` vs hometeam/awayteam.
+        const STATS_COLUMNS = [
+          'id', 'player_id', 'league_id', 'user_id',
+          'created_at', 'game_key',
+          'full_name', 'firstname', 'familyname',
+          'team_name', 'team_id',
+          'playingposition', 'shirtnumber',
+          'sminutes',
+          'spoints',
+          'sreboundstotal', 'sreboundsoffensive', 'sreboundsdefensive',
+          'sassists',
+          'ssteals',
+          'sblocks',
+          'sturnovers',
+          'sfieldgoalsmade', 'sfieldgoalsattempted',
+          'sthreepointersmade', 'sthreepointersattempted',
+          'sfreethrowsmade', 'sfreethrowsattempted',
+          'eff_1', 'eff_2', 'eff_3', 'eff_4', 'eff_5', 'eff_6', 'eff_7',
+        ].join(',');
+
+        // Phase A: fan out the per-id stats fetch in parallel with the
+        // matched-league lookup. Previously these ran sequentially.
+        const matchLeagueIds = Array.from(
+          new Set(matches.map((m) => m.league_id).filter(Boolean))
+        );
+
+        type LeagueInfo = { name: string; parent_league_id?: string | null; age_group?: string | null; stop?: number | null };
+        type LeagueRow = { league_id: string } & LeagueInfo;
+
+        const statsPromise = Promise.all(
+          playerIds.map((pid) =>
+            supabase
               .from('player_stats')
-              .select('*')
+              .select(STATS_COLUMNS)
               .eq('player_id', pid)
               .order('created_at', { ascending: false })
-              .limit(STATS_PER_PLAYER_LIMIT);
-            return { data, error };
-          })
+              .limit(STATS_PER_PLAYER_LIMIT)
+          )
         );
+
+        const matchLeaguesPromise: Promise<{ data: LeagueRow[] }> =
+          matchLeagueIds.length > 0
+            ? Promise.resolve(
+                supabase
+                  .from('leagues')
+                  .select('league_id, name, parent_league_id, age_group, stop')
+                  .in('league_id', matchLeagueIds)
+              ).then(({ data }) => ({ data: (data as LeagueRow[] | null) || [] }))
+            : Promise.resolve({ data: [] });
+
+        // Render the banner from the basic players-table info before
+        // we wait on stats so a slow / timing-out player_stats query
+        // doesn't leave the page blank.
+        setPlayerInfo(pInfo);
+
+        const statsResults = await statsPromise;
+
         const firstError = statsResults.find(r => r.error)?.error || null;
-        const seenStatIds = new Set<string>();
-        const mergedStats: any[] = [];
-        for (const r of statsResults) {
-          for (const row of (r.data || [])) {
-            const k = row.id || `${row.player_id}::${row.game_key}`;
-            if (seenStatIds.has(k)) continue;
-            seenStatIds.add(k);
-            mergedStats.push(row);
-          }
-        }
-        mergedStats.sort((a, b) => {
-          const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
-          const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
-          return tb - ta;
-        });
-        const stats = mergedStats;
-        const statsError = firstError;
-
-        const uniqueLeagueIds = Array.from(new Set([
-          ...matches.map(m => m.league_id),
-          ...(stats || []).map((s: any) => s.league_id),
-        ].filter(Boolean)));
-
-        const leagueInfoLocal = new Map<string, { name: string; parent_league_id?: string | null; age_group?: string | null; stop?: number | null }>();
-        const leagueMapLocal = new Map<string, string>();
-
-        if (uniqueLeagueIds.length > 0) {
-          const { data: leaguesData } = await supabase
-            .from('leagues')
-            .select('league_id, name, parent_league_id, age_group, stop')
-            .in('league_id', uniqueLeagueIds);
-
-          if (leaguesData) {
-            const parentIds: string[] = [];
-            leaguesData.forEach(league => {
-              leagueMapLocal.set(league.league_id, league.name);
-              leagueInfoLocal.set(league.league_id, {
-                name: league.name,
-                parent_league_id: league.parent_league_id,
-                age_group: league.age_group,
-                stop: league.stop,
-              });
-              if (league.parent_league_id && !uniqueLeagueIds.includes(league.parent_league_id)) {
-                parentIds.push(league.parent_league_id);
-              }
-            });
-
-            const uniqueParentIds = Array.from(new Set(parentIds));
-            if (uniqueParentIds.length > 0) {
-              const { data: parentLeagues } = await supabase
-                .from('leagues').select('league_id, name').in('league_id', uniqueParentIds);
-              if (parentLeagues) {
-                parentLeagues.forEach(pl => leagueMapLocal.set(pl.league_id, pl.name));
-              }
-            }
-
-            setLeagueNames(leagueMapLocal);
-          }
-        }
-
-        if (statsError) {
-          console.error('❌ Error fetching player stats:', statsError);
+        if (firstError) {
+          console.error('❌ Error fetching player stats:', firstError);
           toast({
             title: "Error Loading Stats",
             description: "Failed to load player statistics",
@@ -705,86 +708,38 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
           return;
         }
 
-        let statsWithOpponents = stats || [];
-        if (stats && stats.length > 0) {
-          const gameKeys = Array.from(new Set(stats.map(stat => stat.game_key).filter(Boolean)));
-
-          if (gameKeys.length > 0) {
-            const { data: gamesData, error: gamesError } = await supabase
-              .from('game_schedule').select('game_key, hometeam, awayteam').in('game_key', gameKeys);
-
-            if (!gamesError && gamesData && gamesData.length > 0) {
-              const gameKeyMap = new Map<string, { hometeam: string; awayteam: string }>();
-              gamesData.forEach(game => {
-                if (game.game_key) gameKeyMap.set(game.game_key, { hometeam: game.hometeam, awayteam: game.awayteam });
-              });
-
-              statsWithOpponents = stats.map(stat => {
-                let derivedOpponent = undefined;
-                if (stat.game_key) {
-                  const gameInfo = gameKeyMap.get(stat.game_key);
-                  if (gameInfo) {
-                    const playerTeamNorm = (stat.team_name || '').trim().toLowerCase();
-                    const homeTeamNorm = (gameInfo.hometeam || '').trim().toLowerCase();
-                    const awayTeamNorm = (gameInfo.awayteam || '').trim().toLowerCase();
-                    if (playerTeamNorm === homeTeamNorm) derivedOpponent = gameInfo.awayteam;
-                    else if (playerTeamNorm === awayTeamNorm) derivedOpponent = gameInfo.hometeam;
-                  }
-                }
-                return { ...stat, opponent: derivedOpponent || stat.opponent };
-              });
-            }
-          }
-
-          const userId = stats[0].user_id;
-          if (userId) {
-            const { data: leaguesData } = await supabase
-              .from('leagues').select('name, slug, user_id').eq('user_id', userId).eq('is_public', true);
-
-            if (leaguesData && leaguesData.length > 0) {
-              let actualLeague = leaguesData.find(league =>
-                league.name.toLowerCase().includes('uwe') && league.name.toLowerCase().includes('d1')
-              );
-              if (!actualLeague) actualLeague = leaguesData[0];
-              setPlayerLeagues([{ id: actualLeague.slug, name: actualLeague.name, slug: actualLeague.slug }]);
-            } else {
-              setPlayerLeagues([]);
-            }
+        const seenStatIds = new Set<string>();
+        const stats: any[] = [];
+        for (const r of statsResults) {
+          const rows = (r.data as any[] | null) || [];
+          for (const row of rows) {
+            const k = row.id || `${row.player_id}::${row.game_key}`;
+            if (seenStatIds.has(k)) continue;
+            seenStatIds.add(k);
+            stats.push(row);
           }
         }
-
-        statsWithOpponents = statsWithOpponents.map((stat: any) => {
-          const lid = stat.league_id || '';
-          const info = leagueInfoLocal.get(lid);
-          let groupKey: string;
-          let groupLabel: string;
-          if (info?.parent_league_id) {
-            const stopPart = info.stop != null ? `::stop${info.stop}` : '';
-            const agePart = info.age_group ? `::${info.age_group}` : '';
-            groupKey = `${info.parent_league_id}${agePart}${stopPart}`;
-            const parentName = leagueMapLocal.get(info.parent_league_id) || info.parent_league_id;
-            const ageSuffix = info.age_group ? ` ${info.age_group}` : '';
-            const stopSuffix = info.stop != null ? ` Stop ${info.stop}` : '';
-            groupLabel = `${parentName}${ageSuffix}${stopSuffix}`;
-          } else {
-            groupKey = lid;
-            groupLabel = leagueMapLocal.get(lid) || lid;
-          }
-          return { ...stat, _groupKey: groupKey, _groupLabel: groupLabel };
+        stats.sort((a, b) => {
+          const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+          const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+          return tb - ta;
         });
 
-        setPlayerStats(statsWithOpponents);
+        // Render unenriched stats immediately so the loading spinner
+        // clears as soon as the box scores are in hand. Group labels
+        // and opponents will hydrate from the background enrichment
+        // pass below.
+        setPlayerStats(stats);
+        setPlayerInfo(pInfo);
 
-        if (statsWithOpponents && statsWithOpponents.length > 0 && statsWithOpponents[0].players) {
-          const sortedByGameDate = [...statsWithOpponents].sort((a, b) => {
-            const dateA = a.game_date ? new Date(a.game_date).getTime() : 0;
-            const dateB = b.game_date ? new Date(b.game_date).getTime() : 0;
-            return dateB - dateA;
-          });
-          const mostRecentStat = sortedByGameDate[0] || statsWithOpponents[0];
+        const gamesPlayed = stats.filter(stat => parseMinutesPlayed(stat) > 0);
+
+        if (gamesPlayed.length > 0) {
+          const sourceStats = gamesPlayed.length > 0 ? gamesPlayed : stats;
+          const mostRecentStat = sourceStats[0];
 
           const normalizeTeam = (t: string) => t.trim().toLowerCase();
-          const allTeams = statsWithOpponents
+          const allTeams = sourceStats
             .map(s => s.team_name || s.team)
             .filter((team): team is string => Boolean(team));
           const teamMap = new Map<string, string>();
@@ -792,62 +747,25 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
             const norm = normalizeTeam(team);
             if (!teamMap.has(norm)) teamMap.set(norm, team);
           });
-          const uniqueTeams = Array.from(teamMap.values());
           const currentTeam = mostRecentStat.team_name || mostRecentStat.team || 'Unknown Team';
           const currentTeamNorm = normalizeTeam(currentTeam);
-          const previousTeams = uniqueTeams.filter(t => normalizeTeam(t) !== currentTeamNorm);
+          const previousTeams = Array.from(teamMap.values()).filter(t => normalizeTeam(t) !== currentTeamNorm);
+
+          const resolvedName = mostRecentStat.full_name
+            || `${mostRecentStat.firstname || ''} ${mostRecentStat.familyname || ''}`.trim()
+            || pInfo.name
+            || 'Unknown Player';
 
           pInfo = {
-            name: mostRecentStat.players?.full_name || mostRecentStat.full_name || mostRecentStat.name || `${mostRecentStat.firstname || ''} ${mostRecentStat.familyname || ''}`.trim() || 'Unknown Player',
+            ...pInfo,
+            name: resolvedName,
             team: currentTeam,
             position: pInfo.position || mostRecentStat.playingposition || mostRecentStat.position,
             number: pInfo.number ?? mostRecentStat.shirtnumber ?? mostRecentStat.number,
-            leagueId: mostRecentStat.league_id,
-            playerId: pInfo.playerId,
-            photoPath: pInfo.photoPath,
-            photoFocusY: pInfo.photoFocusY,
+            leagueId: mostRecentStat.league_id || pInfo.leagueId,
             previousTeams: previousTeams.length > 0 ? previousTeams : undefined,
-            height: pInfo.height,
-            heightCm: pInfo.heightCm,
-            dateOfBirth: pInfo.dateOfBirth,
           };
-        }
-
-        setPlayerInfo(pInfo);
-
-        const gamesPlayed = (stats || []).filter(stat => parseMinutesPlayed(stat) > 0);
-
-        if (gamesPlayed && gamesPlayed.length > 0) {
-          if (!pInfo || !pInfo.name || pInfo.name === 'Unknown Player') {
-            const fallbackName = gamesPlayed[0].players?.full_name || gamesPlayed[0].full_name || gamesPlayed[0].name || `${gamesPlayed[0].firstname || ''} ${gamesPlayed[0].familyname || ''}`.trim() || 'Unknown Player';
-            const fallbackTeam = gamesPlayed[0].team_name || gamesPlayed[0].team || 'Unknown Team';
-
-            const normalizeTeamFallback = (t: string) => t.trim().toLowerCase();
-            const allTeamsFallback = gamesPlayed.map(s => s.team_name || s.team).filter((team): team is string => Boolean(team));
-            const teamMapFallback = new Map<string, string>();
-            allTeamsFallback.forEach(team => {
-              const norm = normalizeTeamFallback(team);
-              if (!teamMapFallback.has(norm)) teamMapFallback.set(norm, team);
-            });
-            const uniqueTeamsFallback = Array.from(teamMapFallback.values());
-            const fallbackTeamNorm = normalizeTeamFallback(fallbackTeam);
-            const previousTeamsFallback = uniqueTeamsFallback.filter(t => normalizeTeamFallback(t) !== fallbackTeamNorm);
-
-            setPlayerInfo({
-              name: fallbackName,
-              team: fallbackTeam,
-              position: pInfo.position || gamesPlayed[0].playingposition || gamesPlayed[0].position,
-              number: pInfo.number ?? gamesPlayed[0].shirtnumber ?? gamesPlayed[0].number,
-              leagueId: gamesPlayed[0].league_id,
-              playerId: pInfo.playerId,
-              photoPath: pInfo.photoPath,
-              photoFocusY: pInfo.photoFocusY,
-              previousTeams: previousTeamsFallback.length > 0 ? previousTeamsFallback : undefined,
-              height: pInfo.height,
-              heightCm: pInfo.heightCm,
-              dateOfBirth: pInfo.dateOfBirth,
-            });
-          }
+          setPlayerInfo(pInfo);
 
           const totals = gamesPlayed.reduce((acc, game) => ({
             points: acc.points + (game.spoints || game.points || 0),
@@ -927,30 +845,175 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
           }
 
           if (pInfo && averages) {
+            // Fire-and-forget: the OpenAI roundtrip can take 3–8s on a
+            // cold function call and previously held the whole profile
+            // on the loading spinner. Now we let the page render
+            // immediately and hydrate the analysis blurb (and its small
+            // loading state) when the OpenAI request resolves.
             setAnalysisLoading(true);
-            try {
-              const analysisData: PlayerAnalysisData = {
-                name: pInfo.name,
-                games_played: averages.games_played,
-                avg_points: averages.avg_points,
-                avg_rebounds: averages.avg_rebounds,
-                avg_assists: averages.avg_assists,
-                avg_steals: averages.avg_steals,
-                avg_blocks: averages.avg_blocks,
-                fg_percentage: averages.fg_percentage,
-                three_point_percentage: averages.three_point_percentage,
-                ft_percentage: averages.ft_percentage,
-              };
-              const analysis = await generatePlayerAnalysis(analysisData);
-              setAiAnalysis(analysis);
-            } catch (error) {
-              console.error("❌ AI Analysis error:", error);
-              setAiAnalysis("Dynamic player with strong fundamentals and competitive drive.");
-            } finally {
-              setAnalysisLoading(false);
-            }
+            const analysisData: PlayerAnalysisData = {
+              name: pInfo.name,
+              games_played: averages.games_played,
+              avg_points: averages.avg_points,
+              avg_rebounds: averages.avg_rebounds,
+              avg_assists: averages.avg_assists,
+              avg_steals: averages.avg_steals,
+              avg_blocks: averages.avg_blocks,
+              fg_percentage: averages.fg_percentage,
+              three_point_percentage: averages.three_point_percentage,
+              ft_percentage: averages.ft_percentage,
+            };
+            generatePlayerAnalysis(analysisData)
+              .then((analysis) => setAiAnalysis(analysis))
+              .catch((error) => {
+                console.error("❌ AI Analysis error:", error);
+                setAiAnalysis("Dynamic player with strong fundamentals and competitive drive.");
+              })
+              .finally(() => setAnalysisLoading(false));
           }
         }
+
+        // Background enrichment: derive opponents from game_schedule and
+        // hydrate league names / parent labels / public-league pills.
+        // Runs as fire-and-forget so the profile renders as soon as the
+        // box scores are in hand; the stats list re-renders with
+        // opponents and group labels once these queries return.
+        (async () => {
+          try {
+            const matchLeaguesResp = await matchLeaguesPromise;
+            const leagueInfoLocal = new Map<string, LeagueInfo>();
+            const leagueMapLocal = new Map<string, string>();
+            const parentIds: string[] = [];
+            for (const league of matchLeaguesResp.data || []) {
+              leagueMapLocal.set(league.league_id, league.name);
+              leagueInfoLocal.set(league.league_id, {
+                name: league.name,
+                parent_league_id: league.parent_league_id,
+                age_group: league.age_group,
+                stop: league.stop,
+              });
+              if (league.parent_league_id) parentIds.push(league.parent_league_id);
+            }
+
+            const statsLeagueIds = new Set<string>(
+              stats.map((s) => s.league_id).filter(Boolean)
+            );
+            const extraLeagueIds = Array.from(statsLeagueIds).filter(
+              (lid) => !leagueInfoLocal.has(lid)
+            );
+            const gameKeys = Array.from(
+              new Set(stats.map((stat) => stat.game_key).filter(Boolean))
+            );
+            const userId = stats.length > 0 ? stats[0].user_id : null;
+
+            const [gamesResp, publicLeaguesResp, extraLeaguesResp] = await Promise.all([
+              gameKeys.length > 0
+                ? supabase
+                    .from('game_schedule')
+                    .select('game_key, hometeam, awayteam')
+                    .in('game_key', gameKeys)
+                : Promise.resolve({ data: [], error: null }),
+              userId
+                ? supabase
+                    .from('leagues')
+                    .select('name, slug, user_id')
+                    .eq('user_id', userId)
+                    .eq('is_public', true)
+                : Promise.resolve({ data: [], error: null }),
+              extraLeagueIds.length > 0
+                ? supabase
+                    .from('leagues')
+                    .select('league_id, name, parent_league_id, age_group, stop')
+                    .in('league_id', extraLeagueIds)
+                : Promise.resolve({ data: [], error: null }),
+            ]);
+
+            for (const league of (extraLeaguesResp.data || []) as LeagueRow[]) {
+              leagueMapLocal.set(league.league_id, league.name);
+              leagueInfoLocal.set(league.league_id, {
+                name: league.name,
+                parent_league_id: league.parent_league_id,
+                age_group: league.age_group,
+                stop: league.stop,
+              });
+              if (league.parent_league_id) parentIds.push(league.parent_league_id);
+            }
+
+            const uniqueParentIds = Array.from(new Set(parentIds)).filter(
+              (pid) => !leagueMapLocal.has(pid)
+            );
+            if (uniqueParentIds.length > 0) {
+              const { data: parentLeagues } = await supabase
+                .from('leagues')
+                .select('league_id, name')
+                .in('league_id', uniqueParentIds);
+              if (parentLeagues) {
+                parentLeagues.forEach((pl) => leagueMapLocal.set(pl.league_id, pl.name));
+              }
+            }
+
+            if (leagueMapLocal.size > 0) {
+              setLeagueNames(leagueMapLocal);
+            }
+
+            const gameKeyMap = new Map<string, { hometeam: string; awayteam: string }>();
+            for (const game of (gamesResp.data || []) as Array<{ game_key: string; hometeam: string; awayteam: string }>) {
+              if (game.game_key) gameKeyMap.set(game.game_key, { hometeam: game.hometeam, awayteam: game.awayteam });
+            }
+
+            const enriched = stats.map((stat) => {
+              let derivedOpponent: string | undefined;
+              if (stat.game_key) {
+                const gameInfo = gameKeyMap.get(stat.game_key);
+                if (gameInfo) {
+                  const playerTeamNorm = (stat.team_name || '').trim().toLowerCase();
+                  const homeTeamNorm = (gameInfo.hometeam || '').trim().toLowerCase();
+                  const awayTeamNorm = (gameInfo.awayteam || '').trim().toLowerCase();
+                  if (playerTeamNorm === homeTeamNorm) derivedOpponent = gameInfo.awayteam;
+                  else if (playerTeamNorm === awayTeamNorm) derivedOpponent = gameInfo.hometeam;
+                }
+              }
+
+              const lid = stat.league_id || '';
+              const info = leagueInfoLocal.get(lid);
+              let groupKey: string;
+              let groupLabel: string;
+              if (info?.parent_league_id) {
+                const stopPart = info.stop != null ? `::stop${info.stop}` : '';
+                const agePart = info.age_group ? `::${info.age_group}` : '';
+                groupKey = `${info.parent_league_id}${agePart}${stopPart}`;
+                const parentName = leagueMapLocal.get(info.parent_league_id) || info.parent_league_id;
+                const ageSuffix = info.age_group ? ` ${info.age_group}` : '';
+                const stopSuffix = info.stop != null ? ` Stop ${info.stop}` : '';
+                groupLabel = `${parentName}${ageSuffix}${stopSuffix}`;
+              } else {
+                groupKey = lid;
+                groupLabel = leagueMapLocal.get(lid) || lid;
+              }
+
+              return {
+                ...stat,
+                opponent: derivedOpponent || stat.opponent,
+                _groupKey: groupKey,
+                _groupLabel: groupLabel,
+              };
+            });
+
+            setPlayerStats(enriched);
+
+            const publicLeaguesData = (publicLeaguesResp.data || []) as Array<{ name: string; slug: string }>;
+            if (publicLeaguesData.length > 0) {
+              const actualLeague = publicLeaguesData.find((league) =>
+                league.name.toLowerCase().includes('uwe') && league.name.toLowerCase().includes('d1')
+              ) || publicLeaguesData[0];
+              setPlayerLeagues([{ id: actualLeague.slug, name: actualLeague.name, slug: actualLeague.slug }]);
+            } else {
+              setPlayerLeagues([]);
+            }
+          } catch (err) {
+            console.warn('[PlayerProfile] enrichment background error:', err);
+          }
+        })();
       } catch (error) {
         console.error('❌ PlayerProfileContent - Unexpected error:', error);
         toast({
@@ -1053,60 +1116,114 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
     enabled: playerIdsForShots.length > 0 && playerShotGameKeys.length > 0,
   });
 
-  const { data: playerOnOffRows = [] } = useQuery<PlayerOnOffRow[]>({
-    queryKey: ['player-on-off', playerIdsForShots],
+  // The on/off endpoint can also report `unavailable: true` (the view
+  // timed out and there is no cached snapshot to fall back to). When
+  // that happens for *every* linked player_id, we want to render a
+  // small "temporarily unavailable" placeholder instead of silently
+  // dropping the whole section, so the user can tell the difference
+  // between "this player has no on/off data" and "we couldn't fetch
+  // it right now". We collect both the merged rows and a single
+  // unavailable flag in one query result.
+  type PlayerOnOffResult = { rows: PlayerOnOffRow[]; unavailable: boolean };
+  const { data: playerOnOffResult } = useQuery<PlayerOnOffResult>({
+    queryKey: ['player-on-off', playerIdsForShots, nameVariations],
     queryFn: async () => {
-      if (playerIdsForShots.length === 0) return [];
+      if (playerIdsForShots.length === 0) return { rows: [], unavailable: false };
       // The player_on_off Supabase view is expensive on a cold plan cache
       // and can exceed the 30s statement_timeout when hit directly from
       // the browser. We proxy through `/api/player-on-off/:id`, which
       // caches results in-memory on the server and retries transient
       // statement_timeout errors. Issue one request per linked player id
-      // in parallel and merge/dedupe the rows.
+      // in parallel and merge/dedupe the rows. We pass the player's
+      // known name variations so the server can also pick up rows
+      // stored under a slightly different `player_name` (e.g.
+      // "M. Blazejewski" vs "Marcin Blazejewski").
+      const namesParam = nameVariations.length > 0
+        ? `?names=${encodeURIComponent(nameVariations.join('|'))}`
+        : '';
       const results = await Promise.all(
         playerIdsForShots.map(async (pid) => {
           try {
-            const res = await fetch(`/api/player-on-off/${pid}`);
+            const res = await fetch(`/api/player-on-off/${pid}${namesParam}`);
             if (!res.ok) {
               console.error('player_on_off endpoint error for', pid, res.status);
-              return [] as PlayerOnOffRow[];
+              return { rows: [] as PlayerOnOffRow[], unavailable: true };
             }
             const j = await res.json();
-            return (j.rows || []) as PlayerOnOffRow[];
+            return {
+              rows: (j.rows || []) as PlayerOnOffRow[],
+              unavailable: Boolean(j.unavailable),
+            };
           } catch (err) {
             console.error('player_on_off fetch failed for', pid, err);
-            return [] as PlayerOnOffRow[];
+            return { rows: [] as PlayerOnOffRow[], unavailable: true };
           }
         })
       );
       const seen = new Set<string>();
       const merged: PlayerOnOffRow[] = [];
-      for (const arr of results) {
-        for (const row of arr) {
+      for (const r of results) {
+        for (const row of r.rows) {
           const key = `${row.player_id}::${row.game_key}`;
           if (seen.has(key)) continue;
           seen.add(key);
           merged.push(row);
         }
       }
-      return merged;
+      // Render the placeholder when at least one per-id response came
+      // back unavailable AND we have no rows to show. A single successful
+      // id with rows is still enough to render the card; but if every id
+      // we *got data for* was empty and at least one id was unavailable,
+      // we surface the placeholder so the user can tell the difference
+      // between "this player has no on/off data" and "we couldn't fetch
+      // it right now".
+      const anyUnavailable = results.some((r) => r.unavailable);
+      const unavailable = anyUnavailable && merged.length === 0;
+      return { rows: merged, unavailable };
     },
     enabled: playerIdsForShots.length > 0,
     staleTime: 5 * 60 * 1000,
   });
 
+  const playerOnOffRows = playerOnOffResult?.rows ?? [];
+  const playerOnOffUnavailable = playerOnOffResult?.unavailable ?? false;
+
   const onOffSummary = useMemo(() => {
     if (!playerOnOffRows || playerOnOffRows.length === 0 || !playerInfo?.name) return null;
 
     const canonicalName = playerInfo.name;
-    const allowedGameKeys = new Set(
-      filteredStats.map(s => s.game_key).filter((k): k is string => Boolean(k))
+    const playerIdSet = new Set(playerIdsForShots);
+    const nameVariationSet = new Set(
+      nameVariations.map((n) => (n || '').trim().toLowerCase()).filter(Boolean)
     );
+    // Only restrict by game keys when the user has narrowed the league
+    // filter — when "All Competitions" is selected we want every row
+    // the proxy returned, not just the ones that happen to also appear
+    // in the game log. This also avoids dropping rows from leagues
+    // where the player_stats fan-out missed a row but the on/off view
+    // still has data for it.
+    const restrictByGameKeys = selectedLeagueFilter !== 'all';
+    const allowedGameKeys = restrictByGameKeys
+      ? new Set(filteredStats.map((s) => s.game_key).filter((k): k is string => Boolean(k)))
+      : null;
 
-    const rows = playerOnOffRows.filter(r => {
-      const nameOk = r.player_name && namesMatch(canonicalName, r.player_name);
-      const keyOk = allowedGameKeys.size === 0 || allowedGameKeys.has(r.game_key);
-      return nameOk && keyOk;
+    const rows = playerOnOffRows.filter((r) => {
+      // Match the row to this player by ANY of: linked player_id,
+      // exact match against a known name variation, or the existing
+      // fuzzy namesMatch against the canonical name. The earlier code
+      // only used the fuzzy check, which dropped rows whenever the
+      // view stored a different format ("M. Blazejewski" vs
+      // "Marcin Blazejewski") and made the section vanish.
+      const idOk = r.player_id && playerIdSet.has(r.player_id);
+      const nameLower = (r.player_name || '').trim().toLowerCase();
+      const exactNameOk = nameLower.length > 0 && nameVariationSet.has(nameLower);
+      const fuzzyNameOk = r.player_name && namesMatch(canonicalName, r.player_name);
+      if (!idOk && !exactNameOk && !fuzzyNameOk) return false;
+
+      if (allowedGameKeys && allowedGameKeys.size > 0) {
+        return allowedGameKeys.has(r.game_key);
+      }
+      return true;
     });
 
     if (rows.length === 0) return null;
@@ -1138,7 +1255,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
 
     if (summary.every(m => m.on == null && m.off == null)) return null;
     return summary;
-  }, [playerOnOffRows, playerInfo?.name, filteredStats]);
+  }, [playerOnOffRows, playerInfo?.name, playerIdsForShots, nameVariations, filteredStats, selectedLeagueFilter]);
 
   const playerShotGamesWithKeys = useMemo(() => {
     if (!playerStats) return [];
@@ -1618,6 +1735,20 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
             </ShareableCard>
           );
         })()}
+
+        {!onOffSummary && playerOnOffUnavailable && (
+          <div
+            className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4"
+            data-testid="player-on-off-unavailable"
+          >
+            <span className="text-base md:text-lg font-bold text-slate-800 dark:text-white mb-2 block">
+              Team on/off impact
+            </span>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              On/off impact is temporarily unavailable — refresh to retry.
+            </p>
+          </div>
+        )}
 
         {onOffSummary && (
           <ShareableCard
