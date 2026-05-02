@@ -7,6 +7,8 @@ const dbLogosCache = new Map<string, Map<string, string>>();
 const dbLogosFetching = new Map<string, Promise<Map<string, string>>>();
 const parentLeagueCache = new Map<string, string | null>();
 const parentLeagueFetching = new Map<string, Promise<string | null>>();
+const childLeagueIdsCache = new Map<string, string[]>();
+const childLeagueIdsFetching = new Map<string, Promise<string[]>>();
 
 async function getParentLeagueId(leagueId: string): Promise<string | null> {
   if (parentLeagueCache.has(leagueId)) {
@@ -33,6 +35,35 @@ async function getParentLeagueId(leagueId: string): Promise<string | null> {
     }
   })();
   parentLeagueFetching.set(leagueId, fetchPromise);
+  return fetchPromise;
+}
+
+async function getChildLeagueIds(leagueId: string): Promise<string[]> {
+  if (childLeagueIdsCache.has(leagueId)) {
+    return childLeagueIdsCache.get(leagueId)!;
+  }
+  if (childLeagueIdsFetching.has(leagueId)) {
+    return childLeagueIdsFetching.get(leagueId)!;
+  }
+  const fetchPromise = (async () => {
+    try {
+      const { data, error } = await supabase
+        .from("leagues")
+        .select("league_id")
+        .eq("parent_league_id", leagueId);
+      const ids = (!error && Array.isArray(data))
+        ? data.map((r: any) => r.league_id).filter(Boolean)
+        : [];
+      childLeagueIdsCache.set(leagueId, ids);
+      childLeagueIdsFetching.delete(leagueId);
+      return ids;
+    } catch {
+      childLeagueIdsCache.set(leagueId, []);
+      childLeagueIdsFetching.delete(leagueId);
+      return [];
+    }
+  })();
+  childLeagueIdsFetching.set(leagueId, fetchPromise);
   return fetchPromise;
 }
 
@@ -96,12 +127,13 @@ interface GetTeamLogoCachedArgs {
   leagueId: string;
   teamName: string;
   bucket?: string;
+  extraLeagueIds?: string[];
 }
 
 export async function getTeamLogoCached(
   args: GetTeamLogoCachedArgs
 ): Promise<string | null> {
-  const { leagueId, teamName, bucket = "team-logos" } = args;
+  const { leagueId, teamName, bucket = "team-logos", extraLeagueIds } = args;
 
   if (!leagueId || !teamName) {
     return null;
@@ -119,14 +151,32 @@ export async function getTeamLogoCached(
 
   const fetchPromise = (async (): Promise<string | null> => {
     try {
-      const dbLogos = await getDbLogosForLeague(leagueId);
-      let dbUrl = dbLogos.get(teamName) || dbLogos.get(normalizeTeamName(teamName));
+      // Build the ordered list of league IDs to try: the league itself, then
+      // its parent (so child-page logos can fall through to the parent), then
+      // any child leagues (so parent-page logos can find files keyed by a
+      // child competition's league_id), then any explicitly-provided extras.
+      const parentId = await getParentLeagueId(leagueId);
+      const childIds = await getChildLeagueIds(leagueId);
 
-      if (!dbUrl) {
-        const parentId = await getParentLeagueId(leagueId);
-        if (parentId && parentId !== leagueId) {
-          const parentDbLogos = await getDbLogosForLeague(parentId);
-          dbUrl = parentDbLogos.get(teamName) || parentDbLogos.get(normalizeTeamName(teamName));
+      const leagueIdsToTry: string[] = [];
+      const seenLeagueIds = new Set<string>();
+      const pushLeagueId = (id?: string | null) => {
+        if (!id || seenLeagueIds.has(id)) return;
+        seenLeagueIds.add(id);
+        leagueIdsToTry.push(id);
+      };
+      pushLeagueId(leagueId);
+      pushLeagueId(parentId);
+      childIds.forEach(pushLeagueId);
+      if (extraLeagueIds) extraLeagueIds.forEach(pushLeagueId);
+
+      let dbUrl: string | undefined;
+      for (const tryLeagueId of leagueIdsToTry) {
+        const dbLogos = await getDbLogosForLeague(tryLeagueId);
+        const found = dbLogos.get(teamName) || dbLogos.get(normalizeTeamName(teamName));
+        if (found) {
+          dbUrl = found;
+          break;
         }
       }
 
@@ -155,12 +205,6 @@ export async function getTeamLogoCached(
 
       if (DEBUG) {
         debugLog(`[TeamLogoCache] Trying filenames for "${teamName}":`, uniqueFilenames);
-      }
-
-      const leagueIdsToTry = [leagueId];
-      const parentId = await getParentLeagueId(leagueId);
-      if (parentId && parentId !== leagueId) {
-        leagueIdsToTry.push(parentId);
       }
 
       for (const tryLeagueId of leagueIdsToTry) {
@@ -220,4 +264,8 @@ export function clearLogoCache(): void {
   inFlight.clear();
   dbLogosCache.clear();
   dbLogosFetching.clear();
+  parentLeagueCache.clear();
+  parentLeagueFetching.clear();
+  childLeagueIdsCache.clear();
+  childLeagueIdsFetching.clear();
 }

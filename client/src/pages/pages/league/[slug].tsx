@@ -1639,11 +1639,13 @@ export default function LeaguePage() {
               logoQuery = logoQuery.in("league_id", logoLeagueIds);
             }
             const { data: logoRows, error: logoError } = await logoQuery;
-            if (logoError) {
-              console.error("Error fetching team logos:", logoError);
-            }
             const map = new Map<string, string>();
-            if (logoRows && logoRows.length > 0) {
+            // If the team_logos table doesn't exist (or any other query error
+            // occurs) we silently skip this page-level optimization. The
+            // per-component <TeamLogo> fallback will then resolve logos by
+            // probing Supabase storage. This keeps the console clean on
+            // projects where the team_logos table has not been provisioned.
+            if (!logoError && logoRows && logoRows.length > 0) {
               logoRows.forEach((row: any) => {
                 const normalized = normalizeAndMapTeamName(row.team_name);
                 if (normalized && row.logo_url) {
@@ -1652,8 +1654,7 @@ export default function LeaguePage() {
               });
             }
             setTeamLogoMap(map);
-          } catch (logoErr) {
-            console.error("Error fetching team logos:", logoErr);
+          } catch {
             setTeamLogoMap(new Map());
           }
           

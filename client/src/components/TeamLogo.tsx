@@ -9,6 +9,7 @@ interface TeamLogoProps {
   className?: string;
   logoUrl?: string;
   crossOrigin?: "" | "anonymous" | "use-credentials";
+  extraLeagueIds?: string[];
 }
 
 export const LOGO_CACHE_INVALIDATE_EVENT = 'teamLogoCacheInvalidate';
@@ -30,7 +31,7 @@ const sizeClasses = {
   xl: "w-24 h-24"
 };
 
-export function TeamLogo({ teamName, leagueId, size = "md", className = "", logoUrl: providedLogoUrl, crossOrigin }: TeamLogoProps) {
+export function TeamLogo({ teamName, leagueId, size = "md", className = "", logoUrl: providedLogoUrl, crossOrigin, extraLeagueIds }: TeamLogoProps) {
   const [logoUrl, setLogoUrl] = useState<string | null>(providedLogoUrl || null);
   const [isLoading, setIsLoading] = useState(!providedLogoUrl);
   const [hasError, setHasError] = useState(false);
@@ -74,7 +75,7 @@ export function TeamLogo({ teamName, leagueId, size = "md", className = "", logo
       setHasError(false);
 
       try {
-        const url = await getTeamLogoCached({ leagueId, teamName });
+        const url = await getTeamLogoCached({ leagueId, teamName, extraLeagueIds });
         if (!cancelled) {
           setLogoUrl(url);
         }
@@ -95,7 +96,7 @@ export function TeamLogo({ teamName, leagueId, size = "md", className = "", logo
     return () => {
       cancelled = true;
     };
-  }, [leagueId, teamName, refreshKey, providedLogoUrl]);
+  }, [leagueId, teamName, refreshKey, providedLogoUrl, extraLeagueIds?.join(",")]);
 
   const handleImageError = () => {
     setHasError(true);
