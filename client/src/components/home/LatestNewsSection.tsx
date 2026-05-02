@@ -1,7 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { supabase } from "@/lib/supabase";
 import type { NewsArticle } from "@shared/schema";
-import { Newspaper, ExternalLink } from "lucide-react";
+import { Newspaper, ExternalLink, ArrowRight } from "lucide-react";
 
 const NEWS_COLUMNS =
   "id, title, summary, image_url, source_url, league, published_at, is_published";
@@ -110,11 +111,17 @@ export default function LatestNewsSection() {
                         {a.summary}
                       </p>
                     )}
-                    {a.source_url && (
-                      <div className="mt-3 flex items-center gap-1 text-xs font-semibold text-orange-600 dark:text-orange-400">
-                        Read more <ExternalLink className="h-3 w-3" />
-                      </div>
-                    )}
+                    <div className="mt-3 flex items-center gap-1 text-xs font-semibold text-orange-600 dark:text-orange-400">
+                      {a.source_url ? (
+                        <>
+                          Read more <ExternalLink className="h-3 w-3" />
+                        </>
+                      ) : (
+                        <>
+                          Read article <ArrowRight className="h-3 w-3" />
+                        </>
+                      )}
+                    </div>
                   </div>
                 </article>
               );
@@ -126,11 +133,19 @@ export default function LatestNewsSection() {
                   target="_blank"
                   rel="noopener noreferrer"
                   className="block h-full"
+                  data-testid={`link-news-external-${a.id}`}
                 >
                   {card}
                 </a>
               ) : (
-                <div key={a.id} className="h-full">{card}</div>
+                <Link
+                  key={a.id}
+                  href={`/news/${a.id}`}
+                  className="block h-full"
+                  data-testid={`link-news-detail-${a.id}`}
+                >
+                  {card}
+                </Link>
               );
             })}
           </div>
