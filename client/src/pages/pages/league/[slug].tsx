@@ -13,6 +13,7 @@ import GamePreviewModal from "@/components/GamePreviewModal";
 
 import LeagueChatbot from "@/components/LeagueChatbot";
 import { TeamLogo } from "@/components/TeamLogo";
+import LeagueLeadersShareCard from "@/components/LeagueLeadersShareCard";
 import { TeamLogoUploader } from "@/components/TeamLogoUploader";
 import { InstagramCarousel } from "@/components/InstagramCarousel";
 import { ChevronRight, ChevronDown, Trophy, ArrowRight } from "lucide-react";
@@ -1845,6 +1846,20 @@ export default function LeaguePage() {
       "Top Playmakers": "sassists",
     };
 
+    // Adaptive minimum-games qualifier — keeps per-game leaderboards meaningful
+    // without locking new-season leagues out. Cumulative "totals" view never
+    // applies this filter.
+    const leadersMinGames = useMemo(() => {
+      if (!filteredByAgeGroupRound.length) return 0;
+      const maxGames = filteredByAgeGroupRound.reduce(
+        (m: number, p: any) => Math.max(m, p.games || 0),
+        0,
+      );
+      if (maxGames <= 0) return 0;
+      const floor = Math.min(3, maxGames);
+      return Math.max(floor, Math.ceil(maxGames * 0.4));
+    }, [filteredByAgeGroupRound]);
+
     const getTopList = useMemo(() => (statKey: string) => {
       const statToFields: Record<string, { avgField: string; totalField: string }> = {
         'spoints': { avgField: 'avgPoints', totalField: 'totalPoints' },
@@ -1856,8 +1871,17 @@ export default function LeaguePage() {
       if (!fields || !filteredByAgeGroupRound.length) return [];
       
       const fieldToUse = leagueLeadersView === 'averages' ? fields.avgField : fields.totalField;
-      
-      const result = [...filteredByAgeGroupRound]
+
+      // Apply adaptive games qualifier to per-game (averages) view only.
+      // If qualifier empties the pool (e.g. brand-new season), fall back
+      // to the unfiltered list so the section never goes blank.
+      const isAverages = leagueLeadersView === 'averages';
+      const qualified = isAverages && leadersMinGames > 1
+        ? filteredByAgeGroupRound.filter((p: any) => (p.games || 0) >= leadersMinGames)
+        : filteredByAgeGroupRound;
+      const pool = qualified.length > 0 ? qualified : filteredByAgeGroupRound;
+
+      const result = [...pool]
         .sort((a, b) => {
           const aVal = parseFloat(a[fieldToUse]) || 0;
           const bVal = parseFloat(b[fieldToUse]) || 0;
@@ -1872,7 +1896,7 @@ export default function LeaguePage() {
         }));
       
       return result;
-    }, [filteredByAgeGroupRound, leagueLeadersView]);
+    }, [filteredByAgeGroupRound, leagueLeadersView, leadersMinGames]);
 
     const topScorers = getTopList("spoints");
     const topRebounders = getTopList("sreboundstotal");
@@ -4924,9 +4948,15 @@ export default function LeaguePage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                       {(() => {
                         const players = filteredByAgeGroupRound;
+                        const contextParts: string[] = [];
+                        if (filterAgeGroup !== 'all') contextParts.push(shortenAgeLabel(filterAgeGroup));
+                        if (filterRound !== 'all') contextParts.push(`Round ${filterRound}`);
+                        if (isParentLeague && selectedStop !== 'all') contextParts.push(`Stop ${selectedStop}`);
+                        const contextLabel = contextParts.join(' · ');
                         const statCategories = [
                           {
                             title: "Scoring Leaders",
+                            isPerGame: true,
                             sortFn: (a: any, b: any) => leagueLeadersView === 'averages'
                               ? parseFloat(b.avgPoints || '0') - parseFloat(a.avgPoints || '0')
                               : (b.totalPoints || 0) - (a.totalPoints || 0),
@@ -4935,6 +4965,7 @@ export default function LeaguePage() {
                           },
                           {
                             title: "Rebounding Leaders",
+                            isPerGame: true,
                             sortFn: (a: any, b: any) => leagueLeadersView === 'averages'
                               ? parseFloat(b.avgRebounds || '0') - parseFloat(a.avgRebounds || '0')
                               : (b.totalRebounds || 0) - (a.totalRebounds || 0),
@@ -4943,6 +4974,7 @@ export default function LeaguePage() {
                           },
                           {
                             title: "Assist Leaders",
+                            isPerGame: true,
                             sortFn: (a: any, b: any) => leagueLeadersView === 'averages'
                               ? parseFloat(b.avgAssists || '0') - parseFloat(a.avgAssists || '0')
                               : (b.totalAssists || 0) - (a.totalAssists || 0),
@@ -4951,6 +4983,7 @@ export default function LeaguePage() {
                           },
                           {
                             title: "Steal Leaders",
+                            isPerGame: true,
                             sortFn: (a: any, b: any) => leagueLeadersView === 'averages'
                               ? parseFloat(b.avgSteals || '0') - parseFloat(a.avgSteals || '0')
                               : (b.totalSteals || 0) - (a.totalSteals || 0),
@@ -4959,6 +4992,7 @@ export default function LeaguePage() {
                           },
                           {
                             title: "Block Leaders",
+                            isPerGame: true,
                             sortFn: (a: any, b: any) => leagueLeadersView === 'averages'
                               ? parseFloat(b.avgBlocks || '0') - parseFloat(a.avgBlocks || '0')
                               : (b.totalBlocks || 0) - (a.totalBlocks || 0),
@@ -4967,24 +5001,28 @@ export default function LeaguePage() {
                           },
                           {
                             title: "Field Goal %",
+                            isPercentage: true,
                             sortFn: (a: any, b: any) => parseFloat(b.fgPercentage || '0') - parseFloat(a.fgPercentage || '0'),
                             displayFn: (p: any) => `${p.fgPercentage}%`,
                             filterFn: (p: any) => (p.totalFGA || 0) >= 2,
                           },
                           {
                             title: "Three Point %",
+                            isPercentage: true,
                             sortFn: (a: any, b: any) => parseFloat(b.threePercentage || '0') - parseFloat(a.threePercentage || '0'),
                             displayFn: (p: any) => `${p.threePercentage}%`,
                             filterFn: (p: any) => (p.total3PA || 0) >= 1,
                           },
                           {
                             title: "Free Throw %",
+                            isPercentage: true,
                             sortFn: (a: any, b: any) => parseFloat(b.ftPercentage || '0') - parseFloat(a.ftPercentage || '0'),
                             displayFn: (p: any) => `${p.ftPercentage}%`,
                             filterFn: (p: any) => (p.totalFTA || 0) >= 1,
                           },
                           {
                             title: "Efficiency Leaders",
+                            isPerGame: true,
                             sortFn: (a: any, b: any) => {
                               const effA = leagueLeadersView === 'averages'
                                 ? ((a.totalPoints || 0) + (a.totalRebounds || 0) + (a.totalAssists || 0) + (a.totalSteals || 0) + (a.totalBlocks || 0) - ((a.totalFGA || 0) - (a.totalFGM || 0)) - ((a.totalFTA || 0) - (a.totalFTM || 0)) - (a.totalTurnovers || 0)) / (a.games || 1)
@@ -5003,40 +5041,76 @@ export default function LeaguePage() {
                           },
                         ];
 
-                        return statCategories.map(({ title, sortFn, displayFn, filterFn }) => {
-                          const filtered = filterFn ? players.filter(filterFn) : players;
-                          const sorted = [...filtered].sort(sortFn).slice(0, 10);
+                        return statCategories.map(({ title, sortFn, displayFn, filterFn, isPerGame, isPercentage }: any) => {
+                          const baseFiltered = filterFn ? players.filter(filterFn) : players;
+                          // Apply adaptive games qualifier:
+                          //  - Always for percentage leaders
+                          //  - For per-game leaders only when in averages view
+                          const applyMin = leadersMinGames > 1 && (isPercentage || (isPerGame && leagueLeadersView === 'averages'));
+                          const qualified = applyMin
+                            ? baseFiltered.filter((p: any) => (p.games || 0) >= leadersMinGames)
+                            : baseFiltered;
+                          const usedFallback = applyMin && qualified.length === 0 && baseFiltered.length > 0;
+                          const pool = qualified.length > 0 ? qualified : baseFiltered;
+                          const sorted = [...pool].sort(sortFn).slice(0, 10);
+                          const footnote = usedFallback
+                            ? 'Showing all players — season just started'
+                            : applyMin
+                              ? `Min ${leadersMinGames} games played`
+                              : undefined;
+                          const shareLeaders = sorted.slice(0, 5).map((p: any) => ({
+                            name: p.name,
+                            team: p.team,
+                            value: displayFn(p),
+                          }));
                           return (
-                            <div key={title} className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4">
-                              <h3 className="text-sm font-semibold mb-3 px-1" style={{ color: brandColor }}>{title}</h3>
-                              <div className="space-y-0">
-                                {sorted.map((player, idx) => (
-                                  <div
-                                    key={`${title}-${player.slug || player.name}-${idx}`}
-                                    className="flex items-center justify-between py-2 px-2 rounded-md hover:bg-gray-100 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
-                                    onClick={() => {
-                                      if (player.slug) {
-                                        handleSelectPlayer(player.slug, activeSection);
-                                      }
-                                    }}
-                                  >
-                                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                                      <span className="text-xs font-bold w-5 text-center text-slate-400 dark:text-slate-500 shrink-0">{idx + 1}</span>
-                                      <div className="min-w-0 flex-1">
-                                        <p className={`text-sm font-medium truncate ${player.slug ? 'hover:underline' : ''}`} style={{ color: brandColor }}>{player.name}</p>
-                                        <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{player.team || 'Unknown Team'}</p>
+                            <LeagueLeadersShareCard
+                              key={title}
+                              title={title}
+                              leaders={shareLeaders}
+                              leagueName={displayLeagueName || 'League Leaders'}
+                              contextLabel={contextLabel || (leagueLeadersView === 'totals' ? 'Season Totals' : 'Season Averages')}
+                              brandColor={brandColorHex}
+                              leagueLogoUrl={displayLogoUrl}
+                              footnote={footnote}
+                              fileSlug={`league-${slug}-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
+                            >
+                              <div className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4">
+                                <h3 className="text-sm font-semibold mb-3 px-1 pr-10" style={{ color: brandColor }}>{title}</h3>
+                                <div className="space-y-0">
+                                  {sorted.map((player, idx) => (
+                                    <div
+                                      key={`${title}-${player.slug || player.name}-${idx}`}
+                                      className="flex items-center justify-between py-2 px-2 rounded-md hover:bg-gray-100 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
+                                      onClick={() => {
+                                        if (player.slug) {
+                                          handleSelectPlayer(player.slug, activeSection);
+                                        }
+                                      }}
+                                    >
+                                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                        <span className="text-xs font-bold w-5 text-center text-slate-400 dark:text-slate-500 shrink-0">{idx + 1}</span>
+                                        <div className="min-w-0 flex-1">
+                                          <p className={`text-sm font-medium truncate ${player.slug ? 'hover:underline' : ''}`} style={{ color: brandColor }}>{player.name}</p>
+                                          <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{player.team || 'Unknown Team'}</p>
+                                        </div>
                                       </div>
+                                      <span className="text-sm font-semibold text-slate-800 dark:text-white whitespace-nowrap ml-2">
+                                        {displayFn(player)}
+                                      </span>
                                     </div>
-                                    <span className="text-sm font-semibold text-slate-800 dark:text-white whitespace-nowrap ml-2">
-                                      {displayFn(player)}
-                                    </span>
-                                  </div>
-                                ))}
-                                {sorted.length === 0 && (
-                                  <p className="text-xs text-slate-400 dark:text-slate-500 text-center py-4">No data available</p>
+                                  ))}
+                                  {sorted.length === 0 && (
+                                    <p className="text-xs text-slate-400 dark:text-slate-500 text-center py-4">No data available</p>
+                                  )}
+                                </div>
+                                {footnote && (
+                                  <p className="text-[10px] text-slate-400 dark:text-slate-500 text-center pt-2 mt-2 border-t border-gray-100 dark:border-neutral-700/60">
+                                    {footnote}
+                                  </p>
                                 )}
                               </div>
-                            </div>
+                            </LeagueLeadersShareCard>
                           );
                         });
                       })()}
@@ -5091,35 +5165,58 @@ export default function LeaguePage() {
                           avgLabel: "APG", 
                           totalLabel: "AST",
                         },
-                      ] as const).map(({ title, list, avgLabel, totalLabel }) => (
-                        <div key={title} className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4 shadow-inner">
-                          <h3 className="text-xs md:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 md:mb-3 text-center">{title}</h3>
-                          <ul className="space-y-1 text-xs md:text-sm text-slate-800 dark:text-white">
-                            {Array.isArray(list) &&
-                              list.map((p, i) => (
-                                <li 
-                                  key={`${title}-${p.name}-${i}`} 
-                                  className={`flex justify-between ${p.slug ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700 rounded px-1 -mx-1 transition-colors' : ''}`}
-                                  onClick={() => {
-                                    if (p.slug) {
-                                      handleSelectPlayer(p.slug, activeSection);
-                                    }
-                                  }}
-                                >
-                                  <span
-                                    className={`truncate mr-2 ${p.slug ? 'hover:underline' : ''}`}
-                                    style={p.slug ? { color: brandColor } : undefined}
-                                    onMouseEnter={(e) => { if (p.slug) (e.target as HTMLElement).style.color = brandColorHover; }}
-                                    onMouseLeave={(e) => { if (p.slug) (e.target as HTMLElement).style.color = brandColor; }}
-                                  >{p.name}</span>
-                                  <span className="font-medium whitespace-nowrap" style={{ color: brandColor }}>
-                                    {p.value} {leagueLeadersView === 'averages' ? avgLabel : totalLabel}
-                                  </span>
-                                </li>
-                              ))}
-                          </ul>
-                        </div>
-                      ))
+                      ] as const).map(({ title, list, avgLabel, totalLabel }) => {
+                        const unitLabel = leagueLeadersView === 'averages' ? avgLabel : totalLabel;
+                        const shareLeaders = (Array.isArray(list) ? list : []).map((p: any) => ({
+                          name: p.name,
+                          team: p.team,
+                          value: `${p.value} ${unitLabel}`,
+                        }));
+                        const quickFootnote = leagueLeadersView === 'averages' && leadersMinGames > 1
+                          ? `Min ${leadersMinGames} games played`
+                          : undefined;
+                        return (
+                          <LeagueLeadersShareCard
+                            key={title}
+                            title={title}
+                            leaders={shareLeaders}
+                            leagueName={displayLeagueName || 'League Leaders'}
+                            contextLabel={leagueLeadersView === 'totals' ? 'Season Totals' : 'Season Averages'}
+                            brandColor={brandColorHex}
+                            leagueLogoUrl={displayLogoUrl}
+                            footnote={quickFootnote}
+                            fileSlug={`league-${slug}-quick-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
+                          >
+                            <div className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4 shadow-inner">
+                              <h3 className="text-xs md:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 md:mb-3 text-center pr-8">{title}</h3>
+                              <ul className="space-y-1 text-xs md:text-sm text-slate-800 dark:text-white">
+                                {Array.isArray(list) &&
+                                  list.map((p, i) => (
+                                    <li
+                                      key={`${title}-${p.name}-${i}`}
+                                      className={`flex justify-between ${p.slug ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700 rounded px-1 -mx-1 transition-colors' : ''}`}
+                                      onClick={() => {
+                                        if (p.slug) {
+                                          handleSelectPlayer(p.slug, activeSection);
+                                        }
+                                      }}
+                                    >
+                                      <span
+                                        className={`truncate mr-2 ${p.slug ? 'hover:underline' : ''}`}
+                                        style={p.slug ? { color: brandColor } : undefined}
+                                        onMouseEnter={(e) => { if (p.slug) (e.target as HTMLElement).style.color = brandColorHover; }}
+                                        onMouseLeave={(e) => { if (p.slug) (e.target as HTMLElement).style.color = brandColor; }}
+                                      >{p.name}</span>
+                                      <span className="font-medium whitespace-nowrap" style={{ color: brandColor }}>
+                                        {p.value} {unitLabel}
+                                      </span>
+                                    </li>
+                                  ))}
+                              </ul>
+                            </div>
+                          </LeagueLeadersShareCard>
+                        );
+                      })
                     )}
                   </div>
                 </div>
