@@ -1908,7 +1908,7 @@ export default function LeaguePage() {
           const bVal = parseFloat(b[fieldToUse]) || 0;
           return bVal - aVal;
         })
-        .slice(0, 5)
+        .slice(0, 10)
         .map(player => ({
           ...player,
           value: leagueLeadersView === 'averages' 
@@ -5080,7 +5080,7 @@ export default function LeaguePage() {
                             : applyMin
                               ? `Min ${leadersMinGames} games played`
                               : undefined;
-                          const shareLeaders = sorted.slice(0, 5).map((p: any) => ({
+                          const shareLeaders = sorted.slice(0, 10).map((p: any) => ({
                             name: p.name,
                             team: p.team,
                             value: displayFn(p),
@@ -5195,7 +5195,7 @@ export default function LeaguePage() {
                       return {
                         title,
                         unitLabel,
-                        leaders: (Array.isArray(list) ? list : []).slice(0, 5).map((p: any) => ({
+                        leaders: (Array.isArray(list) ? list : []).slice(0, 10).map((p: any) => ({
                           name: p.name,
                           team: p.team,
                           value: String(p.value),
@@ -5218,7 +5218,7 @@ export default function LeaguePage() {
                               <h3 className="text-xs md:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 md:mb-3 text-center">{title}</h3>
                               <ul className="space-y-1 text-xs md:text-sm text-slate-800 dark:text-white">
                                 {Array.isArray(list) &&
-                                  list.map((p, i) => (
+                                  list.slice(0, 5).map((p, i) => (
                                     <li
                                       key={`${title}-${p.name}-${i}`}
                                       className={`flex justify-between ${p.slug ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700 rounded px-1 -mx-1 transition-colors' : ''}`}
