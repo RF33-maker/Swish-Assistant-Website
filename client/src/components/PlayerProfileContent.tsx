@@ -598,29 +598,35 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
         }
 
         if (!initialPlayer) {
-          if (lookupTransient && transientRetryCount < MAX_TRANSIENT_RETRIES) {
-            // Non-deterministic failure (5xx / network / timeout) on
-            // both attempts inside this call. Keep the existing
-            // loading skeleton visible (we set scheduledTransientRetry
-            // so the finally block does NOT flip loading to false)
-            // and re-queue another fetch after a short delay so a
-            // brief auth/RLS bootstrap glitch recovers without
-            // requiring a manual refresh. Capped by MAX_TRANSIENT_RETRIES
-            // so a persistent outage falls through to the toast below.
-            transientRetryCount++;
-            scheduledTransientRetry = true;
-            console.warn(
-              `Player lookup transient failure (attempt ${transientRetryCount}/${MAX_TRANSIENT_RETRIES}), retrying shortly:`,
-              playerSlug,
-            );
-            pendingRetryTimeout = window.setTimeout(() => {
-              pendingRetryTimeout = null;
-              if (!cancelled) fetchPlayerData();
-            }, 1500);
+          if (lookupTransient) {
+            if (transientRetryCount < MAX_TRANSIENT_RETRIES) {
+              // Re-queue with the loading skeleton still visible.
+              transientRetryCount++;
+              scheduledTransientRetry = true;
+              console.warn(
+                `Player lookup transient failure (attempt ${transientRetryCount}/${MAX_TRANSIENT_RETRIES}), retrying:`,
+                playerSlug,
+              );
+              pendingRetryTimeout = window.setTimeout(() => {
+                pendingRetryTimeout = null;
+                if (!cancelled) fetchPlayerData();
+              }, 1500);
+              return;
+            }
+            // Exhausted retries on a transient backend failure — this
+            // is NOT a definitive "no such player", so surface a
+            // generic load error instead of the misleading
+            // "Player Not Found" toast.
+            console.error('Player lookup transient failure exhausted:', playerSlug);
+            toast({
+              title: "Couldn't load player",
+              description: "We're having trouble reaching the server. Please try again in a moment.",
+              variant: "destructive",
+            });
             return;
           }
-          // Definitive miss (or exhausted transient retries): the slug
-          // really doesn't map to a player. Surface the toast once.
+          // Definitive no-row result after the retry — the slug really
+          // doesn't map to a player.
           console.error('❌ Could not find player:', playerSlug);
           toast({
             title: "Player Not Found",
