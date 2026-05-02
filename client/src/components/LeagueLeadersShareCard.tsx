@@ -71,53 +71,103 @@ export default function LeagueLeadersShareCard({
       className="rounded-xl px-3 py-3"
       style={{ backgroundColor: panelBg, border: `1px solid ${panelBorder}` }}
     >
-      <ol className="space-y-1">
+      <ol style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         {entries.map((p, i) => (
           <li
             key={`${p.name}-${i}`}
-            className="flex items-center gap-3 px-2 rounded-md"
             style={{
               backgroundColor: i === 0 ? tintHex(brandColor, 0.85) : "transparent",
-              paddingTop: 8,
-              paddingBottom: 8,
+              borderRadius: 6,
+              paddingTop: 10,
+              paddingBottom: 10,
+              paddingLeft: 10,
+              paddingRight: 10,
+              display: "table",
+              width: "100%",
+              tableLayout: "fixed",
             }}
           >
-            <span
-              className="font-black tabular-nums text-center flex-shrink-0"
-              style={{ color: rankColor, fontSize: 14, lineHeight: 1.4, width: 20 }}
+            <div
+              style={{
+                display: "table-cell",
+                verticalAlign: "middle",
+                width: 24,
+                fontSize: 14,
+                lineHeight: "20px",
+                fontWeight: 900,
+                color: rankColor,
+                fontVariantNumeric: "tabular-nums",
+              }}
             >
               {i + 1}
-            </span>
-            <div className="flex-1 min-w-0">
+            </div>
+            <div
+              style={{
+                display: "table-cell",
+                verticalAlign: "middle",
+                paddingLeft: 10,
+                paddingRight: 8,
+                overflow: "hidden",
+              }}
+            >
               <div
-                className="font-bold truncate"
-                style={{ color: "#0f172a", fontSize: 13, lineHeight: 1.45 }}
+                style={{
+                  fontSize: 13,
+                  lineHeight: "20px",
+                  fontWeight: 700,
+                  color: "#0f172a",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
               >
                 {p.name}
               </div>
               {p.team && (
                 <div
-                  className="truncate"
-                  style={{ color: labelColor, fontSize: 10, lineHeight: 1.5, marginTop: 2 }}
+                  style={{
+                    fontSize: 10,
+                    lineHeight: "16px",
+                    color: labelColor,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    marginTop: 2,
+                  }}
                 >
                   {p.team}
                 </div>
               )}
             </div>
-            <span
-              className="font-black tabular-nums whitespace-nowrap"
-              style={{ color: "#0f172a", fontSize: 14, lineHeight: 1.4 }}
+            <div
+              style={{
+                display: "table-cell",
+                verticalAlign: "middle",
+                textAlign: "right",
+                whiteSpace: "nowrap",
+                fontSize: 14,
+                lineHeight: "20px",
+                fontWeight: 900,
+                color: "#0f172a",
+                fontVariantNumeric: "tabular-nums",
+              }}
             >
               {p.value}
               {unit ? (
                 <span
-                  className="ml-1 font-bold uppercase tracking-wide"
-                  style={{ color: labelColor, fontSize: 10, lineHeight: 1.4 }}
+                  style={{
+                    marginLeft: 4,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.04em",
+                    color: labelColor,
+                  }}
                 >
                   {unit}
                 </span>
               ) : null}
-            </span>
+            </div>
           </li>
         ))}
         {entries.length === 0 && (
