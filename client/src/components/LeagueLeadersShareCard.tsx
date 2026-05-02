@@ -71,46 +71,48 @@ export default function LeagueLeadersShareCard({
       className="rounded-xl px-3 py-3"
       style={{ backgroundColor: panelBg, border: `1px solid ${panelBorder}` }}
     >
-      <ol className="space-y-1.5">
+      <ol className="space-y-1">
         {entries.map((p, i) => (
           <li
             key={`${p.name}-${i}`}
-            className="flex items-center gap-3 py-1.5 px-2 rounded-md"
+            className="flex items-center gap-3 px-2 rounded-md"
             style={{
               backgroundColor: i === 0 ? tintHex(brandColor, 0.85) : "transparent",
+              paddingTop: 8,
+              paddingBottom: 8,
             }}
           >
             <span
-              className="text-sm font-black tabular-nums w-5 text-center flex-shrink-0"
-              style={{ color: rankColor }}
+              className="font-black tabular-nums text-center flex-shrink-0"
+              style={{ color: rankColor, fontSize: 14, lineHeight: 1.4, width: 20 }}
             >
               {i + 1}
             </span>
             <div className="flex-1 min-w-0">
               <div
-                className="text-sm font-bold leading-tight truncate"
-                style={{ color: "#0f172a" }}
+                className="font-bold truncate"
+                style={{ color: "#0f172a", fontSize: 13, lineHeight: 1.45 }}
               >
                 {p.name}
               </div>
               {p.team && (
                 <div
-                  className="text-[10px] leading-tight truncate mt-0.5"
-                  style={{ color: labelColor }}
+                  className="truncate"
+                  style={{ color: labelColor, fontSize: 10, lineHeight: 1.5, marginTop: 2 }}
                 >
                   {p.team}
                 </div>
               )}
             </div>
             <span
-              className="text-sm font-black tabular-nums whitespace-nowrap"
-              style={{ color: "#0f172a" }}
+              className="font-black tabular-nums whitespace-nowrap"
+              style={{ color: "#0f172a", fontSize: 14, lineHeight: 1.4 }}
             >
               {p.value}
               {unit ? (
                 <span
-                  className="ml-1 text-[10px] font-bold uppercase tracking-wide"
-                  style={{ color: labelColor }}
+                  className="ml-1 font-bold uppercase tracking-wide"
+                  style={{ color: labelColor, fontSize: 10, lineHeight: 1.4 }}
                 >
                   {unit}
                 </span>
@@ -120,8 +122,8 @@ export default function LeagueLeadersShareCard({
         ))}
         {entries.length === 0 && (
           <li
-            className="text-xs text-center py-3"
-            style={{ color: labelColor }}
+            className="text-center"
+            style={{ color: labelColor, fontSize: 12, lineHeight: 1.5, paddingTop: 12, paddingBottom: 12 }}
           >
             No data available
           </li>
