@@ -6,6 +6,7 @@ import { normalizeTeamName } from "@/lib/teamUtils";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { useLocation } from "wouter";
 import ShotChart, { type ShotData } from "@/components/ShotChart";
+import { useReadableTeamColor } from "@/hooks/useReadableColor";
 import {
   Select,
   SelectContent,
@@ -89,6 +90,7 @@ const applyPlayerMode = (
 
 export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, childLeagueIds, onBack, onPlayerClick }: InlineTeamProfileProps) {
   const [, navigate] = useLocation();
+  const readableBrand = useReadableTeamColor(brandColor);
   const [activeTab, setActiveTab] = useState<'overview' | 'playerStats' | 'shotChart'>('overview');
   const [playerStatsCategory, setPlayerStatsCategory] = useState<'Traditional' | 'Advanced' | 'Scoring'>('Traditional');
   const [playerStatsView, setPlayerStatsView] = useState<'Total' | 'Per Game' | 'Per 40'>('Per Game');
@@ -315,7 +317,7 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-8 h-8 animate-spin" style={{ color: brandColor }} />
+        <Loader2 className="w-8 h-8 animate-spin" style={{ color: readableBrand.accent }} />
       </div>
     );
   }
@@ -324,7 +326,7 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
     return (
       <div className="text-center py-12">
         <p className="text-slate-500 dark:text-slate-400">Team not found</p>
-        <button onClick={onBack} className="mt-3 text-sm font-medium hover:underline" style={{ color: brandColor }}>
+        <button onClick={onBack} className="mt-3 text-sm font-medium hover:underline" style={{ color: readableBrand.body }}>
           <ArrowLeft className="h-4 w-4 inline mr-1" /> Go back
         </button>
       </div>
@@ -342,7 +344,7 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
       <button
         onClick={onBack}
         className="inline-flex items-center gap-2 text-sm font-medium transition-colors hover:underline"
-        style={{ color: brandColor }}
+        style={{ color: readableBrand.body }}
       >
         <ArrowLeft className="h-4 w-4" />
         Back
@@ -361,7 +363,7 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
                   <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-white/80 dark:bg-neutral-800/80 text-slate-700 dark:text-slate-300 backdrop-blur-sm">
                     {teamData.roster.length} Players
                   </span>
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-white/80 dark:bg-neutral-800/80 backdrop-blur-sm" style={{ color: brandColor }}>
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-white/80 dark:bg-neutral-800/80 backdrop-blur-sm" style={{ color: readableBrand.body }}>
                     {teamData.wins}-{teamData.losses}
                   </span>
                   <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-white/80 dark:bg-neutral-800/80 text-slate-700 dark:text-slate-300 backdrop-blur-sm">
@@ -382,7 +384,7 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
             className={`px-3 md:px-4 py-1.5 text-xs md:text-sm font-medium transition-colors capitalize ${
               activeTab === tab ? 'text-white' : 'text-slate-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-neutral-800'
             }`}
-            style={activeTab === tab ? { backgroundColor: brandColor } : {}}
+            style={activeTab === tab ? { backgroundColor: readableBrand.onWhite } : {}}
           >
             {tab === 'playerStats' ? 'Player Stats' : tab === 'shotChart' ? 'Shot Chart' : 'Overview'}
           </button>
@@ -404,7 +406,7 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
               ].map((stat, i) => (
                 <div key={i} className="text-center py-2">
                   <div className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-0.5">{stat.label}</div>
-                  <div className="text-xl md:text-2xl font-black tabular-nums" style={{ color: brandColor }}>{stat.value.toFixed(1)}</div>
+                  <div className="text-xl md:text-2xl font-black tabular-nums" style={{ color: readableBrand.body }}>{stat.value.toFixed(1)}</div>
                 </div>
               ))}
             </div>
@@ -420,9 +422,9 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
               ].map((stat, i) => (
                 <div key={i} className="text-center">
                   <div className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-0.5">{stat.label}</div>
-                  <div className="text-xl md:text-2xl font-black tabular-nums" style={{ color: brandColor }}>{stat.value.toFixed(1)}%</div>
+                  <div className="text-xl md:text-2xl font-black tabular-nums" style={{ color: readableBrand.body }}>{stat.value.toFixed(1)}%</div>
                   <div className="mt-1.5 bg-gray-100 dark:bg-neutral-700 h-1 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(stat.value, 100)}%`, backgroundColor: brandColor }} />
+                    <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(stat.value, 100)}%`, backgroundColor: readableBrand.accent }} />
                   </div>
                 </div>
               ))}
@@ -553,7 +555,7 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
                   <th className="px-2 py-1.5 text-left font-semibold whitespace-nowrap sticky left-0 bg-white dark:bg-neutral-900 z-10">Player</th>
                   <th
                     className={`px-2 py-1.5 text-center font-semibold cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800 ${statsSortColumn === 'GP' ? '' : ''}`}
-                    style={statsSortColumn === 'GP' ? { color: brandColor } : {}}
+                    style={statsSortColumn === 'GP' ? { color: readableBrand.body } : {}}
                     onClick={() => { if (statsSortColumn === 'GP') setStatsSortDirection(d => d === 'desc' ? 'asc' : 'desc'); else { setStatsSortColumn('GP'); setStatsSortDirection('desc'); } }}
                   >
                     GP {statsSortColumn === 'GP' && <span className="text-[8px]">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>}
@@ -562,7 +564,7 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
                     <th
                       key={col.key}
                       className="px-2 py-1.5 text-center font-semibold cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800"
-                      style={statsSortColumn === col.label ? { color: brandColor } : {}}
+                      style={statsSortColumn === col.label ? { color: readableBrand.body } : {}}
                       onClick={() => { if (statsSortColumn === col.label) setStatsSortDirection(d => d === 'desc' ? 'asc' : 'desc'); else { setStatsSortColumn(col.label); setStatsSortDirection('desc'); } }}
                     >
                       {col.label} {statsSortColumn === col.label && <span className="text-[8px]">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>}

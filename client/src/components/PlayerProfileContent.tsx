@@ -11,6 +11,7 @@ import { generatePlayerAnalysis, type PlayerAnalysisData } from "@/lib/ai-analys
 import { TeamLogo } from "@/components/TeamLogo";
 import { PlayerBanner } from "@/components/PlayerBanner";
 import { useTeamBranding } from "@/hooks/useTeamBranding";
+import { useReadableTeamColor } from "@/hooks/useReadableColor";
 import { namesMatch, getMostCompleteName, slugToName, type PlayerMatch } from "@/lib/fuzzyMatch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import ShotChart, { type ShotData } from "@/components/ShotChart";
@@ -191,21 +192,14 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
   const [savingFocus, setSavingFocus] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { primaryColor: brandedPrimary, colors: brandColors } = useTeamBranding({
+  const { primaryColor: brandedPrimary } = useTeamBranding({
     teamName: playerInfo?.team || "",
     leagueId: playerInfo?.leagueId || "",
     enabled: !brandColorOverride && !!playerInfo?.team && !!playerInfo?.leagueId,
   });
 
   const primaryColor = brandColorOverride || brandedPrimary;
-
-  const primaryColorAlpha = (opacity: number) => {
-    if (!brandColorOverride && brandColors?.primaryRgb) {
-      const { r, g, b } = brandColors.primaryRgb;
-      return `rgba(${r}, ${g}, ${b}, ${opacity})`;
-    }
-    return primaryColor;
-  };
+  const readablePrimary = useReadableTeamColor(primaryColor);
 
   const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -1266,7 +1260,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
     return (
       <div className="flex items-center justify-center py-20">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 mx-auto mb-4" style={{ borderColor: primaryColor }}></div>
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 mx-auto mb-4" style={{ borderColor: readablePrimary.accent }}></div>
           <p className="text-slate-500 dark:text-slate-400 text-sm">Loading player profile...</p>
         </div>
       </div>
@@ -1377,7 +1371,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Season Averages</span>
               {selectedLeagueFilter !== "all" && (
-                <Badge variant="outline" className="text-[10px]" style={{ borderColor: primaryColorAlpha(0.5), color: primaryColor }}>
+                <Badge variant="outline" className="text-[10px]" style={{ borderColor: readablePrimary.accent, color: readablePrimary.body }}>
                   {leagueNames.get(selectedLeagueFilter) || 'Filtered'}
                 </Badge>
               )}
@@ -1395,7 +1389,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
                   <div className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-0.5">
                     {stat.label} {stat.rank ? <span className="text-[10px] normal-case">{getOrdinalSuffix(stat.rank)}</span> : null}
                   </div>
-                  <div className="text-2xl md:text-3xl font-black tabular-nums" style={{ color: primaryColor }}>
+                  <div className="text-2xl md:text-3xl font-black tabular-nums" style={{ color: readablePrimary.body }}>
                     {stat.value.toFixed(1)}
                   </div>
                 </div>
@@ -1428,9 +1422,9 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
                   <div className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-0.5">
                     {stat.label} {stat.rank ? <span className="text-[10px] normal-case">{getOrdinalSuffix(stat.rank)}</span> : null}
                   </div>
-                  <div className="text-xl md:text-2xl font-black tabular-nums" style={{ color: primaryColor }}>{formatPercentage(stat.value)}</div>
+                  <div className="text-xl md:text-2xl font-black tabular-nums" style={{ color: readablePrimary.body }}>{formatPercentage(stat.value)}</div>
                   <div className="mt-1.5 bg-gray-100 dark:bg-neutral-700 h-1 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(stat.value, 100)}%`, backgroundColor: primaryColor }} />
+                    <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(stat.value, 100)}%`, backgroundColor: readablePrimary.accent }} />
                   </div>
                 </div>
               ))}
@@ -1512,7 +1506,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
                     className={`px-3 md:px-4 py-1.5 text-xs md:text-sm font-medium transition-colors capitalize ${
                       careerStatsTab === tab ? 'text-white' : 'text-slate-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-neutral-800'
                     }`}
-                    style={careerStatsTab === tab ? { backgroundColor: primaryColor } : {}}
+                    style={careerStatsTab === tab ? { backgroundColor: readablePrimary.onWhite } : {}}
                   >
                     {tab}
                   </button>
@@ -1596,8 +1590,8 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
                     </tr>
                   ))}
                   {careerTotals && careerStats.length > 1 && (
-                    <tr className="font-bold text-slate-900 dark:text-white border-t-2" style={{ borderColor: primaryColorAlpha(0.4) }}>
-                      <td className="px-2 py-1.5 text-xs uppercase" style={{ color: primaryColor }}>Career</td>
+                    <tr className="font-bold text-slate-900 dark:text-white border-t-2" style={{ borderColor: readablePrimary.accent }}>
+                      <td className="px-2 py-1.5 text-xs uppercase" style={{ color: readablePrimary.body }}>Career</td>
                       <td className="px-2 py-1.5 text-xs"></td>
                       {renderCareerRow(careerTotals)}
                     </tr>
