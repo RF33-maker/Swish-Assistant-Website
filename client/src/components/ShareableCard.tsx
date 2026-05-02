@@ -33,19 +33,106 @@ interface ShareableCardProps {
 const BRAND_ORANGE = "#f97316";
 const FALLBACK_NAVY = "#0f1f33";
 
-/** Darken a #rrggbb hex by `amount` (0-1). Falls back to input on invalid hex. */
-function shadeHex(hex: string, amount: number): string {
-  const m = hex.replace("#", "").match(/^([0-9a-f]{6})$/i);
-  if (!m) return hex;
-  const num = parseInt(m[1], 16);
-  let r = (num >> 16) & 0xff;
-  let g = (num >> 8) & 0xff;
-  let b = num & 0xff;
+/** Convert any supported colour string (`#rgb`, `#rrggbb`, `rgb(r,g,b)`) to `#rrggbb`. */
+export function normalizeHex(input: string | null | undefined): string {
+  if (!input) return FALLBACK_NAVY;
+  const trimmed = input.trim();
+  if (trimmed.startsWith("#")) {
+    const h = trimmed.slice(1);
+    if (/^[0-9a-f]{6}$/i.test(h)) return `#${h.toLowerCase()}`;
+    if (/^[0-9a-f]{3}$/i.test(h)) {
+      return `#${h
+        .split("")
+        .map((c) => (c + c).toLowerCase())
+        .join("")}`;
+    }
+  }
+  const rgbMatch = trimmed.match(
+    /^rgba?\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i,
+  );
+  if (rgbMatch) {
+    const r = Math.max(0, Math.min(255, parseInt(rgbMatch[1], 10)));
+    const g = Math.max(0, Math.min(255, parseInt(rgbMatch[2], 10)));
+    const b = Math.max(0, Math.min(255, parseInt(rgbMatch[3], 10)));
+    return `#${[r, g, b]
+      .map((v) => v.toString(16).padStart(2, "0"))
+      .join("")}`;
+  }
+  return FALLBACK_NAVY;
+}
+
+/** Darken a colour by `amount` (0-1). Accepts hex or rgb(); always returns `#rrggbb`. */
+export function shadeHex(input: string, amount: number): string {
+  const hex = normalizeHex(input);
+  const num = parseInt(hex.slice(1), 16);
   const factor = 1 - amount;
-  r = Math.max(0, Math.min(255, Math.round(r * factor)));
-  g = Math.max(0, Math.min(255, Math.round(g * factor)));
-  b = Math.max(0, Math.min(255, Math.round(b * factor)));
+  const r = Math.max(0, Math.min(255, Math.round(((num >> 16) & 0xff) * factor)));
+  const g = Math.max(0, Math.min(255, Math.round(((num >> 8) & 0xff) * factor)));
+  const b = Math.max(0, Math.min(255, Math.round((num & 0xff) * factor)));
   return `#${[r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+}
+
+/** Return a `rgba(...)` string for `hex` at the given alpha (0-1). */
+export function withAlpha(input: string, alpha: number): string {
+  const hex = normalizeHex(input);
+  const num = parseInt(hex.slice(1), 16);
+  const r = (num >> 16) & 0xff;
+  const g = (num >> 8) & 0xff;
+  const b = num & 0xff;
+  const a = Math.max(0, Math.min(1, alpha));
+  return `rgba(${r}, ${g}, ${b}, ${a})`;
+}
+
+/** Mix a colour toward white by `amount` (0-1). */
+export function tintHex(input: string, amount: number): string {
+  const hex = normalizeHex(input);
+  const num = parseInt(hex.slice(1), 16);
+  const r = Math.round(((num >> 16) & 0xff) + (255 - ((num >> 16) & 0xff)) * amount);
+  const g = Math.round(((num >> 8) & 0xff) + (255 - ((num >> 8) & 0xff)) * amount);
+  const b = Math.round((num & 0xff) + (255 - (num & 0xff)) * amount);
+  return `#${[r, g, b]
+    .map((v) => Math.max(0, Math.min(255, v)).toString(16).padStart(2, "0"))
+    .join("")}`;
+}
+
+function relativeLuminance(input: string): number {
+  const hex = normalizeHex(input);
+  const num = parseInt(hex.slice(1), 16);
+  const channels = [(num >> 16) & 0xff, (num >> 8) & 0xff, num & 0xff].map(
+    (v) => {
+      const c = v / 255;
+      return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    },
+  );
+  return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+}
+
+export function contrastRatio(a: string, b: string): number {
+  const la = relativeLuminance(a);
+  const lb = relativeLuminance(b);
+  return la > lb ? (la + 0.05) / (lb + 0.05) : (lb + 0.05) / (la + 0.05);
+}
+
+/**
+ * Adjust `color` toward black or white (whichever opposes `bg`) until it has at
+ * least `minRatio` contrast against `bg`. Useful for keeping team-coloured text
+ * readable on either the white share body or a dark navy band.
+ */
+export function ensureContrast(
+  color: string,
+  bg: string,
+  minRatio = 4.5,
+): string {
+  const start = normalizeHex(color);
+  if (contrastRatio(start, bg) >= minRatio) return start;
+  const bgIsLight = relativeLuminance(bg) > 0.5;
+  let result = start;
+  for (let amount = 0.08; amount <= 0.92; amount += 0.06) {
+    const candidate = bgIsLight ? shadeHex(start, amount) : tintHex(start, amount);
+    if (contrastRatio(candidate, bg) >= minRatio) return candidate;
+    result = candidate;
+  }
+  return result;
 }
 
 function DiagonalStripes({
@@ -151,11 +238,32 @@ export default function ShareableCard({
     .replace(/[^a-z0-9]+/g, "-")}-${slug}.png`;
 
   // Use team primary color (with darker shade for the gradient end).
-  const bandBase = player.primaryColor || FALLBACK_NAVY;
+  const bandBase = normalizeHex(player.primaryColor || FALLBACK_NAVY);
   const bandDark = shadeHex(bandBase, 0.25);
   const bandStyle = {
     background: `linear-gradient(135deg, ${bandBase} 0%, ${bandDark} 100%)`,
   } as const;
+
+  // Title sits on the team-coloured band. If the band is light (e.g. a yellow
+  // team), pure brand orange disappears, so derive a band-readable variant.
+  const titleColor = ensureContrast(BRAND_ORANGE, bandBase, 4.5);
+
+  // All other text on the band (player name, team, caption, footer URL,
+  // footer meta) is normally white-on-navy. If the team band is very light
+  // (e.g. yellow), white text vanishes; the contrast guard flips it to a
+  // dark variant so it stays readable. Muted variants reuse the same base
+  // colour with reduced opacity so they don't drift back to a transparent
+  // white that would be invisible on a light band.
+  const bandTextColor = ensureContrast("#ffffff", bandBase, 4.5);
+  const bandTextSubtle = withAlpha(bandTextColor, 0.85);
+  const bandTextMuted = withAlpha(bandTextColor, 0.7);
+
+  // Body accents derived from the team colour. The body background stays
+  // white for legibility, so the accent strip uses the raw team colour and
+  // the subtle body tint is a near-white wash of it.
+  const accentStripStart = bandBase;
+  const accentStripEnd = shadeHex(bandBase, 0.25);
+  const bodyTint = tintHex(bandBase, 0.94);
 
   const generatePngBlob = async (): Promise<Blob | null> => {
     if (!captureRef.current) return null;
@@ -167,6 +275,14 @@ export default function ShareableCard({
       logging: false,
       windowWidth: captureRef.current.scrollWidth,
       windowHeight: captureRef.current.scrollHeight,
+      onclone: (doc) => {
+        // Strip the global `.dark` class from the cloned document so any
+        // `dark:` Tailwind variants inside the captured share card revert to
+        // their light-mode values — preventing white-on-white text on the
+        // exported PNG when the user has dark mode enabled.
+        doc.documentElement.classList.remove("dark");
+        doc.body.classList.remove("dark");
+      },
     });
     return await new Promise<Blob | null>((resolve) =>
       canvas.toBlob((b) => resolve(b), "image/png", 0.95)
@@ -331,26 +447,29 @@ export default function ShareableCard({
                     <div className="flex-1 min-w-0">
                       <div
                         className="text-[10px] font-bold tracking-[0.2em] uppercase mb-0.5"
-                        style={{ color: BRAND_ORANGE }}
+                        style={{ color: titleColor }}
                       >
                         {title}
                       </div>
                       <div
-                        className="text-xl font-black text-white leading-tight"
-                        style={{ wordBreak: "break-word" }}
+                        className="text-xl font-black leading-tight"
+                        style={{ wordBreak: "break-word", color: bandTextColor }}
                       >
                         {player.name}
                       </div>
                       {player.team && (
                         <div
-                          className="text-[11px] text-white/85 leading-snug mt-1"
-                          style={{ wordBreak: "break-word" }}
+                          className="text-[11px] leading-snug mt-1"
+                          style={{ wordBreak: "break-word", color: bandTextSubtle }}
                         >
                           {player.team}
                         </div>
                       )}
                       {shareCaption && (
-                        <div className="text-[10px] text-white/70 uppercase tracking-wider mt-1.5">
+                        <div
+                          className="text-[10px] uppercase tracking-wider mt-1.5"
+                          style={{ color: bandTextMuted }}
+                        >
                           {shareCaption}
                         </div>
                       )}
@@ -358,9 +477,31 @@ export default function ShareableCard({
                   </div>
                 </div>
 
-                {/* Card content */}
-                <div className="p-4 bg-gradient-to-b from-white to-slate-50 dark:from-neutral-900 dark:to-neutral-950">
-                  <div className="share-content">{shareContent ?? children}</div>
+                {/* Team-colour accent strip bridging the header band into the
+                    body, so the team brand carries through visually. */}
+                <div
+                  aria-hidden="true"
+                  style={{
+                    height: 5,
+                    background: `linear-gradient(90deg, ${accentStripStart} 0%, ${accentStripEnd} 100%)`,
+                  }}
+                />
+
+                {/* Card content. We force light styles here so that any
+                    `dark:` Tailwind variants from the embedded share content
+                    do not flip to white-on-white when the user is in dark
+                    mode. The on-page (non-modal) content keeps its own dark
+                    behaviour because it lives outside this wrapper. */}
+                <div
+                  className="p-4 share-content"
+                  style={{
+                    background: `linear-gradient(180deg, #ffffff 0%, ${bodyTint} 100%)`,
+                    color: "#0f172a",
+                    colorScheme: "light",
+                  }}
+                  data-share-body="true"
+                >
+                  {shareContent ?? children}
                 </div>
 
                 {/* Footer band */}
@@ -378,13 +519,17 @@ export default function ShareableCard({
                       crossOrigin="anonymous"
                     />
                     <div
-                      className="text-white font-bold text-sm tracking-wide"
+                      className="font-bold text-sm tracking-wide"
+                      style={{ color: bandTextColor }}
                     >
                       swishassistant.com
                     </div>
                   </div>
 
-                  <div className="relative text-right text-[10px] text-white/70 uppercase tracking-wider">
+                  <div
+                    className="relative text-right text-[10px] uppercase tracking-wider"
+                    style={{ color: bandTextMuted }}
+                  >
                     Stats &amp; insights
                   </div>
                 </div>

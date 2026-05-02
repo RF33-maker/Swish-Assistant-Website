@@ -4,7 +4,11 @@ import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { TeamLogo } from "@/components/TeamLogo";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
-import ShareableCard from "@/components/ShareableCard";
+import ShareableCard, {
+  ensureContrast,
+  shadeHex,
+  tintHex,
+} from "@/components/ShareableCard";
 import { useTeamBranding } from "@/hooks/useTeamBranding";
 
 interface PerfRow {
@@ -84,6 +88,72 @@ function StatBlock({ perf, tsPct }: { perf: PerfRow; tsPct: string }) {
       <Stat label="FGA" value={perf.fga ?? 0} />
       <Stat label="FTA" value={perf.fta ?? 0} />
       <Stat label="TS%" value={tsPct} />
+    </div>
+  );
+}
+
+/**
+ * Stat tile used inside the share modal. Uses explicit inline styles so the
+ * exported PNG never picks up `dark:` Tailwind variants (which would render
+ * white text on the white share body when the user has dark mode on).
+ */
+function ShareStat({
+  label,
+  value,
+  labelColor,
+}: {
+  label: string;
+  value: string | number;
+  labelColor: string;
+}) {
+  return (
+    <div className="flex flex-col items-center min-w-[44px]">
+      <span
+        className="text-lg font-black tabular-nums leading-none"
+        style={{ color: "#0f172a" }}
+      >
+        {value}
+      </span>
+      <span
+        className="text-[10px] font-semibold uppercase tracking-wide mt-1.5"
+        style={{ color: labelColor }}
+      >
+        {label}
+      </span>
+    </div>
+  );
+}
+
+function ShareStatBlock({
+  perf,
+  tsPct,
+  labelColor,
+  panelBg,
+  panelBorder,
+}: {
+  perf: PerfRow;
+  tsPct: string;
+  labelColor: string;
+  panelBg: string;
+  panelBorder: string;
+}) {
+  return (
+    <div
+      className="rounded-xl px-3 py-4"
+      style={{ backgroundColor: panelBg, border: `1px solid ${panelBorder}` }}
+    >
+      <div className="grid grid-cols-5 gap-y-4 gap-x-1">
+        <ShareStat label="GS" value={perf.game_score ?? 0} labelColor={labelColor} />
+        <ShareStat label="PTS" value={perf.pts ?? 0} labelColor={labelColor} />
+        <ShareStat label="REB" value={perf.reb ?? 0} labelColor={labelColor} />
+        <ShareStat label="AST" value={perf.ast ?? 0} labelColor={labelColor} />
+        <ShareStat label="STL" value={perf.stl ?? 0} labelColor={labelColor} />
+        <ShareStat label="BLK" value={perf.blk ?? 0} labelColor={labelColor} />
+        <ShareStat label="TOV" value={perf.tov ?? 0} labelColor={labelColor} />
+        <ShareStat label="FGA" value={perf.fga ?? 0} labelColor={labelColor} />
+        <ShareStat label="FTA" value={perf.fta ?? 0} labelColor={labelColor} />
+        <ShareStat label="TS%" value={tsPct} labelColor={labelColor} />
+      </div>
     </div>
   );
 }
@@ -276,17 +346,53 @@ export default function TrendingPerformanceSection() {
   // Content rendered inside the share dialog. The ShareableCard chrome
   // already supplies the player photo / name / team header band, so the
   // share content only needs the meta + stats body.
+  //
+  // Colour strategy:
+  //  - Stat values stay near-black (#0f172a) on the white body so digits read
+  //    instantly at small sizes.
+  //  - Stat labels and the league line use a contrast-guarded variant of the
+  //    team primary so the brand carries through without dropping legibility
+  //    when the team colour is very light (yellow) or very dark (navy).
+  //  - The stat grid sits on a near-white tint of the team colour with a soft
+  //    coloured border, so the panel feels branded without competing with the
+  //    numbers.
+  const labelColor = ensureContrast(primaryColor, "#ffffff", 4.5);
+  const panelBg = tintHex(primaryColor, 0.92);
+  const panelBorder = tintHex(primaryColor, 0.7);
+  const dividerColor = tintHex(primaryColor, 0.65);
+  // The date sits opposite the league label, so we shade it slightly darker
+  // than `labelColor` for a clear hierarchy while still passing the contrast
+  // guard against the white share body.
+  const dateColor = ensureContrast(shadeHex(primaryColor, 0.35), "#ffffff", 4.5);
+
   const shareBody = (
-    <div className="bg-white">
+    <div>
       <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+        <span
+          className="text-[11px] font-bold uppercase tracking-[0.14em]"
+          style={{ color: labelColor }}
+        >
           {leagueName || "Featured League"}
         </span>
-        <span className="text-xs font-semibold text-slate-700">
+        <span
+          className="text-[11px] font-semibold uppercase tracking-wider"
+          style={{ color: dateColor }}
+        >
           {formatDate(perf.game_date)}
         </span>
       </div>
-      <StatBlock perf={perf} tsPct={tsPct} />
+      <div
+        aria-hidden="true"
+        className="mb-3"
+        style={{ height: 1, backgroundColor: dividerColor }}
+      />
+      <ShareStatBlock
+        perf={perf}
+        tsPct={tsPct}
+        labelColor={labelColor}
+        panelBg={panelBg}
+        panelBorder={panelBorder}
+      />
     </div>
   );
 
