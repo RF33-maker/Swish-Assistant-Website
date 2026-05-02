@@ -598,6 +598,10 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
         }
 
         if (!initialPlayer) {
+          // Bail without toasting if the user navigated away or the
+          // slug changed while our awaited lookups were in flight —
+          // avoids a stale toast firing on a no-longer-mounted view.
+          if (cancelled) return;
           if (lookupTransient) {
             if (transientRetryCount < MAX_TRANSIENT_RETRIES) {
               // Re-queue with the loading skeleton still visible.
