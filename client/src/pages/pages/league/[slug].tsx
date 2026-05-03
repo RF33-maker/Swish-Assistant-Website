@@ -4853,6 +4853,7 @@ export default function LeaguePage() {
                     leagueId={league?.league_id || ""} 
                     allTeams={teamStatsData}
                     brandColor={brandColorHex}
+                    scopedLeagueIds={isParentLeague ? selectedAgeGroupLeagueIds : [getDataLeagueId(slug, league?.league_id || "")]}
                   />
                 )}
               </div>

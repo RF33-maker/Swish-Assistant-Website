@@ -18,6 +18,7 @@ interface TeamComparisonProps {
   leagueId: string;
   allTeams: any[];
   brandColor?: string;
+  scopedLeagueIds?: string[];
 }
 
 function aggregateTeamStats(filteredStats: any[], teamName: string) {
@@ -202,7 +203,7 @@ function getTeamComparisonRows(
   }
 }
 
-export function TeamComparison({ leagueId, allTeams, brandColor }: TeamComparisonProps) {
+export function TeamComparison({ leagueId, allTeams, brandColor, scopedLeagueIds }: TeamComparisonProps) {
   const [team1Name, setTeam1Name] = useState<string>("");
   const [team2Name, setTeam2Name] = useState<string>("");
   const [team1Stats, setTeam1Stats] = useState<any>(null);
@@ -263,10 +264,10 @@ export function TeamComparison({ leagueId, allTeams, brandColor }: TeamCompariso
   }, []);
 
   const fetchAllTeamStats = async (): Promise<any[]> => {
-    const { data, error } = await supabase
-      .from("team_stats")
-      .select("*")
-      .eq("league_id", leagueId);
+    const ids = scopedLeagueIds && scopedLeagueIds.length > 0 ? scopedLeagueIds : [leagueId];
+    let query = supabase.from("team_stats").select("*");
+    query = ids.length > 1 ? query.in("league_id", ids) : query.eq("league_id", ids[0]);
+    const { data, error } = await query;
     if (error) throw error;
     return data || [];
   };
@@ -297,6 +298,7 @@ export function TeamComparison({ leagueId, allTeams, brandColor }: TeamCompariso
     }
   };
 
+  const scopedIdsKey = (scopedLeagueIds && scopedLeagueIds.length > 0 ? scopedLeagueIds : [leagueId]).slice().sort().join(',');
   useEffect(() => {
     if (team1Name && team2Name) {
       handleCompare();
@@ -304,7 +306,7 @@ export function TeamComparison({ leagueId, allTeams, brandColor }: TeamCompariso
       setFetchError(null);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [team1Name, team2Name]);
+  }, [team1Name, team2Name, scopedIdsKey]);
 
   const filteredTeams1 = allTeams.filter(team =>
     team.teamName?.toLowerCase().includes(search1.toLowerCase())
