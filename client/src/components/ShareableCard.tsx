@@ -140,7 +140,16 @@ function PlayerAvatar({ player, size = 64 }: { player: SharePlayer; size?: numbe
           }}
         />
       ) : (
-        <span style={{ fontSize: size * 0.34 }}>{initials}</span>
+        <span
+          style={{
+            fontSize: size * 0.38,
+            lineHeight: 1,
+            display: "inline-block",
+            transform: "translateY(2%)",
+          }}
+        >
+          {initials}
+        </span>
       )}
     </div>
   );
@@ -630,17 +639,17 @@ export default function ShareableCard({
                           {player.teamLogoUrl && (
                             <span
                               className="inline-flex items-center justify-center rounded-full bg-white border border-white/60 overflow-hidden flex-shrink-0 shadow-sm"
-                              style={{ width: wide ? 48 : 28, height: wide ? 48 : 28 }}
+                              style={{ width: wide ? 64 : 28, height: wide ? 64 : 28 }}
                             >
                               <img
                                 src={player.teamLogoUrl}
                                 alt={player.team}
                                 crossOrigin="anonymous"
-                                width={wide ? 42 : 24}
-                                height={wide ? 42 : 24}
+                                width={wide ? 56 : 24}
+                                height={wide ? 56 : 24}
                                 style={{
-                                  width: wide ? 42 : 24,
-                                  height: wide ? 42 : 24,
+                                  width: wide ? 56 : 24,
+                                  height: wide ? 56 : 24,
                                   objectFit: "contain",
                                 }}
                                 onError={(e) => {
