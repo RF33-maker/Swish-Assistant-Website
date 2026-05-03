@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Download, Share2, Loader2 } from "lucide-react";
 import html2canvas from "html2canvas";
 import {
@@ -52,7 +52,17 @@ interface ShareableCardProps {
    * the right with a "VS" separator.
    */
   teamLogos?: ShareTeamLogo[];
+  /**
+   * When true, the captured PNG renders at a wider, social-friendly canvas
+   * (~1080px logical width) instead of the default ~512px strip. The modal
+   * preview is scaled down to fit while the export keeps full resolution.
+   * Used by share cards intended for Instagram / X feeds.
+   */
+  wide?: boolean;
 }
+
+const SHARE_WIDTH_WIDE = 1080;
+const PREVIEW_WIDTH_WIDE = 480;
 
 const BRAND_ORANGE = "#f97316";
 
@@ -144,11 +154,26 @@ export default function ShareableCard({
   shareContent,
   shareCaption,
   teamLogos,
+  wide,
 }: ShareableCardProps) {
   const [open, setOpen] = useState(false);
   const [working, setWorking] = useState(false);
+  const [captureHeight, setCaptureHeight] = useState<number | null>(null);
   const captureRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+
+  const previewScale = wide ? PREVIEW_WIDTH_WIDE / SHARE_WIDTH_WIDE : 1;
+
+  useEffect(() => {
+    if (!open || !wide) return;
+    const el = captureRef.current;
+    if (!el) return;
+    const update = () => setCaptureHeight(el.scrollHeight);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [open, wide, shareContent, children]);
 
   const slug = (fileSlug || title)
     .toLowerCase()
@@ -189,14 +214,26 @@ export default function ShareableCard({
 
   const generatePngBlob = async (): Promise<Blob | null> => {
     if (!captureRef.current) return null;
-    const canvas = await html2canvas(captureRef.current, {
+    // In wide mode the visible preview lives inside a CSS `transform: scale()`
+    // wrapper so it fits the modal. html2canvas measures bounds from the live
+    // element, so a transformed ancestor would shrink the captured canvas to
+    // the preview size. Force the canvas dimensions to the untransformed
+    // layout size and also strip the transform / fixed sizing on the scale
+    // wrapper inside the cloned document so the rendered output is the full
+    // 1080px-wide social card, not the ~480px preview.
+    const captureEl = captureRef.current;
+    const naturalWidth = wide ? SHARE_WIDTH_WIDE : captureEl.scrollWidth;
+    const naturalHeight = captureEl.scrollHeight;
+    const canvas = await html2canvas(captureEl, {
       backgroundColor: "#ffffff",
-      scale: 2,
+      scale: wide ? 1 : 2,
       useCORS: true,
       allowTaint: true,
       logging: false,
-      windowWidth: captureRef.current.scrollWidth,
-      windowHeight: captureRef.current.scrollHeight,
+      windowWidth: naturalWidth,
+      windowHeight: naturalHeight,
+      width: naturalWidth,
+      height: naturalHeight,
       onclone: (doc) => {
         // Strip the global `.dark` class from the cloned document so any
         // `dark:` Tailwind variants inside the captured share card revert to
@@ -204,6 +241,28 @@ export default function ShareableCard({
         // exported PNG when the user has dark mode enabled.
         doc.documentElement.classList.remove("dark");
         doc.body.classList.remove("dark");
+
+        // Reset the scaling wrappers so the cloned share card renders at
+        // its natural 1080px width. Without this, html2canvas would draw
+        // the transformed (scaled-down) version into the canvas.
+        const scaler = doc.querySelector<HTMLElement>(
+          "[data-share-scale-wrapper='true']",
+        );
+        if (scaler) {
+          scaler.style.transform = "none";
+          scaler.style.position = "static";
+          scaler.style.width = `${SHARE_WIDTH_WIDE}px`;
+        }
+        const outer = doc.querySelector<HTMLElement>(
+          "[data-share-scale-outer='true']",
+        );
+        if (outer) {
+          outer.style.width = `${SHARE_WIDTH_WIDE}px`;
+          outer.style.height = "auto";
+          outer.style.minHeight = "0";
+          outer.style.position = "static";
+          outer.style.overflow = "visible";
+        }
       },
     });
     return await new Promise<Blob | null>((resolve) =>
@@ -304,7 +363,7 @@ export default function ShareableCard({
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
-          className="max-w-lg p-0 bg-transparent border-none shadow-none max-h-[92vh] overflow-hidden flex flex-col [&>button]:bg-white/95 [&>button]:rounded-full [&>button]:p-1.5 [&>button]:right-2 [&>button]:top-2 [&>button]:text-slate-700 [&>button]:shadow-md [&>button]:z-20"
+          className={`${wide ? "max-w-[540px]" : "max-w-lg"} p-0 bg-transparent border-none shadow-none max-h-[92vh] overflow-hidden flex flex-col [&>button]:bg-white/95 [&>button]:rounded-full [&>button]:p-1.5 [&>button]:right-2 [&>button]:top-2 [&>button]:text-slate-700 [&>button]:shadow-md [&>button]:z-20`}
         >
           <DialogTitle className="sr-only">
             Share {title} for {player.name}
@@ -316,11 +375,56 @@ export default function ShareableCard({
           <div className="rounded-xl overflow-hidden bg-white shadow-2xl flex flex-col min-h-0">
             {/* Scrollable preview area */}
             <div className="overflow-y-auto bg-slate-100 flex-1 min-h-0">
-              <div ref={captureRef} className="bg-white" data-share-card="true">
+              <div
+                data-share-scale-outer={wide ? "true" : undefined}
+                style={
+                  wide
+                    ? {
+                        width: PREVIEW_WIDTH_WIDE,
+                        height:
+                          captureHeight != null
+                            ? captureHeight * previewScale
+                            : undefined,
+                        minHeight: captureHeight == null ? 600 : undefined,
+                        margin: "0 auto",
+                        position: "relative",
+                        overflow: "hidden",
+                      }
+                    : undefined
+                }
+              >
+              <div
+                data-share-scale-wrapper={wide ? "true" : undefined}
+                style={
+                  wide
+                    ? {
+                        transform: `scale(${previewScale})`,
+                        transformOrigin: "top left",
+                        width: SHARE_WIDTH_WIDE,
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                      }
+                    : undefined
+                }
+              >
+              <div
+                ref={captureRef}
+                className="bg-white"
+                data-share-card="true"
+                style={wide ? { width: SHARE_WIDTH_WIDE } : undefined}
+              >
                 {/* Header band */}
                 <div
-                  className="relative px-6 pt-6 pb-5 overflow-hidden"
-                  style={{ ...bandStyle, minHeight: 170 }}
+                  className="relative overflow-hidden"
+                  style={{
+                    ...bandStyle,
+                    minHeight: wide ? 260 : 170,
+                    paddingLeft: wide ? 40 : 24,
+                    paddingRight: wide ? 40 : 24,
+                    paddingTop: wide ? 36 : 24,
+                    paddingBottom: wide ? 32 : 20,
+                  }}
                 >
                   <DiagonalStripes position="tl" color={BRAND_ORANGE} />
 
@@ -328,22 +432,35 @@ export default function ShareableCard({
                       "VS" in between, in place of the single player photo /
                       avatar. Used by Team & Player head-to-head share cards. */}
                   {teamLogos && teamLogos.length >= 2 ? (
-                    <div className="relative flex items-center gap-5 h-full" style={{ minHeight: 120 }}>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        {[teamLogos[0], teamLogos[1]].map((tl, i) => (
-                          <div key={i} className="flex items-center gap-2">
+                    <div
+                      className="relative flex items-center h-full"
+                      style={{ minHeight: wide ? 200 : 120, gap: wide ? 28 : 20 }}
+                    >
+                      <div
+                        className="flex items-center flex-shrink-0"
+                        style={{ gap: wide ? 14 : 8 }}
+                      >
+                        {[teamLogos[0], teamLogos[1]].map((tl, i) => {
+                          const logoOuter = wide ? 110 : 60;
+                          const logoInner = wide ? 96 : 52;
+                          return (
+                          <div
+                            key={i}
+                            className="flex items-center"
+                            style={{ gap: wide ? 14 : 8 }}
+                          >
                             <div
                               className="rounded-full bg-white/95 flex items-center justify-center overflow-hidden border-2 border-white/40 shadow"
-                              style={{ width: 60, height: 60 }}
+                              style={{ width: logoOuter, height: logoOuter }}
                             >
                               {tl.logoUrl ? (
                                 <img
                                   src={tl.logoUrl}
                                   alt={tl.name}
                                   crossOrigin="anonymous"
-                                  width={52}
-                                  height={52}
-                                  style={{ width: 52, height: 52, objectFit: "contain" }}
+                                  width={logoInner}
+                                  height={logoInner}
+                                  style={{ width: logoInner, height: logoInner, objectFit: "contain" }}
                                   onError={(e) => {
                                     (e.currentTarget as HTMLImageElement).style.display = "none";
                                   }}
@@ -351,8 +468,11 @@ export default function ShareableCard({
                                 />
                               ) : (
                                 <span
-                                  className="font-bold text-base"
-                                  style={{ color: shadeHex(player.primaryColor || BRAND_ORANGE, 0.25) }}
+                                  className="font-bold"
+                                  style={{
+                                    color: shadeHex(player.primaryColor || BRAND_ORANGE, 0.25),
+                                    fontSize: wide ? 36 : 16,
+                                  }}
                                 >
                                   {(tl.name || "?").charAt(0).toUpperCase()}
                                 </span>
@@ -360,40 +480,60 @@ export default function ShareableCard({
                             </div>
                             {i === 0 && (
                               <div
-                                className="text-[11px] font-black tracking-widest"
-                                style={{ color: titleColor }}
+                                className="font-black tracking-widest"
+                                style={{ color: titleColor, fontSize: wide ? 22 : 11 }}
                               >
                                 VS
                               </div>
                             )}
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div
-                          className="text-[10px] font-bold tracking-[0.22em] uppercase mb-1.5"
-                          style={{ color: titleColor }}
+                          className="font-bold uppercase"
+                          style={{
+                            color: titleColor,
+                            fontSize: wide ? 16 : 10,
+                            letterSpacing: "0.22em",
+                            marginBottom: wide ? 10 : 6,
+                          }}
                         >
                           {title}
                         </div>
                         <div
-                          className="text-lg font-black leading-tight"
-                          style={{ wordBreak: "break-word", color: bandTextColor }}
+                          className="font-black leading-tight"
+                          style={{
+                            wordBreak: "break-word",
+                            color: bandTextColor,
+                            fontSize: wide ? 36 : 18,
+                          }}
                         >
                           {player.name}
                         </div>
                         {player.team && (
                           <div
-                            className="text-[11px] leading-snug mt-1.5"
-                            style={{ wordBreak: "break-word", color: bandTextSubtle }}
+                            className="leading-snug"
+                            style={{
+                              wordBreak: "break-word",
+                              color: bandTextSubtle,
+                              fontSize: wide ? 16 : 11,
+                              marginTop: wide ? 10 : 6,
+                            }}
                           >
                             {player.team}
                           </div>
                         )}
                         {shareCaption && (
                           <div
-                            className="text-[10px] uppercase tracking-[0.18em] mt-2"
-                            style={{ color: bandTextMuted }}
+                            className="uppercase"
+                            style={{
+                              color: bandTextMuted,
+                              fontSize: wide ? 13 : 10,
+                              letterSpacing: "0.18em",
+                              marginTop: wide ? 12 : 8,
+                            }}
                           >
                             {shareCaption}
                           </div>
@@ -510,7 +650,7 @@ export default function ShareableCard({
                 <div
                   aria-hidden="true"
                   style={{
-                    height: 5,
+                    height: wide ? 8 : 5,
                     background: `linear-gradient(90deg, ${accentStripStart} 0%, ${accentStripEnd} 100%)`,
                   }}
                 />
@@ -521,11 +661,12 @@ export default function ShareableCard({
                     mode. The on-page (non-modal) content keeps its own dark
                     behaviour because it lives outside this wrapper. */}
                 <div
-                  className="p-4 share-content"
+                  className="share-content"
                   style={{
                     background: `linear-gradient(180deg, #ffffff 0%, ${bodyTint} 100%)`,
                     color: "#0f172a",
                     colorScheme: "light",
+                    padding: wide ? 36 : 16,
                   }}
                   data-share-body="true"
                 >
@@ -534,36 +675,55 @@ export default function ShareableCard({
 
                 {/* Footer band */}
                 <div
-                  className="relative px-6 flex items-center justify-between"
-                  style={{ ...bandStyle, height: 72 }}
+                  className="relative flex items-center justify-between"
+                  style={{
+                    ...bandStyle,
+                    height: wide ? 110 : 72,
+                    paddingLeft: wide ? 40 : 24,
+                    paddingRight: wide ? 40 : 24,
+                  }}
                 >
                   <DiagonalStripes position="br" color={BRAND_ORANGE} />
 
-                  <div className="relative flex items-center gap-3">
+                  <div
+                    className="relative flex items-center"
+                    style={{ gap: wide ? 18 : 12 }}
+                  >
                     <img
                       src={SwishLogo}
                       alt="Swish Assistant"
-                      width={36}
-                      height={36}
+                      width={wide ? 56 : 36}
+                      height={wide ? 56 : 36}
                       className="block flex-shrink-0"
-                      style={{ width: 36, height: 36 }}
+                      style={{ width: wide ? 56 : 36, height: wide ? 56 : 36 }}
                       crossOrigin="anonymous"
                     />
                     <div
-                      className="font-bold text-base tracking-wide"
-                      style={{ color: bandTextColor, lineHeight: 1 }}
+                      className="font-bold tracking-wide"
+                      style={{
+                        color: bandTextColor,
+                        lineHeight: 1,
+                        fontSize: wide ? 24 : 16,
+                      }}
                     >
                       swishassistant.com
                     </div>
                   </div>
 
                   <div
-                    className="relative text-right text-[11px] font-semibold uppercase tracking-[0.22em]"
-                    style={{ color: bandTextMuted, lineHeight: 1 }}
+                    className="relative text-right font-semibold uppercase"
+                    style={{
+                      color: bandTextMuted,
+                      lineHeight: 1,
+                      fontSize: wide ? 16 : 11,
+                      letterSpacing: "0.22em",
+                    }}
                   >
                     Stats &amp; Insights
                   </div>
                 </div>
+              </div>
+              </div>
               </div>
             </div>
 
