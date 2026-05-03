@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase, getSupabaseForLeague } from "@/lib/supabase";
-import { type WidgetParams, isLightColor } from "@/lib/widgetUtils";
+import { type WidgetParams, isLightColor, retrySupabase } from "@/lib/widgetUtils";
 import WidgetLayout from "./WidgetLayout";
 
 interface PlayerData {
@@ -49,27 +49,28 @@ export default function PlayerStatsWidget({ params }: { params: WidgetParams }) 
   const [player, setPlayer] = useState<PlayerData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [empty, setEmpty] = useState(false);
 
   useEffect(() => {
     const fetchPlayerStats = async () => {
       const playerId = params.playerId;
       if (!playerId) {
-        setError("No player specified");
+        setError("No player specified in the embed URL.");
         setLoading(false);
         return;
       }
 
       try {
         const db = getSupabaseForLeague(params.leagueSlug || params.leagueId);
-        const { data: playerInfo, error: lookupError } = await supabase
+        const { data: playerInfo, error: lookupError } = await retrySupabase(() => supabase
           .from("players")
           .select("id, full_name, slug")
           .or(`id.eq.${playerId},slug.eq.${playerId}`)
           .limit(1)
-          .single();
+          .single());
 
         if (lookupError || !playerInfo) {
-          setError("Player not found");
+          setError("Player not found.");
           setLoading(false);
           return;
         }
@@ -101,7 +102,7 @@ export default function PlayerStatsWidget({ params }: { params: WidgetParams }) 
         }
 
         if (!resolvedLeagueId) {
-          setError("Could not determine league for this player");
+          setError("Could not determine league for this player.");
           setLoading(false);
           return;
         }
@@ -114,19 +115,25 @@ export default function PlayerStatsWidget({ params }: { params: WidgetParams }) 
           .single();
 
         if (!leagueCheck) {
-          setError("Player data is not publicly available");
+          setError("Player data is not publicly available.");
           setLoading(false);
           return;
         }
 
-        const { data: stats, error: statsError } = await db
+        const { data: stats, error: statsError } = await retrySupabase(() => db
           .from("player_stats")
           .select("spoints, sreboundstotal, sassists, ssteals, sblocks, sfieldgoalsmade, sfieldgoalsattempted, sthreepointersmade, sthreepointersattempted, sfreethrowsmade, sfreethrowsattempted, team_name, firstname, familyname")
           .eq("player_id", canonicalId)
-          .eq("league_id", resolvedLeagueId);
+          .eq("league_id", resolvedLeagueId));
 
-        if (statsError || !stats || stats.length === 0) {
-          setError("No stats found for this player");
+        if (statsError) {
+          setError("We couldn't load player stats right now. Please try again later.");
+          setLoading(false);
+          return;
+        }
+
+        if (!stats || stats.length === 0) {
+          setEmpty(true);
           setLoading(false);
           return;
         }
@@ -164,8 +171,8 @@ export default function PlayerStatsWidget({ params }: { params: WidgetParams }) 
           threePct: totals.tpa > 0 ? (totals.tpm / totals.tpa) * 100 : 0,
           ftPct: totals.fta > 0 ? (totals.ftm / totals.fta) * 100 : 0,
         });
-      } catch (err) {
-        setError("Failed to load player stats");
+      } catch {
+        setError("Something went wrong while loading player stats.");
       } finally {
         setLoading(false);
       }
@@ -206,7 +213,7 @@ export default function PlayerStatsWidget({ params }: { params: WidgetParams }) 
   );
 
   return (
-    <WidgetLayout params={params} loading={loading} error={error}>
+    <WidgetLayout params={params} loading={loading} error={error} empty={empty} emptyMessage="No stats recorded for this player yet.">
       {player && (
         <div className="flex flex-col h-full">
           <div className="text-center mb-4">

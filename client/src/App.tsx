@@ -29,6 +29,7 @@ import NewsManager from "@/pages/NewsManager";
 import NewsArticlePage from "@/pages/NewsArticlePage";
 import WidgetPage from "@/pages/widgets/WidgetPage";
 import WidgetDemo from "@/pages/widget-demo";
+import EmbedGuide from "@/pages/embed-guide";
 import GamePage from "@/pages/GamePage";
 import { AuthProvider } from "./hooks/use-auth";
 import { ProtectedRoute } from "./lib/protected-route";
@@ -68,6 +69,7 @@ function Router() {
       <Route path="/game/:gameKey" component={GamePage} />
       <Route path="/widget/:type" component={WidgetPage} />
       <Route path="/widget-demo" component={WidgetDemo} />
+      <Route path="/embed" component={EmbedGuide} />
       <Route path="/news/:id" component={NewsArticlePage} />
 
       {/* Protected routes */}

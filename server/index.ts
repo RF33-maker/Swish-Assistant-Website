@@ -13,6 +13,19 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// Allow widget and embed-guide routes to be framed on any origin.
+// We explicitly set frame-ancestors:* and ensure X-Frame-Options is not DENY,
+// without affecting headers on the rest of the application.
+app.use((req, res, next) => {
+  const p = req.path || "";
+  const isWidget = p.startsWith("/widget/") || p === "/widget" || p === "/embed" || p.startsWith("/embed/");
+  if (isWidget) {
+    res.setHeader("Content-Security-Policy", "frame-ancestors *");
+    res.removeHeader("X-Frame-Options");
+  }
+  next();
+});
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;

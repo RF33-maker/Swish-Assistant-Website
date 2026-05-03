@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase, getSupabaseForLeague, getDataLeagueId } from "@/lib/supabase";
-import { type WidgetParams, isLightColor } from "@/lib/widgetUtils";
+import { type WidgetParams, isLightColor, withRetry, retrySupabase } from "@/lib/widgetUtils";
 import WidgetLayout from "./WidgetLayout";
 
 interface LeaderEntry {
@@ -46,21 +46,21 @@ interface AggregatedPlayer {
 
 async function resolvePublicLeague(leagueId?: string, leagueSlug?: string): Promise<{ id: string; name: string } | null> {
   if (leagueSlug) {
-    const { data } = await supabase
+    const { data } = await retrySupabase(() => supabase
       .from("leagues")
       .select("league_id, name")
       .eq("slug", leagueSlug)
       .eq("is_public", true)
-      .single();
+      .single());
     return data ? { id: data.league_id, name: data.name } : null;
   }
   if (leagueId) {
-    const { data } = await supabase
+    const { data } = await retrySupabase(() => supabase
       .from("leagues")
       .select("league_id, name")
       .eq("league_id", leagueId)
       .eq("is_public", true)
-      .single();
+      .single());
     return data ? { id: data.league_id, name: data.name } : null;
   }
   return null;
@@ -71,19 +71,20 @@ export default function LeagueLeadersWidget({ params }: { params: WidgetParams }
   const [leagueName, setLeagueName] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [empty, setEmpty] = useState(false);
 
   useEffect(() => {
     const fetchLeaders = async () => {
       if (!params.leagueId && !params.leagueSlug) {
-        setError("No league specified");
+        setError("No league specified in the embed URL.");
         setLoading(false);
         return;
       }
 
       try {
-        const league = await resolvePublicLeague(params.leagueId, params.leagueSlug);
+        const league = await withRetry(() => resolvePublicLeague(params.leagueId, params.leagueSlug));
         if (!league) {
-          setError("League not found");
+          setError("League not found or not public.");
           setLoading(false);
           return;
         }
@@ -95,14 +96,15 @@ export default function LeagueLeadersWidget({ params }: { params: WidgetParams }
         let allStats: PlayerStatRow[] = [];
         let page = 0;
         const pageSize = 1000;
+        const maxPages = 10;
         let hasMore = true;
 
-        while (hasMore) {
-          const { data: pageData } = await db
+        while (hasMore && page < maxPages) {
+          const { data: pageData } = await retrySupabase(() => db
             .from("player_stats")
             .select("*")
             .eq("league_id", dataLeagueId)
-            .range(page * pageSize, (page + 1) * pageSize - 1);
+            .range(page * pageSize, (page + 1) * pageSize - 1));
 
           if (pageData && pageData.length > 0) {
             allStats = [...allStats, ...(pageData as PlayerStatRow[])];
@@ -114,7 +116,7 @@ export default function LeagueLeadersWidget({ params }: { params: WidgetParams }
         }
 
         if (allStats.length === 0) {
-          setError("No stats data available");
+          setEmpty(true);
           setLoading(false);
           return;
         }
@@ -163,7 +165,7 @@ export default function LeagueLeadersWidget({ params }: { params: WidgetParams }
           makeCategory('Blocks', 'blocks', 'BPG'),
         ]);
       } catch {
-        setError("Failed to load league leaders");
+        setError("Something went wrong while loading league leaders.");
       } finally {
         setLoading(false);
       }
@@ -192,7 +194,7 @@ export default function LeagueLeadersWidget({ params }: { params: WidgetParams }
   const medalColors = ['#eab308', '#9ca3af', '#f97316'];
 
   return (
-    <WidgetLayout params={params} loading={loading} error={error}>
+    <WidgetLayout params={params} loading={loading} error={error} empty={empty} emptyMessage="No leaderboard data yet.">
       {leagueName && (
         <div className="flex items-center gap-2 mb-3">
           <div className="w-2 h-5 rounded-full" style={{ backgroundColor: primaryColor }} />

@@ -48,6 +48,47 @@ export const FONT_OPTIONS = [
   'Oswald',
 ] as const;
 
+export const WIDGET_RESIZE_MESSAGE_TYPE = 'swish-widget-resize';
+export const MAX_WIDGET_ROWS = 50;
+
+export async function withRetry<T>(fn: () => Promise<T>, retries = 1, delayMs = 600): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (attempt < retries) {
+        await new Promise(r => setTimeout(r, delayMs));
+      }
+    }
+  }
+  throw lastErr;
+}
+
+interface SupabaseLikeResult<T> {
+  data: T;
+  error: unknown;
+}
+
+export async function retrySupabase<T>(
+  fn: () => PromiseLike<SupabaseLikeResult<T>>,
+  retries = 1,
+  delayMs = 600,
+): Promise<SupabaseLikeResult<T>> {
+  let finalResult: SupabaseLikeResult<T> | null = null;
+  try {
+    return await withRetry(async () => {
+      const r = await fn();
+      finalResult = r;
+      if (r.error) throw r.error;
+      return r;
+    }, retries, delayMs);
+  } catch {
+    return finalResult ?? { data: null as unknown as T, error: new Error('Unknown error') };
+  }
+}
+
 function isValidHexColor(value: string): boolean {
   return /^#[0-9a-fA-F]{6}$/.test(value);
 }
@@ -117,7 +158,28 @@ export function buildWidgetUrl(baseUrl: string, params: WidgetParams): string {
 }
 
 export function buildEmbedCode(widgetUrl: string, width: number, height: number): string {
-  return `<iframe src="${widgetUrl}" width="${width}" height="${height}" frameborder="0" style="border:none;overflow:hidden;" allowtransparency="true"></iframe>`;
+  return `<iframe src="${widgetUrl}" width="${width}" height="${height}" frameborder="0" style="border:none;overflow:hidden;" allowtransparency="true" data-swish-widget></iframe>`;
+}
+
+export function buildResponsiveEmbedCode(widgetUrl: string, height: number): string {
+  return `<iframe src="${widgetUrl}" width="100%" height="${height}" frameborder="0" style="border:none;width:100%;display:block;overflow:hidden;" allowtransparency="true" data-swish-widget></iframe>`;
+}
+
+export function getAutoResizeSnippet(): string {
+  return `<script>
+(function () {
+  window.addEventListener('message', function (e) {
+    var d = e.data;
+    if (!d || d.type !== 'swish-widget-resize' || typeof d.height !== 'number') return;
+    var iframes = document.querySelectorAll('iframe[data-swish-widget]');
+    for (var i = 0; i < iframes.length; i++) {
+      if (iframes[i].contentWindow === e.source) {
+        iframes[i].style.height = d.height + 'px';
+      }
+    }
+  });
+})();
+</script>`;
 }
 
 export function hexToRgb(hex: string): { r: number; g: number; b: number } | null {

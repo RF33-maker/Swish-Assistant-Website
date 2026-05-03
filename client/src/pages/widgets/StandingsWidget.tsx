@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase, getSupabaseForLeague, getDataLeagueId } from "@/lib/supabase";
-import { type WidgetParams, isLightColor } from "@/lib/widgetUtils";
+import { type WidgetParams, isLightColor, withRetry, retrySupabase, MAX_WIDGET_ROWS } from "@/lib/widgetUtils";
 import WidgetLayout from "./WidgetLayout";
 
 interface StandingRow {
@@ -27,21 +27,21 @@ interface TeamRecord {
 
 async function resolveLeague(leagueId?: string, leagueSlug?: string): Promise<{ id: string; name: string } | null> {
   if (leagueSlug) {
-    const { data } = await supabase
+    const { data } = await retrySupabase(() => supabase
       .from("leagues")
       .select("league_id, name")
       .eq("slug", leagueSlug)
       .eq("is_public", true)
-      .single();
+      .single());
     return data ? { id: data.league_id, name: data.name } : null;
   }
   if (leagueId) {
-    const { data } = await supabase
+    const { data } = await retrySupabase(() => supabase
       .from("leagues")
       .select("league_id, name")
       .eq("league_id", leagueId)
       .eq("is_public", true)
-      .single();
+      .single());
     return data ? { id: data.league_id, name: data.name } : null;
   }
   return null;
@@ -52,19 +52,20 @@ export default function StandingsWidget({ params }: { params: WidgetParams }) {
   const [leagueName, setLeagueName] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [empty, setEmpty] = useState(false);
 
   useEffect(() => {
     const fetchStandings = async () => {
       if (!params.leagueId && !params.leagueSlug) {
-        setError("No league specified");
+        setError("No league specified in the embed URL.");
         setLoading(false);
         return;
       }
 
       try {
-        const league = await resolveLeague(params.leagueId, params.leagueSlug);
+        const league = await withRetry(() => resolveLeague(params.leagueId, params.leagueSlug));
         if (!league) {
-          setError("League not found");
+          setError("League not found or not public.");
           setLoading(false);
           return;
         }
@@ -74,10 +75,10 @@ export default function StandingsWidget({ params }: { params: WidgetParams }) {
         const db = getSupabaseForLeague(leagueKey);
         const dataLeagueId = getDataLeagueId(leagueKey, league.id);
 
-        const { data: allTeams } = await supabase
+        const { data: allTeams } = await retrySupabase(() => supabase
           .from("teams")
           .select("team_id, name")
-          .eq("league_id", league.id);
+          .eq("league_id", league.id));
 
         const teamRecords = new Map<string, TeamRecord>();
 
@@ -87,13 +88,13 @@ export default function StandingsWidget({ params }: { params: WidgetParams }) {
           });
         }
 
-        const { data: gameResults, error: statsError } = await db
+        const { data: gameResults, error: statsError } = await retrySupabase(() => db
           .from("v_game_results")
           .select("home_team, away_team, home_score, away_score")
-          .eq("league_id", dataLeagueId);
+          .eq("league_id", dataLeagueId));
 
         if (statsError) {
-          setError("Failed to fetch standings");
+          setError("We couldn't load standings right now. Please try again later.");
           setLoading(false);
           return;
         }
@@ -129,7 +130,7 @@ export default function StandingsWidget({ params }: { params: WidgetParams }) {
         }
 
         if (teamRecords.size === 0) {
-          setError("No standings data available");
+          setEmpty(true);
           setLoading(false);
           return;
         }
@@ -149,9 +150,15 @@ export default function StandingsWidget({ params }: { params: WidgetParams }) {
           rows = rows.filter(r => r.team.toLowerCase() === filterName);
         }
 
-        setStandings(rows);
+        rows = rows.slice(0, MAX_WIDGET_ROWS);
+
+        if (rows.length === 0) {
+          setEmpty(true);
+        } else {
+          setStandings(rows);
+        }
       } catch {
-        setError("An unexpected error occurred");
+        setError("Something went wrong while loading standings.");
       } finally {
         setLoading(false);
       }
@@ -177,7 +184,7 @@ export default function StandingsWidget({ params }: { params: WidgetParams }) {
   const titleFontSize = isCompact ? '13px' : '15px';
 
   return (
-    <WidgetLayout params={params} loading={loading} error={error}>
+    <WidgetLayout params={params} loading={loading} error={error} empty={empty} emptyMessage="No standings available yet.">
       {leagueName && (
         <div className="flex items-center gap-2 mb-3">
           <div className="w-2 h-5 rounded-full" style={{ backgroundColor: primaryColor }} />
