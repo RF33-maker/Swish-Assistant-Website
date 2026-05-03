@@ -737,7 +737,9 @@ export function TeamComparison({ leagueId, allTeams, brandColor, scopedLeagueIds
                   data-testid={`option-team1-${idx}`}
                 >
                   <div className="font-medium text-slate-800 dark:text-white">{team.teamName}</div>
-                  <div className="text-xs text-slate-600 dark:text-slate-400">{team.avgPoints} PPG</div>
+                  {team.age_group && (
+                    <div className="text-xs text-slate-600 dark:text-slate-400">{team.age_group}</div>
+                  )}
                 </div>
               ))}
             </div>
@@ -778,7 +780,9 @@ export function TeamComparison({ leagueId, allTeams, brandColor, scopedLeagueIds
                   data-testid={`option-team2-${idx}`}
                 >
                   <div className="font-medium text-slate-800 dark:text-white">{team.teamName}</div>
-                  <div className="text-xs text-slate-600 dark:text-slate-400">{team.avgPoints} PPG</div>
+                  {team.age_group && (
+                    <div className="text-xs text-slate-600 dark:text-slate-400">{team.age_group}</div>
+                  )}
                 </div>
               ))}
             </div>
