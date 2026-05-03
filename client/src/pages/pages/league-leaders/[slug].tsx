@@ -3,11 +3,18 @@ import { useParams, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
-import { ArrowLeft, ChevronDown } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { namesMatch, strictNamesMatch, getMostCompleteName } from "@/lib/fuzzyMatch";
 import { normalizeTeamName } from "@/lib/teamUtils";
 import { usePublicLeagueBrandingBySlug } from "@/hooks/usePublicLeagueBranding";
 import LeagueDefaultImage from "@/assets/league-default.png";
+import {
+  accumulateAdvancedRow,
+  makeAdvancedAggregator,
+  mergeAdvancedInto,
+  getAdvancedLeaderSections,
+  type AdvancedLeaderDef,
+} from "@/lib/advancedStats";
 
 interface ChildLeague {
   league_id: string;
@@ -54,7 +61,6 @@ export default function LeagueLeadersPage() {
   const [selectedRound, setSelectedRound] = useState<string>('all');
   const [selectedMonth, setSelectedMonth] = useState<string>('season');
   const [statCategory, setStatCategory] = useState<StatCategory>('Traditional');
-  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
   const fetchCancelledRef = useRef(false);
 
   const { colors: leagueBrandColors, brandingData: publicBrandingData } = usePublicLeagueBrandingBySlug({
@@ -330,53 +336,6 @@ export default function LeagueLeadersPage() {
     },
   ];
 
-  const getAdvancedDefs = (vm: 'averages' | 'totals'): StatLeaderDef[] => [
-    {
-      key: 'efficiency', title: 'Efficiency', avgLabel: 'EFF', totalLabel: 'EFF',
-      compute: (p) => {
-        const totalEff = p.total_points + p.total_rebounds + p.total_assists + p.total_steals + p.total_blocks
-          - (p.total_field_goals_attempted - p.total_field_goals_made)
-          - (p.total_free_throws_attempted - p.total_free_throws_made)
-          - p.total_turnovers;
-        const avg = totalEff / p.games_played;
-        return { avg, total: totalEff, display: vm === 'averages' ? `${avg.toFixed(1)}` : `${Math.round(totalEff)}` };
-      }
-    },
-    {
-      key: 'efg_pct', title: 'Effective FG%', avgLabel: 'EFG%', totalLabel: 'EFG%',
-      compute: (p) => {
-        const efg = p.total_field_goals_attempted > 0
-          ? ((p.total_field_goals_made + 0.5 * p.total_three_points_made) / p.total_field_goals_attempted) * 100
-          : 0;
-        return { avg: efg, total: efg, display: `${efg.toFixed(1)}%` };
-      },
-      minAttempts: (p) => p.total_field_goals_attempted >= 2
-    },
-    {
-      key: 'ts_pct', title: 'True Shooting %', avgLabel: 'TS%', totalLabel: 'TS%',
-      compute: (p) => {
-        const tsa = 2 * (p.total_field_goals_attempted + 0.44 * p.total_free_throws_attempted);
-        const ts = tsa > 0 ? (p.total_points / tsa) * 100 : 0;
-        return { avg: ts, total: ts, display: `${ts.toFixed(1)}%` };
-      },
-      minAttempts: (p) => p.total_field_goals_attempted >= 2
-    },
-    {
-      key: 'ast_to', title: 'Assist/Turnover Ratio', avgLabel: 'AST/TO', totalLabel: 'AST/TO',
-      compute: (p) => {
-        const ratio = p.total_turnovers > 0 ? p.total_assists / p.total_turnovers : p.total_assists;
-        return { avg: ratio, total: ratio, display: `${ratio.toFixed(2)}` };
-      },
-      minAttempts: (p) => p.games_played >= 2
-    },
-    {
-      key: 'games_played', title: 'Games Played', avgLabel: 'GP', totalLabel: 'GP',
-      compute: (p) => {
-        return { avg: p.games_played, total: p.games_played, display: `${p.games_played}` };
-      }
-    },
-  ];
-
   const filteredStats = useMemo(() => {
     let stats = rawPlayerStats;
 
@@ -434,7 +393,8 @@ export default function LeagueLeadersPage() {
           total_free_throws_made: 0,
           total_free_throws_attempted: 0,
           total_turnovers: 0,
-          games_played: 0
+          games_played: 0,
+          ...makeAdvancedAggregator(),
         });
       }
 
@@ -459,6 +419,7 @@ export default function LeagueLeadersPage() {
       playerData.total_free_throws_attempted += stat.sfreethrowsattempted || 0;
       playerData.total_turnovers += stat.sturnovers || 0;
       playerData.games_played += 1;
+      accumulateAdvancedRow(playerData, stat);
     });
 
     const playersByIdArray = Array.from(playerStatsMap.values());
@@ -478,6 +439,7 @@ export default function LeagueLeadersPage() {
       target.total_free_throws_made += source.total_free_throws_made;
       target.total_free_throws_attempted += source.total_free_throws_attempted;
       target.total_turnovers += source.total_turnovers;
+      mergeAdvancedInto(target, source);
       target.name = getMostCompleteName([target.name, source.name]);
       if (!target.player_slug && source.player_slug) {
         target.player_slug = source.player_slug;
@@ -549,35 +511,66 @@ export default function LeagueLeadersPage() {
   const leaderboards = useMemo(() => {
     if (aggregatedPlayers.length === 0) return [];
 
-    const defs = statCategory === 'Traditional' 
-      ? getTraditionalDefs(viewMode) 
-      : getAdvancedDefs(viewMode);
-
-    return defs.map(def => {
-      let eligible = aggregatedPlayers.filter(p => p.games_played >= 1);
-      if (def.minAttempts) {
-        eligible = eligible.filter(def.minAttempts);
-      }
-
-      const computed = eligible.map(p => {
-        const result = def.compute(p);
-        return { ...p, _computed: result };
-      });
-
-      const isPercentage = def.key.includes('pct') || def.key === 'ast_to';
-      computed.sort((a, b) => {
-        if (isPercentage || viewMode === 'averages') {
-          return b._computed.avg - a._computed.avg;
+    if (statCategory === 'Traditional') {
+      const defs = getTraditionalDefs(viewMode);
+      const cards = defs.map(def => {
+        let eligible = aggregatedPlayers.filter(p => p.games_played >= 1);
+        if (def.minAttempts) {
+          eligible = eligible.filter(def.minAttempts);
         }
-        return b._computed.total - a._computed.total;
-      });
 
-      return {
-        key: def.key,
-        title: def.title,
-        players: computed.slice(0, 5),
-      };
-    });
+        const computed = eligible.map(p => {
+          const result = def.compute(p);
+          return { ...p, _computed: result };
+        });
+
+        const isPercentage = def.key.includes('pct') || def.key === 'ast_to';
+        computed.sort((a, b) => {
+          if (isPercentage || viewMode === 'averages') {
+            return b._computed.avg - a._computed.avg;
+          }
+          return b._computed.total - a._computed.total;
+        });
+
+        return {
+          key: def.key,
+          title: def.title,
+          players: computed.slice(0, 10),
+        };
+      });
+      return [{ key: 'traditional', title: '', cards }];
+    }
+
+    // Advanced — grouped sections
+    return getAdvancedLeaderSections().map(section => {
+      const cards = section.defs.map((def: AdvancedLeaderDef) => {
+        const eligible = aggregatedPlayers.filter(def.qualifies);
+        // flatMap with [] for nulls gives us a typed non-null array
+        // without a type predicate cast.
+        const computed = eligible.flatMap(p => {
+          const result = def.compute(p);
+          if (!result) return [];
+          return [{ ...p, _computed: { avg: result.value, total: result.value, display: result.display } }];
+        });
+
+        computed.sort((a, b) =>
+          def.lowerIsBetter
+            ? a._computed.avg - b._computed.avg
+            : b._computed.avg - a._computed.avg,
+        );
+
+        return {
+          key: def.key,
+          title: def.title,
+          players: computed.slice(0, 10),
+        };
+      // Hide cards entirely when no qualifying players (e.g. league
+      // doesn't capture this metric, like USG% on a league with no
+      // possession data).
+      }).filter(card => card.players.length > 0);
+
+      return { key: section.key, title: section.title, cards };
+    }).filter(section => section.cards.length > 0);
   }, [aggregatedPlayers, statCategory, viewMode]);
 
   const StatSection = ({ title, players }: { title: string; players: any[] }) => (
@@ -738,36 +731,28 @@ export default function LeagueLeadersPage() {
           <span>Back to League</span>
         </button>
 
-        {/* Category Dropdown */}
-        <div className="relative">
-          <button
-            onClick={() => setCategoryDropdownOpen(!categoryDropdownOpen)}
-            className="flex items-center justify-between w-full max-w-xs px-4 py-3 rounded-xl border bg-white dark:bg-neutral-900 text-left text-lg font-semibold text-gray-900 dark:text-white transition-all"
-            style={{ borderColor: brandBorderLight }}
-          >
-            <span>{statCategory}</span>
-            <ChevronDown className={`h-5 w-5 text-gray-400 transition-transform ${categoryDropdownOpen ? 'rotate-180' : ''}`} />
-          </button>
-          {categoryDropdownOpen && (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setCategoryDropdownOpen(false)} />
-              <div className="absolute z-20 mt-1 w-full max-w-xs rounded-xl border bg-white dark:bg-neutral-900 shadow-lg overflow-hidden" style={{ borderColor: brandBorderLight }}>
-                {(['Traditional', 'Advanced'] as StatCategory[]).map(cat => (
-                  <button
-                    key={cat}
-                    onClick={() => { setStatCategory(cat); setCategoryDropdownOpen(false); }}
-                    className={`w-full px-4 py-3 text-left text-base font-medium transition-colors ${
-                      statCategory === cat
-                        ? 'bg-gray-100 dark:bg-neutral-800'
-                        : 'hover:bg-gray-50 dark:hover:bg-neutral-800'
-                    } text-gray-900 dark:text-white`}
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
+        {/* Category Tabs */}
+        <div
+          className="inline-flex rounded-xl border p-1 w-full max-w-xs"
+          style={{ borderColor: brandBorderLight, backgroundColor: brandBg50 }}
+        >
+          {(['Traditional', 'Advanced'] as StatCategory[]).map(cat => {
+            const active = statCategory === cat;
+            return (
+              <button
+                key={cat}
+                onClick={() => setStatCategory(cat)}
+                className={`flex-1 px-4 py-2 text-sm md:text-base font-semibold rounded-lg transition-all ${
+                  active
+                    ? 'bg-white dark:bg-neutral-700 shadow-sm'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                }`}
+                style={active ? { color: brandColor } : {}}
+              >
+                {cat}
+              </button>
+            );
+          })}
         </div>
 
         {/* Filter Row: Age Group + Rounds (Parent League) OR Season + Months (Regular) */}
@@ -889,8 +874,20 @@ export default function LeagueLeadersPage() {
         {/* Stat Leader Sections */}
         {leaderboards.length > 0 ? (
           <div className="space-y-2">
-            {leaderboards.map(lb => (
-              <StatSection key={lb.key} title={lb.title} players={lb.players} />
+            {leaderboards.map(section => (
+              <div key={section.key}>
+                {section.title && (
+                  <h3
+                    className="text-xs font-bold uppercase tracking-wider mt-6 mb-3 pb-2 border-b"
+                    style={{ color: brandColor, borderColor: brandBorderLight }}
+                  >
+                    {section.title}
+                  </h3>
+                )}
+                {section.cards.map(card => (
+                  <StatSection key={card.key} title={card.title} players={card.players} />
+                ))}
+              </div>
             ))}
           </div>
         ) : (

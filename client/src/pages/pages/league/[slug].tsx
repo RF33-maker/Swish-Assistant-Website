@@ -37,6 +37,12 @@ import { DEBUG, debugLog } from "@/utils/debug";
 import { usePublicLeagueBrandingBySlug } from "@/hooks/usePublicLeagueBranding";
 import { InlinePlayerProfile } from "@/components/InlinePlayerProfile";
 import { InlineTeamProfile } from "@/components/InlineTeamProfile";
+import {
+  accumulateAdvancedRow,
+  makeAdvancedAggregator,
+  getAdvancedLeaderSections,
+  type AdvancedLeaderDef,
+} from "@/lib/advancedStats";
 
 // Compact label for age group filter UI ("Under 18 Boys" -> "U18 Boys").
 function shortenAgeLabel(label: string): string {
@@ -576,6 +582,8 @@ export default function LeaguePage() {
   const [teamStatsCategory, setTeamStatsCategory] = useState<'Traditional' | 'Advanced' | 'Four Factors' | 'Scoring' | 'Misc'>('Traditional'); // Category dropdown
   const [teamStatsMode, setTeamStatsMode] = useState<'Per Game' | 'Totals' | 'Per 100 Possessions'>('Per Game'); // Mode dropdown
   const [leagueLeadersView, setLeagueLeadersView] = useState<'averages' | 'totals'>('averages'); // Toggle for league leaders
+  const [leadersSubject, setLeadersSubject] = useState<'player' | 'team'>('player'); // Player vs Team leaders
+  const [leadersCategory, setLeadersCategory] = useState<'Traditional' | 'Advanced'>('Traditional'); // Traditional vs Advanced leaders
   const [playerStatsView, setPlayerStatsView] = useState<'Total' | 'Per Game' | 'Per 40'>('Per Game'); // Mode selector for player statistics table
   const [playerStatsCategory, setPlayerStatsCategory] = useState<'Traditional' | 'Advanced' | 'Scoring' | 'Misc'>('Traditional'); // Category dropdown for player stats
   const [standingsView, setStandingsView] = useState<'poolA' | 'poolB' | 'full'>('full'); // Toggle for standings view
@@ -4955,25 +4963,168 @@ export default function LeaguePage() {
                     </div>
                   </div>
 
-                  {(isLoadingLeaders || isLoadingStats) ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-                      {Array.from({ length: 9 }).map((_, i) => (
-                        <LeaderCardSkeleton key={`inline-leader-skeleton-${i}`} />
-                      ))}
+                  {/* Subject + Category toggles */}
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    <div className="inline-flex rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 p-1">
+                      <button
+                        onClick={() => setLeadersSubject('player')}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                          leadersSubject === 'player'
+                            ? 'bg-white dark:bg-neutral-700 shadow-sm'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                        }`}
+                        style={leadersSubject === 'player' ? { color: brandColor } : {}}
+                        data-testid="button-leaders-subject-player"
+                      >
+                        Player Leaders
+                      </button>
+                      <button
+                        onClick={() => setLeadersSubject('team')}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                          leadersSubject === 'team'
+                            ? 'bg-white dark:bg-neutral-700 shadow-sm'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                        }`}
+                        style={leadersSubject === 'team' ? { color: brandColor } : {}}
+                        data-testid="button-leaders-subject-team"
+                      >
+                        Team Leaders
+                      </button>
                     </div>
-                  ) : filteredByAgeGroupRound.length === 0 ? (
-                    <div className="text-center py-12">
-                      <p className="text-sm text-slate-500 dark:text-slate-400">No player data available for the selected filters.</p>
+                    <div className="inline-flex rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 p-1">
+                      <button
+                        onClick={() => setLeadersCategory('Traditional')}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                          leadersCategory === 'Traditional'
+                            ? 'bg-white dark:bg-neutral-700 shadow-sm'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                        }`}
+                        style={leadersCategory === 'Traditional' ? { color: brandColor } : {}}
+                        data-testid="button-leaders-category-traditional"
+                      >
+                        Traditional
+                      </button>
+                      <button
+                        onClick={() => setLeadersCategory('Advanced')}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                          leadersCategory === 'Advanced'
+                            ? 'bg-white dark:bg-neutral-700 shadow-sm'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                        }`}
+                        style={leadersCategory === 'Advanced' ? { color: brandColor } : {}}
+                        data-testid="button-leaders-category-advanced"
+                      >
+                        Advanced
+                      </button>
                     </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-                      {(() => {
-                        const players = filteredByAgeGroupRound;
-                        const contextParts: string[] = [];
-                        if (filterAgeGroup !== 'all') contextParts.push(shortenAgeLabel(filterAgeGroup));
-                        if (filterRound !== 'all') contextParts.push(`Round ${filterRound}`);
-                        if (isParentLeague && selectedStop !== 'all') contextParts.push(`Stop ${selectedStop}`);
-                        const contextLabel = contextParts.join(' · ');
+                  </div>
+
+                  {(() => {
+                    const contextParts: string[] = [];
+                    if (filterAgeGroup !== 'all') contextParts.push(shortenAgeLabel(filterAgeGroup));
+                    if (filterRound !== 'all') contextParts.push(`Round ${filterRound}`);
+                    if (isParentLeague && selectedStop !== 'all') contextParts.push(`Stop ${selectedStop}`);
+                    const contextLabel = contextParts.join(' · ');
+                    const baseContextFallback = leagueLeadersView === 'totals' ? 'Season Totals' : 'Season Averages';
+
+                    // Common card renderer used by all 4 (subject × category) variants.
+                    const renderCard = (opts: {
+                      title: string;
+                      items: any[];
+                      displayFn: (p: any) => string;
+                      footnote?: string;
+                      subject: 'player' | 'team';
+                    }) => {
+                      const { title, items, displayFn, footnote, subject } = opts;
+                      const shareLeaders = items.map((p: any) => ({
+                        name: subject === 'team' ? (p.teamName || p.name || 'Unknown') : (p.name || 'Unknown'),
+                        team: subject === 'team' ? '' : (p.team || ''),
+                        value: displayFn(p),
+                      }));
+                      return (
+                        <LeagueLeadersShareCard
+                          key={title}
+                          title={title}
+                          leaders={shareLeaders}
+                          leagueName={displayLeagueName || 'League Leaders'}
+                          contextLabel={contextLabel || baseContextFallback}
+                          brandColor={brandColorHex}
+                          leagueLogoUrl={displayLogoUrl}
+                          footnote={footnote}
+                          fileSlug={`league-${slug}-${subject}-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
+                        >
+                          <div className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4">
+                            <h3 className="text-sm font-semibold mb-3 px-1 pr-10" style={{ color: brandColor }}>{title}</h3>
+                            <div className="space-y-0">
+                              {items.map((entity, idx) => {
+                                const isTeam = subject === 'team';
+                                const displayName = isTeam ? (entity.teamName || entity.name || 'Unknown') : entity.name;
+                                const subLine = isTeam
+                                  ? (entity.age_group ? shortenAgeLabel(entity.age_group) : `${entity.gamesPlayed || 0} GP`)
+                                  : (entity.team || 'Unknown Team');
+                                const isClickable = isTeam ? !!entity.teamName : !!entity.slug;
+                                return (
+                                  <div
+                                    key={`${title}-${entity.slug || entity.teamName || entity.name}-${idx}`}
+                                    className={`flex items-center justify-between py-2 px-2 rounded-md transition-colors ${isClickable ? 'hover:bg-gray-100 dark:hover:bg-neutral-700 cursor-pointer' : ''}`}
+                                    onClick={() => {
+                                      if (isTeam && entity.teamName) {
+                                        setSelectedTeamName(entity.teamName);
+                                        setActiveSection('team');
+                                      } else if (!isTeam && entity.slug) {
+                                        handleSelectPlayer(entity.slug, activeSection);
+                                      }
+                                    }}
+                                  >
+                                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                      <span className="text-xs font-bold w-5 text-center text-slate-400 dark:text-slate-500 shrink-0">{idx + 1}</span>
+                                      <div className="min-w-0 flex-1">
+                                        <p className={`text-sm font-medium truncate ${isClickable ? 'hover:underline' : ''}`} style={{ color: brandColor }}>{displayName}</p>
+                                        <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{subLine}</p>
+                                      </div>
+                                    </div>
+                                    <span className="text-sm font-semibold text-slate-800 dark:text-white whitespace-nowrap ml-2">
+                                      {displayFn(entity)}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                              {items.length === 0 && (
+                                <p className="text-xs text-slate-400 dark:text-slate-500 text-center py-4">No data available</p>
+                              )}
+                            </div>
+                            {footnote && (
+                              <p className="text-[10px] text-slate-400 dark:text-slate-500 text-center pt-2 mt-2 border-t border-gray-100 dark:border-neutral-700/60">
+                                {footnote}
+                              </p>
+                            )}
+                          </div>
+                        </LeagueLeadersShareCard>
+                      );
+                    };
+
+                    // ---------- PLAYER LEADERS ----------
+                    if (leadersSubject === 'player') {
+                      if ((isLoadingLeaders || isLoadingStats)) {
+                        return (
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                            {Array.from({ length: 9 }).map((_, i) => (
+                              <LeaderCardSkeleton key={`inline-leader-skeleton-${i}`} />
+                            ))}
+                          </div>
+                        );
+                      }
+                      if (filteredByAgeGroupRound.length === 0) {
+                        return (
+                          <div className="text-center py-12">
+                            <p className="text-sm text-slate-500 dark:text-slate-400">No player data available for the selected filters.</p>
+                          </div>
+                        );
+                      }
+
+                      const players = filteredByAgeGroupRound;
+
+                      if (leadersCategory === 'Traditional') {
                         const statCategories = [
                           {
                             title: "Scoring Leaders",
@@ -5062,82 +5213,224 @@ export default function LeaguePage() {
                           },
                         ];
 
-                        return statCategories.map(({ title, sortFn, displayFn, filterFn, isPerGame, isPercentage }: any) => {
-                          const baseFiltered = filterFn ? players.filter(filterFn) : players;
-                          // Apply adaptive games qualifier:
-                          //  - Always for percentage leaders
-                          //  - For per-game leaders only when in averages view
-                          const qualifierApplies = isPercentage || (isPerGame && leagueLeadersView === 'averages');
-                          const applyMin = qualifierApplies && leadersMinGames > 1;
-                          const qualified = applyMin
-                            ? baseFiltered.filter((p: any) => (p.games || 0) >= leadersMinGames)
-                            : baseFiltered;
-                          const usedFallback = applyMin && qualified.length === 0 && baseFiltered.length > 0;
-                          const pool = qualified.length > 0 ? qualified : baseFiltered;
-                          const sorted = [...pool].sort(sortFn).slice(0, 10);
-                          const footnote = usedFallback || (qualifierApplies && leadersIsEarlySeason && baseFiltered.length > 0)
-                            ? 'Showing all players — season just started'
-                            : applyMin
-                              ? `Min ${leadersMinGames} games played`
-                              : undefined;
-                          const shareLeaders = sorted.slice(0, 10).map((p: any) => ({
-                            name: p.name,
-                            team: p.team,
-                            value: displayFn(p),
-                          }));
-                          return (
-                            <LeagueLeadersShareCard
-                              key={title}
-                              title={title}
-                              leaders={shareLeaders}
-                              leagueName={displayLeagueName || 'League Leaders'}
-                              contextLabel={contextLabel || (leagueLeadersView === 'totals' ? 'Season Totals' : 'Season Averages')}
-                              brandColor={brandColorHex}
-                              leagueLogoUrl={displayLogoUrl}
-                              footnote={footnote}
-                              fileSlug={`league-${slug}-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
-                            >
-                              <div className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4">
-                                <h3 className="text-sm font-semibold mb-3 px-1 pr-10" style={{ color: brandColor }}>{title}</h3>
-                                <div className="space-y-0">
-                                  {sorted.map((player, idx) => (
-                                    <div
-                                      key={`${title}-${player.slug || player.name}-${idx}`}
-                                      className="flex items-center justify-between py-2 px-2 rounded-md hover:bg-gray-100 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
-                                      onClick={() => {
-                                        if (player.slug) {
-                                          handleSelectPlayer(player.slug, activeSection);
-                                        }
-                                      }}
-                                    >
-                                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                                        <span className="text-xs font-bold w-5 text-center text-slate-400 dark:text-slate-500 shrink-0">{idx + 1}</span>
-                                        <div className="min-w-0 flex-1">
-                                          <p className={`text-sm font-medium truncate ${player.slug ? 'hover:underline' : ''}`} style={{ color: brandColor }}>{player.name}</p>
-                                          <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{player.team || 'Unknown Team'}</p>
-                                        </div>
-                                      </div>
-                                      <span className="text-sm font-semibold text-slate-800 dark:text-white whitespace-nowrap ml-2">
-                                        {displayFn(player)}
-                                      </span>
-                                    </div>
-                                  ))}
-                                  {sorted.length === 0 && (
-                                    <p className="text-xs text-slate-400 dark:text-slate-500 text-center py-4">No data available</p>
-                                  )}
-                                </div>
-                                {footnote && (
-                                  <p className="text-[10px] text-slate-400 dark:text-slate-500 text-center pt-2 mt-2 border-t border-gray-100 dark:border-neutral-700/60">
-                                    {footnote}
-                                  </p>
-                                )}
-                              </div>
-                            </LeagueLeadersShareCard>
+                        return (
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                            {statCategories.map(({ title, sortFn, displayFn, filterFn, isPerGame, isPercentage }: any) => {
+                              const baseFiltered = filterFn ? players.filter(filterFn) : players;
+                              const qualifierApplies = isPercentage || (isPerGame && leagueLeadersView === 'averages');
+                              const applyMin = qualifierApplies && leadersMinGames > 1;
+                              const qualified = applyMin
+                                ? baseFiltered.filter((p: any) => (p.games || 0) >= leadersMinGames)
+                                : baseFiltered;
+                              const usedFallback = applyMin && qualified.length === 0 && baseFiltered.length > 0;
+                              const pool = qualified.length > 0 ? qualified : baseFiltered;
+                              const sorted = [...pool].sort(sortFn).slice(0, 10);
+                              const footnote = usedFallback || (qualifierApplies && leadersIsEarlySeason && baseFiltered.length > 0)
+                                ? 'Showing all players — season just started'
+                                : applyMin
+                                  ? `Min ${leadersMinGames} games played`
+                                  : undefined;
+                              return renderCard({ title, items: sorted, displayFn, footnote, subject: 'player' });
+                            })}
+                          </div>
+                        );
+                      }
+
+                      // Player / Advanced — aggregate advanced stats per player from rawStats,
+                      // then render the same grouped sections as the standalone leaders page.
+                      const aggregated = players.flatMap((p: any) => {
+                        const rows = (p.rawStats || []) as any[];
+                        if (!rows.length) return [];
+                        const advAgg = makeAdvancedAggregator();
+                        rows.forEach((s) => accumulateAdvancedRow(advAgg, s));
+                        const merged = {
+                          ...advAgg,
+                          name: p.name,
+                          team: p.team,
+                          slug: p.slug,
+                          games_played: p.games || 0,
+                          total_points: p.totalPoints || 0,
+                          total_rebounds: p.totalRebounds || 0,
+                          total_assists: p.totalAssists || 0,
+                          total_steals: p.totalSteals || 0,
+                          total_blocks: p.totalBlocks || 0,
+                          total_turnovers: p.totalTurnovers || 0,
+                          total_field_goals_made: p.totalFGM || 0,
+                          total_field_goals_attempted: p.totalFGA || 0,
+                          total_three_points_made: p.total3PM || 0,
+                          total_three_points_attempted: p.total3PA || 0,
+                          total_free_throws_made: p.totalFTM || 0,
+                          total_free_throws_attempted: p.totalFTA || 0,
+                        };
+                        return [merged];
+                      });
+
+                      const sections = getAdvancedLeaderSections().map((section) => {
+                        const cards = section.defs.map((def: AdvancedLeaderDef) => {
+                          const eligible = aggregated.filter((p: any) => def.qualifies(p));
+                          const computed = eligible.flatMap((p: any) => {
+                            const result = def.compute(p);
+                            if (!result) return [];
+                            return [{ ...p, _adv: { value: result.value, display: result.display } }];
+                          });
+                          computed.sort((a: any, b: any) =>
+                            def.lowerIsBetter ? a._adv.value - b._adv.value : b._adv.value - a._adv.value
                           );
-                        });
-                      })()}
-                    </div>
-                  )}
+                          return {
+                            title: def.title,
+                            items: computed.slice(0, 10),
+                          };
+                        }).filter((c) => c.items.length > 0);
+                        return { key: section.key, title: section.title, cards };
+                      }).filter((s) => s.cards.length > 0);
+
+                      if (sections.length === 0) {
+                        return (
+                          <div className="text-center py-12">
+                            <p className="text-sm text-slate-500 dark:text-slate-400">No advanced player data available for the selected filters.</p>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="space-y-6">
+                          {sections.map((section) => (
+                            <div key={section.key}>
+                              <h3 className="text-sm md:text-base font-semibold text-slate-700 dark:text-slate-200 mb-3">{section.title}</h3>
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                                {section.cards.map((card) => renderCard({
+                                  title: card.title,
+                                  items: card.items,
+                                  displayFn: (p: any) => p._adv.display,
+                                  subject: 'player',
+                                }))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    }
+
+                    // ---------- TEAM LEADERS ----------
+                    if (isLoadingTeamStats) {
+                      return (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                          {Array.from({ length: 9 }).map((_, i) => (
+                            <LeaderCardSkeleton key={`inline-team-leader-skeleton-${i}`} />
+                          ))}
+                        </div>
+                      );
+                    }
+
+                    const teamPool = (isParentLeague && (filterAgeGroup !== 'all' || selectedStop !== 'all'))
+                      ? teamStatsData.filter((t: any) => {
+                          if (filterAgeGroup !== 'all' && t.age_group !== filterAgeGroup) return false;
+                          if (selectedStop !== 'all' && !selectedAgeGroupLeagueIds.includes(t.league_id)) return false;
+                          return true;
+                        })
+                      : teamStatsData;
+
+                    if (teamPool.length === 0) {
+                      return (
+                        <div className="text-center py-12">
+                          <p className="text-sm text-slate-500 dark:text-slate-400">No team data available for the selected filters.</p>
+                        </div>
+                      );
+                    }
+
+                    const teamNum = (t: any, key: string) => {
+                      const v = t[key];
+                      if (v == null) return 0;
+                      const n = typeof v === 'number' ? v : parseFloat(v);
+                      return Number.isFinite(n) ? n : 0;
+                    };
+                    const teamFmt = (n: number, digits = 1) => Number.isFinite(n) ? n.toFixed(digits) : '0.0';
+
+                    if (leadersCategory === 'Traditional') {
+                      const teamCategories = [
+                        { title: 'Team Scoring',
+                          sortFn: (a: any, b: any) => leagueLeadersView === 'averages' ? teamNum(b, 'ppg') - teamNum(a, 'ppg') : teamNum(b, 'totalPoints') - teamNum(a, 'totalPoints'),
+                          displayFn: (t: any) => leagueLeadersView === 'averages' ? `${teamFmt(teamNum(t, 'ppg'))} PPG` : `${Math.round(teamNum(t, 'totalPoints'))} PTS` },
+                        { title: 'Team Rebounding',
+                          sortFn: (a: any, b: any) => leagueLeadersView === 'averages' ? teamNum(b, 'rpg') - teamNum(a, 'rpg') : teamNum(b, 'totalRebounds') - teamNum(a, 'totalRebounds'),
+                          displayFn: (t: any) => leagueLeadersView === 'averages' ? `${teamFmt(teamNum(t, 'rpg'))} RPG` : `${Math.round(teamNum(t, 'totalRebounds'))} REB` },
+                        { title: 'Team Assists',
+                          sortFn: (a: any, b: any) => leagueLeadersView === 'averages' ? teamNum(b, 'apg') - teamNum(a, 'apg') : teamNum(b, 'totalAssists') - teamNum(a, 'totalAssists'),
+                          displayFn: (t: any) => leagueLeadersView === 'averages' ? `${teamFmt(teamNum(t, 'apg'))} APG` : `${Math.round(teamNum(t, 'totalAssists'))} AST` },
+                        { title: 'Team Steals',
+                          sortFn: (a: any, b: any) => leagueLeadersView === 'averages' ? teamNum(b, 'spg') - teamNum(a, 'spg') : teamNum(b, 'totalSteals') - teamNum(a, 'totalSteals'),
+                          displayFn: (t: any) => leagueLeadersView === 'averages' ? `${teamFmt(teamNum(t, 'spg'))} SPG` : `${Math.round(teamNum(t, 'totalSteals'))} STL` },
+                        { title: 'Team Blocks',
+                          sortFn: (a: any, b: any) => leagueLeadersView === 'averages' ? teamNum(b, 'bpg') - teamNum(a, 'bpg') : teamNum(b, 'totalBlocks') - teamNum(a, 'totalBlocks'),
+                          displayFn: (t: any) => leagueLeadersView === 'averages' ? `${teamFmt(teamNum(t, 'bpg'))} BPG` : `${Math.round(teamNum(t, 'totalBlocks'))} BLK` },
+                        { title: 'Team Field Goal %',
+                          sortFn: (a: any, b: any) => teamNum(b, 'fgPercentage') - teamNum(a, 'fgPercentage'),
+                          displayFn: (t: any) => `${teamFmt(teamNum(t, 'fgPercentage'))}%`,
+                          filterFn: (t: any) => teamNum(t, 'totalFGA') >= 10 },
+                        { title: 'Team Three Point %',
+                          sortFn: (a: any, b: any) => teamNum(b, 'threePtPercentage') - teamNum(a, 'threePtPercentage'),
+                          displayFn: (t: any) => `${teamFmt(teamNum(t, 'threePtPercentage'))}%`,
+                          filterFn: (t: any) => teamNum(t, 'total3PA') >= 5 },
+                        { title: 'Team Free Throw %',
+                          sortFn: (a: any, b: any) => teamNum(b, 'ftPercentage') - teamNum(a, 'ftPercentage'),
+                          displayFn: (t: any) => `${teamFmt(teamNum(t, 'ftPercentage'))}%`,
+                          filterFn: (t: any) => teamNum(t, 'totalFTA') >= 5 },
+                      ];
+
+                      return (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                          {teamCategories.map(({ title, sortFn, displayFn, filterFn }: any) => {
+                            const eligible = filterFn ? teamPool.filter(filterFn) : teamPool;
+                            const sorted = [...eligible].sort(sortFn).slice(0, 10);
+                            return renderCard({ title, items: sorted, displayFn, subject: 'team' });
+                          })}
+                        </div>
+                      );
+                    }
+
+                    // Team / Advanced — averages of per-game advanced metrics already on teamStatsData.
+                    const teamAdvCategories = [
+                      { title: 'Offensive Rating', field: 'avgOffRating', fmt: (v: number) => teamFmt(v), minGp: 2 },
+                      { title: 'Defensive Rating', field: 'avgDefRating', fmt: (v: number) => teamFmt(v), minGp: 2, lower: true },
+                      { title: 'Net Rating', field: 'avgNetRating', fmt: (v: number) => teamFmt(v), minGp: 2 },
+                      { title: 'Pace', field: 'avgPace', fmt: (v: number) => teamFmt(v), minGp: 2 },
+                      { title: 'Effective FG% (eFG%)', field: 'avgEfgPercent', fmt: (v: number) => `${teamFmt(v)}%`, minGp: 2 },
+                      { title: 'True Shooting % (TS%)', field: 'avgTsPercent', fmt: (v: number) => `${teamFmt(v)}%`, minGp: 2 },
+                      { title: 'Assist % (AST%)', field: 'avgAstPercent', fmt: (v: number) => `${teamFmt(v)}%`, minGp: 2 },
+                      { title: 'Rebound % (REB%)', field: 'avgRebPercent', fmt: (v: number) => `${teamFmt(v)}%`, minGp: 2 },
+                      { title: 'Turnover % (TOV%)', field: 'avgTovPercent', fmt: (v: number) => `${teamFmt(v)}%`, minGp: 2, lower: true },
+                      { title: 'Player Impact Estimate (PIE)', field: 'avgPie', fmt: (v: number) => teamFmt(v, 3), minGp: 2 },
+                    ];
+
+                    const teamAdvCards = teamAdvCategories.flatMap((cat) => {
+                      const eligible = teamPool.filter((t: any) => (t.gamesPlayed || 0) >= cat.minGp && t[cat.field] != null);
+                      // Hide cards where no team has the metric captured.
+                      const hasAnyValue = eligible.some((t: any) => teamNum(t, cat.field) !== 0);
+                      if (eligible.length === 0 || !hasAnyValue) return [];
+                      const sorted = [...eligible].sort((a: any, b: any) =>
+                        cat.lower ? teamNum(a, cat.field) - teamNum(b, cat.field) : teamNum(b, cat.field) - teamNum(a, cat.field)
+                      ).slice(0, 10);
+                      return [{
+                        title: cat.title,
+                        items: sorted,
+                        displayFn: (t: any) => cat.fmt(teamNum(t, cat.field)),
+                      }];
+                    });
+
+                    if (teamAdvCards.length === 0) {
+                      return (
+                        <div className="text-center py-12">
+                          <p className="text-sm text-slate-500 dark:text-slate-400">No advanced team data available for the selected filters.</p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                        {teamAdvCards.map((c) => renderCard({ title: c.title, items: c.items, displayFn: c.displayFn, subject: 'team' }))}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             )}
