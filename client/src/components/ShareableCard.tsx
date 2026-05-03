@@ -548,18 +548,22 @@ export default function ShareableCard({
                       avatar when no photo is set. */}
                   {player.photoUrl ? (
                     <div
-                      className="absolute left-4 bottom-0 pointer-events-none z-[2]"
-                      style={{ width: 128, height: 168 }}
+                      className="absolute bottom-0 pointer-events-none z-[2]"
+                      style={{
+                        left: wide ? 32 : 16,
+                        width: wide ? 220 : 128,
+                        height: wide ? 280 : 168,
+                      }}
                     >
                       {/* Soft circular spotlight behind the cutout */}
                       <div
                         aria-hidden="true"
                         className="absolute rounded-full"
                         style={{
-                          width: 104,
-                          height: 104,
-                          left: 12,
-                          top: 22,
+                          width: wide ? 180 : 104,
+                          height: wide ? 180 : 104,
+                          left: wide ? 20 : 12,
+                          top: wide ? 40 : 22,
                           background:
                             "radial-gradient(circle, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 70%)",
                         }}
@@ -577,48 +581,68 @@ export default function ShareableCard({
                   ) : null}
 
                   <div
-                    className="relative flex items-center gap-5 h-full"
+                    className="relative flex items-center h-full"
                     style={{
-                      paddingLeft: player.photoUrl ? 144 : 0,
-                      minHeight: 120,
+                      gap: wide ? 32 : 20,
+                      paddingLeft: player.photoUrl ? (wide ? 252 : 144) : 0,
+                      minHeight: wide ? 200 : 120,
                     }}
                   >
-                    {!player.photoUrl && <PlayerAvatar player={player} size={76} />}
+                    {!player.photoUrl && (
+                      <PlayerAvatar player={player} size={wide ? 140 : 76} />
+                    )}
                     <div className="flex-1 min-w-0 flex flex-col justify-center">
                       <div
-                        className="text-[10px] font-bold tracking-[0.22em] uppercase"
-                        style={{ color: titleColor, lineHeight: 1, marginBottom: 8 }}
+                        className="font-bold uppercase"
+                        style={{
+                          color: titleColor,
+                          lineHeight: 1,
+                          marginBottom: wide ? 14 : 8,
+                          fontSize: wide ? 18 : 10,
+                          letterSpacing: "0.22em",
+                        }}
                       >
                         {title}
                       </div>
                       <div
-                        className="text-xl font-black"
-                        style={{ wordBreak: "break-word", color: bandTextColor, lineHeight: 1.1 }}
+                        className="font-black"
+                        style={{
+                          wordBreak: "break-word",
+                          color: bandTextColor,
+                          lineHeight: 1.1,
+                          fontSize: wide ? 44 : 20,
+                        }}
                       >
                         {player.name}
                       </div>
                       {player.team && (
                         <div
-                          className="text-[12px] flex items-center gap-2"
+                          className="flex items-center"
                           style={{
+                            gap: wide ? 12 : 8,
                             wordBreak: "break-word",
                             color: bandTextSubtle,
-                            marginTop: 8,
+                            marginTop: wide ? 14 : 8,
                             lineHeight: 1.1,
+                            fontSize: wide ? 22 : 12,
                           }}
                         >
                           {player.teamLogoUrl && (
                             <span
                               className="inline-flex items-center justify-center rounded-full bg-white border border-white/60 overflow-hidden flex-shrink-0 shadow-sm"
-                              style={{ width: 28, height: 28 }}
+                              style={{ width: wide ? 48 : 28, height: wide ? 48 : 28 }}
                             >
                               <img
                                 src={player.teamLogoUrl}
                                 alt={player.team}
                                 crossOrigin="anonymous"
-                                width={24}
-                                height={24}
-                                style={{ width: 24, height: 24, objectFit: "contain" }}
+                                width={wide ? 42 : 24}
+                                height={wide ? 42 : 24}
+                                style={{
+                                  width: wide ? 42 : 24,
+                                  height: wide ? 42 : 24,
+                                  objectFit: "contain",
+                                }}
                                 onError={(e) => {
                                   const img = e.currentTarget as HTMLImageElement;
                                   const wrap = img.parentElement;
@@ -633,8 +657,14 @@ export default function ShareableCard({
                       )}
                       {shareCaption && (
                         <div
-                          className="text-[10px] font-semibold uppercase tracking-[0.2em]"
-                          style={{ color: bandTextMuted, marginTop: 10, lineHeight: 1 }}
+                          className="font-semibold uppercase"
+                          style={{
+                            color: bandTextMuted,
+                            marginTop: wide ? 16 : 10,
+                            lineHeight: 1,
+                            fontSize: wide ? 16 : 10,
+                            letterSpacing: "0.2em",
+                          }}
                         >
                           {shareCaption}
                         </div>
