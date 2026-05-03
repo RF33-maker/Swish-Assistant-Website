@@ -108,16 +108,16 @@ function ShareStat({
   labelColor: string;
 }) {
   return (
-    <div className="flex flex-col items-center min-w-[44px]">
+    <div className="flex flex-col items-center" style={{ minWidth: 88 }}>
       <span
-        className="text-lg font-black tabular-nums leading-none"
-        style={{ color: "#0f172a" }}
+        className="font-black tabular-nums leading-none"
+        style={{ color: "#0f172a", fontSize: 44 }}
       >
         {value}
       </span>
       <span
-        className="text-[10px] font-semibold uppercase tracking-wide mt-1.5"
-        style={{ color: labelColor }}
+        className="font-semibold uppercase tracking-wide"
+        style={{ color: labelColor, fontSize: 16, marginTop: 10, letterSpacing: "0.08em" }}
       >
         {label}
       </span>
@@ -140,10 +140,17 @@ function ShareStatBlock({
 }) {
   return (
     <div
-      className="rounded-xl px-3 py-4"
-      style={{ backgroundColor: panelBg, border: `1px solid ${panelBorder}` }}
+      className="rounded-2xl"
+      style={{
+        backgroundColor: panelBg,
+        border: `1px solid ${panelBorder}`,
+        padding: "28px 20px",
+      }}
     >
-      <div className="grid grid-cols-5 gap-y-4 gap-x-1">
+      <div
+        className="grid grid-cols-5"
+        style={{ rowGap: 36, columnGap: 12 }}
+      >
         <ShareStat label="GS" value={perf.game_score ?? 0} labelColor={labelColor} />
         <ShareStat label="PTS" value={perf.pts ?? 0} labelColor={labelColor} />
         <ShareStat label="REB" value={perf.reb ?? 0} labelColor={labelColor} />
@@ -385,25 +392,24 @@ export default function TrendingPerformanceSection() {
   const dateColor = ensureContrast(shadeHex(primaryColor, 0.35), "#ffffff", 4.5);
 
   const shareBody = (
-    <div>
-      <div className="flex items-center justify-between mb-3">
+    <div className="flex flex-col gap-6" style={{ minHeight: 880 }}>
+      <div className="flex items-center justify-between">
         <span
-          className="text-[11px] font-bold uppercase tracking-[0.14em]"
-          style={{ color: labelColor }}
+          className="font-bold uppercase"
+          style={{ color: labelColor, fontSize: 18, letterSpacing: "0.16em" }}
         >
           {leagueName || "Featured League"}
         </span>
         <span
-          className="text-[11px] font-semibold uppercase tracking-wider"
-          style={{ color: dateColor }}
+          className="font-semibold uppercase"
+          style={{ color: dateColor, fontSize: 18, letterSpacing: "0.14em" }}
         >
           {formatDate(perf.game_date)}
         </span>
       </div>
       <div
         aria-hidden="true"
-        className="mb-3"
-        style={{ height: 1, backgroundColor: dividerColor }}
+        style={{ height: 2, backgroundColor: dividerColor }}
       />
       <ShareStatBlock
         perf={perf}
@@ -429,6 +435,7 @@ export default function TrendingPerformanceSection() {
         }}
         shareCaption={leagueName ? `${leagueName} • ${formatDate(perf.game_date)}` : formatDate(perf.game_date)}
         shareContent={shareBody}
+        wide
       >
         <div
           role="button"

@@ -68,14 +68,18 @@ export default function LeagueLeadersShareCard({
 
   const renderList = (entries: LeaderEntry[], unit?: string) => (
     <div
-      className="rounded-xl px-3 py-3"
-      style={{ backgroundColor: panelBg, border: `1px solid ${panelBorder}` }}
+      className="rounded-2xl"
+      style={{
+        backgroundColor: panelBg,
+        border: `1px solid ${panelBorder}`,
+        padding: "16px 18px",
+      }}
     >
       <ol
         style={{
           display: "flex",
           flexDirection: "column",
-          gap: 6,
+          gap: 10,
           fontFamily:
             "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
         }}
@@ -85,8 +89,8 @@ export default function LeagueLeadersShareCard({
             key={`${p.name}-${i}`}
             style={{
               backgroundColor: i === 0 ? tintHex(brandColor, 0.85) : "transparent",
-              borderRadius: 6,
-              padding: "14px 12px",
+              borderRadius: 10,
+              padding: "18px 18px",
               display: "table",
               width: "100%",
               tableLayout: "fixed",
@@ -96,9 +100,9 @@ export default function LeagueLeadersShareCard({
               style={{
                 display: "table-cell",
                 verticalAlign: "middle",
-                width: 28,
-                fontSize: 16,
-                lineHeight: "28px",
+                width: 48,
+                fontSize: 28,
+                lineHeight: "40px",
                 fontWeight: 800,
                 color: rankColor,
                 fontVariantNumeric: "tabular-nums",
@@ -110,17 +114,17 @@ export default function LeagueLeadersShareCard({
               style={{
                 display: "table-cell",
                 verticalAlign: "middle",
-                paddingLeft: 12,
-                paddingRight: 8,
+                paddingLeft: 18,
+                paddingRight: 12,
               }}
             >
               <div
                 style={{
-                  fontSize: 14,
-                  lineHeight: "22px",
-                  fontWeight: 700,
+                  fontSize: 24,
+                  lineHeight: "32px",
+                  fontWeight: 800,
                   color: "#0f172a",
-                  whiteSpace: "nowrap",
+                  wordBreak: "break-word",
                 }}
               >
                 {p.name}
@@ -128,11 +132,11 @@ export default function LeagueLeadersShareCard({
               {p.team && (
                 <div
                   style={{
-                    fontSize: 11,
-                    lineHeight: "18px",
+                    fontSize: 16,
+                    lineHeight: "22px",
                     color: labelColor,
-                    whiteSpace: "nowrap",
-                    marginTop: 1,
+                    wordBreak: "break-word",
+                    marginTop: 4,
                   }}
                 >
                   {p.team}
@@ -145,9 +149,9 @@ export default function LeagueLeadersShareCard({
                 verticalAlign: "middle",
                 textAlign: "right",
                 whiteSpace: "nowrap",
-                fontSize: 15,
-                lineHeight: "26px",
-                fontWeight: 800,
+                fontSize: 30,
+                lineHeight: "40px",
+                fontWeight: 900,
                 color: "#0f172a",
                 fontVariantNumeric: "tabular-nums",
               }}
@@ -156,11 +160,11 @@ export default function LeagueLeadersShareCard({
               {unit ? (
                 <span
                   style={{
-                    marginLeft: 4,
-                    fontSize: 11,
+                    marginLeft: 8,
+                    fontSize: 14,
                     fontWeight: 700,
                     textTransform: "uppercase",
-                    letterSpacing: "0.04em",
+                    letterSpacing: "0.06em",
                     color: labelColor,
                   }}
                 >
@@ -173,7 +177,7 @@ export default function LeagueLeadersShareCard({
         {entries.length === 0 && (
           <li
             className="text-center"
-            style={{ color: labelColor, fontSize: 12, lineHeight: 1.5, paddingTop: 12, paddingBottom: 12 }}
+            style={{ color: labelColor, fontSize: 16, lineHeight: 1.5, paddingTop: 18, paddingBottom: 18 }}
           >
             No data available
           </li>
@@ -183,12 +187,12 @@ export default function LeagueLeadersShareCard({
   );
 
   const shareBody = (
-    <div>
+    <div className="flex flex-col" style={{ minHeight: 880, gap: 18 }}>
       {contextLabel && (
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between">
           <span
-            className="text-[11px] font-bold uppercase tracking-[0.14em]"
-            style={{ color: labelColor }}
+            className="font-bold uppercase"
+            style={{ color: labelColor, fontSize: 18, letterSpacing: "0.16em" }}
           >
             {contextLabel}
           </span>
@@ -196,16 +200,21 @@ export default function LeagueLeadersShareCard({
       )}
       <div
         aria-hidden="true"
-        className="mb-3"
-        style={{ height: 1, backgroundColor: dividerColor }}
+        style={{ height: 2, backgroundColor: dividerColor }}
       />
       {groups && groups.length > 0 ? (
-        <div className="space-y-3">
+        <div className="flex flex-col" style={{ gap: 18 }}>
           {groups.map((g) => (
             <div key={g.title}>
               <div
-                className="text-[11px] font-bold uppercase tracking-[0.14em] mb-1.5 px-1"
-                style={{ color: labelColor }}
+                className="font-bold uppercase"
+                style={{
+                  color: labelColor,
+                  fontSize: 16,
+                  letterSpacing: "0.16em",
+                  marginBottom: 10,
+                  paddingLeft: 4,
+                }}
               >
                 {g.title}
               </div>
@@ -218,8 +227,13 @@ export default function LeagueLeadersShareCard({
       )}
       {footnote && (
         <div
-          className="text-[10px] uppercase tracking-wider mt-2.5 text-center"
-          style={{ color: labelColor }}
+          className="uppercase text-center"
+          style={{
+            color: labelColor,
+            fontSize: 14,
+            letterSpacing: "0.14em",
+            marginTop: 4,
+          }}
         >
           {footnote}
         </div>
@@ -239,6 +253,7 @@ export default function LeagueLeadersShareCard({
       }}
       shareCaption={title}
       shareContent={shareBody}
+      wide
     >
       {children}
     </ShareableCard>

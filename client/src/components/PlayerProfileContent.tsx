@@ -1642,41 +1642,66 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
             : null;
 
           const shareBlock = (
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+            <div className="flex flex-col" style={{ minHeight: 880, gap: 20 }}>
+              <div className="flex items-center justify-between">
+                <span
+                  className="font-bold uppercase text-slate-500"
+                  style={{ fontSize: 18, letterSpacing: "0.18em" }}
+                >
                   Season Averages
                 </span>
                 {filterLabel && (
                   <span
-                    className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
-                    style={{ backgroundColor: sharePillBg, color: shareAccent }}
+                    className="font-bold uppercase rounded-full"
+                    style={{
+                      backgroundColor: sharePillBg,
+                      color: shareAccent,
+                      fontSize: 14,
+                      letterSpacing: "0.1em",
+                      padding: "6px 14px",
+                    }}
                   >
                     {filterLabel}
                   </span>
                 )}
               </div>
-              <div className="grid grid-cols-3 gap-2.5">
+              <div className="grid grid-cols-3" style={{ gap: 18 }}>
                 {seasonStats.map((stat, i) => (
                   <div
                     key={i}
-                    className="rounded-xl px-2 py-3 flex flex-col items-center text-center bg-white"
-                    style={{ border: `1px solid ${shareTileBorder}`, boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)" }}
+                    className="rounded-2xl flex flex-col items-center text-center bg-white"
+                    style={{
+                      border: `1px solid ${shareTileBorder}`,
+                      boxShadow: "0 1px 3px rgba(15, 23, 42, 0.05)",
+                      padding: "28px 16px",
+                    }}
                   >
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                    <div
+                      className="font-bold uppercase text-slate-500"
+                      style={{ fontSize: 16, letterSpacing: "0.14em", marginBottom: 14 }}
+                    >
                       {stat.label}
                     </div>
                     <div
-                      className="text-3xl font-black tabular-nums leading-none"
-                      style={{ color: shareAccent }}
+                      className="font-black tabular-nums leading-none"
+                      style={{ color: shareAccent, fontSize: 72 }}
                     >
                       {stat.value.toFixed(1)}
                     </div>
-                    <div className="mt-2 h-[18px] flex items-center">
+                    <div
+                      className="flex items-center"
+                      style={{ marginTop: 16, height: 32 }}
+                    >
                       {stat.rank ? (
                         <span
-                          className="px-1.5 py-0.5 rounded-full text-[9px] font-bold tracking-wide tabular-nums"
-                          style={{ backgroundColor: sharePillBg, color: shareAccent }}
+                          className="rounded-full font-bold tabular-nums"
+                          style={{
+                            backgroundColor: sharePillBg,
+                            color: shareAccent,
+                            fontSize: 14,
+                            letterSpacing: "0.06em",
+                            padding: "5px 12px",
+                          }}
                         >
                           {getOrdinalSuffix(stat.rank)}
                         </span>
@@ -1700,6 +1725,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
                 teamLogoUrl: shareTeamLogoUrl,
               }}
               shareContent={shareBlock}
+              wide
             >
               {(() => {
                 const pageAccent = readablePrimary.body;
@@ -1772,39 +1798,58 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
           const shareTrackBg = withAlpha(shareAccent, 0.15);
 
           const shareBlock = (
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 mb-3 block">
+            <div className="flex flex-col" style={{ minHeight: 880, gap: 24 }}>
+              <span
+                className="font-bold uppercase text-slate-500 block"
+                style={{ fontSize: 18, letterSpacing: "0.18em" }}
+              >
                 Shooting
               </span>
-              <div className="grid grid-cols-3 gap-2.5">
+              <div className="grid grid-cols-3" style={{ gap: 22 }}>
                 {shootingStats.map((stat, i) => (
                   <div
                     key={i}
-                    className="rounded-xl px-2 pt-3 pb-3 flex flex-col items-center text-center bg-white"
-                    style={{ border: `1px solid ${shareTileBorder}`, boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)" }}
+                    className="rounded-2xl flex flex-col items-center text-center bg-white"
+                    style={{
+                      border: `1px solid ${shareTileBorder}`,
+                      boxShadow: "0 1px 3px rgba(15, 23, 42, 0.05)",
+                      padding: "32px 18px",
+                    }}
                   >
-                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                    <div
+                      className="font-bold uppercase text-slate-500"
+                      style={{ fontSize: 18, letterSpacing: "0.14em", marginBottom: 16 }}
+                    >
                       {stat.label}
                     </div>
                     <div
-                      className="text-3xl font-black tabular-nums leading-none"
-                      style={{ color: shareAccent }}
+                      className="font-black tabular-nums leading-none"
+                      style={{ color: shareAccent, fontSize: 84 }}
                     >
                       {formatPercentage(stat.value)}
                     </div>
-                    <div className="mt-2 h-[18px] flex items-center">
+                    <div
+                      className="flex items-center"
+                      style={{ marginTop: 18, height: 32 }}
+                    >
                       {stat.rank ? (
                         <span
-                          className="px-1.5 py-0.5 rounded-full text-[9px] font-bold tracking-wide tabular-nums"
-                          style={{ backgroundColor: sharePillBg, color: shareAccent }}
+                          className="rounded-full font-bold tabular-nums"
+                          style={{
+                            backgroundColor: sharePillBg,
+                            color: shareAccent,
+                            fontSize: 14,
+                            letterSpacing: "0.06em",
+                            padding: "5px 12px",
+                          }}
                         >
                           {getOrdinalSuffix(stat.rank)}
                         </span>
                       ) : null}
                     </div>
                     <div
-                      className="w-full mt-2.5 h-1.5 rounded-full overflow-hidden"
-                      style={{ backgroundColor: shareTrackBg }}
+                      className="w-full rounded-full overflow-hidden"
+                      style={{ backgroundColor: shareTrackBg, marginTop: 22, height: 8 }}
                     >
                       <div
                         className="h-full rounded-full"
@@ -1829,6 +1874,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
                 teamLogoUrl: shareTeamLogoUrl,
               }}
               shareContent={shareBlock}
+              wide
             >
               {(() => {
                 const pageAccent = readablePrimary.body;
@@ -1899,7 +1945,104 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
           </div>
         )}
 
-        {onOffSummary && (
+        {onOffSummary && (() => {
+          const fmtVal = (v: number | null, isPercent: boolean) => {
+            if (v == null) return '—';
+            return isPercent ? `${v.toFixed(1)}%` : v.toFixed(1);
+          };
+          const fmtDiff = (v: number | null, isPercent: boolean) => {
+            if (v == null) return '—';
+            const abs = isPercent ? `${Math.abs(v).toFixed(1)}%` : Math.abs(v).toFixed(1);
+            const sign = v < 0 ? '\u2212' : '+';
+            return `${sign}${abs}`;
+          };
+          const onOffShareContent = (
+            <div className="flex flex-col" style={{ minHeight: 880, gap: 18 }}>
+              <span
+                className="font-bold uppercase text-slate-500 block"
+                style={{ fontSize: 18, letterSpacing: "0.18em" }}
+              >
+                Team On/Off Impact
+              </span>
+              <div className="rounded-xl border border-slate-200 overflow-hidden bg-white shadow-sm">
+                <table className="w-full" style={{ fontSize: 18 }}>
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th
+                        className="text-left font-bold text-slate-500 uppercase"
+                        style={{ padding: '14px 20px', fontSize: 13, letterSpacing: '0.16em' }}
+                      ></th>
+                      <th
+                        className="text-right font-bold text-slate-500 uppercase"
+                        style={{ padding: '14px 20px', fontSize: 13, letterSpacing: '0.16em' }}
+                      >
+                        On
+                      </th>
+                      <th
+                        className="text-right font-bold text-slate-500 uppercase"
+                        style={{ padding: '14px 20px', fontSize: 13, letterSpacing: '0.16em' }}
+                      >
+                        Off
+                      </th>
+                      <th
+                        className="text-right font-bold text-slate-500 uppercase"
+                        style={{ padding: '14px 20px', fontSize: 13, letterSpacing: '0.16em' }}
+                      >
+                        Diff
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {onOffSummary.map((m, idx) => {
+                      let diffColor = '#334155';
+                      if (m.diff != null && m.diff !== 0) {
+                        const better = m.higherIsBetter ? m.diff > 0 : m.diff < 0;
+                        diffColor = better ? '#10b981' : '#ef4444';
+                      }
+                      return (
+                        <tr
+                          key={m.key}
+                          className={`border-t border-slate-100 ${idx % 2 === 1 ? 'bg-slate-50/60' : ''}`}
+                        >
+                          <td
+                            className="font-bold uppercase text-slate-600"
+                            style={{ padding: '12px 20px', fontSize: 14, letterSpacing: '0.12em' }}
+                          >
+                            {m.label}
+                          </td>
+                          <td
+                            className="text-right font-bold tabular-nums text-slate-800"
+                            style={{ padding: '12px 20px', fontSize: 22 }}
+                          >
+                            {fmtVal(m.on, m.isPercent)}
+                          </td>
+                          <td
+                            className="text-right font-bold tabular-nums text-slate-800"
+                            style={{ padding: '12px 20px', fontSize: 22 }}
+                          >
+                            {fmtVal(m.off, m.isPercent)}
+                          </td>
+                          <td
+                            className="text-right font-bold tabular-nums"
+                            style={{ padding: '12px 20px', fontSize: 22, color: diffColor }}
+                          >
+                            {fmtDiff(m.diff, m.isPercent)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <p
+                className="text-slate-500 text-center"
+                style={{ fontSize: 14, marginTop: 4 }}
+              >
+                How a player's team performs when they are on vs. off court.
+              </p>
+            </div>
+          );
+          return (
           <ShareableCard
             title="Team On/Off Impact"
             fileSlug="on-off-impact"
@@ -1910,6 +2053,8 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
               primaryColor,
               teamLogoUrl: shareTeamLogoUrl,
             }}
+            shareContent={onOffShareContent}
+            wide
           >
           <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4" data-testid="player-on-off-card">
             <span className="text-base md:text-lg font-bold text-slate-800 dark:text-white mb-3 block">Team on/off impact</span>
@@ -1959,7 +2104,8 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
             <p className="text-xs text-slate-400 dark:text-slate-500 mt-3">How a player's team performs when they are on vs. off court.</p>
           </div>
           </ShareableCard>
-        )}
+          );
+        })()}
 
         {careerStats.length > 0 && (
           <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 overflow-hidden">
@@ -2110,15 +2256,26 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
             return undefined;
           })()}
           shareContent={
-            <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-100 dark:border-neutral-800 p-4">
-              <ShotChart
-                shots={playerShotData || []}
-                loading={playerShotsLoading}
-                compact
-                emptyMessage="No shot data available for this player."
-              />
+            <div
+              className="flex flex-col items-center justify-center bg-white"
+              style={{ minHeight: 880, gap: 18, padding: "8px 0" }}
+            >
+              <span
+                className="font-bold uppercase text-slate-500 self-stretch"
+                style={{ fontSize: 18, letterSpacing: "0.18em" }}
+              >
+                Shot Chart
+              </span>
+              <div style={{ width: "100%", maxWidth: 760 }}>
+                <ShotChart
+                  shots={playerShotData || []}
+                  loading={playerShotsLoading}
+                  emptyMessage="No shot data available for this player."
+                />
+              </div>
             </div>
           }
+          wide
         >
         <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
