@@ -1642,7 +1642,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
             : null;
 
           const shareBlock = (
-            <div className="flex flex-col" style={{ minHeight: 880, gap: 20 }}>
+            <div className="flex flex-col" style={{ gap: 20 }}>
               <div className="flex items-center justify-between">
                 <span
                   className="font-bold uppercase text-slate-500"
@@ -1798,7 +1798,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
           const shareTrackBg = withAlpha(shareAccent, 0.15);
 
           const shareBlock = (
-            <div className="flex flex-col" style={{ minHeight: 880, gap: 24 }}>
+            <div className="flex flex-col" style={{ gap: 24 }}>
               <span
                 className="font-bold uppercase text-slate-500 block"
                 style={{ fontSize: 18, letterSpacing: "0.18em" }}
@@ -1957,7 +1957,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
             return `${sign}${abs}`;
           };
           const onOffShareContent = (
-            <div className="flex flex-col" style={{ minHeight: 880, gap: 18 }}>
+            <div className="flex flex-col" style={{ gap: 18 }}>
               <span
                 className="font-bold uppercase text-slate-500 block"
                 style={{ fontSize: 18, letterSpacing: "0.18em" }}
@@ -2258,7 +2258,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
           shareContent={
             <div
               className="flex flex-col items-center justify-center bg-white"
-              style={{ minHeight: 880, gap: 18, padding: "8px 0" }}
+              style={{ gap: 18, padding: "8px 0" }}
             >
               <span
                 className="font-bold uppercase text-slate-500 self-stretch"

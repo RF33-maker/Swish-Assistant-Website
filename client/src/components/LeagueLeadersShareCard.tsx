@@ -187,7 +187,7 @@ export default function LeagueLeadersShareCard({
   );
 
   const shareBody = (
-    <div className="flex flex-col" style={{ minHeight: 880, gap: 18 }}>
+    <div className="flex flex-col" style={{ gap: 18 }}>
       {contextLabel && (
         <div className="flex items-center justify-between">
           <span

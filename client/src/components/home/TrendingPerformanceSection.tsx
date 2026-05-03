@@ -392,7 +392,7 @@ export default function TrendingPerformanceSection() {
   const dateColor = ensureContrast(shadeHex(primaryColor, 0.35), "#ffffff", 4.5);
 
   const shareBody = (
-    <div className="flex flex-col gap-6" style={{ minHeight: 880 }}>
+    <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <span
           className="font-bold uppercase"
