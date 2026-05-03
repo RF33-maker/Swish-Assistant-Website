@@ -57,11 +57,11 @@ function aggregateTeamStats(filteredStats: any[], teamName: string) {
     totalSteals += stat.tot_ssteals || 0;
     totalBlocks += stat.tot_sblocks || 0;
     totalTurnovers += stat.tot_sturnovers || 0;
-    totalPlusMinus += stat.tot_splusminus || 0;
+    totalPlusMinus += stat.tot_splusminuspoints || 0;
     totalPF += stat.tot_sfoulspersonal || 0;
-    totalPitp += stat.tot_pointsinpaint || 0;
-    totalFastbreak += stat.tot_fastbreakpoints || 0;
-    totalSecondChance += stat.tot_secondchancepoints || 0;
+    totalPitp += stat.tot_spointsinthepaint || 0;
+    totalFastbreak += stat.tot_spointsfastbreak || 0;
+    totalSecondChance += stat.tot_spointssecondchance || 0;
 
     sumEfgPercent += stat.efg_percent || 0;
     sumTsPercent += stat.ts_percent || 0;
@@ -149,7 +149,6 @@ function getTeamComparisonRows(
         { label: 'BPG', value1: team1Stats.bpg, value2: team2Stats.bpg },
         { label: 'TPG', value1: team1Stats.tpg, value2: team2Stats.tpg, lowerIsBetter: true },
         { label: 'FPG', value1: team1Stats.fpg, value2: team2Stats.fpg, lowerIsBetter: true },
-        { label: '+/-', value1: team1Stats.plusMinus, value2: team2Stats.plusMinus },
         { label: 'FG%', value1: `${team1Stats.fgPercentage}%`, value2: `${team2Stats.fgPercentage}%` },
         { label: '2P%', value1: `${team1Stats.twoPercentage}%`, value2: `${team2Stats.twoPercentage}%` },
         { label: '3P%', value1: `${team1Stats.threePercentage}%`, value2: `${team2Stats.threePercentage}%` },
@@ -191,7 +190,6 @@ function getTeamComparisonRows(
         { label: 'PPG', value1: team1Stats.ppg, value2: team2Stats.ppg },
         { label: 'RPG', value1: team1Stats.rpg, value2: team2Stats.rpg },
         { label: 'APG', value1: team1Stats.apg, value2: team2Stats.apg },
-        { label: '+/-', value1: team1Stats.plusMinus, value2: team2Stats.plusMinus },
         { label: 'FPG', value1: team1Stats.fpg, value2: team2Stats.fpg, lowerIsBetter: true },
         { label: 'TPG', value1: team1Stats.tpg, value2: team2Stats.tpg, lowerIsBetter: true },
         { label: 'PITP', value1: team1Stats.pitpPg, value2: team2Stats.pitpPg },
