@@ -319,8 +319,8 @@ export default function ShareableCard({
               <div ref={captureRef} className="bg-white" data-share-card="true">
                 {/* Header band */}
                 <div
-                  className="relative px-5 pt-5 pb-4 overflow-hidden"
-                  style={{ ...bandStyle, minHeight: 150 }}
+                  className="relative px-6 pt-6 pb-5 overflow-hidden"
+                  style={{ ...bandStyle, minHeight: 170 }}
                 >
                   <DiagonalStripes position="tl" color={BRAND_ORANGE} />
 
@@ -328,20 +328,22 @@ export default function ShareableCard({
                       "VS" in between, in place of the single player photo /
                       avatar. Used by Team & Player head-to-head share cards. */}
                   {teamLogos && teamLogos.length >= 2 ? (
-                    <div className="relative flex items-center gap-3 h-full" style={{ minHeight: 110 }}>
+                    <div className="relative flex items-center gap-5 h-full" style={{ minHeight: 120 }}>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         {[teamLogos[0], teamLogos[1]].map((tl, i) => (
-                          <div key={i} className="flex flex-col items-center gap-1">
+                          <div key={i} className="flex items-center gap-2">
                             <div
                               className="rounded-full bg-white/95 flex items-center justify-center overflow-hidden border-2 border-white/40 shadow"
-                              style={{ width: 56, height: 56 }}
+                              style={{ width: 60, height: 60 }}
                             >
                               {tl.logoUrl ? (
                                 <img
                                   src={tl.logoUrl}
                                   alt={tl.name}
                                   crossOrigin="anonymous"
-                                  className="w-full h-full object-contain p-1"
+                                  width={52}
+                                  height={52}
+                                  style={{ width: 52, height: 52, objectFit: "contain" }}
                                   onError={(e) => {
                                     (e.currentTarget as HTMLImageElement).style.display = "none";
                                   }}
@@ -358,7 +360,7 @@ export default function ShareableCard({
                             </div>
                             {i === 0 && (
                               <div
-                                className="text-[9px] font-black tracking-wider"
+                                className="text-[11px] font-black tracking-widest"
                                 style={{ color: titleColor }}
                               >
                                 VS
@@ -369,7 +371,7 @@ export default function ShareableCard({
                       </div>
                       <div className="flex-1 min-w-0">
                         <div
-                          className="text-[10px] font-bold tracking-[0.2em] uppercase mb-0.5"
+                          className="text-[10px] font-bold tracking-[0.22em] uppercase mb-1.5"
                           style={{ color: titleColor }}
                         >
                           {title}
@@ -382,7 +384,7 @@ export default function ShareableCard({
                         </div>
                         {player.team && (
                           <div
-                            className="text-[11px] leading-snug mt-1"
+                            className="text-[11px] leading-snug mt-1.5"
                             style={{ wordBreak: "break-word", color: bandTextSubtle }}
                           >
                             {player.team}
@@ -390,7 +392,7 @@ export default function ShareableCard({
                         )}
                         {shareCaption && (
                           <div
-                            className="text-[10px] uppercase tracking-wider mt-1.5"
+                            className="text-[10px] uppercase tracking-[0.18em] mt-2"
                             style={{ color: bandTextMuted }}
                           >
                             {shareCaption}
@@ -406,18 +408,18 @@ export default function ShareableCard({
                       avatar when no photo is set. */}
                   {player.photoUrl ? (
                     <div
-                      className="absolute left-3 bottom-0 pointer-events-none z-[2]"
-                      style={{ width: 120, height: 150 }}
+                      className="absolute left-4 bottom-0 pointer-events-none z-[2]"
+                      style={{ width: 128, height: 168 }}
                     >
                       {/* Soft circular spotlight behind the cutout */}
                       <div
                         aria-hidden="true"
                         className="absolute rounded-full"
                         style={{
-                          width: 96,
-                          height: 96,
+                          width: 104,
+                          height: 104,
                           left: 12,
-                          top: 18,
+                          top: 22,
                           background:
                             "radial-gradient(circle, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 70%)",
                         }}
@@ -435,41 +437,48 @@ export default function ShareableCard({
                   ) : null}
 
                   <div
-                    className="relative flex items-center gap-4 h-full"
+                    className="relative flex items-center gap-5 h-full"
                     style={{
-                      paddingLeft: player.photoUrl ? 128 : 0,
-                      minHeight: 110,
+                      paddingLeft: player.photoUrl ? 144 : 0,
+                      minHeight: 120,
                     }}
                   >
-                    {!player.photoUrl && <PlayerAvatar player={player} size={64} />}
-                    <div className="flex-1 min-w-0">
+                    {!player.photoUrl && <PlayerAvatar player={player} size={76} />}
+                    <div className="flex-1 min-w-0 flex flex-col justify-center">
                       <div
-                        className="text-[10px] font-bold tracking-[0.2em] uppercase mb-0.5"
-                        style={{ color: titleColor }}
+                        className="text-[10px] font-bold tracking-[0.22em] uppercase"
+                        style={{ color: titleColor, lineHeight: 1, marginBottom: 8 }}
                       >
                         {title}
                       </div>
                       <div
-                        className="text-xl font-black leading-tight"
-                        style={{ wordBreak: "break-word", color: bandTextColor }}
+                        className="text-xl font-black"
+                        style={{ wordBreak: "break-word", color: bandTextColor, lineHeight: 1.1 }}
                       >
                         {player.name}
                       </div>
                       {player.team && (
                         <div
-                          className="text-[11px] leading-snug mt-1 flex items-center gap-1.5"
-                          style={{ wordBreak: "break-word", color: bandTextSubtle }}
+                          className="text-[12px] flex items-center gap-2"
+                          style={{
+                            wordBreak: "break-word",
+                            color: bandTextSubtle,
+                            marginTop: 8,
+                            lineHeight: 1.1,
+                          }}
                         >
                           {player.teamLogoUrl && (
                             <span
-                              className="inline-flex items-center justify-center rounded-full bg-white/95 border border-white/40 overflow-hidden flex-shrink-0"
-                              style={{ width: 20, height: 20 }}
+                              className="inline-flex items-center justify-center rounded-full bg-white border border-white/60 overflow-hidden flex-shrink-0 shadow-sm"
+                              style={{ width: 28, height: 28 }}
                             >
                               <img
                                 src={player.teamLogoUrl}
                                 alt={player.team}
                                 crossOrigin="anonymous"
-                                className="w-full h-full object-contain p-[1px]"
+                                width={24}
+                                height={24}
+                                style={{ width: 24, height: 24, objectFit: "contain" }}
                                 onError={(e) => {
                                   const img = e.currentTarget as HTMLImageElement;
                                   const wrap = img.parentElement;
@@ -484,8 +493,8 @@ export default function ShareableCard({
                       )}
                       {shareCaption && (
                         <div
-                          className="text-[10px] uppercase tracking-wider mt-1.5"
-                          style={{ color: bandTextMuted }}
+                          className="text-[10px] font-semibold uppercase tracking-[0.2em]"
+                          style={{ color: bandTextMuted, marginTop: 10, lineHeight: 1 }}
                         >
                           {shareCaption}
                         </div>
@@ -525,31 +534,34 @@ export default function ShareableCard({
 
                 {/* Footer band */}
                 <div
-                  className="relative px-5 py-3 flex items-center justify-between"
-                  style={{ ...bandStyle, minHeight: 56 }}
+                  className="relative px-6 flex items-center justify-between"
+                  style={{ ...bandStyle, height: 72 }}
                 >
                   <DiagonalStripes position="br" color={BRAND_ORANGE} />
 
-                  <div className="relative flex items-center gap-2">
+                  <div className="relative flex items-center gap-3">
                     <img
                       src={SwishLogo}
                       alt="Swish Assistant"
-                      className="h-7 w-7 object-contain"
+                      width={36}
+                      height={36}
+                      className="block flex-shrink-0"
+                      style={{ width: 36, height: 36 }}
                       crossOrigin="anonymous"
                     />
                     <div
-                      className="font-bold text-sm tracking-wide"
-                      style={{ color: bandTextColor }}
+                      className="font-bold text-base tracking-wide"
+                      style={{ color: bandTextColor, lineHeight: 1 }}
                     >
                       swishassistant.com
                     </div>
                   </div>
 
                   <div
-                    className="relative text-right text-[10px] uppercase tracking-wider"
-                    style={{ color: bandTextMuted }}
+                    className="relative text-right text-[11px] font-semibold uppercase tracking-[0.22em]"
+                    style={{ color: bandTextMuted, lineHeight: 1 }}
                   >
-                    Stats &amp; insights
+                    Stats &amp; Insights
                   </div>
                 </div>
               </div>
