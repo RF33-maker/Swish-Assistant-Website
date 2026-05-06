@@ -706,7 +706,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/public/league-data", async (req: Request, res: Response) => {
     try {
-      const { table, leagueIds } = req.body || {};
+      const { table, leagueIds, parentLeagueId } = req.body || {};
       if (typeof table !== "string" || !(table in ALLOWED_LEAGUE_DATA_COLUMNS)) {
         return res.status(400).json({ error: "Invalid or unsupported table" });
       }
@@ -718,7 +718,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "leagueIds must contain at least one valid id" });
       }
 
-      const allowedIds = await filterLeagueIdsForPublicScope(ids);
+      let allowedIds: string[];
+      if (parentLeagueId && typeof parentLeagueId === "string") {
+        // Caller supplies a parent league context — validate each id is a genuine
+        // child of that parent OR is the parent itself. This bypasses the
+        // is_public gate for parent leagues that have is_public=false (e.g. REBA SL).
+        const { data: childRows } = await supabaseAdmin
+          .from("leagues")
+          .select("league_id")
+          .in("league_id", ids)
+          .eq("parent_league_id", parentLeagueId);
+        const validatedIds = new Set((childRows || []).map((r: any) => r.league_id));
+        // Allow the parent itself in case its own league_id is in the list.
+        const { data: parentRow } = await supabaseAdmin
+          .from("leagues")
+          .select("league_id")
+          .eq("league_id", parentLeagueId)
+          .single();
+        if (parentRow) validatedIds.add(parentLeagueId);
+        allowedIds = ids.filter((id) => validatedIds.has(id));
+      } else {
+        allowedIds = await filterLeagueIdsForPublicScope(ids);
+      }
+
       if (allowedIds.length === 0) {
         return res.json({ rows: [] });
       }

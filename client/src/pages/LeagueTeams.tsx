@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import { TeamLogo } from "@/components/TeamLogo";
 import { normalizeTeamName } from "@/lib/teamUtils";
+import { fetchLeagueData } from "@/lib/leagueData";
 import React from "react";
 
 interface League {
@@ -90,25 +91,25 @@ export default function LeagueTeams() {
       
       setLoading(true);
       try {
-        // Fetch league info
-        const { data: leagueData, error: leagueError } = await supabase
-          .from("leagues")
-          .select("*")
-          .eq("slug", slug)
-          .single();
-
-        if (leagueError) {
-          console.error("Error fetching league:", leagueError);
+        // Fetch league info via service-role endpoint (bypasses RLS for private leagues)
+        const leagueBrandRes = await fetch(`/api/public/league-branding/${encodeURIComponent(slug)}`);
+        if (!leagueBrandRes.ok) {
+          console.error("Error fetching league:", leagueBrandRes.status);
+          return;
+        }
+        const leagueData = await leagueBrandRes.json();
+        if (!leagueData?.league_id) {
+          console.error("League not found for slug:", slug);
           return;
         }
 
         setLeague(leagueData);
 
-        // Fetch all teams from the teams table
-        const { data: allTeams, error: teamsError } = await supabase
-          .from("teams")
-          .select("team_id, name")
-          .eq("league_id", leagueData.league_id);
+        // Fetch all teams via service-role endpoint (bypasses RLS for private leagues)
+        const { data: allTeams, error: teamsError } = await fetchLeagueData<{ team_id: string; name: string }>(
+          "teams",
+          [leagueData.league_id],
+        );
 
         if (teamsError) {
           console.error("Error fetching teams:", teamsError);
@@ -121,11 +122,16 @@ export default function LeagueTeams() {
           return;
         }
 
-        // Fetch all player stats for this league
-        const { data: allPlayerStats, error: statsError } = await supabase
-          .from("player_stats")
-          .select("*")
-          .eq("league_id", leagueData.league_id);
+        // Fetch all player stats via service-role endpoint (bypasses RLS for private leagues)
+        const { data: allPlayerStats, error: statsError } = await fetch("/api/public/player-stats", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ leagueIds: [leagueData.league_id], page: 0, pageSize: 1000 }),
+        }).then(async (r) => {
+          if (!r.ok) return { data: null, error: new Error(`player-stats ${r.status}`) };
+          const j = await r.json();
+          return { data: j.rows ?? [], error: null };
+        }).catch((e) => ({ data: null, error: e }));
 
         if (statsError) {
           console.error("Error fetching player stats:", statsError);
@@ -136,71 +142,72 @@ export default function LeagueTeams() {
           const teamName = team.name;
           const normalizedTeamName = normalizeTeamName(teamName);
           
-            // Get team stats (only if player stats exist)
-            // Normalize both team names for comparison
+            // Filter stats for this team (team_name column in player_stats)
             const teamPlayers = allPlayerStats ? allPlayerStats.filter(stat => 
-              normalizeTeamName(stat.team) === normalizedTeamName
+              normalizeTeamName(stat.team_name || stat.team || '') === normalizedTeamName
             ) : [];
             
-            // Calculate team totals and averages using game_id to properly determine opponents
+            // Calculate team totals and averages using game_key to properly determine opponents
             const gamesByGameId = teamPlayers.reduce((acc: Record<string, any>, player: any) => {
-              if (!acc[player.game_id]) {
-                acc[player.game_id] = {
-                  game_id: player.game_id,
+              const gameKey = player.game_key || player.game_id;
+              if (!gameKey) return acc;
+              if (!acc[gameKey]) {
+                acc[gameKey] = {
+                  game_id: gameKey,
                   game_date: player.game_date,
-                  home_team: player.home_team,
-                  away_team: player.away_team,
                   teams: new Set(),
                   teamScores: {},
                   ourTeam: normalizedTeamName
                 };
               }
               
-              // Track teams and scores in this game using normalized names
-              const playerNormalizedTeam = normalizeTeamName(player.team);
-              acc[player.game_id].teams.add(playerNormalizedTeam);
-              if (!acc[player.game_id].teamScores[playerNormalizedTeam]) {
-                acc[player.game_id].teamScores[playerNormalizedTeam] = 0;
+              const playerNormalizedTeam = normalizeTeamName(player.team_name || player.team || '');
+              acc[gameKey].teams.add(playerNormalizedTeam);
+              if (!acc[gameKey].teamScores[playerNormalizedTeam]) {
+                acc[gameKey].teamScores[playerNormalizedTeam] = 0;
               }
-              acc[player.game_id].teamScores[playerNormalizedTeam] += player.points || 0;
+              acc[gameKey].teamScores[playerNormalizedTeam] += player.spoints || player.points || 0;
               
               return acc;
             }, {});
 
-            // Convert to games with proper opponent data
             const games = Object.values(gamesByGameId).map((gameData: any) => {
               const teams = Array.from(gameData.teams) as string[];
-              const opponent = teams.find(team => team !== normalizedTeamName) || 'Unknown';
+              const opponent = teams.find(t => t !== normalizedTeamName) || 'Unknown';
               const ourScore = gameData.teamScores[normalizedTeamName] || 0;
-              
               return {
                 totalPoints: ourScore,
                 date: gameData.game_date,
-                opponent: opponent
+                opponent,
               };
             });
             
-            const recentGames = games.slice(-5); // Last 5 games
+            const recentGames = games.slice(-5);
             
-            // Get roster with stats
+            // Build per-player roster using correct column names
+            const playerName = (p: any) => p.full_name || `${p.firstname || ''} ${p.familyname || ''}`.trim() || 'Unknown';
             const roster: PlayerStat[] = teamPlayers.reduce((acc: PlayerStat[], player: any) => {
-              const existing = acc.find(p => p.name === player.name);
+              const name = playerName(player);
+              const existing = acc.find(p => p.name === name);
+              const pts = player.spoints ?? player.points ?? 0;
+              const reb = player.sreboundstotal ?? player.rebounds_total ?? 0;
+              const ast = player.sassists ?? player.assists ?? 0;
               if (existing) {
-                existing.totalPoints += player.points || 0;
-                existing.totalRebounds += player.rebounds_total || 0;
-                existing.totalAssists += player.assists || 0;
+                existing.totalPoints += pts;
+                existing.totalRebounds += reb;
+                existing.totalAssists += ast;
                 existing.gamesPlayed += 1;
               } else {
                 acc.push({
-                  name: player.name,
-                  position: player.position || 'Player',
-                  totalPoints: player.points || 0,
-                  totalRebounds: player.rebounds_total || 0,
-                  totalAssists: player.assists || 0,
+                  name,
+                  position: player.playingposition || player.position || 'Player',
+                  totalPoints: pts,
+                  totalRebounds: reb,
+                  totalAssists: ast,
                   gamesPlayed: 1,
                   avgPoints: 0,
                   avgRebounds: 0,
-                  avgAssists: 0
+                  avgAssists: 0,
                 });
               }
               return acc;
@@ -243,7 +250,8 @@ export default function LeagueTeams() {
           
           setTeams(teamsWithData);
       } catch (error) {
-        console.error("Error fetching league and teams:", error);
+        console.error("Error fetching league and teams:", error, JSON.stringify(error));
+        setLoading(false);
       } finally {
         setLoading(false);
       }

@@ -15,6 +15,7 @@ export type LeagueDataTable = "teams" | "team_stats" | "players";
 export async function fetchLeagueData<T = any>(
   table: LeagueDataTable,
   leagueIds: string[],
+  parentLeagueId?: string,
 ): Promise<{ data: T[] | null; error: Error | null }> {
   const ids = (leagueIds || []).filter((v) => typeof v === "string" && v.length > 0);
   if (ids.length === 0) return { data: [], error: null };
@@ -22,7 +23,7 @@ export async function fetchLeagueData<T = any>(
     const res = await fetch("/api/public/league-data", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ table, leagueIds: ids }),
+      body: JSON.stringify({ table, leagueIds: ids, ...(parentLeagueId ? { parentLeagueId } : {}) }),
     });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
