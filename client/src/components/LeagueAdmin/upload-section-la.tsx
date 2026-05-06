@@ -125,7 +125,18 @@ const UploadSectionLA = ({ leagues }: any) => {
         }
       );
 
-      const data = await resp.json();
+      const text = await resp.text();
+      let data: any;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        console.error("❌ Non-JSON response from /api/parse:", text);
+        setStatusMessage(
+          `❌ Parsing failed: server returned HTTP ${resp.status} with a non-JSON response — ${text}`
+        );
+        return;
+      }
+
       if (resp.ok) {
         const explicitIds: string[] | undefined = Array.isArray(data?.created_league_ids)
           ? data.created_league_ids
