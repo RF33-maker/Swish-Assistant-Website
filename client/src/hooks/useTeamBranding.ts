@@ -102,19 +102,20 @@ async function getLeagueLogoData(leagueId: string): Promise<LeagueLogoData> {
       const res = await fetch(`/api/public/league-logo/${encodeURIComponent(leagueId)}`);
       if (res.ok) {
         const apiData = await res.json();
-        const logoUrl = apiData?.logo_url || null;
-        if (logoUrl) {
-          // API only returns the logo URL; fetch brand colour from Supabase alongside
-          const supabaseData = await getLeagueLogoViaSupabase(leagueId);
-          const result: LeagueLogoData = {
-            logoUrl,
-            brandPrimaryColour: supabaseData.brandPrimaryColour,
-          };
+        const logoUrl: string | null = apiData?.logo_url || null;
+        const brandPrimaryColour: string | null = apiData?.brand_primary_colour || null;
+
+        // If the API gave us either a logo or a colour, use them directly —
+        // this works for both public and private child leagues (the endpoint
+        // follows parent_league_id server-side via the service-role client).
+        if (logoUrl || brandPrimaryColour) {
+          const result: LeagueLogoData = { logoUrl, brandPrimaryColour };
           leagueLogoCache.set(leagueId, result);
           return result;
         }
       }
 
+      // Fall back to anon Supabase for public leagues that the API couldn't find.
       const supabaseData = await getLeagueLogoViaSupabase(leagueId);
       leagueLogoCache.set(leagueId, supabaseData);
       return supabaseData;

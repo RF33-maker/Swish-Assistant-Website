@@ -1,6 +1,8 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useLocation, useParams } from "wouter";
 import { supabase, getSupabaseForLeague, getDataLeagueId } from "@/lib/supabase";
+import { fetchLeagueChildren } from "@/lib/leagueChildren";
+import { fetchLeagueData } from "@/lib/leagueData";
 import type { League } from "@shared/schema";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import LeagueDefaultImage from "@/assets/league-default.png";
@@ -13,9 +15,12 @@ import GamePreviewModal from "@/components/GamePreviewModal";
 
 import LeagueChatbot from "@/components/LeagueChatbot";
 import { TeamLogo } from "@/components/TeamLogo";
+import LeagueLeadersShareCard from "@/components/LeagueLeadersShareCard";
 import { TeamLogoUploader } from "@/components/TeamLogoUploader";
 import { InstagramCarousel } from "@/components/InstagramCarousel";
-import { ChevronRight, ChevronDown, Trophy, ArrowRight } from "lucide-react";
+import { ChevronRight, ChevronDown, Trophy, ArrowRight, Search, Users } from "lucide-react";
+import { useGlobalSearch, type SearchSuggestion } from "@/hooks/useGlobalSearch";
+import { PlayerSearchAvatar } from "@/components/PlayerSearchAvatar";
 import { Link } from "wouter";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { EditableDescription } from "@/components/EditableDescription";
@@ -36,6 +41,21 @@ import { DEBUG, debugLog } from "@/utils/debug";
 import { usePublicLeagueBrandingBySlug } from "@/hooks/usePublicLeagueBranding";
 import { InlinePlayerProfile } from "@/components/InlinePlayerProfile";
 import { InlineTeamProfile } from "@/components/InlineTeamProfile";
+import {
+  accumulateAdvancedRow,
+  makeAdvancedAggregator,
+  getAdvancedLeaderSections,
+  type AdvancedLeaderDef,
+} from "@/lib/advancedStats";
+
+// Compact label for age group filter UI ("Under 18 Boys" -> "U18 Boys").
+function shortenAgeLabel(label: string): string {
+  if (!label) return label;
+  return label
+    .replace(/^Under\s*-?\s*/i, "U")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 type GameSchedule = {
   game_id: string;
@@ -503,8 +523,8 @@ export default function LeaguePage() {
             .join(" ")
         : "";
 
-    const [search, setSearch] = useState("");
     const [location, navigate] = useLocation();
+    const { query: search, setQuery: setSearch, suggestions, handleSelect: handleSelectSearch, handleSubmit: handleSubmitSearch } = useGlobalSearch();
     const [league, setLeague] = useState(null);
     const [topScorer, setTopScorer] = useState<PlayerStat | null>(null);
     const [topRebounder, setTopRebounder] = useState<PlayerStat | null>(null);
@@ -512,7 +532,6 @@ export default function LeaguePage() {
     const [standings, setStandings] = useState([]);
     const [teamLogoMap, setTeamLogoMap] = useState<Map<string, string>>(new Map());
     const [schedule, setSchedule] = useState<GameSchedule[]>([]);
-    const [suggestions, setSuggestions] = useState<any[]>([]);
     const [gameSummaries, setGameSummaries] = useState<any[]>([]);
     const [playerStats, setPlayerStats] = useState<any[]>([]);
     const [aiSummary, setAiSummary] = useState<string | null>(null);
@@ -566,6 +585,8 @@ export default function LeaguePage() {
   const [teamStatsCategory, setTeamStatsCategory] = useState<'Traditional' | 'Advanced' | 'Four Factors' | 'Scoring' | 'Misc'>('Traditional'); // Category dropdown
   const [teamStatsMode, setTeamStatsMode] = useState<'Per Game' | 'Totals' | 'Per 100 Possessions'>('Per Game'); // Mode dropdown
   const [leagueLeadersView, setLeagueLeadersView] = useState<'averages' | 'totals'>('averages'); // Toggle for league leaders
+  const [leadersSubject, setLeadersSubject] = useState<'player' | 'team'>('player'); // Player vs Team leaders
+  const [leadersCategory, setLeadersCategory] = useState<'Traditional' | 'Advanced'>('Traditional'); // Traditional vs Advanced leaders
   const [playerStatsView, setPlayerStatsView] = useState<'Total' | 'Per Game' | 'Per 40'>('Per Game'); // Mode selector for player statistics table
   const [playerStatsCategory, setPlayerStatsCategory] = useState<'Traditional' | 'Advanced' | 'Scoring' | 'Misc'>('Traditional'); // Category dropdown for player stats
   const [standingsView, setStandingsView] = useState<'poolA' | 'poolB' | 'full'>('full'); // Toggle for standings view
@@ -711,31 +732,6 @@ export default function LeaguePage() {
       setBrandFadedIn(false);
     }
   }, [leagueBrandColors]);
-
-    useEffect(() => {
-      const fetchSuggestions = async () => {
-        if (search.trim().length === 0) {
-          setSuggestions([]);
-          return;
-        }
-
-        const { data, error } = await supabase
-          .from("leagues")
-          .select("name, slug")
-          .ilike("name", `%${search}%`)
-          .eq("is_public", true)
-          .limit(5);
-
-        if (!error) {
-          setSuggestions(data || []);
-        } else {
-          console.error("Suggestion error:", error);
-        }
-      };
-
-      const delay = setTimeout(fetchSuggestions, 300);
-      return () => clearTimeout(delay);
-    }, [search]);
 
     // Intersection Observer for orange divider animation
     useEffect(() => {
@@ -1264,13 +1260,23 @@ export default function LeaguePage() {
         const fetchLeagueId = getDataLeagueId(slug, league.league_id);
         const parentChildIdsForTeamStats = childCompetitions.map(c => c.league_id);
         const isParentTeamStatsFetch = parentChildIdsForTeamStats.length > 0;
-        let teamStatsQuery = db.from("team_stats").select("*");
+        // For parent leagues, route team_stats through the service-role
+        // endpoint so private (is_public=false) children still roll up.
+        // The anon-key client is filtered by RLS on `team_stats`.
+        let rawTeamStats: any[] | null = null;
+        let error: any = null;
         if (isParentTeamStatsFetch) {
-          teamStatsQuery = teamStatsQuery.in("league_id", parentChildIdsForTeamStats);
+          const result = await fetchLeagueData<any>("team_stats", parentChildIdsForTeamStats);
+          rawTeamStats = result.data;
+          error = result.error;
         } else {
-          teamStatsQuery = teamStatsQuery.eq("league_id", fetchLeagueId);
+          const result = await db
+            .from("team_stats")
+            .select("*")
+            .eq("league_id", fetchLeagueId);
+          rawTeamStats = result.data;
+          error = result.error;
         }
-        const { data: rawTeamStats, error } = await teamStatsQuery;
 
         if (error) {
           console.error("Error fetching team stats:", error);
@@ -1587,16 +1593,16 @@ export default function LeaguePage() {
           
           setYoutubeUrl(data.youtube_embed_url || "");
           
-          const { data: competitions, error: competitionsError } = await supabase
-            .from("leagues")
-            .select("league_id, name, slug, logo_url, age_group, stop")
-            .eq("parent_league_id", data.league_id)
-            .eq("is_public", true);
-          
-          if (competitions && !competitionsError) {
+          // Use the service-role-backed endpoint so private (is_public=false)
+          // children still roll up under their public parent. The anon-key
+          // supabase client is filtered by RLS on the `leagues` table and
+          // would otherwise return 0 children for parents whose kids have
+          // been hidden from search via is_public=false.
+          try {
+            const competitions = await fetchLeagueChildren(data.league_id);
             setChildCompetitions(competitions);
             fetchedChildCompetitions = competitions;
-          } else if (competitionsError) {
+          } catch (competitionsError) {
             console.error("Failed to fetch child competitions:", competitionsError);
           }
           
@@ -1639,11 +1645,13 @@ export default function LeaguePage() {
               logoQuery = logoQuery.in("league_id", logoLeagueIds);
             }
             const { data: logoRows, error: logoError } = await logoQuery;
-            if (logoError) {
-              console.error("Error fetching team logos:", logoError);
-            }
             const map = new Map<string, string>();
-            if (logoRows && logoRows.length > 0) {
+            // If the team_logos table doesn't exist (or any other query error
+            // occurs) we silently skip this page-level optimization. The
+            // per-component <TeamLogo> fallback will then resolve logos by
+            // probing Supabase storage. This keeps the console clean on
+            // projects where the team_logos table has not been provisioned.
+            if (!logoError && logoRows && logoRows.length > 0) {
               logoRows.forEach((row: any) => {
                 const normalized = normalizeAndMapTeamName(row.team_name);
                 if (normalized && row.logo_url) {
@@ -1652,8 +1660,7 @@ export default function LeaguePage() {
               });
             }
             setTeamLogoMap(map);
-          } catch (logoErr) {
-            console.error("Error fetching team logos:", logoErr);
+          } catch {
             setTeamLogoMap(new Map());
           }
           
@@ -1832,17 +1839,37 @@ export default function LeaguePage() {
       }
     }, [league?.league_id, childCompetitions]);
 
-    const handleSearch = () => {
-      if (search.trim()) {
-        navigate(`/league/${search}`);
-      }
-    };
-
     const sortMap: Record<string, string> = {
       "Top Scorers": "spoints",
       "Top Rebounders": "sreboundstotal",
       "Top Playmakers": "sassists",
     };
+
+    // Adaptive minimum-games qualifier — keeps per-game leaderboards meaningful
+    // without locking new-season leagues out. Cumulative "totals" view never
+    // applies this filter.
+    const leadersQualifier = useMemo(() => {
+      if (!filteredByAgeGroupRound.length) {
+        return { minGames: 0, isEarlySeason: false };
+      }
+      const maxGames = filteredByAgeGroupRound.reduce(
+        (m: number, p: any) => Math.max(m, p.games || 0),
+        0,
+      );
+      // Early-season: when no player has yet played 3+ games, don't filter
+      // anyone out — the section would otherwise look empty for new leagues.
+      if (maxGames < 3) {
+        return { minGames: 1, isEarlySeason: true };
+      }
+      // Established season: require at least 3 games, scaling up to ~40% of
+      // the leading player's GP for older / fuller seasons.
+      return {
+        minGames: Math.max(3, Math.ceil(maxGames * 0.4)),
+        isEarlySeason: false,
+      };
+    }, [filteredByAgeGroupRound]);
+    const leadersMinGames = leadersQualifier.minGames;
+    const leadersIsEarlySeason = leadersQualifier.isEarlySeason;
 
     const getTopList = useMemo(() => (statKey: string) => {
       const statToFields: Record<string, { avgField: string; totalField: string }> = {
@@ -1855,14 +1882,23 @@ export default function LeaguePage() {
       if (!fields || !filteredByAgeGroupRound.length) return [];
       
       const fieldToUse = leagueLeadersView === 'averages' ? fields.avgField : fields.totalField;
-      
-      const result = [...filteredByAgeGroupRound]
+
+      // Apply adaptive games qualifier to per-game (averages) view only.
+      // If qualifier empties the pool (e.g. brand-new season), fall back
+      // to the unfiltered list so the section never goes blank.
+      const isAverages = leagueLeadersView === 'averages';
+      const qualified = isAverages && leadersMinGames > 1
+        ? filteredByAgeGroupRound.filter((p: any) => (p.games || 0) >= leadersMinGames)
+        : filteredByAgeGroupRound;
+      const pool = qualified.length > 0 ? qualified : filteredByAgeGroupRound;
+
+      const result = [...pool]
         .sort((a, b) => {
           const aVal = parseFloat(a[fieldToUse]) || 0;
           const bVal = parseFloat(b[fieldToUse]) || 0;
           return bVal - aVal;
         })
-        .slice(0, 5)
+        .slice(0, 10)
         .map(player => ({
           ...player,
           value: leagueLeadersView === 'averages' 
@@ -1871,7 +1907,7 @@ export default function LeaguePage() {
         }));
       
       return result;
-    }, [filteredByAgeGroupRound, leagueLeadersView]);
+    }, [filteredByAgeGroupRound, leagueLeadersView, leadersMinGames]);
 
     const topScorers = getTopList("spoints");
     const topRebounders = getTopList("sreboundstotal");
@@ -2453,17 +2489,27 @@ export default function LeaguePage() {
         }
         debugLog("📊 Step 1: Fetching all player_stats for league_id:", statsLeagueId, "isParent:", isParentFetch);
 
-        let rosterQuery = supabase
-          .from("players")
-          .select("id, full_name, slug");
-        
+        // For parent leagues, route the roster fetch through the
+        // service-role endpoint so players from private (is_public=false)
+        // children are included. The anon-key client is filtered by RLS
+        // on the `players` table.
+        let rosterData: any[] | null = null;
         if (isParentFetch && parentChildIds.length > 0) {
-          rosterQuery = rosterQuery.in("league_id", parentChildIds);
+          const result = await fetchLeagueData<any>("players", parentChildIds);
+          if (result.error) {
+            console.error("Error fetching parent roster via league-data:", result.error);
+          }
+          rosterData = result.data;
         } else {
-          rosterQuery = rosterQuery.eq("league_id", statsLeagueId);
+          const { data, error: rosterError } = await supabase
+            .from("players")
+            .select("id, full_name, slug")
+            .eq("league_id", statsLeagueId);
+          if (rosterError) {
+            console.error("Error fetching roster:", rosterError);
+          }
+          rosterData = data;
         }
-        
-        const { data: rosterData } = await rosterQuery;
 
         const slugLookup = new Map<string, string>();
         const nameLookup = new Map<string, string>();
@@ -2584,10 +2630,17 @@ export default function LeaguePage() {
 
     const calculateStandingsForLeague = async (leagueId: string): Promise<{standings: any[], poolAStandings: any[], poolBStandings: any[], hasPools: boolean}> => {
       try {
-        const { data: allTeams } = await supabase
-          .from("teams")
-          .select("team_id, name")
-          .eq("league_id", leagueId);
+        // Route the `teams` fetch through the service-role endpoint so
+        // private (is_public=false) child leagues — which RLS hides from
+        // the anon client — still produce standings rows on the parent
+        // league page.
+        const { data: allTeams, error: teamsError } = await fetchLeagueData<{ team_id: string; name: string }>(
+          "teams",
+          [leagueId],
+        );
+        if (teamsError) {
+          console.error("Error fetching teams via league-data:", teamsError);
+        }
 
         const { data: gameResults, error: gameResultsError } = await db
           .from("v_game_results")
@@ -3192,34 +3245,55 @@ export default function LeaguePage() {
             </div>
 
             <div className="relative flex-1 md:max-w-md md:mx-6">
-              <input
-                type="text"
-                placeholder="Find your league"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                className="w-full px-3 py-1 md:py-2 border border-gray-300 dark:border-neutral-700 rounded-full text-xs md:text-sm bg-white dark:bg-neutral-800 text-slate-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500"
-              />
-              <button
-                onClick={handleSearch}
-                className="absolute right-0 top-0 h-full px-2.5 md:px-4 bg-orange-500 hover:bg-orange-600 text-white rounded-full text-xs md:text-sm"
-              >
-                Go
-              </button>
+              <form onSubmit={handleSubmitSearch} className="flex items-center">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 md:h-4 md:w-4 text-gray-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Search league, team or player"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="w-full pl-8 md:pl-9 pr-3 py-1 md:py-2 border border-gray-300 dark:border-neutral-700 rounded-full text-xs md:text-sm bg-white dark:bg-neutral-800 text-slate-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  />
+                </div>
+              </form>
 
               {suggestions.length > 0 && (
-                <ul className="absolute z-50 mt-2 w-full bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                  {suggestions.map((item, index) => (
+                <ul className="absolute z-50 mt-1 w-full bg-white dark:bg-neutral-900 border border-orange-200 dark:border-neutral-700 rounded-md shadow-lg max-h-72 overflow-y-auto">
+                  {suggestions.map((item: SearchSuggestion, index: number) => (
                     <li
                       key={index}
-                      onClick={() => {
-                        setSearch("");
-                        setSuggestions([]);
-                        navigate(`/league/${item.slug}`);
-                      }}
-                      className="px-4 py-2 cursor-pointer hover:bg-orange-100 dark:hover:bg-neutral-800 text-left text-slate-800 dark:text-slate-200 text-sm"
+                      onClick={() => handleSelectSearch(item)}
+                      className="px-4 py-2.5 cursor-pointer hover:bg-orange-50 dark:hover:bg-neutral-800 text-left border-b border-orange-100 dark:border-neutral-800 last:border-b-0 transition-colors duration-200"
                     >
-                      {item.name}
+                      <div className="flex items-center gap-3">
+                        {item.type === 'league' ? (
+                          <div className="h-7 w-7 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center flex-shrink-0">
+                            <Trophy className="h-3.5 w-3.5 text-white" />
+                          </div>
+                        ) : item.type === 'team' ? (
+                          <div className="h-7 w-7 rounded-full bg-white dark:bg-neutral-800 border border-orange-200 dark:border-neutral-600 flex items-center justify-center overflow-hidden flex-shrink-0">
+                            <TeamLogo teamName={item.name} leagueId={item.league_id} size="sm" />
+                          </div>
+                        ) : (
+                          <PlayerSearchAvatar name={item.name} photoUrl={item.photo_url} />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-orange-900 dark:text-orange-300 text-xs md:text-sm truncate">{item.name}</div>
+                          {item.type === 'player' && item.team && (
+                            <div className="text-xs text-orange-600 dark:text-orange-400 truncate">{item.team}</div>
+                          )}
+                          {item.type === 'team' && (
+                            <div className="text-xs text-orange-600 dark:text-orange-400 truncate">{item.league_name}</div>
+                          )}
+                          {item.type === 'league' && (
+                            <div className="text-xs text-orange-600 dark:text-orange-400">League</div>
+                          )}
+                        </div>
+                        <div className="text-xs text-orange-700 dark:text-orange-300 capitalize bg-orange-100 dark:bg-orange-900/50 px-1.5 py-0.5 rounded-full font-medium flex-shrink-0">
+                          {item.type}
+                        </div>
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -4799,6 +4873,7 @@ export default function LeaguePage() {
                     leagueId={league?.league_id || ""} 
                     allTeams={teamStatsData}
                     brandColor={brandColorHex}
+                    scopedLeagueIds={isParentLeague ? selectedAgeGroupLeagueIds : [getDataLeagueId(slug, league?.league_id || "")]}
                   />
                 )}
               </div>
@@ -4909,23 +4984,172 @@ export default function LeaguePage() {
                     </div>
                   </div>
 
-                  {(isLoadingLeaders || isLoadingStats) ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-                      {Array.from({ length: 9 }).map((_, i) => (
-                        <LeaderCardSkeleton key={`inline-leader-skeleton-${i}`} />
-                      ))}
+                  {/* Subject + Category toggles */}
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    <div className="inline-flex rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 p-1">
+                      <button
+                        onClick={() => setLeadersSubject('player')}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                          leadersSubject === 'player'
+                            ? 'bg-white dark:bg-neutral-700 shadow-sm'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                        }`}
+                        style={leadersSubject === 'player' ? { color: brandColor } : {}}
+                        data-testid="button-leaders-subject-player"
+                      >
+                        Player Leaders
+                      </button>
+                      <button
+                        onClick={() => setLeadersSubject('team')}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                          leadersSubject === 'team'
+                            ? 'bg-white dark:bg-neutral-700 shadow-sm'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                        }`}
+                        style={leadersSubject === 'team' ? { color: brandColor } : {}}
+                        data-testid="button-leaders-subject-team"
+                      >
+                        Team Leaders
+                      </button>
                     </div>
-                  ) : filteredByAgeGroupRound.length === 0 ? (
-                    <div className="text-center py-12">
-                      <p className="text-sm text-slate-500 dark:text-slate-400">No player data available for the selected filters.</p>
+                    <div className="inline-flex rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 p-1">
+                      <button
+                        onClick={() => setLeadersCategory('Traditional')}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                          leadersCategory === 'Traditional'
+                            ? 'bg-white dark:bg-neutral-700 shadow-sm'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                        }`}
+                        style={leadersCategory === 'Traditional' ? { color: brandColor } : {}}
+                        data-testid="button-leaders-category-traditional"
+                      >
+                        Traditional
+                      </button>
+                      <button
+                        onClick={() => setLeadersCategory('Advanced')}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                          leadersCategory === 'Advanced'
+                            ? 'bg-white dark:bg-neutral-700 shadow-sm'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                        }`}
+                        style={leadersCategory === 'Advanced' ? { color: brandColor } : {}}
+                        data-testid="button-leaders-category-advanced"
+                      >
+                        Advanced
+                      </button>
                     </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-                      {(() => {
-                        const players = filteredByAgeGroupRound;
+                  </div>
+
+                  {(() => {
+                    const contextParts: string[] = [];
+                    if (filterAgeGroup !== 'all') contextParts.push(shortenAgeLabel(filterAgeGroup));
+                    if (filterRound !== 'all') contextParts.push(`Round ${filterRound}`);
+                    if (isParentLeague && selectedStop !== 'all') contextParts.push(`Stop ${selectedStop}`);
+                    const contextLabel = contextParts.join(' · ');
+                    const baseContextFallback = leagueLeadersView === 'totals' ? 'Season Totals' : 'Season Averages';
+
+                    // Common card renderer used by all 4 (subject × category) variants.
+                    const renderCard = (opts: {
+                      title: string;
+                      items: any[];
+                      displayFn: (p: any) => string;
+                      footnote?: string;
+                      subject: 'player' | 'team';
+                    }) => {
+                      const { title, items, displayFn, footnote, subject } = opts;
+                      const shareLeaders = items.map((p: any) => ({
+                        name: subject === 'team' ? (p.teamName || p.name || 'Unknown') : (p.name || 'Unknown'),
+                        team: subject === 'team' ? '' : (p.team || ''),
+                        value: displayFn(p),
+                      }));
+                      return (
+                        <LeagueLeadersShareCard
+                          key={title}
+                          title={title}
+                          leaders={shareLeaders}
+                          leagueName={displayLeagueName || 'League Leaders'}
+                          contextLabel={contextLabel || baseContextFallback}
+                          brandColor={brandColorHex}
+                          leagueLogoUrl={displayLogoUrl}
+                          footnote={footnote}
+                          fileSlug={`league-${slug}-${subject}-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
+                        >
+                          <div className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4">
+                            <h3 className="text-sm font-semibold mb-3 px-1 pr-10" style={{ color: brandColor }}>{title}</h3>
+                            <div className="space-y-0">
+                              {items.map((entity, idx) => {
+                                const isTeam = subject === 'team';
+                                const displayName = isTeam ? (entity.teamName || entity.name || 'Unknown') : entity.name;
+                                const subLine = isTeam
+                                  ? (entity.age_group ? shortenAgeLabel(entity.age_group) : `${entity.gamesPlayed || 0} GP`)
+                                  : (entity.team || 'Unknown Team');
+                                const isClickable = isTeam ? !!entity.teamName : !!entity.slug;
+                                return (
+                                  <div
+                                    key={`${title}-${entity.slug || entity.teamName || entity.name}-${idx}`}
+                                    className={`flex items-center justify-between py-2 px-2 rounded-md transition-colors ${isClickable ? 'hover:bg-gray-100 dark:hover:bg-neutral-700 cursor-pointer' : ''}`}
+                                    onClick={() => {
+                                      if (isTeam && entity.teamName) {
+                                        setSelectedTeamName(entity.teamName);
+                                        setActiveSection('team');
+                                      } else if (!isTeam && entity.slug) {
+                                        handleSelectPlayer(entity.slug, activeSection);
+                                      }
+                                    }}
+                                  >
+                                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                      <span className="text-xs font-bold w-5 text-center text-slate-400 dark:text-slate-500 shrink-0">{idx + 1}</span>
+                                      <div className="min-w-0 flex-1">
+                                        <p className={`text-sm font-medium truncate ${isClickable ? 'hover:underline' : ''}`} style={{ color: brandColor }}>{displayName}</p>
+                                        <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{subLine}</p>
+                                      </div>
+                                    </div>
+                                    <span className="text-sm font-semibold text-slate-800 dark:text-white whitespace-nowrap ml-2">
+                                      {displayFn(entity)}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                              {items.length === 0 && (
+                                <p className="text-xs text-slate-400 dark:text-slate-500 text-center py-4">No data available</p>
+                              )}
+                            </div>
+                            {footnote && (
+                              <p className="text-[10px] text-slate-400 dark:text-slate-500 text-center pt-2 mt-2 border-t border-gray-100 dark:border-neutral-700/60">
+                                {footnote}
+                              </p>
+                            )}
+                          </div>
+                        </LeagueLeadersShareCard>
+                      );
+                    };
+
+                    // ---------- PLAYER LEADERS ----------
+                    if (leadersSubject === 'player') {
+                      if ((isLoadingLeaders || isLoadingStats)) {
+                        return (
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                            {Array.from({ length: 9 }).map((_, i) => (
+                              <LeaderCardSkeleton key={`inline-leader-skeleton-${i}`} />
+                            ))}
+                          </div>
+                        );
+                      }
+                      if (filteredByAgeGroupRound.length === 0) {
+                        return (
+                          <div className="text-center py-12">
+                            <p className="text-sm text-slate-500 dark:text-slate-400">No player data available for the selected filters.</p>
+                          </div>
+                        );
+                      }
+
+                      const players = filteredByAgeGroupRound;
+
+                      if (leadersCategory === 'Traditional') {
                         const statCategories = [
                           {
                             title: "Scoring Leaders",
+                            isPerGame: true,
                             sortFn: (a: any, b: any) => leagueLeadersView === 'averages'
                               ? parseFloat(b.avgPoints || '0') - parseFloat(a.avgPoints || '0')
                               : (b.totalPoints || 0) - (a.totalPoints || 0),
@@ -4934,6 +5158,7 @@ export default function LeaguePage() {
                           },
                           {
                             title: "Rebounding Leaders",
+                            isPerGame: true,
                             sortFn: (a: any, b: any) => leagueLeadersView === 'averages'
                               ? parseFloat(b.avgRebounds || '0') - parseFloat(a.avgRebounds || '0')
                               : (b.totalRebounds || 0) - (a.totalRebounds || 0),
@@ -4942,6 +5167,7 @@ export default function LeaguePage() {
                           },
                           {
                             title: "Assist Leaders",
+                            isPerGame: true,
                             sortFn: (a: any, b: any) => leagueLeadersView === 'averages'
                               ? parseFloat(b.avgAssists || '0') - parseFloat(a.avgAssists || '0')
                               : (b.totalAssists || 0) - (a.totalAssists || 0),
@@ -4950,6 +5176,7 @@ export default function LeaguePage() {
                           },
                           {
                             title: "Steal Leaders",
+                            isPerGame: true,
                             sortFn: (a: any, b: any) => leagueLeadersView === 'averages'
                               ? parseFloat(b.avgSteals || '0') - parseFloat(a.avgSteals || '0')
                               : (b.totalSteals || 0) - (a.totalSteals || 0),
@@ -4958,6 +5185,7 @@ export default function LeaguePage() {
                           },
                           {
                             title: "Block Leaders",
+                            isPerGame: true,
                             sortFn: (a: any, b: any) => leagueLeadersView === 'averages'
                               ? parseFloat(b.avgBlocks || '0') - parseFloat(a.avgBlocks || '0')
                               : (b.totalBlocks || 0) - (a.totalBlocks || 0),
@@ -4966,24 +5194,28 @@ export default function LeaguePage() {
                           },
                           {
                             title: "Field Goal %",
+                            isPercentage: true,
                             sortFn: (a: any, b: any) => parseFloat(b.fgPercentage || '0') - parseFloat(a.fgPercentage || '0'),
                             displayFn: (p: any) => `${p.fgPercentage}%`,
                             filterFn: (p: any) => (p.totalFGA || 0) >= 2,
                           },
                           {
                             title: "Three Point %",
+                            isPercentage: true,
                             sortFn: (a: any, b: any) => parseFloat(b.threePercentage || '0') - parseFloat(a.threePercentage || '0'),
                             displayFn: (p: any) => `${p.threePercentage}%`,
                             filterFn: (p: any) => (p.total3PA || 0) >= 1,
                           },
                           {
                             title: "Free Throw %",
+                            isPercentage: true,
                             sortFn: (a: any, b: any) => parseFloat(b.ftPercentage || '0') - parseFloat(a.ftPercentage || '0'),
                             displayFn: (p: any) => `${p.ftPercentage}%`,
                             filterFn: (p: any) => (p.totalFTA || 0) >= 1,
                           },
                           {
                             title: "Efficiency Leaders",
+                            isPerGame: true,
                             sortFn: (a: any, b: any) => {
                               const effA = leagueLeadersView === 'averages'
                                 ? ((a.totalPoints || 0) + (a.totalRebounds || 0) + (a.totalAssists || 0) + (a.totalSteals || 0) + (a.totalBlocks || 0) - ((a.totalFGA || 0) - (a.totalFGM || 0)) - ((a.totalFTA || 0) - (a.totalFTM || 0)) - (a.totalTurnovers || 0)) / (a.games || 1)
@@ -5002,45 +5234,224 @@ export default function LeaguePage() {
                           },
                         ];
 
-                        return statCategories.map(({ title, sortFn, displayFn, filterFn }) => {
-                          const filtered = filterFn ? players.filter(filterFn) : players;
-                          const sorted = [...filtered].sort(sortFn).slice(0, 10);
-                          return (
-                            <div key={title} className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4">
-                              <h3 className="text-sm font-semibold mb-3 px-1" style={{ color: brandColor }}>{title}</h3>
-                              <div className="space-y-0">
-                                {sorted.map((player, idx) => (
-                                  <div
-                                    key={`${title}-${player.slug || player.name}-${idx}`}
-                                    className="flex items-center justify-between py-2 px-2 rounded-md hover:bg-gray-100 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
-                                    onClick={() => {
-                                      if (player.slug) {
-                                        handleSelectPlayer(player.slug, activeSection);
-                                      }
-                                    }}
-                                  >
-                                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                                      <span className="text-xs font-bold w-5 text-center text-slate-400 dark:text-slate-500 shrink-0">{idx + 1}</span>
-                                      <div className="min-w-0 flex-1">
-                                        <p className={`text-sm font-medium truncate ${player.slug ? 'hover:underline' : ''}`} style={{ color: brandColor }}>{player.name}</p>
-                                        <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{player.team || 'Unknown Team'}</p>
-                                      </div>
-                                    </div>
-                                    <span className="text-sm font-semibold text-slate-800 dark:text-white whitespace-nowrap ml-2">
-                                      {displayFn(player)}
-                                    </span>
-                                  </div>
-                                ))}
-                                {sorted.length === 0 && (
-                                  <p className="text-xs text-slate-400 dark:text-slate-500 text-center py-4">No data available</p>
-                                )}
+                        return (
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                            {statCategories.map(({ title, sortFn, displayFn, filterFn, isPerGame, isPercentage }: any) => {
+                              const baseFiltered = filterFn ? players.filter(filterFn) : players;
+                              const qualifierApplies = isPercentage || (isPerGame && leagueLeadersView === 'averages');
+                              const applyMin = qualifierApplies && leadersMinGames > 1;
+                              const qualified = applyMin
+                                ? baseFiltered.filter((p: any) => (p.games || 0) >= leadersMinGames)
+                                : baseFiltered;
+                              const usedFallback = applyMin && qualified.length === 0 && baseFiltered.length > 0;
+                              const pool = qualified.length > 0 ? qualified : baseFiltered;
+                              const sorted = [...pool].sort(sortFn).slice(0, 10);
+                              const footnote = usedFallback || (qualifierApplies && leadersIsEarlySeason && baseFiltered.length > 0)
+                                ? 'Showing all players — season just started'
+                                : applyMin
+                                  ? `Min ${leadersMinGames} games played`
+                                  : undefined;
+                              return renderCard({ title, items: sorted, displayFn, footnote, subject: 'player' });
+                            })}
+                          </div>
+                        );
+                      }
+
+                      // Player / Advanced — aggregate advanced stats per player from rawStats,
+                      // then render the same grouped sections as the standalone leaders page.
+                      const aggregated = players.flatMap((p: any) => {
+                        const rows = (p.rawStats || []) as any[];
+                        if (!rows.length) return [];
+                        const advAgg = makeAdvancedAggregator();
+                        rows.forEach((s) => accumulateAdvancedRow(advAgg, s));
+                        const merged = {
+                          ...advAgg,
+                          name: p.name,
+                          team: p.team,
+                          slug: p.slug,
+                          games_played: p.games || 0,
+                          total_points: p.totalPoints || 0,
+                          total_rebounds: p.totalRebounds || 0,
+                          total_assists: p.totalAssists || 0,
+                          total_steals: p.totalSteals || 0,
+                          total_blocks: p.totalBlocks || 0,
+                          total_turnovers: p.totalTurnovers || 0,
+                          total_field_goals_made: p.totalFGM || 0,
+                          total_field_goals_attempted: p.totalFGA || 0,
+                          total_three_points_made: p.total3PM || 0,
+                          total_three_points_attempted: p.total3PA || 0,
+                          total_free_throws_made: p.totalFTM || 0,
+                          total_free_throws_attempted: p.totalFTA || 0,
+                        };
+                        return [merged];
+                      });
+
+                      const sections = getAdvancedLeaderSections().map((section) => {
+                        const cards = section.defs.map((def: AdvancedLeaderDef) => {
+                          const eligible = aggregated.filter((p: any) => def.qualifies(p));
+                          const computed = eligible.flatMap((p: any) => {
+                            const result = def.compute(p);
+                            if (!result) return [];
+                            return [{ ...p, _adv: { value: result.value, display: result.display } }];
+                          });
+                          computed.sort((a: any, b: any) =>
+                            def.lowerIsBetter ? a._adv.value - b._adv.value : b._adv.value - a._adv.value
+                          );
+                          return {
+                            title: def.title,
+                            items: computed.slice(0, 10),
+                          };
+                        }).filter((c) => c.items.length > 0);
+                        return { key: section.key, title: section.title, cards };
+                      }).filter((s) => s.cards.length > 0);
+
+                      if (sections.length === 0) {
+                        return (
+                          <div className="text-center py-12">
+                            <p className="text-sm text-slate-500 dark:text-slate-400">No advanced player data available for the selected filters.</p>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="space-y-6">
+                          {sections.map((section) => (
+                            <div key={section.key}>
+                              <h3 className="text-sm md:text-base font-semibold text-slate-700 dark:text-slate-200 mb-3">{section.title}</h3>
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                                {section.cards.map((card) => renderCard({
+                                  title: card.title,
+                                  items: card.items,
+                                  displayFn: (p: any) => p._adv.display,
+                                  subject: 'player',
+                                }))}
                               </div>
                             </div>
-                          );
-                        });
-                      })()}
-                    </div>
-                  )}
+                          ))}
+                        </div>
+                      );
+                    }
+
+                    // ---------- TEAM LEADERS ----------
+                    if (isLoadingTeamStats) {
+                      return (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                          {Array.from({ length: 9 }).map((_, i) => (
+                            <LeaderCardSkeleton key={`inline-team-leader-skeleton-${i}`} />
+                          ))}
+                        </div>
+                      );
+                    }
+
+                    const teamPool = (isParentLeague && (filterAgeGroup !== 'all' || selectedStop !== 'all'))
+                      ? teamStatsData.filter((t: any) => {
+                          if (filterAgeGroup !== 'all' && t.age_group !== filterAgeGroup) return false;
+                          if (selectedStop !== 'all' && !selectedAgeGroupLeagueIds.includes(t.league_id)) return false;
+                          return true;
+                        })
+                      : teamStatsData;
+
+                    if (teamPool.length === 0) {
+                      return (
+                        <div className="text-center py-12">
+                          <p className="text-sm text-slate-500 dark:text-slate-400">No team data available for the selected filters.</p>
+                        </div>
+                      );
+                    }
+
+                    const teamNum = (t: any, key: string) => {
+                      const v = t[key];
+                      if (v == null) return 0;
+                      const n = typeof v === 'number' ? v : parseFloat(v);
+                      return Number.isFinite(n) ? n : 0;
+                    };
+                    const teamFmt = (n: number, digits = 1) => Number.isFinite(n) ? n.toFixed(digits) : '0.0';
+
+                    if (leadersCategory === 'Traditional') {
+                      const teamCategories = [
+                        { title: 'Team Scoring',
+                          sortFn: (a: any, b: any) => leagueLeadersView === 'averages' ? teamNum(b, 'ppg') - teamNum(a, 'ppg') : teamNum(b, 'totalPoints') - teamNum(a, 'totalPoints'),
+                          displayFn: (t: any) => leagueLeadersView === 'averages' ? `${teamFmt(teamNum(t, 'ppg'))} PPG` : `${Math.round(teamNum(t, 'totalPoints'))} PTS` },
+                        { title: 'Team Rebounding',
+                          sortFn: (a: any, b: any) => leagueLeadersView === 'averages' ? teamNum(b, 'rpg') - teamNum(a, 'rpg') : teamNum(b, 'totalRebounds') - teamNum(a, 'totalRebounds'),
+                          displayFn: (t: any) => leagueLeadersView === 'averages' ? `${teamFmt(teamNum(t, 'rpg'))} RPG` : `${Math.round(teamNum(t, 'totalRebounds'))} REB` },
+                        { title: 'Team Assists',
+                          sortFn: (a: any, b: any) => leagueLeadersView === 'averages' ? teamNum(b, 'apg') - teamNum(a, 'apg') : teamNum(b, 'totalAssists') - teamNum(a, 'totalAssists'),
+                          displayFn: (t: any) => leagueLeadersView === 'averages' ? `${teamFmt(teamNum(t, 'apg'))} APG` : `${Math.round(teamNum(t, 'totalAssists'))} AST` },
+                        { title: 'Team Steals',
+                          sortFn: (a: any, b: any) => leagueLeadersView === 'averages' ? teamNum(b, 'spg') - teamNum(a, 'spg') : teamNum(b, 'totalSteals') - teamNum(a, 'totalSteals'),
+                          displayFn: (t: any) => leagueLeadersView === 'averages' ? `${teamFmt(teamNum(t, 'spg'))} SPG` : `${Math.round(teamNum(t, 'totalSteals'))} STL` },
+                        { title: 'Team Blocks',
+                          sortFn: (a: any, b: any) => leagueLeadersView === 'averages' ? teamNum(b, 'bpg') - teamNum(a, 'bpg') : teamNum(b, 'totalBlocks') - teamNum(a, 'totalBlocks'),
+                          displayFn: (t: any) => leagueLeadersView === 'averages' ? `${teamFmt(teamNum(t, 'bpg'))} BPG` : `${Math.round(teamNum(t, 'totalBlocks'))} BLK` },
+                        { title: 'Team Field Goal %',
+                          sortFn: (a: any, b: any) => teamNum(b, 'fgPercentage') - teamNum(a, 'fgPercentage'),
+                          displayFn: (t: any) => `${teamFmt(teamNum(t, 'fgPercentage'))}%`,
+                          filterFn: (t: any) => teamNum(t, 'totalFGA') >= 10 },
+                        { title: 'Team Three Point %',
+                          sortFn: (a: any, b: any) => teamNum(b, 'threePtPercentage') - teamNum(a, 'threePtPercentage'),
+                          displayFn: (t: any) => `${teamFmt(teamNum(t, 'threePtPercentage'))}%`,
+                          filterFn: (t: any) => teamNum(t, 'total3PA') >= 5 },
+                        { title: 'Team Free Throw %',
+                          sortFn: (a: any, b: any) => teamNum(b, 'ftPercentage') - teamNum(a, 'ftPercentage'),
+                          displayFn: (t: any) => `${teamFmt(teamNum(t, 'ftPercentage'))}%`,
+                          filterFn: (t: any) => teamNum(t, 'totalFTA') >= 5 },
+                      ];
+
+                      return (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                          {teamCategories.map(({ title, sortFn, displayFn, filterFn }: any) => {
+                            const eligible = filterFn ? teamPool.filter(filterFn) : teamPool;
+                            const sorted = [...eligible].sort(sortFn).slice(0, 10);
+                            return renderCard({ title, items: sorted, displayFn, subject: 'team' });
+                          })}
+                        </div>
+                      );
+                    }
+
+                    // Team / Advanced — averages of per-game advanced metrics already on teamStatsData.
+                    const teamAdvCategories = [
+                      { title: 'Offensive Rating', field: 'avgOffRating', fmt: (v: number) => teamFmt(v), minGp: 2 },
+                      { title: 'Defensive Rating', field: 'avgDefRating', fmt: (v: number) => teamFmt(v), minGp: 2, lower: true },
+                      { title: 'Net Rating', field: 'avgNetRating', fmt: (v: number) => teamFmt(v), minGp: 2 },
+                      { title: 'Pace', field: 'avgPace', fmt: (v: number) => teamFmt(v), minGp: 2 },
+                      { title: 'Effective FG% (eFG%)', field: 'avgEfgPercent', fmt: (v: number) => `${teamFmt(v)}%`, minGp: 2 },
+                      { title: 'True Shooting % (TS%)', field: 'avgTsPercent', fmt: (v: number) => `${teamFmt(v)}%`, minGp: 2 },
+                      { title: 'Assist % (AST%)', field: 'avgAstPercent', fmt: (v: number) => `${teamFmt(v)}%`, minGp: 2 },
+                      { title: 'Rebound % (REB%)', field: 'avgRebPercent', fmt: (v: number) => `${teamFmt(v)}%`, minGp: 2 },
+                      { title: 'Turnover % (TOV%)', field: 'avgTovPercent', fmt: (v: number) => `${teamFmt(v)}%`, minGp: 2, lower: true },
+                      { title: 'Player Impact Estimate (PIE)', field: 'avgPie', fmt: (v: number) => teamFmt(v, 3), minGp: 2 },
+                    ];
+
+                    const teamAdvCards = teamAdvCategories.flatMap((cat) => {
+                      const eligible = teamPool.filter((t: any) => (t.gamesPlayed || 0) >= cat.minGp && t[cat.field] != null);
+                      // Hide cards where no team has the metric captured.
+                      const hasAnyValue = eligible.some((t: any) => teamNum(t, cat.field) !== 0);
+                      if (eligible.length === 0 || !hasAnyValue) return [];
+                      const sorted = [...eligible].sort((a: any, b: any) =>
+                        cat.lower ? teamNum(a, cat.field) - teamNum(b, cat.field) : teamNum(b, cat.field) - teamNum(a, cat.field)
+                      ).slice(0, 10);
+                      return [{
+                        title: cat.title,
+                        items: sorted,
+                        displayFn: (t: any) => cat.fmt(teamNum(t, cat.field)),
+                      }];
+                    });
+
+                    if (teamAdvCards.length === 0) {
+                      return (
+                        <div className="text-center py-12">
+                          <p className="text-sm text-slate-500 dark:text-slate-400">No advanced team data available for the selected filters.</p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                        {teamAdvCards.map((c) => renderCard({ title: c.title, items: c.items, displayFn: c.displayFn, subject: 'team' }))}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             )}
@@ -5065,62 +5476,118 @@ export default function LeaguePage() {
                       View All Leaders →
                     </button>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
-                    {(isLoadingLeaders || isLoadingStats) ? (
-                      Array.from({ length: 3 }).map((_, i) => (
-                        <LeaderCardSkeleton key={`leader-skeleton-${i}`} />
-                      ))
+                  {(() => {
+                    const isLoading = isLoadingLeaders || isLoadingStats;
+                    const quickCategories = [
+                      { title: "Top Scorers", list: topScorers, avgLabel: "PPG", totalLabel: "PTS" },
+                      { title: "Top Rebounders", list: topRebounders, avgLabel: "RPG", totalLabel: "REB" },
+                      { title: "Top Playmakers", list: topAssistsList, avgLabel: "APG", totalLabel: "AST" },
+                    ] as const;
+
+                    const qvContextParts: string[] = [];
+                    if (filterAgeGroup !== 'all') qvContextParts.push(shortenAgeLabel(filterAgeGroup));
+                    if (filterRound !== 'all') qvContextParts.push(`Round ${filterRound}`);
+                    if (isParentLeague && selectedStop !== 'all') qvContextParts.push(`Stop ${selectedStop}`);
+                    qvContextParts.push(leagueLeadersView === 'totals' ? 'Season Totals' : 'Season Averages');
+                    const quickContextLabel = qvContextParts.join(' · ');
+
+                    let quickFootnote: string | undefined;
+                    if (leagueLeadersView === 'averages' && filteredByAgeGroupRound.length > 0) {
+                      const qualifiedPool = leadersMinGames > 1
+                        ? filteredByAgeGroupRound.filter((p: any) => (p.games || 0) >= leadersMinGames)
+                        : filteredByAgeGroupRound;
+                      const usedFallback = leadersMinGames > 1 && qualifiedPool.length === 0;
+                      if (leadersIsEarlySeason || usedFallback) {
+                        quickFootnote = 'Showing all players — season just started';
+                      } else if (leadersMinGames > 1) {
+                        quickFootnote = `Min ${leadersMinGames} games played`;
+                      }
+                    }
+
+                    const shareGroups = quickCategories.map(({ title, list, avgLabel, totalLabel }) => {
+                      const unitLabel = leagueLeadersView === 'averages' ? avgLabel : totalLabel;
+                      return {
+                        title,
+                        unitLabel,
+                        leaders: (Array.isArray(list) ? list : []).slice(0, 10).map((p: any) => ({
+                          name: p.name,
+                          team: p.team,
+                          value: String(p.value),
+                        })),
+                      };
+                    });
+
+                    const gridContent = isLoading ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+                        {Array.from({ length: 3 }).map((_, i) => (
+                          <LeaderCardSkeleton key={`leader-skeleton-${i}`} />
+                        ))}
+                      </div>
                     ) : (
-                      ([
-                        { 
-                          title: "Top Scorers", 
-                          list: topScorers, 
-                          avgLabel: "PPG", 
-                          totalLabel: "PTS",
-                        },
-                        { 
-                          title: "Top Rebounders", 
-                          list: topRebounders, 
-                          avgLabel: "RPG", 
-                          totalLabel: "REB",
-                        },
-                        { 
-                          title: "Top Playmakers", 
-                          list: topAssistsList, 
-                          avgLabel: "APG", 
-                          totalLabel: "AST",
-                        },
-                      ] as const).map(({ title, list, avgLabel, totalLabel }) => (
-                        <div key={title} className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4 shadow-inner">
-                          <h3 className="text-xs md:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 md:mb-3 text-center">{title}</h3>
-                          <ul className="space-y-1 text-xs md:text-sm text-slate-800 dark:text-white">
-                            {Array.isArray(list) &&
-                              list.map((p, i) => (
-                                <li 
-                                  key={`${title}-${p.name}-${i}`} 
-                                  className={`flex justify-between ${p.slug ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700 rounded px-1 -mx-1 transition-colors' : ''}`}
-                                  onClick={() => {
-                                    if (p.slug) {
-                                      handleSelectPlayer(p.slug, activeSection);
-                                    }
-                                  }}
-                                >
-                                  <span
-                                    className={`truncate mr-2 ${p.slug ? 'hover:underline' : ''}`}
-                                    style={p.slug ? { color: brandColor } : undefined}
-                                    onMouseEnter={(e) => { if (p.slug) (e.target as HTMLElement).style.color = brandColorHover; }}
-                                    onMouseLeave={(e) => { if (p.slug) (e.target as HTMLElement).style.color = brandColor; }}
-                                  >{p.name}</span>
-                                  <span className="font-medium whitespace-nowrap" style={{ color: brandColor }}>
-                                    {p.value} {leagueLeadersView === 'averages' ? avgLabel : totalLabel}
-                                  </span>
-                                </li>
-                              ))}
-                          </ul>
-                        </div>
-                      ))
-                    )}
-                  </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+                        {quickCategories.map(({ title, list, avgLabel, totalLabel }) => {
+                          const unitLabel = leagueLeadersView === 'averages' ? avgLabel : totalLabel;
+                          return (
+                            <div key={title} className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4 shadow-inner">
+                              <h3 className="text-xs md:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 md:mb-3 text-center">{title}</h3>
+                              <ul className="space-y-1 text-xs md:text-sm text-slate-800 dark:text-white">
+                                {Array.isArray(list) &&
+                                  list.slice(0, 5).map((p, i) => (
+                                    <li
+                                      key={`${title}-${p.name}-${i}`}
+                                      className={`flex justify-between ${p.slug ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700 rounded px-1 -mx-1 transition-colors' : ''}`}
+                                      onClick={() => {
+                                        if (p.slug) {
+                                          handleSelectPlayer(p.slug, activeSection);
+                                        }
+                                      }}
+                                    >
+                                      <span
+                                        className={`truncate mr-2 ${p.slug ? 'hover:underline' : ''}`}
+                                        style={p.slug ? { color: brandColor } : undefined}
+                                        onMouseEnter={(e) => { if (p.slug) (e.target as HTMLElement).style.color = brandColorHover; }}
+                                        onMouseLeave={(e) => { if (p.slug) (e.target as HTMLElement).style.color = brandColor; }}
+                                      >{p.name}</span>
+                                      <span className="font-medium whitespace-nowrap" style={{ color: brandColor }}>
+                                        {p.value} {unitLabel}
+                                      </span>
+                                    </li>
+                                  ))}
+                              </ul>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+
+                    if (isLoading) return gridContent;
+
+                    const inPageContent = (
+                      <>
+                        {gridContent}
+                        {quickFootnote && (
+                          <p className="text-[10px] text-slate-400 dark:text-slate-500 text-center mt-3">
+                            {quickFootnote}
+                          </p>
+                        )}
+                      </>
+                    );
+
+                    return (
+                      <LeagueLeadersShareCard
+                        title="League Leaders"
+                        groups={shareGroups}
+                        leagueName={displayLeagueName || 'League Leaders'}
+                        contextLabel={quickContextLabel}
+                        brandColor={brandColorHex}
+                        leagueLogoUrl={displayLogoUrl}
+                        footnote={quickFootnote}
+                        fileSlug={`league-${slug}-quick-league-leaders`}
+                      >
+                        {inPageContent}
+                      </LeagueLeadersShareCard>
+                    );
+                  })()}
                 </div>
 
                 {/* Team League Leaders */}

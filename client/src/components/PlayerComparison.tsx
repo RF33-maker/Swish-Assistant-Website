@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 import { Search } from "lucide-react";
 import { normalizeTeamName } from "@/lib/teamUtils";
 import ShareableCard from "@/components/ShareableCard";
+import { getTeamLogoCached } from "@/utils/teamLogoCache";
 import {
   Select,
   SelectContent,
@@ -240,7 +241,35 @@ export function PlayerComparison({ leagueId, allPlayers, brandColor }: PlayerCom
   const [showDropdown2, setShowDropdown2] = useState(false);
   const [player1PhotoUrl, setPlayer1PhotoUrl] = useState<string | null>(null);
   const [player2PhotoUrl, setPlayer2PhotoUrl] = useState<string | null>(null);
+  const [player1TeamLogoUrl, setPlayer1TeamLogoUrl] = useState<string | null>(null);
+  const [player2TeamLogoUrl, setPlayer2TeamLogoUrl] = useState<string | null>(null);
   const [teamGameScores, setTeamGameScores] = useState<Map<string, Map<string, number>>>(new Map());
+
+  // Resolve each player's team logo for the share-card header band.
+  useEffect(() => {
+    let cancelled = false;
+    setPlayer1TeamLogoUrl(null);
+    const teamName = player1Stats?.team;
+    if (!teamName || !leagueId) return;
+    void getTeamLogoCached({ leagueId, teamName }).then((url) => {
+      if (!cancelled) setPlayer1TeamLogoUrl(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [player1Stats?.team, leagueId]);
+  useEffect(() => {
+    let cancelled = false;
+    setPlayer2TeamLogoUrl(null);
+    const teamName = player2Stats?.team;
+    if (!teamName || !leagueId) return;
+    void getTeamLogoCached({ leagueId, teamName }).then((url) => {
+      if (!cancelled) setPlayer2TeamLogoUrl(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [player2Stats?.team, leagueId]);
 
   const dropdown1Ref = useRef<HTMLDivElement>(null);
   const dropdown2Ref = useRef<HTMLDivElement>(null);
@@ -593,13 +622,15 @@ export function PlayerComparison({ leagueId, allPlayers, brandColor }: PlayerCom
     return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
   };
 
-  // Share-card layout (renders cleanly inside ShareableCard's modal).
   const renderShareAvatar = (name: string, accent: 'orange' | 'slate', photoUrl: string | null) => {
     const isOrange = accent === 'orange';
     const ringClass = isOrange ? 'border-orange-300' : 'border-slate-300';
     if (photoUrl) {
       return (
-        <div className={`w-16 h-16 rounded-full overflow-hidden shadow border-2 ${ringClass} bg-white`}>
+        <div
+          className={`rounded-full overflow-hidden shadow border-4 ${ringClass} bg-white`}
+          style={{ width: 140, height: 140 }}
+        >
           <img
             src={photoUrl}
             alt={name}
@@ -618,53 +649,94 @@ export function PlayerComparison({ leagueId, allPlayers, brandColor }: PlayerCom
       .toUpperCase();
     return (
       <div
-        className={`w-16 h-16 rounded-full flex items-center justify-center font-bold text-xl shadow border-2 ${
+        className={`rounded-full flex items-center justify-center font-black shadow border-4 ${
           isOrange
             ? 'bg-gradient-to-br from-orange-100 to-orange-200 border-orange-300 text-orange-700'
             : 'bg-gradient-to-br from-slate-100 to-slate-200 border-slate-300 text-slate-700'
         }`}
+        style={{ width: 140, height: 140, fontSize: 48 }}
       >
         {initials || '?'}
       </div>
     );
   };
 
-  const renderShareVsHeader = (s1: any, s2: any) => (
-    <div className="flex items-center justify-between gap-2">
-      <div className="flex flex-col items-center gap-1.5 flex-1 min-w-0">
-        {renderShareAvatar(s1.name, 'orange', player1PhotoUrl)}
-        <div className="text-center min-w-0 w-full">
-          <div className="text-xs font-bold text-slate-800 leading-tight truncate" title={s1.name}>{s1.name}</div>
-          {s1.team && (
-            <div className="text-[10px] text-slate-500 truncate" title={s1.team}>{s1.team}</div>
-          )}
-          <div className="text-[10px] text-slate-500">{s1.games} games</div>
+  const renderShareVsTeam = (s: any, accent: 'orange' | 'slate', photoUrl: string | null) => (
+    <div className="flex flex-col items-center gap-3 min-w-0">
+      {renderShareAvatar(s.name, accent, photoUrl)}
+      <div className="text-center w-full px-1">
+        <div
+          className="font-black text-slate-800"
+          style={{
+            fontSize: 26,
+            lineHeight: 1.15,
+            wordBreak: 'break-word',
+            hyphens: 'auto',
+          }}
+        >
+          {s.name}
         </div>
-      </div>
-      <div className="text-lg font-black text-orange-500 tracking-wider px-1 flex-shrink-0">VS</div>
-      <div className="flex flex-col items-center gap-1.5 flex-1 min-w-0">
-        {renderShareAvatar(s2.name, 'slate', player2PhotoUrl)}
-        <div className="text-center min-w-0 w-full">
-          <div className="text-xs font-bold text-slate-800 leading-tight truncate" title={s2.name}>{s2.name}</div>
-          {s2.team && (
-            <div className="text-[10px] text-slate-500 truncate" title={s2.team}>{s2.team}</div>
-          )}
-          <div className="text-[10px] text-slate-500">{s2.games} games</div>
+        {s.team && (
+          <div
+            className="text-slate-500 mt-1 font-medium"
+            style={{ fontSize: 16, wordBreak: 'break-word' }}
+          >
+            {s.team}
+          </div>
+        )}
+        <div className="text-slate-500 mt-1 font-medium" style={{ fontSize: 14 }}>
+          {s.games} game{s.games !== 1 ? 's' : ''}
         </div>
       </div>
     </div>
   );
 
-  const renderShareTable = (s1: any, s2: any) => {
+  const renderShareVsHeader = (s1: any, s2: any) => (
+    <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-5">
+      {renderShareVsTeam(s1, 'orange', player1PhotoUrl)}
+      <div
+        className="font-black text-orange-500 tracking-widest self-center"
+        style={{ fontSize: 48 }}
+      >
+        VS
+      </div>
+      {renderShareVsTeam(s2, 'slate', player2PhotoUrl)}
+    </div>
+  );
+
+  const renderShareTable = (s1: any, s2: any, captionText?: string) => {
     const rows = getPlayerComparisonRows(comparisonCategory, s1, s2);
     return (
-      <div className="rounded-lg border border-slate-200 overflow-hidden bg-white">
-        <table className="w-full text-xs">
+      <div className="rounded-xl border border-slate-200 overflow-hidden bg-white shadow-sm">
+        {captionText && (
+          <div
+            className="text-center font-bold uppercase tracking-widest text-orange-700 bg-orange-50 border-b border-orange-100"
+            style={{ fontSize: 14, padding: '10px 12px', letterSpacing: '0.18em' }}
+          >
+            {captionText}
+          </div>
+        )}
+        <table className="w-full" style={{ fontSize: 18 }}>
           <thead className="bg-slate-50">
             <tr>
-              <th className="py-1.5 px-2 text-right font-bold text-slate-700 truncate max-w-[40%]">{s1.name}</th>
-              <th className="py-1.5 px-2 text-center font-semibold text-slate-500 uppercase tracking-wider text-[10px]">Stat</th>
-              <th className="py-1.5 px-2 text-left font-bold text-slate-700 truncate max-w-[40%]">{s2.name}</th>
+              <th
+                className="text-right font-black text-slate-800 align-bottom"
+                style={{ padding: '14px 16px', width: '38%', wordBreak: 'break-word', lineHeight: 1.15, fontSize: 18 }}
+              >
+                {s1.name}
+              </th>
+              <th
+                className="text-center font-bold text-slate-500 uppercase tracking-wider align-bottom"
+                style={{ padding: '14px 8px', fontSize: 12, letterSpacing: '0.16em' }}
+              >
+                Stat
+              </th>
+              <th
+                className="text-left font-black text-slate-800 align-bottom"
+                style={{ padding: '14px 16px', width: '38%', wordBreak: 'break-word', lineHeight: 1.15, fontSize: 18 }}
+              >
+                {s2.name}
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -674,14 +746,26 @@ export function PlayerComparison({ leagueId, allPlayers, brandColor }: PlayerCom
               const p1Better = row.lowerIsBetter ? num1 < num2 : num1 > num2;
               const p2Better = row.lowerIsBetter ? num2 < num1 : num2 > num1;
               return (
-                <tr key={i} className={`border-t border-slate-100 ${i % 2 === 1 ? 'bg-slate-50/50' : ''}`}>
-                  <td className={`py-1 px-2 text-right tabular-nums font-semibold ${p1Better ? 'text-orange-600' : 'text-slate-700'}`}>
+                <tr
+                  key={i}
+                  className={`border-t border-slate-100 ${i % 2 === 1 ? 'bg-slate-50/60' : ''}`}
+                >
+                  <td
+                    className={`text-right tabular-nums font-bold ${p1Better ? 'text-orange-600' : 'text-slate-700'}`}
+                    style={{ padding: '8px 16px', fontSize: 20 }}
+                  >
                     {row.value1}
                   </td>
-                  <td className="py-1 px-2 text-center font-semibold text-slate-600 text-[10px] uppercase tracking-wider">
+                  <td
+                    className="text-center font-semibold text-slate-600 uppercase tracking-wider"
+                    style={{ padding: '8px 8px', fontSize: 12, letterSpacing: '0.16em' }}
+                  >
                     {row.label}
                   </td>
-                  <td className={`py-1 px-2 text-left tabular-nums font-semibold ${p2Better ? 'text-orange-600' : 'text-slate-700'}`}>
+                  <td
+                    className={`text-left tabular-nums font-bold ${p2Better ? 'text-orange-600' : 'text-slate-700'}`}
+                    style={{ padding: '8px 16px', fontSize: 20 }}
+                  >
                     {row.value2}
                   </td>
                 </tr>
@@ -695,96 +779,118 @@ export function PlayerComparison({ leagueId, allPlayers, brandColor }: PlayerCom
 
   const renderShareContent = () => {
     if (!player1Stats || !player2Stats) return null;
+    const bodyMinHeight = 980;
     if (view === 'season') {
       return (
-        <div className="space-y-3">
+        <div className="flex flex-col gap-7" style={{ minHeight: bodyMinHeight }}>
           {renderShareVsHeader(player1Stats, player2Stats)}
-          <div className="text-center">
-            <span className="inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">
-              {comparisonCategory} • Season Averages
-            </span>
-          </div>
-          {renderShareTable(player1Stats, player2Stats)}
+          {renderShareTable(player1Stats, player2Stats, `${comparisonCategory} • Season Averages`)}
         </div>
       );
     }
     // Head-to-Head
     if (h2h.games.length === 0) {
       return (
-        <div className="space-y-3">
+        <div className="flex flex-col gap-7" style={{ minHeight: bodyMinHeight }}>
           {renderShareVsHeader(player1Stats, player2Stats)}
-          <div className="rounded-lg bg-slate-50 border border-slate-200 p-4 text-center">
-            <p className="text-sm font-semibold text-slate-700">No head-to-head matchups yet</p>
-            <p className="text-xs text-slate-500 mt-1">{player1Stats.name} and {player2Stats.name} haven't faced each other on opposing teams.</p>
+          <div className="rounded-xl bg-slate-50 border border-slate-200 text-center" style={{ padding: 32 }}>
+            <p className="font-bold text-slate-700" style={{ fontSize: 22 }}>
+              No head-to-head matchups yet
+            </p>
+            <p className="text-slate-500 mt-2" style={{ fontSize: 16 }}>
+              {player1Stats.name} and {player2Stats.name} haven't faced each other on opposing teams.
+            </p>
           </div>
         </div>
       );
     }
     const hasRecord = h2h.p1Wins + h2h.p2Wins > 0;
+    const recentGames = h2h.games.slice(0, 6);
     return (
-      <div className="space-y-3">
+      <div className="flex flex-col gap-6" style={{ minHeight: bodyMinHeight }}>
         {renderShareVsHeader(player1Stats, player2Stats)}
-        <div className="text-center rounded-lg bg-orange-50 border border-orange-200 py-2 px-3">
-          <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
+        <div
+          className="text-center rounded-xl bg-orange-50 border border-orange-200"
+          style={{ padding: '18px 24px' }}
+        >
+          <div
+            className="uppercase tracking-widest text-slate-500 font-bold"
+            style={{ fontSize: 13, letterSpacing: '0.2em' }}
+          >
             {hasRecord ? 'Series Record' : 'Times Faced Off'}
           </div>
           {hasRecord ? (
-            <div className="flex items-center justify-center gap-3 mt-0.5">
+            <div className="flex items-center justify-center gap-6 mt-2">
               <div className="flex flex-col items-center">
-                <div className="text-[9px] text-slate-500 truncate max-w-[80px]" title={player1Stats.name}>{player1Stats.name}</div>
-                <div className="text-xl font-black text-orange-600 tabular-nums">{h2h.p1Wins}</div>
+                <div
+                  className="text-slate-600 font-medium"
+                  style={{ fontSize: 14, wordBreak: 'break-word', maxWidth: 220 }}
+                >
+                  {player1Stats.name}
+                </div>
+                <div className="font-black text-orange-600 tabular-nums" style={{ fontSize: 40 }}>
+                  {h2h.p1Wins}
+                </div>
               </div>
-              <div className="text-base font-bold text-slate-400">—</div>
+              <div className="font-bold text-slate-400" style={{ fontSize: 28 }}>—</div>
               <div className="flex flex-col items-center">
-                <div className="text-[9px] text-slate-500 truncate max-w-[80px]" title={player2Stats.name}>{player2Stats.name}</div>
-                <div className="text-xl font-black text-slate-700 tabular-nums">{h2h.p2Wins}</div>
+                <div
+                  className="text-slate-600 font-medium"
+                  style={{ fontSize: 14, wordBreak: 'break-word', maxWidth: 220 }}
+                >
+                  {player2Stats.name}
+                </div>
+                <div className="font-black text-slate-700 tabular-nums" style={{ fontSize: 40 }}>
+                  {h2h.p2Wins}
+                </div>
               </div>
-              <div className="text-[10px] text-slate-500 ml-2">in {h2h.games.length} game{h2h.games.length !== 1 ? 's' : ''}</div>
             </div>
           ) : (
-            <div className="text-base font-black text-slate-800 mt-0.5">
+            <div className="font-black text-slate-800 mt-2" style={{ fontSize: 28 }}>
               {h2h.games.length} game{h2h.games.length !== 1 ? 's' : ''}
             </div>
           )}
+          <div className="text-slate-500 mt-1" style={{ fontSize: 14 }}>
+            {h2h.games.length} game{h2h.games.length !== 1 ? 's' : ''} played
+          </div>
         </div>
-        <div className="rounded-lg border border-slate-200 overflow-hidden bg-white">
-          <table className="w-full text-[11px]">
+        <div className="rounded-xl border border-slate-200 overflow-hidden bg-white shadow-sm">
+          <div
+            className="text-center font-bold uppercase tracking-widest text-orange-700 bg-orange-50 border-b border-orange-100"
+            style={{ fontSize: 13, padding: '10px 12px', letterSpacing: '0.18em' }}
+          >
+            Recent Matchups
+          </div>
+          <table className="w-full" style={{ fontSize: 16 }}>
             <thead className="bg-slate-50">
               <tr>
-                <th className="py-1.5 px-2 text-left font-semibold text-slate-600">Date</th>
-                <th className="py-1.5 px-2 text-center font-semibold text-slate-600 truncate">{player1Stats.name}</th>
-                <th className="py-1.5 px-2 text-center font-semibold text-slate-600 truncate">{player2Stats.name}</th>
+                <th className="text-left font-bold text-slate-600" style={{ padding: '10px 14px' }}>Date</th>
+                <th className="text-center font-bold text-slate-600" style={{ padding: '10px 14px', wordBreak: 'break-word' }}>{player1Stats.name}</th>
+                <th className="text-center font-bold text-slate-600" style={{ padding: '10px 14px', wordBreak: 'break-word' }}>{player2Stats.name}</th>
               </tr>
             </thead>
             <tbody>
-              {h2h.games.slice(0, 6).map((g, idx) => (
-                <tr key={`${g.game_id}-${idx}`} className={`border-t border-slate-100 ${idx % 2 === 1 ? 'bg-slate-50/50' : ''}`}>
-                  <td className="py-1 px-2 text-slate-700 whitespace-nowrap">{formatDate(g.date)}</td>
-                  <td className="py-1 px-2 text-center tabular-nums text-slate-800">
-                    <span className="font-semibold">{g.p1Line.pts}</span>p / {g.p1Line.reb}r / {g.p1Line.ast}a
+              {recentGames.map((g, idx) => (
+                <tr key={`${g.game_id}-${idx}`} className={`border-t border-slate-100 ${idx % 2 === 1 ? 'bg-slate-50/60' : ''}`}>
+                  <td className="text-slate-700 whitespace-nowrap" style={{ padding: '10px 14px' }}>{formatDate(g.date)}</td>
+                  <td className="text-center tabular-nums text-slate-800" style={{ padding: '10px 14px' }}>
+                    <span className="font-bold">{g.p1Line.pts}</span>p / {g.p1Line.reb}r / {g.p1Line.ast}a
                   </td>
-                  <td className="py-1 px-2 text-center tabular-nums text-slate-800">
-                    <span className="font-semibold">{g.p2Line.pts}</span>p / {g.p2Line.reb}r / {g.p2Line.ast}a
+                  <td className="text-center tabular-nums text-slate-800" style={{ padding: '10px 14px' }}>
+                    <span className="font-bold">{g.p2Line.pts}</span>p / {g.p2Line.reb}r / {g.p2Line.ast}a
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-          {h2h.games.length > 6 && (
-            <div className="text-center text-[10px] text-slate-500 py-1 bg-slate-50">
-              +{h2h.games.length - 6} more game{h2h.games.length - 6 !== 1 ? 's' : ''}
+          {h2h.games.length > recentGames.length && (
+            <div className="text-center text-slate-500 bg-slate-50" style={{ fontSize: 13, padding: '8px 12px' }}>
+              +{h2h.games.length - recentGames.length} more game{h2h.games.length - recentGames.length !== 1 ? 's' : ''}
             </div>
           )}
         </div>
         {h2h.p1Stats && h2h.p2Stats && (
-          <>
-            <div className="text-center">
-              <span className="inline-block text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">
-                {comparisonCategory} • H2H Only
-              </span>
-            </div>
-            {renderShareTable(h2h.p1Stats, h2h.p2Stats)}
-          </>
+          renderShareTable(h2h.p1Stats, h2h.p2Stats, `${comparisonCategory} • H2H Only`)
         )}
       </div>
     );
@@ -941,6 +1047,11 @@ export function PlayerComparison({ leagueId, allPlayers, brandColor }: PlayerCom
           }}
           shareCaption={comparisonCategory.toUpperCase()}
           shareContent={renderShareContent()}
+          teamLogos={[
+            { name: player1Stats.team || player1Stats.name, logoUrl: player1TeamLogoUrl },
+            { name: player2Stats.team || player2Stats.name, logoUrl: player2TeamLogoUrl },
+          ]}
+          wide
         >
         <div className="max-w-5xl mx-auto pt-6">
           <Tabs value={view} onValueChange={(v) => setView(v as 'season' | 'h2h')}>

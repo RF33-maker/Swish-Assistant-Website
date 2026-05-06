@@ -60,6 +60,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/chat", (req, res) => proxyToPython(req, res, "/chat"));
   app.post("/api/ai-analysis", (req, res) => proxyToPython(req, res, "/api/ai-analysis"));
   app.post("/api/parse", (req, res) => proxyToPython(req, res, "/api/parse"));
+  app.get("/players", (req, res) => proxyToPython(req, res, "/players"));
+  app.get("/chart_summary/:name", (req, res) => proxyToPython(req, res, `/chart_summary/${req.params.name}`));
+  app.post("/api/generate-summary", (req, res) => proxyToPython(req, res, "/api/generate-summary"));
 
   // League chatbot AI — handled directly in Express via OpenAI Node SDK
   // (avoids dependency on the Python backend process which can go offline)
@@ -531,38 +534,285 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Returns child league rows for a given parent_league_id, bypassing
+  // RLS via the service-role client. Public parent league pages need
+  // this to roll up data from children that have been marked
+  // is_public=false (the anon-key client filters those rows out under
+  // the existing RLS policy on `leagues`). The endpoint itself is
+  // public-read because it only exposes basic competition metadata
+  // (id/name/slug/logo/age_group/stop) that's already implied by the
+  // parent league page.
+  app.get("/api/public/league-children/:parentId", async (req: Request, res: Response) => {
+    try {
+      const { parentId } = req.params;
+      if (!parentId) return res.status(400).json({ error: "parentId is required" });
+
+      const { data, error } = await supabaseAdmin
+        .from("leagues")
+        .select("league_id, name, slug, logo_url, age_group, stop")
+        .eq("parent_league_id", parentId);
+
+      if (error) {
+        console.error("Error fetching league children:", error);
+        return res.status(500).json({ error: "Failed to fetch league children" });
+      }
+
+      res.json({ children: data || [] });
+    } catch (err: any) {
+      console.error("Error fetching league children:", err.message);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Service-role-backed read endpoint that lets parent league pages roll up
+  // data from private (is_public=false) child leagues. The anon-key Supabase
+  // client gets filtered by RLS on `teams`, `team_stats`, and `players`, so
+  // a public REBA SL parent page would otherwise show empty standings /
+  // player stats / team stats whenever its sub-competitions have been hidden
+  // from search via is_public=false.
+  //
+  // Access control:
+  //   - Restricted to a known allow-list of tables and a fixed per-table
+  //     column projection (no caller-controlled `select`).
+  //   - Each requested league_id is validated server-side to be either
+  //     itself public, or a child of a public parent league. League IDs
+  //     that don't satisfy that scope are dropped silently before the
+  //     data fetch — preventing arbitrary-id enumeration of fully
+  //     private leagues that have no public parent.
+  // Explicit per-table column projections (no caller-controlled select).
+  // The team_stats list mirrors the columns the league page actually
+  // reads in fetchTeamStats — keep this in sync with
+  // client/src/pages/pages/league/[slug].tsx if new aggregations are
+  // added there.
+  const TEAM_STATS_COLS = [
+    "name",
+    "league_id",
+    "tot_sminutes",
+    "tot_spoints",
+    "tot_sfieldgoalsmade",
+    "tot_sfieldgoalsattempted",
+    "tot_sthreepointersmade",
+    "tot_sthreepointersattempted",
+    "tot_stwopointersmade",
+    "tot_stwopointersattempted",
+    "tot_sfreethrowsmade",
+    "tot_sfreethrowsattempted",
+    "tot_sreboundstotal",
+    "tot_sreboundsoffensive",
+    "tot_sreboundsdefensive",
+    "tot_sassists",
+    "tot_ssteals",
+    "tot_sblocks",
+    "tot_sturnovers",
+    "tot_sfoulspersonal",
+    "tot_splusminuspoints",
+    "tot_spointsinthepaint",
+    "tot_spointsfastbreak",
+    "tot_spointssecondchance",
+    "tot_spointsfromturnovers",
+    "tot_timesscoreslevel",
+    "tot_leadchanges",
+    "tot_timeleading",
+    "tot_biggestscoringrun",
+    "off_rating",
+    "def_rating",
+    "net_rating",
+    "pace",
+    "ast_percent",
+    "ast_to_ratio",
+    "oreb_percent",
+    "dreb_percent",
+    "reb_percent",
+    "tov_percent",
+    "efg_percent",
+    "ts_percent",
+    "ft_rate",
+    "three_point_rate",
+    "pie",
+    "opp_efg_percent",
+    "opp_ft_rate",
+    "opp_tov_percent",
+    "opp_oreb_percent",
+    "opp_3pm",
+    "opp_fgm",
+    "opp_fga",
+    "opp_points",
+    "opp_turnovers",
+    "opp_possessions",
+    "fga_percent_2pt",
+    "fga_percent_3pt",
+    "fga_percent_midrange",
+    "pts_percent_2pt",
+    "pts_percent_3pt",
+    "pts_percent_midrange",
+    "pts_percent_pitp",
+    "pts_percent_fastbreak",
+    "pts_percent_second_chance",
+    "pts_percent_off_turnovers",
+    "pts_percent_ft",
+  ].join(", ");
+
+  const ALLOWED_LEAGUE_DATA_COLUMNS: Record<string, string> = {
+    teams: "team_id, name, league_id",
+    team_stats: TEAM_STATS_COLS,
+    players: "id, full_name, slug, league_id",
+  };
+
+  async function filterLeagueIdsForPublicScope(ids: string[]): Promise<string[]> {
+    if (ids.length === 0) return [];
+    const { data, error } = await supabaseAdmin
+      .from("leagues")
+      .select("league_id, is_public, parent_league_id")
+      .in("league_id", ids);
+    if (error || !data) {
+      console.error("filterLeagueIdsForPublicScope: leagues lookup failed:", error?.message);
+      return [];
+    }
+    const directlyAllowed = new Set<string>();
+    const parentIdsToCheck = new Set<string>();
+    const idToParent = new Map<string, string | null>();
+    for (const row of data as Array<{ league_id: string; is_public: boolean | null; parent_league_id: string | null }>) {
+      if (row.is_public) {
+        directlyAllowed.add(row.league_id);
+      } else if (row.parent_league_id) {
+        parentIdsToCheck.add(row.parent_league_id);
+        idToParent.set(row.league_id, row.parent_league_id);
+      }
+    }
+    const publicParents = new Set<string>();
+    if (parentIdsToCheck.size > 0) {
+      const { data: parents, error: parentErr } = await supabaseAdmin
+        .from("leagues")
+        .select("league_id, is_public")
+        .in("league_id", Array.from(parentIdsToCheck));
+      if (parentErr) {
+        console.error("filterLeagueIdsForPublicScope: parent lookup failed:", parentErr.message);
+      } else if (parents) {
+        for (const p of parents as Array<{ league_id: string; is_public: boolean | null }>) {
+          if (p.is_public) publicParents.add(p.league_id);
+        }
+      }
+    }
+    const allowed = new Set<string>(directlyAllowed);
+    for (const [childId, parentId] of idToParent.entries()) {
+      if (parentId && publicParents.has(parentId)) allowed.add(childId);
+    }
+    return ids.filter((id) => allowed.has(id));
+  }
+
+  app.post("/api/public/league-data", async (req: Request, res: Response) => {
+    try {
+      const { table, leagueIds } = req.body || {};
+      if (typeof table !== "string" || !(table in ALLOWED_LEAGUE_DATA_COLUMNS)) {
+        return res.status(400).json({ error: "Invalid or unsupported table" });
+      }
+      if (!Array.isArray(leagueIds) || leagueIds.length === 0) {
+        return res.status(400).json({ error: "leagueIds must be a non-empty array" });
+      }
+      const ids = leagueIds.filter((v: unknown): v is string => typeof v === "string" && v.length > 0);
+      if (ids.length === 0) {
+        return res.status(400).json({ error: "leagueIds must contain at least one valid id" });
+      }
+
+      const allowedIds = await filterLeagueIdsForPublicScope(ids);
+      if (allowedIds.length === 0) {
+        return res.json({ rows: [] });
+      }
+
+      const cols = ALLOWED_LEAGUE_DATA_COLUMNS[table];
+      const { data, error } = await supabaseAdmin
+        .from(table)
+        .select(cols)
+        .in("league_id", allowedIds);
+
+      if (error) {
+        console.error(`Error fetching league-data for ${table}:`, error);
+        return res.status(500).json({ error: "Failed to fetch league data" });
+      }
+
+      res.json({ rows: data || [] });
+    } catch (err: any) {
+      console.error("Error in /api/public/league-data:", err.message);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Batch league info lookup using service role — bypasses RLS so private
+  // child leagues (e.g. REBA SL age groups) resolve names/parents correctly.
+  // Body: { ids: string[] }
+  // Response: { [leagueId]: { name, parent_league_id, age_group, stop } }
+  app.post("/api/public/league-info", async (req: Request, res: Response) => {
+    try {
+      const { ids } = req.body as { ids?: string[] };
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.json({});
+      }
+      const unique = Array.from(new Set(ids)).slice(0, 100);
+      const { data, error } = await supabaseAdmin
+        .from("leagues")
+        .select("league_id, name, parent_league_id, age_group, stop")
+        .in("league_id", unique);
+      if (error) {
+        console.error("Error in /api/public/league-info:", error.message);
+        return res.status(500).json({ error: "Internal server error" });
+      }
+      const result: Record<string, { name: string; parent_league_id: string | null; age_group: string | null; stop: number | null }> = {};
+      for (const row of data || []) {
+        result[row.league_id] = {
+          name: row.name,
+          parent_league_id: row.parent_league_id || null,
+          age_group: row.age_group || null,
+          stop: row.stop ?? null,
+        };
+      }
+      res.json(result);
+    } catch (err: any) {
+      console.error("Error in /api/public/league-info:", err.message);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   app.get("/api/public/league-logo/:leagueId", async (req: Request, res: Response) => {
     try {
       const { leagueId } = req.params;
       if (!leagueId) return res.status(400).json({ error: "leagueId is required" });
 
+      // No is_public filter — private child leagues must still resolve branding
+      // via their public parent so that player profiles display the right colour.
       const { data, error } = await supabaseAdmin
         .from("leagues")
-        .select("logo_url, parent_league_id, is_public")
+        .select("logo_url, parent_league_id, brand_primary_colour, is_public")
         .eq("league_id", leagueId)
-        .eq("is_public", true)
         .single();
 
       if (error || !data) {
         return res.status(404).json({ error: "League not found" });
       }
 
+      // If this league has its own logo, return it (plus its colour).
       if (data.logo_url) {
-        return res.json({ logo_url: data.logo_url });
+        return res.json({
+          logo_url: data.logo_url,
+          brand_primary_colour: data.brand_primary_colour || null,
+        });
       }
 
+      // No logo — try the parent league (private children inherit parent branding).
       if (data.parent_league_id) {
         const { data: parentData } = await supabaseAdmin
           .from("leagues")
-          .select("logo_url")
+          .select("logo_url, brand_primary_colour")
           .eq("league_id", data.parent_league_id)
-          .eq("is_public", true)
           .single();
 
-        return res.json({ logo_url: parentData?.logo_url || null });
+        return res.json({
+          logo_url: parentData?.logo_url || null,
+          brand_primary_colour:
+            data.brand_primary_colour || parentData?.brand_primary_colour || null,
+        });
       }
 
-      res.json({ logo_url: null });
+      res.json({ logo_url: null, brand_primary_colour: data.brand_primary_colour || null });
     } catch (err: any) {
       console.error("Error fetching public league logo:", err.message);
       res.status(500).json({ error: "Internal server error" });
@@ -580,37 +830,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // numbers don't change minute-to-minute, so an hours-old cache is still
   // far more useful than an empty card.
   type OnOffRow = Record<string, any>;
-  const PLAYER_ON_OFF_TTL_MS = 60 * 60 * 1000; // 1h fresh window
-  const PLAYER_ON_OFF_DISK_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7d stale ceiling
-  const playerOnOffCache = new Map<string, { at: number; rows: OnOffRow[] }>();
+  type OnOffEntry = { at: number; rows: OnOffRow[] };
+  const PLAYER_ON_OFF_TTL_MS = 60 * 60 * 1000;
+  const PLAYER_ON_OFF_DISK_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+  const byIdCache = new Map<string, OnOffEntry>();
+  const byNamesCache = new Map<string, OnOffEntry>();
   const ON_OFF_CACHE_DIR = path.join(process.cwd(), '.cache', 'player_on_off');
   try { fs.mkdirSync(ON_OFF_CACHE_DIR, { recursive: true }); } catch {}
 
   function diskPathFor(playerId: string) {
     return path.join(ON_OFF_CACHE_DIR, `${playerId}.json`);
   }
-  function readDiskCache(playerId: string): { at: number; rows: OnOffRow[] } | null {
+  function readDiskCache(playerId: string): OnOffEntry | null {
     try {
       const fp = diskPathFor(playerId);
       if (!fs.existsSync(fp)) return null;
-      const raw = fs.readFileSync(fp, 'utf8');
-      const parsed = JSON.parse(raw);
+      const parsed = JSON.parse(fs.readFileSync(fp, 'utf8'));
       if (!parsed || !Array.isArray(parsed.rows)) return null;
       return { at: Number(parsed.at) || 0, rows: parsed.rows as OnOffRow[] };
     } catch (err) {
-      console.warn('player_on_off disk read failed for', playerId, (err as any)?.message);
+      console.warn('player_on_off disk read failed for', playerId, (err as Error)?.message);
       return null;
     }
   }
-  function writeDiskCache(playerId: string, entry: { at: number; rows: OnOffRow[] }) {
+  function writeDiskCache(playerId: string, entry: OnOffEntry) {
     try {
       fs.writeFileSync(diskPathFor(playerId), JSON.stringify(entry));
     } catch (err) {
-      console.warn('player_on_off disk write failed for', playerId, (err as any)?.message);
+      console.warn('player_on_off disk write failed for', playerId, (err as Error)?.message);
     }
   }
 
-  async function fetchPlayerOnOffOnce(playerId: string): Promise<OnOffRow[]> {
+  async function fetchByIdOnce(playerId: string): Promise<OnOffRow[]> {
     const { data, error } = await supabaseAdmin
       .from('player_on_off')
       .select('*')
@@ -619,20 +870,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return (data || []) as OnOffRow[];
   }
 
-  async function fetchPlayerOnOffWithRetry(playerId: string): Promise<OnOffRow[]> {
+  async function fetchByNamesOnce(names: string[]): Promise<OnOffRow[]> {
+    if (names.length === 0) return [];
+    const { data, error } = await supabaseAdmin
+      .from('player_on_off')
+      .select('*')
+      .in('player_name', names);
+    if (error) throw Object.assign(new Error(error.message), { code: error.code });
+    return (data || []) as OnOffRow[];
+  }
+
+  async function withTimeoutRetry<T>(fn: () => Promise<T>): Promise<T> {
     let lastErr: any = null;
     for (let attempt = 0; attempt < 4; attempt++) {
       try {
-        return await fetchPlayerOnOffOnce(playerId);
+        return await fn();
       } catch (err: any) {
         lastErr = err;
-        // 57014 = statement_timeout. Retry these; they often succeed once
-        // the Postgres plan/buffer cache is warm.
         if (err?.code !== '57014') break;
         await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
       }
     }
     throw lastErr;
+  }
+
+  function dedupeRows(rows: OnOffRow[]): OnOffRow[] {
+    const seen = new Set<string>();
+    const out: OnOffRow[] = [];
+    for (const r of rows) {
+      const key = `${r.player_id || ''}::${r.game_key || ''}::${r.player_name || ''}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(r);
+    }
+    return out;
+  }
+
+  function evictOldest(map: Map<string, OnOffEntry>, max: number) {
+    if (map.size <= max) return;
+    const oldestKey = map.keys().next().value;
+    if (oldestKey) map.delete(oldestKey);
   }
 
   app.get('/api/player-on-off/:playerId', async (req: Request, res: Response) => {
@@ -642,40 +919,113 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     const now = Date.now();
 
-    // 1. In-memory cache (fastest)
-    let cached = playerOnOffCache.get(playerId);
+    const namesParam = req.query.names;
+    let names: string[] = [];
+    if (typeof namesParam === 'string' && namesParam.length > 0) {
+      names = namesParam
+        .split('|')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0 && s.length <= 100);
+      names = Array.from(new Set(names)).slice(0, 10);
+    }
+    const namesKey = names.length
+      ? names.map((n) => n.toLowerCase()).sort().join('|')
+      : '';
 
-    // 2. Hydrate from disk on first request after restart
-    if (!cached) {
+    let idCached = byIdCache.get(playerId);
+    if (!idCached) {
       const fromDisk = readDiskCache(playerId);
       if (fromDisk) {
-        playerOnOffCache.set(playerId, fromDisk);
-        cached = fromDisk;
+        byIdCache.set(playerId, fromDisk);
+        idCached = fromDisk;
       }
     }
+    const namesCached = namesKey ? byNamesCache.get(namesKey) : undefined;
 
-    if (cached && now - cached.at < PLAYER_ON_OFF_TTL_MS) {
-      return res.json({ rows: cached.rows, cached: true });
+    const idFresh = idCached && now - idCached.at < PLAYER_ON_OFF_TTL_MS;
+    const namesFresh = !namesKey || (namesCached && now - namesCached.at < PLAYER_ON_OFF_TTL_MS);
+
+    if (idFresh && namesFresh) {
+      const merged = dedupeRows([
+        ...(idCached?.rows || []),
+        ...(namesCached?.rows || []),
+      ]);
+      return res.json({ rows: merged, cached: true });
     }
 
-    try {
-      const rows = await fetchPlayerOnOffWithRetry(playerId);
-      const entry = { at: now, rows };
-      playerOnOffCache.set(playerId, entry);
+    type BranchResult =
+      | { ok: true; rows: OnOffRow[]; fromCache: boolean }
+      | { ok: false; err: any };
+
+    const idPromise: Promise<BranchResult> = idFresh
+      ? Promise.resolve({ ok: true, rows: idCached!.rows, fromCache: true })
+      : withTimeoutRetry(() => fetchByIdOnce(playerId)).then(
+          (rows): BranchResult => ({ ok: true, rows, fromCache: false }),
+          (err): BranchResult => ({ ok: false, err })
+        );
+
+    const namesPromise: Promise<BranchResult> = namesFresh
+      ? Promise.resolve({ ok: true, rows: namesCached?.rows || [], fromCache: true })
+      : withTimeoutRetry(() => fetchByNamesOnce(names)).then(
+          (rows): BranchResult => ({ ok: true, rows, fromCache: false }),
+          (err): BranchResult => ({ ok: false, err })
+        );
+
+    const [idResult, namesResult] = await Promise.all([idPromise, namesPromise]);
+
+    if (idResult.ok && !idResult.fromCache) {
+      const entry = { at: now, rows: idResult.rows };
+      byIdCache.set(playerId, entry);
       writeDiskCache(playerId, entry);
-      if (playerOnOffCache.size > 500) {
-        const oldestKey = playerOnOffCache.keys().next().value;
-        if (oldestKey) playerOnOffCache.delete(oldestKey);
-      }
-      res.json({ rows, cached: false });
-    } catch (err: any) {
-      console.error('player_on_off endpoint error for', playerId, err?.code, err?.message);
-      // Serve stale cache (memory or disk) so the UI degrades gracefully.
-      if (cached && now - cached.at < PLAYER_ON_OFF_DISK_TTL_MS) {
-        return res.json({ rows: cached.rows, cached: true, stale: true });
-      }
-      res.status(503).json({ error: 'player_on_off unavailable', code: err?.code });
+      evictOldest(byIdCache, 500);
     }
+    if (namesResult.ok && !namesResult.fromCache && namesKey) {
+      byNamesCache.set(namesKey, { at: now, rows: namesResult.rows });
+      evictOldest(byNamesCache, 1000);
+    }
+
+    // Track cache *existence* (within disk TTL) separately from row
+    // count: a successful cached snapshot of "no rows" is a valid
+    // fallback and means the branch is NOT lost on a later live
+    // failure. Without this distinction we'd misreport unavailable
+    // for players who genuinely have no on/off rows.
+    const idCacheUsable = !!(idCached && now - idCached.at < PLAYER_ON_OFF_DISK_TTL_MS);
+    const namesCacheUsable = !!(namesCached && now - namesCached.at < PLAYER_ON_OFF_DISK_TTL_MS);
+
+    const idRows = idResult.ok
+      ? idResult.rows
+      : (idCacheUsable ? idCached!.rows : []);
+    const nameRows = namesResult.ok
+      ? namesResult.rows
+      : (namesCacheUsable ? namesCached!.rows : []);
+    const merged = dedupeRows([...idRows, ...nameRows]);
+
+    // A branch is "lost" when its live fetch failed AND no within-TTL
+    // cache snapshot exists at all. An empty-but-fresh cache is a
+    // valid snapshot and preserves the genuine "no data" path. The
+    // names branch only counts when the caller actually supplied
+    // names — without them, that branch cannot contribute or fail.
+    const idLost = !idResult.ok && !idCacheUsable;
+    const namesLost = namesKey !== '' && !namesResult.ok && !namesCacheUsable;
+
+    if (merged.length === 0 && (idLost || namesLost)) {
+      const errCode =
+        (!idResult.ok ? idResult.err?.code : undefined) ??
+        (!namesResult.ok ? namesResult.err?.code : undefined);
+      console.error('player_on_off endpoint unavailable for', playerId, errCode);
+      return res.json({ rows: [], unavailable: true, code: errCode });
+    }
+
+    const partial = !idResult.ok || (namesKey !== '' && !namesResult.ok);
+    const stale =
+      (!idResult.ok && idRows.length > 0) ||
+      (namesKey !== '' && !namesResult.ok && nameRows.length > 0);
+    res.json({
+      rows: merged,
+      cached: stale,
+      ...(partial ? { partial: true } : {}),
+      ...(stale ? { stale: true } : {}),
+    });
   });
 
   const httpServer = createServer(app);

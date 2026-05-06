@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Copy, Check, Code, BarChart3, Users, Trophy, Gamepad2 } from "lucide-react";
+import { ArrowLeft, Copy, Check, Code, BarChart3, Users, Trophy, Gamepad2, BookOpen } from "lucide-react";
 import {
   type WidgetParams,
   type WidgetType,
@@ -12,6 +12,7 @@ import {
   FONT_OPTIONS,
   buildWidgetUrl,
   buildEmbedCode,
+  buildResponsiveEmbedCode,
 } from "@/lib/widgetUtils";
 
 interface LeagueOption {
@@ -39,6 +40,7 @@ export default function WidgetBuilder() {
   const [, navigate] = useLocation();
   const [copied, setCopied] = useState(false);
 
+  const [embedMode, setEmbedMode] = useState<'fixed' | 'responsive'>('fixed');
   const [widgetType, setWidgetType] = useState<WidgetType>('standings');
   const [leagueId, setLeagueId] = useState('');
   const [leagueSlug, setLeagueSlug] = useState('');
@@ -181,7 +183,12 @@ export default function WidgetBuilder() {
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
   const widgetUrl = useMemo(() => buildWidgetUrl(baseUrl, widgetParams), [baseUrl, widgetParams]);
-  const embedCode = useMemo(() => buildEmbedCode(widgetUrl, dimensions.width, dimensions.height), [widgetUrl, dimensions]);
+  const embedCode = useMemo(
+    () => embedMode === 'responsive'
+      ? buildResponsiveEmbedCode(widgetUrl, dimensions.height)
+      : buildEmbedCode(widgetUrl, dimensions.width, dimensions.height),
+    [widgetUrl, dimensions, embedMode],
+  );
 
   const iframeUrl = widgetUrl;
 
@@ -232,6 +239,15 @@ export default function WidgetBuilder() {
             <Code className="h-5 w-5 text-orange-600" />
             <h1 className="text-xl font-bold text-slate-900">Widget Builder</h1>
           </div>
+          <a
+            href="/embed"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-sm font-medium text-orange-700 hover:text-orange-900"
+          >
+            <BookOpen className="h-4 w-4" />
+            Embed guide
+          </a>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
@@ -430,6 +446,29 @@ export default function WidgetBuilder() {
                 <Code className="h-4 w-4 text-orange-600" />
                 Embed Code
               </h2>
+              <div className="flex gap-2">
+                {(['fixed', 'responsive'] as const).map(mode => (
+                  <button
+                    key={mode}
+                    onClick={() => setEmbedMode(mode)}
+                    className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold capitalize transition-all border-2 ${
+                      embedMode === mode
+                        ? 'border-orange-500 bg-orange-50 text-orange-700'
+                        : 'border-slate-200 text-slate-500 hover:border-orange-200'
+                    }`}
+                  >
+                    {mode === 'fixed' ? 'Fixed size' : 'Responsive'}
+                    <span className="block text-[10px] font-normal text-slate-400 mt-0.5">
+                      {mode === 'fixed' ? `${dimensions.width}x${dimensions.height}` : '100% width'}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-slate-500">
+                Want widgets to auto-resize to their content?{' '}
+                <a href="/embed#auto-resize" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline">See the embed guide</a>
+                .
+              </p>
               <div className="bg-slate-900 text-green-400 text-xs p-3 rounded-lg font-mono overflow-x-auto whitespace-pre-wrap break-all leading-relaxed">
                 {hasRequiredData ? embedCode : '<iframe ...> Select data source above to generate embed code'}
               </div>

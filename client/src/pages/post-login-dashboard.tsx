@@ -1,5 +1,5 @@
 import { useLocation } from "wouter"
-import { Users, TrendingUp, Trophy, Settings, Share2, Code } from "lucide-react";
+import { Users, TrendingUp, Trophy, Settings, Share2, Code, Newspaper, FilePenLine } from "lucide-react";
 import {
   Card,
   CardHeader,
@@ -40,7 +40,7 @@ export default function DashboardLanding() {
           Choose your mode
         </p>
 
-        <div className="mt-16 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="mt-16 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
             <Card className="bg-white border-orange-200 shadow-lg shadow-orange-500/20 hover:shadow-xl hover:shadow-orange-500/40 transition-all duration-300 cursor-pointer transform hover:scale-105 group" onClick={() => navigate("/league-management")}>
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-3">
@@ -149,6 +149,35 @@ export default function DashboardLanding() {
                 >
                   <Code className="h-3 w-3 mr-1 group-hover:animate-bounce" />
                   Build Widgets
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-white border-orange-200 shadow-lg shadow-orange-500/20 hover:shadow-xl hover:shadow-orange-500/40 transition-all duration-300 cursor-pointer transform hover:scale-105 group" onClick={() => navigate("/news-manager")} data-testid="card-news-manager">
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-12 w-12 rounded-full bg-orange-600 group-hover:bg-orange-700 flex items-center justify-center transition-all duration-300 group-hover:rotate-12 group-hover:scale-110">
+                    <Newspaper className="h-6 w-6 text-white group-hover:animate-pulse" />
+                  </div>
+                  <div className="flex-1">
+                    <CardTitle className="text-orange-900 text-lg group-hover:text-orange-700 transition-colors duration-300">News Manager</CardTitle>
+                    <CardDescription className="group-hover:text-orange-600 transition-colors duration-300">Publish stories and updates</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <p className="text-orange-700 text-sm mb-4">Add, edit, and remove articles that appear in the public Latest News section on the home page.</p>
+                <Button
+                  size="sm"
+                  className="bg-orange-600 hover:bg-orange-700 text-white transform transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate("/news-manager");
+                  }}
+                  data-testid="button-open-news-manager"
+                >
+                  <FilePenLine className="h-3 w-3 mr-1 group-hover:animate-bounce" />
+                  Manage News
                 </Button>
               </CardContent>
             </Card>

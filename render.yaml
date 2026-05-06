@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: swish-python-backend
+    runtime: python
+    rootDir: python_backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn main:app --bind 0.0.0.0:$PORT

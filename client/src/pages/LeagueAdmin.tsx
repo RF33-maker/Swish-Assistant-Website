@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation, useParams } from "wouter";
 import { supabase } from "@/lib/supabase";
+import { fetchLeagueChildren } from "@/lib/leagueChildren";
 import { TeamLogoUploader } from "@/components/TeamLogoUploader";
 import { TeamLogo, invalidateLogoCache } from "@/components/TeamLogo";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
@@ -133,12 +134,9 @@ export default function LeagueAdmin() {
     }
     
     try {
-      const { data: childCompetitions } = await supabase
-        .from('leagues')
-        .select('league_id')
-        .eq('parent_league_id', league.league_id);
+      const childCompetitions = await fetchLeagueChildren(league.league_id);
 
-      const childIds = (childCompetitions || []).map((c: any) => c.league_id);
+      const childIds = childCompetitions.map((c) => c.league_id);
       const queryLeagueIds = childIds.length > 0 ? [league.league_id, ...childIds] : [league.league_id];
 
       const result = await supabase
@@ -199,12 +197,9 @@ export default function LeagueAdmin() {
     }
     
     try {
-      const { data: childCompetitions } = await supabase
-        .from('leagues')
-        .select('league_id')
-        .eq('parent_league_id', league.league_id);
+      const childCompetitions = await fetchLeagueChildren(league.league_id);
 
-      const childIds = (childCompetitions || []).map((c: any) => c.league_id);
+      const childIds = childCompetitions.map((c) => c.league_id);
       const logoQueryIds = childIds.length > 0 ? [league.league_id, ...childIds] : [league.league_id];
 
       const logoMap: Record<string, string> = {};

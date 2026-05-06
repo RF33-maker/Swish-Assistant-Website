@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { getPythonBackendUrl } from "@/lib/backendUrl";
 
 const UploadSectionLA = ({ leagues }: any) => {
   const { user } = useAuth();
@@ -12,23 +13,113 @@ const UploadSectionLA = ({ leagues }: any) => {
   const [lastFilePath, setLastFilePath] = useState<string | null>(null);
   const [selectedLeagueId, setSelectedLeagueId] = useState<string>("");
 
+  const backfillParentLeagueId = async (
+    parentLeagueId: string,
+    snapshot: { ok: true; ids: Set<string> } | { ok: false },
+    explicitChildIds?: string[],
+  ) => {
+    if (!user?.id) return;
+
+    try {
+      // Preferred path: an explicit list of newly-created child league IDs.
+      if (explicitChildIds && explicitChildIds.length > 0) {
+        const targets = explicitChildIds.filter((id) => id && id !== parentLeagueId);
+        if (targets.length === 0) return;
+        const { error } = await supabase
+          .from("leagues")
+          .update({ parent_league_id: parentLeagueId })
+          .in("league_id", targets)
+          .eq("user_id", user.id)
+          .is("parent_league_id", null);
+        if (error) {
+          console.error("❌ parent_league_id backfill (explicit) failed:", error.message);
+        }
+        return;
+      }
+
+      // Fallback path: snapshot diff. Only safe if the pre-parse snapshot succeeded.
+      if (!snapshot.ok) {
+        console.warn(
+          "⚠️ Skipping parent_league_id backfill — pre-parse snapshot was unavailable, " +
+            "so we cannot safely identify which rows were newly created by this upload.",
+        );
+        setStatusMessage(
+          "✅ Parsing complete! ⚠️ Could not auto-link new child leagues to this parent — please set parent_league_id manually if needed.",
+        );
+        return;
+      }
+
+      const preExistingLeagueIds = snapshot.ids;
+      const { data: candidates, error: fetchErr } = await supabase
+        .from("leagues")
+        .select("league_id")
+        .eq("user_id", user.id)
+        .is("parent_league_id", null);
+
+      if (fetchErr) {
+        console.error("❌ parent_league_id backfill query failed:", fetchErr.message);
+        return;
+      }
+
+      const newChildIds = (candidates || [])
+        .map((row: any) => row.league_id as string)
+        .filter((id) => id && id !== parentLeagueId && !preExistingLeagueIds.has(id));
+
+      if (newChildIds.length === 0) return;
+
+      const { error: updateErr } = await supabase
+        .from("leagues")
+        .update({ parent_league_id: parentLeagueId })
+        .in("league_id", newChildIds)
+        .eq("user_id", user.id)
+        .is("parent_league_id", null);
+
+      if (updateErr) {
+        console.error("❌ parent_league_id backfill update failed:", updateErr.message);
+      }
+    } catch (err) {
+      console.error("❌ parent_league_id backfill threw:", err);
+    }
+  };
+
   const triggerParse = async (filePath: string | null) => {
     if (!filePath || !selectedLeagueId || !user?.id) {
       setStatusMessage("❌ file_path, user_id, and league_id are required");
       return;
     }
 
+    // Snapshot existing leagues for this user so we can detect newly-created children.
+    // Snapshot failure must NOT silently fall through to a "treat everything as new" update.
+    let snapshot: { ok: true; ids: Set<string> } | { ok: false } = { ok: false };
+    try {
+      const { data: existing, error: snapErr } = await supabase
+        .from("leagues")
+        .select("league_id")
+        .eq("user_id", user.id);
+      if (snapErr) {
+        console.error("⚠️ Could not snapshot existing leagues:", snapErr.message);
+      } else {
+        const ids = new Set<string>();
+        (existing || []).forEach((row: any) => {
+          if (row?.league_id) ids.add(row.league_id);
+        });
+        snapshot = { ok: true, ids };
+      }
+    } catch (err) {
+      console.error("⚠️ Snapshot failed:", err);
+    }
+
     try {
       setStatusMessage("🔄 Parsing file...");
-      const BASE = (import.meta.env.VITE_BACKEND_URL || `${window.location.protocol}//${window.location.hostname}:8000`).replace(/\/$/, '');
       const resp = await fetch(
-        `${BASE}/api/parse`,
+        `${getPythonBackendUrl()}/api/parse`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             user_id: user.id,
             league_id: selectedLeagueId,
+            parent_league_id: selectedLeagueId,
             file_path: `XLSX Uploads/${filePath}`, // adjust bucket name
           }),
         }
@@ -36,7 +127,11 @@ const UploadSectionLA = ({ leagues }: any) => {
 
       const data = await resp.json();
       if (resp.ok) {
+        const explicitIds: string[] | undefined = Array.isArray(data?.created_league_ids)
+          ? data.created_league_ids
+          : undefined;
         setStatusMessage("✅ Parsing complete!");
+        await backfillParentLeagueId(selectedLeagueId, snapshot, explicitIds);
       } else {
         setStatusMessage(`❌ Parsing failed: ${data.error || "Unknown error"}`);
       }

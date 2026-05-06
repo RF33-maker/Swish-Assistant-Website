@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase, getSupabaseForLeague, getDataLeagueId } from "@/lib/supabase";
-import { type WidgetParams, isLightColor } from "@/lib/widgetUtils";
+import { type WidgetParams, isLightColor, withRetry, retrySupabase, MAX_WIDGET_ROWS } from "@/lib/widgetUtils";
 import WidgetLayout from "./WidgetLayout";
 
 interface GameScore {
@@ -15,21 +15,21 @@ interface GameScore {
 
 async function resolvePublicLeague(leagueId?: string, leagueSlug?: string): Promise<{ id: string; name: string } | null> {
   if (leagueSlug) {
-    const { data } = await supabase
+    const { data } = await retrySupabase(() => supabase
       .from("leagues")
       .select("league_id, name")
       .eq("slug", leagueSlug)
       .eq("is_public", true)
-      .single();
+      .single());
     return data ? { id: data.league_id, name: data.name } : null;
   }
   if (leagueId) {
-    const { data } = await supabase
+    const { data } = await retrySupabase(() => supabase
       .from("leagues")
       .select("league_id, name")
       .eq("league_id", leagueId)
       .eq("is_public", true)
-      .single();
+      .single());
     return data ? { id: data.league_id, name: data.name } : null;
   }
   return null;
@@ -40,19 +40,20 @@ export default function GameScoresWidget({ params }: { params: WidgetParams }) {
   const [leagueName, setLeagueName] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [empty, setEmpty] = useState(false);
 
   useEffect(() => {
     const fetchGames = async () => {
       if (!params.leagueId && !params.leagueSlug) {
-        setError("No league specified");
+        setError("No league specified in the embed URL.");
         setLoading(false);
         return;
       }
 
       try {
-        const league = await resolvePublicLeague(params.leagueId, params.leagueSlug);
+        const league = await withRetry(() => resolvePublicLeague(params.leagueId, params.leagueSlug));
         if (!league) {
-          setError("League not found");
+          setError("League not found or not public.");
           setLoading(false);
           return;
         }
@@ -62,15 +63,21 @@ export default function GameScoresWidget({ params }: { params: WidgetParams }) {
         const db = getSupabaseForLeague(leagueKey);
         const dataLeagueId = getDataLeagueId(leagueKey, league.id);
 
-        const { data: gameResults, error: viewError } = await db
+        const { data: gameResults, error: viewError } = await retrySupabase(() => db
           .from("v_game_results")
           .select("*")
           .eq("league_id", dataLeagueId)
           .order("match_time", { ascending: false })
-          .limit(20);
+          .limit(MAX_WIDGET_ROWS));
 
-        if (viewError || !gameResults || gameResults.length === 0) {
-          setError("No recent games found");
+        if (viewError) {
+          setError("We couldn't load games right now. Please try again later.");
+          setLoading(false);
+          return;
+        }
+
+        if (!gameResults || gameResults.length === 0) {
+          setEmpty(true);
           setLoading(false);
           return;
         }
@@ -93,9 +100,14 @@ export default function GameScoresWidget({ params }: { params: WidgetParams }) {
           );
         }
 
-        setGames(results.slice(0, 10));
+        const sliced = results.slice(0, 10);
+        if (sliced.length === 0) {
+          setEmpty(true);
+        } else {
+          setGames(sliced);
+        }
       } catch {
-        setError("Failed to load game scores");
+        setError("Something went wrong while loading games.");
       } finally {
         setLoading(false);
       }
@@ -132,7 +144,7 @@ export default function GameScoresWidget({ params }: { params: WidgetParams }) {
   const displayGames = games.slice(0, maxGames);
 
   return (
-    <WidgetLayout params={params} loading={loading} error={error}>
+    <WidgetLayout params={params} loading={loading} error={error} empty={empty} emptyMessage="No games have been played yet.">
       {leagueName && (
         <div className="flex items-center gap-2 mb-3">
           <div className="w-2 h-5 rounded-full" style={{ backgroundColor: primaryColor }} />

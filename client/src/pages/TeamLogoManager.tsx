@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation, useParams } from "wouter";
 import { supabase } from "@/lib/supabase";
+import { fetchLeagueChildren } from "@/lib/leagueChildren";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import { TeamLogoUploader } from "@/components/TeamLogoUploader";
 import { TeamLogo, invalidateLogoCache } from "@/components/TeamLogo";
@@ -57,12 +58,9 @@ export default function TeamLogoManager() {
         setLeague(leagueData);
         setIsOwner(currentUser?.id === leagueData.user_id);
 
-        const { data: childCompetitions } = await supabase
-          .from("leagues")
-          .select("league_id")
-          .eq("parent_league_id", leagueData.league_id);
+        const childCompetitions = await fetchLeagueChildren(leagueData.league_id);
 
-        const childIds = (childCompetitions || []).map((c: any) => c.league_id);
+        const childIds = childCompetitions.map((c) => c.league_id);
         const isParent = childIds.length > 0;
         const queryLeagueIds = isParent ? [leagueData.league_id, ...childIds] : [leagueData.league_id];
 

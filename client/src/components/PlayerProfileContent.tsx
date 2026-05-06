@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Trophy, Filter } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
@@ -11,11 +10,14 @@ import { generatePlayerAnalysis, type PlayerAnalysisData } from "@/lib/ai-analys
 import { TeamLogo } from "@/components/TeamLogo";
 import { PlayerBanner } from "@/components/PlayerBanner";
 import { useTeamBranding } from "@/hooks/useTeamBranding";
+import { useReadableTeamColor } from "@/hooks/useReadableColor";
 import { namesMatch, getMostCompleteName, slugToName, type PlayerMatch } from "@/lib/fuzzyMatch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import ShotChart, { type ShotData } from "@/components/ShotChart";
 import ShareableCard from "@/components/ShareableCard";
+import { withAlpha } from "@/lib/colorContrast";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
+import { getTeamLogoCached } from "@/utils/teamLogoCache";
 
 // Only the columns actually consumed by this profile view, so we never
 // pull every column of the (wide) players table on a cold load.
@@ -182,30 +184,25 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
   const [careerStatsTab, setCareerStatsTab] = useState<string>("averages");
   const [photoUploading, setPhotoUploading] = useState(false);
   // Cache-buster appended to photo URLs so the browser/CDN doesn't serve a
-  // stale (cached) version of the same storage path. Initialized on mount so
-  // every page load gets a fresh URL (avoids cross-session staleness from
-  // pre-bg-removal uploads), and bumped after every successful upload.
-  const [photoCacheBuster, setPhotoCacheBuster] = useState<number>(() => Date.now());
+  // stale (cached) version of the same storage path. Initialized to 0 so a
+  // normal page visit reuses the existing CDN cache (Date.now() on every
+  // mount was forcing a fresh fetch on every visit and noticeably delaying
+  // the banner photo). Only bumped after a successful upload so the freshly
+  // uploaded image appears immediately.
+  const [photoCacheBuster, setPhotoCacheBuster] = useState<number>(0);
   const [showFocusAdjuster, setShowFocusAdjuster] = useState(false);
   const [tempFocusY, setTempFocusY] = useState<number>(50);
   const [savingFocus, setSavingFocus] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { primaryColor: brandedPrimary, colors: brandColors } = useTeamBranding({
+  const { primaryColor: brandedPrimary } = useTeamBranding({
     teamName: playerInfo?.team || "",
     leagueId: playerInfo?.leagueId || "",
     enabled: !brandColorOverride && !!playerInfo?.team && !!playerInfo?.leagueId,
   });
 
   const primaryColor = brandColorOverride || brandedPrimary;
-
-  const primaryColorAlpha = (opacity: number) => {
-    if (!brandColorOverride && brandColors?.primaryRgb) {
-      const { r, g, b } = brandColors.primaryRgb;
-      return `rgba(${r}, ${g}, ${b}, ${opacity})`;
-    }
-    return primaryColor;
-  };
+  const readablePrimary = useReadableTeamColor(primaryColor);
 
   const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -486,56 +483,174 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
   useEffect(() => {
     if (!playerSlug) return;
 
+    // Track a scheduled transient-retry timeout so we can cancel it
+    // when the slug changes or the component unmounts (avoids stale
+    // state updates and orphaned retry churn).
+    let pendingRetryTimeout: number | null = null;
+    let cancelled = false;
+    // Bound transient retries — three attempts (the original call + two
+    // re-queues) is enough to ride out an auth/RLS bootstrap race
+    // without spinning forever on a persistent backend outage.
+    const MAX_TRANSIENT_RETRIES = 2;
+    let transientRetryCount = 0;
+
     const fetchPlayerData = async () => {
+      if (cancelled) return;
       setLoading(true);
+      // When a transient retry is scheduled below we set this flag so
+      // the function-level finally does not flip loading to false and
+      // briefly render an empty profile shell between attempts.
+      let scheduledTransientRetry = false;
       try {
         let initialPlayer: any = null;
         const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(playerSlug);
 
+        // Direct slug navigation races auth/session/RLS bootstrap, which
+        // means the very first players-table lookup can transiently come
+        // back empty (a PGRST116 "no rows" response) or with a network /
+        // 5xx / statement-timeout error even though the slug is valid.
+        // We therefore retry every empty/failing result exactly once with
+        // a small backoff before surfacing the destructive "Player Not
+        // Found" toast — only a *second* "no rows" response is treated
+        // as a definitive miss.
+        const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
+        const isNoRowError = (err: { code?: string; message?: string } | null | undefined) =>
+          !!err && (err.code === 'PGRST116' || /no rows|0 rows/i.test(err?.message || ''));
+
+        type LookupOutcome<T> =
+          | { kind: 'found'; data: T }
+          | { kind: 'empty' }       // definitive: the row really does not exist
+          | { kind: 'transient' };  // both attempts hit a non-deterministic failure
+
+        const lookupWithRetry = async <T,>(
+          run: () => Promise<{ data: T | null; error: { code?: string; message?: string } | null }>,
+        ): Promise<LookupOutcome<T>> => {
+          let lastWasNoRow = false;
+          let lastWasTransient = false;
+          for (let attempt = 0; attempt < 2; attempt++) {
+            const { data, error } = await run();
+            if (data) return { kind: 'found', data };
+            if (!error || isNoRowError(error)) {
+              lastWasNoRow = true;
+              lastWasTransient = false;
+            } else {
+              lastWasTransient = true;
+              lastWasNoRow = false;
+            }
+            if (attempt === 0) await sleep(400);
+          }
+          if (lastWasNoRow) return { kind: 'empty' };
+          if (lastWasTransient) return { kind: 'transient' };
+          return { kind: 'empty' };
+        };
+
+        let lookupTransient = false;
+
+        type PlayerRow = Record<string, any>;
+
         if (isUUID) {
-          const { data, error } = await supabase.from('players').select(PLAYER_PROFILE_COLUMNS).eq('id', playerSlug).single();
-          if (data && !error) initialPlayer = data;
+          const r = await lookupWithRetry<PlayerRow>(() =>
+            supabase.from('players').select(PLAYER_PROFILE_COLUMNS).eq('id', playerSlug).single()
+          );
+          if (r.kind === 'found') initialPlayer = r.data;
+          if (r.kind === 'transient') lookupTransient = true;
         } else {
-          const { data, error } = await supabase.from('players').select(PLAYER_PROFILE_COLUMNS).eq('slug', playerSlug).single();
-          if (data && !error) initialPlayer = data;
+          const r = await lookupWithRetry<PlayerRow>(() =>
+            supabase.from('players').select(PLAYER_PROFILE_COLUMNS).eq('slug', playerSlug).single()
+          );
+          if (r.kind === 'found') initialPlayer = r.data;
+          if (r.kind === 'transient') lookupTransient = true;
 
-          if (!initialPlayer) {
+          if (!initialPlayer && !lookupTransient) {
+            // Step 1: re-query by slug without .single() — recovers from
+            // transient PGRST116 failures on the primary lookup and also
+            // handles hyphenated surnames (e.g. "Wise-Malcolm") where
+            // slugToName() would convert the hyphen to a space, breaking
+            // the name-based fallback below.
+            const slugReRun = async () => {
+              const { data, error } = await supabase
+                .from('players')
+                .select(PLAYER_PROFILE_COLUMNS)
+                .eq('slug', playerSlug)
+                .limit(1);
+              const rows = data ?? [];
+              return { data: rows.length > 0 ? rows[0] : null, error };
+            };
+            const slugRetry = await lookupWithRetry<PlayerRow>(slugReRun);
+            if (slugRetry.kind === 'found') initialPlayer = slugRetry.data;
+            if (slugRetry.kind === 'transient') lookupTransient = true;
+          }
+
+          if (!initialPlayer && !lookupTransient) {
             const searchName = slugToName(playerSlug);
-            // Slug lookup failed — fall back to a small prefix-bounded
-            // search.
+            // Step 2: name-based ilike search for legacy slugs that have no
+            // `slug` column entry yet.
             //
-            // The previous code paged through `players` with
-            // `.limit(10000)` when no direct ilike match was found,
-            // scanning the whole table on every cold profile load. We
-            // now:
-            //   * use a prefix `ilike('full_name', '${name}%')` so an
-            //     index on `full_name` can serve the lookup instead of
-            //     a full sequential scan, and
-            //   * project only the columns this component actually
-            //     consumes via PLAYER_PROFILE_COLUMNS.
-            //
-            // The slug column is the canonical identifier; this
-            // fallback only exists for legacy human-readable URLs.
-            const { data: directMatch, error: directError } = await supabase
-              .from('players')
-              .select(PLAYER_PROFILE_COLUMNS)
-              .ilike('full_name', `${searchName}%`)
-              .limit(10);
-
-            if (directMatch && directMatch.length > 0 && !directError) {
-              initialPlayer = directMatch.find(player => namesMatch(player.full_name, searchName)) || directMatch[0];
+            // NOTE: slugToName converts all hyphens to spaces, so hyphenated
+            // surnames won't match here — that's why we do the slug re-query
+            // above first as the primary recovery path.
+            const fallbackRun = async () => {
+              const { data, error } = await supabase
+                .from('players')
+                .select(PLAYER_PROFILE_COLUMNS)
+                .ilike('full_name', `${searchName}%`)
+                .limit(10);
+              const rows = data ?? [];
+              return {
+                data: rows.length > 0 ? rows : null,
+                error,
+              };
+            };
+            const fallback = await lookupWithRetry<PlayerRow[]>(fallbackRun);
+            if (fallback.kind === 'transient') lookupTransient = true;
+            if (fallback.kind === 'found') {
+              initialPlayer =
+                fallback.data.find((player) => namesMatch(player.full_name, searchName)) ||
+                fallback.data[0];
             }
           }
         }
 
         if (!initialPlayer) {
+          // Bail without toasting if the user navigated away or the
+          // slug changed while our awaited lookups were in flight —
+          // avoids a stale toast firing on a no-longer-mounted view.
+          if (cancelled) return;
+          if (lookupTransient) {
+            if (transientRetryCount < MAX_TRANSIENT_RETRIES) {
+              // Re-queue with the loading skeleton still visible.
+              transientRetryCount++;
+              scheduledTransientRetry = true;
+              console.warn(
+                `Player lookup transient failure (attempt ${transientRetryCount}/${MAX_TRANSIENT_RETRIES}), retrying:`,
+                playerSlug,
+              );
+              pendingRetryTimeout = window.setTimeout(() => {
+                pendingRetryTimeout = null;
+                if (!cancelled) fetchPlayerData();
+              }, 1500);
+              return;
+            }
+            // Exhausted retries on a transient backend failure — this
+            // is NOT a definitive "no such player", so surface a
+            // generic load error instead of the misleading
+            // "Player Not Found" toast.
+            console.error('Player lookup transient failure exhausted:', playerSlug);
+            toast({
+              title: "Couldn't load player",
+              description: "We're having trouble reaching the server. Please try again in a moment.",
+              variant: "destructive",
+            });
+            return;
+          }
+          // Definitive no-row result after the retry — the slug really
+          // doesn't map to a player.
           console.error('❌ Could not find player:', playerSlug);
           toast({
             title: "Player Not Found",
             description: "Could not find player with the specified identifier",
             variant: "destructive",
           });
-          setLoading(false);
           return;
         }
 
@@ -628,80 +743,81 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
         // career while preventing unbounded scans on players with
         // anomalously large rowsets.
         const STATS_PER_PLAYER_LIMIT = 1000;
-        const statsResults = await Promise.all(
-          playerIds.map(async (pid) => {
-            const { data, error } = await supabase
+        // Project only the columns the profile, career stats, shot
+        // chart and on/off filtering actually consume. `select('*')`
+        // pulls the entire (very wide) player_stats row including
+        // sequence numbers, raw FIBA payload fields, period splits,
+        // etc. that the UI never uses — that wasted ~5x bytes per row
+        // on the wire and made cold-cache loads noticeably slower.
+        //
+        // NOTE: `game_date` and `opponent` are deliberately NOT in
+        // this projection. They do not exist in the live Supabase
+        // `player_stats` schema (verified: requesting them returns
+        // PostgREST 42703 "column does not exist"). The UI handles
+        // their absence gracefully:
+        //   - sort/display fallback: `stat.game_date || stat.created_at`
+        //   - opponent is hydrated from `game_schedule` in the
+        //     background enrichment (gameKeyMap lookup) using the
+        //     player's `team_name` vs hometeam/awayteam.
+        const STATS_COLUMNS = [
+          'id', 'player_id', 'league_id', 'user_id',
+          'created_at', 'game_key',
+          'full_name', 'firstname', 'familyname',
+          'team_name', 'team_id',
+          'playingposition', 'shirtnumber',
+          'sminutes',
+          'spoints',
+          'sreboundstotal', 'sreboundsoffensive', 'sreboundsdefensive',
+          'sassists',
+          'ssteals',
+          'sblocks',
+          'sturnovers',
+          'sfieldgoalsmade', 'sfieldgoalsattempted',
+          'sthreepointersmade', 'sthreepointersattempted',
+          'sfreethrowsmade', 'sfreethrowsattempted',
+          'eff_1', 'eff_2', 'eff_3', 'eff_4', 'eff_5', 'eff_6', 'eff_7',
+        ].join(',');
+
+        // Phase A: fan out the per-id stats fetch in parallel with the
+        // matched-league lookup. Previously these ran sequentially.
+        const matchLeagueIds = Array.from(
+          new Set(matches.map((m) => m.league_id).filter(Boolean))
+        );
+
+        type LeagueInfo = { name: string; parent_league_id?: string | null; age_group?: string | null; stop?: number | null };
+        type LeagueRow = { league_id: string } & LeagueInfo;
+
+        const statsPromise = Promise.all(
+          playerIds.map((pid) =>
+            supabase
               .from('player_stats')
-              .select('*')
+              .select(STATS_COLUMNS)
               .eq('player_id', pid)
               .order('created_at', { ascending: false })
-              .limit(STATS_PER_PLAYER_LIMIT);
-            return { data, error };
-          })
+              .limit(STATS_PER_PLAYER_LIMIT)
+          )
         );
+
+        const matchLeaguesPromise: Promise<{ data: LeagueRow[] }> =
+          matchLeagueIds.length > 0
+            ? Promise.resolve(
+                supabase
+                  .from('leagues')
+                  .select('league_id, name, parent_league_id, age_group, stop')
+                  .in('league_id', matchLeagueIds)
+              ).then(({ data }) => ({ data: (data as LeagueRow[] | null) || [] }))
+            : Promise.resolve({ data: [] });
+
+        // Render the banner from the basic players-table info before
+        // we wait on stats so a slow / timing-out player_stats query
+        // doesn't leave the page blank.
+        setPlayerInfo(pInfo);
+
+        const statsResults = await statsPromise;
+
         const firstError = statsResults.find(r => r.error)?.error || null;
-        const seenStatIds = new Set<string>();
-        const mergedStats: any[] = [];
-        for (const r of statsResults) {
-          for (const row of (r.data || [])) {
-            const k = row.id || `${row.player_id}::${row.game_key}`;
-            if (seenStatIds.has(k)) continue;
-            seenStatIds.add(k);
-            mergedStats.push(row);
-          }
-        }
-        mergedStats.sort((a, b) => {
-          const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
-          const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
-          return tb - ta;
-        });
-        const stats = mergedStats;
-        const statsError = firstError;
-
-        const uniqueLeagueIds = Array.from(new Set([
-          ...matches.map(m => m.league_id),
-          ...(stats || []).map((s: any) => s.league_id),
-        ].filter(Boolean)));
-
-        const leagueInfoLocal = new Map<string, { name: string; parent_league_id?: string | null; age_group?: string | null; stop?: number | null }>();
-        const leagueMapLocal = new Map<string, string>();
-
-        if (uniqueLeagueIds.length > 0) {
-          const { data: leaguesData } = await supabase
-            .from('leagues')
-            .select('league_id, name, parent_league_id, age_group, stop')
-            .in('league_id', uniqueLeagueIds);
-
-          if (leaguesData) {
-            const parentIds: string[] = [];
-            leaguesData.forEach(league => {
-              leagueMapLocal.set(league.league_id, league.name);
-              leagueInfoLocal.set(league.league_id, {
-                name: league.name,
-                parent_league_id: league.parent_league_id,
-                age_group: league.age_group,
-                stop: league.stop,
-              });
-              if (league.parent_league_id && !uniqueLeagueIds.includes(league.parent_league_id)) {
-                parentIds.push(league.parent_league_id);
-              }
-            });
-
-            const uniqueParentIds = Array.from(new Set(parentIds));
-            if (uniqueParentIds.length > 0) {
-              const { data: parentLeagues } = await supabase
-                .from('leagues').select('league_id, name').in('league_id', uniqueParentIds);
-              if (parentLeagues) {
-                parentLeagues.forEach(pl => leagueMapLocal.set(pl.league_id, pl.name));
-              }
-            }
-
-            setLeagueNames(leagueMapLocal);
-          }
-        }
-
-        if (statsError) {
-          console.error('❌ Error fetching player stats:', statsError);
+        if (firstError) {
+          console.error('❌ Error fetching player stats:', firstError);
           toast({
             title: "Error Loading Stats",
             description: "Failed to load player statistics",
@@ -711,86 +827,38 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
           return;
         }
 
-        let statsWithOpponents = stats || [];
-        if (stats && stats.length > 0) {
-          const gameKeys = Array.from(new Set(stats.map(stat => stat.game_key).filter(Boolean)));
-
-          if (gameKeys.length > 0) {
-            const { data: gamesData, error: gamesError } = await supabase
-              .from('game_schedule').select('game_key, hometeam, awayteam').in('game_key', gameKeys);
-
-            if (!gamesError && gamesData && gamesData.length > 0) {
-              const gameKeyMap = new Map<string, { hometeam: string; awayteam: string }>();
-              gamesData.forEach(game => {
-                if (game.game_key) gameKeyMap.set(game.game_key, { hometeam: game.hometeam, awayteam: game.awayteam });
-              });
-
-              statsWithOpponents = stats.map(stat => {
-                let derivedOpponent = undefined;
-                if (stat.game_key) {
-                  const gameInfo = gameKeyMap.get(stat.game_key);
-                  if (gameInfo) {
-                    const playerTeamNorm = (stat.team_name || '').trim().toLowerCase();
-                    const homeTeamNorm = (gameInfo.hometeam || '').trim().toLowerCase();
-                    const awayTeamNorm = (gameInfo.awayteam || '').trim().toLowerCase();
-                    if (playerTeamNorm === homeTeamNorm) derivedOpponent = gameInfo.awayteam;
-                    else if (playerTeamNorm === awayTeamNorm) derivedOpponent = gameInfo.hometeam;
-                  }
-                }
-                return { ...stat, opponent: derivedOpponent || stat.opponent };
-              });
-            }
-          }
-
-          const userId = stats[0].user_id;
-          if (userId) {
-            const { data: leaguesData } = await supabase
-              .from('leagues').select('name, slug, user_id').eq('user_id', userId).eq('is_public', true);
-
-            if (leaguesData && leaguesData.length > 0) {
-              let actualLeague = leaguesData.find(league =>
-                league.name.toLowerCase().includes('uwe') && league.name.toLowerCase().includes('d1')
-              );
-              if (!actualLeague) actualLeague = leaguesData[0];
-              setPlayerLeagues([{ id: actualLeague.slug, name: actualLeague.name, slug: actualLeague.slug }]);
-            } else {
-              setPlayerLeagues([]);
-            }
+        const seenStatIds = new Set<string>();
+        const stats: any[] = [];
+        for (const r of statsResults) {
+          const rows = (r.data as any[] | null) || [];
+          for (const row of rows) {
+            const k = row.id || `${row.player_id}::${row.game_key}`;
+            if (seenStatIds.has(k)) continue;
+            seenStatIds.add(k);
+            stats.push(row);
           }
         }
-
-        statsWithOpponents = statsWithOpponents.map((stat: any) => {
-          const lid = stat.league_id || '';
-          const info = leagueInfoLocal.get(lid);
-          let groupKey: string;
-          let groupLabel: string;
-          if (info?.parent_league_id) {
-            const stopPart = info.stop != null ? `::stop${info.stop}` : '';
-            const agePart = info.age_group ? `::${info.age_group}` : '';
-            groupKey = `${info.parent_league_id}${agePart}${stopPart}`;
-            const parentName = leagueMapLocal.get(info.parent_league_id) || info.parent_league_id;
-            const ageSuffix = info.age_group ? ` ${info.age_group}` : '';
-            const stopSuffix = info.stop != null ? ` Stop ${info.stop}` : '';
-            groupLabel = `${parentName}${ageSuffix}${stopSuffix}`;
-          } else {
-            groupKey = lid;
-            groupLabel = leagueMapLocal.get(lid) || lid;
-          }
-          return { ...stat, _groupKey: groupKey, _groupLabel: groupLabel };
+        stats.sort((a, b) => {
+          const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+          const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+          return tb - ta;
         });
 
-        setPlayerStats(statsWithOpponents);
+        // Render unenriched stats immediately so the loading spinner
+        // clears as soon as the box scores are in hand. Group labels
+        // and opponents will hydrate from the background enrichment
+        // pass below.
+        setPlayerStats(stats);
+        setPlayerInfo(pInfo);
 
-        if (statsWithOpponents && statsWithOpponents.length > 0 && statsWithOpponents[0].players) {
-          const sortedByGameDate = [...statsWithOpponents].sort((a, b) => {
-            const dateA = a.game_date ? new Date(a.game_date).getTime() : 0;
-            const dateB = b.game_date ? new Date(b.game_date).getTime() : 0;
-            return dateB - dateA;
-          });
-          const mostRecentStat = sortedByGameDate[0] || statsWithOpponents[0];
+        const gamesPlayed = stats.filter(stat => parseMinutesPlayed(stat) > 0);
+
+        if (gamesPlayed.length > 0) {
+          const sourceStats = gamesPlayed.length > 0 ? gamesPlayed : stats;
+          const mostRecentStat = sourceStats[0];
 
           const normalizeTeam = (t: string) => t.trim().toLowerCase();
-          const allTeams = statsWithOpponents
+          const allTeams = sourceStats
             .map(s => s.team_name || s.team)
             .filter((team): team is string => Boolean(team));
           const teamMap = new Map<string, string>();
@@ -798,62 +866,25 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
             const norm = normalizeTeam(team);
             if (!teamMap.has(norm)) teamMap.set(norm, team);
           });
-          const uniqueTeams = Array.from(teamMap.values());
           const currentTeam = mostRecentStat.team_name || mostRecentStat.team || 'Unknown Team';
           const currentTeamNorm = normalizeTeam(currentTeam);
-          const previousTeams = uniqueTeams.filter(t => normalizeTeam(t) !== currentTeamNorm);
+          const previousTeams = Array.from(teamMap.values()).filter(t => normalizeTeam(t) !== currentTeamNorm);
+
+          const resolvedName = mostRecentStat.full_name
+            || `${mostRecentStat.firstname || ''} ${mostRecentStat.familyname || ''}`.trim()
+            || pInfo.name
+            || 'Unknown Player';
 
           pInfo = {
-            name: mostRecentStat.players?.full_name || mostRecentStat.full_name || mostRecentStat.name || `${mostRecentStat.firstname || ''} ${mostRecentStat.familyname || ''}`.trim() || 'Unknown Player',
+            ...pInfo,
+            name: resolvedName,
             team: currentTeam,
             position: pInfo.position || mostRecentStat.playingposition || mostRecentStat.position,
             number: pInfo.number ?? mostRecentStat.shirtnumber ?? mostRecentStat.number,
-            leagueId: mostRecentStat.league_id,
-            playerId: pInfo.playerId,
-            photoPath: pInfo.photoPath,
-            photoFocusY: pInfo.photoFocusY,
+            leagueId: mostRecentStat.league_id || pInfo.leagueId,
             previousTeams: previousTeams.length > 0 ? previousTeams : undefined,
-            height: pInfo.height,
-            heightCm: pInfo.heightCm,
-            dateOfBirth: pInfo.dateOfBirth,
           };
-        }
-
-        setPlayerInfo(pInfo);
-
-        const gamesPlayed = (stats || []).filter(stat => parseMinutesPlayed(stat) > 0);
-
-        if (gamesPlayed && gamesPlayed.length > 0) {
-          if (!pInfo || !pInfo.name || pInfo.name === 'Unknown Player') {
-            const fallbackName = gamesPlayed[0].players?.full_name || gamesPlayed[0].full_name || gamesPlayed[0].name || `${gamesPlayed[0].firstname || ''} ${gamesPlayed[0].familyname || ''}`.trim() || 'Unknown Player';
-            const fallbackTeam = gamesPlayed[0].team_name || gamesPlayed[0].team || 'Unknown Team';
-
-            const normalizeTeamFallback = (t: string) => t.trim().toLowerCase();
-            const allTeamsFallback = gamesPlayed.map(s => s.team_name || s.team).filter((team): team is string => Boolean(team));
-            const teamMapFallback = new Map<string, string>();
-            allTeamsFallback.forEach(team => {
-              const norm = normalizeTeamFallback(team);
-              if (!teamMapFallback.has(norm)) teamMapFallback.set(norm, team);
-            });
-            const uniqueTeamsFallback = Array.from(teamMapFallback.values());
-            const fallbackTeamNorm = normalizeTeamFallback(fallbackTeam);
-            const previousTeamsFallback = uniqueTeamsFallback.filter(t => normalizeTeamFallback(t) !== fallbackTeamNorm);
-
-            setPlayerInfo({
-              name: fallbackName,
-              team: fallbackTeam,
-              position: pInfo.position || gamesPlayed[0].playingposition || gamesPlayed[0].position,
-              number: pInfo.number ?? gamesPlayed[0].shirtnumber ?? gamesPlayed[0].number,
-              leagueId: gamesPlayed[0].league_id,
-              playerId: pInfo.playerId,
-              photoPath: pInfo.photoPath,
-              photoFocusY: pInfo.photoFocusY,
-              previousTeams: previousTeamsFallback.length > 0 ? previousTeamsFallback : undefined,
-              height: pInfo.height,
-              heightCm: pInfo.heightCm,
-              dateOfBirth: pInfo.dateOfBirth,
-            });
-          }
+          setPlayerInfo(pInfo);
 
           const totals = gamesPlayed.reduce((acc, game) => ({
             points: acc.points + (game.spoints || game.points || 0),
@@ -933,30 +964,190 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
           }
 
           if (pInfo && averages) {
+            // Fire-and-forget: the OpenAI roundtrip can take 3–8s on a
+            // cold function call and previously held the whole profile
+            // on the loading spinner. Now we let the page render
+            // immediately and hydrate the analysis blurb (and its small
+            // loading state) when the OpenAI request resolves.
             setAnalysisLoading(true);
-            try {
-              const analysisData: PlayerAnalysisData = {
-                name: pInfo.name,
-                games_played: averages.games_played,
-                avg_points: averages.avg_points,
-                avg_rebounds: averages.avg_rebounds,
-                avg_assists: averages.avg_assists,
-                avg_steals: averages.avg_steals,
-                avg_blocks: averages.avg_blocks,
-                fg_percentage: averages.fg_percentage,
-                three_point_percentage: averages.three_point_percentage,
-                ft_percentage: averages.ft_percentage,
-              };
-              const analysis = await generatePlayerAnalysis(analysisData);
-              setAiAnalysis(analysis);
-            } catch (error) {
-              console.error("❌ AI Analysis error:", error);
-              setAiAnalysis("Dynamic player with strong fundamentals and competitive drive.");
-            } finally {
-              setAnalysisLoading(false);
-            }
+            const analysisData: PlayerAnalysisData = {
+              name: pInfo.name,
+              games_played: averages.games_played,
+              avg_points: averages.avg_points,
+              avg_rebounds: averages.avg_rebounds,
+              avg_assists: averages.avg_assists,
+              avg_steals: averages.avg_steals,
+              avg_blocks: averages.avg_blocks,
+              fg_percentage: averages.fg_percentage,
+              three_point_percentage: averages.three_point_percentage,
+              ft_percentage: averages.ft_percentage,
+            };
+            generatePlayerAnalysis(analysisData)
+              .then((analysis) => setAiAnalysis(analysis))
+              .catch((error) => {
+                console.error("❌ AI Analysis error:", error);
+                setAiAnalysis("Dynamic player with strong fundamentals and competitive drive.");
+              })
+              .finally(() => setAnalysisLoading(false));
           }
         }
+
+        // Background enrichment: derive opponents from game_schedule and
+        // hydrate league names / parent labels / public-league pills.
+        // Runs as fire-and-forget so the profile renders as soon as the
+        // box scores are in hand; the stats list re-renders with
+        // opponents and group labels once these queries return.
+        (async () => {
+          try {
+            const matchLeaguesResp = await matchLeaguesPromise;
+            const leagueInfoLocal = new Map<string, LeagueInfo>();
+            const leagueMapLocal = new Map<string, string>();
+            const parentIds: string[] = [];
+            for (const league of matchLeaguesResp.data || []) {
+              leagueMapLocal.set(league.league_id, league.name);
+              leagueInfoLocal.set(league.league_id, {
+                name: league.name,
+                parent_league_id: league.parent_league_id,
+                age_group: league.age_group,
+                stop: league.stop,
+              });
+              if (league.parent_league_id) parentIds.push(league.parent_league_id);
+            }
+
+            const statsLeagueIds = new Set<string>(
+              stats.map((s) => s.league_id).filter(Boolean)
+            );
+            const extraLeagueIds = Array.from(statsLeagueIds).filter(
+              (lid) => !leagueInfoLocal.has(lid)
+            );
+            const gameKeys = Array.from(
+              new Set(stats.map((stat) => stat.game_key).filter(Boolean))
+            );
+            const userId = stats.length > 0 ? stats[0].user_id : null;
+
+            // Use service-role-backed endpoint for extra league info so that
+            // private child leagues (e.g. REBA SL age groups) resolve names
+            // and parent IDs correctly — the anon client is blocked by RLS.
+            const extraLeagueInfoFetch: Promise<Record<string, { name: string; parent_league_id: string | null; age_group: string | null; stop: number | null }>> =
+              extraLeagueIds.length > 0
+                ? fetch('/api/public/league-info', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids: extraLeagueIds }),
+                  }).then(r => r.ok ? r.json() : {}).catch(() => ({}))
+                : Promise.resolve({});
+
+            const [gamesResp, publicLeaguesResp, extraLeagueInfoMap] = await Promise.all([
+              gameKeys.length > 0
+                ? supabase
+                    .from('game_schedule')
+                    .select('game_key, hometeam, awayteam')
+                    .in('game_key', gameKeys)
+                : Promise.resolve({ data: [], error: null }),
+              userId
+                ? supabase
+                    .from('leagues')
+                    .select('name, slug, user_id')
+                    .eq('user_id', userId)
+                    .eq('is_public', true)
+                : Promise.resolve({ data: [], error: null }),
+              extraLeagueInfoFetch,
+            ]);
+
+            // Convert the server response back into the shape expected by the
+            // enrichment loop below (same fields as the old Supabase response).
+            const extraLeaguesResp = {
+              data: Object.entries(extraLeagueInfoMap as Record<string, { name: string; parent_league_id: string | null; age_group: string | null; stop: number | null }>).map(
+                ([league_id, info]) => ({ league_id, ...info })
+              ),
+            };
+
+            for (const league of (extraLeaguesResp.data || []) as LeagueRow[]) {
+              leagueMapLocal.set(league.league_id, league.name);
+              leagueInfoLocal.set(league.league_id, {
+                name: league.name,
+                parent_league_id: league.parent_league_id,
+                age_group: league.age_group,
+                stop: league.stop,
+              });
+              if (league.parent_league_id) parentIds.push(league.parent_league_id);
+            }
+
+            const uniqueParentIds = Array.from(new Set(parentIds)).filter(
+              (pid) => !leagueMapLocal.has(pid)
+            );
+            if (uniqueParentIds.length > 0) {
+              const { data: parentLeagues } = await supabase
+                .from('leagues')
+                .select('league_id, name')
+                .in('league_id', uniqueParentIds);
+              if (parentLeagues) {
+                parentLeagues.forEach((pl) => leagueMapLocal.set(pl.league_id, pl.name));
+              }
+            }
+
+            if (leagueMapLocal.size > 0) {
+              setLeagueNames(leagueMapLocal);
+            }
+
+            const gameKeyMap = new Map<string, { hometeam: string; awayteam: string }>();
+            for (const game of (gamesResp.data || []) as Array<{ game_key: string; hometeam: string; awayteam: string }>) {
+              if (game.game_key) gameKeyMap.set(game.game_key, { hometeam: game.hometeam, awayteam: game.awayteam });
+            }
+
+            const enriched = stats.map((stat) => {
+              let derivedOpponent: string | undefined;
+              if (stat.game_key) {
+                const gameInfo = gameKeyMap.get(stat.game_key);
+                if (gameInfo) {
+                  const playerTeamNorm = (stat.team_name || '').trim().toLowerCase();
+                  const homeTeamNorm = (gameInfo.hometeam || '').trim().toLowerCase();
+                  const awayTeamNorm = (gameInfo.awayteam || '').trim().toLowerCase();
+                  if (playerTeamNorm === homeTeamNorm) derivedOpponent = gameInfo.awayteam;
+                  else if (playerTeamNorm === awayTeamNorm) derivedOpponent = gameInfo.hometeam;
+                }
+              }
+
+              const lid = stat.league_id || '';
+              const info = leagueInfoLocal.get(lid);
+              let groupKey: string;
+              let groupLabel: string;
+              if (info?.parent_league_id) {
+                const stopPart = info.stop != null ? `::stop${info.stop}` : '';
+                const agePart = info.age_group ? `::${info.age_group}` : '';
+                groupKey = `${info.parent_league_id}${agePart}${stopPart}`;
+                const parentName = leagueMapLocal.get(info.parent_league_id) || info.parent_league_id;
+                const ageSuffix = info.age_group ? ` ${info.age_group}` : '';
+                const stopSuffix = info.stop != null ? ` Stop ${info.stop}` : '';
+                groupLabel = `${parentName}${ageSuffix}${stopSuffix}`;
+              } else {
+                groupKey = lid;
+                groupLabel = leagueMapLocal.get(lid) || lid;
+              }
+
+              return {
+                ...stat,
+                opponent: derivedOpponent || stat.opponent,
+                _groupKey: groupKey,
+                _groupLabel: groupLabel,
+              };
+            });
+
+            setPlayerStats(enriched);
+
+            const publicLeaguesData = (publicLeaguesResp.data || []) as Array<{ name: string; slug: string }>;
+            if (publicLeaguesData.length > 0) {
+              const actualLeague = publicLeaguesData.find((league) =>
+                league.name.toLowerCase().includes('uwe') && league.name.toLowerCase().includes('d1')
+              ) || publicLeaguesData[0];
+              setPlayerLeagues([{ id: actualLeague.slug, name: actualLeague.name, slug: actualLeague.slug }]);
+            } else {
+              setPlayerLeagues([]);
+            }
+          } catch (err) {
+            console.warn('[PlayerProfile] enrichment background error:', err);
+          }
+        })();
       } catch (error) {
         console.error('❌ PlayerProfileContent - Unexpected error:', error);
         toast({
@@ -965,11 +1156,24 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
           variant: "destructive",
         });
       } finally {
-        setLoading(false);
+        // Don't drop the skeleton when a transient retry is queued —
+        // we want the user to keep seeing the existing loading state
+        // rather than a blank profile shell between retry attempts.
+        if (!scheduledTransientRetry && !cancelled) {
+          setLoading(false);
+        }
       }
     };
 
     fetchPlayerData();
+
+    return () => {
+      cancelled = true;
+      if (pendingRetryTimeout !== null) {
+        window.clearTimeout(pendingRetryTimeout);
+        pendingRetryTimeout = null;
+      }
+    };
   }, [playerSlug]);
 
   const filteredStats = useMemo(() => {
@@ -1059,60 +1263,114 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
     enabled: playerIdsForShots.length > 0 && playerShotGameKeys.length > 0,
   });
 
-  const { data: playerOnOffRows = [] } = useQuery<PlayerOnOffRow[]>({
-    queryKey: ['player-on-off', playerIdsForShots],
+  // The on/off endpoint can also report `unavailable: true` (the view
+  // timed out and there is no cached snapshot to fall back to). When
+  // that happens for *every* linked player_id, we want to render a
+  // small "temporarily unavailable" placeholder instead of silently
+  // dropping the whole section, so the user can tell the difference
+  // between "this player has no on/off data" and "we couldn't fetch
+  // it right now". We collect both the merged rows and a single
+  // unavailable flag in one query result.
+  type PlayerOnOffResult = { rows: PlayerOnOffRow[]; unavailable: boolean };
+  const { data: playerOnOffResult } = useQuery<PlayerOnOffResult>({
+    queryKey: ['player-on-off', playerIdsForShots, nameVariations],
     queryFn: async () => {
-      if (playerIdsForShots.length === 0) return [];
+      if (playerIdsForShots.length === 0) return { rows: [], unavailable: false };
       // The player_on_off Supabase view is expensive on a cold plan cache
       // and can exceed the 30s statement_timeout when hit directly from
       // the browser. We proxy through `/api/player-on-off/:id`, which
       // caches results in-memory on the server and retries transient
       // statement_timeout errors. Issue one request per linked player id
-      // in parallel and merge/dedupe the rows.
+      // in parallel and merge/dedupe the rows. We pass the player's
+      // known name variations so the server can also pick up rows
+      // stored under a slightly different `player_name` (e.g.
+      // "M. Blazejewski" vs "Marcin Blazejewski").
+      const namesParam = nameVariations.length > 0
+        ? `?names=${encodeURIComponent(nameVariations.join('|'))}`
+        : '';
       const results = await Promise.all(
         playerIdsForShots.map(async (pid) => {
           try {
-            const res = await fetch(`/api/player-on-off/${pid}`);
+            const res = await fetch(`/api/player-on-off/${pid}${namesParam}`);
             if (!res.ok) {
               console.error('player_on_off endpoint error for', pid, res.status);
-              return [] as PlayerOnOffRow[];
+              return { rows: [] as PlayerOnOffRow[], unavailable: true };
             }
             const j = await res.json();
-            return (j.rows || []) as PlayerOnOffRow[];
+            return {
+              rows: (j.rows || []) as PlayerOnOffRow[],
+              unavailable: Boolean(j.unavailable),
+            };
           } catch (err) {
             console.error('player_on_off fetch failed for', pid, err);
-            return [] as PlayerOnOffRow[];
+            return { rows: [] as PlayerOnOffRow[], unavailable: true };
           }
         })
       );
       const seen = new Set<string>();
       const merged: PlayerOnOffRow[] = [];
-      for (const arr of results) {
-        for (const row of arr) {
+      for (const r of results) {
+        for (const row of r.rows) {
           const key = `${row.player_id}::${row.game_key}`;
           if (seen.has(key)) continue;
           seen.add(key);
           merged.push(row);
         }
       }
-      return merged;
+      // Render the placeholder when at least one per-id response came
+      // back unavailable AND we have no rows to show. A single successful
+      // id with rows is still enough to render the card; but if every id
+      // we *got data for* was empty and at least one id was unavailable,
+      // we surface the placeholder so the user can tell the difference
+      // between "this player has no on/off data" and "we couldn't fetch
+      // it right now".
+      const anyUnavailable = results.some((r) => r.unavailable);
+      const unavailable = anyUnavailable && merged.length === 0;
+      return { rows: merged, unavailable };
     },
     enabled: playerIdsForShots.length > 0,
     staleTime: 5 * 60 * 1000,
   });
 
+  const playerOnOffRows = playerOnOffResult?.rows ?? [];
+  const playerOnOffUnavailable = playerOnOffResult?.unavailable ?? false;
+
   const onOffSummary = useMemo(() => {
     if (!playerOnOffRows || playerOnOffRows.length === 0 || !playerInfo?.name) return null;
 
     const canonicalName = playerInfo.name;
-    const allowedGameKeys = new Set(
-      filteredStats.map(s => s.game_key).filter((k): k is string => Boolean(k))
+    const playerIdSet = new Set(playerIdsForShots);
+    const nameVariationSet = new Set(
+      nameVariations.map((n) => (n || '').trim().toLowerCase()).filter(Boolean)
     );
+    // Only restrict by game keys when the user has narrowed the league
+    // filter — when "All Competitions" is selected we want every row
+    // the proxy returned, not just the ones that happen to also appear
+    // in the game log. This also avoids dropping rows from leagues
+    // where the player_stats fan-out missed a row but the on/off view
+    // still has data for it.
+    const restrictByGameKeys = selectedLeagueFilter !== 'all';
+    const allowedGameKeys = restrictByGameKeys
+      ? new Set(filteredStats.map((s) => s.game_key).filter((k): k is string => Boolean(k)))
+      : null;
 
-    const rows = playerOnOffRows.filter(r => {
-      const nameOk = r.player_name && namesMatch(canonicalName, r.player_name);
-      const keyOk = allowedGameKeys.size === 0 || allowedGameKeys.has(r.game_key);
-      return nameOk && keyOk;
+    const rows = playerOnOffRows.filter((r) => {
+      // Match the row to this player by ANY of: linked player_id,
+      // exact match against a known name variation, or the existing
+      // fuzzy namesMatch against the canonical name. The earlier code
+      // only used the fuzzy check, which dropped rows whenever the
+      // view stored a different format ("M. Blazejewski" vs
+      // "Marcin Blazejewski") and made the section vanish.
+      const idOk = r.player_id && playerIdSet.has(r.player_id);
+      const nameLower = (r.player_name || '').trim().toLowerCase();
+      const exactNameOk = nameLower.length > 0 && nameVariationSet.has(nameLower);
+      const fuzzyNameOk = r.player_name && namesMatch(canonicalName, r.player_name);
+      if (!idOk && !exactNameOk && !fuzzyNameOk) return false;
+
+      if (allowedGameKeys && allowedGameKeys.size > 0) {
+        return allowedGameKeys.has(r.game_key);
+      }
+      return true;
     });
 
     if (rows.length === 0) return null;
@@ -1144,7 +1402,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
 
     if (summary.every(m => m.on == null && m.off == null)) return null;
     return summary;
-  }, [playerOnOffRows, playerInfo?.name, filteredStats]);
+  }, [playerOnOffRows, playerInfo?.name, playerIdsForShots, nameVariations, filteredStats, selectedLeagueFilter]);
 
   const playerShotGamesWithKeys = useMemo(() => {
     if (!playerStats) return [];
@@ -1159,6 +1417,25 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
     () => getPlayerPhotoUrlCached(playerInfo?.photoPath ?? null, photoCacheBuster || undefined),
     [playerInfo?.photoPath, photoCacheBuster]
   );
+
+  // Resolve the team logo URL once for the share-card header band on all
+  // four ShareableCards rendered below (Season Averages, Shooting Splits,
+  // On/Off Impact, Shot Chart). Uses the same cached lookup as in-page
+  // <TeamLogo>, so it's typically a cache hit.
+  const [shareTeamLogoUrl, setShareTeamLogoUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setShareTeamLogoUrl(null);
+    const teamName = playerInfo?.team;
+    const leagueId = playerInfo?.leagueId;
+    if (!teamName || !leagueId) return;
+    void getTeamLogoCached({ leagueId, teamName }).then((url) => {
+      if (!cancelled) setShareTeamLogoUrl(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [playerInfo?.team, playerInfo?.leagueId]);
 
   // Separate photo for share/social graphics — uses photo_path (original/non-bg-removed).
   // Falls back to the bg-removed banner photo if no original is set so existing players
@@ -1266,7 +1543,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
     return (
       <div className="flex items-center justify-center py-20">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 mx-auto mb-4" style={{ borderColor: primaryColor }}></div>
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 mx-auto mb-4" style={{ borderColor: readablePrimary.accent }}></div>
           <p className="text-slate-500 dark:text-slate-400 text-sm">Loading player profile...</p>
         </div>
       </div>
@@ -1309,19 +1586,28 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
         <td className={`${ct} font-semibold`}>{row.eff.toFixed(1)}</td>
       </>
     );
+    // Advanced metrics
+    const tsDen = 2 * (row.fga + 0.44 * row.fta);
+    const ts = tsDen > 0 ? (row.pts / tsDen) * 100 : 0;
+    const efg = row.fga > 0 ? ((row.fgm + 0.5 * row.tpm) / row.fga) * 100 : 0;
+    const pps = row.fga > 0 ? row.pts / row.fga : 0;
+    const astTo = row.to > 0 ? row.ast / row.to : (row.ast > 0 ? Infinity : 0);
+    const tpar = row.fga > 0 ? row.tpa / row.fga : 0;
+    const ftr = row.fga > 0 ? row.fta / row.fga : 0;
+    const stk = (row.stl + row.blk) / gp;
+    const fmtRatio = (v: number) => (v === Infinity ? '∞' : v.toFixed(2));
     return (
       <>
         <td className={ct}>{gp}</td>
-        <td className={ct}>{row.eff.toFixed(1)}</td>
-        <td className={ct}>{(row.to / gp).toFixed(1)}</td>
-        <td className={ct}>{row.fg_pct.toFixed(1)}</td>
-        <td className={ct}>{row.tp_pct.toFixed(1)}</td>
-        <td className={ct}>{row.ft_pct.toFixed(1)}</td>
-        <td className={ct}>{(row.pts / gp).toFixed(1)}</td>
-        <td className={ct}>{(row.reb / gp).toFixed(1)}</td>
-        <td className={ct}>{(row.ast / gp).toFixed(1)}</td>
-        <td className={ct}>{(row.stl / gp).toFixed(1)}</td>
-        <td className={ct}>{(row.blk / gp).toFixed(1)}</td>
+        <td className={ct}>{formatMinutes(row.min / gp)}</td>
+        <td className={ct}>{ts.toFixed(1)}</td>
+        <td className={ct}>{efg.toFixed(1)}</td>
+        <td className={ct}>{pps.toFixed(2)}</td>
+        <td className={ct}>{fmtRatio(astTo)}</td>
+        <td className={ct}>{tpar.toFixed(2)}</td>
+        <td className={ct}>{ftr.toFixed(2)}</td>
+        <td className={ct}>{stk.toFixed(1)}</td>
+        <td className={`${ct} font-semibold`}>{row.eff.toFixed(1)}</td>
       </>
     );
   };
@@ -1362,84 +1648,429 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
       )}
 
       <div className="space-y-4 md:space-y-5 mt-4 md:mt-5">
-        {filteredSeasonAverages && (
-          <ShareableCard
-            title="Season Averages"
-            fileSlug="season-averages"
-            player={{
-              name: playerInfo?.name || "Player",
-              team: playerInfo?.team || "",
-              photoUrl: playerPhotoUrl,
-              primaryColor,
-            }}
+        {filteredSeasonAverages && (() => {
+          type StatTile = { value: number; label: string; rank?: number };
+          const seasonStats: StatTile[] = [
+            { value: filteredSeasonAverages.avg_points, label: "PTS", rank: playerRankings?.points },
+            { value: filteredSeasonAverages.avg_rebounds, label: "REB", rank: playerRankings?.rebounds },
+            { value: filteredSeasonAverages.avg_assists, label: "AST", rank: playerRankings?.assists },
+            { value: filteredSeasonAverages.avg_steals, label: "STL", rank: playerRankings?.steals },
+            { value: filteredSeasonAverages.avg_blocks, label: "BLK", rank: playerRankings?.blocks },
+            { value: filteredSeasonAverages.avg_efficiency, label: "EFF" },
+          ];
+          // Derive border / pill / track colours from the contrast-safe
+          // `onWhite` accent so very light team colours (white, pale yellow)
+          // still produce a visible tinted border, badge and progress track
+          // instead of vanishing into the white tile.
+          const shareAccent = readablePrimary.onWhite;
+          const shareTileBorder = withAlpha(shareAccent, 0.18);
+          const sharePillBg = withAlpha(shareAccent, 0.12);
+          const filterLabel = selectedLeagueFilter !== "all"
+            ? (leagueNames.get(selectedLeagueFilter) || 'Filtered')
+            : null;
+
+          const shareBlock = (
+            <div className="flex flex-col" style={{ gap: 20 }}>
+              <div className="flex items-center justify-between">
+                <span
+                  className="font-bold uppercase text-slate-500"
+                  style={{ fontSize: 18, letterSpacing: "0.18em" }}
+                >
+                  Season Averages
+                </span>
+                {filterLabel && (
+                  <span
+                    className="font-bold uppercase rounded-full"
+                    style={{
+                      backgroundColor: sharePillBg,
+                      color: shareAccent,
+                      fontSize: 14,
+                      letterSpacing: "0.1em",
+                      padding: "6px 14px",
+                    }}
+                  >
+                    {filterLabel}
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-3" style={{ gap: 18 }}>
+                {seasonStats.map((stat, i) => (
+                  <div
+                    key={i}
+                    className="rounded-2xl flex flex-col items-center text-center bg-white"
+                    style={{
+                      border: `1px solid ${shareTileBorder}`,
+                      boxShadow: "0 1px 3px rgba(15, 23, 42, 0.05)",
+                      padding: "28px 16px",
+                    }}
+                  >
+                    <div
+                      className="font-bold uppercase text-slate-500"
+                      style={{ fontSize: 16, letterSpacing: "0.14em", marginBottom: 14 }}
+                    >
+                      {stat.label}
+                    </div>
+                    <div
+                      className="font-black tabular-nums leading-none"
+                      style={{ color: shareAccent, fontSize: 72 }}
+                    >
+                      {stat.value.toFixed(1)}
+                    </div>
+                    <div
+                      className="flex items-center"
+                      style={{ marginTop: 16, height: 32 }}
+                    >
+                      {stat.rank ? (
+                        <span
+                          className="rounded-full font-bold tabular-nums"
+                          style={{
+                            backgroundColor: sharePillBg,
+                            color: shareAccent,
+                            fontSize: 14,
+                            letterSpacing: "0.06em",
+                            padding: "5px 12px",
+                          }}
+                        >
+                          {getOrdinalSuffix(stat.rank)}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+
+          return (
+            <ShareableCard
+              title="Season Averages"
+              fileSlug="season-averages"
+              player={{
+                name: playerInfo?.name || "Player",
+                team: playerInfo?.team || "",
+                photoUrl: playerPhotoUrl,
+                primaryColor,
+                teamLogoUrl: shareTeamLogoUrl,
+              }}
+              shareContent={shareBlock}
+              wide
+            >
+              {(() => {
+                const pageAccent = readablePrimary.body;
+                const pageTileBorder = withAlpha(readablePrimary.accent, 0.22);
+                const pagePillBg = withAlpha(readablePrimary.accent, 0.14);
+                return (
+                  <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                        Season Averages
+                      </span>
+                      {selectedLeagueFilter !== "all" && (
+                        <span
+                          className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
+                          style={{ backgroundColor: pagePillBg, color: pageAccent }}
+                        >
+                          {leagueNames.get(selectedLeagueFilter) || 'Filtered'}
+                        </span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-3 md:grid-cols-6 gap-2 md:gap-2.5">
+                      {seasonStats.map((stat, i) => (
+                        <div
+                          key={i}
+                          className="rounded-xl px-2 py-3 flex flex-col items-center text-center bg-white dark:bg-neutral-800/40"
+                          style={{ border: `1px solid ${pageTileBorder}`, boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)" }}
+                        >
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+                            {stat.label}
+                          </div>
+                          <div
+                            className="text-2xl md:text-3xl font-black tabular-nums leading-none"
+                            style={{ color: pageAccent }}
+                          >
+                            {stat.value.toFixed(1)}
+                          </div>
+                          <div className="mt-2 h-[18px] flex items-center">
+                            {stat.rank ? (
+                              <span
+                                className="px-1.5 py-0.5 rounded-full text-[9px] font-bold tracking-wide tabular-nums"
+                                style={{ backgroundColor: pagePillBg, color: pageAccent }}
+                              >
+                                {getOrdinalSuffix(stat.rank)}
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+            </ShareableCard>
+          );
+        })()}
+
+        {filteredSeasonAverages && (() => {
+          type ShootingTile = { value: number; label: string; rank?: number };
+          const shootingStats: ShootingTile[] = [
+            { value: filteredSeasonAverages.fg_percentage, label: "FG%", rank: playerRankings?.fg_percentage },
+            { value: filteredSeasonAverages.three_point_percentage, label: "3PT%", rank: playerRankings?.three_point_percentage },
+            { value: filteredSeasonAverages.ft_percentage, label: "FT%", rank: playerRankings?.ft_percentage },
+          ];
+          // Derive accents from the contrast-safe `onWhite` variant so light
+          // team colours (white / pale yellow) still produce a visible
+          // border, rank pill and progress track on the white tile.
+          const shareAccent = readablePrimary.onWhite;
+          const shareTileBorder = withAlpha(shareAccent, 0.18);
+          const sharePillBg = withAlpha(shareAccent, 0.12);
+          const shareTrackBg = withAlpha(shareAccent, 0.15);
+
+          const shareBlock = (
+            <div className="flex flex-col" style={{ gap: 24 }}>
+              <span
+                className="font-bold uppercase text-slate-500 block"
+                style={{ fontSize: 18, letterSpacing: "0.18em" }}
+              >
+                Shooting
+              </span>
+              <div className="grid grid-cols-3" style={{ gap: 22 }}>
+                {shootingStats.map((stat, i) => (
+                  <div
+                    key={i}
+                    className="rounded-2xl flex flex-col items-center text-center bg-white"
+                    style={{
+                      border: `1px solid ${shareTileBorder}`,
+                      boxShadow: "0 1px 3px rgba(15, 23, 42, 0.05)",
+                      padding: "32px 18px",
+                    }}
+                  >
+                    <div
+                      className="font-bold uppercase text-slate-500"
+                      style={{ fontSize: 18, letterSpacing: "0.14em", marginBottom: 16 }}
+                    >
+                      {stat.label}
+                    </div>
+                    <div
+                      className="font-black tabular-nums leading-none"
+                      style={{ color: shareAccent, fontSize: 84 }}
+                    >
+                      {formatPercentage(stat.value)}
+                    </div>
+                    <div
+                      className="flex items-center"
+                      style={{ marginTop: 18, height: 32 }}
+                    >
+                      {stat.rank ? (
+                        <span
+                          className="rounded-full font-bold tabular-nums"
+                          style={{
+                            backgroundColor: sharePillBg,
+                            color: shareAccent,
+                            fontSize: 14,
+                            letterSpacing: "0.06em",
+                            padding: "5px 12px",
+                          }}
+                        >
+                          {getOrdinalSuffix(stat.rank)}
+                        </span>
+                      ) : null}
+                    </div>
+                    <div
+                      className="w-full rounded-full overflow-hidden"
+                      style={{ backgroundColor: shareTrackBg, marginTop: 22, height: 8 }}
+                    >
+                      <div
+                        className="h-full rounded-full"
+                        style={{ width: `${Math.min(stat.value, 100)}%`, backgroundColor: shareAccent }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+
+          return (
+            <ShareableCard
+              title="Shooting Splits"
+              fileSlug="shooting"
+              player={{
+                name: playerInfo?.name || "Player",
+                team: playerInfo?.team || "",
+                photoUrl: playerPhotoUrl,
+                primaryColor,
+                teamLogoUrl: shareTeamLogoUrl,
+              }}
+              shareContent={shareBlock}
+              wide
+            >
+              {(() => {
+                const pageAccent = readablePrimary.body;
+                const pageTileBorder = withAlpha(readablePrimary.accent, 0.22);
+                const pagePillBg = withAlpha(readablePrimary.accent, 0.14);
+                const pageTrackBg = withAlpha(readablePrimary.accent, 0.18);
+                return (
+                  <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400 mb-3 block">
+                      Shooting
+                    </span>
+                    <div className="grid grid-cols-3 gap-2.5">
+                      {shootingStats.map((stat, i) => (
+                        <div
+                          key={i}
+                          className="rounded-xl px-2 py-3 flex flex-col items-center text-center bg-white dark:bg-neutral-800/40"
+                          style={{ border: `1px solid ${pageTileBorder}`, boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)" }}
+                        >
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+                            {stat.label}
+                          </div>
+                          <div
+                            className="text-2xl md:text-3xl font-black tabular-nums leading-none"
+                            style={{ color: pageAccent }}
+                          >
+                            {formatPercentage(stat.value)}
+                          </div>
+                          <div className="mt-2 h-[18px] flex items-center">
+                            {stat.rank ? (
+                              <span
+                                className="px-1.5 py-0.5 rounded-full text-[9px] font-bold tracking-wide tabular-nums"
+                                style={{ backgroundColor: pagePillBg, color: pageAccent }}
+                              >
+                                {getOrdinalSuffix(stat.rank)}
+                              </span>
+                            ) : null}
+                          </div>
+                          <div
+                            className="w-full mt-2.5 h-1.5 rounded-full overflow-hidden"
+                            style={{ backgroundColor: pageTrackBg }}
+                          >
+                            <div
+                              className="h-full rounded-full transition-all duration-500"
+                              style={{ width: `${Math.min(stat.value, 100)}%`, backgroundColor: readablePrimary.accent }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+            </ShareableCard>
+          );
+        })()}
+
+        {!onOffSummary && playerOnOffUnavailable && (
+          <div
+            className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4"
+            data-testid="player-on-off-unavailable"
           >
-          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Season Averages</span>
-              {selectedLeagueFilter !== "all" && (
-                <Badge variant="outline" className="text-[10px]" style={{ borderColor: primaryColorAlpha(0.5), color: primaryColor }}>
-                  {leagueNames.get(selectedLeagueFilter) || 'Filtered'}
-                </Badge>
-              )}
-            </div>
-            <div className="grid grid-cols-3 md:grid-cols-6 gap-2 md:gap-3">
-              {[
-                { value: filteredSeasonAverages.avg_points, label: "PTS", rank: playerRankings?.points },
-                { value: filteredSeasonAverages.avg_rebounds, label: "REB", rank: playerRankings?.rebounds },
-                { value: filteredSeasonAverages.avg_assists, label: "AST", rank: playerRankings?.assists },
-                { value: filteredSeasonAverages.avg_steals, label: "STL", rank: playerRankings?.steals },
-                { value: filteredSeasonAverages.avg_blocks, label: "BLK", rank: playerRankings?.blocks },
-                { value: filteredSeasonAverages.avg_efficiency, label: "EFF" },
-              ].map((stat, i) => (
-                <div key={i} className={`text-center py-2 ${i >= 3 ? 'hidden md:block' : ''}`}>
-                  <div className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-0.5">
-                    {stat.label} {stat.rank ? <span className="text-[10px] normal-case">{getOrdinalSuffix(stat.rank)}</span> : null}
-                  </div>
-                  <div className="text-2xl md:text-3xl font-black tabular-nums" style={{ color: primaryColor }}>
-                    {stat.value.toFixed(1)}
-                  </div>
-                </div>
-              ))}
-            </div>
+            <span className="text-base md:text-lg font-bold text-slate-800 dark:text-white mb-2 block">
+              Team on/off impact
+            </span>
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              On/off impact is temporarily unavailable — refresh to retry.
+            </p>
           </div>
-          </ShareableCard>
         )}
 
-        {filteredSeasonAverages && (
-          <ShareableCard
-            title="Shooting Splits"
-            fileSlug="shooting"
-            player={{
-              name: playerInfo?.name || "Player",
-              team: playerInfo?.team || "",
-              photoUrl: playerPhotoUrl,
-              primaryColor,
-            }}
-          >
-          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3 block">Shooting</span>
-            <div className="grid grid-cols-3 gap-4">
-              {[
-                { value: filteredSeasonAverages.fg_percentage, label: "FG%", rank: playerRankings?.fg_percentage },
-                { value: filteredSeasonAverages.three_point_percentage, label: "3PT%", rank: playerRankings?.three_point_percentage },
-                { value: filteredSeasonAverages.ft_percentage, label: "FT%", rank: playerRankings?.ft_percentage },
-              ].map((stat, i) => (
-                <div key={i} className="text-center">
-                  <div className="text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wide mb-0.5">
-                    {stat.label} {stat.rank ? <span className="text-[10px] normal-case">{getOrdinalSuffix(stat.rank)}</span> : null}
-                  </div>
-                  <div className="text-xl md:text-2xl font-black tabular-nums" style={{ color: primaryColor }}>{formatPercentage(stat.value)}</div>
-                  <div className="mt-1.5 bg-gray-100 dark:bg-neutral-700 h-1 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(stat.value, 100)}%`, backgroundColor: primaryColor }} />
-                  </div>
-                </div>
-              ))}
+        {onOffSummary && (() => {
+          const fmtVal = (v: number | null, isPercent: boolean) => {
+            if (v == null) return '—';
+            return isPercent ? `${v.toFixed(1)}%` : v.toFixed(1);
+          };
+          const fmtDiff = (v: number | null, isPercent: boolean) => {
+            if (v == null) return '—';
+            const abs = isPercent ? `${Math.abs(v).toFixed(1)}%` : Math.abs(v).toFixed(1);
+            const sign = v < 0 ? '\u2212' : '+';
+            return `${sign}${abs}`;
+          };
+          const onOffShareContent = (
+            <div className="flex flex-col" style={{ gap: 18 }}>
+              <span
+                className="font-bold uppercase text-slate-500 block"
+                style={{ fontSize: 18, letterSpacing: "0.18em" }}
+              >
+                Team On/Off Impact
+              </span>
+              <div className="rounded-xl border border-slate-200 overflow-hidden bg-white shadow-sm">
+                <table className="w-full" style={{ fontSize: 18 }}>
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th
+                        className="text-left font-bold text-slate-500 uppercase"
+                        style={{ padding: '14px 20px', fontSize: 13, letterSpacing: '0.16em' }}
+                      ></th>
+                      <th
+                        className="text-right font-bold text-slate-500 uppercase"
+                        style={{ padding: '14px 20px', fontSize: 13, letterSpacing: '0.16em' }}
+                      >
+                        On
+                      </th>
+                      <th
+                        className="text-right font-bold text-slate-500 uppercase"
+                        style={{ padding: '14px 20px', fontSize: 13, letterSpacing: '0.16em' }}
+                      >
+                        Off
+                      </th>
+                      <th
+                        className="text-right font-bold text-slate-500 uppercase"
+                        style={{ padding: '14px 20px', fontSize: 13, letterSpacing: '0.16em' }}
+                      >
+                        Diff
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {onOffSummary.map((m, idx) => {
+                      let diffColor = '#334155';
+                      if (m.diff != null && m.diff !== 0) {
+                        const better = m.higherIsBetter ? m.diff > 0 : m.diff < 0;
+                        diffColor = better ? '#10b981' : '#ef4444';
+                      }
+                      return (
+                        <tr
+                          key={m.key}
+                          className={`border-t border-slate-100 ${idx % 2 === 1 ? 'bg-slate-50/60' : ''}`}
+                        >
+                          <td
+                            className="font-bold uppercase text-slate-600"
+                            style={{ padding: '12px 20px', fontSize: 14, letterSpacing: '0.12em' }}
+                          >
+                            {m.label}
+                          </td>
+                          <td
+                            className="text-right font-bold tabular-nums text-slate-800"
+                            style={{ padding: '12px 20px', fontSize: 22 }}
+                          >
+                            {fmtVal(m.on, m.isPercent)}
+                          </td>
+                          <td
+                            className="text-right font-bold tabular-nums text-slate-800"
+                            style={{ padding: '12px 20px', fontSize: 22 }}
+                          >
+                            {fmtVal(m.off, m.isPercent)}
+                          </td>
+                          <td
+                            className="text-right font-bold tabular-nums"
+                            style={{ padding: '12px 20px', fontSize: 22, color: diffColor }}
+                          >
+                            {fmtDiff(m.diff, m.isPercent)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <p
+                className="text-slate-500 text-center"
+                style={{ fontSize: 14, marginTop: 4 }}
+              >
+                How a player's team performs when they are on vs. off court.
+              </p>
             </div>
-          </div>
-          </ShareableCard>
-        )}
-
-        {onOffSummary && (
+          );
+          return (
           <ShareableCard
             title="Team On/Off Impact"
             fileSlug="on-off-impact"
@@ -1448,7 +2079,10 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
               team: playerInfo?.team || "",
               photoUrl: playerPhotoUrl,
               primaryColor,
+              teamLogoUrl: shareTeamLogoUrl,
             }}
+            shareContent={onOffShareContent}
+            wide
           >
           <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4" data-testid="player-on-off-card">
             <span className="text-base md:text-lg font-bold text-slate-800 dark:text-white mb-3 block">Team on/off impact</span>
@@ -1498,7 +2132,8 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
             <p className="text-xs text-slate-400 dark:text-slate-500 mt-3">How a player's team performs when they are on vs. off court.</p>
           </div>
           </ShareableCard>
-        )}
+          );
+        })()}
 
         {careerStats.length > 0 && (
           <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 overflow-hidden">
@@ -1512,7 +2147,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
                     className={`px-3 md:px-4 py-1.5 text-xs md:text-sm font-medium transition-colors capitalize ${
                       careerStatsTab === tab ? 'text-white' : 'text-slate-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-neutral-800'
                     }`}
-                    style={careerStatsTab === tab ? { backgroundColor: primaryColor } : {}}
+                    style={careerStatsTab === tab ? { backgroundColor: readablePrimary.onWhite } : {}}
                   >
                     {tab}
                   </button>
@@ -1559,17 +2194,16 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
                     )}
                     {careerStatsTab === "advanced" && (
                       <>
-                        <th className="px-2 py-1.5 text-center font-semibold">GP</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">EFF</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">TO</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">FG%</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">3P%</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">FT%</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">PTS</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">REB</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">AST</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">STL</th>
-                        <th className="px-2 py-1.5 text-center font-semibold">BLK</th>
+                        <th className="px-2 py-1.5 text-center font-semibold" title="Games Played">GP</th>
+                        <th className="px-2 py-1.5 text-center font-semibold" title="Minutes Per Game">MPG</th>
+                        <th className="px-2 py-1.5 text-center font-semibold" title="True Shooting %">TS%</th>
+                        <th className="px-2 py-1.5 text-center font-semibold" title="Effective Field Goal %">eFG%</th>
+                        <th className="px-2 py-1.5 text-center font-semibold" title="Points Per Shot (PTS / FGA)">PPS</th>
+                        <th className="px-2 py-1.5 text-center font-semibold" title="Assist to Turnover Ratio">AST/TO</th>
+                        <th className="px-2 py-1.5 text-center font-semibold" title="3-Point Attempt Rate (3PA / FGA)">3PAr</th>
+                        <th className="px-2 py-1.5 text-center font-semibold" title="Free Throw Rate (FTA / FGA)">FTr</th>
+                        <th className="px-2 py-1.5 text-center font-semibold" title="Stocks per game (STL + BLK)">STK</th>
+                        <th className="px-2 py-1.5 text-center font-semibold" title="Efficiency per game">EFF</th>
                       </>
                     )}
                   </tr>
@@ -1596,8 +2230,8 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
                     </tr>
                   ))}
                   {careerTotals && careerStats.length > 1 && (
-                    <tr className="font-bold text-slate-900 dark:text-white border-t-2" style={{ borderColor: primaryColorAlpha(0.4) }}>
-                      <td className="px-2 py-1.5 text-xs uppercase" style={{ color: primaryColor }}>Career</td>
+                    <tr className="font-bold text-slate-900 dark:text-white border-t-2" style={{ borderColor: readablePrimary.accent }}>
+                      <td className="px-2 py-1.5 text-xs uppercase" style={{ color: readablePrimary.body }}>Career</td>
                       <td className="px-2 py-1.5 text-xs"></td>
                       {renderCareerRow(careerTotals)}
                     </tr>
@@ -1634,6 +2268,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
             team: playerInfo?.team || "",
             photoUrl: playerPhotoUrl,
             primaryColor,
+            teamLogoUrl: shareTeamLogoUrl,
           }}
           shareCaption={(() => {
             if (playerShotChartRange === "season") return "Full Season";
@@ -1649,15 +2284,26 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
             return undefined;
           })()}
           shareContent={
-            <div className="bg-white dark:bg-neutral-900 rounded-xl border border-gray-100 dark:border-neutral-800 p-4">
-              <ShotChart
-                shots={playerShotData || []}
-                loading={playerShotsLoading}
-                compact
-                emptyMessage="No shot data available for this player."
-              />
+            <div
+              className="flex flex-col items-center justify-center bg-white"
+              style={{ gap: 18, padding: "8px 0" }}
+            >
+              <span
+                className="font-bold uppercase text-slate-500 self-stretch"
+                style={{ fontSize: 18, letterSpacing: "0.18em" }}
+              >
+                Shot Chart
+              </span>
+              <div style={{ width: "100%", maxWidth: 760 }}>
+                <ShotChart
+                  shots={playerShotData || []}
+                  loading={playerShotsLoading}
+                  emptyMessage="No shot data available for this player."
+                />
+              </div>
             </div>
           }
+          wide
         >
         <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">

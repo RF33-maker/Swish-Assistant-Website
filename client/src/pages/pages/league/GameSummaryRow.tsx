@@ -1,9 +1,6 @@
 import React, { useState } from "react";
 import { supabase }      from "@/lib/supabase";
-
-
-
-const BASE = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000').replace(/\/$/, '');
+import { getPythonBackendUrl } from "@/lib/backendUrl";
 
 
 interface Player { name: string; }
@@ -55,7 +52,7 @@ export function GameSummaryRow({
 
     // 2) Send everything into your AI endpoint
     try {
-      const response = await fetch(`${BASE}/api/generate-summary`, {
+      const response = await fetch(`${getPythonBackendUrl()}/api/generate-summary`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

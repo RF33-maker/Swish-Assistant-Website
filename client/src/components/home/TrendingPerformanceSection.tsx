@@ -4,8 +4,13 @@ import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { TeamLogo } from "@/components/TeamLogo";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
-import ShareableCard from "@/components/ShareableCard";
+import ShareableCard, {
+  ensureContrast,
+  shadeHex,
+  tintHex,
+} from "@/components/ShareableCard";
 import { useTeamBranding } from "@/hooks/useTeamBranding";
+import { getTeamLogoCached } from "@/utils/teamLogoCache";
 
 interface PerfRow {
   league_id: string;
@@ -84,6 +89,79 @@ function StatBlock({ perf, tsPct }: { perf: PerfRow; tsPct: string }) {
       <Stat label="FGA" value={perf.fga ?? 0} />
       <Stat label="FTA" value={perf.fta ?? 0} />
       <Stat label="TS%" value={tsPct} />
+    </div>
+  );
+}
+
+/**
+ * Stat tile used inside the share modal. Uses explicit inline styles so the
+ * exported PNG never picks up `dark:` Tailwind variants (which would render
+ * white text on the white share body when the user has dark mode on).
+ */
+function ShareStat({
+  label,
+  value,
+  labelColor,
+}: {
+  label: string;
+  value: string | number;
+  labelColor: string;
+}) {
+  return (
+    <div className="flex flex-col items-center" style={{ minWidth: 88 }}>
+      <span
+        className="font-black tabular-nums leading-none"
+        style={{ color: "#0f172a", fontSize: 44 }}
+      >
+        {value}
+      </span>
+      <span
+        className="font-semibold uppercase tracking-wide"
+        style={{ color: labelColor, fontSize: 16, marginTop: 10, letterSpacing: "0.08em" }}
+      >
+        {label}
+      </span>
+    </div>
+  );
+}
+
+function ShareStatBlock({
+  perf,
+  tsPct,
+  labelColor,
+  panelBg,
+  panelBorder,
+}: {
+  perf: PerfRow;
+  tsPct: string;
+  labelColor: string;
+  panelBg: string;
+  panelBorder: string;
+}) {
+  return (
+    <div
+      className="rounded-2xl"
+      style={{
+        backgroundColor: panelBg,
+        border: `1px solid ${panelBorder}`,
+        padding: "28px 20px",
+      }}
+    >
+      <div
+        className="grid grid-cols-5"
+        style={{ rowGap: 36, columnGap: 12 }}
+      >
+        <ShareStat label="GS" value={perf.game_score ?? 0} labelColor={labelColor} />
+        <ShareStat label="PTS" value={perf.pts ?? 0} labelColor={labelColor} />
+        <ShareStat label="REB" value={perf.reb ?? 0} labelColor={labelColor} />
+        <ShareStat label="AST" value={perf.ast ?? 0} labelColor={labelColor} />
+        <ShareStat label="STL" value={perf.stl ?? 0} labelColor={labelColor} />
+        <ShareStat label="BLK" value={perf.blk ?? 0} labelColor={labelColor} />
+        <ShareStat label="TOV" value={perf.tov ?? 0} labelColor={labelColor} />
+        <ShareStat label="FGA" value={perf.fga ?? 0} labelColor={labelColor} />
+        <ShareStat label="FTA" value={perf.fta ?? 0} labelColor={labelColor} />
+        <ShareStat label="TS%" value={tsPct} labelColor={labelColor} />
+      </div>
     </div>
   );
 }
@@ -232,6 +310,24 @@ export default function TrendingPerformanceSection() {
     enabled: !!(perf?.team_name && perf?.league_id),
   });
 
+  // Resolve the team logo URL for the share-card header band. Uses the same
+  // cached lookup as the in-page <TeamLogo> so it's typically a cache hit.
+  const [shareTeamLogoUrl, setShareTeamLogoUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setShareTeamLogoUrl(null);
+    if (!perf?.team_name || !perf?.league_id) return;
+    void getTeamLogoCached({
+      leagueId: perf.league_id,
+      teamName: perf.team_name,
+    }).then((url) => {
+      if (!cancelled) setShareTeamLogoUrl(url);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [perf?.team_name, perf?.league_id]);
+
   const tsPct = useMemo(() => {
     if (!perf) return "—";
     return perf.ts_pct !== null && perf.ts_pct !== undefined
@@ -276,17 +372,52 @@ export default function TrendingPerformanceSection() {
   // Content rendered inside the share dialog. The ShareableCard chrome
   // already supplies the player photo / name / team header band, so the
   // share content only needs the meta + stats body.
+  //
+  // Colour strategy:
+  //  - Stat values stay near-black (#0f172a) on the white body so digits read
+  //    instantly at small sizes.
+  //  - Stat labels and the league line use a contrast-guarded variant of the
+  //    team primary so the brand carries through without dropping legibility
+  //    when the team colour is very light (yellow) or very dark (navy).
+  //  - The stat grid sits on a near-white tint of the team colour with a soft
+  //    coloured border, so the panel feels branded without competing with the
+  //    numbers.
+  const labelColor = ensureContrast(primaryColor, "#ffffff", 4.5);
+  const panelBg = tintHex(primaryColor, 0.92);
+  const panelBorder = tintHex(primaryColor, 0.7);
+  const dividerColor = tintHex(primaryColor, 0.65);
+  // The date sits opposite the league label, so we shade it slightly darker
+  // than `labelColor` for a clear hierarchy while still passing the contrast
+  // guard against the white share body.
+  const dateColor = ensureContrast(shadeHex(primaryColor, 0.35), "#ffffff", 4.5);
+
   const shareBody = (
-    <div className="bg-white">
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center justify-between">
+        <span
+          className="font-bold uppercase"
+          style={{ color: labelColor, fontSize: 18, letterSpacing: "0.16em" }}
+        >
           {leagueName || "Featured League"}
         </span>
-        <span className="text-xs font-semibold text-slate-700">
+        <span
+          className="font-semibold uppercase"
+          style={{ color: dateColor, fontSize: 18, letterSpacing: "0.14em" }}
+        >
           {formatDate(perf.game_date)}
         </span>
       </div>
-      <StatBlock perf={perf} tsPct={tsPct} />
+      <div
+        aria-hidden="true"
+        style={{ height: 2, backgroundColor: dividerColor }}
+      />
+      <ShareStatBlock
+        perf={perf}
+        tsPct={tsPct}
+        labelColor={labelColor}
+        panelBg={panelBg}
+        panelBorder={panelBorder}
+      />
     </div>
   );
 
@@ -300,9 +431,11 @@ export default function TrendingPerformanceSection() {
           team: perf.team_name || leagueName || "",
           photoUrl,
           primaryColor,
+          teamLogoUrl: shareTeamLogoUrl,
         }}
         shareCaption={leagueName ? `${leagueName} • ${formatDate(perf.game_date)}` : formatDate(perf.game_date)}
         shareContent={shareBody}
+        wide
       >
         <div
           role="button"
