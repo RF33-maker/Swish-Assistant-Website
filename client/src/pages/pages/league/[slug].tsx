@@ -2536,27 +2536,61 @@ export default function LeaguePage() {
           let lastError: any = null;
           
           for (let attempt = 0; attempt <= maxRetries; attempt++) {
-            let query = db.from("player_stats").select("*");
-            if (isParentFetch) {
-              query = query.in("league_id", parentChildIds);
-            } else {
-              query = query.eq("league_id", statsLeagueId);
-            }
-            const { data, error } = await query
-              .order("player_id", { ascending: true, nullsFirst: false })
-              .range(page * pageSize, (page + 1) * pageSize - 1);
-            
-            if (error) {
-              lastError = error;
-              debugLog("📊 Step 1: Retry", attempt, "failed for page", page, ":", error.message);
+            try {
+              let data: any[] | null = null;
+              let error: any = null;
+
+              if (isParentFetch) {
+                // Route through the service-role endpoint so private child
+                // leagues (e.g. REBA SL age groups) are included — the anon
+                // Supabase client is blocked by RLS for is_public=false rows.
+                // Pass parentLeagueId so the server can validate the children
+                // even when the parent itself has is_public=false (REBA SL).
+                const res = await fetch("/api/public/player-stats", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    leagueIds: parentChildIds,
+                    page,
+                    pageSize,
+                    parentLeagueId: league.league_id,
+                  }),
+                });
+                if (res.ok) {
+                  const json = await res.json();
+                  data = json.rows ?? null;
+                } else {
+                  error = { message: `player-stats HTTP ${res.status}` };
+                }
+              } else {
+                const result = await db
+                  .from("player_stats")
+                  .select("*")
+                  .eq("league_id", statsLeagueId)
+                  .order("player_id", { ascending: true, nullsFirst: false })
+                  .range(page * pageSize, (page + 1) * pageSize - 1);
+                data = result.data;
+                error = result.error;
+              }
+
+              if (error) {
+                lastError = error;
+                debugLog("📊 Step 1: Retry", attempt, "failed for page", page, ":", error.message);
+                if (attempt < maxRetries) {
+                  await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+                  continue;
+                }
+              } else {
+                pageData = data;
+                lastError = null;
+                break;
+              }
+            } catch (fetchErr: any) {
+              lastError = fetchErr;
+              debugLog("📊 Step 1: Retry", attempt, "fetch error page", page, ":", fetchErr.message);
               if (attempt < maxRetries) {
                 await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
-                continue;
               }
-            } else {
-              pageData = data;
-              lastError = null;
-              break;
             }
           }
           
