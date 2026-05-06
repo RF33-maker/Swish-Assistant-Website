@@ -17,7 +17,7 @@ export function getPythonBackendUrl(): string {
 
   const hostname = window.location.hostname;
   if (hostname === 'swishassistant.com' || hostname.endsWith('.swishassistant.com')) {
-    return 'https://swish-python-backend.onrender.com';
+    return 'https://sab-backend.onrender.com';
   }
 
   return window.location.origin;
