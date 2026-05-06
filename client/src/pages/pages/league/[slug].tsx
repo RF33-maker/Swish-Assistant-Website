@@ -18,7 +18,9 @@ import { TeamLogo } from "@/components/TeamLogo";
 import LeagueLeadersShareCard from "@/components/LeagueLeadersShareCard";
 import { TeamLogoUploader } from "@/components/TeamLogoUploader";
 import { InstagramCarousel } from "@/components/InstagramCarousel";
-import { ChevronRight, ChevronDown, Trophy, ArrowRight } from "lucide-react";
+import { ChevronRight, ChevronDown, Trophy, ArrowRight, Search, Users } from "lucide-react";
+import { useGlobalSearch, type SearchSuggestion } from "@/hooks/useGlobalSearch";
+import { PlayerSearchAvatar } from "@/components/PlayerSearchAvatar";
 import { Link } from "wouter";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { EditableDescription } from "@/components/EditableDescription";
@@ -521,8 +523,8 @@ export default function LeaguePage() {
             .join(" ")
         : "";
 
-    const [search, setSearch] = useState("");
     const [location, navigate] = useLocation();
+    const { query: search, setQuery: setSearch, suggestions, handleSelect: handleSelectSearch, handleSubmit: handleSubmitSearch } = useGlobalSearch();
     const [league, setLeague] = useState(null);
     const [topScorer, setTopScorer] = useState<PlayerStat | null>(null);
     const [topRebounder, setTopRebounder] = useState<PlayerStat | null>(null);
@@ -530,7 +532,6 @@ export default function LeaguePage() {
     const [standings, setStandings] = useState([]);
     const [teamLogoMap, setTeamLogoMap] = useState<Map<string, string>>(new Map());
     const [schedule, setSchedule] = useState<GameSchedule[]>([]);
-    const [suggestions, setSuggestions] = useState<any[]>([]);
     const [gameSummaries, setGameSummaries] = useState<any[]>([]);
     const [playerStats, setPlayerStats] = useState<any[]>([]);
     const [aiSummary, setAiSummary] = useState<string | null>(null);
@@ -731,31 +732,6 @@ export default function LeaguePage() {
       setBrandFadedIn(false);
     }
   }, [leagueBrandColors]);
-
-    useEffect(() => {
-      const fetchSuggestions = async () => {
-        if (search.trim().length === 0) {
-          setSuggestions([]);
-          return;
-        }
-
-        const { data, error } = await supabase
-          .from("leagues")
-          .select("name, slug")
-          .ilike("name", `%${search}%`)
-          .eq("is_public", true)
-          .limit(5);
-
-        if (!error) {
-          setSuggestions(data || []);
-        } else {
-          console.error("Suggestion error:", error);
-        }
-      };
-
-      const delay = setTimeout(fetchSuggestions, 300);
-      return () => clearTimeout(delay);
-    }, [search]);
 
     // Intersection Observer for orange divider animation
     useEffect(() => {
@@ -1862,12 +1838,6 @@ export default function LeaguePage() {
         fetchTeamStats();
       }
     }, [league?.league_id, childCompetitions]);
-
-    const handleSearch = () => {
-      if (search.trim()) {
-        navigate(`/league/${search}`);
-      }
-    };
 
     const sortMap: Record<string, string> = {
       "Top Scorers": "spoints",
@@ -3275,34 +3245,55 @@ export default function LeaguePage() {
             </div>
 
             <div className="relative flex-1 md:max-w-md md:mx-6">
-              <input
-                type="text"
-                placeholder="Find your league"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                className="w-full px-3 py-1 md:py-2 border border-gray-300 dark:border-neutral-700 rounded-full text-xs md:text-sm bg-white dark:bg-neutral-800 text-slate-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500"
-              />
-              <button
-                onClick={handleSearch}
-                className="absolute right-0 top-0 h-full px-2.5 md:px-4 bg-orange-500 hover:bg-orange-600 text-white rounded-full text-xs md:text-sm"
-              >
-                Go
-              </button>
+              <form onSubmit={handleSubmitSearch} className="flex items-center">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 md:h-4 md:w-4 text-gray-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Search league, team or player"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="w-full pl-8 md:pl-9 pr-3 py-1 md:py-2 border border-gray-300 dark:border-neutral-700 rounded-full text-xs md:text-sm bg-white dark:bg-neutral-800 text-slate-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  />
+                </div>
+              </form>
 
               {suggestions.length > 0 && (
-                <ul className="absolute z-50 mt-2 w-full bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                  {suggestions.map((item, index) => (
+                <ul className="absolute z-50 mt-1 w-full bg-white dark:bg-neutral-900 border border-orange-200 dark:border-neutral-700 rounded-md shadow-lg max-h-72 overflow-y-auto">
+                  {suggestions.map((item: SearchSuggestion, index: number) => (
                     <li
                       key={index}
-                      onClick={() => {
-                        setSearch("");
-                        setSuggestions([]);
-                        navigate(`/league/${item.slug}`);
-                      }}
-                      className="px-4 py-2 cursor-pointer hover:bg-orange-100 dark:hover:bg-neutral-800 text-left text-slate-800 dark:text-slate-200 text-sm"
+                      onClick={() => handleSelectSearch(item)}
+                      className="px-4 py-2.5 cursor-pointer hover:bg-orange-50 dark:hover:bg-neutral-800 text-left border-b border-orange-100 dark:border-neutral-800 last:border-b-0 transition-colors duration-200"
                     >
-                      {item.name}
+                      <div className="flex items-center gap-3">
+                        {item.type === 'league' ? (
+                          <div className="h-7 w-7 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center flex-shrink-0">
+                            <Trophy className="h-3.5 w-3.5 text-white" />
+                          </div>
+                        ) : item.type === 'team' ? (
+                          <div className="h-7 w-7 rounded-full bg-white dark:bg-neutral-800 border border-orange-200 dark:border-neutral-600 flex items-center justify-center overflow-hidden flex-shrink-0">
+                            <TeamLogo teamName={item.name} leagueId={item.league_id} size="sm" />
+                          </div>
+                        ) : (
+                          <PlayerSearchAvatar name={item.name} photoUrl={item.photo_url} />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-orange-900 dark:text-orange-300 text-xs md:text-sm truncate">{item.name}</div>
+                          {item.type === 'player' && item.team && (
+                            <div className="text-xs text-orange-600 dark:text-orange-400 truncate">{item.team}</div>
+                          )}
+                          {item.type === 'team' && (
+                            <div className="text-xs text-orange-600 dark:text-orange-400 truncate">{item.league_name}</div>
+                          )}
+                          {item.type === 'league' && (
+                            <div className="text-xs text-orange-600 dark:text-orange-400">League</div>
+                          )}
+                        </div>
+                        <div className="text-xs text-orange-700 dark:text-orange-300 capitalize bg-orange-100 dark:bg-orange-900/50 px-1.5 py-0.5 rounded-full font-medium flex-shrink-0">
+                          {item.type}
+                        </div>
+                      </div>
                     </li>
                   ))}
                 </ul>

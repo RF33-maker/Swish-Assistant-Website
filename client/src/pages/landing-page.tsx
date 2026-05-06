@@ -9,7 +9,7 @@ import SLB from "@/assets/Super-League-Basketball-Logo.png"
 import NBLBE from "@/assets/NBLBE.jpg"
 import { Button } from "@/components/ui/button"
 import { Analytics } from "@vercel/analytics/next"
-import { Search, ChevronDown, Trophy, Users, Menu } from "lucide-react"
+import { Search, ChevronDown, Trophy, Menu } from "lucide-react"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import { TeamLogo } from "@/components/TeamLogo"
@@ -17,6 +17,8 @@ import LatestScoresSection from "@/components/home/LatestScoresSection"
 import LatestNewsSection from "@/components/home/LatestNewsSection"
 import TopPlayersSection from "@/components/home/TopPlayersSection"
 import TrendingPerformanceSection from "@/components/home/TrendingPerformanceSection"
+import { useGlobalSearch } from "@/hooks/useGlobalSearch"
+import { PlayerSearchAvatar } from "@/components/PlayerSearchAvatar"
 
 function LeagueLogosCarousel() {
   const logos = [Ballpark, NBLBE, BCB, SLB]
@@ -47,211 +49,10 @@ function LeagueLogosCarousel() {
   )
 }
 
-function PlayerSearchAvatar({ name, photoUrl }: { name: string; photoUrl?: string | null }) {
-  const [imgError, setImgError] = useState(false);
-
-  if (photoUrl && !imgError) {
-    return (
-      <img
-        src={photoUrl}
-        alt={name}
-        className="h-8 w-8 rounded-full object-cover flex-shrink-0 border border-orange-200 dark:border-neutral-600"
-        onError={() => setImgError(true)}
-      />
-    );
-  }
-
-  return (
-    <div className="h-8 w-8 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center flex-shrink-0">
-      <Users className="h-4 w-4 text-white" />
-    </div>
-  );
-}
-
 export default function LandingPage() {
-  const [query, setQuery] = useState("")
-  const [suggestions, setSuggestions] = useState<any[]>([])
   const [, setLocation] = useLocation()
   const [trendingLeagues, setTrendingLeagues] = useState<any[]>([]);
-
-  useEffect(() => {
-    const fetchSuggestions = async () => {
-      if (query.trim().length === 0) {
-        setSuggestions([])
-        return
-      }
-
-      const [leaguesResponse, teamsResponse] = await Promise.all([
-        supabase
-          .from("leagues")
-          .select("name, slug")
-          .or(`name.ilike.%${query}%`)
-          .eq("is_public", true),
-        supabase
-          .from("teams")
-          .select("name, league_id, leagues:league_id(name, slug, is_public)")
-          .ilike("name", `%${query}%`)
-          .limit(20)
-      ]);
-
-      const playersResponse = await supabase
-        .from("players")
-        .select("id, full_name, slug, photo_path_bg_removed, league_id")
-        .ilike("full_name", `%${query}%`)
-        .limit(30);
-
-      const leagues = leaguesResponse.data || [];
-      const players = playersResponse.data || [];
-      const teams = teamsResponse.data || [];
-
-      let playerTeamMap: Record<string, string> = {};
-      if (players.length > 0) {
-        const playerIds = players.map((p: any) => p.id);
-        const { data: statsData } = await supabase
-          .from("player_stats")
-          .select("player_id, team")
-          .in("player_id", playerIds)
-          .limit(100);
-        if (statsData) {
-          statsData.forEach((s: any) => {
-            if (s.player_id && s.team && !playerTeamMap[s.player_id]) {
-              playerTeamMap[s.player_id] = s.team;
-            }
-          });
-        }
-      }
-
-      const isAbbreviated = (name: string) => {
-        const parts = name.trim().split(/\s+/);
-        return parts.some(p => p.length <= 2 || p.includes('.'));
-      };
-
-      const getNameParts = (name: string) => {
-        const clean = name.toLowerCase().replace(/[.\-']/g, '').replace(/\s+/g, ' ').trim();
-        const parts = clean.split(' ').filter(p => !['jr', 'sr', 'ii', 'iii', 'iv'].includes(p));
-        return { first: parts[0] || '', last: parts[parts.length - 1] || '' };
-      };
-
-      const areSamePlayer = (a: string, b: string) => {
-        const pa = getNameParts(a);
-        const pb = getNameParts(b);
-        if (pa.last !== pb.last) return false;
-        if (pa.first === pb.first) return true;
-        if (pa.first.length >= 1 && pb.first.length >= 1 &&
-            (pa.first[0] === pb.first[0]) &&
-            (pa.first.length <= 2 || pb.first.length <= 2)) return true;
-        return false;
-      };
-
-      const playerGroups: any[][] = [];
-      players.forEach((player: any) => {
-        const existingGroup = playerGroups.find(group =>
-          group.some((p: any) => areSamePlayer(p.full_name, player.full_name))
-        );
-        if (existingGroup) {
-          existingGroup.push(player);
-        } else {
-          playerGroups.push([player]);
-        }
-      });
-
-      const uniquePlayers = playerGroups.map((group: any[]) => {
-        group.sort((a: any, b: any) => {
-          if (a.photo_path_bg_removed && !b.photo_path_bg_removed) return -1;
-          if (!a.photo_path_bg_removed && b.photo_path_bg_removed) return 1;
-          const aAbbr = isAbbreviated(a.full_name);
-          const bAbbr = isAbbreviated(b.full_name);
-          if (!aAbbr && bAbbr) return -1;
-          if (aAbbr && !bAbbr) return 1;
-          if (b.full_name.length !== a.full_name.length) return b.full_name.length - a.full_name.length;
-          return String(a.id).localeCompare(String(b.id));
-        });
-        const best = group[0];
-        let photoUrl: string | null = null;
-        if (best.photo_path_bg_removed) {
-          const { data: urlData } = supabase.storage.from('player-photos').getPublicUrl(best.photo_path_bg_removed);
-          photoUrl = urlData?.publicUrl || null;
-        }
-        return {
-          name: best.full_name,
-          team: playerTeamMap[best.id] || '',
-          player_id: best.id,
-          player_slug: best.slug,
-          photo_url: photoUrl,
-          type: 'player'
-        };
-      });
-
-      const uniqueTeams = teams.reduce((acc: any[], team: any) => {
-        const leagueJoin = Array.isArray(team.leagues) ? team.leagues[0] : team.leagues;
-        if (leagueJoin?.is_public === false) return acc;
-        if (!acc.some(t => t.name === team.name && t.league_id === team.league_id)) {
-          acc.push({
-            name: team.name,
-            league_id: team.league_id,
-            league_name: leagueJoin?.name || '',
-            league_slug: leagueJoin?.slug || '',
-            type: 'team'
-          });
-        }
-        return acc;
-      }, []);
-
-      const formattedLeagues = leagues.map(league => ({
-        ...league,
-        type: 'league'
-      }));
-
-      const combined = [...formattedLeagues, ...uniqueTeams, ...uniquePlayers].slice(0, 10);
-
-      setSuggestions(combined)
-    }
-
-    const delayDebounce = setTimeout(fetchSuggestions, 300)
-    return () => clearTimeout(delayDebounce)
-  }, [query])
-
-
-  const handleSelect = (item: any) => {
-    setQuery("")
-    setSuggestions([])
-
-    if (item.type === 'league') {
-      setLocation(`/league/${item.slug}`)
-    } else if (item.type === 'team') {
-      const encodedName = encodeURIComponent(item.name);
-      if (item.league_slug) {
-        setLocation(`/league/${item.league_slug}/team/${encodedName}`)
-      } else {
-        setLocation(`/team/${encodedName}`)
-      }
-    } else if (item.type === 'player') {
-      const identifier = item.player_slug || item.player_id;
-      setLocation(`/player/${identifier}`)
-    }
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!query.trim()) return
-
-    if (suggestions.length > 0) {
-      handleSelect(suggestions[0])
-      return
-    }
-
-    const { data, error } = await supabase
-      .from("leagues")
-      .select("slug")
-      .ilike("name", `%${query.toLowerCase()}%`)
-      .eq("is_public", true)
-
-    if (error) console.error("Supabase error:", error)
-
-    if (data && data.length > 0) {
-      setLocation(`/league/${data[0].slug}`)
-    }
-  }
+  const { query, setQuery, suggestions, handleSelect, handleSubmit } = useGlobalSearch();
 
   useEffect(() => {
     const fetchTrending = async () => {
@@ -417,7 +218,7 @@ export default function LandingPage() {
               return (
               <button
                 key={league.slug}
-                onClick={() => handleSelect({ type: 'league', slug: league.slug })}
+                onClick={() => handleSelect({ type: 'league', name: league.name, slug: league.slug })}
                 className="relative overflow-hidden rounded-2xl h-24 hover:scale-[1.03] hover:shadow-lg transition-all duration-300 animate-slide-in-left group"
                 style={{
                   animationDelay: `${0.8 + i * 0.075}s`,
