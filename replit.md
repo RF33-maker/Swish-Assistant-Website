@@ -62,7 +62,7 @@ The application utilizes Supabase database views to simplify data fetching:
 -   **Primary server**: `tsx server/index.ts` (Express with Vite) handles API routes and serves the React frontend on port 5000.
 -   **Supabase Service Role Client**: `server/supabaseServiceClient.ts` creates a Supabase client using `SUPABASE_SERVICE_ROLE_KEY` to bypass RLS for storage uploads and privileged database operations (team logos, league banners). The frontend anon-key client (`client/src/lib/supabase.ts`) is used only for client-side auth and reads.
 -   **League AI chatbot**: Handled directly in `server/routes.ts` using the OpenAI Node SDK.
--   **Python Backend** (optional, port 8000): Handles a secondary coaching chatbot and player scouting analysis, proxied via `proxyToPython` in `server/routes.ts`.
+-   **Python Backend** (optional, port 8000 locally): Handles a secondary coaching chatbot and player scouting analysis, proxied via `proxyToPython` in `server/routes.ts`. All browser calls go through `getPythonBackendUrl()` (`client/src/lib/backendUrl.ts`), which reads `VITE_BACKEND_URL` in production (set this to the Render public URL, e.g. `https://swish-backend.onrender.com`) and falls back to `window.location.origin` in local dev (Vite proxy handles routing to port 8000). Render deployment config is in `render.yaml`.
 
 ## External Dependencies
 -   **Supabase**: Database, user authentication, and object storage for assets like team logos and league banners.

@@ -2,8 +2,7 @@ import { useEffect, useState } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { Maximize } from "lucide-react";
 import { Button } from "@/components/ui/button";
-
-const BASE = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000').replace(/\/$/, '');
+import { getPythonBackendUrl } from "@/lib/backendUrl";
 
 export default function VisualizationSection() {
   const [chartData, setChartData] = useState([]);
@@ -14,7 +13,7 @@ export default function VisualizationSection() {
   useEffect(() => {
     async function fetchPlayerList() {
       try {
-        const res = await fetch(`${BASE}/players`);
+        const res = await fetch(`${getPythonBackendUrl()}/players`);
         const names = await res.json();
         setPlayerList(names);
 
@@ -37,7 +36,7 @@ export default function VisualizationSection() {
       setLoading(true);
       try {
         const playerName = encodeURIComponent(selectedPlayer);
-        const res = await fetch(`${BASE}/chart_summary/${playerName}`);
+        const res = await fetch(`${getPythonBackendUrl()}/chart_summary/${playerName}`);
         const data = await res.json();
         setChartData(data);
       } catch (err) {

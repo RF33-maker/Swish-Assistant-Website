@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { getPythonBackendUrl } from "@/lib/backendUrl";
 
 const UploadSectionLA = ({ leagues }: any) => {
   const { user } = useAuth();
@@ -110,9 +111,8 @@ const UploadSectionLA = ({ leagues }: any) => {
 
     try {
       setStatusMessage("🔄 Parsing file...");
-      const BASE = (import.meta.env.VITE_BACKEND_URL || `${window.location.protocol}//${window.location.hostname}:8000`).replace(/\/$/, '');
       const resp = await fetch(
-        `${BASE}/api/parse`,
+        `${getPythonBackendUrl()}/api/parse`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

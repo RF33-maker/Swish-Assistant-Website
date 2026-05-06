@@ -60,6 +60,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/chat", (req, res) => proxyToPython(req, res, "/chat"));
   app.post("/api/ai-analysis", (req, res) => proxyToPython(req, res, "/api/ai-analysis"));
   app.post("/api/parse", (req, res) => proxyToPython(req, res, "/api/parse"));
+  app.get("/players", (req, res) => proxyToPython(req, res, "/players"));
+  app.get("/chart_summary/:name", (req, res) => proxyToPython(req, res, `/chart_summary/${req.params.name}`));
+  app.post("/api/generate-summary", (req, res) => proxyToPython(req, res, "/api/generate-summary"));
 
   // League chatbot AI — handled directly in Express via OpenAI Node SDK
   // (avoids dependency on the Python backend process which can go offline)
