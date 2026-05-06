@@ -561,6 +561,179 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Service-role-backed read endpoint that lets parent league pages roll up
+  // data from private (is_public=false) child leagues. The anon-key Supabase
+  // client gets filtered by RLS on `teams`, `team_stats`, and `players`, so
+  // a public REBA SL parent page would otherwise show empty standings /
+  // player stats / team stats whenever its sub-competitions have been hidden
+  // from search via is_public=false.
+  //
+  // Access control:
+  //   - Restricted to a known allow-list of tables and a fixed per-table
+  //     column projection (no caller-controlled `select`).
+  //   - Each requested league_id is validated server-side to be either
+  //     itself public, or a child of a public parent league. League IDs
+  //     that don't satisfy that scope are dropped silently before the
+  //     data fetch — preventing arbitrary-id enumeration of fully
+  //     private leagues that have no public parent.
+  // Explicit per-table column projections (no caller-controlled select).
+  // The team_stats list mirrors the columns the league page actually
+  // reads in fetchTeamStats — keep this in sync with
+  // client/src/pages/pages/league/[slug].tsx if new aggregations are
+  // added there.
+  const TEAM_STATS_COLS = [
+    "name",
+    "league_id",
+    "tot_sminutes",
+    "tot_spoints",
+    "tot_sfieldgoalsmade",
+    "tot_sfieldgoalsattempted",
+    "tot_sthreepointersmade",
+    "tot_sthreepointersattempted",
+    "tot_stwopointersmade",
+    "tot_stwopointersattempted",
+    "tot_sfreethrowsmade",
+    "tot_sfreethrowsattempted",
+    "tot_sreboundstotal",
+    "tot_sreboundsoffensive",
+    "tot_sreboundsdefensive",
+    "tot_sassists",
+    "tot_ssteals",
+    "tot_sblocks",
+    "tot_sturnovers",
+    "tot_sfoulspersonal",
+    "tot_splusminuspoints",
+    "tot_spointsinthepaint",
+    "tot_spointsfastbreak",
+    "tot_spointssecondchance",
+    "tot_spointsfromturnovers",
+    "tot_timesscoreslevel",
+    "tot_leadchanges",
+    "tot_timeleading",
+    "tot_biggestscoringrun",
+    "off_rating",
+    "def_rating",
+    "net_rating",
+    "pace",
+    "ast_percent",
+    "ast_to_ratio",
+    "oreb_percent",
+    "dreb_percent",
+    "reb_percent",
+    "tov_percent",
+    "efg_percent",
+    "ts_percent",
+    "ft_rate",
+    "three_point_rate",
+    "pie",
+    "opp_efg_percent",
+    "opp_ft_rate",
+    "opp_tov_percent",
+    "opp_oreb_percent",
+    "opp_3pm",
+    "opp_fgm",
+    "opp_fga",
+    "opp_points",
+    "opp_turnovers",
+    "opp_possessions",
+    "fga_percent_2pt",
+    "fga_percent_3pt",
+    "fga_percent_midrange",
+    "pts_percent_2pt",
+    "pts_percent_3pt",
+    "pts_percent_midrange",
+    "pts_percent_pitp",
+    "pts_percent_fastbreak",
+    "pts_percent_second_chance",
+    "pts_percent_off_turnovers",
+    "pts_percent_ft",
+  ].join(", ");
+
+  const ALLOWED_LEAGUE_DATA_COLUMNS: Record<string, string> = {
+    teams: "team_id, name, league_id",
+    team_stats: TEAM_STATS_COLS,
+    players: "id, full_name, slug, league_id",
+  };
+
+  async function filterLeagueIdsForPublicScope(ids: string[]): Promise<string[]> {
+    if (ids.length === 0) return [];
+    const { data, error } = await supabaseAdmin
+      .from("leagues")
+      .select("league_id, is_public, parent_league_id")
+      .in("league_id", ids);
+    if (error || !data) {
+      console.error("filterLeagueIdsForPublicScope: leagues lookup failed:", error?.message);
+      return [];
+    }
+    const directlyAllowed = new Set<string>();
+    const parentIdsToCheck = new Set<string>();
+    const idToParent = new Map<string, string | null>();
+    for (const row of data as Array<{ league_id: string; is_public: boolean | null; parent_league_id: string | null }>) {
+      if (row.is_public) {
+        directlyAllowed.add(row.league_id);
+      } else if (row.parent_league_id) {
+        parentIdsToCheck.add(row.parent_league_id);
+        idToParent.set(row.league_id, row.parent_league_id);
+      }
+    }
+    const publicParents = new Set<string>();
+    if (parentIdsToCheck.size > 0) {
+      const { data: parents, error: parentErr } = await supabaseAdmin
+        .from("leagues")
+        .select("league_id, is_public")
+        .in("league_id", Array.from(parentIdsToCheck));
+      if (parentErr) {
+        console.error("filterLeagueIdsForPublicScope: parent lookup failed:", parentErr.message);
+      } else if (parents) {
+        for (const p of parents as Array<{ league_id: string; is_public: boolean | null }>) {
+          if (p.is_public) publicParents.add(p.league_id);
+        }
+      }
+    }
+    const allowed = new Set<string>(directlyAllowed);
+    for (const [childId, parentId] of idToParent.entries()) {
+      if (parentId && publicParents.has(parentId)) allowed.add(childId);
+    }
+    return ids.filter((id) => allowed.has(id));
+  }
+
+  app.post("/api/public/league-data", async (req: Request, res: Response) => {
+    try {
+      const { table, leagueIds } = req.body || {};
+      if (typeof table !== "string" || !(table in ALLOWED_LEAGUE_DATA_COLUMNS)) {
+        return res.status(400).json({ error: "Invalid or unsupported table" });
+      }
+      if (!Array.isArray(leagueIds) || leagueIds.length === 0) {
+        return res.status(400).json({ error: "leagueIds must be a non-empty array" });
+      }
+      const ids = leagueIds.filter((v: unknown): v is string => typeof v === "string" && v.length > 0);
+      if (ids.length === 0) {
+        return res.status(400).json({ error: "leagueIds must contain at least one valid id" });
+      }
+
+      const allowedIds = await filterLeagueIdsForPublicScope(ids);
+      if (allowedIds.length === 0) {
+        return res.json({ rows: [] });
+      }
+
+      const cols = ALLOWED_LEAGUE_DATA_COLUMNS[table];
+      const { data, error } = await supabaseAdmin
+        .from(table)
+        .select(cols)
+        .in("league_id", allowedIds);
+
+      if (error) {
+        console.error(`Error fetching league-data for ${table}:`, error);
+        return res.status(500).json({ error: "Failed to fetch league data" });
+      }
+
+      res.json({ rows: data || [] });
+    } catch (err: any) {
+      console.error("Error in /api/public/league-data:", err.message);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   app.get("/api/public/league-logo/:leagueId", async (req: Request, res: Response) => {
     try {
       const { leagueId } = req.params;

@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useLocation, useParams } from "wouter";
 import { supabase, getSupabaseForLeague, getDataLeagueId } from "@/lib/supabase";
 import { fetchLeagueChildren } from "@/lib/leagueChildren";
+import { fetchLeagueData } from "@/lib/leagueData";
 import type { League } from "@shared/schema";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import LeagueDefaultImage from "@/assets/league-default.png";
@@ -1283,13 +1284,23 @@ export default function LeaguePage() {
         const fetchLeagueId = getDataLeagueId(slug, league.league_id);
         const parentChildIdsForTeamStats = childCompetitions.map(c => c.league_id);
         const isParentTeamStatsFetch = parentChildIdsForTeamStats.length > 0;
-        let teamStatsQuery = db.from("team_stats").select("*");
+        // For parent leagues, route team_stats through the service-role
+        // endpoint so private (is_public=false) children still roll up.
+        // The anon-key client is filtered by RLS on `team_stats`.
+        let rawTeamStats: any[] | null = null;
+        let error: any = null;
         if (isParentTeamStatsFetch) {
-          teamStatsQuery = teamStatsQuery.in("league_id", parentChildIdsForTeamStats);
+          const result = await fetchLeagueData<any>("team_stats", parentChildIdsForTeamStats);
+          rawTeamStats = result.data;
+          error = result.error;
         } else {
-          teamStatsQuery = teamStatsQuery.eq("league_id", fetchLeagueId);
+          const result = await db
+            .from("team_stats")
+            .select("*")
+            .eq("league_id", fetchLeagueId);
+          rawTeamStats = result.data;
+          error = result.error;
         }
-        const { data: rawTeamStats, error } = await teamStatsQuery;
 
         if (error) {
           console.error("Error fetching team stats:", error);
@@ -2508,17 +2519,27 @@ export default function LeaguePage() {
         }
         debugLog("📊 Step 1: Fetching all player_stats for league_id:", statsLeagueId, "isParent:", isParentFetch);
 
-        let rosterQuery = supabase
-          .from("players")
-          .select("id, full_name, slug");
-        
+        // For parent leagues, route the roster fetch through the
+        // service-role endpoint so players from private (is_public=false)
+        // children are included. The anon-key client is filtered by RLS
+        // on the `players` table.
+        let rosterData: any[] | null = null;
         if (isParentFetch && parentChildIds.length > 0) {
-          rosterQuery = rosterQuery.in("league_id", parentChildIds);
+          const result = await fetchLeagueData<any>("players", parentChildIds);
+          if (result.error) {
+            console.error("Error fetching parent roster via league-data:", result.error);
+          }
+          rosterData = result.data;
         } else {
-          rosterQuery = rosterQuery.eq("league_id", statsLeagueId);
+          const { data, error: rosterError } = await supabase
+            .from("players")
+            .select("id, full_name, slug")
+            .eq("league_id", statsLeagueId);
+          if (rosterError) {
+            console.error("Error fetching roster:", rosterError);
+          }
+          rosterData = data;
         }
-        
-        const { data: rosterData } = await rosterQuery;
 
         const slugLookup = new Map<string, string>();
         const nameLookup = new Map<string, string>();
@@ -2639,10 +2660,17 @@ export default function LeaguePage() {
 
     const calculateStandingsForLeague = async (leagueId: string): Promise<{standings: any[], poolAStandings: any[], poolBStandings: any[], hasPools: boolean}> => {
       try {
-        const { data: allTeams } = await supabase
-          .from("teams")
-          .select("team_id, name")
-          .eq("league_id", leagueId);
+        // Route the `teams` fetch through the service-role endpoint so
+        // private (is_public=false) child leagues — which RLS hides from
+        // the anon client — still produce standings rows on the parent
+        // league page.
+        const { data: allTeams, error: teamsError } = await fetchLeagueData<{ team_id: string; name: string }>(
+          "teams",
+          [leagueId],
+        );
+        if (teamsError) {
+          console.error("Error fetching teams via league-data:", teamsError);
+        }
 
         const { data: gameResults, error: gameResultsError } = await db
           .from("v_game_results")
