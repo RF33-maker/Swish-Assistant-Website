@@ -483,20 +483,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { slug } = req.params;
       if (!slug) return res.status(400).json({ error: "slug is required" });
 
+      // No is_public filter — parent leagues like REBA SL may have
+      // is_public=false yet still have a public-facing page. Branding data
+      // (name, colors, logo) is low-sensitivity so we expose it regardless.
       const { data, error } = await supabaseAdmin
         .from("leagues")
-        .select("league_id, name, slug, primary_color, secondary_color, accent_color, brand_primary_colour, banner_url, logo_url")
+        .select("league_id, name, slug, brand_primary_colour, banner_url, logo_url")
         .eq("slug", slug)
-        .eq("is_public", true)
         .single();
 
       if (error || !data) {
+        console.error("league-branding error:", JSON.stringify(error), "slug:", slug);
         return res.status(404).json({ error: "League not found" });
       }
 
       const responseData = {
         ...data,
-        primary_color: data.brand_primary_colour || data.primary_color,
+        primary_color: data.brand_primary_colour,
       };
 
       res.json(responseData);
@@ -511,20 +514,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { leagueId } = req.params;
       if (!leagueId) return res.status(400).json({ error: "leagueId is required" });
 
+      // No is_public filter — same reasoning as the slug variant above.
       const { data, error } = await supabaseAdmin
         .from("leagues")
-        .select("league_id, name, slug, primary_color, secondary_color, accent_color, brand_primary_colour, banner_url, logo_url")
+        .select("league_id, name, slug, brand_primary_colour, banner_url, logo_url")
         .eq("league_id", leagueId)
-        .eq("is_public", true)
         .single();
 
       if (error || !data) {
+        console.error("league-branding-by-id error:", JSON.stringify(error), "leagueId:", leagueId);
         return res.status(404).json({ error: "League not found" });
       }
 
       const responseData = {
         ...data,
-        primary_color: data.brand_primary_colour || data.primary_color,
+        primary_color: data.brand_primary_colour,
       };
 
       res.json(responseData);
@@ -733,6 +737,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ rows: data || [] });
     } catch (err: any) {
       console.error("Error in /api/public/league-data:", err.message);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Paginated player_stats fetch via service role — bypasses RLS so that
+  // private child leagues (e.g. REBA SL age groups) are included.
+  // Body: { leagueIds: string[], page: number, pageSize: number, parentLeagueId?: string }
+  // If parentLeagueId is supplied we validate each id has that parent in the DB,
+  // which allows parent leagues that are themselves is_public=false (REBA SL).
+  // Response: { rows: any[] }
+  app.post("/api/public/player-stats", async (req: Request, res: Response) => {
+    try {
+      const { leagueIds, page = 0, pageSize = 500, parentLeagueId } = req.body as {
+        leagueIds?: string[];
+        page?: number;
+        pageSize?: number;
+        parentLeagueId?: string;
+      };
+      if (!Array.isArray(leagueIds) || leagueIds.length === 0) {
+        return res.status(400).json({ error: "leagueIds must be a non-empty array" });
+      }
+      const safePage = Math.max(0, Math.floor(Number(page) || 0));
+      const safePageSize = Math.min(1000, Math.max(1, Math.floor(Number(pageSize) || 500)));
+
+      let allowedIds: string[];
+      if (parentLeagueId && typeof parentLeagueId === "string") {
+        // Caller says all ids are children of parentLeagueId — validate in DB.
+        // This handles parent leagues that have is_public=false (e.g. REBA SL):
+        // the children are allowed as long as they genuinely belong to this parent.
+        const { data: childRows } = await supabaseAdmin
+          .from("leagues")
+          .select("league_id")
+          .in("league_id", leagueIds)
+          .eq("parent_league_id", parentLeagueId);
+        const validatedChildIds = new Set((childRows || []).map((r: any) => r.league_id));
+        // Also allow the parent itself if it's in the list.
+        const { data: parentRow } = await supabaseAdmin
+          .from("leagues")
+          .select("league_id")
+          .eq("league_id", parentLeagueId)
+          .single();
+        if (parentRow) validatedChildIds.add(parentLeagueId);
+        allowedIds = leagueIds.filter((id) => validatedChildIds.has(id));
+      } else {
+        allowedIds = await filterLeagueIdsForPublicScope(leagueIds);
+      }
+
+      if (allowedIds.length === 0) {
+        return res.json({ rows: [] });
+      }
+
+      const from = safePage * safePageSize;
+      const to = from + safePageSize - 1;
+
+      const { data, error } = await supabaseAdmin
+        .from("player_stats")
+        .select("*")
+        .in("league_id", allowedIds)
+        .order("player_id", { ascending: true, nullsFirst: false })
+        .range(from, to);
+
+      if (error) {
+        console.error("Error in /api/public/player-stats:", error.message);
+        return res.status(500).json({ error: "Failed to fetch player stats" });
+      }
+
+      res.json({ rows: data || [] });
+    } catch (err: any) {
+      console.error("Error in /api/public/player-stats:", err.message);
       res.status(500).json({ error: "Internal server error" });
     }
   });
