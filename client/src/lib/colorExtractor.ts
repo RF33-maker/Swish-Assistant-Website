@@ -153,41 +153,38 @@ export async function extractTeamColors(teamName: string, leagueId: string): Pro
     return cachedEntry.colors;
   }
   
-  // Extract fresh colors
-  const normalizedTeamName = teamName.replace(/\s+/g, '_');
-  const possibleFilenames = [
-    `${leagueId}_${normalizedTeamName}.png`,
-    `${leagueId}_${normalizedTeamName}.jpg`,
-    `${leagueId}_${normalizedTeamName}.jpeg`,
-    `${leagueId}_${normalizedTeamName}_Senior_Men.png`,
-    `${leagueId}_${normalizedTeamName}_Senior_Men.jpg`,
-    `${leagueId}_${normalizedTeamName}_Senior_Men.jpeg`,
-    `${leagueId}_${normalizedTeamName}_Senior_Men_I.png`,
-    `${leagueId}_${normalizedTeamName}_Senior_Men_I.jpg`,
-    `${leagueId}_${normalizedTeamName}_Senior_Men_I.jpeg`,
-  ];
-  
-  for (const filename of possibleFilenames) {
-    const logoUrl = `https://omkwqpcgttrgvbhcxgqf.supabase.co/storage/v1/object/public/team-logos/${filename}`;
-    const extractedColors = await extractColorsFromImage(logoUrl);
-    
-    if (extractedColors) {
-      // Cache the result
-      cache[cacheKey] = {
-        colors: extractedColors,
-        timestamp: Date.now(),
-        version: CACHE_VERSION,
-      };
-      
-      try {
-        localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
-      } catch (err) {
-        console.warn("Failed to cache colors:", err);
-      }
-      
-      return extractedColors;
+  // Ask the server for the team's logo URL (server does storage probing, no browser 404s)
+  let logoUrl: string | null = null;
+  try {
+    const res = await fetch(`/api/leagues/${leagueId}/team-logos`);
+    if (res.ok) {
+      const logoMap: Record<string, string> = await res.json();
+      const lower = teamName.toLowerCase();
+      logoUrl =
+        logoMap[teamName] ||
+        Object.entries(logoMap).find(([k]) => k.toLowerCase() === lower)?.[1] ||
+        null;
     }
+  } catch {
+    // network error — return null
   }
-  
+
+  if (!logoUrl) return null;
+
+  const extractedColors = await extractColorsFromImage(logoUrl);
+  if (extractedColors) {
+    cache[cacheKey] = {
+      colors: extractedColors,
+      timestamp: Date.now(),
+      version: CACHE_VERSION,
+    };
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+    } catch (err) {
+      console.warn("Failed to cache colors:", err);
+    }
+    return extractedColors;
+  }
+
   return null;
 }
