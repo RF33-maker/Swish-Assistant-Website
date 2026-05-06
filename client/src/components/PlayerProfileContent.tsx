@@ -562,20 +562,33 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
           if (r.kind === 'transient') lookupTransient = true;
 
           if (!initialPlayer && !lookupTransient) {
+            // Step 1: re-query by slug without .single() — recovers from
+            // transient PGRST116 failures on the primary lookup and also
+            // handles hyphenated surnames (e.g. "Wise-Malcolm") where
+            // slugToName() would convert the hyphen to a space, breaking
+            // the name-based fallback below.
+            const slugReRun = async () => {
+              const { data, error } = await supabase
+                .from('players')
+                .select(PLAYER_PROFILE_COLUMNS)
+                .eq('slug', playerSlug)
+                .limit(1);
+              const rows = data ?? [];
+              return { data: rows.length > 0 ? rows[0] : null, error };
+            };
+            const slugRetry = await lookupWithRetry<PlayerRow>(slugReRun);
+            if (slugRetry.kind === 'found') initialPlayer = slugRetry.data;
+            if (slugRetry.kind === 'transient') lookupTransient = true;
+          }
+
+          if (!initialPlayer && !lookupTransient) {
             const searchName = slugToName(playerSlug);
-            // Slug lookup definitively returned no rows — fall back to a
-            // small prefix-bounded search to support legacy human-readable
-            // slugs that don't have a `slug` column entry yet.
+            // Step 2: name-based ilike search for legacy slugs that have no
+            // `slug` column entry yet.
             //
-            // The previous code paged through `players` with
-            // `.limit(10000)` when no direct ilike match was found,
-            // scanning the whole table on every cold profile load. We
-            // now:
-            //   * use a prefix `ilike('full_name', '${name}%')` so an
-            //     index on `full_name` can serve the lookup instead of
-            //     a full sequential scan, and
-            //   * project only the columns this component actually
-            //     consumes via PLAYER_PROFILE_COLUMNS.
+            // NOTE: slugToName converts all hyphens to spaces, so hyphenated
+            // surnames won't match here — that's why we do the slug re-query
+            // above first as the primary recovery path.
             const fallbackRun = async () => {
               const { data, error } = await supabase
                 .from('players')
