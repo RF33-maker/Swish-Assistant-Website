@@ -4,7 +4,6 @@ import { supabase } from "@/lib/supabase";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import { TeamLogo } from "@/components/TeamLogo";
 import { normalizeTeamName } from "@/lib/teamUtils";
-import { fetchLeagueData } from "@/lib/leagueData";
 import React from "react";
 
 interface League {
@@ -105,11 +104,10 @@ export default function LeagueTeams() {
 
         setLeague(leagueData);
 
-        // Fetch all teams via service-role endpoint (bypasses RLS for private leagues)
-        const { data: allTeams, error: teamsError } = await fetchLeagueData<{ team_id: string; name: string }>(
-          "teams",
-          [leagueData.league_id],
-        );
+        const { data: allTeams, error: teamsError } = await supabase
+          .from("teams")
+          .select("team_id, name")
+          .eq("league_id", leagueData.league_id);
 
         if (teamsError) {
           console.error("Error fetching teams:", teamsError);
@@ -122,16 +120,10 @@ export default function LeagueTeams() {
           return;
         }
 
-        // Fetch all player stats via service-role endpoint (bypasses RLS for private leagues)
-        const { data: allPlayerStats, error: statsError } = await fetch("/api/public/player-stats", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ leagueIds: [leagueData.league_id], page: 0, pageSize: 1000 }),
-        }).then(async (r) => {
-          if (!r.ok) return { data: null, error: new Error(`player-stats ${r.status}`) };
-          const j = await r.json();
-          return { data: j.rows ?? [], error: null };
-        }).catch((e) => ({ data: null, error: e }));
+        const { data: allPlayerStats, error: statsError } = await supabase
+          .from("player_stats")
+          .select("*")
+          .eq("league_id", leagueData.league_id);
 
         if (statsError) {
           console.error("Error fetching player stats:", statsError);

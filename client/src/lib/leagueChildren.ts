@@ -1,3 +1,5 @@
+import { supabase } from "@/lib/supabase";
+
 export type LeagueChild = {
   league_id: string;
   name: string;
@@ -14,10 +16,12 @@ export async function fetchLeagueChildren(parentId: string): Promise<LeagueChild
   if (cache.has(parentId)) return cache.get(parentId)!;
   const p = (async () => {
     try {
-      const res = await fetch(`/api/public/league-children/${encodeURIComponent(parentId)}`);
-      if (!res.ok) return [];
-      const json = await res.json();
-      return Array.isArray(json?.children) ? (json.children as LeagueChild[]) : [];
+      const { data, error } = await supabase
+        .from("leagues")
+        .select("league_id, name, slug, logo_url, age_group, stop")
+        .eq("parent_league_id", parentId);
+      if (error) return [];
+      return (data || []) as LeagueChild[];
     } catch {
       return [];
     }
