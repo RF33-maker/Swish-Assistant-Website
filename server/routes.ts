@@ -734,6 +734,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Batch league info lookup using service role — bypasses RLS so private
+  // child leagues (e.g. REBA SL age groups) resolve names/parents correctly.
+  // Body: { ids: string[] }
+  // Response: { [leagueId]: { name, parent_league_id, age_group, stop } }
+  app.post("/api/public/league-info", async (req: Request, res: Response) => {
+    try {
+      const { ids } = req.body as { ids?: string[] };
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.json({});
+      }
+      const unique = Array.from(new Set(ids)).slice(0, 100);
+      const { data, error } = await supabaseAdmin
+        .from("leagues")
+        .select("league_id, name, parent_league_id, age_group, stop")
+        .in("league_id", unique);
+      if (error) {
+        console.error("Error in /api/public/league-info:", error.message);
+        return res.status(500).json({ error: "Internal server error" });
+      }
+      const result: Record<string, { name: string; parent_league_id: string | null; age_group: string | null; stop: number | null }> = {};
+      for (const row of data || []) {
+        result[row.league_id] = {
+          name: row.name,
+          parent_league_id: row.parent_league_id || null,
+          age_group: row.age_group || null,
+          stop: row.stop ?? null,
+        };
+      }
+      res.json(result);
+    } catch (err: any) {
+      console.error("Error in /api/public/league-info:", err.message);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   app.get("/api/public/league-logo/:leagueId", async (req: Request, res: Response) => {
     try {
       const { leagueId } = req.params;

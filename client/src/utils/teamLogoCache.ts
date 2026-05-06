@@ -20,20 +20,27 @@ async function getParentLeagueId(leagueId: string): Promise<string | null> {
   }
   const fetchPromise = (async () => {
     try {
-      const { data, error } = await supabase
-        .from("leagues")
-        .select("parent_league_id")
-        .eq("league_id", leagueId)
-        .single();
-      const parentId = (!error && data?.parent_league_id) ? data.parent_league_id : null;
-      parentLeagueCache.set(leagueId, parentId);
-      parentLeagueFetching.delete(leagueId);
-      return parentId;
+      // Use the service-role-backed endpoint so private child leagues
+      // (e.g. REBA SL age groups) resolve their parent correctly — the
+      // anon Supabase client is blocked by RLS on the leagues table.
+      const res = await fetch('/api/public/league-info', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [leagueId] }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const parentId = data[leagueId]?.parent_league_id || null;
+        parentLeagueCache.set(leagueId, parentId);
+        parentLeagueFetching.delete(leagueId);
+        return parentId;
+      }
     } catch {
-      parentLeagueCache.set(leagueId, null);
-      parentLeagueFetching.delete(leagueId);
-      return null;
+      // fall through to null
     }
+    parentLeagueCache.set(leagueId, null);
+    parentLeagueFetching.delete(leagueId);
+    return null;
   })();
   parentLeagueFetching.set(leagueId, fetchPromise);
   return fetchPromise;

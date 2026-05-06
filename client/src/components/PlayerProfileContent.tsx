@@ -1025,7 +1025,19 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
             );
             const userId = stats.length > 0 ? stats[0].user_id : null;
 
-            const [gamesResp, publicLeaguesResp, extraLeaguesResp] = await Promise.all([
+            // Use service-role-backed endpoint for extra league info so that
+            // private child leagues (e.g. REBA SL age groups) resolve names
+            // and parent IDs correctly — the anon client is blocked by RLS.
+            const extraLeagueInfoFetch: Promise<Record<string, { name: string; parent_league_id: string | null; age_group: string | null; stop: number | null }>> =
+              extraLeagueIds.length > 0
+                ? fetch('/api/public/league-info', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids: extraLeagueIds }),
+                  }).then(r => r.ok ? r.json() : {}).catch(() => ({}))
+                : Promise.resolve({});
+
+            const [gamesResp, publicLeaguesResp, extraLeagueInfoMap] = await Promise.all([
               gameKeys.length > 0
                 ? supabase
                     .from('game_schedule')
@@ -1039,13 +1051,16 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
                     .eq('user_id', userId)
                     .eq('is_public', true)
                 : Promise.resolve({ data: [], error: null }),
-              extraLeagueIds.length > 0
-                ? supabase
-                    .from('leagues')
-                    .select('league_id, name, parent_league_id, age_group, stop')
-                    .in('league_id', extraLeagueIds)
-                : Promise.resolve({ data: [], error: null }),
+              extraLeagueInfoFetch,
             ]);
+
+            // Convert the server response back into the shape expected by the
+            // enrichment loop below (same fields as the old Supabase response).
+            const extraLeaguesResp = {
+              data: Object.entries(extraLeagueInfoMap as Record<string, { name: string; parent_league_id: string | null; age_group: string | null; stop: number | null }>).map(
+                ([league_id, info]) => ({ league_id, ...info })
+              ),
+            };
 
             for (const league of (extraLeaguesResp.data || []) as LeagueRow[]) {
               leagueMapLocal.set(league.league_id, league.name);
