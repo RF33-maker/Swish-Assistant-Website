@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { fetchLeagueChildren } from "@/lib/leagueChildren";
 import { DEBUG, debugLog } from "./debug";
 
 const logoCache = new Map<string, string | null>();
@@ -47,13 +48,12 @@ async function getChildLeagueIds(leagueId: string): Promise<string[]> {
   }
   const fetchPromise = (async () => {
     try {
-      const { data, error } = await supabase
-        .from("leagues")
-        .select("league_id")
-        .eq("parent_league_id", leagueId);
-      const ids = (!error && Array.isArray(data))
-        ? data.map((r: any) => r.league_id).filter(Boolean)
-        : [];
+      // Goes through the service-role-backed endpoint so private
+      // (is_public=false) children still roll up under their public
+      // parent — the anon-key supabase client gets filtered out by RLS
+      // on the `leagues` table.
+      const data = await fetchLeagueChildren(leagueId);
+      const ids = data.map((r) => r.league_id).filter(Boolean);
       childLeagueIdsCache.set(leagueId, ids);
       childLeagueIdsFetching.delete(leagueId);
       return ids;

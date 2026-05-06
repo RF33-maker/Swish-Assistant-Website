@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useParams, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
+import { fetchLeagueChildren } from "@/lib/leagueChildren";
 import Header from "@/components/layout/header";
 import Footer from "@/components/layout/footer";
 import { ArrowLeft } from "lucide-react";
@@ -191,12 +192,11 @@ export default function LeagueLeadersPage() {
         }
 
         let leagueIdsToQuery = [leagueData.league_id];
-        const { data: childLeagueData } = await supabase
-          .from("leagues")
-          .select("league_id, name, age_group")
-          .eq("parent_league_id", leagueData.league_id);
-        
-        if (childLeagueData && childLeagueData.length > 0) {
+        // Use the service-role-backed endpoint so private (is_public=false)
+        // child leagues still roll up under their public parent.
+        const childLeagueData = await fetchLeagueChildren(leagueData.league_id);
+
+        if (childLeagueData.length > 0) {
           setChildLeagues(childLeagueData);
           leagueIdsToQuery = childLeagueData.map(c => c.league_id);
         } else {

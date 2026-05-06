@@ -531,6 +531,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Returns child league rows for a given parent_league_id, bypassing
+  // RLS via the service-role client. Public parent league pages need
+  // this to roll up data from children that have been marked
+  // is_public=false (the anon-key client filters those rows out under
+  // the existing RLS policy on `leagues`). The endpoint itself is
+  // public-read because it only exposes basic competition metadata
+  // (id/name/slug/logo/age_group/stop) that's already implied by the
+  // parent league page.
+  app.get("/api/public/league-children/:parentId", async (req: Request, res: Response) => {
+    try {
+      const { parentId } = req.params;
+      if (!parentId) return res.status(400).json({ error: "parentId is required" });
+
+      const { data, error } = await supabaseAdmin
+        .from("leagues")
+        .select("league_id, name, slug, logo_url, age_group, stop")
+        .eq("parent_league_id", parentId);
+
+      if (error) {
+        console.error("Error fetching league children:", error);
+        return res.status(500).json({ error: "Failed to fetch league children" });
+      }
+
+      res.json({ children: data || [] });
+    } catch (err: any) {
+      console.error("Error fetching league children:", err.message);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   app.get("/api/public/league-logo/:leagueId", async (req: Request, res: Response) => {
     try {
       const { leagueId } = req.params;

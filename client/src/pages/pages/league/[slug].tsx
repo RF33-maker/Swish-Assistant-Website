@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useLocation, useParams } from "wouter";
 import { supabase, getSupabaseForLeague, getDataLeagueId } from "@/lib/supabase";
+import { fetchLeagueChildren } from "@/lib/leagueChildren";
 import type { League } from "@shared/schema";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import LeagueDefaultImage from "@/assets/league-default.png";
@@ -1605,15 +1606,16 @@ export default function LeaguePage() {
           
           setYoutubeUrl(data.youtube_embed_url || "");
           
-          const { data: competitions, error: competitionsError } = await supabase
-            .from("leagues")
-            .select("league_id, name, slug, logo_url, age_group, stop")
-            .eq("parent_league_id", data.league_id);
-          
-          if (competitions && !competitionsError) {
+          // Use the service-role-backed endpoint so private (is_public=false)
+          // children still roll up under their public parent. The anon-key
+          // supabase client is filtered by RLS on the `leagues` table and
+          // would otherwise return 0 children for parents whose kids have
+          // been hidden from search via is_public=false.
+          try {
+            const competitions = await fetchLeagueChildren(data.league_id);
             setChildCompetitions(competitions);
             fetchedChildCompetitions = competitions;
-          } else if (competitionsError) {
+          } catch (competitionsError) {
             console.error("Failed to fetch child competitions:", competitionsError);
           }
           
