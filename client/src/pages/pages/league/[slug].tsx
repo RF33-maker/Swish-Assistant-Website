@@ -1608,8 +1608,7 @@ export default function LeaguePage() {
           const { data: competitions, error: competitionsError } = await supabase
             .from("leagues")
             .select("league_id, name, slug, logo_url, age_group, stop")
-            .eq("parent_league_id", data.league_id)
-            .eq("is_public", true);
+            .eq("parent_league_id", data.league_id);
           
           if (competitions && !competitionsError) {
             setChildCompetitions(competitions);
