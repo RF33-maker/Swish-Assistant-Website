@@ -267,6 +267,7 @@ def parse_file():
         file_path = data.get('file_path', '')
         user_id = data.get('user_id', '')
         league_id = data.get('league_id', '')
+        parent_league_id = data.get('parent_league_id', '') or league_id
 
         if not file_path:
             return jsonify({'error': 'file_path is required'}), 400
@@ -291,6 +292,11 @@ def parse_file():
         result['file_path'] = file_path
         result['user_id'] = user_id
         result['league_id'] = league_id
+        result['parent_league_id'] = parent_league_id
+        # Placeholder for downstream automation that creates child league rows.
+        # The frontend uses this list (when populated) to stamp parent_league_id
+        # only on those specific rows; otherwise it falls back to a snapshot diff.
+        result.setdefault('created_league_ids', [])
 
         return jsonify(result)
 
