@@ -371,7 +371,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get all teams for this league from player_stats
       const { data: playerStats, error: teamsError } = await supabaseAdmin
         .from('player_stats')
-        .select('team')
+        .select('team_name')
         .eq('league_id', leagueId);
 
       if (teamsError) {
@@ -381,7 +381,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get unique team names
       const teams = Array.from(new Set(
-        playerStats?.map((stat: any) => stat.team).filter(Boolean) || []
+        playerStats?.map((stat: any) => stat.team_name).filter(Boolean) || []
       ));
 
       // Check for existing logo files for each team using direct storage access
@@ -703,6 +703,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     return ids.filter((id) => allowed.has(id));
   }
+
+  app.post("/api/public/team-logos", async (req: Request, res: Response) => {
+    try {
+      const { leagueIds } = req.body || {};
+      if (!Array.isArray(leagueIds) || leagueIds.length === 0) {
+        return res.json({ rows: [] });
+      }
+      const ids = leagueIds.filter((v: unknown): v is string => typeof v === "string" && v.length > 0);
+      if (ids.length === 0) return res.json({ rows: [] });
+
+      const { data, error } = await supabaseAdmin
+        .from("team_logos")
+        .select("team_name, logo_url, league_id")
+        .in("league_id", ids);
+
+      if (error) {
+        return res.json({ rows: [] });
+      }
+      return res.json({ rows: data || [] });
+    } catch {
+      return res.json({ rows: [] });
+    }
+  });
 
   app.post("/api/public/league-data", async (req: Request, res: Response) => {
     try {

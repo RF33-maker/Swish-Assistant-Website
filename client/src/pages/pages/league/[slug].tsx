@@ -1638,21 +1638,16 @@ export default function LeaguePage() {
 
           const logoLeagueIds = isParent ? [data.league_id, ...childIds] : [effectiveLeagueId];
           try {
-            let logoQuery = supabase.from("team_logos").select("team_name, logo_url, league_id");
-            if (logoLeagueIds.length === 1) {
-              logoQuery = logoQuery.eq("league_id", logoLeagueIds[0]);
-            } else {
-              logoQuery = logoQuery.in("league_id", logoLeagueIds);
-            }
-            const { data: logoRows, error: logoError } = await logoQuery;
+            const logoRes = await fetch('/api/public/team-logos', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ leagueIds: logoLeagueIds }),
+            });
             const map = new Map<string, string>();
-            // If the team_logos table doesn't exist (or any other query error
-            // occurs) we silently skip this page-level optimization. The
-            // per-component <TeamLogo> fallback will then resolve logos by
-            // probing Supabase storage. This keeps the console clean on
-            // projects where the team_logos table has not been provisioned.
-            if (!logoError && logoRows && logoRows.length > 0) {
-              logoRows.forEach((row: any) => {
+            if (logoRes.ok) {
+              const json = await logoRes.json();
+              const logoRows: Array<{ team_name: string; logo_url: string }> = json.rows || [];
+              logoRows.forEach((row) => {
                 const normalized = normalizeAndMapTeamName(row.team_name);
                 if (normalized && row.logo_url) {
                   map.set(normalized, row.logo_url);

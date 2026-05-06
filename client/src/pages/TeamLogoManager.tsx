@@ -105,51 +105,42 @@ export default function TeamLogoManager() {
 
         const logoMap: Record<string, string> = {};
 
+        // Step 1: check team_logos DB table via service-role endpoint
         try {
-          const { data: storedLogos, error: logoError } = await supabase
-            .from("team_logos")
-            .select("team_name, logo_url")
-            .in("league_id", logoQueryIds);
-
-          if (!logoError && storedLogos) {
-            storedLogos.forEach((logo: any) => {
-              logoMap[logo.team_name] = logo.logo_url;
+          const dbRes = await fetch('/api/public/team-logos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ leagueIds: logoQueryIds }),
+          });
+          if (dbRes.ok) {
+            const json = await dbRes.json();
+            (json.rows || []).forEach((logo: any) => {
+              if (logo.team_name && logo.logo_url) {
+                logoMap[logo.team_name] = logo.logo_url;
+              }
             });
           }
         } catch (e) {
         }
-        
-        // For teams not in the database, check storage directly with all extensions
-        const extensions = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
-        
-        for (const teamName of uniqueTeams) {
-          if (logoMap[teamName]) {
-            continue; // Skip if already found in database
-          }
-          
-          const baseFileName = teamName.replace(/\s+/g, '_');
-          let foundLogo = false;
-          
-          for (const lid of logoQueryIds) {
-            if (foundLogo) break;
-            for (const ext of extensions) {
-              const fileName = `${lid}_${baseFileName}.${ext}`;
-              const { data } = supabase.storage
-                .from('team-logos')
-                .getPublicUrl(fileName);
-              
-              try {
-                const response = await fetch(data.publicUrl, { method: 'HEAD' });
-                if (response.ok) {
-                  logoMap[teamName] = data.publicUrl;
-                  foundLogo = true;
-                  break;
-                }
-              } catch (error) {
+
+        // Step 2: for teams not in DB, use server-side storage probing (no browser HEAD requests)
+        for (const lid of logoQueryIds) {
+          const missing = uniqueTeams.filter(t => !logoMap[t]);
+          if (missing.length === 0) break;
+          try {
+            const storageRes = await fetch(`/api/leagues/${lid}/team-logos`);
+            if (storageRes.ok) {
+              const storageMap: Record<string, string> = await storageRes.json();
+              for (const teamName of missing) {
+                const lower = teamName.toLowerCase();
+                const url =
+                  storageMap[teamName] ||
+                  Object.entries(storageMap).find(([k]) => k.toLowerCase() === lower)?.[1];
+                if (url) logoMap[teamName] = url;
               }
             }
+          } catch (e) {
           }
-          
         }
         
         setTeamLogos(logoMap);

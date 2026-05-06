@@ -1,4 +1,3 @@
-import { supabase } from "@/lib/supabase";
 import { fetchLeagueChildren } from "@/lib/leagueChildren";
 import { DEBUG, debugLog } from "./debug";
 
@@ -10,6 +9,8 @@ const parentLeagueCache = new Map<string, string | null>();
 const parentLeagueFetching = new Map<string, Promise<string | null>>();
 const childLeagueIdsCache = new Map<string, string[]>();
 const childLeagueIdsFetching = new Map<string, Promise<string[]>>();
+const serverLogoMapCache = new Map<string, Record<string, string>>();
+const serverLogoMapFetching = new Map<string, Promise<Record<string, string>>>();
 
 async function getParentLeagueId(leagueId: string): Promise<string | null> {
   if (parentLeagueCache.has(leagueId)) {
@@ -20,9 +21,6 @@ async function getParentLeagueId(leagueId: string): Promise<string | null> {
   }
   const fetchPromise = (async () => {
     try {
-      // Use the service-role-backed endpoint so private child leagues
-      // (e.g. REBA SL age groups) resolve their parent correctly — the
-      // anon Supabase client is blocked by RLS on the leagues table.
       const res = await fetch('/api/public/league-info', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -55,10 +53,6 @@ async function getChildLeagueIds(leagueId: string): Promise<string[]> {
   }
   const fetchPromise = (async () => {
     try {
-      // Goes through the service-role-backed endpoint so private
-      // (is_public=false) children still roll up under their public
-      // parent — the anon-key supabase client gets filtered out by RLS
-      // on the `leagues` table.
       const data = await fetchLeagueChildren(leagueId);
       const ids = data.map((r) => r.league_id).filter(Boolean);
       childLeagueIdsCache.set(leagueId, ids);
@@ -105,13 +99,15 @@ async function getDbLogosForLeague(leagueId: string): Promise<Map<string, string
   const fetchPromise = (async () => {
     const map = new Map<string, string>();
     try {
-      const { data, error } = await supabase
-        .from("team_logos")
-        .select("team_name, logo_url")
-        .eq("league_id", leagueId);
-
-      if (!error && data) {
-        data.forEach((row: any) => {
+      const res = await fetch('/api/public/team-logos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leagueIds: [leagueId] }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const rows: Array<{ team_name: string; logo_url: string }> = json.rows || [];
+        rows.forEach((row) => {
           if (row.team_name && row.logo_url) {
             map.set(row.team_name, row.logo_url);
             map.set(normalizeTeamName(row.team_name), row.logo_url);
@@ -119,7 +115,7 @@ async function getDbLogosForLeague(leagueId: string): Promise<Map<string, string
         });
       }
     } catch (err) {
-      debugLog("[TeamLogoCache] Error fetching team_logos table:", err);
+      debugLog("[TeamLogoCache] Error fetching team_logos via server:", err);
     }
     dbLogosCache.set(leagueId, map);
     dbLogosFetching.delete(leagueId);
@@ -128,6 +124,40 @@ async function getDbLogosForLeague(leagueId: string): Promise<Map<string, string
 
   dbLogosFetching.set(leagueId, fetchPromise);
   return fetchPromise;
+}
+
+async function getServerLogoMap(leagueId: string): Promise<Record<string, string>> {
+  if (serverLogoMapCache.has(leagueId)) {
+    return serverLogoMapCache.get(leagueId)!;
+  }
+  if (serverLogoMapFetching.has(leagueId)) {
+    return serverLogoMapFetching.get(leagueId)!;
+  }
+  const fetchPromise = (async () => {
+    try {
+      const res = await fetch(`/api/leagues/${leagueId}/team-logos`);
+      if (res.ok) {
+        const map: Record<string, string> = await res.json();
+        serverLogoMapCache.set(leagueId, map);
+        serverLogoMapFetching.delete(leagueId);
+        return map;
+      }
+    } catch {
+      // fall through
+    }
+    serverLogoMapCache.set(leagueId, {});
+    serverLogoMapFetching.delete(leagueId);
+    return {};
+  })();
+  serverLogoMapFetching.set(leagueId, fetchPromise);
+  return fetchPromise;
+}
+
+function findInLogoMap(map: Record<string, string>, teamName: string): string | undefined {
+  if (map[teamName]) return map[teamName];
+  const lower = teamName.toLowerCase();
+  const entry = Object.entries(map).find(([k]) => k.toLowerCase() === lower);
+  return entry?.[1];
 }
 
 interface GetTeamLogoCachedArgs {
@@ -140,7 +170,7 @@ interface GetTeamLogoCachedArgs {
 export async function getTeamLogoCached(
   args: GetTeamLogoCachedArgs
 ): Promise<string | null> {
-  const { leagueId, teamName, bucket = "team-logos", extraLeagueIds } = args;
+  const { leagueId, teamName, extraLeagueIds } = args;
 
   if (!leagueId || !teamName) {
     return null;
@@ -158,10 +188,6 @@ export async function getTeamLogoCached(
 
   const fetchPromise = (async (): Promise<string | null> => {
     try {
-      // Build the ordered list of league IDs to try: the league itself, then
-      // its parent (so child-page logos can fall through to the parent), then
-      // any child leagues (so parent-page logos can find files keyed by a
-      // child competition's league_id), then any explicitly-provided extras.
       const parentId = await getParentLeagueId(leagueId);
       const childIds = await getChildLeagueIds(leagueId);
 
@@ -177,6 +203,7 @@ export async function getTeamLogoCached(
       childIds.forEach(pushLeagueId);
       if (extraLeagueIds) extraLeagueIds.forEach(pushLeagueId);
 
+      // Step 1: check team_logos DB table via server endpoint
       let dbUrl: string | undefined;
       for (const tryLeagueId of leagueIdsToTry) {
         const dbLogos = await getDbLogosForLeague(tryLeagueId);
@@ -194,52 +221,27 @@ export async function getTeamLogoCached(
         return dbUrl;
       }
 
-      const extensions = ["png", "jpg", "jpeg", "gif", "webp"];
-
-      const normalizedFileName = normalizeTeamNameForFile(teamName);
-      const originalFileName = teamName.replace(/\s+/g, "_");
-
-      const filenamesToTry = [
-        normalizedFileName,
-        originalFileName,
-        `${normalizedFileName}_Senior_Men`,
-        `${normalizedFileName}_Senior_Men_I`,
-        `${originalFileName}_Senior_Men`,
-        `${originalFileName}_Senior_Men_I`,
-      ];
-
-      const uniqueFilenames = Array.from(new Set(filenamesToTry));
-
-      if (DEBUG) {
-        debugLog(`[TeamLogoCache] Trying filenames for "${teamName}":`, uniqueFilenames);
-      }
-
+      // Step 2: use server-side storage probing (no browser HEAD requests)
       for (const tryLeagueId of leagueIdsToTry) {
-        for (const baseFileName of uniqueFilenames) {
-          for (const ext of extensions) {
-            const fileName = `${tryLeagueId}_${baseFileName}.${ext}`;
-
-            const { data } = supabase.storage
-              .from(bucket)
-              .getPublicUrl(fileName);
-
-            try {
-              const response = await fetch(data.publicUrl, { method: "HEAD" });
-              if (response.ok) {
-                const lastModified = response.headers.get("last-modified");
-                const cacheBuster = lastModified
-                  ? new Date(lastModified).getTime()
-                  : Date.now();
-                const urlWithCacheBuster = `${data.publicUrl}?t=${cacheBuster}`;
-
-                debugLog(`[TeamLogoCache] Found logo: ${fileName}`);
-
-                logoCache.set(cacheKey, urlWithCacheBuster);
-                inFlight.delete(cacheKey);
-                return urlWithCacheBuster;
-              }
-            } catch {
-            }
+        const serverMap = await getServerLogoMap(tryLeagueId);
+        const url = findInLogoMap(serverMap, teamName);
+        if (url) {
+          debugLog(`[TeamLogoCache] Found logo via server map for "${teamName}" in league ${tryLeagueId}`);
+          logoCache.set(cacheKey, url);
+          inFlight.delete(cacheKey);
+          return url;
+        }
+        // Also try normalised file-name variants against the server map keys
+        const variants = [
+          normalizeTeamNameForFile(teamName),
+          teamName.replace(/\s+/g, "_"),
+        ];
+        for (const variant of variants) {
+          const varEntry = findInLogoMap(serverMap, variant.replace(/_/g, " "));
+          if (varEntry) {
+            logoCache.set(cacheKey, varEntry);
+            inFlight.delete(cacheKey);
+            return varEntry;
           }
         }
       }
@@ -264,6 +266,7 @@ export function invalidateLogoCacheEntry(leagueId: string, teamName: string): vo
   logoCache.delete(cacheKey);
   inFlight.delete(cacheKey);
   dbLogosCache.delete(leagueId);
+  serverLogoMapCache.delete(leagueId);
 }
 
 export function clearLogoCache(): void {
@@ -275,4 +278,6 @@ export function clearLogoCache(): void {
   parentLeagueFetching.clear();
   childLeagueIdsCache.clear();
   childLeagueIdsFetching.clear();
+  serverLogoMapCache.clear();
+  serverLogoMapFetching.clear();
 }
