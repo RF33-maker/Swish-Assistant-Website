@@ -1,0 +1,33 @@
+20:25:05.250 Running build in Washington, D.C., USA (East) – iad1
+20:25:05.250 Build machine configuration: 2 cores, 8 GB
+20:25:05.376 Cloning github.com/RF33-maker/Swish-Assistant-Website (Branch: feature/league-pages, Commit: b3ef747)
+20:25:05.377 Previous build caches not available.
+20:25:07.941 Cloning completed: 2.565s
+20:25:08.323 Running "vercel build"
+20:25:09.134 Vercel CLI 51.6.1
+20:25:09.704 Running "install" command: `npm ci`...
+20:25:11.126 npm error code EUSAGE
+20:25:11.127 npm error
+20:25:11.128 npm error `npm ci` can only install packages when your package.json and package-lock.json or npm-shrinkwrap.json are in sync. Please update your lock file with `npm install` before continuing.
+20:25:11.128 npm error
+20:25:11.128 npm error Missing: bufferutil@4.0.8 from lock file
+20:25:11.129 npm error
+20:25:11.129 npm error Clean install a project
+20:25:11.129 npm error
+20:25:11.129 npm error Usage:
+20:25:11.130 npm error npm ci
+20:25:11.130 npm error
+20:25:11.130 npm error Options:
+20:25:11.130 npm error [--install-strategy <hoisted|nested|shallow|linked>] [--legacy-bundling]
+20:25:11.131 npm error [--global-style] [--omit <dev|optional|peer> [--omit <dev|optional|peer> ...]]
+20:25:11.131 npm error [--include <prod|dev|optional|peer> [--include <prod|dev|optional|peer> ...]]
+20:25:11.131 npm error [--strict-peer-deps] [--foreground-scripts] [--ignore-scripts] [--no-audit]
+20:25:11.132 npm error [--no-bin-links] [--no-fund] [--dry-run]
+20:25:11.132 npm error [-w|--workspace <workspace-name> [-w|--workspace <workspace-name> ...]]
+20:25:11.132 npm error [-ws|--workspaces] [--include-workspace-root] [--install-links]
+20:25:11.132 npm error
+20:25:11.133 npm error aliases: clean-install, ic, install-clean, isntall-clean
+20:25:11.133 npm error
+20:25:11.133 npm error Run "npm help ci" for more info
+20:25:11.133 npm error A complete log of this run can be found in: /vercel/.npm/_logs/2026-05-06T19_25_09_959Z-debug-0.log
+20:25:11.165 Error: Command "npm ci" exited with 1
