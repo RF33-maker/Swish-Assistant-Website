@@ -739,33 +739,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { leagueId } = req.params;
       if (!leagueId) return res.status(400).json({ error: "leagueId is required" });
 
+      // No is_public filter — private child leagues must still resolve branding
+      // via their public parent so that player profiles display the right colour.
       const { data, error } = await supabaseAdmin
         .from("leagues")
-        .select("logo_url, parent_league_id, is_public")
+        .select("logo_url, parent_league_id, brand_primary_colour, is_public")
         .eq("league_id", leagueId)
-        .eq("is_public", true)
         .single();
 
       if (error || !data) {
         return res.status(404).json({ error: "League not found" });
       }
 
+      // If this league has its own logo, return it (plus its colour).
       if (data.logo_url) {
-        return res.json({ logo_url: data.logo_url });
+        return res.json({
+          logo_url: data.logo_url,
+          brand_primary_colour: data.brand_primary_colour || null,
+        });
       }
 
+      // No logo — try the parent league (private children inherit parent branding).
       if (data.parent_league_id) {
         const { data: parentData } = await supabaseAdmin
           .from("leagues")
-          .select("logo_url")
+          .select("logo_url, brand_primary_colour")
           .eq("league_id", data.parent_league_id)
-          .eq("is_public", true)
           .single();
 
-        return res.json({ logo_url: parentData?.logo_url || null });
+        return res.json({
+          logo_url: parentData?.logo_url || null,
+          brand_primary_colour:
+            data.brand_primary_colour || parentData?.brand_primary_colour || null,
+        });
       }
 
-      res.json({ logo_url: null });
+      res.json({ logo_url: null, brand_primary_colour: data.brand_primary_colour || null });
     } catch (err: any) {
       console.error("Error fetching public league logo:", err.message);
       res.status(500).json({ error: "Internal server error" });
