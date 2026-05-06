@@ -1260,20 +1260,14 @@ export default function LeaguePage() {
         const fetchLeagueId = getDataLeagueId(slug, league.league_id);
         const parentChildIdsForTeamStats = childCompetitions.map(c => c.league_id);
         const isParentTeamStatsFetch = parentChildIdsForTeamStats.length > 0;
-        // For parent leagues, route team_stats through the service-role
-        // endpoint so private (is_public=false) children still roll up.
-        // The anon-key client is filtered by RLS on `team_stats`.
         let rawTeamStats: any[] | null = null;
         let error: any = null;
-        if (isParentTeamStatsFetch) {
-          const result = await fetchLeagueData<any>("team_stats", parentChildIdsForTeamStats);
-          rawTeamStats = result.data;
-          error = result.error;
-        } else {
-          const result = await db
-            .from("team_stats")
-            .select("*")
-            .eq("league_id", fetchLeagueId);
+        {
+          const idsToFetch = isParentTeamStatsFetch ? parentChildIdsForTeamStats : [fetchLeagueId];
+          const q = idsToFetch.length === 1
+            ? db.from("team_stats").select("*").eq("league_id", idsToFetch[0])
+            : db.from("team_stats").select("*").in("league_id", idsToFetch);
+          const result = await q;
           rawTeamStats = result.data;
           error = result.error;
         }
@@ -2484,26 +2478,15 @@ export default function LeaguePage() {
         }
         debugLog("📊 Step 1: Fetching all player_stats for league_id:", statsLeagueId, "isParent:", isParentFetch);
 
-        // For parent leagues, route the roster fetch through the
-        // service-role endpoint so players from private (is_public=false)
-        // children are included. The anon-key client is filtered by RLS
-        // on the `players` table.
         let rosterData: any[] | null = null;
-        if (isParentFetch && parentChildIds.length > 0) {
-          const result = await fetchLeagueData<any>("players", parentChildIds);
-          if (result.error) {
-            console.error("Error fetching parent roster via league-data:", result.error);
-          }
-          rosterData = result.data;
-        } else {
-          const { data, error: rosterError } = await supabase
-            .from("players")
-            .select("id, full_name, slug")
-            .eq("league_id", statsLeagueId);
-          if (rosterError) {
-            console.error("Error fetching roster:", rosterError);
-          }
-          rosterData = data;
+        {
+          const rosterIds = isParentFetch && parentChildIds.length > 0 ? parentChildIds : [statsLeagueId];
+          const rosterQ = rosterIds.length === 1
+            ? supabase.from("players").select("id, full_name, slug").eq("league_id", rosterIds[0])
+            : supabase.from("players").select("id, full_name, slug").in("league_id", rosterIds);
+          const { data: rosterResult, error: rosterError } = await rosterQ;
+          if (rosterError) console.error("Error fetching roster:", rosterError);
+          rosterData = rosterResult;
         }
 
         const slugLookup = new Map<string, string>();
@@ -2535,33 +2518,12 @@ export default function LeaguePage() {
               let data: any[] | null = null;
               let error: any = null;
 
-              if (isParentFetch) {
-                // Route through the service-role endpoint so private child
-                // leagues (e.g. REBA SL age groups) are included — the anon
-                // Supabase client is blocked by RLS for is_public=false rows.
-                // Pass parentLeagueId so the server can validate the children
-                // even when the parent itself has is_public=false (REBA SL).
-                const res = await fetch("/api/public/player-stats", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    leagueIds: parentChildIds,
-                    page,
-                    pageSize,
-                    parentLeagueId: league.league_id,
-                  }),
-                });
-                if (res.ok) {
-                  const json = await res.json();
-                  data = json.rows ?? null;
-                } else {
-                  error = { message: `player-stats HTTP ${res.status}` };
-                }
-              } else {
-                const result = await db
-                  .from("player_stats")
-                  .select("*")
-                  .eq("league_id", statsLeagueId)
+              {
+                const psIds = isParentFetch && parentChildIds.length > 0 ? parentChildIds : [statsLeagueId];
+                const psQ = psIds.length === 1
+                  ? db.from("player_stats").select("*").eq("league_id", psIds[0])
+                  : db.from("player_stats").select("*").in("league_id", psIds);
+                const result = await psQ
                   .order("player_id", { ascending: true, nullsFirst: false })
                   .range(page * pageSize, (page + 1) * pageSize - 1);
                 data = result.data;
@@ -2659,17 +2621,12 @@ export default function LeaguePage() {
 
     const calculateStandingsForLeague = async (leagueId: string, parentLeagueId?: string): Promise<{standings: any[], poolAStandings: any[], poolBStandings: any[], hasPools: boolean}> => {
       try {
-        // Route the `teams` fetch through the service-role endpoint so
-        // private (is_public=false) child leagues — which RLS hides from
-        // the anon client — still produce standings rows on the parent
-        // league page. Pass parentLeagueId to bypass is_public gating.
-        const { data: allTeams, error: teamsError } = await fetchLeagueData<{ team_id: string; name: string }>(
-          "teams",
-          [leagueId],
-          parentLeagueId,
-        );
+        const { data: allTeams, error: teamsError } = await db
+          .from("teams")
+          .select("team_id, name")
+          .eq("league_id", leagueId);
         if (teamsError) {
-          console.error("Error fetching teams via league-data:", teamsError);
+          console.error("Error fetching teams:", teamsError);
         }
 
         const { data: gameResults, error: gameResultsError } = await db
@@ -2807,13 +2764,10 @@ export default function LeaguePage() {
     // Calculate team standings using team_stats table first, fallback to player_stats
     const calculateStandingsWithTeamStats = async (leagueId: string, playerStats: any[], parentLeagueId?: string) => {
       try {
-        // Use service-role endpoint so private child leagues (is_public=false)
-        // are still included — the anon Supabase client is blocked by RLS.
-        const { data: allTeams, error: teamsError } = await fetchLeagueData<{ team_id: string; name: string }>(
-          "teams",
-          [leagueId],
-          parentLeagueId,
-        );
+        const { data: allTeams, error: teamsError } = await db
+          .from("teams")
+          .select("team_id, name")
+          .eq("league_id", leagueId);
 
         if (teamsError || !allTeams || allTeams.length === 0) {
           console.error("Error fetching teams:", teamsError);
@@ -3007,13 +2961,10 @@ export default function LeaguePage() {
       try {
         setIsLoadingStandings(true);
 
-        // Use service-role endpoint so private child leagues (is_public=false)
-        // are still included — the anon Supabase client is blocked by RLS.
-        const { data: allTeams, error: teamsError } = await fetchLeagueData<{ team_id: string; name: string }>(
-          "teams",
-          [leagueId],
-          parentLeagueId,
-        );
+        const { data: allTeams, error: teamsError } = await db
+          .from("teams")
+          .select("team_id, name")
+          .eq("league_id", leagueId);
 
         if (teamsError || !allTeams || allTeams.length === 0) {
           console.error("Error fetching teams:", teamsError);

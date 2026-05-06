@@ -1025,16 +1025,25 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
             );
             const userId = stats.length > 0 ? stats[0].user_id : null;
 
-            // Use service-role-backed endpoint for extra league info so that
-            // private child leagues (e.g. REBA SL age groups) resolve names
-            // and parent IDs correctly — the anon client is blocked by RLS.
             const extraLeagueInfoFetch: Promise<Record<string, { name: string; parent_league_id: string | null; age_group: string | null; stop: number | null }>> =
               extraLeagueIds.length > 0
-                ? fetch('/api/public/league-info', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ids: extraLeagueIds }),
-                  }).then(r => r.ok ? r.json() : {}).catch(() => ({}))
+                ? supabase
+                    .from('leagues')
+                    .select('league_id, name, parent_league_id, age_group, stop')
+                    .in('league_id', extraLeagueIds)
+                    .then(({ data }) => {
+                      const result: Record<string, any> = {};
+                      (data || []).forEach((row: any) => {
+                        result[row.league_id] = {
+                          name: row.name,
+                          parent_league_id: row.parent_league_id || null,
+                          age_group: row.age_group || null,
+                          stop: row.stop ?? null,
+                        };
+                      });
+                      return result;
+                    })
+                    .catch(() => ({}))
                 : Promise.resolve({});
 
             const [gamesResp, publicLeaguesResp, extraLeagueInfoMap] = await Promise.all([
