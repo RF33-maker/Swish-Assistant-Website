@@ -105,44 +105,19 @@ export default function TeamLogoManager() {
 
         const logoMap: Record<string, string> = {};
 
-        // Step 1: check team_logos DB table via service-role endpoint
-        try {
-          const dbRes = await fetch('/api/public/team-logos', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ leagueIds: logoQueryIds }),
-          });
-          if (dbRes.ok) {
-            const json = await dbRes.json();
-            (json.rows || []).forEach((logo: any) => {
-              if (logo.team_name && logo.logo_url) {
-                logoMap[logo.team_name] = logo.logo_url;
-              }
-            });
-          }
-        } catch (e) {
-        }
+        // Read logo_url directly from the teams table
+        const { data: logoRows } = await supabase
+          .from("teams")
+          .select("name, logo_url")
+          .in("league_id", logoQueryIds)
+          .not("logo_url", "is", null);
 
-        // Step 2: for teams not in DB, use server-side storage probing (no browser HEAD requests)
-        for (const lid of logoQueryIds) {
-          const missing = uniqueTeams.filter(t => !logoMap[t]);
-          if (missing.length === 0) break;
-          try {
-            const storageRes = await fetch(`/api/leagues/${lid}/team-logos`);
-            if (storageRes.ok) {
-              const storageMap: Record<string, string> = await storageRes.json();
-              for (const teamName of missing) {
-                const lower = teamName.toLowerCase();
-                const url =
-                  storageMap[teamName] ||
-                  Object.entries(storageMap).find(([k]) => k.toLowerCase() === lower)?.[1];
-                if (url) logoMap[teamName] = url;
-              }
-            }
-          } catch (e) {
+        (logoRows || []).forEach((row: { name: string; logo_url: string }) => {
+          if (row.name && row.logo_url) {
+            logoMap[row.name] = row.logo_url;
           }
-        }
-        
+        });
+
         setTeamLogos(logoMap);
 
         const teamsWithLogos = uniqueTeams.map(teamName => ({

@@ -188,6 +188,8 @@ export interface AdvancedLeaderDef {
   compute: (p: AdvancedAggregator) => { value: number; display: string } | null;
   qualifies: (p: AdvancedAggregator) => boolean;
   lowerIsBetter?: boolean;
+  /** Human-readable minimum qualification label shown on the leaderboard card (e.g. "Min. 20 FGA") */
+  minLabel?: string;
 }
 
 export interface AdvancedLeaderSection {
@@ -250,7 +252,8 @@ export function getAdvancedLeaderSections(): AdvancedLeaderSection[] {
             const value = ((p.total_field_goals_made + 0.5 * p.total_three_points_made) / p.total_field_goals_attempted) * 100;
             return { value, display: fmtPct(value) };
           },
-          qualifies: (p) => p.total_field_goals_attempted >= 2,
+          qualifies: (p) => p.total_field_goals_attempted >= 20,
+          minLabel: 'Min. 20 FGA',
         },
         {
           // Mirrors PlayerComparison: averages per-row ts_percent.
@@ -267,7 +270,8 @@ export function getAdvancedLeaderSections(): AdvancedLeaderSection[] {
             const value = (p.total_points / tsa) * 100;
             return { value, display: fmtPct(value) };
           },
-          qualifies: (p) => p.total_field_goals_attempted >= 2,
+          qualifies: (p) => p.total_field_goals_attempted >= 20,
+          minLabel: 'Min. 20 FGA',
         },
         {
           key: 'three_pt_rate',

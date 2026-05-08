@@ -64,6 +64,21 @@ The application utilizes Supabase database views to simplify data fetching:
 -   **League AI chatbot**: Handled directly in `server/routes.ts` using the OpenAI Node SDK.
 -   **Python Backend** (optional, port 8000 locally): Handles a secondary coaching chatbot and player scouting analysis, proxied via `proxyToPython` in `server/routes.ts`. All browser calls go through `getPythonBackendUrl()` (`client/src/lib/backendUrl.ts`), which reads `VITE_BACKEND_URL` in production (set this to the Render public URL, e.g. `https://swish-backend.onrender.com`) and falls back to `window.location.origin` in local dev (Vite proxy handles routing to port 8000). Render deployment config is in `render.yaml`.
 
+## Vercel Deployment — Required Environment Variables
+
+The following environment variables must be configured in the Vercel project settings for the serverless API to work:
+
+| Variable | Description |
+|---|---|
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase service-role key — bypasses RLS for server-side operations. **Required** (server fails to start without it). |
+| `VITE_SUPABASE_URL` | Supabase project URL (e.g. `https://xxx.supabase.co`). |
+| `OPENAI_API_KEY` | OpenAI API key for the league chatbot (`/api/chat/league`). |
+| `VITE_SUPABASE_ANON_KEY` | Supabase anon/public key — used by the React frontend. |
+| `SESSION_SECRET` | Express session secret (defaults to `"keyboard_cat"` if unset — set a strong value in production). |
+| `VITE_BACKEND_URL` | URL of the Python/Render backend (e.g. `https://swish-backend.onrender.com`) — optional, only needed for coaching chatbot features. |
+
+> Note: Replit object storage (`objectStorage.ts`) uses a sidecar only available inside Replit and will not function on Vercel. The primary team-logo upload path (via Supabase Storage) is unaffected.
+
 ## External Dependencies
 -   **Supabase**: Database, user authentication, and object storage for assets like team logos and league banners.
 -   **OpenAI (Node SDK)**: Integrated directly into the Express backend for the league chatbot.
