@@ -5034,14 +5034,21 @@ export default function LeaguePage() {
                     const baseContextFallback = leagueLeadersView === 'totals' ? 'Season Totals' : 'Season Averages';
 
                     // Common card renderer used by all 4 (subject × category) variants.
+                    // Minimum attempt thresholds for percentage leaderboards —
+                    // must match the constants in league-leaders/[slug].tsx.
+                    const MIN_FGA_INLINE = 20;
+                    const MIN_3PA_INLINE = 8;
+                    const MIN_FTA_INLINE = 10;
+
                     const renderCard = (opts: {
                       title: string;
                       items: any[];
                       displayFn: (p: any) => string;
                       footnote?: string;
+                      minLabel?: string;
                       subject: 'player' | 'team';
                     }) => {
-                      const { title, items, displayFn, footnote, subject } = opts;
+                      const { title, items, displayFn, footnote, minLabel, subject } = opts;
                       const shareLeaders = items.map((p: any) => ({
                         name: subject === 'team' ? (p.teamName || p.name || 'Unknown') : (p.name || 'Unknown'),
                         team: subject === 'team' ? '' : (p.team || ''),
@@ -5060,7 +5067,12 @@ export default function LeaguePage() {
                           fileSlug={`league-${slug}-${subject}-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
                         >
                           <div className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4">
-                            <h3 className="text-sm font-semibold mb-3 px-1 pr-10" style={{ color: brandColor }}>{title}</h3>
+                            <div className="flex items-baseline gap-2 mb-3 px-1 pr-10">
+                              <h3 className="text-sm font-semibold" style={{ color: brandColor }}>{title}</h3>
+                              {minLabel && (
+                                <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-neutral-700 px-1.5 py-0.5 rounded-full whitespace-nowrap">{minLabel}</span>
+                              )}
+                            </div>
                             <div className="space-y-0">
                               {items.map((entity, idx) => {
                                 const isTeam = subject === 'team';
@@ -5182,21 +5194,24 @@ export default function LeaguePage() {
                             isPercentage: true,
                             sortFn: (a: any, b: any) => parseFloat(b.fgPercentage || '0') - parseFloat(a.fgPercentage || '0'),
                             displayFn: (p: any) => `${p.fgPercentage}%`,
-                            filterFn: (p: any) => (p.totalFGA || 0) >= 2,
+                            filterFn: (p: any) => (p.totalFGA || 0) >= MIN_FGA_INLINE,
+                            minLabel: `Min. ${MIN_FGA_INLINE} FGA`,
                           },
                           {
                             title: "Three Point %",
                             isPercentage: true,
                             sortFn: (a: any, b: any) => parseFloat(b.threePercentage || '0') - parseFloat(a.threePercentage || '0'),
                             displayFn: (p: any) => `${p.threePercentage}%`,
-                            filterFn: (p: any) => (p.total3PA || 0) >= 1,
+                            filterFn: (p: any) => (p.total3PA || 0) >= MIN_3PA_INLINE,
+                            minLabel: `Min. ${MIN_3PA_INLINE} 3PA`,
                           },
                           {
                             title: "Free Throw %",
                             isPercentage: true,
                             sortFn: (a: any, b: any) => parseFloat(b.ftPercentage || '0') - parseFloat(a.ftPercentage || '0'),
                             displayFn: (p: any) => `${p.ftPercentage}%`,
-                            filterFn: (p: any) => (p.totalFTA || 0) >= 1,
+                            filterFn: (p: any) => (p.totalFTA || 0) >= MIN_FTA_INLINE,
+                            minLabel: `Min. ${MIN_FTA_INLINE} FTA`,
                           },
                           {
                             title: "Efficiency Leaders",
@@ -5221,7 +5236,7 @@ export default function LeaguePage() {
 
                         return (
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-                            {statCategories.map(({ title, sortFn, displayFn, filterFn, isPerGame, isPercentage }: any) => {
+                            {statCategories.map(({ title, sortFn, displayFn, filterFn, isPerGame, isPercentage, minLabel }: any) => {
                               const baseFiltered = filterFn ? players.filter(filterFn) : players;
                               const qualifierApplies = isPercentage || (isPerGame && leagueLeadersView === 'averages');
                               const applyMin = qualifierApplies && leadersMinGames > 1;
@@ -5236,7 +5251,7 @@ export default function LeaguePage() {
                                 : applyMin
                                   ? `Min ${leadersMinGames} games played`
                                   : undefined;
-                              return renderCard({ title, items: sorted, displayFn, footnote, subject: 'player' });
+                              return renderCard({ title, items: sorted, displayFn, footnote, minLabel, subject: 'player' });
                             })}
                           </div>
                         );
@@ -5284,6 +5299,7 @@ export default function LeaguePage() {
                           );
                           return {
                             title: def.title,
+                            minLabel: def.minLabel,
                             items: computed.slice(0, 10),
                           };
                         }).filter((c) => c.items.length > 0);
@@ -5308,6 +5324,7 @@ export default function LeaguePage() {
                                   title: card.title,
                                   items: card.items,
                                   displayFn: (p: any) => p._adv.display,
+                                  minLabel: card.minLabel,
                                   subject: 'player',
                                 }))}
                               </div>

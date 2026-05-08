@@ -37,6 +37,11 @@ interface League {
 
 type StatCategory = 'Traditional' | 'Advanced';
 
+// Minimum attempt thresholds for percentage leaderboards
+const MIN_FGA = 20;
+const MIN_3PA = 8;
+const MIN_FTA = 10;
+
 interface StatLeaderDef {
   key: string;
   title: string;
@@ -44,6 +49,7 @@ interface StatLeaderDef {
   totalLabel: string;
   compute: (p: any) => { avg: number; total: number; display: string };
   minAttempts?: (p: any) => boolean;
+  minLabel?: string;
 }
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -316,7 +322,8 @@ export default function LeagueLeadersPage() {
         const pct = p.total_field_goals_attempted > 0 ? (p.total_field_goals_made / p.total_field_goals_attempted) * 100 : 0;
         return { avg: pct, total: pct, display: `${pct.toFixed(1)}%` };
       },
-      minAttempts: (p) => p.total_field_goals_attempted >= 2
+      minAttempts: (p) => p.total_field_goals_attempted >= MIN_FGA,
+      minLabel: `Min. ${MIN_FGA} FGA`,
     },
     {
       key: '3p_pct', title: 'Three Point %', avgLabel: '3P%', totalLabel: '3P%',
@@ -324,7 +331,8 @@ export default function LeagueLeadersPage() {
         const pct = p.total_three_points_attempted > 0 ? (p.total_three_points_made / p.total_three_points_attempted) * 100 : 0;
         return { avg: pct, total: pct, display: `${pct.toFixed(1)}%` };
       },
-      minAttempts: (p) => p.total_three_points_attempted >= 1
+      minAttempts: (p) => p.total_three_points_attempted >= MIN_3PA,
+      minLabel: `Min. ${MIN_3PA} 3PA`,
     },
     {
       key: 'ft_pct', title: 'Free Throw %', avgLabel: 'FT%', totalLabel: 'FT%',
@@ -332,7 +340,8 @@ export default function LeagueLeadersPage() {
         const pct = p.total_free_throws_attempted > 0 ? (p.total_free_throws_made / p.total_free_throws_attempted) * 100 : 0;
         return { avg: pct, total: pct, display: `${pct.toFixed(1)}%` };
       },
-      minAttempts: (p) => p.total_free_throws_attempted >= 1
+      minAttempts: (p) => p.total_free_throws_attempted >= MIN_FTA,
+      minLabel: `Min. ${MIN_FTA} FTA`,
     },
   ];
 
@@ -535,6 +544,7 @@ export default function LeagueLeadersPage() {
         return {
           key: def.key,
           title: def.title,
+          minLabel: def.minLabel,
           players: computed.slice(0, 10),
         };
       });
@@ -562,6 +572,7 @@ export default function LeagueLeadersPage() {
         return {
           key: def.key,
           title: def.title,
+          minLabel: def.minLabel,
           players: computed.slice(0, 10),
         };
       // Hide cards entirely when no qualifying players (e.g. league
@@ -573,9 +584,14 @@ export default function LeagueLeadersPage() {
     }).filter(section => section.cards.length > 0);
   }, [aggregatedPlayers, statCategory, viewMode]);
 
-  const StatSection = ({ title, players }: { title: string; players: any[] }) => (
+  const StatSection = ({ title, players, minLabel }: { title: string; players: any[]; minLabel?: string }) => (
     <div className="mb-6">
-      <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-3">{title}</h3>
+      <div className="flex items-baseline gap-2 mb-3">
+        <h3 className="text-lg font-bold text-gray-900 dark:text-white">{title}</h3>
+        {minLabel && (
+          <span className="text-xs font-medium text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-neutral-800 px-2 py-0.5 rounded-full">{minLabel}</span>
+        )}
+      </div>
       {players.length > 0 ? (
         <div className="space-y-1">
           {players.map((player, index) => (
@@ -885,7 +901,7 @@ export default function LeagueLeadersPage() {
                   </h3>
                 )}
                 {section.cards.map(card => (
-                  <StatSection key={card.key} title={card.title} players={card.players} />
+                  <StatSection key={card.key} title={card.title} players={card.players} minLabel={card.minLabel} />
                 ))}
               </div>
             ))}
@@ -898,7 +914,7 @@ export default function LeagueLeadersPage() {
 
         <div className="dark:bg-neutral-800 border dark:border-neutral-700 rounded-lg p-3 md:p-4 text-center" style={{ backgroundColor: brandBg50, borderColor: brandBorderLight }}>
           <p className="text-xs md:text-sm" style={{ color: brandColor }}>
-            * Shooting percentages require minimum attempts: Field Goals (2+), Three Pointers (1+), Free Throws (1+)
+            * Shooting percentages require minimum attempts: FG% ({MIN_FGA}+ FGA), 3P% ({MIN_3PA}+ 3PA), FT% ({MIN_FTA}+ FTA). Advanced: eFG% &amp; TS% ({MIN_FGA}+ FGA).
           </p>
         </div>
       </main>
