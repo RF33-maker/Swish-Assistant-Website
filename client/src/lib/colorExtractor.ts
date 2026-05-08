@@ -153,17 +153,22 @@ export async function extractTeamColors(teamName: string, leagueId: string): Pro
     return cachedEntry.colors;
   }
   
-  // Ask the server for the team's logo URL (server does storage probing, no browser 404s)
+  // Fetch the logo URL directly from the teams table
   let logoUrl: string | null = null;
   try {
-    const res = await fetch(`/api/leagues/${leagueId}/team-logos`);
-    if (res.ok) {
-      const logoMap: Record<string, string> = await res.json();
-      const lower = teamName.toLowerCase();
-      logoUrl =
-        logoMap[teamName] ||
-        Object.entries(logoMap).find(([k]) => k.toLowerCase() === lower)?.[1] ||
-        null;
+    const { supabase } = await import('@/lib/supabase');
+    const lower = teamName.toLowerCase();
+    const { data } = await supabase
+      .from('teams')
+      .select('name, logo_url')
+      .eq('league_id', leagueId)
+      .not('logo_url', 'is', null);
+    if (data) {
+      const match = data.find(
+        (r: { name: string; logo_url: string }) =>
+          r.name === teamName || r.name.toLowerCase() === lower
+      );
+      logoUrl = match?.logo_url || null;
     }
   } catch {
     // network error — return null

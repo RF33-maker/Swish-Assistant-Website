@@ -97,23 +97,19 @@ async function getDbLogosForLeague(leagueId: string): Promise<Map<string, string
   const fetchPromise = (async () => {
     const map = new Map<string, string>();
     try {
-      const res = await fetch('/api/public/team-logos', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ leagueIds: [leagueId] }),
+      const { data } = await supabase
+        .from('teams')
+        .select('name, logo_url')
+        .eq('league_id', leagueId)
+        .not('logo_url', 'is', null);
+      (data || []).forEach((row: { name: string; logo_url: string }) => {
+        if (row.name && row.logo_url) {
+          map.set(row.name, row.logo_url);
+          map.set(normalizeTeamName(row.name), row.logo_url);
+        }
       });
-      if (res.ok) {
-        const json = await res.json();
-        const rows: Array<{ team_name: string; logo_url: string }> = json.rows || [];
-        rows.forEach((row) => {
-          if (row.team_name && row.logo_url) {
-            map.set(row.team_name, row.logo_url);
-            map.set(normalizeTeamName(row.team_name), row.logo_url);
-          }
-        });
-      }
     } catch (err) {
-      debugLog("[TeamLogoCache] Error fetching team_logos via server:", err);
+      debugLog("[TeamLogoCache] Error fetching team logo_urls:", err);
     }
     dbLogosCache.set(leagueId, map);
     dbLogosFetching.delete(leagueId);
