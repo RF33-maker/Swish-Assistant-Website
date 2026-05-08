@@ -283,20 +283,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log("Upload successful, public URL:", publicUrl);
 
+      // Update teams.logo_url for the matching team row(s)
       const { error: dbError } = await supabaseAdmin
-        .from("team_logos")
-        .upsert({
-          league_id: leagueId,
-          team_name: teamName,
-          logo_url: publicUrl,
-          uploaded_by: "system",
-          updated_at: new Date().toISOString(),
-        }, {
-          onConflict: 'league_id,team_name',
-        });
+        .from("teams")
+        .update({ logo_url: publicUrl })
+        .eq("league_id", leagueId)
+        .eq("name", teamName);
 
-      if (dbError && dbError.code !== '42P01') {
-        console.error("Error persisting to team_logos:", dbError);
+      if (dbError) {
+        console.error("Error updating teams.logo_url:", dbError);
       }
 
       res.json({
@@ -350,6 +345,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`Deleted ${fileName}`);
           deletedFiles.push(fileName);
         }
+      }
+
+      // Clear logo_url on the teams row
+      const { error: dbError } = await supabaseAdmin
+        .from("teams")
+        .update({ logo_url: null })
+        .eq("league_id", leagueId)
+        .eq("name", teamName);
+
+      if (dbError) {
+        console.error("Error clearing teams.logo_url:", dbError);
       }
 
       res.json({
