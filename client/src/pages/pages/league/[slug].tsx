@@ -36,7 +36,7 @@ import { PlayerComparison } from "@/components/PlayerComparison";
 import { TeamComparison } from "@/components/TeamComparison";
 import { TournamentBracket } from "@/components/TournamentBracket";
 import { normalizeTeamName } from "@/lib/teamUtils";
-import { namesMatch, getMostCompleteName } from "@/lib/fuzzyMatch";
+import { namesMatch, getMostCompleteName, strictNamesMatch } from "@/lib/fuzzyMatch";
 import { DEBUG, debugLog } from "@/utils/debug";
 import { usePublicLeagueBrandingBySlug } from "@/hooks/usePublicLeagueBranding";
 import { InlinePlayerProfile } from "@/components/InlinePlayerProfile";
@@ -2172,6 +2172,7 @@ export default function LeaguePage() {
     type PlayerAggregate = {
       name: string;
       team: string;
+      latestGameTs: string;
       shirtnumber: string | null;
       playerIds: Set<string>;
       games: number;
@@ -2216,14 +2217,18 @@ export default function LeaguePage() {
       return namesMatch(name1, name2);
     };
 
-    const aggregatePlayerStats = (playerStats: any[], slugLookup: Map<string, string>, nameLookup: Map<string, string>): any[] => {
+    const aggregatePlayerStats = (playerStats: any[], slugLookup: Map<string, string>, nameLookup: Map<string, string>, playerIdToName?: Map<string, string>): any[] => {
       if (!playerStats || playerStats.length === 0) return [];
 
       const byPlayerId = new Map<string, PlayerAggregate>();
       const noPlayerId: any[] = [];
 
       playerStats.forEach(stat => {
-        const playerName = stat.full_name || stat.name || 'Unknown Player';
+        const playerName = stat.full_name ||
+          `${stat.firstname || ''} ${stat.familyname || ''}`.trim() ||
+          stat.name ||
+          (stat.player_id && playerIdToName?.get(stat.player_id)) ||
+          'Unknown Player';
         const team = stat.team || stat.team_name || 'Unknown';
         const minutesPlayed = parseMinutesPlayed(stat);
         const hasAnyStats = (stat.spoints || 0) > 0 || (stat.sreboundstotal || 0) > 0 || 
@@ -2238,6 +2243,7 @@ export default function LeaguePage() {
             byPlayerId.set(stat.player_id, {
               name: playerName,
               team: team,
+              latestGameTs: stat.game_date || '',
               shirtnumber: stat.shirtnumber || null,
               playerIds: new Set([stat.player_id]),
               games: 0,
@@ -2250,6 +2256,11 @@ export default function LeaguePage() {
             });
           }
           const agg = byPlayerId.get(stat.player_id)!;
+          const gameDate = stat.game_date || '';
+          if (gameDate > agg.latestGameTs) {
+            agg.latestGameTs = gameDate;
+            agg.team = team;
+          }
           if (didPlay) {
             agg.games += 1;
             agg.totalPoints += stat.spoints || 0;
@@ -2335,7 +2346,9 @@ export default function LeaguePage() {
       }
 
       noPlayerId.forEach(stat => {
-        const playerName = stat.full_name || stat.name || 'Unknown Player';
+        const playerName = stat.full_name ||
+          `${stat.firstname || ''} ${stat.familyname || ''}`.trim() ||
+          stat.name || 'Unknown Player';
         const team = stat.team || stat.team_name || 'Unknown';
         let existingPlayer = mergedPlayers.find(p => areSimilarNames(p.name, playerName));
         
@@ -2364,9 +2377,15 @@ export default function LeaguePage() {
           if (minutesParts && minutesParts.length === 2) {
             existingPlayer.totalMinutes += parseInt(minutesParts[0]) + parseInt(minutesParts[1]) / 60;
           }
+          const noIdGameDate = stat.game_date || '';
+          if (noIdGameDate > existingPlayer.latestGameTs) {
+            existingPlayer.latestGameTs = noIdGameDate;
+            existingPlayer.team = team;
+          }
         } else {
           const newPlayer: PlayerAggregate = {
             name: playerName, team: team,
+            latestGameTs: stat.game_date || '',
             shirtnumber: stat.shirtnumber || null,
             playerIds: new Set<string>(), games: 1,
             totalPoints: stat.spoints || 0, totalRebounds: stat.sreboundstotal || 0,
@@ -2388,7 +2407,66 @@ export default function LeaguePage() {
         }
       });
 
-      const playersWithGames = mergedPlayers.filter(player => player.games > 0);
+      const wiggallRaw = playerStats.filter((s: any) => {
+        const n = (s.full_name || `${s.firstname || ''} ${s.familyname || ''}`.trim() || s.name || (s.player_id && playerIdToName?.get(s.player_id)) || '').toLowerCase();
+        return n.includes('wiggall');
+      });
+      if (wiggallRaw.length > 0) {
+        console.log('[DEBUG] raw wiggall rows:', wiggallRaw.map((s: any) => ({ player_id: s.player_id, full_name: s.full_name, firstname: s.firstname, familyname: s.familyname, idToName: s.player_id ? playerIdToName?.get(s.player_id) : null, team: s.team || s.team_name, spoints: s.spoints, sminutes: s.sminutes })));
+      }
+      const wiggallDebug = mergedPlayers.filter(p => p.name.toLowerCase().includes('wiggall'));
+      if (wiggallDebug.length > 0) {
+        console.log('[crossTeamMerge DEBUG] wiggall entries in mergedPlayers:', wiggallDebug.map(p => ({ name: p.name, team: p.team, games: p.games, playerIds: Array.from(p.playerIds) })));
+      }
+
+      const crossTeamMerged: PlayerAggregate[] = [];
+      mergedPlayers.forEach((player) => {
+        let foundMatch = false;
+        for (const existingPlayer of crossTeamMerged) {
+          let overlaps = false;
+          player.playerIds.forEach((id: string) => {
+            if (existingPlayer.playerIds.has(id)) overlaps = true;
+          });
+          if (overlaps) continue;
+
+          if (strictNamesMatch(player.name, existingPlayer.name)) {
+            existingPlayer.games += player.games;
+            existingPlayer.totalPoints += player.totalPoints;
+            existingPlayer.totalRebounds += player.totalRebounds;
+            existingPlayer.totalAssists += player.totalAssists;
+            existingPlayer.totalSteals += player.totalSteals;
+            existingPlayer.totalBlocks += player.totalBlocks;
+            existingPlayer.totalTurnovers += player.totalTurnovers;
+            existingPlayer.totalFGM += player.totalFGM;
+            existingPlayer.totalFGA += player.totalFGA;
+            existingPlayer.total2PM += player.total2PM;
+            existingPlayer.total2PA += player.total2PA;
+            existingPlayer.total3PM += player.total3PM;
+            existingPlayer.total3PA += player.total3PA;
+            existingPlayer.totalFTM += player.totalFTM;
+            existingPlayer.totalFTA += player.totalFTA;
+            existingPlayer.totalORB += player.totalORB;
+            existingPlayer.totalDRB += player.totalDRB;
+            existingPlayer.totalMinutes += player.totalMinutes;
+            existingPlayer.totalPersonalFouls += player.totalPersonalFouls;
+            existingPlayer.totalPlusMinus += player.totalPlusMinus;
+            existingPlayer.rawStats.push(...player.rawStats);
+            player.playerIds.forEach((id: string) => existingPlayer.playerIds.add(id));
+            if (player.latestGameTs > existingPlayer.latestGameTs) {
+              existingPlayer.latestGameTs = player.latestGameTs;
+              existingPlayer.team = player.team;
+            }
+            existingPlayer.name = getMostCompleteName([existingPlayer.name, player.name]);
+            foundMatch = true;
+            break;
+          }
+        }
+        if (!foundMatch) {
+          crossTeamMerged.push({ ...player, playerIds: new Set(player.playerIds) });
+        }
+      });
+
+      const playersWithGames = crossTeamMerged.filter(player => player.games > 0);
       
       return playersWithGames.map((player) => {
         let playerSlug: string | null = null;
@@ -2491,8 +2569,12 @@ export default function LeaguePage() {
 
         const slugLookup = new Map<string, string>();
         const nameLookup = new Map<string, string>();
+        const playerIdToName = new Map<string, string>();
         
         rosterData?.forEach(p => {
+          if (p.full_name) {
+            playerIdToName.set(p.id, p.full_name);
+          }
           if (p.slug) {
             slugLookup.set(p.id, p.slug);
             if (p.full_name) {
@@ -2570,7 +2652,7 @@ export default function LeaguePage() {
             page++;
 
             if (!isCancelled()) {
-              const intermediateResults = aggregatePlayerStats(allPlayerStats, slugLookup, nameLookup);
+              const intermediateResults = aggregatePlayerStats(allPlayerStats, slugLookup, nameLookup, playerIdToName);
               if (intermediateResults.length > 0) {
                 setAllPlayerAverages(intermediateResults);
                 setFilteredPlayerAverages(intermediateResults);
@@ -2601,7 +2683,7 @@ export default function LeaguePage() {
           return;
         }
 
-        const finalResults = aggregatePlayerStats(allPlayerStats, slugLookup, nameLookup);
+        const finalResults = aggregatePlayerStats(allPlayerStats, slugLookup, nameLookup, playerIdToName);
         debugLog("📊 Final player list has", finalResults.length, "players");
 
         if (isCancelled()) return;
