@@ -86,6 +86,7 @@ export default function LeagueAdmin() {
         .from('leagues')
         .select('*')
         .eq('user_id', currentUser.id)
+        .is('parent_league_id', null)
         .order('created_at', { ascending: false });
 
       if (error) {
