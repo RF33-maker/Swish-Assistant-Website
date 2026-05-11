@@ -11,6 +11,7 @@ interface League {
   league_id: string;
   name: string;
   slug: string;
+  parent_league_id?: string | null;
   banner_url?: string;
   instagram_embed_url?: string;
   created_by: string;
@@ -86,6 +87,7 @@ export default function LeagueAdmin() {
         .from('leagues')
         .select('*')
         .eq('user_id', currentUser.id)
+        .is('parent_league_id', null)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -559,7 +561,11 @@ export default function LeagueAdmin() {
 
           {/* PDF Upload Section */}
           <div className="md:col-span-2 bg-white rounded-xl shadow overflow-hidden">
-            <UploadSection leagues={userLeagues} />
+            <UploadSection leagues={
+              league?.parent_league_id && !userLeagues.some(l => l.league_id === league.league_id)
+                ? [...userLeagues, league]
+                : userLeagues
+            } />
           </div>
 
           {/* Team Logo Management */}
