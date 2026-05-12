@@ -18,8 +18,114 @@ interface Player {
   league_id: string;
 }
 
+interface PlayerStatPreview {
+  gp: number;
+  ppg: number;
+  rpg: number;
+  apg: number;
+  loading: boolean;
+  error: boolean;
+}
+
 interface Props {
   leagueId: string;
+}
+
+interface PlayerStatRow {
+  spoints: number | null;
+  sreboundstotal: number | null;
+  sassists: number | null;
+  game_key: string | null;
+}
+
+async function fetchPlayerStatPreview(
+  playerId: string,
+  leagueId: string
+): Promise<PlayerStatPreview> {
+  const { data, error } = await supabase
+    .from("player_stats")
+    .select("spoints, sreboundstotal, sassists, game_key")
+    .eq("player_id", playerId);
+
+  if (error || !data) {
+    return { gp: 0, ppg: 0, rpg: 0, apg: 0, loading: false, error: true };
+  }
+
+  const rows = data as PlayerStatRow[];
+  const uniqueGames = new Set(rows.map((r) => r.game_key).filter((k): k is string => !!k)).size;
+  const gp = uniqueGames || rows.length;
+  if (gp === 0) {
+    return { gp: 0, ppg: 0, rpg: 0, apg: 0, loading: false, error: false };
+  }
+
+  const totPts = rows.reduce((s, r) => s + (r.spoints ?? 0), 0);
+  const totReb = rows.reduce((s, r) => s + (r.sreboundstotal ?? 0), 0);
+  const totAst = rows.reduce((s, r) => s + (r.sassists ?? 0), 0);
+
+  return {
+    gp,
+    ppg: totPts / gp,
+    rpg: totReb / gp,
+    apg: totAst / gp,
+    loading: false,
+    error: false,
+  };
+}
+
+function StatCard({
+  name,
+  badge,
+  badgeColor,
+  stats,
+}: {
+  name: string;
+  badge: string;
+  badgeColor: "green" | "red";
+  stats: PlayerStatPreview;
+}) {
+  const badgeClasses =
+    badgeColor === "green"
+      ? "bg-green-100 text-green-700"
+      : "bg-red-100 text-red-700";
+
+  return (
+    <div
+      className={`rounded-lg border p-3 ${
+        badgeColor === "green" ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"
+      }`}
+    >
+      <div className="flex items-center gap-2 mb-2">
+        <span className="font-medium text-gray-800 text-sm truncate">{name}</span>
+        <span className={`px-1.5 py-0.5 text-xs rounded font-medium flex-shrink-0 ${badgeClasses}`}>
+          {badge}
+        </span>
+      </div>
+      {stats.loading ? (
+        <div className="flex items-center gap-1.5 text-xs text-gray-400">
+          <div className="w-3 h-3 border-2 border-gray-300 border-t-transparent rounded-full animate-spin" />
+          Loading stats…
+        </div>
+      ) : stats.error ? (
+        <p className="text-xs text-gray-400 italic">Stats unavailable</p>
+      ) : stats.gp === 0 ? (
+        <p className="text-xs text-gray-400 italic">No stats recorded</p>
+      ) : (
+        <div className="grid grid-cols-4 gap-1 text-center">
+          {[
+            { label: "GP", value: stats.gp.toString() },
+            { label: "PPG", value: stats.ppg.toFixed(1) },
+            { label: "RPG", value: stats.rpg.toFixed(1) },
+            { label: "APG", value: stats.apg.toFixed(1) },
+          ].map(({ label, value }) => (
+            <div key={label}>
+              <div className="text-base font-bold text-gray-800">{value}</div>
+              <div className="text-[10px] text-gray-500 uppercase tracking-wide">{label}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function DuplicatePlayerManager({ leagueId }: Props) {
@@ -31,6 +137,9 @@ export default function DuplicatePlayerManager({ leagueId }: Props) {
   const [confirmPair, setConfirmPair] = useState<DuplicatePair | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Preview stats for confirmation modals: keyed by player id
+  const [previewStats, setPreviewStats] = useState<Record<string, PlayerStatPreview>>({});
 
   // Manual merge state
   const [manualSearch1, setManualSearch1] = useState("");
@@ -72,6 +181,42 @@ export default function DuplicatePlayerManager({ leagueId }: Props) {
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
+
+  // Clear preview cache when leagueId changes to avoid cross-league stale stats
+  useEffect(() => {
+    setPreviewStats({});
+  }, [leagueId]);
+
+  // Fetch preview stats whenever a confirmation modal opens.
+  // Cache key uses leagueId:playerId to avoid cross-league stale data.
+  // Errored entries are not cached so reopening the modal retries the fetch.
+  useEffect(() => {
+    if (!confirmPair) return;
+    const ids = [confirmPair.canonicalId, confirmPair.duplicateId];
+    ids.forEach((id) => {
+      const cacheKey = `${leagueId}:${id}`;
+      const cached = previewStats[cacheKey];
+      if (cached && !cached.error) return;
+      setPreviewStats((prev) => ({ ...prev, [cacheKey]: { gp: 0, ppg: 0, rpg: 0, apg: 0, loading: true, error: false } }));
+      fetchPlayerStatPreview(id, leagueId).then((stats) =>
+        setPreviewStats((prev) => ({ ...prev, [cacheKey]: stats }))
+      );
+    });
+  }, [confirmPair, leagueId]);
+
+  useEffect(() => {
+    if (!confirmManual || !manualPlayer1 || !manualPlayer2) return;
+    const ids = [manualPlayer1.id, manualPlayer2.id];
+    ids.forEach((id) => {
+      const cacheKey = `${leagueId}:${id}`;
+      const cached = previewStats[cacheKey];
+      if (cached && !cached.error) return;
+      setPreviewStats((prev) => ({ ...prev, [cacheKey]: { gp: 0, ppg: 0, rpg: 0, apg: 0, loading: true, error: false } }));
+      fetchPlayerStatPreview(id, leagueId).then((stats) =>
+        setPreviewStats((prev) => ({ ...prev, [cacheKey]: stats }))
+      );
+    });
+  }, [confirmManual, leagueId, manualPlayer1, manualPlayer2]);
 
   const getToken = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -183,6 +328,8 @@ export default function DuplicatePlayerManager({ leagueId }: Props) {
       setMergingId(null);
     }
   };
+
+  const loadingPlaceholder: PlayerStatPreview = { gp: 0, ppg: 0, rpg: 0, apg: 0, loading: true, error: false };
 
   return (
     <div className="md:col-span-2 bg-white rounded-xl shadow p-4 md:p-6">
@@ -423,13 +570,30 @@ export default function DuplicatePlayerManager({ leagueId }: Props) {
       {confirmPair && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">Confirm Merge</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              This will move all stats from{" "}
-              <strong className="text-red-700">{confirmPair.duplicateName}</strong> to{" "}
-              <strong className="text-green-700">{confirmPair.canonicalName}</strong> and permanently delete the duplicate record.
+            <h3 className="text-lg font-semibold text-gray-800 mb-1">Confirm Merge</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Verify these are the same person before merging. Stats will be permanently combined.
+            </p>
+
+            {/* Stats preview */}
+            <div className="space-y-2 mb-4">
+              <StatCard
+                name={confirmPair.canonicalName}
+                badge="keep"
+                badgeColor="green"
+                stats={previewStats[`${leagueId}:${confirmPair.canonicalId}`] ?? loadingPlaceholder}
+              />
+              <StatCard
+                name={confirmPair.duplicateName}
+                badge="merge"
+                badgeColor="red"
+                stats={previewStats[`${leagueId}:${confirmPair.duplicateId}`] ?? loadingPlaceholder}
+              />
+            </div>
+
+            <p className="text-xs text-gray-500 mb-1">
               {confirmPair.statsToRepoint > 0 && (
-                <> {confirmPair.statsToRepoint} stat row{confirmPair.statsToRepoint !== 1 ? "s" : ""} will be updated.</>
+                <>{confirmPair.statsToRepoint} stat row{confirmPair.statsToRepoint !== 1 ? "s" : ""} will be re-pointed. </>
               )}
             </p>
             <p className="text-xs text-red-600 font-medium mb-4">This action cannot be undone.</p>
@@ -457,11 +621,27 @@ export default function DuplicatePlayerManager({ leagueId }: Props) {
       {confirmManual && manualPlayer1 && manualPlayer2 && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">Confirm Manual Merge</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              All stats from <strong className="text-red-700">{getDisplayName(manualPlayer2)}</strong> will be moved to{" "}
-              <strong className="text-green-700">{getDisplayName(manualPlayer1)}</strong> and the duplicate record will be permanently deleted.
+            <h3 className="text-lg font-semibold text-gray-800 mb-1">Confirm Manual Merge</h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Verify these are the same person before merging. Stats will be permanently combined.
             </p>
+
+            {/* Stats preview */}
+            <div className="space-y-2 mb-4">
+              <StatCard
+                name={getDisplayName(manualPlayer1)}
+                badge="keep"
+                badgeColor="green"
+                stats={previewStats[`${leagueId}:${manualPlayer1.id}`] ?? loadingPlaceholder}
+              />
+              <StatCard
+                name={getDisplayName(manualPlayer2)}
+                badge="merge"
+                badgeColor="red"
+                stats={previewStats[`${leagueId}:${manualPlayer2.id}`] ?? loadingPlaceholder}
+              />
+            </div>
+
             <p className="text-xs text-red-600 font-medium mb-4">This action cannot be undone.</p>
             <div className="flex gap-3">
               <button
