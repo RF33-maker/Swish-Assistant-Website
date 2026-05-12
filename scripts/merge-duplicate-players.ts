@@ -53,9 +53,17 @@ const isDryRun = !args.includes('--execute');
 const skipConfirm = args.includes('--yes');
 
 const leagueSlugIdx = args.indexOf('--league-slug');
+if (leagueSlugIdx !== -1 && (!args[leagueSlugIdx + 1] || args[leagueSlugIdx + 1].startsWith('--'))) {
+  console.error('Error: --league-slug requires a value (e.g. --league-slug reba-sl)');
+  process.exit(1);
+}
 const leagueSlugFilter = leagueSlugIdx !== -1 ? args[leagueSlugIdx + 1] : null;
 
 const manualIdx = args.indexOf('--manual');
+if (manualIdx !== -1 && (!args[manualIdx + 1] || args[manualIdx + 1].startsWith('--'))) {
+  console.error('Error: --manual requires a path (e.g. --manual scripts/manual-merges.json)');
+  process.exit(1);
+}
 const manualPath =
   manualIdx !== -1
     ? args[manualIdx + 1]
@@ -504,6 +512,13 @@ async function buildMergePairs(
     const merge = playerMap.get(o.mergeId);
     if (!keep || !merge) {
       console.warn(`⚠️  Manual override skipped — could not find players: keepId=${o.keepId} mergeId=${o.mergeId}`);
+      continue;
+    }
+    if (keep.league_id !== merge.league_id) {
+      console.warn(
+        `⚠️  Manual override skipped — players are in different leagues: ` +
+        `keepId=${o.keepId} (league ${keep.league_id}) mergeId=${o.mergeId} (league ${merge.league_id})`
+      );
       continue;
     }
     // Remove any auto pair that covers the same duplicate
