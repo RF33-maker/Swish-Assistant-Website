@@ -2,6 +2,7 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { supabaseAdmin } from "./supabaseServiceClient";
+import { detectDuplicates } from "./playerMergeUtils";
 import multer from 'multer';
 import OpenAI from 'openai';
 import * as fs from 'fs';
@@ -1150,6 +1151,177 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ...(partial ? { partial: true } : {}),
       ...(stale ? { stale: true } : {}),
     });
+  });
+
+  // ---- Player Merge Routes ----
+
+  // Helper: fetch all league IDs in scope (the league itself + its direct children)
+  async function getScopedLeagueIds(leagueId: string): Promise<string[]> {
+    const { data } = await supabaseAdmin
+      .from('leagues')
+      .select('league_id')
+      .eq('parent_league_id', leagueId);
+    const childIds = (data || []).map((r: any) => r.league_id);
+    return [leagueId, ...childIds];
+  }
+
+  // List all players for a league + its children (for manual search)
+  app.get("/api/leagues/:leagueId/players", async (req, res) => {
+    try {
+      const userId = await authenticateSupabaseUser(req);
+      if (!userId) return res.status(401).json({ error: "Authentication required" });
+
+      const { leagueId } = req.params;
+      const isOwner = await verifyLeagueOwnership(userId, leagueId);
+      if (!isOwner) return res.status(403).json({ error: "Only league owners can access this" });
+
+      const allIds = await getScopedLeagueIds(leagueId);
+
+      const { data, error } = await supabaseAdmin
+        .from('players')
+        .select('id, full_name, slug, league_id')
+        .in('league_id', allIds)
+        .order('full_name');
+
+      if (error) return res.status(500).json({ error: error.message });
+      res.json({ players: data || [] });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Detect duplicate player pairs for a league + its children
+  app.get("/api/leagues/:leagueId/duplicate-players", async (req, res) => {
+    try {
+      const userId = await authenticateSupabaseUser(req);
+      if (!userId) return res.status(401).json({ error: "Authentication required" });
+
+      const { leagueId } = req.params;
+      const isOwner = await verifyLeagueOwnership(userId, leagueId);
+      if (!isOwner) return res.status(403).json({ error: "Only league owners can access this" });
+
+      const allIds = await getScopedLeagueIds(leagueId);
+
+      // Fetch all players across the league and its children
+      const PAGE = 1000;
+      const players: any[] = [];
+      let offset = 0;
+      while (true) {
+        const { data, error } = await supabaseAdmin
+          .from('players')
+          .select('id, full_name, league_id, slug')
+          .in('league_id', allIds)
+          .range(offset, offset + PAGE - 1);
+        if (error) return res.status(500).json({ error: error.message });
+        if (!data || data.length === 0) break;
+        players.push(...data);
+        if (data.length < PAGE) break;
+        offset += PAGE;
+      }
+
+      if (players.length === 0) return res.json({ pairs: [] });
+
+      // Fetch stats counts
+      const statsCounts = new Map<string, number>();
+      const CHUNK = 200;
+      for (let i = 0; i < players.length; i += CHUNK) {
+        const chunk = players.slice(i, i + CHUNK).map((p: any) => p.id);
+        const { data, error: statsError } = await supabaseAdmin
+          .from('player_stats')
+          .select('player_id')
+          .in('player_id', chunk);
+        if (statsError) {
+          console.error('Error fetching stats counts for duplicate detection:', statsError.message);
+        }
+        for (const row of data || []) {
+          statsCounts.set(row.player_id, (statsCounts.get(row.player_id) || 0) + 1);
+        }
+      }
+
+      const pairs = detectDuplicates(players, statsCounts);
+      res.json({ pairs });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Merge a duplicate player into the canonical player
+  app.post("/api/leagues/:leagueId/merge-players", async (req, res) => {
+    try {
+      const userId = await authenticateSupabaseUser(req);
+      if (!userId) return res.status(401).json({ error: "Authentication required" });
+
+      const { leagueId } = req.params;
+      const isOwner = await verifyLeagueOwnership(userId, leagueId);
+      if (!isOwner) return res.status(403).json({ error: "Only league owners can merge players" });
+
+      const { canonicalId, duplicateId } = req.body;
+      if (!canonicalId || !duplicateId) {
+        return res.status(400).json({ error: "canonicalId and duplicateId are required" });
+      }
+      if (canonicalId === duplicateId) {
+        return res.status(400).json({ error: "canonicalId and duplicateId must be different" });
+      }
+
+      // Fetch both player records
+      const { data: playerCheck, error: checkError } = await supabaseAdmin
+        .from('players')
+        .select('id, league_id, full_name')
+        .in('id', [canonicalId, duplicateId]);
+
+      if (checkError) return res.status(500).json({ error: checkError.message });
+      if (!playerCheck || playerCheck.length !== 2) {
+        return res.status(404).json({ error: "One or both players not found" });
+      }
+
+      const canonical = playerCheck.find((p: any) => p.id === canonicalId);
+      const duplicate = playerCheck.find((p: any) => p.id === duplicateId);
+
+      if (!canonical || !duplicate) {
+        return res.status(404).json({ error: "One or both players not found" });
+      }
+
+      // Both players must belong to the league or one of its children
+      const allIds = await getScopedLeagueIds(leagueId);
+      const allIdSet = new Set(allIds);
+      if (!allIdSet.has(canonical.league_id) || !allIdSet.has(duplicate.league_id)) {
+        return res.status(403).json({ error: "Players must belong to this league or one of its sub-leagues" });
+      }
+
+      // Re-point player_stats rows from duplicate → canonical
+      const { error: updateError } = await supabaseAdmin
+        .from('player_stats')
+        .update({ player_id: canonicalId })
+        .eq('player_id', duplicateId);
+
+      if (updateError) return res.status(500).json({ error: `Failed to update stats: ${updateError.message}` });
+
+      // Delete the duplicate player record
+      const { error: deleteError } = await supabaseAdmin
+        .from('players')
+        .delete()
+        .eq('id', duplicateId);
+
+      if (deleteError) {
+        // Attempt to roll back the stats repoint so we don't leave data in a partial state
+        const { error: rollbackError } = await supabaseAdmin
+          .from('player_stats')
+          .update({ player_id: duplicateId })
+          .eq('player_id', canonicalId);
+        if (rollbackError) {
+          console.error('Merge rollback failed — stats may be in partial state:', rollbackError.message);
+        }
+        return res.status(500).json({ error: `Merge failed and was rolled back: ${deleteError.message}` });
+      }
+
+      res.json({
+        success: true,
+        canonicalName: canonical.full_name || '',
+        duplicateName: duplicate.full_name || '',
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   const httpServer = createServer(app);
