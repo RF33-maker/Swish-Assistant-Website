@@ -307,16 +307,6 @@ function namesMatch(name1: string, name2: string, threshold = 0.85): boolean {
   return false;
 }
 
-function getMostCompleteName(names: string[]): string {
-  return names.reduce((best, cur) => {
-    const curFull = cur.split(' ').filter(p => p.length > 1).length;
-    const bestFull = best.split(' ').filter(p => p.length > 1).length;
-    if (curFull > bestFull) return cur;
-    if (curFull < bestFull) return best;
-    return cur.length > best.length ? cur : best;
-  });
-}
-
 // ---------------------------------------------------------------------------
 // Data types
 // ---------------------------------------------------------------------------
@@ -442,10 +432,23 @@ function detectDuplicates(
         if (!aName || !bName) continue;
         if (!namesMatch(aName, bName)) continue;
 
-        // Choose canonical: prefer more complete name; break ties by stats count
-        const canonicalName = getMostCompleteName([aName, bName]);
-        const aIsCanonical = canonicalName === aName || 
-          (canonicalName !== bName && (statsCounts.get(a.id) || 0) >= (statsCounts.get(b.id) || 0));
+        // Choose canonical player explicitly:
+        //  1. More full words (words with length > 1) wins — prefers complete names over initials
+        //  2. Tie: more player_stats rows wins — keeps the record most data references
+        //  3. Tie: longer full_name string wins — deterministic final fallback
+        const aFullWords = aName.split(' ').filter(p => p.length > 1).length;
+        const bFullWords = bName.split(' ').filter(p => p.length > 1).length;
+        const aStats = statsCounts.get(a.id) || 0;
+        const bStats = statsCounts.get(b.id) || 0;
+
+        let aIsCanonical: boolean;
+        if (aFullWords !== bFullWords) {
+          aIsCanonical = aFullWords > bFullWords;
+        } else if (aStats !== bStats) {
+          aIsCanonical = aStats > bStats;
+        } else {
+          aIsCanonical = aName.length >= bName.length;
+        }
 
         const canonical = aIsCanonical ? a : b;
         const duplicate = aIsCanonical ? b : a;
