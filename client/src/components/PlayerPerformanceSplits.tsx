@@ -4,6 +4,23 @@ import { supabase } from "@/lib/supabase";
 import ShareableCard from "@/components/ShareableCard";
 import { ChevronDown, ChevronUp, Info } from "lucide-react";
 
+// ---------------------------------------------------------------------------
+// View type
+// ---------------------------------------------------------------------------
+
+/**
+ * Columns currently returned by player_on_off_impact_profile_v1.
+ *
+ * Missing from the view (frontend placeholder only — will show "—" until
+ * the Supabase view is updated to include them):
+ *   on_oreb_pct / off_oreb_pct / diff_oreb_pct
+ *   on_dreb_pct / off_dreb_pct / diff_dreb_pct
+ *   on_reb_pct  / off_reb_pct  / diff_reb_pct
+ *   on_ast_pct  / off_ast_pct  / diff_ast_pct
+ *   on_blk_pct  / off_blk_pct  / diff_blk_pct
+ *   on_stl_pct  / off_stl_pct  / diff_stl_pct
+ *   on_tov_pct  / off_tov_pct  / diff_tov_pct
+ */
 interface PlayerOnOffImpactProfileRow {
   player_id: string;
   league_id?: string | null;
@@ -25,6 +42,28 @@ interface PlayerOnOffImpactProfileRow {
   tracking_quality: string | null;
   confidence_explanation: string | null;
   profile_safe: boolean | null;
+  // Percentage splits — not yet in the view; will be null until view is updated
+  on_oreb_pct?: number | null;
+  off_oreb_pct?: number | null;
+  diff_oreb_pct?: number | null;
+  on_dreb_pct?: number | null;
+  off_dreb_pct?: number | null;
+  diff_dreb_pct?: number | null;
+  on_reb_pct?: number | null;
+  off_reb_pct?: number | null;
+  diff_reb_pct?: number | null;
+  on_ast_pct?: number | null;
+  off_ast_pct?: number | null;
+  diff_ast_pct?: number | null;
+  on_blk_pct?: number | null;
+  off_blk_pct?: number | null;
+  diff_blk_pct?: number | null;
+  on_stl_pct?: number | null;
+  off_stl_pct?: number | null;
+  diff_stl_pct?: number | null;
+  on_tov_pct?: number | null;
+  off_tov_pct?: number | null;
+  diff_tov_pct?: number | null;
 }
 
 interface PlayerPerformanceSplitsProps {
@@ -38,21 +77,77 @@ interface PlayerPerformanceSplitsProps {
   teamLogoUrl?: string | null;
 }
 
+// ---------------------------------------------------------------------------
+// Metric row definition
+// ---------------------------------------------------------------------------
+
+interface MetricRow {
+  label: string;
+  abbr: string;
+  on: number | null | undefined;
+  off: number | null | undefined;
+  /** pre-computed diff from the view, or null to compute on-the-fly */
+  diff: number | null | undefined;
+  /** true = lower diff is better (DRTG, TOV%) */
+  invertGood?: boolean;
+  decimals?: number;
+  /** true = show % suffix */
+  pct?: boolean;
+  /** true = this metric comes from a view column not yet deployed */
+  missing?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function fmt(v: number | null | undefined, decimals = 1, pct = false): string {
+  if (v == null) return "—";
+  return `${v.toFixed(decimals)}${pct ? "%" : ""}`;
+}
+
+function fmtSigned(v: number | null | undefined, decimals = 1): string {
+  if (v == null) return "—";
+  const sign = v >= 0 ? "+" : "−";
+  return `${sign}${Math.abs(v).toFixed(decimals)}`;
+}
+
+/**
+ * Returns Tailwind text colour classes for a diff value.
+ * neutral band: |diff| ≤ 3 → muted
+ * invertGood: negative diff is green (DRTG, TOV%)
+ */
+function diffColor(
+  diff: number | null | undefined,
+  invertGood = false
+): string {
+  if (diff == null) return "text-slate-400 dark:text-slate-500";
+  const abs = Math.abs(diff);
+  if (abs <= 3) return "text-slate-500 dark:text-slate-400";
+  const positive = diff > 0;
+  const isGood = invertGood ? !positive : positive;
+  return isGood
+    ? "text-emerald-600 dark:text-emerald-400"
+    : "text-red-500 dark:text-red-400";
+}
+
+// ---------------------------------------------------------------------------
+// Badge sub-components
+// ---------------------------------------------------------------------------
+
 function SwingBadge({ swing }: { swing: number }) {
-  if (swing > 3) {
+  if (swing > 3)
     return (
       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
         Positive
       </span>
     );
-  }
-  if (swing < -3) {
+  if (swing < -3)
     return (
       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400 border border-red-200 dark:border-red-800">
         Negative
       </span>
     );
-  }
   return (
     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 dark:bg-neutral-800 dark:text-slate-400 border border-slate-200 dark:border-neutral-700">
       Neutral
@@ -62,27 +157,24 @@ function SwingBadge({ swing }: { swing: number }) {
 
 function AccuracyBadge({ label }: { label: string }) {
   const lower = label.toLowerCase();
-  if (lower.includes("high")) {
+  if (lower.includes("high"))
     return (
       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
         {label}
       </span>
     );
-  }
-  if (lower.includes("medium")) {
+  if (lower.includes("medium"))
     return (
       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
         {label}
       </span>
     );
-  }
-  if (lower.includes("low") || lower.includes("directional")) {
+  if (lower.includes("low") || lower.includes("directional"))
     return (
       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-50 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 border border-orange-200 dark:border-orange-800">
         {label}
       </span>
     );
-  }
   return (
     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 dark:bg-neutral-800 dark:text-slate-400 border border-slate-200 dark:border-neutral-700">
       {label}
@@ -98,16 +190,110 @@ function SampleBadge({ label }: { label: string }) {
   );
 }
 
-function fmt(v: number | null, decimals = 1): string {
-  if (v == null) return "N/A";
-  return v.toFixed(decimals);
+// ---------------------------------------------------------------------------
+// Metric table (shared between card and share snapshot)
+// ---------------------------------------------------------------------------
+
+function MetricTable({
+  metrics,
+  compact = false,
+}: {
+  metrics: MetricRow[];
+  compact?: boolean;
+}) {
+  const cellPx = compact ? "6px 12px" : "8px 14px";
+  const labelSize = compact ? 10 : 11;
+  const valSize = compact ? 13 : 15;
+
+  return (
+    <div
+      className="rounded-xl border border-slate-200 dark:border-neutral-700 overflow-hidden"
+      style={{ fontSize: 14 }}
+    >
+      <table className="w-full">
+        <thead className="bg-slate-50 dark:bg-neutral-800">
+          <tr>
+            <th
+              className="text-left font-bold text-slate-500 uppercase"
+              style={{ padding: cellPx, fontSize: labelSize, letterSpacing: "0.12em" }}
+            />
+            <th
+              className="text-right font-bold text-slate-500 uppercase"
+              style={{ padding: cellPx, fontSize: labelSize, letterSpacing: "0.12em" }}
+            >
+              On
+            </th>
+            <th
+              className="text-right font-bold text-slate-500 uppercase"
+              style={{ padding: cellPx, fontSize: labelSize, letterSpacing: "0.12em" }}
+            >
+              Off
+            </th>
+            <th
+              className="text-right font-bold text-slate-500 uppercase"
+              style={{ padding: cellPx, fontSize: labelSize, letterSpacing: "0.12em" }}
+            >
+              Diff
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {metrics.map((m, idx) => {
+            const computedDiff =
+              m.diff != null
+                ? m.diff
+                : m.on != null && m.off != null
+                ? m.on - m.off
+                : null;
+            const color = m.missing
+              ? "text-slate-400 dark:text-slate-500"
+              : diffColor(computedDiff, m.invertGood);
+            const dec = m.decimals ?? 1;
+            return (
+              <tr
+                key={m.abbr}
+                className={`border-t border-slate-100 dark:border-neutral-700 ${
+                  idx % 2 === 1 ? "bg-slate-50/60 dark:bg-neutral-800/30" : ""
+                }`}
+              >
+                <td
+                  className="font-semibold uppercase text-slate-600 dark:text-slate-400"
+                  style={{ padding: cellPx, fontSize: labelSize, letterSpacing: "0.1em" }}
+                >
+                  {m.label}
+                </td>
+                <td
+                  className="text-right tabular-nums text-slate-700 dark:text-slate-200"
+                  style={{ padding: cellPx, fontSize: valSize, fontWeight: 600 }}
+                >
+                  {fmt(m.on, dec, m.pct)}
+                </td>
+                <td
+                  className="text-right tabular-nums text-slate-700 dark:text-slate-200"
+                  style={{ padding: cellPx, fontSize: valSize, fontWeight: 600 }}
+                >
+                  {fmt(m.off, dec, m.pct)}
+                </td>
+                <td
+                  className={`text-right tabular-nums font-bold ${color}`}
+                  style={{ padding: cellPx, fontSize: valSize }}
+                >
+                  {m.missing
+                    ? "—"
+                    : fmtSigned(computedDiff, dec)}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
-function fmtSigned(v: number | null, decimals = 1): string {
-  if (v == null) return "N/A";
-  const sign = v >= 0 ? "+" : "−";
-  return `${sign}${Math.abs(v).toFixed(decimals)}`;
-}
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
 
 export function PlayerPerformanceSplits({
   playerId,
@@ -141,27 +327,54 @@ export function PlayerPerformanceSplits({
         throw error;
       }
 
-      return (data && data.length > 0 ? data[0] : null) as PlayerOnOffImpactProfileRow | null;
+      if (data && data.length > 0) {
+        const r = data[0] as PlayerOnOffImpactProfileRow;
+        // Detect which percentage columns are missing from the view
+        const missingCols: string[] = [];
+        const pctFields = [
+          "on_oreb_pct","off_oreb_pct","diff_oreb_pct",
+          "on_dreb_pct","off_dreb_pct","diff_dreb_pct",
+          "on_reb_pct","off_reb_pct","diff_reb_pct",
+          "on_ast_pct","off_ast_pct","diff_ast_pct",
+          "on_blk_pct","off_blk_pct","diff_blk_pct",
+          "on_stl_pct","off_stl_pct","diff_stl_pct",
+          "on_tov_pct","off_tov_pct","diff_tov_pct",
+        ] as const;
+        for (const col of pctFields) {
+          if (!(col in r)) missingCols.push(col);
+        }
+        if (missingCols.length > 0) {
+          console.info(
+            `[PlayerPerformanceSplits] The following columns are not yet present in ` +
+            `player_on_off_impact_profile_v1 — rows will show "—" until the view is updated:\n  ${missingCols.join(", ")}`
+          );
+        }
+        return r;
+      }
+
+      return null;
     },
     enabled: !!playerId,
     staleTime: 5 * 60 * 1000,
   });
 
+  // ── Loading ──────────────────────────────────────────────────────────────
   if (isLoading) {
     return (
       <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4 animate-pulse">
         <div className="h-5 w-48 bg-slate-200 dark:bg-neutral-700 rounded mb-1" />
         <div className="h-3 w-64 bg-slate-100 dark:bg-neutral-800 rounded mb-4" />
         <div className="h-10 w-32 bg-slate-100 dark:bg-neutral-800 rounded mb-4" />
-        <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-2">
           {[...Array(6)].map((_, i) => (
-            <div key={i} className="h-10 bg-slate-100 dark:bg-neutral-800 rounded" />
+            <div key={i} className="h-8 bg-slate-100 dark:bg-neutral-800 rounded" />
           ))}
         </div>
       </div>
     );
   }
 
+  // ── Error ────────────────────────────────────────────────────────────────
   if (isError) {
     return (
       <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
@@ -178,6 +391,7 @@ export function PlayerPerformanceSplits({
     );
   }
 
+  // ── No data ───────────────────────────────────────────────────────────────
   if (!row) {
     return (
       <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
@@ -194,21 +408,87 @@ export function PlayerPerformanceSplits({
     );
   }
 
+  // ── Derived state ─────────────────────────────────────────────────────────
   const accuracyLabel = row.accuracy_label || "";
   const isNeedsReview = accuracyLabel.toLowerCase().includes("needs review");
   const isInsufficient = accuracyLabel.toLowerCase().includes("insufficient");
   const isLowAccuracy = accuracyLabel.toLowerCase().includes("low");
   const hasHeadline = row.adjusted_net_swing != null && !isNeedsReview;
 
-  const swingColor =
-    !hasHeadline
-      ? "text-slate-400 dark:text-slate-500"
-      : row.adjusted_net_swing! > 3
-      ? "text-emerald-600 dark:text-emerald-400"
-      : row.adjusted_net_swing! < -3
-      ? "text-red-600 dark:text-red-400"
-      : "text-slate-700 dark:text-slate-300";
+  const swingColor = !hasHeadline
+    ? "text-slate-400 dark:text-slate-500"
+    : row.adjusted_net_swing! > 3
+    ? "text-emerald-600 dark:text-emerald-400"
+    : row.adjusted_net_swing! < -3
+    ? "text-red-600 dark:text-red-400"
+    : "text-slate-700 dark:text-slate-300";
 
+  // Detect if pct columns are missing (from view)
+  const pctMissing = !("on_oreb_pct" in row);
+
+  // ── Metric rows ───────────────────────────────────────────────────────────
+  const metrics: MetricRow[] = [
+    {
+      label: "ORTG",     abbr: "ortg",
+      on: row.on_ortg,   off: row.off_ortg,
+      diff: row.on_ortg != null && row.off_ortg != null ? row.on_ortg - row.off_ortg : null,
+    },
+    {
+      label: "DRTG",     abbr: "drtg",
+      on: row.on_drtg,   off: row.off_drtg,
+      diff: row.on_drtg != null && row.off_drtg != null ? row.on_drtg - row.off_drtg : null,
+      invertGood: true,
+    },
+    {
+      label: "NRTG",     abbr: "nrtg",
+      on: row.on_nrtg,   off: row.off_nrtg,
+      diff: row.on_nrtg != null && row.off_nrtg != null ? row.on_nrtg - row.off_nrtg : null,
+    },
+    {
+      label: "OREB%",    abbr: "oreb_pct",
+      on: row.on_oreb_pct,  off: row.off_oreb_pct,
+      diff: row.diff_oreb_pct ?? null,
+      pct: true, missing: pctMissing,
+    },
+    {
+      label: "DREB%",    abbr: "dreb_pct",
+      on: row.on_dreb_pct,  off: row.off_dreb_pct,
+      diff: row.diff_dreb_pct ?? null,
+      pct: true, missing: pctMissing,
+    },
+    {
+      label: "REB%",     abbr: "reb_pct",
+      on: row.on_reb_pct,   off: row.off_reb_pct,
+      diff: row.diff_reb_pct ?? null,
+      pct: true, missing: pctMissing,
+    },
+    {
+      label: "AST%",     abbr: "ast_pct",
+      on: row.on_ast_pct,   off: row.off_ast_pct,
+      diff: row.diff_ast_pct ?? null,
+      pct: true, missing: pctMissing,
+    },
+    {
+      label: "TOV%",     abbr: "tov_pct",
+      on: row.on_tov_pct,   off: row.off_tov_pct,
+      diff: row.diff_tov_pct ?? null,
+      pct: true, invertGood: true, missing: pctMissing,
+    },
+    {
+      label: "STL%",     abbr: "stl_pct",
+      on: row.on_stl_pct,   off: row.off_stl_pct,
+      diff: row.diff_stl_pct ?? null,
+      pct: true, missing: pctMissing,
+    },
+    {
+      label: "BLK%",     abbr: "blk_pct",
+      on: row.on_blk_pct,   off: row.off_blk_pct,
+      diff: row.diff_blk_pct ?? null,
+      pct: true, missing: pctMissing,
+    },
+  ];
+
+  // ── Share card snapshot ───────────────────────────────────────────────────
   const shareContent = (
     <div className="flex flex-col" style={{ gap: 16 }}>
       <div>
@@ -245,123 +525,32 @@ export function PlayerPerformanceSplits({
       </div>
 
       {isNeedsReview && (
-        <p style={{ fontSize: 13 }} className="text-slate-500 dark:text-slate-400">
+        <p style={{ fontSize: 13 }} className="text-slate-500">
           {row.confidence_explanation || "On/off tracking needs review."}
         </p>
       )}
 
-      <div
-        className="rounded-xl border border-slate-200 dark:border-neutral-700 overflow-hidden"
-        style={{ fontSize: 14 }}
-      >
-        <table className="w-full">
-          <thead className="bg-slate-50 dark:bg-neutral-800">
-            <tr>
-              <th
-                className="text-left font-bold text-slate-500 uppercase"
-                style={{ padding: "8px 14px", fontSize: 11, letterSpacing: "0.12em" }}
-              />
-              <th
-                className="text-right font-bold text-slate-500 uppercase"
-                style={{ padding: "8px 14px", fontSize: 11, letterSpacing: "0.12em" }}
-              >
-                On
-              </th>
-              <th
-                className="text-right font-bold text-slate-500 uppercase"
-                style={{ padding: "8px 14px", fontSize: 11, letterSpacing: "0.12em" }}
-              >
-                Off
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {[
-              { label: "Net Rating", on: row.on_nrtg, off: row.off_nrtg },
-              { label: "Def Rating", on: row.on_drtg, off: row.off_drtg },
-              { label: "Off Rating", on: row.on_ortg, off: row.off_ortg },
-            ].map((m, idx) => (
-              <tr
-                key={m.label}
-                className={`border-t border-slate-100 dark:border-neutral-700 ${idx % 2 === 1 ? "bg-slate-50/60 dark:bg-neutral-800/30" : ""}`}
-              >
-                <td
-                  className="font-semibold uppercase text-slate-600 dark:text-slate-400"
-                  style={{ padding: "8px 14px", fontSize: 11, letterSpacing: "0.1em" }}
-                >
-                  {m.label}
-                </td>
-                <td
-                  className="text-right font-bold tabular-nums text-slate-800 dark:text-white"
-                  style={{ padding: "8px 14px", fontSize: 16 }}
-                >
-                  {fmt(m.on)}
-                </td>
-                <td
-                  className="text-right font-bold tabular-nums text-slate-800 dark:text-white"
-                  style={{ padding: "8px 14px", fontSize: 16 }}
-                >
-                  {fmt(m.off)}
-                </td>
-              </tr>
-            ))}
-            <tr className="border-t border-slate-100 dark:border-neutral-700 bg-slate-50/60 dark:bg-neutral-800/30">
-              <td
-                className="font-semibold uppercase text-slate-600 dark:text-slate-400"
-                style={{ padding: "8px 14px", fontSize: 11, letterSpacing: "0.1em" }}
-              >
-                Raw Swing
-              </td>
-              <td
-                colSpan={2}
-                className="text-right font-bold tabular-nums text-slate-800 dark:text-white"
-                style={{ padding: "8px 14px", fontSize: 16 }}
-              >
-                {fmtSigned(row.raw_net_swing)}
-              </td>
-            </tr>
-            <tr className="border-t border-slate-100 dark:border-neutral-700">
-              <td
-                className="font-semibold uppercase text-slate-600 dark:text-slate-400"
-                style={{ padding: "8px 14px", fontSize: 11, letterSpacing: "0.1em" }}
-              >
-                Clean Possessions
-              </td>
-              <td
-                colSpan={2}
-                className="text-right font-bold tabular-nums text-slate-800 dark:text-white"
-                style={{ padding: "8px 14px", fontSize: 16 }}
-              >
-                {fmt(row.on_possessions_for, 0)}
-              </td>
-            </tr>
-            <tr className="border-t border-slate-100 dark:border-neutral-700 bg-slate-50/60 dark:bg-neutral-800/30">
-              <td
-                className="font-semibold uppercase text-slate-600 dark:text-slate-400"
-                style={{ padding: "8px 14px", fontSize: 11, letterSpacing: "0.1em" }}
-              >
-                Tracking Quality
-              </td>
-              <td
-                colSpan={2}
-                className="text-right font-bold tabular-nums text-slate-800 dark:text-white"
-                style={{ padding: "8px 14px", fontSize: 16 }}
-              >
-                {row.tracking_quality || "N/A"}
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <MetricTable metrics={metrics} compact />
+
+      <div className="flex items-center justify-between" style={{ fontSize: 12 }}>
+        <span className="text-slate-400">
+          Raw Swing: {fmtSigned(row.raw_net_swing)}
+        </span>
+        <span className="text-slate-400">
+          Clean Possessions: {fmt(row.on_possessions_for, 0)}
+          {row.tracking_quality ? ` · ${row.tracking_quality}` : ""}
+        </span>
       </div>
 
       {row.confidence_explanation && !isNeedsReview && (
-        <p style={{ fontSize: 12 }} className="text-slate-500 dark:text-slate-400">
+        <p style={{ fontSize: 12 }} className="text-slate-500">
           {row.confidence_explanation}
         </p>
       )}
     </div>
   );
 
+  // ── Main render ───────────────────────────────────────────────────────────
   return (
     <ShareableCard
       title="Team Performance Splits"
@@ -380,6 +569,7 @@ export function PlayerPerformanceSplits({
         className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4"
         data-testid="player-performance-splits-card"
       >
+        {/* Header */}
         <div className="mb-3">
           <span className="text-base md:text-lg font-bold text-slate-800 dark:text-white block">
             Team Performance Splits
@@ -405,9 +595,12 @@ export function PlayerPerformanceSplits({
           </div>
         ) : (
           <>
+            {/* Headline swing */}
             <div className="flex flex-wrap items-end gap-3 mb-4">
               <span
-                className={`text-4xl font-extrabold tabular-nums leading-none ${swingColor} ${isInsufficient ? "opacity-50" : ""}`}
+                className={`text-4xl font-extrabold tabular-nums leading-none ${swingColor} ${
+                  isInsufficient ? "opacity-50" : ""
+                }`}
               >
                 {hasHeadline ? fmtSigned(row.adjusted_net_swing) : "—"}
               </span>
@@ -420,7 +613,9 @@ export function PlayerPerformanceSplits({
                     <SwingBadge swing={row.adjusted_net_swing} />
                   )}
                   {accuracyLabel && <AccuracyBadge label={accuracyLabel} />}
-                  {row.sample_size_label && <SampleBadge label={row.sample_size_label} />}
+                  {row.sample_size_label && (
+                    <SampleBadge label={row.sample_size_label} />
+                  )}
                 </div>
                 {isInsufficient && (
                   <span className="text-xs text-slate-400 dark:text-slate-500 italic mt-0.5">
@@ -435,30 +630,36 @@ export function PlayerPerformanceSplits({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 mb-3">
-              {[
-                { label: "On Net Rtg", value: fmt(row.on_nrtg) },
-                { label: "Off Net Rtg", value: fmt(row.off_nrtg) },
-                { label: "On Def Rtg", value: fmt(row.on_drtg) },
-                { label: "Off Def Rtg", value: fmt(row.off_drtg) },
-                { label: "Raw Swing", value: fmtSigned(row.raw_net_swing) },
-                { label: "Clean Possessions", value: fmt(row.on_possessions_for, 0) },
-                { label: "Tracking Quality", value: row.tracking_quality || "N/A" },
-              ].map((item) => (
-                <div
-                  key={item.label}
-                  className="bg-slate-50 dark:bg-neutral-800 rounded-lg px-3 py-2"
-                >
-                  <span className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-semibold block">
-                    {item.label}
-                  </span>
-                  <span className="text-sm font-bold text-slate-800 dark:text-white tabular-nums">
-                    {item.value}
-                  </span>
-                </div>
-              ))}
+            {/* Main metric table */}
+            <div className="mb-3">
+              <MetricTable metrics={metrics} />
             </div>
 
+            {/* Footer — raw swing + possessions + tracking */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-3 text-xs text-slate-400 dark:text-slate-500">
+              <span>
+                Raw Swing:{" "}
+                <span className="font-semibold text-slate-600 dark:text-slate-300 tabular-nums">
+                  {fmtSigned(row.raw_net_swing)}
+                </span>
+              </span>
+              <span>
+                Clean Possessions:{" "}
+                <span className="font-semibold text-slate-600 dark:text-slate-300 tabular-nums">
+                  {fmt(row.on_possessions_for, 0)}
+                </span>
+              </span>
+              {row.tracking_quality && (
+                <span>
+                  Tracking:{" "}
+                  <span className="font-semibold text-slate-600 dark:text-slate-300">
+                    {row.tracking_quality}
+                  </span>
+                </span>
+              )}
+            </div>
+
+            {/* "How is this calculated?" collapsible */}
             {row.confidence_explanation && (
               <div>
                 <button
