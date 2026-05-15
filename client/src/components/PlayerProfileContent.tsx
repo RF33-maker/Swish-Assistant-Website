@@ -18,6 +18,7 @@ import ShareableCard from "@/components/ShareableCard";
 import { withAlpha } from "@/lib/colorContrast";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
+import { PlayerPerformanceSplits } from "@/components/PlayerPerformanceSplits";
 
 // Only the columns actually consumed by this profile view, so we never
 // pull every column of the (wide) players table on a cold load.
@@ -108,47 +109,6 @@ interface PlayerRankings {
   ft_percentage: number;
 }
 
-interface PlayerOnOffRow {
-  player_id: string;
-  player_name: string;
-  team_id: string | null;
-  game_key: string;
-  on_seconds: number | null;
-  off_seconds: number | null;
-  on_ortg: number | null;
-  off_ortg: number | null;
-  on_drtg: number | null;
-  off_drtg: number | null;
-  on_nrtg: number | null;
-  off_nrtg: number | null;
-  on_oreb_pct: number | null;
-  off_oreb_pct: number | null;
-  on_dreb_pct: number | null;
-  off_dreb_pct: number | null;
-  on_reb_pct: number | null;
-  off_reb_pct: number | null;
-  on_ast_pct: number | null;
-  off_ast_pct: number | null;
-  on_blk_pct: number | null;
-  off_blk_pct: number | null;
-  on_stl_pct: number | null;
-  off_stl_pct: number | null;
-  on_tov_pct: number | null;
-  off_tov_pct: number | null;
-}
-
-const ON_OFF_METRICS: { key: string; label: string; isPercent: boolean; higherIsBetter: boolean }[] = [
-  { key: 'ortg', label: 'ORTG', isPercent: false, higherIsBetter: true },
-  { key: 'drtg', label: 'DRTG', isPercent: false, higherIsBetter: false },
-  { key: 'nrtg', label: 'NRTG', isPercent: false, higherIsBetter: true },
-  { key: 'oreb_pct', label: 'OREB%', isPercent: true, higherIsBetter: true },
-  { key: 'dreb_pct', label: 'DREB%', isPercent: true, higherIsBetter: true },
-  { key: 'reb_pct', label: 'REB%', isPercent: true, higherIsBetter: true },
-  { key: 'ast_pct', label: 'AST%', isPercent: true, higherIsBetter: true },
-  { key: 'blk_pct', label: 'BLK%', isPercent: true, higherIsBetter: true },
-  { key: 'stl_pct', label: 'STL%', isPercent: true, higherIsBetter: true },
-  { key: 'tov_pct', label: 'TOV%', isPercent: true, higherIsBetter: false },
-];
 
 interface PlayerProfileContentProps {
   playerSlug: string;
@@ -1272,146 +1232,6 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
     enabled: playerIdsForShots.length > 0 && playerShotGameKeys.length > 0,
   });
 
-  // The on/off endpoint can also report `unavailable: true` (the view
-  // timed out and there is no cached snapshot to fall back to). When
-  // that happens for *every* linked player_id, we want to render a
-  // small "temporarily unavailable" placeholder instead of silently
-  // dropping the whole section, so the user can tell the difference
-  // between "this player has no on/off data" and "we couldn't fetch
-  // it right now". We collect both the merged rows and a single
-  // unavailable flag in one query result.
-  type PlayerOnOffResult = { rows: PlayerOnOffRow[]; unavailable: boolean };
-  const { data: playerOnOffResult } = useQuery<PlayerOnOffResult>({
-    queryKey: ['player-on-off', playerIdsForShots, nameVariations],
-    queryFn: async () => {
-      if (playerIdsForShots.length === 0) return { rows: [], unavailable: false };
-      // The player_on_off Supabase view is expensive on a cold plan cache
-      // and can exceed the 30s statement_timeout when hit directly from
-      // the browser. We proxy through `/api/player-on-off/:id`, which
-      // caches results in-memory on the server and retries transient
-      // statement_timeout errors. Issue one request per linked player id
-      // in parallel and merge/dedupe the rows. We pass the player's
-      // known name variations so the server can also pick up rows
-      // stored under a slightly different `player_name` (e.g.
-      // "M. Blazejewski" vs "Marcin Blazejewski").
-      const namesParam = nameVariations.length > 0
-        ? `?names=${encodeURIComponent(nameVariations.join('|'))}`
-        : '';
-      const results = await Promise.all(
-        playerIdsForShots.map(async (pid) => {
-          try {
-            const res = await fetch(`/api/player-on-off/${pid}${namesParam}`);
-            if (!res.ok) {
-              console.error('player_on_off endpoint error for', pid, res.status);
-              return { rows: [] as PlayerOnOffRow[], unavailable: true };
-            }
-            const j = await res.json();
-            return {
-              rows: (j.rows || []) as PlayerOnOffRow[],
-              unavailable: Boolean(j.unavailable),
-            };
-          } catch (err) {
-            console.error('player_on_off fetch failed for', pid, err);
-            return { rows: [] as PlayerOnOffRow[], unavailable: true };
-          }
-        })
-      );
-      const seen = new Set<string>();
-      const merged: PlayerOnOffRow[] = [];
-      for (const r of results) {
-        for (const row of r.rows) {
-          const key = `${row.player_id}::${row.game_key}`;
-          if (seen.has(key)) continue;
-          seen.add(key);
-          merged.push(row);
-        }
-      }
-      // Render the placeholder when at least one per-id response came
-      // back unavailable AND we have no rows to show. A single successful
-      // id with rows is still enough to render the card; but if every id
-      // we *got data for* was empty and at least one id was unavailable,
-      // we surface the placeholder so the user can tell the difference
-      // between "this player has no on/off data" and "we couldn't fetch
-      // it right now".
-      const anyUnavailable = results.some((r) => r.unavailable);
-      const unavailable = anyUnavailable && merged.length === 0;
-      return { rows: merged, unavailable };
-    },
-    enabled: playerIdsForShots.length > 0,
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const playerOnOffRows = playerOnOffResult?.rows ?? [];
-  const playerOnOffUnavailable = playerOnOffResult?.unavailable ?? false;
-
-  const onOffSummary = useMemo(() => {
-    if (!playerOnOffRows || playerOnOffRows.length === 0 || !playerInfo?.name) return null;
-
-    const canonicalName = playerInfo.name;
-    const playerIdSet = new Set(playerIdsForShots);
-    const nameVariationSet = new Set(
-      nameVariations.map((n) => (n || '').trim().toLowerCase()).filter(Boolean)
-    );
-    // Only restrict by game keys when the user has narrowed the league
-    // filter — when "All Competitions" is selected we want every row
-    // the proxy returned, not just the ones that happen to also appear
-    // in the game log. This also avoids dropping rows from leagues
-    // where the player_stats fan-out missed a row but the on/off view
-    // still has data for it.
-    const restrictByGameKeys = selectedLeagueFilter !== 'all';
-    const allowedGameKeys = restrictByGameKeys
-      ? new Set(filteredStats.map((s) => s.game_key).filter((k): k is string => Boolean(k)))
-      : null;
-
-    const rows = playerOnOffRows.filter((r) => {
-      // Match the row to this player by ANY of: linked player_id,
-      // exact match against a known name variation, or the existing
-      // fuzzy namesMatch against the canonical name. The earlier code
-      // only used the fuzzy check, which dropped rows whenever the
-      // view stored a different format ("M. Blazejewski" vs
-      // "Marcin Blazejewski") and made the section vanish.
-      const idOk = r.player_id && playerIdSet.has(r.player_id);
-      const nameLower = (r.player_name || '').trim().toLowerCase();
-      const exactNameOk = nameLower.length > 0 && nameVariationSet.has(nameLower);
-      const fuzzyNameOk = r.player_name && namesMatch(canonicalName, r.player_name);
-      if (!idOk && !exactNameOk && !fuzzyNameOk) return false;
-
-      if (allowedGameKeys && allowedGameKeys.size > 0) {
-        return allowedGameKeys.has(r.game_key);
-      }
-      return true;
-    });
-
-    if (rows.length === 0) return null;
-
-    const summary = ON_OFF_METRICS.map(m => {
-      let onSum = 0;
-      let onWeight = 0;
-      let offSum = 0;
-      let offWeight = 0;
-      for (const r of rows) {
-        const onSec = r.on_seconds || 0;
-        const offSec = r.off_seconds || 0;
-        const onVal = (r as any)[`on_${m.key}`];
-        const offVal = (r as any)[`off_${m.key}`];
-        if (onVal != null && onSec > 0) {
-          onSum += onVal * onSec;
-          onWeight += onSec;
-        }
-        if (offVal != null && offSec > 0) {
-          offSum += offVal * offSec;
-          offWeight += offSec;
-        }
-      }
-      const on = onWeight > 0 ? onSum / onWeight : null;
-      const off = offWeight > 0 ? offSum / offWeight : null;
-      const diff = on != null && off != null ? on - off : null;
-      return { ...m, on, off, diff };
-    });
-
-    if (summary.every(m => m.on == null && m.off == null)) return null;
-    return summary;
-  }, [playerOnOffRows, playerInfo?.name, playerIdsForShots, nameVariations, filteredStats, selectedLeagueFilter]);
 
   const playerShotGamesWithKeys = useMemo(() => {
     if (!playerStats) return [];
@@ -1968,181 +1788,17 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
           );
         })()}
 
-        {!onOffSummary && playerOnOffUnavailable && (
-          <div
-            className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4"
-            data-testid="player-on-off-unavailable"
-          >
-            <span className="text-base md:text-lg font-bold text-slate-800 dark:text-white mb-2 block">
-              Team on/off impact
-            </span>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              On/off impact is temporarily unavailable — refresh to retry.
-            </p>
-          </div>
+        {playerInfo?.playerId && (
+          <PlayerPerformanceSplits
+            playerId={playerInfo.playerId}
+            leagueId={selectedLeagueFilter !== "all" ? selectedLeagueFilter : undefined}
+            playerName={playerInfo.name}
+            playerTeam={playerInfo.team}
+            playerPhotoUrl={playerPhotoUrl}
+            primaryColor={primaryColor}
+            teamLogoUrl={shareTeamLogoUrl}
+          />
         )}
-
-        {onOffSummary && (() => {
-          const fmtVal = (v: number | null, isPercent: boolean) => {
-            if (v == null) return '—';
-            return isPercent ? `${v.toFixed(1)}%` : v.toFixed(1);
-          };
-          const fmtDiff = (v: number | null, isPercent: boolean) => {
-            if (v == null) return '—';
-            const abs = isPercent ? `${Math.abs(v).toFixed(1)}%` : Math.abs(v).toFixed(1);
-            const sign = v < 0 ? '\u2212' : '+';
-            return `${sign}${abs}`;
-          };
-          const onOffShareContent = (
-            <div className="flex flex-col" style={{ gap: 18 }}>
-              <span
-                className="font-bold uppercase text-slate-500 block"
-                style={{ fontSize: 18, letterSpacing: "0.18em" }}
-              >
-                Team On/Off Impact
-              </span>
-              <div className="rounded-xl border border-slate-200 overflow-hidden bg-white shadow-sm">
-                <table className="w-full" style={{ fontSize: 18 }}>
-                  <thead className="bg-slate-50">
-                    <tr>
-                      <th
-                        className="text-left font-bold text-slate-500 uppercase"
-                        style={{ padding: '14px 20px', fontSize: 13, letterSpacing: '0.16em' }}
-                      ></th>
-                      <th
-                        className="text-right font-bold text-slate-500 uppercase"
-                        style={{ padding: '14px 20px', fontSize: 13, letterSpacing: '0.16em' }}
-                      >
-                        On
-                      </th>
-                      <th
-                        className="text-right font-bold text-slate-500 uppercase"
-                        style={{ padding: '14px 20px', fontSize: 13, letterSpacing: '0.16em' }}
-                      >
-                        Off
-                      </th>
-                      <th
-                        className="text-right font-bold text-slate-500 uppercase"
-                        style={{ padding: '14px 20px', fontSize: 13, letterSpacing: '0.16em' }}
-                      >
-                        Diff
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {onOffSummary.map((m, idx) => {
-                      let diffColor = '#334155';
-                      if (m.diff != null && m.diff !== 0) {
-                        const better = m.higherIsBetter ? m.diff > 0 : m.diff < 0;
-                        diffColor = better ? '#10b981' : '#ef4444';
-                      }
-                      return (
-                        <tr
-                          key={m.key}
-                          className={`border-t border-slate-100 ${idx % 2 === 1 ? 'bg-slate-50/60' : ''}`}
-                        >
-                          <td
-                            className="font-bold uppercase text-slate-600"
-                            style={{ padding: '12px 20px', fontSize: 14, letterSpacing: '0.12em' }}
-                          >
-                            {m.label}
-                          </td>
-                          <td
-                            className="text-right font-bold tabular-nums text-slate-800"
-                            style={{ padding: '12px 20px', fontSize: 22 }}
-                          >
-                            {fmtVal(m.on, m.isPercent)}
-                          </td>
-                          <td
-                            className="text-right font-bold tabular-nums text-slate-800"
-                            style={{ padding: '12px 20px', fontSize: 22 }}
-                          >
-                            {fmtVal(m.off, m.isPercent)}
-                          </td>
-                          <td
-                            className="text-right font-bold tabular-nums"
-                            style={{ padding: '12px 20px', fontSize: 22, color: diffColor }}
-                          >
-                            {fmtDiff(m.diff, m.isPercent)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              <p
-                className="text-slate-500 text-center"
-                style={{ fontSize: 14, marginTop: 4 }}
-              >
-                How a player's team performs when they are on vs. off court.
-              </p>
-            </div>
-          );
-          return (
-          <ShareableCard
-            title="Team On/Off Impact"
-            fileSlug="on-off-impact"
-            player={{
-              name: playerInfo?.name || "Player",
-              team: playerInfo?.team || "",
-              photoUrl: playerPhotoUrl,
-              primaryColor,
-              teamLogoUrl: shareTeamLogoUrl,
-            }}
-            shareContent={onOffShareContent}
-            wide
-          >
-          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4" data-testid="player-on-off-card">
-            <span className="text-base md:text-lg font-bold text-slate-800 dark:text-white mb-3 block">Team on/off impact</span>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-y border-gray-100 dark:border-neutral-800 text-slate-400 dark:text-slate-500 uppercase text-[10px] tracking-wider">
-                    <th className="px-2 py-2 text-left font-semibold"></th>
-                    <th className="px-2 py-2 text-right font-semibold">ON</th>
-                    <th className="px-2 py-2 text-right font-semibold">OFF</th>
-                    <th className="px-2 py-2 text-right font-semibold">DIFF</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {onOffSummary.map((m, idx) => {
-                    const fmtVal = (v: number | null) => {
-                      if (v == null) return '—';
-                      return m.isPercent ? `${v.toFixed(1)}%` : v.toFixed(1);
-                    };
-                    const fmtDiff = (v: number | null) => {
-                      if (v == null) return '—';
-                      const abs = m.isPercent ? `${Math.abs(v).toFixed(1)}%` : Math.abs(v).toFixed(1);
-                      const sign = v < 0 ? '\u2212' : '+';
-                      return `${sign}${abs}`;
-                    };
-                    let diffColor = 'text-slate-700 dark:text-slate-300';
-                    if (m.diff != null && m.diff !== 0) {
-                      const better = m.higherIsBetter ? m.diff > 0 : m.diff < 0;
-                      diffColor = better ? 'text-emerald-500 dark:text-emerald-400' : 'text-red-500 dark:text-red-400';
-                    }
-                    return (
-                      <tr
-                        key={m.key}
-                        className={`border-b border-gray-50 dark:border-neutral-800/50 ${idx % 2 === 1 ? 'bg-gray-50/50 dark:bg-neutral-800/30' : ''}`}
-                        data-testid={`on-off-row-${m.key}`}
-                      >
-                        <td className="px-2 py-2 font-semibold uppercase tracking-wide text-xs text-slate-500 dark:text-slate-400">{m.label}</td>
-                        <td className="px-2 py-2 text-right font-semibold text-slate-800 dark:text-white tabular-nums">{fmtVal(m.on)}</td>
-                        <td className="px-2 py-2 text-right font-semibold text-slate-800 dark:text-white tabular-nums">{fmtVal(m.off)}</td>
-                        <td className={`px-2 py-2 text-right font-semibold tabular-nums ${diffColor}`}>{fmtDiff(m.diff)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-3">How a player's team performs when they are on vs. off court.</p>
-          </div>
-          </ShareableCard>
-          );
-        })()}
 
         {careerStats.length > 0 && (
           <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 overflow-hidden">
