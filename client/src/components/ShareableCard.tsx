@@ -221,8 +221,48 @@ export default function ShareableCard({
   const accentStripEnd = shadeHex(bandBase, 0.25);
   const bodyTint = tintHex(bandBase, 0.94);
 
+  /**
+   * Fetch an image URL and return a base64 data URL so html2canvas can draw
+   * it without hitting CORS or browser taint restrictions.
+   */
+  const fetchAsDataUrl = async (src: string): Promise<string | null> => {
+    if (!src || src.startsWith("data:") || src.startsWith("blob:")) return src;
+    try {
+      const resp = await fetch(src, { mode: "cors", credentials: "omit" });
+      if (!resp.ok) return null;
+      const blob = await resp.blob();
+      return await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch {
+      return null;
+    }
+  };
+
   const generatePngBlob = async (): Promise<Blob | null> => {
     if (!captureRef.current) return null;
+
+    // Pre-fetch every <img> inside the capture area as a data URL.
+    // html2canvas runs in a cloned document and cannot re-request images
+    // that were CORS-blocked or cached under a different origin; converting
+    // them to data: URLs before the clone guarantees they appear in the PNG.
+    const liveImgs = Array.from(
+      captureRef.current.querySelectorAll<HTMLImageElement>("img"),
+    );
+    const dataUrlMap = new Map<string, string>();
+    await Promise.all(
+      liveImgs.map(async (img) => {
+        const src = img.getAttribute("src") || img.src;
+        if (src && !dataUrlMap.has(src)) {
+          const dataUrl = await fetchAsDataUrl(src);
+          if (dataUrl) dataUrlMap.set(src, dataUrl);
+        }
+      }),
+    );
+
     // In wide mode the visible preview lives inside a CSS `transform: scale()`
     // wrapper so it fits the modal. html2canvas measures bounds from the live
     // element, so a transformed ancestor would shrink the captured canvas to
@@ -250,6 +290,15 @@ export default function ShareableCard({
         // exported PNG when the user has dark mode enabled.
         doc.documentElement.classList.remove("dark");
         doc.body.classList.remove("dark");
+
+        // Swap every image src to its pre-fetched data URL so the cloned
+        // document doesn't need to make network requests (which would hit
+        // CORS restrictions and produce blank image slots in the export).
+        doc.querySelectorAll<HTMLImageElement>("img").forEach((img) => {
+          const src = img.getAttribute("src") || img.src;
+          const dataUrl = dataUrlMap.get(src);
+          if (dataUrl) img.src = dataUrl;
+        });
 
         // Reset the scaling wrappers so the cloned share card renders at
         // its natural 1080px width. Without this, html2canvas would draw
@@ -551,10 +600,39 @@ export default function ShareableCard({
                     </div>
                   ) : (
                   <>
-                  {/* Player photo cutout — anchored to bottom-left so the
-                      transparent player image stands tall in the band, like
-                      the profile banner. Falls back to the circular initials
-                      avatar when no photo is set. */}
+                  {/* Team logo — large faded watermark anchored to the
+                      right side of the header background. Sits behind all
+                      other content (z-[1]) and adds brand presence without
+                      competing with the player photo or text. */}
+                  {player.teamLogoUrl && (
+                    <div
+                      aria-hidden="true"
+                      className="absolute pointer-events-none z-[1]"
+                      style={{
+                        right: wide ? 36 : 18,
+                        top: "50%",
+                        width: wide ? 210 : 118,
+                        height: wide ? 210 : 118,
+                        marginTop: wide ? -105 : -59,
+                        opacity: 0.18,
+                      }}
+                    >
+                      <img
+                        src={player.teamLogoUrl}
+                        alt=""
+                        crossOrigin="anonymous"
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "contain",
+                        }}
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).style.display = "none";
+                        }}
+                      />
+                    </div>
+                  )}
+
                   {player.photoUrl ? (
                     <div
                       className="absolute bottom-0 pointer-events-none z-[2]"
@@ -562,6 +640,7 @@ export default function ShareableCard({
                         left: wide ? 32 : 16,
                         width: wide ? 220 : 128,
                         height: wide ? 280 : 168,
+                        overflow: "hidden",
                       }}
                     >
                       {/* Soft circular spotlight behind the cutout */}
@@ -577,11 +656,23 @@ export default function ShareableCard({
                             "radial-gradient(circle, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 70%)",
                         }}
                       />
+                      {/* Use height:100%/width:auto instead of object-fit:contain
+                          so html2canvas renders the image identically to the
+                          browser preview (html2canvas ignores object-fit). */}
                       <img
                         src={player.photoUrl}
                         alt={player.name}
                         crossOrigin="anonymous"
-                        className="absolute inset-0 w-full h-full object-contain object-bottom"
+                        style={{
+                          position: "absolute",
+                          bottom: 0,
+                          left: "50%",
+                          transform: "translateX(-50%)",
+                          height: "100%",
+                          width: "auto",
+                          maxWidth: "none",
+                          display: "block",
+                        }}
                         onError={(e) => {
                           (e.currentTarget as HTMLImageElement).style.display = "none";
                         }}
@@ -626,9 +717,7 @@ export default function ShareableCard({
                       </div>
                       {player.team && (
                         <div
-                          className="flex items-center"
                           style={{
-                            gap: wide ? 12 : 8,
                             wordBreak: "break-word",
                             color: bandTextSubtle,
                             marginTop: wide ? 14 : 8,
@@ -636,32 +725,7 @@ export default function ShareableCard({
                             fontSize: wide ? 22 : 12,
                           }}
                         >
-                          {player.teamLogoUrl && (
-                            <span
-                              className="inline-flex items-center justify-center rounded-full bg-white border border-white/60 overflow-hidden flex-shrink-0 shadow-sm"
-                              style={{ width: wide ? 64 : 28, height: wide ? 64 : 28 }}
-                            >
-                              <img
-                                src={player.teamLogoUrl}
-                                alt={player.team}
-                                crossOrigin="anonymous"
-                                width={wide ? 56 : 24}
-                                height={wide ? 56 : 24}
-                                style={{
-                                  width: wide ? 56 : 24,
-                                  height: wide ? 56 : 24,
-                                  objectFit: "contain",
-                                }}
-                                onError={(e) => {
-                                  const img = e.currentTarget as HTMLImageElement;
-                                  const wrap = img.parentElement;
-                                  if (wrap) wrap.style.display = "none";
-                                }}
-                                data-testid="share-team-logo"
-                              />
-                            </span>
-                          )}
-                          <span>{player.team}</span>
+                          {player.team}
                         </div>
                       )}
                       {shareCaption && (
