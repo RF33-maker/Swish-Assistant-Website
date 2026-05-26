@@ -168,20 +168,51 @@ export default function ShareableCard({
   const [open, setOpen] = useState(false);
   const [working, setWorking] = useState(false);
   const [captureHeight, setCaptureHeight] = useState<number | null>(null);
+  // Measured width of the preview container so the scale adapts to mobile.
+  const [previewContainerWidth, setPreviewContainerWidth] = useState(PREVIEW_WIDTH_WIDE);
   const captureRef = useRef<HTMLDivElement>(null);
+  const previewContainerRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
-  const previewScale = wide ? PREVIEW_WIDTH_WIDE / SHARE_WIDTH_WIDE : 1;
+  // Clamp the preview to whatever the container actually offers — this keeps
+  // the card fully on-screen on narrow mobile viewports.
+  const actualPreviewWidth = Math.min(PREVIEW_WIDTH_WIDE, previewContainerWidth);
+  const previewScale = wide ? actualPreviewWidth / SHARE_WIDTH_WIDE : 1;
 
   useEffect(() => {
-    if (!open || !wide) return;
+    if (!open) return;
+
+    // Measure available preview width and track resize.
+    const container = previewContainerRef.current;
+    if (container) {
+      const updateWidth = () => setPreviewContainerWidth(container.clientWidth);
+      updateWidth();
+      const rw = new ResizeObserver(updateWidth);
+      rw.observe(container);
+      // Cleanup handled below via single cleanup fn.
+      if (!wide) return () => rw.disconnect();
+    }
+
+    if (!wide) return;
+
+    // Track the capture element height for the wide scale-outer container.
     const el = captureRef.current;
     if (!el) return;
-    const update = () => setCaptureHeight(el.scrollHeight);
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
+    const updateHeight = () => setCaptureHeight(el.scrollHeight);
+    updateHeight();
+    const rh = new ResizeObserver(updateHeight);
+    rh.observe(el);
+
+    const containerEl = previewContainerRef.current;
+    const rw2 = containerEl ? new ResizeObserver(() => {
+      if (containerEl) setPreviewContainerWidth(containerEl.clientWidth);
+    }) : null;
+    if (containerEl && rw2) rw2.observe(containerEl);
+
+    return () => {
+      rh.disconnect();
+      rw2?.disconnect();
+    };
   }, [open, wide, shareContent, children]);
 
   const slug = (fileSlug || title)
@@ -421,7 +452,7 @@ export default function ShareableCard({
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
-          className={`${wide ? "max-w-[540px]" : "max-w-lg"} p-0 bg-transparent border-none shadow-none max-h-[92vh] overflow-hidden flex flex-col [&>button]:bg-white/95 [&>button]:rounded-full [&>button]:p-1.5 [&>button]:right-2 [&>button]:top-2 [&>button]:text-slate-700 [&>button]:shadow-md [&>button]:z-20`}
+          className={`w-[calc(100vw-16px)] ${wide ? "max-w-[540px]" : "max-w-lg"} p-0 bg-transparent border-none shadow-none max-h-[92vh] overflow-hidden flex flex-col [&>button]:bg-white/95 [&>button]:rounded-full [&>button]:p-1.5 [&>button]:right-2 [&>button]:top-2 [&>button]:text-slate-700 [&>button]:shadow-md [&>button]:z-20`}
         >
           <DialogTitle className="sr-only">
             Share {title} for {player.name}
@@ -431,14 +462,14 @@ export default function ShareableCard({
           </DialogDescription>
 
           <div className="rounded-xl overflow-hidden bg-white shadow-2xl flex flex-col min-h-0">
-            {/* Scrollable preview area */}
-            <div className="overflow-y-auto bg-slate-100 flex-1 min-h-0">
+            {/* Scrollable preview area — ref lets us measure actual width for mobile scaling */}
+            <div ref={previewContainerRef} className="overflow-y-auto bg-slate-100 flex-1 min-h-0">
               <div
                 data-share-scale-outer={wide ? "true" : undefined}
                 style={
                   wide
                     ? {
-                        width: PREVIEW_WIDTH_WIDE,
+                        width: actualPreviewWidth,
                         height:
                           captureHeight != null
                             ? captureHeight * previewScale
