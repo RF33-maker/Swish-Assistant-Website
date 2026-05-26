@@ -275,7 +275,7 @@ export default function ShareableCard({
     const naturalHeight = captureEl.scrollHeight;
     const canvas = await html2canvas(captureEl, {
       backgroundColor: "#ffffff",
-      scale: wide ? 1 : 2,
+      scale: 2,
       useCORS: true,
       allowTaint: true,
       logging: false,
@@ -685,6 +685,10 @@ export default function ShareableCard({
                     style={{
                       gap: wide ? 32 : 20,
                       paddingLeft: player.photoUrl ? (wide ? 252 : 144) : 0,
+                      // Reserve space so text doesn't run behind the team logo
+                      // watermark (absolute-positioned at right:36/18, width:210/118).
+                      // Calculation: logo_width + logo_right - header_paddingRight + buffer
+                      paddingRight: player.teamLogoUrl ? (wide ? 230 : 130) : 0,
                       minHeight: wide ? 200 : 120,
                     }}
                   >
