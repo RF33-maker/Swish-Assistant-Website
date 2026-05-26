@@ -866,36 +866,59 @@ export default function ShareableCard({
             </div>
 
             {/* Sticky action bar (NOT inside captureRef) */}
-            <div className="grid grid-cols-2 gap-2 p-3 bg-white border-t border-slate-200 flex-shrink-0">
-              <Button
-                variant="outline"
-                onClick={handleDownload}
-                disabled={working}
-                className="gap-2"
-                data-testid="share-download-btn"
-              >
-                {working ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Download className="h-4 w-4" />
-                )}
-                Download
-              </Button>
-              <Button
-                onClick={handleShare}
-                disabled={working}
-                className="gap-2 text-white"
-                style={{ backgroundColor: BRAND_ORANGE }}
-                data-testid="share-share-btn"
-              >
-                {working ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Share2 className="h-4 w-4" />
-                )}
-                Share
-              </Button>
-            </div>
+            {(() => {
+              // Detect whether the device supports native file sharing (iOS /
+              // Android). We probe with a dummy PNG file so the label can tell
+              // the user exactly what will happen on their device.
+              const canNativeShare = (() => {
+                try {
+                  const probe = new File([], "probe.png", { type: "image/png" });
+                  return !!(
+                    navigator.canShare &&
+                    (navigator as Navigator & { canShare?: (d: ShareData) => boolean }).canShare({ files: [probe] })
+                  );
+                } catch {
+                  return false;
+                }
+              })();
+
+              return (
+                <div className="grid grid-cols-2 gap-2 p-3 bg-white border-t border-slate-200 flex-shrink-0">
+                  <Button
+                    variant="outline"
+                    onClick={handleDownload}
+                    disabled={working}
+                    className="gap-2"
+                    data-testid="share-download-btn"
+                  >
+                    {working ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4" />
+                    )}
+                    {/* On mobile, native share goes to Photos so "Download"
+                        becomes the fallback / desktop label */}
+                    {canNativeShare ? "Files" : "Download"}
+                  </Button>
+                  <Button
+                    onClick={handleShare}
+                    disabled={working}
+                    className="gap-2 text-white"
+                    style={{ backgroundColor: BRAND_ORANGE }}
+                    data-testid="share-share-btn"
+                  >
+                    {working ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Share2 className="h-4 w-4" />
+                    )}
+                    {/* When native share is available the OS sheet lets the user
+                        save directly to Photos / Camera Roll */}
+                    {canNativeShare ? "Save to Photos" : "Share"}
+                  </Button>
+                </div>
+              );
+            })()}
           </div>
         </DialogContent>
       </Dialog>
