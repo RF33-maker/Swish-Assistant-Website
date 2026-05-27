@@ -804,6 +804,16 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
           return tb - ta;
         });
 
+        // Override the static players-table team with the team from the
+        // player's most recent game entry. Stats are now sorted newest-first
+        // so the first row with a non-empty team_name is the latest team.
+        // This fixes players who switch age groups or stops mid-season (e.g.
+        // played 15U Stop 1 but is now on a 16U Stop 4 team).
+        const latestTeamFromStats = stats.find(s => s.team_name?.trim())?.team_name?.trim();
+        if (latestTeamFromStats) {
+          pInfo = { ...pInfo, team: latestTeamFromStats };
+        }
+
         // Render unenriched stats immediately so the loading spinner
         // clears as soon as the box scores are in hand. Group labels
         // and opponents will hydrate from the background enrichment
