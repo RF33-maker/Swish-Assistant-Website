@@ -1324,6 +1324,284 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ---- News Articles CRUD API ----
+  // Routes through Express so slugs are always generated/validated server-side.
+
+  function buildArticleSlug(title: string): string {
+    return (title || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 100);
+  }
+
+  async function resolveUniqueSlug(base: string, excludeId?: string): Promise<string> {
+    if (!base) base = "article";
+    let slug = base;
+    let suffix = 2;
+    while (true) {
+      let q = supabaseAdmin
+        .from("news_articles")
+        .select("id")
+        .eq("slug", slug);
+      if (excludeId) q = q.neq("id", excludeId);
+      const { data } = await q;
+      if (!data || data.length === 0) break;
+      slug = `${base}-${suffix++}`;
+    }
+    return slug;
+  }
+
+  // Startup slug backfill — fire and forget; gracefully handles missing column
+  (async () => {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from("news_articles")
+        .select("id, title")
+        .is("slug", null);
+      if (error) {
+        if ((error as any).code !== "42703") console.warn("Slug backfill: column may not exist yet —", error.message);
+        return;
+      }
+      if (!data || data.length === 0) return;
+      const { data: existing } = await supabaseAdmin
+        .from("news_articles")
+        .select("slug")
+        .not("slug", "is", null);
+      const taken = new Set<string>((existing || []).map((r: any) => r.slug).filter(Boolean));
+      let count = 0;
+      for (const a of data) {
+        let base = buildArticleSlug(a.title);
+        if (!base) base = a.id.slice(0, 8);
+        let slug = base;
+        let sfx = 2;
+        while (taken.has(slug)) slug = `${base}-${sfx++}`;
+        taken.add(slug);
+        await supabaseAdmin.from("news_articles").update({ slug }).eq("id", a.id);
+        count++;
+      }
+      if (count > 0) console.log(`[news] Backfilled slugs for ${count} article(s)`);
+    } catch (err: any) {
+      console.warn("[news] Slug backfill skipped:", err?.message);
+    }
+  })();
+
+  // POST /api/news-articles — create article with server-enforced slug
+  app.post("/api/news-articles", async (req: Request, res: Response) => {
+    try {
+      const userId = await authenticateSupabaseUser(req);
+      if (!userId) return res.status(401).json({ error: "Authentication required" });
+
+      const { title, slug: requestedSlug, summary, body, league, source_url, image_url, is_published } = req.body;
+      if (!title?.trim()) return res.status(400).json({ error: "title is required" });
+
+      const base = requestedSlug?.trim() || buildArticleSlug(title.trim());
+      const slug = await resolveUniqueSlug(base);
+
+      const { data, error } = await supabaseAdmin
+        .from("news_articles")
+        .insert({
+          title: title.trim(),
+          slug,
+          summary: summary?.trim() || null,
+          body: body?.trim() || null,
+          league: league?.trim() || null,
+          source_url: source_url?.trim() || null,
+          image_url: image_url || null,
+          is_published: !!is_published,
+        })
+        .select()
+        .single();
+
+      if (error) return res.status(500).json({ error: error.message });
+      res.json(data);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // PATCH /api/news-articles/:id — update article with server-enforced slug
+  app.patch("/api/news-articles/:id", async (req: Request, res: Response) => {
+    try {
+      const userId = await authenticateSupabaseUser(req);
+      if (!userId) return res.status(401).json({ error: "Authentication required" });
+
+      const { id } = req.params;
+      const { title, slug: requestedSlug, summary, body, league, source_url, image_url, is_published } = req.body;
+
+      const base = requestedSlug?.trim() || (title ? buildArticleSlug(title.trim()) : undefined);
+      const slug = base ? await resolveUniqueSlug(base, id) : undefined;
+
+      const payload: Record<string, any> = {};
+      if (title !== undefined) payload.title = title.trim();
+      if (slug !== undefined) payload.slug = slug;
+      if (summary !== undefined) payload.summary = summary?.trim() || null;
+      if (body !== undefined) payload.body = body?.trim() || null;
+      if (league !== undefined) payload.league = league?.trim() || null;
+      if (source_url !== undefined) payload.source_url = source_url?.trim() || null;
+      if (image_url !== undefined) payload.image_url = image_url || null;
+      if (is_published !== undefined) payload.is_published = !!is_published;
+
+      const { data, error } = await supabaseAdmin
+        .from("news_articles")
+        .update(payload)
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) return res.status(500).json({ error: error.message });
+      res.json(data);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ---- Dynamic sitemap ----
+  // Served at /sitemap.xml — queries Supabase for live data so new articles,
+  // leagues, teams and players are picked up on the next Google crawl without
+  // any manual script run. Cached in memory for 1 hour to avoid hitting the
+  // DB on every bot request.
+  const SITEMAP_TTL_MS = 60 * 60 * 1000;
+  const SITE_BASE = "https://www.swishassistant.com";
+  let sitemapCache: { xml: string; at: number } | null = null;
+
+  function xmlEscape(s: string): string {
+    return s
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&apos;");
+  }
+
+  function sitemapUrl(loc: string, lastmod: string, changefreq: string, priority: string) {
+    return `  <url>\n    <loc>${xmlEscape(loc)}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>${changefreq}</changefreq>\n    <priority>${priority}</priority>\n  </url>\n`;
+  }
+
+  async function buildSitemap(): Promise<string> {
+    const today = new Date().toISOString().split("T")[0];
+    let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+    xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
+
+    // Static pages
+    xml += sitemapUrl(`${SITE_BASE}/`, today, "daily", "1.0");
+    xml += sitemapUrl(`${SITE_BASE}/news`, today, "daily", "0.9");
+    for (const p of [
+      { path: "/coaches-hub", freq: "weekly", pri: "0.8" },
+      { path: "/teams", freq: "weekly", pri: "0.7" },
+      { path: "/players", freq: "weekly", pri: "0.7" },
+      { path: "/privacy", freq: "monthly", pri: "0.3" },
+      { path: "/terms", freq: "monthly", pri: "0.3" },
+      { path: "/cookies", freq: "monthly", pri: "0.3" },
+    ]) {
+      xml += sitemapUrl(`${SITE_BASE}${p.path}`, today, p.freq, p.pri);
+    }
+
+    // Published news articles (slug-based URLs)
+    try {
+      const { data: articles } = await supabaseAdmin
+        .from("news_articles")
+        .select("id, slug, published_at")
+        .eq("is_published", true)
+        .order("published_at", { ascending: false });
+      for (const a of articles || []) {
+        const articleSlug = a.slug || a.id;
+        const lastmod = a.published_at
+          ? new Date(a.published_at).toISOString().split("T")[0]
+          : today;
+        xml += sitemapUrl(`${SITE_BASE}/news/${xmlEscape(articleSlug)}`, lastmod, "weekly", "0.8");
+      }
+    } catch (err: any) {
+      console.error("Sitemap: error fetching articles:", err.message);
+    }
+
+    // Public leagues
+    try {
+      const { data: leagues } = await supabaseAdmin
+        .from("leagues")
+        .select("slug, updated_at")
+        .eq("is_public", true);
+      for (const l of leagues || []) {
+        const lastmod = l.updated_at
+          ? new Date(l.updated_at).toISOString().split("T")[0]
+          : today;
+        xml += sitemapUrl(`${SITE_BASE}/league/${xmlEscape(l.slug)}`, lastmod, "daily", "0.9");
+        xml += sitemapUrl(`${SITE_BASE}/league-leaders/${xmlEscape(l.slug)}`, lastmod, "daily", "0.8");
+        xml += sitemapUrl(`${SITE_BASE}/league/${xmlEscape(l.slug)}/teams`, lastmod, "weekly", "0.7");
+      }
+    } catch (err: any) {
+      console.error("Sitemap: error fetching leagues:", err.message);
+    }
+
+    // Team detail pages
+    try {
+      const { data: teams } = await supabaseAdmin
+        .from("teams")
+        .select("name");
+      const seenTeams = new Set<string>();
+      for (const t of teams || []) {
+        if (!t.name) continue;
+        const encoded = encodeURIComponent(t.name.toLowerCase().replace(/\s+/g, "-"));
+        if (seenTeams.has(encoded)) continue;
+        seenTeams.add(encoded);
+        xml += sitemapUrl(`${SITE_BASE}/team/${encoded}`, today, "weekly", "0.6");
+      }
+    } catch (err: any) {
+      console.error("Sitemap: error fetching teams:", err.message);
+    }
+
+    // Players with slugs (batched)
+    try {
+      const BATCH = 1000;
+      let offset = 0;
+      while (true) {
+        const { data: players } = await supabaseAdmin
+          .from("players")
+          .select("slug")
+          .not("slug", "is", null)
+          .range(offset, offset + BATCH - 1);
+        if (!players || players.length === 0) break;
+        for (const p of players) {
+          if (p.slug) {
+            xml += sitemapUrl(`${SITE_BASE}/player/${xmlEscape(p.slug)}`, today, "weekly", "0.5");
+          }
+        }
+        if (players.length < BATCH) break;
+        offset += BATCH;
+      }
+    } catch (err: any) {
+      console.error("Sitemap: error fetching players:", err.message);
+    }
+
+    xml += "</urlset>";
+    return xml;
+  }
+
+  app.get("/sitemap.xml", async (req: Request, res: Response) => {
+    const now = Date.now();
+    if (sitemapCache && now - sitemapCache.at < SITEMAP_TTL_MS) {
+      res.setHeader("Content-Type", "application/xml; charset=utf-8");
+      res.setHeader("Cache-Control", "public, max-age=3600");
+      return res.send(sitemapCache.xml);
+    }
+    try {
+      const xml = await buildSitemap();
+      sitemapCache = { xml, at: now };
+      res.setHeader("Content-Type", "application/xml; charset=utf-8");
+      res.setHeader("Cache-Control", "public, max-age=3600");
+      res.send(xml);
+    } catch (err: any) {
+      console.error("Sitemap generation error:", err.message);
+      if (sitemapCache) {
+        res.setHeader("Content-Type", "application/xml; charset=utf-8");
+        return res.send(sitemapCache.xml);
+      }
+      res.status(500).send("Failed to generate sitemap");
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

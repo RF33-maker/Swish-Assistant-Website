@@ -10,10 +10,13 @@ import { ArrowLeft, ExternalLink, Newspaper, CalendarDays } from "lucide-react";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
 
 const ARTICLE_COLUMNS =
-  "id, title, summary, body, image_url, source_url, league, published_at, is_published";
+  "id, title, slug, summary, body, image_url, source_url, league, published_at, is_published";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const SITE_URL = "https://www.swishassistant.com";
+const PUBLISHER_LOGO = `${SITE_URL}/icon-192.png`;
 
 function formatDate(value: string | Date | null | undefined) {
   if (!value) return "";
@@ -40,11 +43,11 @@ function PageShell({ children }: { children: React.ReactNode }) {
             </span>
           </Link>
           <Link
-            href="/"
+            href="/news"
             className="text-sm font-medium text-slate-600 hover:text-orange-600 dark:text-slate-300 dark:hover:text-orange-400 inline-flex items-center gap-1"
             data-testid="link-home"
           >
-            <ArrowLeft className="h-4 w-4" /> Home
+            <ArrowLeft className="h-4 w-4" /> All News
           </Link>
         </div>
       </header>
@@ -59,24 +62,34 @@ function PageShell({ children }: { children: React.ReactNode }) {
 }
 
 export default function NewsArticlePage() {
-  const params = useParams<{ id: string }>();
-  const id = params?.id || "";
+  const params = useParams<{ slug: string }>();
+  const slug = params?.slug || "";
   const [, setLocation] = useLocation();
 
-  const isValidId = UUID_REGEX.test(id);
+  const isUUID = UUID_REGEX.test(slug);
 
   const {
     data: article,
     isLoading,
     isError,
   } = useQuery<NewsArticle | null>({
-    queryKey: ["supabase", "news_articles", "detail", id],
-    enabled: isValidId,
+    queryKey: ["supabase", "news_articles", "detail", slug],
+    enabled: !!slug,
     queryFn: async () => {
+      if (isUUID) {
+        const { data, error } = await supabase
+          .from("news_articles")
+          .select(ARTICLE_COLUMNS)
+          .eq("id", slug)
+          .eq("is_published", true)
+          .maybeSingle();
+        if (error) throw error;
+        return (data as NewsArticle | null) ?? null;
+      }
       const { data, error } = await supabase
         .from("news_articles")
         .select(ARTICLE_COLUMNS)
-        .eq("id", id)
+        .eq("slug", slug)
         .eq("is_published", true)
         .maybeSingle();
       if (error) throw error;
@@ -86,9 +99,15 @@ export default function NewsArticlePage() {
 
   useEffect(() => {
     window.scrollTo({ top: 0 });
-  }, [id]);
+  }, [slug]);
 
-  if (!isValidId) {
+  useEffect(() => {
+    if (article && isUUID && article.slug) {
+      setLocation(`/news/${article.slug}`, { replace: true });
+    }
+  }, [article, isUUID, setLocation]);
+
+  if (!slug) {
     return (
       <PageShell>
         <div className="max-w-3xl mx-auto px-6 py-16 text-center" data-testid="news-not-found">
@@ -101,16 +120,16 @@ export default function NewsArticlePage() {
           </p>
           <Button
             className="mt-6 bg-orange-500 hover:bg-orange-600 text-white"
-            onClick={() => setLocation("/")}
+            onClick={() => setLocation("/news")}
           >
-            Back to home
+            Back to news
           </Button>
         </div>
       </PageShell>
     );
   }
 
-  if (isLoading) {
+  if (isLoading || (isUUID && article?.slug)) {
     return (
       <PageShell>
         <article className="max-w-3xl mx-auto px-6 py-10">
@@ -144,9 +163,9 @@ export default function NewsArticlePage() {
           </p>
           <Button
             className="mt-6 bg-orange-500 hover:bg-orange-600 text-white"
-            onClick={() => setLocation("/")}
+            onClick={() => setLocation("/news")}
           >
-            Back to home
+            Back to news
           </Button>
         </div>
       </PageShell>
@@ -159,7 +178,29 @@ export default function NewsArticlePage() {
       ? article.body.replace(/\s+/g, " ").trim().slice(0, 160)
       : `${article.title} — read the full story on Swish Assistant.`);
 
-  const canonical = `https://www.swishassistant.com/news/${article.id}`;
+  const canonicalSlug = article.slug || article.id;
+  const canonical = `${SITE_URL}/news/${canonicalSlug}`;
+
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "NewsArticle",
+    headline: article.title,
+    description,
+    url: canonical,
+    ...(article.published_at && {
+      datePublished: new Date(article.published_at).toISOString(),
+      dateModified: new Date(article.published_at).toISOString(),
+    }),
+    ...(article.image_url && { image: article.image_url }),
+    publisher: {
+      "@type": "Organization",
+      name: "Swish Assistant",
+      logo: {
+        "@type": "ImageObject",
+        url: PUBLISHER_LOGO,
+      },
+    },
+  };
 
   return (
     <PageShell>
@@ -186,6 +227,7 @@ export default function NewsArticlePage() {
           <meta name="twitter:image" content={article.image_url} />
         )}
         <link rel="canonical" href={canonical} />
+        <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
       </Helmet>
 
       <article className="max-w-3xl mx-auto px-6 py-10" data-testid="news-article">
@@ -266,7 +308,7 @@ export default function NewsArticlePage() {
         <div className="mt-10">
           <Button
             variant="ghost"
-            onClick={() => setLocation("/")}
+            onClick={() => setLocation("/news")}
             className="text-slate-600 hover:text-orange-600 dark:text-slate-300 dark:hover:text-orange-400"
             data-testid="button-back"
           >

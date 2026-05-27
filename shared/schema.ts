@@ -344,6 +344,7 @@ export const scoutingReports = pgTable("scouting_reports", {
 export const newsArticles = pgTable("news_articles", {
   id: uuid("id").primaryKey().defaultRandom(),
   title: text("title").notNull(),
+  slug: text("slug").unique(),
   summary: text("summary"),
   body: text("body"),
   image_url: text("image_url"),

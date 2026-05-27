@@ -63,8 +63,24 @@ const NEWS_BUCKET = "news-images";
 const NEWS_LIST_KEY = ["supabase", "news_articles", "manager-list"] as const;
 const PUBLIC_NEWS_KEY = ["supabase", "news_articles", "latest", 6] as const;
 
+function generateSlug(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 100);
+}
+
 const formSchema = insertNewsArticleSchema.extend({
   title: z.string().min(1, "Title is required").max(200, "Title is too long"),
+  slug: z
+    .string()
+    .max(120, "Slug is too long")
+    .regex(/^[a-z0-9-]*$/, "Slug must only contain lowercase letters, numbers, and hyphens")
+    .optional()
+    .nullable(),
   summary: z.string().max(500, "Summary is too long").optional().nullable(),
   body: z.string().optional().nullable(),
   league: z.string().max(100, "League is too long").optional().nullable(),
@@ -82,6 +98,7 @@ type FormValues = z.infer<typeof formSchema>;
 
 const DEFAULT_FORM_VALUES: FormValues = {
   title: "",
+  slug: "",
   summary: "",
   body: "",
   league: "",
@@ -129,7 +146,7 @@ export default function NewsManager() {
       const { data, error } = await supabase
         .from("news_articles")
         .select(
-          "id, title, summary, body, image_url, source_url, league, published_at, is_published",
+          "id, title, slug, summary, body, image_url, source_url, league, published_at, is_published",
         )
         .order("published_at", { ascending: false });
       if (error) throw error;
@@ -148,6 +165,7 @@ export default function NewsManager() {
     if (editingArticle) {
       form.reset({
         title: editingArticle.title ?? "",
+        slug: (editingArticle as any).slug ?? "",
         summary: editingArticle.summary ?? "",
         body: editingArticle.body ?? "",
         league: editingArticle.league ?? "",
@@ -209,6 +227,7 @@ export default function NewsManager() {
 
       const payload = {
         title: values.title.trim(),
+        slug: values.slug?.trim() || undefined,
         summary: values.summary?.trim() || null,
         body: values.body?.trim() || null,
         league: values.league?.trim() || null,
@@ -217,15 +236,27 @@ export default function NewsManager() {
         is_published: !!values.is_published,
       };
 
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      const authHeaders: Record<string, string> = {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
+
       if (editingArticle) {
-        const { error } = await supabase
-          .from("news_articles")
-          .update(payload)
-          .eq("id", editingArticle.id);
-        if (error) throw error;
+        const res = await fetch(`/api/news-articles/${editingArticle.id}`, {
+          method: "PATCH",
+          headers: authHeaders,
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || "Save failed"); }
       } else {
-        const { error } = await supabase.from("news_articles").insert(payload);
-        if (error) throw error;
+        const res = await fetch("/api/news-articles", {
+          method: "POST",
+          headers: authHeaders,
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || "Save failed"); }
       }
     },
     onSuccess: () => {
@@ -545,8 +576,42 @@ export default function NewsManager() {
                         {...field}
                         value={field.value ?? ""}
                         data-testid="input-title"
+                        onChange={(e) => {
+                          field.onChange(e);
+                          const current = form.getValues("slug") ?? "";
+                          if (!current || current === generateSlug(field.value ?? "")) {
+                            form.setValue("slug", generateSlug(e.target.value), {
+                              shouldValidate: false,
+                            });
+                          }
+                        }}
                       />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="slug"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>URL Slug</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="lions-clinch-season-finale-2026"
+                        {...field}
+                        value={field.value ?? ""}
+                        data-testid="input-slug"
+                      />
+                    </FormControl>
+                    <FormDescription className="text-xs">
+                      Auto-generated from title. Used in the article URL:{" "}
+                      <span className="font-mono text-orange-700">
+                        /news/{form.watch("slug") || "your-slug-here"}
+                      </span>
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

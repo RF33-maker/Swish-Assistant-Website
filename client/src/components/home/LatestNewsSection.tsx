@@ -5,7 +5,7 @@ import type { NewsArticle } from "@shared/schema";
 import { Newspaper, ExternalLink, ArrowRight } from "lucide-react";
 
 const NEWS_COLUMNS =
-  "id, title, summary, image_url, source_url, league, published_at, is_published";
+  "id, title, slug, summary, image_url, source_url, league, published_at, is_published";
 
 function NewsCardSkeleton() {
   return (
@@ -47,14 +47,22 @@ export default function LatestNewsSection() {
   return (
     <section className="py-16 md:py-20 bg-gradient-to-b from-orange-50/40 to-white dark:from-neutral-900 dark:to-neutral-950">
       <div className="max-w-6xl mx-auto px-6">
-        <div className="mb-6 md:mb-8 animate-fade-in-up">
-          <h2 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white">
-            Latest News
-          </h2>
-          <div className="w-16 h-1 bg-orange-500 rounded-full mt-2" />
-          <p className="mt-3 text-slate-600 dark:text-slate-400 text-sm md:text-base">
-            Stories, updates and headlines across the leagues we host.
-          </p>
+        <div className="mb-6 md:mb-8 animate-fade-in-up flex items-end justify-between gap-4">
+          <div>
+            <h2 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white">
+              Latest News
+            </h2>
+            <div className="w-16 h-1 bg-orange-500 rounded-full mt-2" />
+            <p className="mt-3 text-slate-600 dark:text-slate-400 text-sm md:text-base">
+              Stories, updates and headlines across the leagues we host.
+            </p>
+          </div>
+          <Link
+            href="/news"
+            className="shrink-0 text-sm font-semibold text-orange-600 hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300 inline-flex items-center gap-1 whitespace-nowrap"
+          >
+            View all <ArrowRight className="h-4 w-4" />
+          </Link>
         </div>
 
         {loading ? (
@@ -140,7 +148,7 @@ export default function LatestNewsSection() {
               ) : (
                 <Link
                   key={a.id}
-                  href={`/news/${a.id}`}
+                  href={`/news/${(a as any).slug || a.id}`}
                   className="block h-full"
                   data-testid={`link-news-detail-${a.id}`}
                 >

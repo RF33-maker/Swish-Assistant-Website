@@ -27,6 +27,7 @@ import SocialToolsPage from "@/pages/social-tools";
 import WidgetBuilder from "@/pages/widget-builder";
 import NewsManager from "@/pages/NewsManager";
 import NewsArticlePage from "@/pages/NewsArticlePage";
+import NewsIndexPage from "@/pages/NewsIndexPage";
 import WidgetPage from "@/pages/widgets/WidgetPage";
 import WidgetDemo from "@/pages/widget-demo";
 import EmbedGuide from "@/pages/embed-guide";
@@ -70,7 +71,8 @@ function Router() {
       <Route path="/widget/:type" component={WidgetPage} />
       <Route path="/widget-demo" component={WidgetDemo} />
       <Route path="/embed" component={EmbedGuide} />
-      <Route path="/news/:id" component={NewsArticlePage} />
+      <Route path="/news" component={NewsIndexPage} />
+      <Route path="/news/:slug" component={NewsArticlePage} />
 
       {/* Protected routes */}
       <ProtectedRoute path="/dashboard" component={PostLoginDashboard} />
