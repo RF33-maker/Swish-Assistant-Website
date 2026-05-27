@@ -836,7 +836,12 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
             const norm = normalizeTeam(team);
             if (!teamMap.has(norm)) teamMap.set(norm, team);
           });
-          const currentTeam = mostRecentStat.team_name || mostRecentStat.team || 'Unknown Team';
+          // Derive team from the absolute newest stat (regardless of minutes played)
+          // so a player who switched teams but has 0 minutes in their latest game
+          // still shows the correct current team.
+          const newestStatWithTeam = stats.find(s => (s.team_name || s.team)?.trim());
+          const currentTeam = newestStatWithTeam?.team_name?.trim() || newestStatWithTeam?.team?.trim()
+            || mostRecentStat.team_name || mostRecentStat.team || 'Unknown Team';
           const currentTeamNorm = normalizeTeam(currentTeam);
           const previousTeams = Array.from(teamMap.values()).filter(t => normalizeTeam(t) !== currentTeamNorm);
 
