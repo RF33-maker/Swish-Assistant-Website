@@ -8,12 +8,94 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, ExternalLink, Newspaper, CalendarDays } from "lucide-react";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
+import GameEmbed from "@/components/GameEmbed";
+import { isGameSlug } from "@/lib/gameSlug";
 
 const ARTICLE_COLUMNS =
   "id, title, summary, body, image_url, source_url, league, published_at, is_published";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Matches a game URL in any of its forms:
+//   https://swishassistant.com/game/{slug}
+//   https://www.swishassistant.com/game/{slug}
+//   /game/{slug}
+const GAME_URL_SOURCE =
+  "(?:https?:\\/\\/(?:www\\.)?swishassistant\\.com)?\\/game\\/([\\w-]+)";
+
+// Returns the game slug if the entire trimmed line is a bare game URL, else null.
+function extractBareGameSlug(line: string): string | null {
+  const trimmed = line.trim();
+  const bare = /^(?:https?:\/\/(?:www\.)?swishassistant\.com)?\/game\/([\w-]+)\/?$/.exec(trimmed);
+  if (!bare) return null;
+  const slug = bare[1];
+  return isGameSlug(slug) ? slug : null;
+}
+
+// Renders a plain-text line, turning any inline game URLs into anchor hyperlinks.
+function renderLineWithInlineLinks(line: string, lineKey: string): React.ReactNode {
+  const re = new RegExp(GAME_URL_SOURCE, "g");
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(line)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(line.slice(lastIndex, match.index));
+    }
+    const slug = match[1];
+    const href = `/game/${slug}`;
+    parts.push(
+      <a
+        key={`${lineKey}-link-${match.index}`}
+        href={href}
+        className="text-orange-600 underline hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        {match[0]}
+      </a>,
+    );
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < line.length) {
+    parts.push(line.slice(lastIndex));
+  }
+  return parts.length === 1 ? parts[0] : <>{parts}</>;
+}
+
+// Parses an article body into React nodes, promoting bare game URLs to GameEmbed cards.
+function parseArticleBody(body: string): React.ReactNode[] {
+  const lines = body.split("\n");
+  const nodes: React.ReactNode[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      // Blank line → paragraph spacer
+      nodes.push(<div key={`sp-${i}`} className="h-4" aria-hidden />);
+      continue;
+    }
+
+    const gameSlug = extractBareGameSlug(trimmed);
+    if (gameSlug) {
+      nodes.push(
+        <GameEmbed key={`embed-${i}`} slug={gameSlug} href={`/game/${gameSlug}`} />,
+      );
+      continue;
+    }
+
+    nodes.push(
+      <p key={`p-${i}`} className="mb-4">
+        {renderLineWithInlineLinks(line, `l${i}`)}
+      </p>,
+    );
+  }
+
+  return nodes;
+}
 
 const SITE_URL = "https://www.swishassistant.com";
 const PUBLISHER_LOGO = `${SITE_URL}/icon-192.png`;
@@ -277,10 +359,10 @@ export default function NewsArticlePage() {
 
         {article.body ? (
           <div
-            className="mt-8 text-slate-800 dark:text-slate-200 text-base md:text-lg leading-relaxed whitespace-pre-wrap [&>p]:mb-4"
+            className="mt-8 text-slate-800 dark:text-slate-200 text-base md:text-lg leading-relaxed"
             data-testid="text-article-body"
           >
-            {article.body}
+            {parseArticleBody(article.body)}
           </div>
         ) : (
           <p className="mt-8 text-slate-500 dark:text-slate-400 italic">
