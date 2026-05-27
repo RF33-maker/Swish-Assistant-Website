@@ -10,7 +10,7 @@ import { ArrowLeft, ExternalLink, Newspaper, CalendarDays } from "lucide-react";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
 
 const ARTICLE_COLUMNS =
-  "id, title, slug, summary, body, image_url, source_url, league, published_at, is_published";
+  "id, title, summary, body, image_url, source_url, league, published_at, is_published";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -86,13 +86,16 @@ export default function NewsArticlePage() {
         if (error) throw error;
         return (data as NewsArticle | null) ?? null;
       }
+      // Slug-based lookup — slug column may not exist yet in the DB.
+      // If the query errors (e.g. column missing), return null so the
+      // page shows "not found" instead of crashing.
       const { data, error } = await supabase
         .from("news_articles")
         .select(ARTICLE_COLUMNS)
         .eq("slug", slug)
         .eq("is_published", true)
         .maybeSingle();
-      if (error) throw error;
+      if (error) return null;
       return (data as NewsArticle | null) ?? null;
     },
   });
@@ -100,12 +103,6 @@ export default function NewsArticlePage() {
   useEffect(() => {
     window.scrollTo({ top: 0 });
   }, [slug]);
-
-  useEffect(() => {
-    if (article && isUUID && article.slug) {
-      setLocation(`/news/${article.slug}`, { replace: true });
-    }
-  }, [article, isUUID, setLocation]);
 
   if (!slug) {
     return (

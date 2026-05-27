@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
 
 const NEWS_COLUMNS =
-  "id, title, slug, summary, image_url, source_url, league, published_at, is_published";
+  "id, title, summary, image_url, source_url, league, published_at, is_published";
 
 const SITE_URL = "https://www.swishassistant.com";
 

@@ -5,7 +5,7 @@ import type { NewsArticle } from "@shared/schema";
 import { Newspaper, ExternalLink, ArrowRight } from "lucide-react";
 
 const NEWS_COLUMNS =
-  "id, title, slug, summary, image_url, source_url, league, published_at, is_published";
+  "id, title, summary, image_url, source_url, league, published_at, is_published";
 
 function NewsCardSkeleton() {
   return (
