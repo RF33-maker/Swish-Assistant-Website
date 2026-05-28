@@ -1609,14 +1609,28 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
                       <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                         Season Averages
                       </span>
-                      {selectedLeagueFilter !== "all" && (
+                      {playerMatches.length > 1 ? (
+                        <Select value={selectedLeagueFilter} onValueChange={setSelectedLeagueFilter}>
+                          <SelectTrigger className="h-7 w-auto min-w-[130px] text-xs border-gray-200 dark:border-neutral-600 dark:bg-neutral-800 dark:text-white">
+                            <SelectValue placeholder="All Competitions" />
+                          </SelectTrigger>
+                          <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
+                            <SelectItem value="all" className="text-xs dark:text-white dark:focus:bg-neutral-700">All Competitions</SelectItem>
+                            {Array.from(new Set(playerMatches.map(m => m.league_id))).filter(Boolean).map(leagueId => (
+                              <SelectItem key={leagueId} value={leagueId} className="text-xs dark:text-white dark:focus:bg-neutral-700">
+                                {leagueNames.get(leagueId) || leagueId}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : selectedLeagueFilter !== "all" ? (
                         <span
                           className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
                           style={{ backgroundColor: pagePillBg, color: pageAccent }}
                         >
                           {leagueNames.get(selectedLeagueFilter) || 'Filtered'}
                         </span>
-                      )}
+                      ) : null}
                     </div>
                     <div className="grid grid-cols-3 md:grid-cols-6 gap-2 md:gap-2.5">
                       {seasonStats.map((stat, i) => (
@@ -2014,29 +2028,14 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
         </div>
         </ShareableCard>
 
-        {playerMatches.length > 1 && (
-          <div className="flex flex-wrap items-center gap-2">
-            <Filter className="h-4 w-4 text-orange-500" />
-            <span className="text-sm text-slate-600 dark:text-slate-400">Competition:</span>
-            <Select value={selectedLeagueFilter} onValueChange={setSelectedLeagueFilter}>
-              <SelectTrigger className="w-auto min-w-[160px] h-8 text-sm border-gray-200 dark:border-neutral-600 dark:bg-neutral-800 dark:text-white" data-testid="select-league-filter">
-                <SelectValue placeholder="Select" />
-              </SelectTrigger>
-              <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
-                <SelectItem value="all" data-testid="select-league-all" className="dark:text-white dark:focus:bg-neutral-700">All Competitions</SelectItem>
-                {Array.from(new Set(playerMatches.map(m => m.league_id))).filter(Boolean).map(leagueId => (
-                  <SelectItem key={leagueId} value={leagueId} data-testid={`select-league-${leagueId}`} className="dark:text-white dark:focus:bg-neutral-700">
-                    {leagueNames.get(leagueId) || leagueId}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-
         <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100 dark:border-neutral-800">
+          <div className="px-4 py-3 border-b border-gray-100 dark:border-neutral-800 flex items-center justify-between">
             <span className="text-base md:text-lg font-bold text-slate-800 dark:text-white">Game Log</span>
+            {selectedLeagueFilter !== "all" && (
+              <span className="text-xs text-slate-400 dark:text-slate-500">
+                Filtered: {leagueNames.get(selectedLeagueFilter) || 'Competition'}
+              </span>
+            )}
           </div>
           {filteredStats.length === 0 ? (
             <div className="p-6 md:p-8 text-center text-slate-500 dark:text-slate-400 text-sm">
