@@ -6,6 +6,7 @@ import { fetchLeagueData } from "@/lib/leagueData";
 import type { League } from "@shared/schema";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import LeagueDefaultImage from "@/assets/league-default.png";
+import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
 import { Helmet } from "react-helmet-async";
 import React from "react";
 import { GameSummaryRow } from "./GameSummaryRow";
@@ -2560,8 +2561,8 @@ export default function LeaguePage() {
         {
           const rosterIds = isParentFetch && parentChildIds.length > 0 ? parentChildIds : [statsLeagueId];
           const rosterQ = rosterIds.length === 1
-            ? supabase.from("players").select("id, full_name, slug").eq("league_id", rosterIds[0])
-            : supabase.from("players").select("id, full_name, slug").in("league_id", rosterIds);
+            ? supabase.from("players").select("id, full_name, slug, photo_path_bg_removed").eq("league_id", rosterIds[0])
+            : supabase.from("players").select("id, full_name, slug, photo_path_bg_removed").in("league_id", rosterIds);
           const { data: rosterResult, error: rosterError } = await rosterQ;
           if (rosterError) console.error("Error fetching roster:", rosterError);
           rosterData = rosterResult;
@@ -2570,6 +2571,7 @@ export default function LeaguePage() {
         const slugLookup = new Map<string, string>();
         const nameLookup = new Map<string, string>();
         const playerIdToName = new Map<string, string>();
+        const photoLookup = new Map<string, string>();
         
         rosterData?.forEach(p => {
           if (p.full_name) {
@@ -2580,6 +2582,9 @@ export default function LeaguePage() {
             if (p.full_name) {
               nameLookup.set(p.full_name.toLowerCase().trim(), p.slug);
             }
+          }
+          if (p.photo_path_bg_removed) {
+            photoLookup.set(p.id, p.photo_path_bg_removed);
           }
         });
         
@@ -2701,7 +2706,7 @@ export default function LeaguePage() {
               const chunk = uncoveredIds.slice(ci, ci + chunkSize);
               const { data: extraPlayers } = await supabase
                 .from("players")
-                .select("id, full_name, slug")
+                .select("id, full_name, slug, photo_path_bg_removed")
                 .in("id", chunk);
               extraPlayers?.forEach((p: any) => {
                 if (p.slug) {
@@ -2711,6 +2716,8 @@ export default function LeaguePage() {
                 }
                 if (p.full_name && p.id)
                   playerIdToName.set(p.id, p.full_name);
+                if (p.photo_path_bg_removed && p.id)
+                  photoLookup.set(p.id, p.photo_path_bg_removed);
               });
             }
             debugLog("📊 Secondary slug enrichment: resolved", uncoveredIds.length, "additional player IDs");
@@ -2718,6 +2725,14 @@ export default function LeaguePage() {
         }
 
         const finalResults = aggregatePlayerStats(allPlayerStats, slugLookup, nameLookup, playerIdToName);
+        finalResults.forEach((p: any) => {
+          if (!p.photoPath && p.playerIds instanceof Set) {
+            for (const pid of p.playerIds) {
+              const path = photoLookup.get(pid);
+              if (path) { p.photoPath = path; break; }
+            }
+          }
+        });
         debugLog("📊 Final player list has", finalResults.length, "players");
 
         if (isCancelled()) return;
@@ -5197,6 +5212,7 @@ export default function LeaguePage() {
                                   ? (entity.age_group ? shortenAgeLabel(entity.age_group) : `${entity.gamesPlayed || 0} GP`)
                                   : (entity.team || 'Unknown Team');
                                 const isClickable = isTeam ? !!entity.teamName : !!entity.slug;
+                                const photoUrl = !isTeam ? getPlayerPhotoUrlCached(entity.photoPath) : null;
                                 return (
                                   <div
                                     key={`${title}-${entity.slug || entity.teamName || entity.name}-${idx}`}
@@ -5212,6 +5228,23 @@ export default function LeaguePage() {
                                   >
                                     <div className="flex items-center gap-2.5 min-w-0 flex-1">
                                       <span className="text-xs font-bold w-5 text-center text-slate-400 dark:text-slate-500 shrink-0">{idx + 1}</span>
+                                      {!isTeam && (
+                                        photoUrl ? (
+                                          <img
+                                            src={photoUrl}
+                                            alt={displayName || ''}
+                                            className="w-8 h-8 rounded-full object-cover object-top flex-shrink-0 bg-gray-100 dark:bg-neutral-800"
+                                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                                          />
+                                        ) : (
+                                          <div
+                                            className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                                            style={{ backgroundColor: brandColor + '22', color: brandColor }}
+                                          >
+                                            {displayName?.charAt(0)?.toUpperCase() || '?'}
+                                          </div>
+                                        )
+                                      )}
                                       <div className="min-w-0 flex-1">
                                         <p className={`text-sm font-medium truncate ${isClickable ? 'hover:underline' : ''}`} style={{ color: brandColor }}>{displayName}</p>
                                         <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{subLine}</p>
