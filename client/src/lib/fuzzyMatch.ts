@@ -258,12 +258,13 @@ export function namesMatch(name1: string, name2: string, threshold: number = 0.8
     const first2 = parts2[0];
     
     // If first parts match (including initials or nicknames) and last names are similar
-    // Use high threshold (0.9) for first names to prevent false merges like "Mahamud" vs "Hamza"
+    // 0.82 catches one-vowel-off variants like "Divine"/"Devine" while the last-name
+    // guard (0.85) prevents genuinely different people from being merged.
     const firstMatch = first1 === first2 || 
       (first1.length === 1 && first2.startsWith(first1)) ||
       (first2.length === 1 && first1.startsWith(first2)) ||
       areNicknameVariants(first1, first2) ||
-      jaroWinklerSimilarity(first1, first2) >= 0.9;
+      jaroWinklerSimilarity(first1, first2) >= 0.82;
     
     if (firstMatch && jaroWinklerSimilarity(last1, last2) >= 0.85) {
       return true;

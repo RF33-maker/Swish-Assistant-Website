@@ -168,20 +168,51 @@ export default function ShareableCard({
   const [open, setOpen] = useState(false);
   const [working, setWorking] = useState(false);
   const [captureHeight, setCaptureHeight] = useState<number | null>(null);
+  // Measured width of the preview container so the scale adapts to mobile.
+  const [previewContainerWidth, setPreviewContainerWidth] = useState(PREVIEW_WIDTH_WIDE);
   const captureRef = useRef<HTMLDivElement>(null);
+  const previewContainerRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
-  const previewScale = wide ? PREVIEW_WIDTH_WIDE / SHARE_WIDTH_WIDE : 1;
+  // Clamp the preview to whatever the container actually offers — this keeps
+  // the card fully on-screen on narrow mobile viewports.
+  const actualPreviewWidth = Math.min(PREVIEW_WIDTH_WIDE, previewContainerWidth);
+  const previewScale = wide ? actualPreviewWidth / SHARE_WIDTH_WIDE : 1;
 
   useEffect(() => {
-    if (!open || !wide) return;
+    if (!open) return;
+
+    // Measure available preview width and track resize.
+    const container = previewContainerRef.current;
+    if (container) {
+      const updateWidth = () => setPreviewContainerWidth(container.clientWidth);
+      updateWidth();
+      const rw = new ResizeObserver(updateWidth);
+      rw.observe(container);
+      // Cleanup handled below via single cleanup fn.
+      if (!wide) return () => rw.disconnect();
+    }
+
+    if (!wide) return;
+
+    // Track the capture element height for the wide scale-outer container.
     const el = captureRef.current;
     if (!el) return;
-    const update = () => setCaptureHeight(el.scrollHeight);
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
+    const updateHeight = () => setCaptureHeight(el.scrollHeight);
+    updateHeight();
+    const rh = new ResizeObserver(updateHeight);
+    rh.observe(el);
+
+    const containerEl = previewContainerRef.current;
+    const rw2 = containerEl ? new ResizeObserver(() => {
+      if (containerEl) setPreviewContainerWidth(containerEl.clientWidth);
+    }) : null;
+    if (containerEl && rw2) rw2.observe(containerEl);
+
+    return () => {
+      rh.disconnect();
+      rw2?.disconnect();
+    };
   }, [open, wide, shareContent, children]);
 
   const slug = (fileSlug || title)
@@ -221,8 +252,48 @@ export default function ShareableCard({
   const accentStripEnd = shadeHex(bandBase, 0.25);
   const bodyTint = tintHex(bandBase, 0.94);
 
+  /**
+   * Fetch an image URL and return a base64 data URL so html2canvas can draw
+   * it without hitting CORS or browser taint restrictions.
+   */
+  const fetchAsDataUrl = async (src: string): Promise<string | null> => {
+    if (!src || src.startsWith("data:") || src.startsWith("blob:")) return src;
+    try {
+      const resp = await fetch(src, { mode: "cors", credentials: "omit" });
+      if (!resp.ok) return null;
+      const blob = await resp.blob();
+      return await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch {
+      return null;
+    }
+  };
+
   const generatePngBlob = async (): Promise<Blob | null> => {
     if (!captureRef.current) return null;
+
+    // Pre-fetch every <img> inside the capture area as a data URL.
+    // html2canvas runs in a cloned document and cannot re-request images
+    // that were CORS-blocked or cached under a different origin; converting
+    // them to data: URLs before the clone guarantees they appear in the PNG.
+    const liveImgs = Array.from(
+      captureRef.current.querySelectorAll<HTMLImageElement>("img"),
+    );
+    const dataUrlMap = new Map<string, string>();
+    await Promise.all(
+      liveImgs.map(async (img) => {
+        const src = img.getAttribute("src") || img.src;
+        if (src && !dataUrlMap.has(src)) {
+          const dataUrl = await fetchAsDataUrl(src);
+          if (dataUrl) dataUrlMap.set(src, dataUrl);
+        }
+      }),
+    );
+
     // In wide mode the visible preview lives inside a CSS `transform: scale()`
     // wrapper so it fits the modal. html2canvas measures bounds from the live
     // element, so a transformed ancestor would shrink the captured canvas to
@@ -235,7 +306,7 @@ export default function ShareableCard({
     const naturalHeight = captureEl.scrollHeight;
     const canvas = await html2canvas(captureEl, {
       backgroundColor: "#ffffff",
-      scale: wide ? 1 : 2,
+      scale: 2,
       useCORS: true,
       allowTaint: true,
       logging: false,
@@ -250,6 +321,15 @@ export default function ShareableCard({
         // exported PNG when the user has dark mode enabled.
         doc.documentElement.classList.remove("dark");
         doc.body.classList.remove("dark");
+
+        // Swap every image src to its pre-fetched data URL so the cloned
+        // document doesn't need to make network requests (which would hit
+        // CORS restrictions and produce blank image slots in the export).
+        doc.querySelectorAll<HTMLImageElement>("img").forEach((img) => {
+          const src = img.getAttribute("src") || img.src;
+          const dataUrl = dataUrlMap.get(src);
+          if (dataUrl) img.src = dataUrl;
+        });
 
         // Reset the scaling wrappers so the cloned share card renders at
         // its natural 1080px width. Without this, html2canvas would draw
@@ -372,7 +452,7 @@ export default function ShareableCard({
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
-          className={`${wide ? "max-w-[540px]" : "max-w-lg"} p-0 bg-transparent border-none shadow-none max-h-[92vh] overflow-hidden flex flex-col [&>button]:bg-white/95 [&>button]:rounded-full [&>button]:p-1.5 [&>button]:right-2 [&>button]:top-2 [&>button]:text-slate-700 [&>button]:shadow-md [&>button]:z-20`}
+          className={`w-[calc(100vw-16px)] ${wide ? "max-w-[540px]" : "max-w-lg"} p-0 bg-transparent border-none shadow-none max-h-[92vh] overflow-hidden flex flex-col [&>button]:bg-white/95 [&>button]:rounded-full [&>button]:p-1.5 [&>button]:right-2 [&>button]:top-2 [&>button]:text-slate-700 [&>button]:shadow-md [&>button]:z-20`}
         >
           <DialogTitle className="sr-only">
             Share {title} for {player.name}
@@ -382,14 +462,14 @@ export default function ShareableCard({
           </DialogDescription>
 
           <div className="rounded-xl overflow-hidden bg-white shadow-2xl flex flex-col min-h-0">
-            {/* Scrollable preview area */}
-            <div className="overflow-y-auto bg-slate-100 flex-1 min-h-0">
+            {/* Scrollable preview area — ref lets us measure actual width for mobile scaling */}
+            <div ref={previewContainerRef} className="overflow-y-auto bg-slate-100 flex-1 min-h-0">
               <div
                 data-share-scale-outer={wide ? "true" : undefined}
                 style={
                   wide
                     ? {
-                        width: PREVIEW_WIDTH_WIDE,
+                        width: actualPreviewWidth,
                         height:
                           captureHeight != null
                             ? captureHeight * previewScale
@@ -551,10 +631,39 @@ export default function ShareableCard({
                     </div>
                   ) : (
                   <>
-                  {/* Player photo cutout — anchored to bottom-left so the
-                      transparent player image stands tall in the band, like
-                      the profile banner. Falls back to the circular initials
-                      avatar when no photo is set. */}
+                  {/* Team logo — large faded watermark anchored to the
+                      right side of the header background. Sits behind all
+                      other content (z-[1]) and adds brand presence without
+                      competing with the player photo or text. */}
+                  {player.teamLogoUrl && (
+                    <div
+                      aria-hidden="true"
+                      className="absolute pointer-events-none z-[1]"
+                      style={{
+                        right: wide ? 36 : 18,
+                        top: "50%",
+                        width: wide ? 210 : 118,
+                        height: wide ? 210 : 118,
+                        marginTop: wide ? -105 : -59,
+                        opacity: 0.18,
+                      }}
+                    >
+                      <img
+                        src={player.teamLogoUrl}
+                        alt=""
+                        crossOrigin="anonymous"
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "contain",
+                        }}
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).style.display = "none";
+                        }}
+                      />
+                    </div>
+                  )}
+
                   {player.photoUrl ? (
                     <div
                       className="absolute bottom-0 pointer-events-none z-[2]"
@@ -562,6 +671,7 @@ export default function ShareableCard({
                         left: wide ? 32 : 16,
                         width: wide ? 220 : 128,
                         height: wide ? 280 : 168,
+                        overflow: "hidden",
                       }}
                     >
                       {/* Soft circular spotlight behind the cutout */}
@@ -577,11 +687,23 @@ export default function ShareableCard({
                             "radial-gradient(circle, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 70%)",
                         }}
                       />
+                      {/* Use height:100%/width:auto instead of object-fit:contain
+                          so html2canvas renders the image identically to the
+                          browser preview (html2canvas ignores object-fit). */}
                       <img
                         src={player.photoUrl}
                         alt={player.name}
                         crossOrigin="anonymous"
-                        className="absolute inset-0 w-full h-full object-contain object-bottom"
+                        style={{
+                          position: "absolute",
+                          bottom: 0,
+                          left: "50%",
+                          transform: "translateX(-50%)",
+                          height: "100%",
+                          width: "auto",
+                          maxWidth: "none",
+                          display: "block",
+                        }}
                         onError={(e) => {
                           (e.currentTarget as HTMLImageElement).style.display = "none";
                         }}
@@ -594,6 +716,10 @@ export default function ShareableCard({
                     style={{
                       gap: wide ? 32 : 20,
                       paddingLeft: player.photoUrl ? (wide ? 252 : 144) : 0,
+                      // Reserve space so text doesn't run behind the team logo
+                      // watermark (absolute-positioned at right:36/18, width:210/118).
+                      // Calculation: logo_width + logo_right - header_paddingRight + buffer
+                      paddingRight: player.teamLogoUrl ? (wide ? 230 : 130) : 0,
                       minHeight: wide ? 200 : 120,
                     }}
                   >
@@ -626,9 +752,7 @@ export default function ShareableCard({
                       </div>
                       {player.team && (
                         <div
-                          className="flex items-center"
                           style={{
-                            gap: wide ? 12 : 8,
                             wordBreak: "break-word",
                             color: bandTextSubtle,
                             marginTop: wide ? 14 : 8,
@@ -636,32 +760,7 @@ export default function ShareableCard({
                             fontSize: wide ? 22 : 12,
                           }}
                         >
-                          {player.teamLogoUrl && (
-                            <span
-                              className="inline-flex items-center justify-center rounded-full bg-white border border-white/60 overflow-hidden flex-shrink-0 shadow-sm"
-                              style={{ width: wide ? 64 : 28, height: wide ? 64 : 28 }}
-                            >
-                              <img
-                                src={player.teamLogoUrl}
-                                alt={player.team}
-                                crossOrigin="anonymous"
-                                width={wide ? 56 : 24}
-                                height={wide ? 56 : 24}
-                                style={{
-                                  width: wide ? 56 : 24,
-                                  height: wide ? 56 : 24,
-                                  objectFit: "contain",
-                                }}
-                                onError={(e) => {
-                                  const img = e.currentTarget as HTMLImageElement;
-                                  const wrap = img.parentElement;
-                                  if (wrap) wrap.style.display = "none";
-                                }}
-                                data-testid="share-team-logo"
-                              />
-                            </span>
-                          )}
-                          <span>{player.team}</span>
+                          {player.team}
                         </div>
                       )}
                       {shareCaption && (
@@ -767,36 +866,59 @@ export default function ShareableCard({
             </div>
 
             {/* Sticky action bar (NOT inside captureRef) */}
-            <div className="grid grid-cols-2 gap-2 p-3 bg-white border-t border-slate-200 flex-shrink-0">
-              <Button
-                variant="outline"
-                onClick={handleDownload}
-                disabled={working}
-                className="gap-2"
-                data-testid="share-download-btn"
-              >
-                {working ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Download className="h-4 w-4" />
-                )}
-                Download
-              </Button>
-              <Button
-                onClick={handleShare}
-                disabled={working}
-                className="gap-2 text-white"
-                style={{ backgroundColor: BRAND_ORANGE }}
-                data-testid="share-share-btn"
-              >
-                {working ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Share2 className="h-4 w-4" />
-                )}
-                Share
-              </Button>
-            </div>
+            {(() => {
+              // Detect whether the device supports native file sharing (iOS /
+              // Android). We probe with a dummy PNG file so the label can tell
+              // the user exactly what will happen on their device.
+              const canNativeShare = (() => {
+                try {
+                  const probe = new File([], "probe.png", { type: "image/png" });
+                  return !!(
+                    navigator.canShare &&
+                    (navigator as Navigator & { canShare?: (d: ShareData) => boolean }).canShare({ files: [probe] })
+                  );
+                } catch {
+                  return false;
+                }
+              })();
+
+              return (
+                <div className="grid grid-cols-2 gap-2 p-3 bg-white border-t border-slate-200 flex-shrink-0">
+                  <Button
+                    variant="outline"
+                    onClick={handleDownload}
+                    disabled={working}
+                    className="gap-2"
+                    data-testid="share-download-btn"
+                  >
+                    {working ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4" />
+                    )}
+                    {/* On mobile, native share goes to Photos so "Download"
+                        becomes the fallback / desktop label */}
+                    {canNativeShare ? "Files" : "Download"}
+                  </Button>
+                  <Button
+                    onClick={handleShare}
+                    disabled={working}
+                    className="gap-2 text-white"
+                    style={{ backgroundColor: BRAND_ORANGE }}
+                    data-testid="share-share-btn"
+                  >
+                    {working ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Share2 className="h-4 w-4" />
+                    )}
+                    {/* When native share is available the OS sheet lets the user
+                        save directly to Photos / Camera Roll */}
+                    {canNativeShare ? "Save to Photos" : "Share"}
+                  </Button>
+                </div>
+              );
+            })()}
           </div>
         </DialogContent>
       </Dialog>

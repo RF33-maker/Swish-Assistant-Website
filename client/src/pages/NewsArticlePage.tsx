@@ -8,12 +8,97 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, ExternalLink, Newspaper, CalendarDays } from "lucide-react";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
+import GameEmbed from "@/components/GameEmbed";
+import { isGameSlug } from "@/lib/gameSlug";
 
 const ARTICLE_COLUMNS =
   "id, title, summary, body, image_url, source_url, league, published_at, is_published";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Matches a game URL in any of its forms:
+//   https://swishassistant.com/game/{slug}
+//   https://www.swishassistant.com/game/{slug}
+//   /game/{slug}
+const GAME_URL_SOURCE =
+  "(?:https?:\\/\\/(?:www\\.)?swishassistant\\.com)?\\/game\\/([\\w-]+)";
+
+// Returns the game slug if the entire trimmed line is a bare game URL, else null.
+function extractBareGameSlug(line: string): string | null {
+  const trimmed = line.trim();
+  const bare = /^(?:https?:\/\/(?:www\.)?swishassistant\.com)?\/game\/([\w-]+)\/?$/.exec(trimmed);
+  if (!bare) return null;
+  const slug = bare[1];
+  return isGameSlug(slug) ? slug : null;
+}
+
+// Renders a plain-text line, turning any inline game URLs into anchor hyperlinks.
+function renderLineWithInlineLinks(line: string, lineKey: string): React.ReactNode {
+  const re = new RegExp(GAME_URL_SOURCE, "g");
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(line)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(line.slice(lastIndex, match.index));
+    }
+    const slug = match[1];
+    const href = `/game/${slug}`;
+    parts.push(
+      <a
+        key={`${lineKey}-link-${match.index}`}
+        href={href}
+        className="text-orange-600 underline hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        {match[0]}
+      </a>,
+    );
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < line.length) {
+    parts.push(line.slice(lastIndex));
+  }
+  return parts.length === 1 ? parts[0] : <>{parts}</>;
+}
+
+// Parses an article body into React nodes, promoting bare game URLs to GameEmbed cards.
+function parseArticleBody(body: string): React.ReactNode[] {
+  const lines = body.split("\n");
+  const nodes: React.ReactNode[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      // Blank line → paragraph spacer
+      nodes.push(<div key={`sp-${i}`} className="h-4" aria-hidden />);
+      continue;
+    }
+
+    const gameSlug = extractBareGameSlug(trimmed);
+    if (gameSlug) {
+      nodes.push(
+        <GameEmbed key={`embed-${i}`} slug={gameSlug} href={`/game/${gameSlug}`} />,
+      );
+      continue;
+    }
+
+    nodes.push(
+      <p key={`p-${i}`} className="mb-4">
+        {renderLineWithInlineLinks(line, `l${i}`)}
+      </p>,
+    );
+  }
+
+  return nodes;
+}
+
+const SITE_URL = "https://www.swishassistant.com";
+const PUBLISHER_LOGO = `${SITE_URL}/icon-192.png`;
 
 function formatDate(value: string | Date | null | undefined) {
   if (!value) return "";
@@ -40,11 +125,11 @@ function PageShell({ children }: { children: React.ReactNode }) {
             </span>
           </Link>
           <Link
-            href="/"
+            href="/news"
             className="text-sm font-medium text-slate-600 hover:text-orange-600 dark:text-slate-300 dark:hover:text-orange-400 inline-flex items-center gap-1"
             data-testid="link-home"
           >
-            <ArrowLeft className="h-4 w-4" /> Home
+            <ArrowLeft className="h-4 w-4" /> All News
           </Link>
         </div>
       </header>
@@ -59,36 +144,49 @@ function PageShell({ children }: { children: React.ReactNode }) {
 }
 
 export default function NewsArticlePage() {
-  const params = useParams<{ id: string }>();
-  const id = params?.id || "";
+  const params = useParams<{ slug: string }>();
+  const slug = params?.slug || "";
   const [, setLocation] = useLocation();
 
-  const isValidId = UUID_REGEX.test(id);
+  const isUUID = UUID_REGEX.test(slug);
 
   const {
     data: article,
     isLoading,
     isError,
   } = useQuery<NewsArticle | null>({
-    queryKey: ["supabase", "news_articles", "detail", id],
-    enabled: isValidId,
+    queryKey: ["supabase", "news_articles", "detail", slug],
+    enabled: !!slug,
     queryFn: async () => {
+      if (isUUID) {
+        const { data, error } = await supabase
+          .from("news_articles")
+          .select(ARTICLE_COLUMNS)
+          .eq("id", slug)
+          .eq("is_published", true)
+          .maybeSingle();
+        if (error) throw error;
+        return (data as NewsArticle | null) ?? null;
+      }
+      // Slug-based lookup — slug column may not exist yet in the DB.
+      // If the query errors (e.g. column missing), return null so the
+      // page shows "not found" instead of crashing.
       const { data, error } = await supabase
         .from("news_articles")
         .select(ARTICLE_COLUMNS)
-        .eq("id", id)
+        .eq("slug", slug)
         .eq("is_published", true)
         .maybeSingle();
-      if (error) throw error;
+      if (error) return null;
       return (data as NewsArticle | null) ?? null;
     },
   });
 
   useEffect(() => {
     window.scrollTo({ top: 0 });
-  }, [id]);
+  }, [slug]);
 
-  if (!isValidId) {
+  if (!slug) {
     return (
       <PageShell>
         <div className="max-w-3xl mx-auto px-6 py-16 text-center" data-testid="news-not-found">
@@ -101,16 +199,16 @@ export default function NewsArticlePage() {
           </p>
           <Button
             className="mt-6 bg-orange-500 hover:bg-orange-600 text-white"
-            onClick={() => setLocation("/")}
+            onClick={() => setLocation("/news")}
           >
-            Back to home
+            Back to news
           </Button>
         </div>
       </PageShell>
     );
   }
 
-  if (isLoading) {
+  if (isLoading || (isUUID && article?.slug)) {
     return (
       <PageShell>
         <article className="max-w-3xl mx-auto px-6 py-10">
@@ -144,9 +242,9 @@ export default function NewsArticlePage() {
           </p>
           <Button
             className="mt-6 bg-orange-500 hover:bg-orange-600 text-white"
-            onClick={() => setLocation("/")}
+            onClick={() => setLocation("/news")}
           >
-            Back to home
+            Back to news
           </Button>
         </div>
       </PageShell>
@@ -159,7 +257,29 @@ export default function NewsArticlePage() {
       ? article.body.replace(/\s+/g, " ").trim().slice(0, 160)
       : `${article.title} — read the full story on Swish Assistant.`);
 
-  const canonical = `https://www.swishassistant.com/news/${article.id}`;
+  const canonicalSlug = article.slug || article.id;
+  const canonical = `${SITE_URL}/news/${canonicalSlug}`;
+
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "NewsArticle",
+    headline: article.title,
+    description,
+    url: canonical,
+    ...(article.published_at && {
+      datePublished: new Date(article.published_at).toISOString(),
+      dateModified: new Date(article.published_at).toISOString(),
+    }),
+    ...(article.image_url && { image: article.image_url }),
+    publisher: {
+      "@type": "Organization",
+      name: "Swish Assistant",
+      logo: {
+        "@type": "ImageObject",
+        url: PUBLISHER_LOGO,
+      },
+    },
+  };
 
   return (
     <PageShell>
@@ -186,6 +306,7 @@ export default function NewsArticlePage() {
           <meta name="twitter:image" content={article.image_url} />
         )}
         <link rel="canonical" href={canonical} />
+        <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
       </Helmet>
 
       <article className="max-w-3xl mx-auto px-6 py-10" data-testid="news-article">
@@ -238,10 +359,10 @@ export default function NewsArticlePage() {
 
         {article.body ? (
           <div
-            className="mt-8 text-slate-800 dark:text-slate-200 text-base md:text-lg leading-relaxed whitespace-pre-wrap [&>p]:mb-4"
+            className="mt-8 text-slate-800 dark:text-slate-200 text-base md:text-lg leading-relaxed"
             data-testid="text-article-body"
           >
-            {article.body}
+            {parseArticleBody(article.body)}
           </div>
         ) : (
           <p className="mt-8 text-slate-500 dark:text-slate-400 italic">
@@ -266,7 +387,7 @@ export default function NewsArticlePage() {
         <div className="mt-10">
           <Button
             variant="ghost"
-            onClick={() => setLocation("/")}
+            onClick={() => setLocation("/news")}
             className="text-slate-600 hover:text-orange-600 dark:text-slate-300 dark:hover:text-orange-400"
             data-testid="button-back"
           >

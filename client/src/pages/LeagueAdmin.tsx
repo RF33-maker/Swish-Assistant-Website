@@ -6,6 +6,7 @@ import { TeamLogoUploader } from "@/components/TeamLogoUploader";
 import { TeamLogo, invalidateLogoCache } from "@/components/TeamLogo";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import UploadSection from "@/components/LeagueAdmin/upload-section-la";
+import DuplicatePlayerManager from "@/components/LeagueAdmin/DuplicatePlayerManager";
 
 interface League {
   league_id: string;
@@ -567,6 +568,9 @@ export default function LeagueAdmin() {
                 : userLeagues
             } />
           </div>
+
+          {/* Duplicate Player Management */}
+          <DuplicatePlayerManager leagueId={league.league_id} />
 
           {/* Team Logo Management */}
           <div className="md:col-span-2 bg-white rounded-xl shadow p-4 md:p-6">

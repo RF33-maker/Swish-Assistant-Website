@@ -569,6 +569,7 @@ export default function LandingPage() {
                 <li><a href="/auth" className="text-gray-300 hover:text-white transition-colors">Login</a></li>
                 <li><a href="#features" className="text-gray-300 hover:text-white transition-colors">Features</a></li>
                 <li><a href="#pricing" className="text-gray-300 hover:text-white transition-colors">Pricing</a></li> */}
+                <li><a href="/news" className="text-gray-300 hover:text-white transition-colors">Latest News</a></li>
                 <li><a href="#subscribe" className="text-gray-300 hover:text-white transition-colors">Subscribe</a></li>
               </ul>
             </div>

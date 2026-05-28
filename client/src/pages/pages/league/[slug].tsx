@@ -2683,6 +2683,40 @@ export default function LeaguePage() {
           return;
         }
 
+        // Secondary slug enrichment: find any player_ids in the stats that were
+        // not covered by the initial rosterData query (e.g. players whose
+        // players.league_id doesn't match any of the queried child leagues).
+        // The players table is small so fetching a targeted list is fast.
+        {
+          const uncoveredIds = [
+            ...new Set(
+              allPlayerStats
+                .map((s: any) => s.player_id)
+                .filter((id: string | null) => id && !slugLookup.has(id))
+            )
+          ] as string[];
+          if (uncoveredIds.length > 0) {
+            const chunkSize = 200;
+            for (let ci = 0; ci < uncoveredIds.length; ci += chunkSize) {
+              const chunk = uncoveredIds.slice(ci, ci + chunkSize);
+              const { data: extraPlayers } = await supabase
+                .from("players")
+                .select("id, full_name, slug")
+                .in("id", chunk);
+              extraPlayers?.forEach((p: any) => {
+                if (p.slug) {
+                  slugLookup.set(p.id, p.slug);
+                  if (p.full_name)
+                    nameLookup.set(p.full_name.toLowerCase().trim(), p.slug);
+                }
+                if (p.full_name && p.id)
+                  playerIdToName.set(p.id, p.full_name);
+              });
+            }
+            debugLog("📊 Secondary slug enrichment: resolved", uncoveredIds.length, "additional player IDs");
+          }
+        }
+
         const finalResults = aggregatePlayerStats(allPlayerStats, slugLookup, nameLookup, playerIdToName);
         debugLog("📊 Final player list has", finalResults.length, "players");
 
