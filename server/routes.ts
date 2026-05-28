@@ -1581,7 +1581,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/sitemap.xml", async (req: Request, res: Response) => {
     const now = Date.now();
-    if (sitemapCache && now - sitemapCache.at < SITEMAP_TTL_MS) {
+    const forceRefresh = req.query.refresh === "1";
+    if (!forceRefresh && sitemapCache && now - sitemapCache.at < SITEMAP_TTL_MS) {
       res.setHeader("Content-Type", "application/xml; charset=utf-8");
       res.setHeader("Cache-Control", "public, max-age=3600");
       return res.send(sitemapCache.xml);
