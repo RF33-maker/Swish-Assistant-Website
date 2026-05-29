@@ -53,6 +53,10 @@ interface TrendingData {
 const ROTATE_MS = 6000;
 const FEATURED_LEAGUE_LIMIT = 4;
 const PERFS_PER_LEAGUE = 2;
+// Over-fetch so client-side COALESCE(week_start, game_date) sort can surface
+// recent games that have a NULL week_start (which the DB sorts last when using
+// nullsFirst: false, potentially cutting them off before the display limit).
+const FETCH_PER_LEAGUE = 15;
 
 function formatDate(s: string | null) {
   if (!s) return "";
@@ -174,7 +178,9 @@ export default function TrendingPerformanceSection() {
   );
 
   const { data, isLoading } = useQuery<TrendingData>({
-    queryKey: ["supabase", "home", "trending-performance", "v3"],
+    queryKey: ["supabase", "home", "trending-performance", "v4"],
+    staleTime: 5 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
     queryFn: async () => {
       const empty: TrendingData = { perfs: [], leagueNames: {}, playerMeta: {} };
 
@@ -210,21 +216,38 @@ export default function TrendingPerformanceSection() {
       if (leagueIds.length > 0) {
         const perLeagueResults = await Promise.all(
           leagueIds.map(async (lid) => {
+            // Over-fetch (FETCH_PER_LEAGUE rows) so the client-side
+            // COALESCE(week_start, game_date) sort below can surface recent
+            // games whose week_start is NULL. The DB orders NULLs last in a
+            // DESC sort, which would cut those rows off before the display
+            // limit if we fetched only PERFS_PER_LEAGUE rows here.
             const { data: rows, error } = await supabase
               .from("vw_player_game_scores")
               .select(
                 "league_id, game_key, game_date, week_start, player_id, full_name, team_id, team_name, pts, reb, ast, stl, blk, tov, fga, fta, ts_pct, game_score"
               )
               .eq("league_id", lid)
-              .order("week_start", { ascending: false })
+              .order("game_date", { ascending: false })
               .order("game_score", { ascending: false })
-              .limit(PERFS_PER_LEAGUE)
+              .limit(FETCH_PER_LEAGUE)
               .returns<PerfRow[]>();
             if (error) {
               console.error("[TrendingPerf] perf error", lid, error);
               return [] as PerfRow[];
             }
-            return rows || [];
+
+            // Sort this league's rows using COALESCE(week_start, game_date)
+            // semantics so NULL week_start rows rank by game_date instead of
+            // being treated as infinitely old.
+            const sorted = (rows || []).slice().sort((a, b) => {
+              const aw = a.week_start || a.game_date || "";
+              const bw = b.week_start || b.game_date || "";
+              if (aw !== bw) return aw < bw ? 1 : -1;
+              return (b.game_score ?? 0) - (a.game_score ?? 0);
+            });
+
+            // Take only the top PERFS_PER_LEAGUE after the client-side sort.
+            return sorted.slice(0, PERFS_PER_LEAGUE);
           })
         );
         for (const rows of perLeagueResults) {
@@ -235,12 +258,12 @@ export default function TrendingPerformanceSection() {
         }
       }
 
-      // Final sort: latest week first, then highest game score within that
-      // week. This guarantees the carousel always leads with the freshest
-      // performances across the featured leagues.
+      // Global sort: latest effective date first (COALESCE(week_start,
+      // game_date)), then highest game score. This guarantees the carousel
+      // always leads with the freshest performances across all featured leagues.
       perfs.sort((a, b) => {
-        const aw = a.week_start || "";
-        const bw = b.week_start || "";
+        const aw = a.week_start || a.game_date || "";
+        const bw = b.week_start || b.game_date || "";
         if (aw !== bw) return aw < bw ? 1 : -1;
         return (b.game_score ?? 0) - (a.game_score ?? 0);
       });
