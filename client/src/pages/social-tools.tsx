@@ -1,5 +1,5 @@
 import { useLocation } from "wouter";
-import { ArrowLeft, Download, Trophy, Loader2, Filter, Search, ChevronDown, ChevronUp } from "lucide-react";
+import { ArrowLeft, Download, Trophy, Loader2, Filter, Search, ChevronDown, ChevronUp, RefreshCw, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -7,7 +7,7 @@ import { PlayerPerformanceCardV1 } from "@/components/social/PlayerPerformanceCa
 import { PlayerPhotoUploader } from "@/components/social/PlayerPhotoUploader";
 import { PostQueueSection } from "@/components/social/PostQueueSection";
 import type { PlayerPerformanceV1Data } from "@/types/socialCards";
-import { useRef, useState, useEffect, useMemo } from "react";
+import { useRef, useState, useEffect, useMemo, useCallback } from "react";
 import html2canvas from "html2canvas";
 import { supabase } from "@/lib/supabase";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -166,7 +166,6 @@ async function buildPlayerPerformanceCardData(perf: TopPerformance): Promise<Pla
     }
   }
 
-  // Pre-process the photo with the polygon mask and rounded corners
   let maskedPhotoUrl = playerPhotoUrl;
   if (playerPhotoUrl) {
     try {
@@ -202,9 +201,75 @@ async function buildPlayerPerformanceCardData(perf: TopPerformance): Promise<Pla
   };
 }
 
+/** Renders a PlayerPerformanceCardV1 off-screen and captures it as a PNG blob. */
+async function renderCardToBlob(
+  data: PlayerPerformanceV1Data,
+  template: string,
+): Promise<Blob | null> {
+  const hiddenContainer = document.createElement("div");
+  hiddenContainer.style.cssText = `
+    position: fixed;
+    left: -9999px;
+    top: 0;
+    width: 1080px;
+    height: 1350px;
+    z-index: -9999;
+    pointer-events: none;
+  `;
+  document.body.appendChild(hiddenContainer);
+
+  const cardWrapper = document.createElement("div");
+  cardWrapper.style.cssText = "width: 1080px; height: 1350px;";
+  hiddenContainer.appendChild(cardWrapper);
+
+  const { createRoot } = await import("react-dom/client");
+  const root = createRoot(cardWrapper);
+
+  try {
+    await new Promise<void>((resolve) => {
+      root.render(<PlayerPerformanceCardV1 data={data} template={template} />);
+      setTimeout(resolve, 200);
+    });
+
+    const images = cardWrapper.querySelectorAll("img");
+    await Promise.all(
+      Array.from(images).map(
+        (img) =>
+          new Promise((resolve) => {
+            if (img.complete) {
+              resolve(true);
+            } else {
+              img.onload = () => resolve(true);
+              img.onerror = () => resolve(false);
+            }
+          })
+      )
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    const canvas = await html2canvas(cardWrapper.firstElementChild as HTMLElement, {
+      scale: 1,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: null,
+      width: 1080,
+      height: 1350,
+    });
+
+    return await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob((b) => resolve(b), "image/png")
+    );
+  } finally {
+    root.unmount();
+    if (document.body.contains(hiddenContainer)) {
+      document.body.removeChild(hiddenContainer);
+    }
+  }
+}
+
 export default function SocialToolsPage() {
   const [, navigate] = useLocation();
-  const cardRef = useRef<HTMLDivElement>(null);
   const [performances, setPerformances] = useState<TopPerformance[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedData, setSelectedData] = useState<PlayerPerformanceV1Data>(defaultData);
@@ -221,14 +286,23 @@ export default function SocialToolsPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [performanceOffset, setPerformanceOffset] = useState(0);
   const [selectedTemplate, setSelectedTemplate] = useState<string>("default");
+
+  // Preview state — generated once when a performance is selected.
+  const [previewImgUrl, setPreviewImgUrl] = useState<string | null>(null);
+  const [previewGenerating, setPreviewGenerating] = useState(false);
+  const [previewError, setPreviewError] = useState(false);
+  const socialBlobRef = useRef<Blob | null>(null);
+  // Monotonically-increasing token: only the latest generation request may
+  // commit its result. Guards against rapid selection/template changes where
+  // a slower capture can finish after a newer one and overwrite state.
+  const generationTokenRef = useRef(0);
+
   const PAGE_SIZE = 50;
   
-  // Compute queue cards from IDs and cache
   const queueCards = useMemo(() => {
     return queueIds.map(id => queueCardCache[id]).filter(Boolean);
   }, [queueIds, queueCardCache]);
 
-  // Filter performances by search query
   const filteredPerformances = useMemo(() => {
     if (!performanceSearch.trim()) return performances;
     const query = performanceSearch.toLowerCase();
@@ -277,15 +351,12 @@ export default function SocialToolsPage() {
         .select("*, players:player_id(id, full_name, photo_path)")
         .order("spoints", { ascending: false });
       
-      // Apply league filter
       if (selectedLeague !== "all") {
         query = query.eq("league_id", selectedLeague);
       }
       
-      // Filter out 0-point performances
       query = query.gt("spoints", 0);
       
-      // Apply time filter
       if (timeFilter === "last-3-days") {
         const threeDaysAgo = new Date();
         threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
@@ -309,7 +380,7 @@ export default function SocialToolsPage() {
       let teamStatsMap: Record<string, any[]> = {};
       
       if (numericIds.length > 0) {
-        const { data: teamStats, error: teamError } = await supabase
+        const { data: teamStats } = await supabase
           .from("team_stats")
           .select("numeric_id, game_key, name, tot_spoints, league_id")
           .in("numeric_id", numericIds);
@@ -395,12 +466,10 @@ export default function SocialToolsPage() {
         };
       });
 
-      // Check if there are more results
       const hasMore = (playerStats?.length || 0) === PAGE_SIZE;
       setHasMorePerformances(hasMore);
       setPerformanceOffset(offset + (playerStats?.length || 0));
       
-      // Append or replace performances based on whether this is initial load
       if (isInitialLoad) {
         setPerformances(mapped);
       } else {
@@ -420,16 +489,65 @@ export default function SocialToolsPage() {
     }
   };
 
+  /** Generate the preview PNG from the given data + template.
+   *  Uses a monotonic token so that only the most-recent call can commit
+   *  its result — rapid selection/template changes cannot cause stale
+   *  captures to overwrite a newer preview. */
+  const generatePreview = useCallback(async (data: PlayerPerformanceV1Data, template: string) => {
+    const token = ++generationTokenRef.current;
+    // Immediately clear stale preview so old card doesn't show while new one loads.
+    socialBlobRef.current = null;
+    setPreviewImgUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+    setPreviewGenerating(true);
+    setPreviewError(false);
+    try {
+      const blob = await renderCardToBlob(data, template);
+      // Discard result if a newer request has started since we began.
+      if (generationTokenRef.current !== token) return;
+      if (!blob) {
+        setPreviewError(true);
+        return;
+      }
+      socialBlobRef.current = blob;
+      const url = URL.createObjectURL(blob);
+      setPreviewImgUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return url;
+      });
+    } catch (err) {
+      if (generationTokenRef.current !== token) return;
+      console.error("[SocialTools] preview generation failed:", err);
+      setPreviewError(true);
+    } finally {
+      if (generationTokenRef.current === token) {
+        setPreviewGenerating(false);
+      }
+    }
+  }, []);
+
+  // Regenerate preview when template changes (if a performance is already selected).
+  useEffect(() => {
+    if (!selectedId || selectedData === defaultData) return;
+    generatePreview(selectedData, selectedTemplate);
+  // We intentionally run only when template changes after a selection.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTemplate]);
+
   const handleSelectPerformance = async (perf: TopPerformance) => {
     setSelectedId(perf.id);
     const cardData = await buildPlayerPerformanceCardData(perf);
     setSelectedData(cardData);
     
-    // Add to queue if not already present
     if (!queueIds.includes(perf.id)) {
       setQueueIds(prev => [...prev, perf.id]);
       setQueueCardCache(prev => ({ ...prev, [perf.id]: cardData }));
     }
+
+    // Generate the preview PNG immediately after building card data.
+    generatePreview(cardData, selectedTemplate);
   };
   
   const handleRemoveFromQueue = (index: number) => {
@@ -441,81 +559,20 @@ export default function SocialToolsPage() {
   };
 
   const handleDownload = async () => {
-    if (!selectedData) return;
+    if (!selectedData || selectedData === defaultData) return;
     
     try {
-      // Create an off-screen container for rendering at full size
-      // Note: Do NOT use visibility:hidden as html2canvas won't render hidden elements
-      const hiddenContainer = document.createElement("div");
-      hiddenContainer.style.cssText = `
-        position: fixed;
-        left: -9999px;
-        top: 0;
-        width: 1080px;
-        height: 1350px;
-        z-index: -9999;
-        pointer-events: none;
-      `;
-      document.body.appendChild(hiddenContainer);
-      
-      // Import ReactDOM to render the card
-      const { createRoot } = await import("react-dom/client");
-      
-      // Create a wrapper div for the card
-      const cardWrapper = document.createElement("div");
-      cardWrapper.style.cssText = "width: 1080px; height: 1350px;";
-      hiddenContainer.appendChild(cardWrapper);
-      
-      // Render the card into the hidden container
-      const root = createRoot(cardWrapper);
-      
-      // Create a promise that resolves when card is rendered
-      await new Promise<void>((resolve) => {
-        root.render(
-          <PlayerPerformanceCardV1 data={selectedData} template={selectedTemplate} />
-        );
-        // Give React time to render
-        setTimeout(resolve, 200);
-      });
-      
-      // Wait for all images to load
-      const images = cardWrapper.querySelectorAll("img");
-      await Promise.all(
-        Array.from(images).map(
-          (img) =>
-            new Promise((resolve) => {
-              if (img.complete) {
-                resolve(true);
-              } else {
-                img.onload = () => resolve(true);
-                img.onerror = () => resolve(false);
-              }
-            })
-        )
-      );
-      
-      // Additional delay to ensure fonts and styles are applied
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      
-      // Capture the hidden card
-      const canvas = await html2canvas(cardWrapper.firstElementChild as HTMLElement, {
-        scale: 1,
-        useCORS: true,
-        allowTaint: true,
-        backgroundColor: null,
-        width: 1080,
-        height: 1350,
-      });
-      
-      // Clean up
-      root.unmount();
-      document.body.removeChild(hiddenContainer);
-      
-      // Download
+      // Reuse the already-generated blob; regenerate only if unavailable.
+      const blob = socialBlobRef.current ?? await renderCardToBlob(selectedData, selectedTemplate);
+      if (!blob) {
+        console.error("[SocialTools] download: failed to generate blob");
+        return;
+      }
       const link = document.createElement("a");
       link.download = `${selectedData.player_name.replace(/\s+/g, '-')}-performance.png`;
-      link.href = canvas.toDataURL("image/png");
+      link.href = URL.createObjectURL(blob);
       link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 10000);
     } catch (error) {
       console.error("Failed to generate image:", error);
     }
@@ -584,7 +641,6 @@ export default function SocialToolsPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                {/* Search bar for performances */}
                 <div className="relative mb-4">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                   <Input
@@ -718,32 +774,63 @@ export default function SocialToolsPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="mb-4">
+                <div className="mb-4 flex gap-2">
                   <Button
                     onClick={handleDownload}
-                    className="w-full bg-orange-600 hover:bg-orange-700 text-white"
-                    disabled={selectedId === null}
+                    className="flex-1 bg-orange-600 hover:bg-orange-700 text-white"
+                    disabled={selectedId === null || previewGenerating}
                     data-testid="button-download"
                   >
                     <Download className="h-4 w-4 mr-2" />
                     Download as PNG
                   </Button>
+                  {selectedId !== null && (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={() => generatePreview(selectedData, selectedTemplate)}
+                      disabled={previewGenerating}
+                      title="Regenerate preview"
+                      className="flex-shrink-0"
+                      data-testid="button-regenerate"
+                    >
+                      <RefreshCw className={`h-4 w-4 ${previewGenerating ? "animate-spin" : ""}`} />
+                    </Button>
+                  )}
                 </div>
-                
-                <div className="bg-gray-200 dark:bg-gray-700 p-3 rounded-lg overflow-hidden">
-                  <div 
-                    className="origin-top-left"
-                    style={{ 
-                      transform: "scale(0.35)", 
-                      transformOrigin: "top left",
-                      width: "1080px",
-                      height: "472px"
-                    }}
-                  >
-                    <div ref={cardRef}>
-                      <PlayerPerformanceCardV1 data={selectedData} template={selectedTemplate} />
+
+                {/* Preview area */}
+                <div className="bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden min-h-[160px] flex items-center justify-center">
+                  {!selectedId ? (
+                    <p className="text-sm text-gray-500 dark:text-gray-400 py-8 text-center px-4">
+                      Select a performance to see a preview
+                    </p>
+                  ) : previewGenerating ? (
+                    <div className="flex flex-col items-center gap-3 py-10 text-gray-500">
+                      <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
+                      <span className="text-sm">Generating preview…</span>
                     </div>
-                  </div>
+                  ) : previewError ? (
+                    <div className="flex flex-col items-center gap-3 py-10 text-gray-500">
+                      <AlertTriangle className="h-7 w-7 text-amber-500" />
+                      <span className="text-sm text-center px-4">Preview failed</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => generatePreview(selectedData, selectedTemplate)}
+                        className="gap-2"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        Retry
+                      </Button>
+                    </div>
+                  ) : previewImgUrl ? (
+                    <img
+                      src={previewImgUrl}
+                      alt="Card preview"
+                      className="w-full h-auto block rounded-lg"
+                    />
+                  ) : null}
                 </div>
                 
                 <p className="mt-3 text-xs text-gray-500 dark:text-gray-400 text-center">
@@ -756,7 +843,6 @@ export default function SocialToolsPage() {
           </div>
         </div>
         
-        {/* Post Queue Section */}
         <PostQueueSection 
           cards={queueCards} 
           loading={queueLoading} 
