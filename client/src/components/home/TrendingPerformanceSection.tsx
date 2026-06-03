@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { supabase } from "@/lib/supabase";
 import { TeamLogo } from "@/components/TeamLogo";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
 import ShareableCard, {
@@ -51,12 +50,6 @@ interface TrendingData {
 }
 
 const ROTATE_MS = 6000;
-const FEATURED_LEAGUE_LIMIT = 4;
-const PERFS_PER_LEAGUE = 2;
-// Over-fetch so client-side COALESCE(week_start, game_date) sort can surface
-// recent games that have a NULL week_start (which the DB sorts last when using
-// nullsFirst: false, potentially cutting them off before the display limit).
-const FETCH_PER_LEAGUE = 15;
 
 function formatDate(s: string | null) {
   if (!s) return "";
@@ -178,116 +171,32 @@ export default function TrendingPerformanceSection() {
   );
 
   const { data, isLoading } = useQuery<TrendingData>({
-    queryKey: ["supabase", "home", "trending-performance", "v4"],
+    queryKey: ["home", "trending-performance", "v11-backend"],
     staleTime: 5 * 60 * 1000,
-    refetchInterval: 5 * 60 * 1000,
     queryFn: async () => {
       const empty: TrendingData = { perfs: [], leagueNames: {}, playerMeta: {} };
-
-      // Stick to the top 4 trending leagues (those with a trending_position
-      // assigned, ordered ascending). This keeps the carousel focused on the
-      // featured leagues only.
-      const { data: leagueRows, error: lErr } = await supabase
-        .from("leagues")
-        .select("league_id, name, trending_position")
-        .eq("is_public", true)
-        .not("trending_position", "is", null)
-        .order("trending_position", { ascending: true, nullsFirst: false })
-        .limit(FEATURED_LEAGUE_LIMIT);
-
-      if (lErr) {
-        console.error("[TrendingPerf] leagues error", lErr);
+      try {
+        const res = await fetch("/api/home/trending-performances");
+        if (!res.ok) return empty;
+        const json = await res.json() as {
+          perfs: PerfRow[];
+          leagueNames: Record<string, string>;
+          playerMeta: Record<string, { slug: string | null; photo_path_bg_removed: string | null }>;
+        };
+        // Resolve player photo URLs client-side from the storage paths returned
+        // by the backend so we don't need to call getPublicUrl on the server.
+        const playerMeta: Record<string, { slug: string | null; photoUrl: string | null }> = {};
+        for (const [id, meta] of Object.entries(json.playerMeta || {})) {
+          playerMeta[id] = {
+            slug: meta.slug,
+            photoUrl: getPlayerPhotoUrlCached(meta.photo_path_bg_removed),
+          };
+        }
+        return { perfs: json.perfs || [], leagueNames: json.leagueNames || {}, playerMeta };
+      } catch (err) {
+        console.error("[TrendingPerf] fetch error", err);
         return empty;
       }
-
-      const leagues = (leagueRows as LeagueMetaRow[] | null) || [];
-      const leagueNames: Record<string, string> = {};
-      for (const l of leagues) {
-        if (l.name) leagueNames[l.league_id] = l.name;
-      }
-
-      // Run one tightly-scoped query per featured league in parallel. A
-      // single batched .in() across all leagues used to time out
-      // (Postgres 57014) because the view scan was unbounded; per-league
-      // queries with a hard LIMIT let the planner pick a much cheaper
-      // plan and keep the response small.
-      const leagueIds = leagues.map((l) => l.league_id);
-      const perfs: PerfRow[] = [];
-      if (leagueIds.length > 0) {
-        const perLeagueResults = await Promise.all(
-          leagueIds.map(async (lid) => {
-            // Over-fetch (FETCH_PER_LEAGUE rows) so the client-side
-            // COALESCE(week_start, game_date) sort below can surface recent
-            // games whose week_start is NULL. The DB orders NULLs last in a
-            // DESC sort, which would cut those rows off before the display
-            // limit if we fetched only PERFS_PER_LEAGUE rows here.
-            const { data: rows, error } = await supabase
-              .from("vw_player_game_scores")
-              .select(
-                "league_id, game_key, game_date, week_start, player_id, full_name, team_id, team_name, pts, reb, ast, stl, blk, tov, fga, fta, ts_pct, game_score"
-              )
-              .eq("league_id", lid)
-              .order("game_date", { ascending: false })
-              .order("game_score", { ascending: false })
-              .limit(FETCH_PER_LEAGUE)
-              .returns<PerfRow[]>();
-            if (error) {
-              console.error("[TrendingPerf] perf error", lid, error);
-              return [] as PerfRow[];
-            }
-
-            // Sort this league's rows using COALESCE(week_start, game_date)
-            // semantics so NULL week_start rows rank by game_date instead of
-            // being treated as infinitely old.
-            const sorted = (rows || []).slice().sort((a, b) => {
-              const aw = a.week_start || a.game_date || "";
-              const bw = b.week_start || b.game_date || "";
-              if (aw !== bw) return aw < bw ? 1 : -1;
-              return (b.game_score ?? 0) - (a.game_score ?? 0);
-            });
-
-            // Take only the top PERFS_PER_LEAGUE after the client-side sort.
-            return sorted.slice(0, PERFS_PER_LEAGUE);
-          })
-        );
-        for (const rows of perLeagueResults) {
-          for (const r of rows) {
-            if (!r?.league_id) continue;
-            perfs.push(r);
-          }
-        }
-      }
-
-      // Global sort: latest effective date first (COALESCE(week_start,
-      // game_date)), then highest game score. This guarantees the carousel
-      // always leads with the freshest performances across all featured leagues.
-      perfs.sort((a, b) => {
-        const aw = a.week_start || a.game_date || "";
-        const bw = b.week_start || b.game_date || "";
-        if (aw !== bw) return aw < bw ? 1 : -1;
-        return (b.game_score ?? 0) - (a.game_score ?? 0);
-      });
-
-      const playerIds = perfs.map((p) => p.player_id);
-      const playerMeta: Record<string, { slug: string | null; photoUrl: string | null }> = {};
-      if (playerIds.length > 0) {
-        const { data: metaRows, error: pErr } = await supabase
-          .from("players")
-          .select("id, slug, photo_path_bg_removed")
-          .in("id", playerIds);
-        if (!pErr) {
-          for (const p of (metaRows as PlayerMetaRow[] | null) || []) {
-            playerMeta[p.id] = {
-              slug: p.slug,
-              photoUrl: getPlayerPhotoUrlCached(p.photo_path_bg_removed),
-            };
-          }
-        } else {
-          console.error("[TrendingPerf] players error", pErr);
-        }
-      }
-
-      return { perfs, leagueNames, playerMeta };
     },
   });
 
@@ -367,7 +276,7 @@ export default function TrendingPerformanceSection() {
     }
   };
 
-  if (isLoading || !perf) {
+  if (isLoading) {
     return (
       <div className="w-full max-w-xl mb-6 md:mb-8">
         <div className="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 shadow-sm p-4 md:p-5 animate-pulse">
@@ -391,6 +300,10 @@ export default function TrendingPerformanceSection() {
       </div>
     );
   }
+
+  // Query resolved but returned no performances — hide gracefully rather
+  // than showing an infinite loading skeleton.
+  if (!perf) return null;
 
   // Content rendered inside the share dialog. The ShareableCard chrome
   // already supplies the player photo / name / team header band, so the

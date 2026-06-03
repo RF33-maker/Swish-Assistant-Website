@@ -1579,6 +1579,125 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return xml;
   }
 
+  // ── Trending Performances (home page card) ──────────────────────────────────
+  // Queries vw_player_game_scores server-side so we can cache the result in
+  // memory and avoid hammering Supabase with one query per user per page load.
+  // The view is slow (57014 timeouts under load); a single background query
+  // every TRENDING_TTL_MS serves all concurrent visitors from cache.
+  interface TrendingPerfRow {
+    league_id: string; game_key: string; game_date: string | null;
+    week_start: string | null; player_id: string; full_name: string;
+    team_id: string | null; team_name: string | null;
+    pts: number | null; reb: number | null; ast: number | null;
+    stl: number | null; blk: number | null; tov: number | null;
+    fga: number | null; fta: number | null;
+    ts_pct: number | null; game_score: number | null;
+  }
+  interface TrendingApiPayload {
+    perfs: TrendingPerfRow[];
+    leagueNames: Record<string, string>;
+    playerMeta: Record<string, { slug: string | null; photo_path_bg_removed: string | null }>;
+  }
+  const TRENDING_TTL_MS = 5 * 60 * 1000;
+  let trendingCache: { data: TrendingApiPayload; at: number } | null = null;
+  let trendingInFlight: Promise<TrendingApiPayload> | null = null;
+
+  async function fetchTrendingPerformances(): Promise<TrendingApiPayload> {
+    const empty: TrendingApiPayload = { perfs: [], leagueNames: {}, playerMeta: {} };
+
+    const { data: leagueRows, error: lErr } = await supabaseAdmin
+      .from("leagues")
+      .select("league_id, name, trending_position")
+      .eq("is_public", true)
+      .not("trending_position", "is", null)
+      .order("trending_position", { ascending: true, nullsFirst: false })
+      .limit(4);
+
+    if (lErr || !leagueRows || leagueRows.length === 0) {
+      console.error("[TrendingPerf] leagues error", lErr?.message);
+      return empty;
+    }
+
+    const leagueNames: Record<string, string> = {};
+    for (const l of leagueRows as { league_id: string; name: string | null }[]) {
+      if (l.name) leagueNames[l.league_id] = l.name;
+    }
+
+    const leagueIds = leagueRows.map((l: any) => l.league_id as string);
+    const perfs: TrendingPerfRow[] = [];
+
+    const perLeague = await Promise.allSettled(
+      leagueIds.map(async (lid) => {
+        const { data: rows, error } = await supabaseAdmin
+          .from("vw_player_game_scores")
+          .select("league_id,game_key,game_date,week_start,player_id,full_name,team_id,team_name,pts,reb,ast,stl,blk,tov,fga,fta,ts_pct,game_score")
+          .eq("league_id", lid)
+          .order("week_start", { ascending: false, nullsFirst: false })
+          .order("game_score", { ascending: false })
+          .limit(2)
+          .returns<TrendingPerfRow[]>();
+        if (error) {
+          console.error("[TrendingPerf] league query error", lid, error.message);
+          return [] as TrendingPerfRow[];
+        }
+        return (rows || []).slice(0, 2);
+      })
+    );
+
+    for (const result of perLeague) {
+      if (result.status === "fulfilled") {
+        for (const r of result.value) {
+          if (r?.league_id) perfs.push(r);
+        }
+      }
+    }
+
+    perfs.sort((a, b) => {
+      const aw = a.week_start || a.game_date || "";
+      const bw = b.week_start || b.game_date || "";
+      if (aw !== bw) return aw < bw ? 1 : -1;
+      return (b.game_score ?? 0) - (a.game_score ?? 0);
+    });
+
+    const playerMeta: Record<string, { slug: string | null; photo_path_bg_removed: string | null }> = {};
+    const playerIds = [...new Set(perfs.map((p) => p.player_id))];
+    if (playerIds.length > 0) {
+      const { data: metaRows, error: pErr } = await supabaseAdmin
+        .from("players")
+        .select("id, slug, photo_path_bg_removed")
+        .in("id", playerIds);
+      if (!pErr) {
+        for (const p of (metaRows || []) as { id: string; slug: string | null; photo_path_bg_removed: string | null }[]) {
+          playerMeta[p.id] = { slug: p.slug, photo_path_bg_removed: p.photo_path_bg_removed };
+        }
+      }
+    }
+
+    return { perfs, leagueNames, playerMeta };
+  }
+
+  app.get("/api/home/trending-performances", async (req: Request, res: Response) => {
+    const now = Date.now();
+    if (trendingCache && now - trendingCache.at < TRENDING_TTL_MS) {
+      return res.json(trendingCache.data);
+    }
+    // Deduplicate concurrent requests — only one in-flight fetch at a time.
+    if (!trendingInFlight) {
+      trendingInFlight = fetchTrendingPerformances().finally(() => {
+        trendingInFlight = null;
+      });
+    }
+    try {
+      const data = await trendingInFlight;
+      trendingCache = { data, at: Date.now() };
+      return res.json(data);
+    } catch (err: any) {
+      console.error("[TrendingPerf] fetch error", err.message);
+      if (trendingCache) return res.json(trendingCache.data);
+      return res.json({ perfs: [], leagueNames: {}, playerMeta: {} });
+    }
+  });
+
   app.get("/sitemap.xml", async (req: Request, res: Response) => {
     const now = Date.now();
     const forceRefresh = req.query.refresh === "1";
