@@ -19,6 +19,7 @@ import { withAlpha } from "@/lib/colorContrast";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
 import { PlayerPerformanceSplits } from "@/components/PlayerPerformanceSplits";
+import { InstagramFeedSection } from "@/components/InstagramFeedSection";
 
 // Only the columns actually consumed by this profile view, so we never
 // pull every column of the (wide) players table on a cold load.
@@ -131,7 +132,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
   const [playerStats, setPlayerStats] = useState<PlayerStat[]>([]);
   const [seasonAverages, setSeasonAverages] = useState<SeasonAverages | null>(null);
   const [playerRankings, setPlayerRankings] = useState<PlayerRankings | null>(null);
-  const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string; position?: string; number?: number; leagueId?: string; playerId?: string; photoPath?: string | null; sharePhotoPath?: string | null; photoFocusY?: number | null; previousTeams?: string[]; height?: string | null; heightCm?: number | null; dateOfBirth?: string | null } | null>(null);
+  const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string; position?: string; number?: number; leagueId?: string; playerId?: string; photoPath?: string | null; sharePhotoPath?: string | null; photoFocusY?: number | null; previousTeams?: string[]; height?: string | null; heightCm?: number | null; dateOfBirth?: string | null; instagramHandle?: string | null } | null>(null);
   const [playerLeagues, setPlayerLeagues] = useState<{ id: string; name: string; slug: string }[]>([]);
   const [playerMatches, setPlayerMatches] = useState<PlayerMatch[]>([]);
   const [nameVariations, setNameVariations] = useState<string[]>([]);
@@ -679,6 +680,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
           height: initialPlayer.height || null,
           heightCm: initialPlayer.height_cm || null,
           dateOfBirth: initialPlayer.date_of_birth || null,
+          instagramHandle: initialPlayer.instagram_handle || null,
         };
 
         const playerIds = matches.map(m => m.id);
@@ -1280,6 +1282,28 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
       cancelled = true;
     };
   }, [playerInfo?.team, playerInfo?.leagueId]);
+
+  // Secondary graceful fetch for instagram_handle — kept separate from the main
+  // profile query so that a missing column (pre-migration) fails silently here
+  // rather than breaking the entire player profile load.
+  useEffect(() => {
+    const playerId = playerInfo?.playerId;
+    if (!playerId) return;
+    let cancelled = false;
+    supabase
+      .from('players')
+      .select('instagram_handle')
+      .eq('id', playerId)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (cancelled || error || !data) return;
+        const handle = (data as any).instagram_handle as string | null | undefined;
+        if (handle) {
+          setPlayerInfo(prev => prev ? { ...prev, instagramHandle: handle } : null);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [playerInfo?.playerId]);
 
   // Separate photo for share/social graphics — uses photo_path (original/non-bg-removed).
   // Falls back to the bg-removed banner photo if no original is set so existing players
@@ -1952,6 +1976,10 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
               ))}
             </div>
           </div>
+        )}
+
+        {playerInfo?.instagramHandle && (
+          <InstagramFeedSection handle={playerInfo.instagramHandle} />
         )}
 
         <ShareableCard

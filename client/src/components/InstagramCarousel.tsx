@@ -1,3 +1,7 @@
+/**
+ * @deprecated Use InstagramFeedSection instead for new feature work.
+ * This component is kept for backwards compatibility with existing league page logic.
+ */
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Carousel,

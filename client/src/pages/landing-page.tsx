@@ -17,8 +17,11 @@ import LatestScoresSection from "@/components/home/LatestScoresSection"
 import LatestNewsSection from "@/components/home/LatestNewsSection"
 import TopPlayersSection from "@/components/home/TopPlayersSection"
 import TrendingPerformanceSection from "@/components/home/TrendingPerformanceSection"
+import { InstagramFeedSection } from "@/components/InstagramFeedSection"
 import { useGlobalSearch } from "@/hooks/useGlobalSearch"
 import { PlayerSearchAvatar } from "@/components/PlayerSearchAvatar"
+
+const PLATFORM_INSTAGRAM_HANDLE = "swishstats"
 
 function LeagueLogosCarousel() {
   const logos = [Ballpark, NBLBE, BCB, SLB]
@@ -288,6 +291,13 @@ export default function LandingPage() {
       {/* News & top players sections (scores ticker is rendered above the hero) */}
       <LatestNewsSection />
       <TopPlayersSection />
+
+      {/* Stay Connected — Instagram feed */}
+      <section className="py-6 md:py-8 bg-white dark:bg-neutral-950">
+        <div className="max-w-6xl mx-auto px-4 md:px-6">
+          <InstagramFeedSection handle={PLATFORM_INSTAGRAM_HANDLE} />
+        </div>
+      </section>
 
       {/* Newsletter Signup Section */}
       <section id="subscribe" className="py-20 bg-gradient-to-br from-orange-50 to-orange-100 dark:from-neutral-800 dark:to-neutral-900 relative overflow-hidden flex items-center">

@@ -19,6 +19,7 @@ import { TeamLogo } from "@/components/TeamLogo";
 import LeagueLeadersShareCard from "@/components/LeagueLeadersShareCard";
 import { TeamLogoUploader } from "@/components/TeamLogoUploader";
 import { InstagramCarousel } from "@/components/InstagramCarousel";
+import { InstagramFeedSection } from "@/components/InstagramFeedSection";
 import { ChevronRight, ChevronDown, Trophy, ArrowRight, Search, Users } from "lucide-react";
 import { useGlobalSearch, type SearchSuggestion } from "@/hooks/useGlobalSearch";
 import { PlayerSearchAvatar } from "@/components/PlayerSearchAvatar";
@@ -6094,7 +6095,7 @@ export default function LeaguePage() {
                   </div>
                 </div>
               ) : (
-                <InstagramCarousel urls={instagramUrls} />
+                <InstagramFeedSection urls={instagramUrls} brandColor={brandColorHex} title="" />
               )}
             </div>
 
