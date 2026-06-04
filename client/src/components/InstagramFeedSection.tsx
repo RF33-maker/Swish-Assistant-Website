@@ -156,22 +156,13 @@ export function InstagramFeedSection({
   const scrollPrev = useCallback(() => api?.scrollPrev(), [api]);
   const scrollNext = useCallback(() => api?.scrollNext(), [api]);
 
-  // When there are no post URLs, synthesise a single profile-embed card so the
-  // Carousel chrome (arrows, scroll behaviour) renders uniformly regardless of
-  // whether the viewer has posts or just a handle.
-  const cardUrls: string[] = hasPostUrls
-    ? postUrls
-    : [`https://www.instagram.com/${effectiveHandle}/`];
+  // Align timestamps with post URL positions.
+  const cardTimestamps: Array<string | null | undefined> = postUrls.map((url) => {
+    const idx = urls.indexOf(url);
+    return timestamps?.[idx] ?? null;
+  });
 
-  // Align timestamps with cardUrls (post-URL index ↔ original urls index).
-  const cardTimestamps: Array<string | null | undefined> = hasPostUrls
-    ? postUrls.map((url) => {
-        const idx = urls.indexOf(url);
-        return timestamps?.[idx] ?? null;
-      })
-    : [null];
-
-  const showArrows = cardUrls.length > 1;
+  const showArrows = postUrls.length > 1;
 
   return (
     <div className="w-full py-2">
@@ -231,47 +222,84 @@ export function InstagramFeedSection({
         </div>
       )}
 
-      {/* Card carousel — both multi-post and single-handle modes use the same
-          Carousel chrome so layout is consistent. Single-handle mode renders one
-          full-width card; multi-post mode renders narrow peek-style cards. */}
-      <div className="relative">
-        <Carousel setApi={setApi} opts={{ align: "start", loop: false }}>
-          <CarouselContent className="-ml-3">
-            {cardUrls.map((url, i) => (
-              <CarouselItem
-                key={i}
-                className={`pl-3 shrink-0 ${hasPostUrls ? "basis-[230px]" : "basis-full"}`}
-              >
-                <InstagramCard
-                  url={url}
-                  handle={effectiveHandle || undefined}
-                  timestamp={cardTimestamps[i]}
-                />
-              </CarouselItem>
-            ))}
-          </CarouselContent>
-        </Carousel>
+      {hasPostUrls ? (
+        /* Multi-post mode: horizontal scrollable carousel of iframe cards. */
+        <div className="relative">
+          <Carousel setApi={setApi} opts={{ align: "start", loop: false }}>
+            <CarouselContent className="-ml-3">
+              {postUrls.map((url, i) => (
+                <CarouselItem key={i} className="pl-3 shrink-0 basis-[230px]">
+                  <InstagramCard
+                    url={url}
+                    handle={effectiveHandle || undefined}
+                    timestamp={cardTimestamps[i]}
+                  />
+                </CarouselItem>
+              ))}
+            </CarouselContent>
+          </Carousel>
 
-        {/* Arrow navigation — only shown when there are multiple cards. */}
-        {showArrows && (
-          <>
-            <button
-              onClick={scrollPrev}
-              className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-3 z-10 h-8 w-8 rounded-full bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-600 shadow-md flex items-center justify-center hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors"
-              aria-label="Previous posts"
+          {showArrows && (
+            <>
+              <button
+                onClick={scrollPrev}
+                className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-3 z-10 h-8 w-8 rounded-full bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-600 shadow-md flex items-center justify-center hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors"
+                aria-label="Previous posts"
+              >
+                <ChevronLeft className="h-4 w-4 text-slate-700 dark:text-slate-200" />
+              </button>
+              <button
+                onClick={scrollNext}
+                className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 z-10 h-8 w-8 rounded-full bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-600 shadow-md flex items-center justify-center hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors"
+                aria-label="Next posts"
+              >
+                <ChevronRight className="h-4 w-4 text-slate-700 dark:text-slate-200" />
+              </button>
+            </>
+          )}
+        </div>
+      ) : (
+        /* Handle-only mode: Instagram profile iframes are blocked by X-Frame-Options,
+           so we show a rich CTA card that always renders and links out instead. */
+        hasHandle && (
+          <a
+            href={`https://www.instagram.com/${effectiveHandle}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex flex-col sm:flex-row items-center gap-5 rounded-xl border border-gray-100 dark:border-neutral-700 p-6 sm:p-8 hover:bg-gray-50 dark:hover:bg-neutral-800/50 transition-colors group"
+          >
+            {/* Large Instagram gradient icon */}
+            <div
+              className="h-20 w-20 sm:h-24 sm:w-24 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-lg group-hover:scale-105 transition-transform"
+              style={{
+                background:
+                  "linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)",
+              }}
             >
-              <ChevronLeft className="h-4 w-4 text-slate-700 dark:text-slate-200" />
-            </button>
-            <button
-              onClick={scrollNext}
-              className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 z-10 h-8 w-8 rounded-full bg-white dark:bg-neutral-800 border border-gray-200 dark:border-neutral-600 shadow-md flex items-center justify-center hover:bg-gray-50 dark:hover:bg-neutral-700 transition-colors"
-              aria-label="Next posts"
+              <Instagram className="h-10 w-10 sm:h-12 sm:w-12 text-white" />
+            </div>
+
+            {/* Text block */}
+            <div className="text-center sm:text-left flex-1">
+              <p className="font-bold text-slate-800 dark:text-white text-lg">
+                @{effectiveHandle}
+              </p>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                Follow us on Instagram for highlights, scores &amp; behind-the-scenes content.
+              </p>
+            </div>
+
+            {/* CTA button */}
+            <span
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-bold text-white flex-shrink-0 transition-opacity group-hover:opacity-90"
+              style={{ backgroundColor: accentColor }}
             >
-              <ChevronRight className="h-4 w-4 text-slate-700 dark:text-slate-200" />
-            </button>
-          </>
-        )}
-      </div>
+              <Instagram className="h-4 w-4" />
+              Follow on Instagram
+            </span>
+          </a>
+        )
+      )}
     </div>
   );
 }
