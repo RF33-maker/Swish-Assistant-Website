@@ -545,6 +545,7 @@ export default function LeaguePage() {
     const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [instagramUrls, setInstagramUrls] = useState<string[]>([]);
   const [newInstagramUrl, setNewInstagramUrl] = useState("");
@@ -1930,6 +1931,42 @@ export default function LeaguePage() {
     const handleCloseGameModal = () => {
       setIsGameModalOpen(false);
       setSelectedGameId(null);
+    };
+
+    const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file || !league?.league_id || !currentUser) return;
+
+      setUploadingLogo(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) { alert('Not authenticated'); return; }
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('leagueId', league.league_id);
+
+        const response = await fetch('/api/league-logos/upload', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${session.access_token}` },
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const result = await response.json();
+          throw new Error(result.error || 'Logo upload failed');
+        }
+
+        const result = await response.json();
+        setLeague({ ...league, logo_url: result.publicUrl });
+        alert('Logo updated successfully!');
+      } catch (error) {
+        console.error('Logo upload error:', error);
+        alert(`Failed to upload logo: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      } finally {
+        setUploadingLogo(false);
+        event.target.value = '';
+      }
     };
 
     const handleBannerUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -3506,6 +3543,36 @@ export default function LeaguePage() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                       </svg>
                       Change Banner
+                    </>
+                  )}
+                </label>
+
+                {/* Logo upload */}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleLogoUpload}
+                  className="hidden"
+                  id="logo-upload"
+                  disabled={uploadingLogo}
+                />
+                <label
+                  htmlFor="logo-upload"
+                  className={`inline-flex items-center gap-2 px-4 py-2 bg-white/90 hover:bg-white text-slate-700 text-sm font-medium rounded-lg cursor-pointer transition-colors ${
+                    uploadingLogo ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                >
+                  {uploadingLogo ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      Change Logo
                     </>
                   )}
                 </label>

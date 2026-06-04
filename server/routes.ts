@@ -430,6 +430,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/league-logos/upload", upload.single('file'), async (req, res) => {
+    try {
+      const userId = await authenticateSupabaseUser(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const file = req.file;
+      const { leagueId } = req.body;
+
+      if (!file || !leagueId) {
+        return res.status(400).json({ error: "Missing required fields: file and leagueId" });
+      }
+
+      const isOwner = await verifyLeagueOwnership(userId, leagueId);
+      if (!isOwner) {
+        return res.status(403).json({ error: "Only league owners can upload logos" });
+      }
+
+      const fileExt = file.originalname.split('.').pop();
+      const fileName = `${leagueId}_${Date.now()}.${fileExt}`;
+
+      const { data, error } = await supabaseAdmin.storage
+        .from('league-banners')
+        .upload(`logos/${fileName}`, file.buffer, {
+          upsert: true,
+          contentType: file.mimetype,
+        });
+
+      if (error) {
+        console.error("Logo storage upload error:", error);
+        return res.status(500).json({ error: error.message });
+      }
+
+      const { data: { publicUrl } } = supabaseAdmin.storage
+        .from('league-banners')
+        .getPublicUrl(`logos/${fileName}`);
+
+      const { error: updateError } = await supabaseAdmin
+        .from('leagues')
+        .update({ logo_url: publicUrl })
+        .eq('league_id', leagueId);
+
+      if (updateError) {
+        console.error("Error updating league logo_url:", updateError);
+        return res.status(500).json({ error: updateError.message });
+      }
+
+      res.json({ success: true, publicUrl });
+    } catch (error) {
+      console.error("Logo upload error:", error);
+      res.status(500).json({ error: "Logo upload failed" });
+    }
+  });
+
   app.post("/api/league-banners/upload", upload.single('file'), async (req, res) => {
     try {
       const userId = await authenticateSupabaseUser(req);
