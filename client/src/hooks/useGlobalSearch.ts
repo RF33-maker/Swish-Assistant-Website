@@ -3,13 +3,14 @@ import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 
 export type SearchSuggestion =
-  | { type: "league"; name: string; slug: string }
+  | { type: "league"; name: string; slug: string; logo_url: string | null }
   | { type: "team"; name: string; league_id: string; league_name: string; league_slug: string }
   | { type: "player"; name: string; team: string; player_id: string | number; player_slug: string | null; photo_url: string | null };
 
 interface LeagueRow {
   name: string;
   slug: string;
+  logo_url: string | null;
 }
 
 interface LeagueRef {
@@ -78,7 +79,7 @@ export function useGlobalSearch() {
       const [leaguesResponse, teamsResponse] = await Promise.all([
         supabase
           .from("leagues")
-          .select("name, slug")
+          .select("name, slug, logo_url")
           .or(`name.ilike.%${query}%`)
           .eq("is_public", true),
         supabase
@@ -182,6 +183,7 @@ export function useGlobalSearch() {
           type: "league",
           name: league.name,
           slug: league.slug,
+          logo_url: league.logo_url ?? null,
         })
       );
 

@@ -119,9 +119,15 @@ export default function LandingPage() {
                   >
                     <div className="flex items-center gap-3">
                       {item.type === 'league' ? (
-                        <div className="h-8 w-8 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center flex-shrink-0">
-                          <Trophy className="h-4 w-4 text-white" />
-                        </div>
+                        item.logo_url ? (
+                          <div className="h-8 w-8 rounded-full bg-white dark:bg-neutral-800 border border-orange-200 dark:border-neutral-600 flex items-center justify-center overflow-hidden flex-shrink-0">
+                            <img src={item.logo_url} alt={item.name} className="h-7 w-7 object-contain" />
+                          </div>
+                        ) : (
+                          <div className="h-8 w-8 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center flex-shrink-0">
+                            <Trophy className="h-4 w-4 text-white" />
+                          </div>
+                        )
                       ) : item.type === 'team' ? (
                         <div className="h-8 w-8 rounded-full bg-white dark:bg-neutral-800 border border-orange-200 dark:border-neutral-600 flex items-center justify-center overflow-hidden flex-shrink-0">
                           <TeamLogo teamName={item.name} leagueId={item.league_id} size="sm" />
