@@ -20,7 +20,7 @@ import LeagueLeadersShareCard from "@/components/LeagueLeadersShareCard";
 import { TeamLogoUploader } from "@/components/TeamLogoUploader";
 import { InstagramCarousel } from "@/components/InstagramCarousel";
 import { InstagramFeedSection } from "@/components/InstagramFeedSection";
-import { ChevronRight, ChevronDown, Trophy, ArrowRight, Search, Users } from "lucide-react";
+import { ChevronRight, ChevronDown, Trophy, ArrowRight, Search, Users, Instagram } from "lucide-react";
 import { useGlobalSearch, type SearchSuggestion } from "@/hooks/useGlobalSearch";
 import { PlayerSearchAvatar } from "@/components/PlayerSearchAvatar";
 import { Link } from "wouter";
@@ -3465,10 +3465,17 @@ export default function LeaguePage() {
               <h2 className="text-3xl sm:text-4xl font-bold text-white drop-shadow-md">
                 {displayLeagueName || "League Name"}
               </h2>
-              <p className="text-sm text-white/90 mt-1">
-            
-              </p>
-
+              {(league as any)?.instagram_handle && (
+                <a
+                  href={`https://www.instagram.com/${(league as any).instagram_handle}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 self-start inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold text-white bg-white/20 hover:bg-white/30 border border-white/30 transition-colors"
+                >
+                  <Instagram className="h-3 w-3" />
+                  @{(league as any).instagram_handle}
+                </a>
+              )}
             </div>
             
             {/* Banner Upload Button for League Owner */}

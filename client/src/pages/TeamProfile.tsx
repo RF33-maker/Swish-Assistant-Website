@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import ShotChart, { type ShotData } from "@/components/ShotChart";
+import { Instagram } from "lucide-react";
 
 interface League {
   league_id: string;
@@ -292,6 +293,7 @@ export default function TeamProfile() {
   const [search, setSearch] = useState("");
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [teamDescription, setTeamDescription] = useState<string | null>(null);
+  const [teamInstagramUrl, setTeamInstagramUrl] = useState<string | null>(null);
   const [isOwner, setIsOwner] = useState(false);
   const { user } = useAuth();
   const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
@@ -540,7 +542,7 @@ export default function TeamProfile() {
         // Build teams query with optional league filter
         let teamsQuery = supabase
           .from("teams")
-          .select("description, league_id")
+          .select("description, league_id, instagram_url")
           .eq("name", normalizedTeamName);
         
         if (leagueId) {
@@ -577,6 +579,9 @@ export default function TeamProfile() {
         
         if (teamData?.description) {
           setTeamDescription(teamData.description);
+        }
+        if (teamData?.instagram_url) {
+          setTeamInstagramUrl(teamData.instagram_url);
         }
 
         if (!scheduleError && upcomingGamesData) {
@@ -1091,13 +1096,24 @@ export default function TeamProfile() {
               <div className="text-base md:text-lg opacity-90">
                 Average Team Score: <span className="font-bold">{team.avgTeamPoints} PPG</span>
               </div>
-              {team.league && (
-                <div className="mt-3">
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {team.league && (
                   <span className="bg-white/20 px-3 py-1 rounded-full text-xs md:text-sm">
                     {team.league.name}
                   </span>
-                </div>
-              )}
+                )}
+                {teamInstagramUrl && (
+                  <a
+                    href={teamInstagramUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold text-white bg-white/20 hover:bg-white/30 border border-white/30 transition-colors"
+                  >
+                    <Instagram className="h-3 w-3" />
+                    Instagram
+                  </a>
+                )}
+              </div>
             </div>
           </div>
         </div>

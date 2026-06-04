@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Trophy, Filter } from "lucide-react";
+import { ArrowLeft, Trophy, Filter, Instagram } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { generatePlayerAnalysis, type PlayerAnalysisData } from "@/lib/ai-analysis";
@@ -19,7 +19,6 @@ import { withAlpha } from "@/lib/colorContrast";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
 import { PlayerPerformanceSplits } from "@/components/PlayerPerformanceSplits";
-import { InstagramFeedSection } from "@/components/InstagramFeedSection";
 
 // Only the columns actually consumed by this profile view, so we never
 // pull every column of the (wide) players table on a cold load.
@@ -132,7 +131,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
   const [playerStats, setPlayerStats] = useState<PlayerStat[]>([]);
   const [seasonAverages, setSeasonAverages] = useState<SeasonAverages | null>(null);
   const [playerRankings, setPlayerRankings] = useState<PlayerRankings | null>(null);
-  const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string; position?: string; number?: number; leagueId?: string; playerId?: string; photoPath?: string | null; sharePhotoPath?: string | null; photoFocusY?: number | null; previousTeams?: string[]; height?: string | null; heightCm?: number | null; dateOfBirth?: string | null; instagramHandle?: string | null } | null>(null);
+  const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string; position?: string; number?: number; leagueId?: string; playerId?: string; photoPath?: string | null; sharePhotoPath?: string | null; photoFocusY?: number | null; previousTeams?: string[]; height?: string | null; heightCm?: number | null; dateOfBirth?: string | null; instagramUrl?: string | null } | null>(null);
   const [playerLeagues, setPlayerLeagues] = useState<{ id: string; name: string; slug: string }[]>([]);
   const [playerMatches, setPlayerMatches] = useState<PlayerMatch[]>([]);
   const [nameVariations, setNameVariations] = useState<string[]>([]);
@@ -1283,7 +1282,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
     };
   }, [playerInfo?.team, playerInfo?.leagueId]);
 
-  // Secondary graceful fetch for instagram_handle — kept separate from the main
+  // Secondary graceful fetch for instagram_url — kept separate from the main
   // profile query so that a missing column (pre-migration) fails silently here
   // rather than breaking the entire player profile load.
   useEffect(() => {
@@ -1292,14 +1291,14 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
     let cancelled = false;
     supabase
       .from('players')
-      .select('instagram_handle')
+      .select('instagram_url')
       .eq('id', playerId)
       .maybeSingle()
       .then(({ data, error }) => {
         if (cancelled || error || !data) return;
-        const handle = (data as any).instagram_handle as string | null | undefined;
-        if (handle) {
-          setPlayerInfo(prev => prev ? { ...prev, instagramHandle: handle } : null);
+        const url = (data as any).instagram_url as string | null | undefined;
+        if (url) {
+          setPlayerInfo(prev => prev ? { ...prev, instagramUrl: url } : null);
         }
       });
     return () => { cancelled = true; };
@@ -1978,8 +1977,19 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
           </div>
         )}
 
-        {playerInfo?.instagramHandle && (
-          <InstagramFeedSection handle={playerInfo.instagramHandle} />
+        {playerInfo?.instagramUrl && (
+          <div className="mb-4">
+            <a
+              href={playerInfo.instagramUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-white hover:opacity-80 transition-opacity"
+              style={{ background: "linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)" }}
+            >
+              <Instagram className="h-4 w-4" />
+              Follow on Instagram
+            </a>
+          </div>
         )}
 
         <ShareableCard
