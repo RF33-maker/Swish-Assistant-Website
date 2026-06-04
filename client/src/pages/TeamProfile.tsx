@@ -542,7 +542,7 @@ export default function TeamProfile() {
         // Build teams query with optional league filter
         let teamsQuery = supabase
           .from("teams")
-          .select("description, league_id, instagram_url")
+          .select("description, league_id, social_instagram")
           .eq("name", normalizedTeamName);
         
         if (leagueId) {
@@ -580,8 +580,8 @@ export default function TeamProfile() {
         if (teamData?.description) {
           setTeamDescription(teamData.description);
         }
-        if (teamData?.instagram_url) {
-          setTeamInstagramUrl(teamData.instagram_url);
+        if (teamData?.social_instagram) {
+          setTeamInstagramUrl(teamData.social_instagram);
         }
 
         if (!scheduleError && upcomingGamesData) {

@@ -1291,12 +1291,12 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
     let cancelled = false;
     supabase
       .from('players')
-      .select('instagram_url')
+      .select('social_instagram')
       .eq('id', playerId)
       .maybeSingle()
       .then(({ data, error }) => {
         if (cancelled || error || !data) return;
-        const url = (data as any).instagram_url as string | null | undefined;
+        const url = (data as any).social_instagram as string | null | undefined;
         if (url) {
           setPlayerInfo(prev => prev ? { ...prev, instagramUrl: url } : null);
         }
