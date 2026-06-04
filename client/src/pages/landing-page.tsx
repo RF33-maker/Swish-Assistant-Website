@@ -21,7 +21,7 @@ import { InstagramFeedSection } from "@/components/InstagramFeedSection"
 import { useGlobalSearch } from "@/hooks/useGlobalSearch"
 import { PlayerSearchAvatar } from "@/components/PlayerSearchAvatar"
 
-const PLATFORM_INSTAGRAM_HANDLE = "swishstats"
+const PLATFORM_INSTAGRAM_HANDLE = "swishassistant"
 
 function LeagueLogosCarousel() {
   const logos = [Ballpark, NBLBE, BCB, SLB]
