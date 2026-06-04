@@ -1945,8 +1945,9 @@ export default function LeaguePage() {
         const formData = new FormData();
         formData.append('file', file);
         formData.append('leagueId', league.league_id);
+        formData.append('type', 'logo');
 
-        const response = await fetch('/api/league-logos/upload', {
+        const response = await fetch('/api/league-banners/upload', {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${session.access_token}` },
           body: formData,

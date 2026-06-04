@@ -493,7 +493,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const file = req.file;
-      const { leagueId } = req.body;
+      const { leagueId, type } = req.body;
+      const isLogo = type === 'logo';
 
       if (!file || !leagueId) {
         return res.status(400).json({ error: "Missing required fields: file and leagueId" });
@@ -501,13 +502,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const isOwner = await verifyLeagueOwnership(userId, leagueId);
       if (!isOwner) {
-        return res.status(403).json({ error: "Only league owners can upload banners" });
+        return res.status(403).json({ error: "Only league owners can upload assets" });
       }
 
       const fileExt = file.originalname.split('.').pop();
-      const fileName = `${leagueId}_${Date.now()}.${fileExt}`;
+      const fileName = isLogo
+        ? `logos/${leagueId}_${Date.now()}.${fileExt}`
+        : `${leagueId}_${Date.now()}.${fileExt}`;
 
-      const { data, error } = await supabaseAdmin.storage
+      const { error } = await supabaseAdmin.storage
         .from('league-banners')
         .upload(fileName, file.buffer, {
           upsert: true,
@@ -515,7 +518,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
 
       if (error) {
-        console.error("Banner storage upload error:", error);
+        console.error("Asset storage upload error:", error);
         return res.status(500).json({ error: error.message });
       }
 
@@ -523,20 +526,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from('league-banners')
         .getPublicUrl(fileName);
 
+      const updateField = isLogo ? { logo_url: publicUrl } : { banner_url: publicUrl };
+
       const { error: updateError } = await supabaseAdmin
         .from('leagues')
-        .update({ banner_url: publicUrl })
+        .update(updateField)
         .eq('league_id', leagueId);
 
       if (updateError) {
-        console.error("Error updating league banner_url:", updateError);
+        console.error("Error updating league asset:", updateError);
         return res.status(500).json({ error: updateError.message });
       }
 
       res.json({ success: true, publicUrl });
     } catch (error) {
-      console.error("Banner upload error:", error);
-      res.status(500).json({ error: "Banner upload failed" });
+      console.error("Asset upload error:", error);
+      res.status(500).json({ error: "Upload failed" });
     }
   });
 
