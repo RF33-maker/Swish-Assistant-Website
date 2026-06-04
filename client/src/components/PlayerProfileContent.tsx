@@ -31,7 +31,7 @@ import { PlayerPerformanceSplits } from "@/components/PlayerPerformanceSplits";
 // `team_name`, `shirtNumber`, and `height_cm` when alias fields are
 // absent.
 const PLAYER_PROFILE_COLUMNS =
-  "id, slug, full_name, team_name, position, shirtNumber, league_id, photo_path_bg_removed, photo_path, photo_focus_y, height_cm, date_of_birth";
+  "id, slug, full_name, team_name, position, shirtNumber, league_id, photo_path_bg_removed, photo_path, photo_focus_y, height_cm, date_of_birth, current_team, previous_teams, instagram_handle";
 
 interface PlayerStat {
   id: string;
@@ -131,7 +131,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
   const [playerStats, setPlayerStats] = useState<PlayerStat[]>([]);
   const [seasonAverages, setSeasonAverages] = useState<SeasonAverages | null>(null);
   const [playerRankings, setPlayerRankings] = useState<PlayerRankings | null>(null);
-  const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string; position?: string; number?: number; leagueId?: string; playerId?: string; photoPath?: string | null; sharePhotoPath?: string | null; photoFocusY?: number | null; previousTeams?: string[]; height?: string | null; heightCm?: number | null; dateOfBirth?: string | null; instagramUrl?: string | null } | null>(null);
+  const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string; position?: string; number?: number; leagueId?: string; playerId?: string; photoPath?: string | null; sharePhotoPath?: string | null; photoFocusY?: number | null; previousTeams?: string[]; height?: string | null; heightCm?: number | null; dateOfBirth?: string | null; instagramUrl?: string | null; instagramHandle?: string | null; dbCurrentTeam?: string | null; dbPreviousTeams?: string[] | null } | null>(null);
   const [playerLeagues, setPlayerLeagues] = useState<{ id: string; name: string; slug: string }[]>([]);
   const [playerMatches, setPlayerMatches] = useState<PlayerMatch[]>([]);
   const [nameVariations, setNameVariations] = useState<string[]>([]);
@@ -680,6 +680,10 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
           heightCm: initialPlayer.height_cm || null,
           dateOfBirth: initialPlayer.date_of_birth || null,
           instagramHandle: initialPlayer.instagram_handle || null,
+          dbCurrentTeam: initialPlayer.current_team || null,
+          dbPreviousTeams: (initialPlayer.previous_teams && initialPlayer.previous_teams.length > 0)
+            ? initialPlayer.previous_teams
+            : null,
         };
 
         const playerIds = matches.map(m => m.id);
@@ -1511,6 +1515,36 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
             fileInputRef={fileInputRef}
             isAuthenticated={!!user}
           />
+        </div>
+      )}
+
+      {playerInfo && (playerInfo.instagramHandle || playerInfo.dbCurrentTeam || (playerInfo.dbPreviousTeams && playerInfo.dbPreviousTeams.length > 0)) && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-1 py-2 mt-1">
+          {playerInfo.dbCurrentTeam && (
+            <span className="inline-flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300">
+              <span className="font-semibold text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wide">Current Team</span>
+              <span className="font-medium">{playerInfo.dbCurrentTeam}</span>
+            </span>
+          )}
+          {playerInfo.dbPreviousTeams && playerInfo.dbPreviousTeams.length > 0 && (
+            <span className="inline-flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300">
+              <span className="font-semibold text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wide">Also played for</span>
+              <span>{playerInfo.dbPreviousTeams.join(", ")}</span>
+            </span>
+          )}
+          {playerInfo.instagramHandle && (
+            <a
+              href={`https://www.instagram.com/${playerInfo.instagramHandle.replace(/^@/, "")}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-pink-600 dark:text-pink-400 hover:text-pink-700 dark:hover:text-pink-300 transition-colors"
+            >
+              <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current" aria-hidden="true">
+                <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/>
+              </svg>
+              @{playerInfo.instagramHandle.replace(/^@/, "")}
+            </a>
+          )}
         </div>
       )}
 

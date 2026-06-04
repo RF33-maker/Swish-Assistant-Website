@@ -37,6 +37,7 @@ import { ProtectedRoute } from "./lib/protected-route";
 import ResetPassword from "./pages/reset-password";
 import SettingsPage from "@/pages/settings-page";
 import ProfilePage from "./pages/profile-page";
+import ImportPlayersPage from "@/pages/admin/import-players";
 import TestConnections from "./components/test-connections";
 import PaymentPage from "@/pages/payment";
 import ContactSalesPage from "@/pages/contact-sales";
@@ -88,7 +89,7 @@ function Router() {
       <ProtectedRoute path="/social-tools" component={SocialToolsPage} />
       <ProtectedRoute path="/api-widgets" component={WidgetBuilder} />
       <ProtectedRoute path="/news-manager" component={NewsManager} />
-
+      <ProtectedRoute path="/admin/import-players" component={ImportPlayersPage} />
 
       {/* Fallback */}
       <Route component={NotFound} />

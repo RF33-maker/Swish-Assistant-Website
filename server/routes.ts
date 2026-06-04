@@ -10,6 +10,64 @@ import * as path from 'path';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+function generatePlayerSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function parseCSV(text: string): Record<string, string>[] {
+  const lines = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+  const nonEmpty = lines.filter((l) => l.trim().length > 0);
+  if (nonEmpty.length < 2) return [];
+
+  const parseRow = (line: string): string[] => {
+    const fields: string[] = [];
+    let i = 0;
+    while (i < line.length) {
+      if (line[i] === '"') {
+        let field = "";
+        i++;
+        while (i < line.length) {
+          if (line[i] === '"' && line[i + 1] === '"') {
+            field += '"';
+            i += 2;
+          } else if (line[i] === '"') {
+            i++;
+            break;
+          } else {
+            field += line[i++];
+          }
+        }
+        fields.push(field);
+        if (line[i] === ",") i++;
+      } else {
+        let field = "";
+        while (i < line.length && line[i] !== ",") field += line[i++];
+        fields.push(field.trim());
+        if (line[i] === ",") i++;
+      }
+    }
+    return fields;
+  };
+
+  const headers = parseRow(nonEmpty[0]).map((h) => h.trim().toLowerCase());
+  const rows: Record<string, string>[] = [];
+  for (let r = 1; r < nonEmpty.length; r++) {
+    const values = parseRow(nonEmpty[r]);
+    const row: Record<string, string> = {};
+    headers.forEach((h, idx) => {
+      row[h] = values[idx] ?? "";
+    });
+    rows.push(row);
+  }
+  return rows;
+}
+
 const upload = multer({ storage: multer.memoryStorage() });
 
 async function authenticateSupabaseUser(req: Request): Promise<string | null> {
@@ -1755,6 +1813,132 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("[TrendingPerf] fetch error", err.message);
       if (trendingCache) return res.json(trendingCache.data);
       return res.json({ perfs: [], leagueNames: {}, playerMeta: {} });
+    }
+  });
+
+  // ─── Player CSV import endpoint ─────────────────────────────────────────────
+  app.post("/api/admin/import-players", upload.single("file"), async (req: Request, res: Response) => {
+    try {
+      const userId = await authenticateSupabaseUser(req);
+      if (!userId) return res.status(401).json({ error: "Authentication required" });
+
+      // Verify the caller has the admin role in their Supabase app_metadata.
+      const { data: adminUserData, error: adminUserError } = await supabaseAdmin.auth.admin.getUserById(userId);
+      if (adminUserError || !adminUserData?.user) {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+      if (adminUserData.user.app_metadata?.role !== "admin") {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+
+      const file = req.file;
+      if (!file) return res.status(400).json({ error: "No CSV file uploaded" });
+
+      const csvText = file.buffer.toString("utf-8");
+      const rows = parseCSV(csvText);
+
+      if (rows.length === 0) return res.status(400).json({ error: "CSV is empty or has no data rows" });
+
+      const { data: existingPlayers, error: playersError } = await supabaseAdmin
+        .from("players")
+        .select("id, full_name, slug");
+
+      if (playersError || !existingPlayers) {
+        return res.status(500).json({ error: "Failed to fetch existing players" });
+      }
+
+      const normalize = (s: string) =>
+        s.toLowerCase().replace(/\s+/g, " ").trim();
+
+      const playerByName = new Map<string, { id: string; slug: string }>();
+      for (const p of existingPlayers) {
+        if (p.full_name) playerByName.set(normalize(p.full_name), { id: p.id, slug: p.slug });
+      }
+
+      const existingSlugs = new Set(existingPlayers.map((p: any) => p.slug).filter(Boolean));
+
+      let updated = 0;
+      let created = 0;
+      let skipped = 0;
+      const errors: string[] = [];
+
+      for (const row of rows) {
+        const rawName = (row["full_name"] || "").trim();
+        if (!rawName) { skipped++; continue; }
+
+        const previousTeamsRaw = (row["previous_teams"] || "").trim();
+        const previousTeams = previousTeamsRaw
+          ? previousTeamsRaw.split(";").map((t: string) => t.trim()).filter(Boolean)
+          : null;
+
+        // Enrichment fields — the only fields updated on existing matched players.
+        const enrichmentOnly: Record<string, any> = {};
+        if (row["current_team"] !== undefined && row["current_team"] !== "")
+          enrichmentOnly.current_team = row["current_team"].trim();
+        if (previousTeams !== null && previousTeams.length > 0)
+          enrichmentOnly.previous_teams = previousTeams;
+        if (row["instagram_handle"] !== undefined && row["instagram_handle"] !== "")
+          enrichmentOnly.instagram_handle = row["instagram_handle"].replace(/^@/, "").trim();
+
+        // Additional fields allowed only for new inserts (do not overwrite stats-sourced data).
+        const insertExtras: Record<string, any> = {};
+        if (row["position"] !== undefined && row["position"] !== "")
+          insertExtras.position = row["position"].trim();
+        if (row["height_cm"] !== undefined && row["height_cm"] !== "") {
+          const h = parseFloat(row["height_cm"]);
+          if (!isNaN(h)) insertExtras.height_cm = h;
+        }
+        if (row["date_of_birth"] !== undefined && row["date_of_birth"] !== "")
+          insertExtras.date_of_birth = row["date_of_birth"].trim();
+
+        const normName = normalize(rawName);
+        const existing = playerByName.get(normName);
+
+        if (existing) {
+          if (Object.keys(enrichmentOnly).length === 0) { skipped++; continue; }
+          const { error: updateError } = await supabaseAdmin
+            .from("players")
+            .update(enrichmentOnly)
+            .eq("id", existing.id);
+
+          if (updateError) {
+            errors.push(`Row "${rawName}": ${updateError.message}`);
+          } else {
+            updated++;
+          }
+        } else {
+          const baseSlug = generatePlayerSlug(rawName);
+          let slug = baseSlug;
+          let counter = 1;
+          while (existingSlugs.has(slug)) {
+            slug = `${baseSlug}-${counter++}`;
+          }
+          existingSlugs.add(slug);
+
+          const newRow: Record<string, any> = {
+            full_name: rawName,
+            slug,
+            ...enrichmentOnly,
+            ...insertExtras,
+          };
+
+          const { error: insertError } = await supabaseAdmin
+            .from("players")
+            .insert(newRow);
+
+          if (insertError) {
+            errors.push(`Row "${rawName}" (new): ${insertError.message}`);
+          } else {
+            created++;
+            playerByName.set(normName, { id: "", slug });
+          }
+        }
+      }
+
+      return res.json({ updated, created, skipped, errors });
+    } catch (err: any) {
+      console.error("[import-players] error:", err.message);
+      return res.status(500).json({ error: err.message || "Internal server error" });
     }
   });
 
