@@ -5989,9 +5989,8 @@ export default function LeaguePage() {
             {activeSection === 'overview' && (<>
             {/* Instagram Embed */}
             <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4">
-              <div className="flex justify-between items-center mb-3">
-                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Instagram Feed</h3>
-                {isOwner && (
+              {isOwner && (
+                <div className="flex justify-end mb-1">
                   <button
                     onClick={() => setIsEditingInstagram(!isEditingInstagram)}
                     className="text-xs font-medium"
@@ -6000,8 +5999,8 @@ export default function LeaguePage() {
                   >
                     {isEditingInstagram ? 'Cancel' : 'Edit'}
                   </button>
-                )}
-              </div>
+                </div>
+              )}
 
               {isEditingInstagram && isOwner ? (
                 <div className="space-y-3">
@@ -6095,7 +6094,11 @@ export default function LeaguePage() {
                   </div>
                 </div>
               ) : (
-                <InstagramFeedSection urls={instagramUrls} brandColor={brandColorHex} title="" />
+                <InstagramFeedSection
+                  urls={instagramUrls}
+                  handle={(league as any)?.instagram_handle || undefined}
+                  brandColor={brandColorHex}
+                />
               )}
             </div>
 
