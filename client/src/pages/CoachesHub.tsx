@@ -697,7 +697,7 @@ export default function CoachesHub() {
                     </Link>
                     {selectedLeague && (
                       <Link 
-                        href={`/league/${selectedLeague.slug}`}
+                        href={`/competition/${selectedLeague.slug}`}
                         className="flex items-center gap-2 text-sm text-orange-600 hover:text-orange-700 transition"
                       >
                         <Eye className="w-4 h-4" />

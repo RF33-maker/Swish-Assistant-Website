@@ -159,7 +159,7 @@ export default function TeamsList() {
         {filteredTeams.length > 0 ? (
           <div className="bg-white rounded-lg border border-gray-200 divide-y divide-gray-200">
             {filteredTeams.map((team) => (
-              <Link key={`${team.name}-${team.league_id}`} to={team.league_slug ? `/league/${team.league_slug}/team/${encodeURIComponent(team.name)}` : `/team/${encodeURIComponent(team.name)}`}>
+              <Link key={`${team.name}-${team.league_id}`} to={team.league_slug ? `/competition/${team.league_slug}/team/${encodeURIComponent(team.name)}` : `/team/${encodeURIComponent(team.name)}`}>
                 <div className="p-4 hover:bg-gray-50 transition-colors flex items-center justify-between group">
                   <div className="flex items-center gap-4">
                     <TeamLogo teamName={team.name} leagueId={team.league_id} size="md" />

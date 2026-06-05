@@ -603,25 +603,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/competition/:competitionId/seasons", async (req: Request, res: Response) => {
+  app.get("/api/league/:leagueId/competitions", async (req: Request, res: Response) => {
     try {
-      const { competitionId } = req.params;
-      if (!competitionId) return res.status(400).json({ error: "competitionId is required" });
+      const { leagueId } = req.params;
+      if (!leagueId) return res.status(400).json({ error: "leagueId is required" });
 
       const { data, error } = await supabaseAdmin
-        .from("leagues")
+        .from("competitions")
         .select("name, slug, season")
-        .eq("competition_id", competitionId)
+        .eq("competition_id", leagueId)
         .order("season", { ascending: false });
 
       if (error) {
-        console.error("competition seasons error:", error);
-        return res.status(500).json({ error: "Failed to fetch seasons" });
+        console.error("league competitions error:", error);
+        return res.status(500).json({ error: "Failed to fetch competitions" });
       }
 
       res.json(data || []);
     } catch (err: any) {
-      console.error("Error fetching competition seasons:", err.message);
+      console.error("Error fetching league competitions:", err.message);
       res.status(500).json({ error: "Internal server error" });
     }
   });
@@ -635,7 +635,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // is_public=false yet still have a public-facing page. Branding data
       // (name, colors, logo) is low-sensitivity so we expose it regardless.
       const { data, error } = await supabaseAdmin
-        .from("leagues")
+        .from("competitions")
         .select("league_id, name, slug, brand_primary_colour, banner_url, logo_url")
         .eq("slug", slug)
         .single();
@@ -664,7 +664,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // No is_public filter — same reasoning as the slug variant above.
       const { data, error } = await supabaseAdmin
-        .from("leagues")
+        .from("competitions")
         .select("league_id, name, slug, brand_primary_colour, banner_url, logo_url")
         .eq("league_id", leagueId)
         .single();
@@ -700,7 +700,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!parentId) return res.status(400).json({ error: "parentId is required" });
 
       const { data, error } = await supabaseAdmin
-        .from("leagues")
+        .from("competitions")
         .select("league_id, name, slug, logo_url, age_group, stop")
         .eq("parent_league_id", parentId);
 
@@ -813,7 +813,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   async function filterLeagueIdsForPublicScope(ids: string[]): Promise<string[]> {
     if (ids.length === 0) return [];
     const { data, error } = await supabaseAdmin
-      .from("leagues")
+      .from("competitions")
       .select("league_id, is_public, parent_league_id")
       .in("league_id", ids);
     if (error || !data) {
@@ -834,7 +834,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const publicParents = new Set<string>();
     if (parentIdsToCheck.size > 0) {
       const { data: parents, error: parentErr } = await supabaseAdmin
-        .from("leagues")
+        .from("competitions")
         .select("league_id, is_public")
         .in("league_id", Array.from(parentIdsToCheck));
       if (parentErr) {
@@ -895,14 +895,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // child of that parent OR is the parent itself. This bypasses the
         // is_public gate for parent leagues that have is_public=false (e.g. REBA SL).
         const { data: childRows } = await supabaseAdmin
-          .from("leagues")
+          .from("competitions")
           .select("league_id")
           .in("league_id", ids)
           .eq("parent_league_id", parentLeagueId);
         const validatedIds = new Set((childRows || []).map((r: any) => r.league_id));
         // Allow the parent itself in case its own league_id is in the list.
         const { data: parentRow } = await supabaseAdmin
-          .from("leagues")
+          .from("competitions")
           .select("league_id")
           .eq("league_id", parentLeagueId)
           .single();
@@ -960,14 +960,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // This handles parent leagues that have is_public=false (e.g. REBA SL):
         // the children are allowed as long as they genuinely belong to this parent.
         const { data: childRows } = await supabaseAdmin
-          .from("leagues")
+          .from("competitions")
           .select("league_id")
           .in("league_id", leagueIds)
           .eq("parent_league_id", parentLeagueId);
         const validatedChildIds = new Set((childRows || []).map((r: any) => r.league_id));
         // Also allow the parent itself if it's in the list.
         const { data: parentRow } = await supabaseAdmin
-          .from("leagues")
+          .from("competitions")
           .select("league_id")
           .eq("league_id", parentLeagueId)
           .single();
@@ -1015,7 +1015,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const unique = Array.from(new Set(ids)).slice(0, 100);
       const { data, error } = await supabaseAdmin
-        .from("leagues")
+        .from("competitions")
         .select("league_id, name, parent_league_id, age_group, stop")
         .in("league_id", unique);
       if (error) {
@@ -1046,7 +1046,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // No is_public filter — private child leagues must still resolve branding
       // via their public parent so that player profiles display the right colour.
       const { data, error } = await supabaseAdmin
-        .from("leagues")
+        .from("competitions")
         .select("logo_url, parent_league_id, brand_primary_colour, is_public")
         .eq("league_id", leagueId)
         .single();
@@ -1066,7 +1066,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // No logo — try the parent league (private children inherit parent branding).
       if (data.parent_league_id) {
         const { data: parentData } = await supabaseAdmin
-          .from("leagues")
+          .from("competitions")
           .select("logo_url, brand_primary_colour")
           .eq("league_id", data.parent_league_id)
           .single();
@@ -1661,16 +1661,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Public leagues
     try {
       const { data: leagues } = await supabaseAdmin
-        .from("leagues")
+        .from("competitions")
         .select("slug, updated_at")
         .eq("is_public", true);
       for (const l of leagues || []) {
         const lastmod = l.updated_at
           ? new Date(l.updated_at).toISOString().split("T")[0]
           : today;
-        xml += sitemapUrl(`${SITE_BASE}/league/${xmlEscape(l.slug)}`, lastmod, "daily", "0.9");
-        xml += sitemapUrl(`${SITE_BASE}/league-leaders/${xmlEscape(l.slug)}`, lastmod, "daily", "0.8");
-        xml += sitemapUrl(`${SITE_BASE}/league/${xmlEscape(l.slug)}/teams`, lastmod, "weekly", "0.7");
+        xml += sitemapUrl(`${SITE_BASE}/competition/${xmlEscape(l.slug)}`, lastmod, "daily", "0.9");
+        xml += sitemapUrl(`${SITE_BASE}/competition-leaders/${xmlEscape(l.slug)}`, lastmod, "daily", "0.8");
+        xml += sitemapUrl(`${SITE_BASE}/competition/${xmlEscape(l.slug)}/teams`, lastmod, "weekly", "0.7");
       }
     } catch (err: any) {
       console.error("Sitemap: error fetching leagues:", err.message);
@@ -1747,7 +1747,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const empty: TrendingApiPayload = { perfs: [], leagueNames: {}, playerMeta: {} };
 
     const { data: leagueRows, error: lErr } = await supabaseAdmin
-      .from("leagues")
+      .from("competitions")
       .select("league_id, name, trending_position")
       .eq("is_public", true)
       .not("trending_position", "is", null)

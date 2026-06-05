@@ -28,7 +28,7 @@ interface TeamRecord {
 async function resolveLeague(leagueId?: string, leagueSlug?: string): Promise<{ id: string; name: string } | null> {
   if (leagueSlug) {
     const { data } = await retrySupabase(() => supabase
-      .from("leagues")
+      .from("competitions")
       .select("league_id, name")
       .eq("slug", leagueSlug)
       .eq("is_public", true)
@@ -37,7 +37,7 @@ async function resolveLeague(leagueId?: string, leagueSlug?: string): Promise<{ 
   }
   if (leagueId) {
     const { data } = await retrySupabase(() => supabase
-      .from("leagues")
+      .from("competitions")
       .select("league_id, name")
       .eq("league_id", leagueId)
       .eq("is_public", true)

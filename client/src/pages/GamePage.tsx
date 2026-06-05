@@ -892,7 +892,7 @@ export default function GamePage() {
       )}
       <div className="max-w-6xl mx-auto px-4 py-6">
         <button 
-          onClick={() => navigate(leagueSlug ? `/league/${leagueSlug}` : '/')}
+          onClick={() => navigate(leagueSlug ? `/competition/${leagueSlug}` : '/')}
           className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 mb-6 transition-colors cursor-pointer"
           onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = brandColorHover; }}
           onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = ''; }}

@@ -327,7 +327,7 @@ export default function SocialToolsPage() {
 
   const fetchLeagues = async () => {
     const { data, error } = await supabase
-      .from("leagues")
+      .from("competitions")
       .select("league_id, name, slug")
       .order("name");
     

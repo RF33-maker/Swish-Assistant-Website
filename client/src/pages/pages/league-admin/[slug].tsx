@@ -29,7 +29,7 @@ export default function HomePage() {
   useEffect(() => {
     const fetchLeague = async () => {
       const { data, error } = await supabase
-        .from("leagues")
+        .from("competitions")
         .select("*")
         .eq("slug", slug)
         .single();

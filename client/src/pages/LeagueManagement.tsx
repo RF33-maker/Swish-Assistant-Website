@@ -153,7 +153,7 @@ export default function LeagueManagement() {
 
   const handleViewLeague = (slug: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setLocation(`/league/${slug}`);
+    setLocation(`/competition/${slug}`);
   };
 
   if (!user) {

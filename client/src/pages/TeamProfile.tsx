@@ -476,7 +476,7 @@ export default function TeamProfile() {
       }
 
       const { data, error } = await supabase
-        .from("leagues")
+        .from("competitions")
         .select("name, slug")
         .ilike("name", `%${search}%`)
         .eq("is_public", true)
@@ -493,7 +493,7 @@ export default function TeamProfile() {
 
   const handleSearch = () => {
     if (search.trim()) {
-      navigate(`/league/${search}`);
+      navigate(`/competition/${search}`);
     }
   };
 
@@ -510,7 +510,7 @@ export default function TeamProfile() {
         let leagueId: string | null = null;
         if (leagueSlug) {
           const { data: leagueData } = await supabase
-            .from("leagues")
+            .from("competitions")
             .select("league_id")
             .eq("slug", leagueSlug)
             .single();
@@ -893,7 +893,7 @@ export default function TeamProfile() {
           let league: League | null = null;
           if (allStats[0]?.league_id) {
             const { data: leagueData } = await supabase
-              .from("leagues")
+              .from("competitions")
               .select("*")
               .eq("league_id", allStats[0].league_id)
               .single();
@@ -981,7 +981,7 @@ export default function TeamProfile() {
         <meta
           property="og:url"
           content={leagueSlug 
-            ? `https://www.swishassistant.com/league/${leagueSlug}/team/${encodeURIComponent(team.name.toLowerCase().replace(/\s+/g, '-'))}`
+            ? `https://www.swishassistant.com/competition/${leagueSlug}/team/${encodeURIComponent(team.name.toLowerCase().replace(/\s+/g, '-'))}`
             : `https://www.swishassistant.com/team/${encodeURIComponent(team.name.toLowerCase().replace(/\s+/g, '-'))}`}
         />
         <meta
@@ -998,7 +998,7 @@ export default function TeamProfile() {
           }
         />
         <link rel="canonical" href={leagueSlug 
-          ? `https://www.swishassistant.com/league/${leagueSlug}/team/${encodeURIComponent(team.name.toLowerCase().replace(/\s+/g, '-'))}`
+          ? `https://www.swishassistant.com/competition/${leagueSlug}/team/${encodeURIComponent(team.name.toLowerCase().replace(/\s+/g, '-'))}`
           : `https://www.swishassistant.com/team/${encodeURIComponent(team.name.toLowerCase().replace(/\s+/g, '-'))}`} />
       </Helmet>
       
@@ -1037,7 +1037,7 @@ export default function TeamProfile() {
                   onClick={() => {
                     setSearch("");
                     setSuggestions([]);
-                    navigate(`/league/${item.slug}`);
+                    navigate(`/competition/${item.slug}`);
                   }}
                   className="px-4 py-2 cursor-pointer hover:bg-orange-100 dark:hover:bg-neutral-700 text-left text-slate-800 dark:text-white"
                 >
@@ -1058,7 +1058,7 @@ export default function TeamProfile() {
           </button>
           {team?.league && (
             <button
-              onClick={() => navigate(`/league/${team.league?.slug}`)}
+              onClick={() => navigate(`/competition/${team.league?.slug}`)}
               className="text-slate-600 dark:text-slate-300 hover:text-orange-500 dark:hover:text-orange-400"
             >
               Back to League

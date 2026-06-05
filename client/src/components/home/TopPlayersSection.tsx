@@ -100,7 +100,7 @@ export default function TopPlayersSection() {
     queryKey: ["supabase", "home", "top-players", "eligible-leagues"],
     queryFn: async () => {
       const { data: lgs, error: lgsError } = await supabase
-        .from("leagues")
+        .from("competitions")
         .select("league_id, name, slug, trending_position")
         .eq("is_public", true)
         .order("trending_position", { ascending: true, nullsFirst: false })

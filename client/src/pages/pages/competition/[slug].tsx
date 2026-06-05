@@ -5,7 +5,7 @@ import { Trophy, Calendar, ChevronRight, ArrowLeft } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
 
-interface Competition {
+interface League {
   id: string;
   name: string;
   slug: string;
@@ -13,7 +13,7 @@ interface Competition {
   description: string | null;
 }
 
-interface SeasonLeague {
+interface SeasonCompetition {
   name: string;
   slug: string;
   season: string | null;
@@ -22,12 +22,12 @@ interface SeasonLeague {
 }
 
 export default function CompetitionPage() {
-  const [, params] = useRoute("/competition/:slug");
+  const [, params] = useRoute("/league/:slug");
   const [, setLocation] = useLocation();
   const slug = params?.slug ?? "";
 
-  const [competition, setCompetition] = useState<Competition | null>(null);
-  const [seasons, setSeasons] = useState<SeasonLeague[]>([]);
+  const [league, setLeague] = useState<League | null>(null);
+  const [seasons, setSeasons] = useState<SeasonCompetition[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -37,28 +37,40 @@ export default function CompetitionPage() {
       setLoading(true);
       setNotFound(false);
 
-      const { data: comp, error: compError } = await supabase
-        .from("competitions")
+      // Look up the league brand in the leagues table
+      const { data: leagueData, error: leagueError } = await supabase
+        .from("leagues")
         .select("id, name, slug, logo_url, description")
         .eq("slug", slug)
         .single();
 
-      if (compError || !comp) {
+      if (leagueError || !leagueData) {
+        // Fallback: check if the slug belongs to a competition (season) and redirect
+        const { data: comp } = await supabase
+          .from("competitions")
+          .select("slug")
+          .eq("slug", slug)
+          .single();
+        if (comp?.slug) {
+          setLocation(`/competition/${slug}`, { replace: true });
+          return;
+        }
         setNotFound(true);
         setLoading(false);
         return;
       }
 
-      setCompetition(comp as Competition);
+      setLeague(leagueData as League);
 
-      const { data: leagues } = await supabase
-        .from("leagues")
+      // Fetch all season instances that belong to this league brand
+      const { data: competitionsData } = await supabase
+        .from("competitions")
         .select("name, slug, season, banner_url, logo_url")
-        .eq("competition_id", comp.id)
+        .eq("competition_id", leagueData.id)
         .eq("is_public", true)
         .order("season", { ascending: false });
 
-      setSeasons((leagues as SeasonLeague[] | null) || []);
+      setSeasons((competitionsData as SeasonCompetition[] | null) || []);
       setLoading(false);
     };
 
@@ -73,12 +85,12 @@ export default function CompetitionPage() {
     );
   }
 
-  if (notFound || !competition) {
+  if (notFound || !league) {
     return (
       <div className="min-h-screen bg-white dark:bg-neutral-950 flex flex-col items-center justify-center gap-4 text-center px-6">
         <Trophy className="w-12 h-12 text-orange-300" />
-        <h1 className="text-2xl font-bold text-slate-800 dark:text-white">Competition not found</h1>
-        <p className="text-slate-500 dark:text-slate-400">No competition with the slug "{slug}" exists.</p>
+        <h1 className="text-2xl font-bold text-slate-800 dark:text-white">League not found</h1>
+        <p className="text-slate-500 dark:text-slate-400">No league with the slug "{slug}" exists.</p>
         <button
           onClick={() => setLocation("/")}
           className="mt-2 flex items-center gap-2 text-orange-600 hover:text-orange-700 font-medium text-sm"
@@ -107,10 +119,10 @@ export default function CompetitionPage() {
 
       {/* Hero */}
       <div className="bg-gradient-to-b from-orange-50 dark:from-neutral-900 to-white dark:to-neutral-950 px-6 pt-10 pb-8 flex flex-col items-center text-center">
-        {competition.logo_url ? (
+        {league.logo_url ? (
           <img
-            src={competition.logo_url}
-            alt={competition.name}
+            src={league.logo_url}
+            alt={league.name}
             className="w-20 h-20 object-contain mb-4 rounded-xl shadow-md"
           />
         ) : (
@@ -119,11 +131,11 @@ export default function CompetitionPage() {
           </div>
         )}
         <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-          {competition.name}
+          {league.name}
         </h1>
-        {competition.description && (
+        {league.description && (
           <p className="mt-3 text-slate-500 dark:text-slate-400 text-sm max-w-lg">
-            {competition.description}
+            {league.description}
           </p>
         )}
         <div className="mt-3 flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
@@ -146,7 +158,7 @@ export default function CompetitionPage() {
             {seasons.map((s) => (
               <button
                 key={s.slug}
-                onClick={() => setLocation(`/league/${s.slug}`)}
+                onClick={() => setLocation(`/competition/${s.slug}`)}
                 className="relative overflow-hidden rounded-2xl h-24 hover:scale-[1.02] hover:shadow-lg transition-all duration-200 text-left group w-full"
                 style={{ backgroundColor: "#1a1a1a" }}
               >

@@ -188,7 +188,7 @@ export default function LatestScoresSection() {
     queryKey: ["supabase", "home", "latest-scores", LATEST_SCORES_LIMIT],
     queryFn: async () => {
       const { data: leagues } = await supabase
-        .from("leagues")
+        .from("competitions")
         .select("league_id, name, slug, trending_position")
         .eq("is_public", true)
         .order("trending_position", { ascending: true, nullsFirst: false })
@@ -379,7 +379,7 @@ export default function LatestScoresSection() {
     if (g.kind === "result" || g.kind === "live") {
       setLocation(`/game/${g.game_key}`);
     } else if (g.league_slug) {
-      setLocation(`/league/${g.league_slug}`);
+      setLocation(`/competition/${g.league_slug}`);
     }
   };
 

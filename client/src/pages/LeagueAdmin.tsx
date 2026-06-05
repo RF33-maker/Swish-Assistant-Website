@@ -416,7 +416,7 @@ export default function LeagueAdmin() {
           <h1 className="text-2xl font-bold text-gray-800 mb-2">Access Denied</h1>
           <p className="text-gray-600 mb-4">You don't have permission to access this league's admin panel.</p>
           <button
-            onClick={() => navigate(`/league/${slug}`)}
+            onClick={() => navigate(`/competition/${slug}`)}
             className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg"
           >
             View League
@@ -435,7 +435,7 @@ export default function LeagueAdmin() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <button
-                  onClick={() => navigate(`/league/${slug}`)}
+                  onClick={() => navigate(`/competition/${slug}`)}
                   className="text-gray-600 hover:text-gray-800"
                   data-testid="button-back-to-league"
                 >

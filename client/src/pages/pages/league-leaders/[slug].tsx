@@ -181,7 +181,7 @@ export default function LeagueLeadersPage() {
         setError(null);
 
         const { data: leagueData, error: leagueError } = await supabase
-          .from("leagues")
+          .from("competitions")
           .select("*")
           .eq("slug", slug)
           .single();
@@ -756,7 +756,7 @@ export default function LeagueLeadersPage() {
 
       <main className="flex-grow p-4 md:p-6 max-w-3xl mx-auto w-full space-y-5">
         <button
-          onClick={() => navigate(`/league/${slug}`)}
+          onClick={() => navigate(`/competition/${slug}`)}
           className="flex items-center gap-2 font-medium transition-colors opacity-90 hover:opacity-100"
           style={{ color: brandColor }}
         >

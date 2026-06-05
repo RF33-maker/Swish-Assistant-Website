@@ -17,7 +17,7 @@ export async function fetchLeagueChildren(parentId: string): Promise<LeagueChild
   const p = (async () => {
     try {
       const { data, error } = await supabase
-        .from("leagues")
+        .from("competitions")
         .select("league_id, name, slug, logo_url, age_group, stop")
         .eq("parent_league_id", parentId);
       if (error) return [];

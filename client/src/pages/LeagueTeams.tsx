@@ -63,7 +63,7 @@ export default function LeagueTeams() {
       }
 
       const { data, error } = await supabase
-        .from("leagues")
+        .from("competitions")
         .select("name, slug")
         .ilike("name", `%${search}%`)
         .eq("is_public", true)
@@ -80,7 +80,7 @@ export default function LeagueTeams() {
 
   const handleSearch = () => {
     if (search.trim()) {
-      navigate(`/league/${search}`);
+      navigate(`/competition/${search}`);
     }
   };
 
@@ -316,7 +316,7 @@ export default function LeagueTeams() {
                   onClick={() => {
                     setSearch("");
                     setSuggestions([]);
-                    navigate(`/league/${item.slug}`);
+                    navigate(`/competition/${item.slug}`);
                   }}
                   className="px-4 py-2 cursor-pointer hover:bg-orange-100 text-left text-slate-800"
                 >
@@ -335,7 +335,7 @@ export default function LeagueTeams() {
             Home
           </button>
           <button
-            onClick={() => navigate(`/league/${slug}`)}
+            onClick={() => navigate(`/competition/${slug}`)}
             className="text-slate-600 hover:text-orange-500"
           >
             Back to League
@@ -449,7 +449,7 @@ export default function LeagueTeams() {
                     {/* View Full Profile Button */}
                     <div className="pt-4 border-t border-gray-100">
                       <button 
-                        onClick={() => navigate(`/league/${slug}/team/${encodeURIComponent(team.name)}`)}
+                        onClick={() => navigate(`/competition/${slug}/team/${encodeURIComponent(team.name)}`)}
                         className="w-full bg-orange-500 hover:bg-orange-600 text-white font-medium py-3 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -563,13 +563,13 @@ export default function LeaguePage() {
     setPreviousSection(fromSection);
     setSelectedPlayerSlug(playerSlug);
     setActiveSection('player');
-    navigate(`/league/${slug}/player/${playerSlug}`);
+    navigate(`/competition/${slug}/player/${playerSlug}`);
   }, [slug, navigate]);
 
   const handlePlayerBack = useCallback(() => {
     setSelectedPlayerSlug(null);
     setActiveSection(previousSection);
-    navigate(`/league/${slug}`);
+    navigate(`/competition/${slug}`);
   }, [slug, navigate, previousSection]);
 
   const [comparisonMode, setComparisonMode] = useState<'player' | 'team'>('player'); // Toggle between player and team comparison
@@ -1554,15 +1554,15 @@ export default function LeaguePage() {
       setParentStandingsGroups([]);
       
       const fetchUserAndLeague = async () => {
-        // Reset sibling seasons so a league without competition_id never shows stale options
+        // Reset sibling seasons so a competition without competition_id never shows stale options
         setSiblingSeasons([]);
 
         const { data: { user } } = await supabase.auth.getUser();
         setCurrentUser(user);
         
-        // Then fetch league data
+        // Then fetch competition (season) data
         const { data, error } = await supabase
-          .from("leagues")
+          .from("competitions")
           .select("*")
           .eq("slug", slug)
           .single();
@@ -1610,7 +1610,7 @@ export default function LeaguePage() {
           // Fetch parent league if this is a sub-competition
           if (data.parent_league_id) {
             const { data: parent, error: parentError } = await supabase
-              .from("leagues")
+              .from("competitions")
               .select("league_id, name, slug, logo_url")
               .eq("league_id", data.parent_league_id)
               .single();
@@ -1622,10 +1622,10 @@ export default function LeaguePage() {
             }
           }
 
-          // Fetch sibling seasons from the same competition brand
+          // Fetch sibling seasons from the same league brand
           if ((data as any).competition_id) {
             try {
-              const res = await fetch(`/api/competition/${(data as any).competition_id}/seasons`);
+              const res = await fetch(`/api/league/${(data as any).competition_id}/competitions`);
               if (res.ok) {
                 const seasons = await res.json();
                 setSiblingSeasons(seasons);
@@ -3369,13 +3369,13 @@ export default function LeaguePage() {
       <meta property="og:type" content="website" />
       <meta
         property="og:url"
-        content={`https://www.swishassistant.com/league/${slug}`}
+        content={`https://www.swishassistant.com/competition/${slug}`}
       />
       <meta
         property="og:image"
         content="https://www.swishassistant.com/og-image.png"
       />
-      <link rel="canonical" href={`https://www.swishassistant.com/league/${slug}`} />
+      <link rel="canonical" href={`https://www.swishassistant.com/competition/${slug}`} />
     </Helmet>
 
     <div className="min-h-screen bg-[#fffaf1]">
@@ -3524,7 +3524,7 @@ export default function LeaguePage() {
                 {(league as any)?.competition_id && siblingSeasons.length > 1 && (
                   <select
                     value={slug}
-                    onChange={(e) => navigate(`/league/${e.target.value}`)}
+                    onChange={(e) => navigate(`/competition/${e.target.value}`)}
                     className="text-xs font-semibold bg-white/20 hover:bg-white/30 border border-white/40 text-white rounded-full px-3 py-1 cursor-pointer backdrop-blur-sm transition-colors focus:outline-none focus:ring-1 focus:ring-white/60"
                     style={{ WebkitAppearance: 'none', appearance: 'none', paddingRight: '1.5rem', backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='white'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center' }}
                   >
@@ -3622,7 +3622,7 @@ export default function LeaguePage() {
         {parentLeague && (
           <div className="bg-white dark:bg-neutral-900 border-b border-gray-100 dark:border-neutral-800">
             <div className="max-w-7xl mx-auto px-4 md:px-6 py-3">
-              <Link href={`/league/${parentLeague.slug}`}>
+              <Link href={`/competition/${parentLeague.slug}`}>
                 <a className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-orange-400 dark:hover:text-orange-300 transition-colors group" data-testid="link-parent-league">
                   <div className="flex items-center gap-2">
                     {parentLeague.logo_url && (

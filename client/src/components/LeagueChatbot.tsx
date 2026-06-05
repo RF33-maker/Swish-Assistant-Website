@@ -2194,7 +2194,7 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
                               if (button.type === 'player') {
                                 setLocation(`/player/${button.id}`);
                               } else if (button.type === 'team') {
-                                setLocation(leagueSlug ? `/league/${leagueSlug}/team/${button.id}` : `/team/${button.id}`);
+                                setLocation(leagueSlug ? `/competition/${leagueSlug}/team/${button.id}` : `/team/${button.id}`);
                               }
                             }}
                             className="px-2 py-1 text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 rounded transition-colors border border-blue-200 flex items-center gap-1"
@@ -2337,7 +2337,7 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
                                 key={i}
                                 onClick={() => {
                                   if (button.type === 'player') setLocation(`/player/${button.id}`);
-                                  else if (button.type === 'team') setLocation(leagueSlug ? `/league/${leagueSlug}/team/${button.id}` : `/team/${button.id}`);
+                                  else if (button.type === 'team') setLocation(leagueSlug ? `/competition/${leagueSlug}/team/${button.id}` : `/team/${button.id}`);
                                 }}
                                 variant="outline"
                                 size="sm"
@@ -2598,7 +2598,7 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
                                   if (button.type === 'player') {
                                     setLocation(`/player/${button.id}`);
                                   } else if (button.type === 'team') {
-                                    setLocation(leagueSlug ? `/league/${leagueSlug}/team/${button.id}` : `/team/${button.id}`);
+                                    setLocation(leagueSlug ? `/competition/${leagueSlug}/team/${button.id}` : `/team/${button.id}`);
                                   }
                                 }}
                                 variant="outline"

@@ -2000,7 +2000,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
               {playerLeagues.map((league) => (
                 <button
                   key={league.id}
-                  onClick={() => setLocation(`/league/${league.slug}`)}
+                  onClick={() => setLocation(`/competition/${league.slug}`)}
                   className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-neutral-700 hover:border-orange-300 dark:hover:border-orange-500/50 bg-white dark:bg-neutral-800 hover:bg-orange-50 dark:hover:bg-neutral-700 transition-colors text-sm font-medium text-slate-700 dark:text-slate-300"
                 >
                   <Trophy className="h-4 w-4 text-orange-500" />

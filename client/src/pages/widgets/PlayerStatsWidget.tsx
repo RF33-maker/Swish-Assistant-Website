@@ -83,7 +83,7 @@ export default function PlayerStatsWidget({ params }: { params: WidgetParams }) 
         let resolvedLeagueId = leagueId;
         if (!resolvedLeagueId && leagueSlug) {
           const { data: slugLeague } = await supabase
-            .from("leagues")
+            .from("competitions")
             .select("league_id")
             .eq("slug", leagueSlug)
             .eq("is_public", true)
@@ -108,7 +108,7 @@ export default function PlayerStatsWidget({ params }: { params: WidgetParams }) 
         }
 
         const { data: leagueCheck } = await supabase
-          .from("leagues")
+          .from("competitions")
           .select("league_id")
           .eq("league_id", resolvedLeagueId)
           .eq("is_public", true)
