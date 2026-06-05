@@ -31,6 +31,8 @@ export const leagues = pgTable("leagues", {
   trending_position: smallint("trending_position"),
   age_group: varchar("age_group", { length: 50 }),
   stop: smallint("stop"),
+  competition_id: uuid("competition_id"), // FK → competitions.id
+  season: text("season"), // e.g. "2025/26", "2026/27"
   created_at: timestamp("created_at").defaultNow(),
   updated_at: timestamp("updated_at").defaultNow(),
 });

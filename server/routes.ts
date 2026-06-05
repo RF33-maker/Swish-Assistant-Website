@@ -603,6 +603,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/competition/:competitionId/seasons", async (req: Request, res: Response) => {
+    try {
+      const { competitionId } = req.params;
+      if (!competitionId) return res.status(400).json({ error: "competitionId is required" });
+
+      const { data, error } = await supabaseAdmin
+        .from("leagues")
+        .select("name, slug, season")
+        .eq("competition_id", competitionId)
+        .order("season", { ascending: false });
+
+      if (error) {
+        console.error("competition seasons error:", error);
+        return res.status(500).json({ error: "Failed to fetch seasons" });
+      }
+
+      res.json(data || []);
+    } catch (err: any) {
+      console.error("Error fetching competition seasons:", err.message);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   app.get("/api/public/league-branding/:slug", async (req: Request, res: Response) => {
     try {
       const { slug } = req.params;

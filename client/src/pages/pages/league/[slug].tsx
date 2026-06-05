@@ -615,6 +615,7 @@ export default function LeaguePage() {
   const [selectedAgeGroup, setSelectedAgeGroup] = useState<string>('all');
   const [selectedStop, setSelectedStop] = useState<string>('all');
   const [parentStandingsGroups, setParentStandingsGroups] = useState<{ageGroup: string, standings: any[], poolAStandings: any[], poolBStandings: any[], hasPools: boolean}[]>([]);
+  const [siblingSeasons, setSiblingSeasons] = useState<{ name: string; slug: string; season: string | null }[]>([]);
 
   const getTeamLogoUrl = (teamName: string): string | undefined => {
     if (!teamName) return undefined;
@@ -1615,6 +1616,19 @@ export default function LeaguePage() {
               setParentLeague(parent);
             } else if (parentError) {
               console.error("Failed to fetch parent league:", parentError);
+            }
+          }
+
+          // Fetch sibling seasons from the same competition brand
+          if ((data as any).competition_id) {
+            try {
+              const res = await fetch(`/api/competition/${(data as any).competition_id}/seasons`);
+              if (res.ok) {
+                const seasons = await res.json();
+                setSiblingSeasons(seasons);
+              }
+            } catch (e) {
+              console.error("Failed to fetch sibling seasons:", e);
             }
           }
         }
@@ -3500,9 +3514,25 @@ export default function LeaguePage() {
             }}
           >
             <div className="absolute inset-0 bg-black/40 flex flex-col justify-end p-6">
-              <h2 className="text-3xl sm:text-4xl font-bold text-white drop-shadow-md">
-                {displayLeagueName || "League Name"}
-              </h2>
+              <div className="flex items-center gap-3 flex-wrap">
+                <h2 className="text-3xl sm:text-4xl font-bold text-white drop-shadow-md">
+                  {displayLeagueName || "League Name"}
+                </h2>
+                {siblingSeasons.length > 1 && (
+                  <select
+                    value={slug}
+                    onChange={(e) => navigate(`/league/${e.target.value}`)}
+                    className="text-xs font-semibold bg-white/20 hover:bg-white/30 border border-white/40 text-white rounded-full px-3 py-1 cursor-pointer backdrop-blur-sm transition-colors focus:outline-none focus:ring-1 focus:ring-white/60"
+                    style={{ WebkitAppearance: 'none', appearance: 'none', paddingRight: '1.5rem', backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='white'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center' }}
+                  >
+                    {siblingSeasons.map((s) => (
+                      <option key={s.slug} value={s.slug} style={{ background: '#1a1a2e', color: 'white' }}>
+                        {s.season || s.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
               {(league as any)?.instagram_handle && (
                 <a
                   href={`https://www.instagram.com/${(league as any).instagram_handle}`}
