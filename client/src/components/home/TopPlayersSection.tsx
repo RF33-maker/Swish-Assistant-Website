@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { supabase } from "@/lib/supabase";
 import { Trophy } from "lucide-react";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
 
@@ -18,26 +17,6 @@ interface LeagueRow {
   trending_position: number | null;
 }
 
-interface SeasonAverageRow {
-  player_name: string | null;
-  team_id: string | null;
-  team_name: string | null;
-  games_played: number | null;
-  avg_pts: number | null;
-  avg_reb: number | null;
-  avg_ast: number | null;
-  total_pts: number | null;
-  total_reb: number | null;
-  total_ast: number | null;
-}
-
-interface PlayerMetaRow {
-  id: string;
-  full_name: string | null;
-  team_id: string | null;
-  slug: string | null;
-  photo_path_bg_removed: string | null;
-}
 
 interface LeaderRow {
   player_id: string;
@@ -172,7 +151,7 @@ export default function TopPlayersSection() {
   const [viewMode, setViewMode] = useState<ViewMode>("averages");
 
   const { data: leagues = [], isLoading: loadingLeagues } = useQuery<LeagueOption[]>({
-    queryKey: ["supabase", "home", "top-players-v2", "eligible-leagues"],
+    queryKey: ["supabase", "home", "top-players-v3", "eligible-leagues"],
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const { data: lgs, error: lgsError } = await supabase
@@ -221,136 +200,60 @@ export default function TopPlayersSection() {
 
   const currentLeague = leagues[leagueIdx] ?? null;
 
-  const { data: allLeaders = null, isLoading: loadingLeaders } = useQuery<LeaderRow[] | null>({
-    queryKey: ["supabase", "home", "top-players-v2", "leaders", currentLeague?.league_id ?? "none"],
+  interface LeadersResponse {
+    scoring: LeaderRow[];
+    rebounding: LeaderRow[];
+    assists: LeaderRow[];
+    scoring_total: LeaderRow[];
+    rebounding_total: LeaderRow[];
+    assists_total: LeaderRow[];
+  }
+
+  const { data: leadersData = null, isLoading: loadingLeaders } = useQuery<LeadersResponse | null>({
+    queryKey: ["api", "home", "player-leaders-v1", currentLeague?.league_id ?? "none"],
     enabled: !!currentLeague,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       if (!currentLeague) return null;
+      const res = await fetch(`/api/home/player-leaders/${currentLeague.league_id}`);
+      if (!res.ok) return null;
+      const json = await res.json();
+      if (!json || (!json.scoring && !json.rebounding && !json.assists)) return null;
 
-      // Fetch all players for this league (no stat-biased ordering) so that
-      // rebounding/assist leaders aren't cut off by a points-ordered limit.
-      // Pre-aggregated views have at most ~200 rows per league, so this is safe.
-      const { data: rows, error: rowsErr } = await supabase
-        .from("v_player_season_averages")
-        .select(
-          "player_name, team_id, team_name, games_played, avg_pts, avg_reb, avg_ast, total_pts, total_reb, total_ast"
-        )
-        .eq("league_id", currentLeague.league_id)
-        .order("player_name", { ascending: true })
-        .limit(500)
-        .returns<SeasonAverageRow[]>();
+      // Attach photo URLs (computed client-side from raw path)
+      const enrich = (rows: any[]): LeaderRow[] =>
+        (rows || []).map((r: any) => ({
+          ...r,
+          photo_url: getPlayerPhotoUrlCached(r.photo_path_bg_removed),
+        }));
 
-      if (rowsErr) {
-        console.error("[TopPlayers] leaders error", rowsErr);
-        return null;
-      }
-      if (!rows || rows.length === 0) return null;
-
-      const seasonRows = rows.filter(
-        (r): r is SeasonAverageRow & { player_name: string } => Boolean(r.player_name)
-      );
-      const names = Array.from(new Set(seasonRows.map((r) => r.player_name)));
-      const playerByNameTeam = new Map<string, PlayerMetaRow>();
-      const playerByName = new Map<string, PlayerMetaRow>();
-
-      if (names.length > 0) {
-        const { data: players, error: playersErr } = await supabase
-          .from("players")
-          .select("id, full_name, team_id, slug, photo_path_bg_removed")
-          .in("full_name", names)
-          .eq("league_id", currentLeague.league_id)
-          .limit(names.length * 4)
-          .returns<PlayerMetaRow[]>();
-
-        if (playersErr) {
-          console.error("[TopPlayers] players lookup error", playersErr);
-        }
-
-        (players || []).forEach((p) => {
-          if (!p.full_name) return;
-          if (p.team_id) {
-            playerByNameTeam.set(`${p.full_name}::${p.team_id}`, p);
-          }
-          if (!playerByName.has(p.full_name)) {
-            playerByName.set(p.full_name, p);
-          }
-        });
-      }
-
-      // Deduplicate: v_player_season_averages has one row per (player_name, team_id)
-      // so a player who switched teams appears multiple times. Merge by player_name:
-      // sum totals + games, recompute averages, use the most-games row for metadata.
-      const mergedByName = new Map<string, {
-        total_pts: number; total_reb: number; total_ast: number; games: number;
-        primaryRow: SeasonAverageRow & { player_name: string };
-      }>();
-
-      for (const r of seasonRows) {
-        const name = r.player_name;
-        const existing = mergedByName.get(name);
-        const gp = Number(r.games_played ?? 0) || 0;
-        const tPts = Number(r.total_pts ?? 0) || 0;
-        const tReb = Number(r.total_reb ?? 0) || 0;
-        const tAst = Number(r.total_ast ?? 0) || 0;
-
-        if (!existing) {
-          mergedByName.set(name, { total_pts: tPts, total_reb: tReb, total_ast: tAst, games: gp, primaryRow: r });
-        } else {
-          existing.total_pts += tPts;
-          existing.total_reb += tReb;
-          existing.total_ast += tAst;
-          existing.games += gp;
-          // Keep the row with more games as the "primary" for team/metadata
-          if (gp > Number(existing.primaryRow.games_played ?? 0)) {
-            existing.primaryRow = r;
-          }
-        }
-      }
-
-      return Array.from(mergedByName.values()).map(({ total_pts, total_reb, total_ast, games, primaryRow }) => {
-        const name = primaryRow.player_name;
-        const teamMatch = primaryRow.team_id ? playerByNameTeam.get(`${name}::${primaryRow.team_id}`) : undefined;
-        const meta = teamMatch ?? playerByName.get(name);
-        const syntheticId = meta?.id || `${name}::${primaryRow.team_id ?? "noteam"}`;
-        const gp = games || 1;
-        return {
-          player_id: syntheticId,
-          full_name: meta?.full_name || name || "Unknown",
-          team: primaryRow.team_name || "",
-          photo_url: meta ? getPlayerPhotoUrlCached(meta.photo_path_bg_removed) : null,
-          slug: meta?.slug || null,
-          ppg: Math.round((total_pts / gp) * 10) / 10,
-          rpg: Math.round((total_reb / gp) * 10) / 10,
-          apg: Math.round((total_ast / gp) * 10) / 10,
-          total_pts,
-          total_reb,
-          total_ast,
-        };
-      });
+      return {
+        scoring:          enrich(json.scoring),
+        rebounding:       enrich(json.rebounding),
+        assists:          enrich(json.assists),
+        scoring_total:    enrich(json.scoring_total    ?? json.scoring),
+        rebounding_total: enrich(json.rebounding_total ?? json.rebounding),
+        assists_total:    enrich(json.assists_total    ?? json.assists),
+      };
     },
   });
 
   const isAverages = viewMode === "averages";
 
-  const scoringLeaders = allLeaders
-    ? [...allLeaders]
-        .sort((a, b) => (isAverages ? b.ppg - a.ppg : b.total_pts - a.total_pts))
+  const scoringLeaders = leadersData
+    ? (isAverages ? leadersData.scoring : leadersData.scoring_total)
         .slice(0, 5)
     : [];
-  const rebLeaders = allLeaders
-    ? [...allLeaders]
-        .sort((a, b) => (isAverages ? b.rpg - a.rpg : b.total_reb - a.total_reb))
-        .slice(0, 5)
+  const rebLeaders = leadersData
+    ? (isAverages ? leadersData.rebounding : leadersData.rebounding_total).slice(0, 5)
     : [];
-  const astLeaders = allLeaders
-    ? [...allLeaders]
-        .sort((a, b) => (isAverages ? b.apg - a.apg : b.total_ast - a.total_ast))
-        .slice(0, 5)
+  const astLeaders = leadersData
+    ? (isAverages ? leadersData.assists : leadersData.assists_total).slice(0, 5)
     : [];
 
   const isLoading = loadingLeagues || (!!currentLeague && loadingLeaders);
-  const hasData = allLeaders && allLeaders.length > 0;
+  const hasData = leadersData &&
+    (leadersData.scoring.length > 0 || leadersData.rebounding.length > 0 || leadersData.assists.length > 0);
 
   return (
     <section className="py-16 md:py-20 bg-white dark:bg-neutral-950">

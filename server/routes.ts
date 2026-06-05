@@ -1836,6 +1836,133 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return { perfs, leagueNames, playerMeta };
   }
 
+  // ─── Home page: player leaders (same raw aggregation as league page) ──────────
+  const playerLeadersCache = new Map<string, { data: any; at: number }>();
+  const PLAYER_LEADERS_TTL = 5 * 60 * 1000;
+
+  app.get("/api/home/player-leaders/:leagueId", async (req: Request, res: Response) => {
+    const { leagueId } = req.params;
+    const now = Date.now();
+    const cached = playerLeadersCache.get(leagueId);
+    if (cached && now - cached.at < PLAYER_LEADERS_TTL) return res.json(cached.data);
+
+    try {
+      // Verify the league is public
+      const allowed = await filterLeagueIdsForPublicScope([leagueId]);
+      if (!allowed.includes(leagueId)) return res.status(403).json({ error: "Forbidden" });
+
+      // Fetch raw game-by-game stats — same source as the league page
+      const { data: rows, error } = await supabaseAdmin
+        .from("player_stats")
+        .select(
+          "player_id, full_name, firstname, familyname, team_name, " +
+          "spoints, sreboundstotal, sassists, ssteals, sblocks, sturnovers, " +
+          "sfieldgoalsattempted, sfreethrowsattempted, sminutes"
+        )
+        .eq("league_id", leagueId)
+        .limit(5000);
+
+      if (error) {
+        console.error("[PlayerLeaders] error", error.message);
+        return res.status(500).json({ error: error.message });
+      }
+
+      if (!rows || rows.length === 0) {
+        return res.json({ scoring: [], rebounding: [], assists: [] });
+      }
+
+      // Aggregate by player_id — mirrors aggregatePlayerStats on the league page
+      const byPlayerId = new Map<string, {
+        name: string; team: string; player_id: string;
+        games: number; totalPoints: number; totalRebounds: number; totalAssists: number;
+      }>();
+
+      for (const stat of rows as any[]) {
+        if (!stat.player_id) continue;
+        const name = (stat.full_name ||
+          `${stat.firstname || ""} ${stat.familyname || ""}`.trim() ||
+          "Unknown").trim();
+        const team = stat.team_name || "";
+
+        const hasAnyStats =
+          (stat.spoints || 0) > 0 || (stat.sreboundstotal || 0) > 0 ||
+          (stat.sassists || 0) > 0 || (stat.ssteals || 0) > 0 ||
+          (stat.sblocks || 0) > 0 || (stat.sfieldgoalsattempted || 0) > 0 ||
+          (stat.sfreethrowsattempted || 0) > 0 || (stat.sturnovers || 0) > 0;
+
+        const mins = stat.sminutes;
+        let minutesPlayed = 0;
+        if (typeof mins === "number") minutesPlayed = mins;
+        else if (typeof mins === "string") {
+          const parts = mins.split(":");
+          minutesPlayed = parts.length === 2
+            ? parseInt(parts[0]) + parseInt(parts[1]) / 60
+            : parseFloat(mins) || 0;
+        }
+        if (!minutesPlayed && !hasAnyStats) continue; // DNP — skip
+
+        if (!byPlayerId.has(stat.player_id)) {
+          byPlayerId.set(stat.player_id, {
+            name, team, player_id: stat.player_id,
+            games: 0, totalPoints: 0, totalRebounds: 0, totalAssists: 0,
+          });
+        }
+        const agg = byPlayerId.get(stat.player_id)!;
+        agg.games += 1;
+        agg.totalPoints += stat.spoints || 0;
+        agg.totalRebounds += stat.sreboundstotal || 0;
+        agg.totalAssists += stat.sassists || 0;
+      }
+
+      // Enrich with slug + photo from players table
+      const playerIds = Array.from(byPlayerId.keys()).slice(0, 1000);
+      const metaById = new Map<string, { slug: string | null; photo_path_bg_removed: string | null }>();
+      if (playerIds.length > 0) {
+        const { data: playerRows } = await supabaseAdmin
+          .from("players")
+          .select("id, slug, photo_path_bg_removed")
+          .in("id", playerIds);
+        (playerRows || []).forEach((p: any) => {
+          metaById.set(p.id, { slug: p.slug ?? null, photo_path_bg_removed: p.photo_path_bg_removed ?? null });
+        });
+      }
+
+      const allRows = Array.from(byPlayerId.values()).map((p) => {
+        const gp = p.games || 1;
+        const meta = metaById.get(p.player_id);
+        return {
+          player_id: p.player_id,
+          full_name: p.name,
+          team: p.team,
+          slug: meta?.slug ?? null,
+          photo_path_bg_removed: meta?.photo_path_bg_removed ?? null,
+          games: p.games,
+          total_pts: p.totalPoints,
+          total_reb: p.totalRebounds,
+          total_ast: p.totalAssists,
+          ppg: Math.round((p.totalPoints / gp) * 10) / 10,
+          rpg: Math.round((p.totalRebounds / gp) * 10) / 10,
+          apg: Math.round((p.totalAssists / gp) * 10) / 10,
+        };
+      });
+
+      const result = {
+        scoring:          [...allRows].sort((a, b) => b.ppg       - a.ppg).slice(0, 5),
+        rebounding:       [...allRows].sort((a, b) => b.rpg       - a.rpg).slice(0, 5),
+        assists:          [...allRows].sort((a, b) => b.apg       - a.apg).slice(0, 5),
+        scoring_total:    [...allRows].sort((a, b) => b.total_pts - a.total_pts).slice(0, 5),
+        rebounding_total: [...allRows].sort((a, b) => b.total_reb - a.total_reb).slice(0, 5),
+        assists_total:    [...allRows].sort((a, b) => b.total_ast - a.total_ast).slice(0, 5),
+      };
+
+      playerLeadersCache.set(leagueId, { data: result, at: Date.now() });
+      return res.json(result);
+    } catch (err: any) {
+      console.error("[PlayerLeaders] error", err.message);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   app.get("/api/home/trending-performances", async (req: Request, res: Response) => {
     const now = Date.now();
     if (trendingCache && now - trendingCache.at < TRENDING_TTL_MS) {
