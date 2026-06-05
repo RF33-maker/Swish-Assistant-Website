@@ -3,6 +3,7 @@ import { useRoute, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { Trophy, Calendar, ChevronRight, ArrowLeft } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import SwishLogo from "@/assets/Swish Assistant Logo.png";
 
 interface Competition {
   id: string;
@@ -95,13 +96,12 @@ export default function CompetitionPage() {
 
       {/* Header */}
       <header className="sticky top-0 z-30 bg-white/90 dark:bg-neutral-950/90 backdrop-blur border-b border-orange-100 dark:border-neutral-800 px-6 py-3 flex items-center justify-between">
-        <button
+        <img
+          src={SwishLogo}
+          alt="Swish Assistant"
+          className="h-6 md:h-9 cursor-pointer"
           onClick={() => setLocation("/")}
-          className="flex items-center gap-2 text-orange-600 hover:text-orange-700 font-semibold text-sm transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Swish
-        </button>
+        />
         <ThemeToggle />
       </header>
 
