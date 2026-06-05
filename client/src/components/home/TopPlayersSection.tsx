@@ -278,23 +278,54 @@ export default function TopPlayersSection() {
         });
       }
 
-      return seasonRows.map((r) => {
+      // Deduplicate: v_player_season_averages has one row per (player_name, team_id)
+      // so a player who switched teams appears multiple times. Merge by player_name:
+      // sum totals + games, recompute averages, use the most-games row for metadata.
+      const mergedByName = new Map<string, {
+        total_pts: number; total_reb: number; total_ast: number; games: number;
+        primaryRow: SeasonAverageRow & { player_name: string };
+      }>();
+
+      for (const r of seasonRows) {
         const name = r.player_name;
-        const teamMatch = r.team_id ? playerByNameTeam.get(`${name}::${r.team_id}`) : undefined;
+        const existing = mergedByName.get(name);
+        const gp = Number(r.games_played ?? 0) || 0;
+        const tPts = Number(r.total_pts ?? 0) || 0;
+        const tReb = Number(r.total_reb ?? 0) || 0;
+        const tAst = Number(r.total_ast ?? 0) || 0;
+
+        if (!existing) {
+          mergedByName.set(name, { total_pts: tPts, total_reb: tReb, total_ast: tAst, games: gp, primaryRow: r });
+        } else {
+          existing.total_pts += tPts;
+          existing.total_reb += tReb;
+          existing.total_ast += tAst;
+          existing.games += gp;
+          // Keep the row with more games as the "primary" for team/metadata
+          if (gp > Number(existing.primaryRow.games_played ?? 0)) {
+            existing.primaryRow = r;
+          }
+        }
+      }
+
+      return Array.from(mergedByName.values()).map(({ total_pts, total_reb, total_ast, games, primaryRow }) => {
+        const name = primaryRow.player_name;
+        const teamMatch = primaryRow.team_id ? playerByNameTeam.get(`${name}::${primaryRow.team_id}`) : undefined;
         const meta = teamMatch ?? playerByName.get(name);
-        const syntheticId = meta?.id || `${name}::${r.team_id ?? "noteam"}`;
+        const syntheticId = meta?.id || `${name}::${primaryRow.team_id ?? "noteam"}`;
+        const gp = games || 1;
         return {
           player_id: syntheticId,
           full_name: meta?.full_name || name || "Unknown",
-          team: r.team_name || "",
+          team: primaryRow.team_name || "",
           photo_url: meta ? getPlayerPhotoUrlCached(meta.photo_path_bg_removed) : null,
           slug: meta?.slug || null,
-          ppg: Number(r.avg_pts ?? 0) || 0,
-          rpg: Number(r.avg_reb ?? 0) || 0,
-          apg: Number(r.avg_ast ?? 0) || 0,
-          total_pts: Number(r.total_pts ?? 0) || 0,
-          total_reb: Number(r.total_reb ?? 0) || 0,
-          total_ast: Number(r.total_ast ?? 0) || 0,
+          ppg: Math.round((total_pts / gp) * 10) / 10,
+          rpg: Math.round((total_reb / gp) * 10) / 10,
+          apg: Math.round((total_ast / gp) * 10) / 10,
+          total_pts,
+          total_reb,
+          total_ast,
         };
       });
     },
