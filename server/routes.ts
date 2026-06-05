@@ -1726,13 +1726,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // The view is slow (57014 timeouts under load); a single background query
   // every TRENDING_TTL_MS serves all concurrent visitors from cache.
   interface TrendingPerfRow {
-    league_id: string; game_key: string; game_date: string | null;
-    week_start: string | null; player_id: string; full_name: string;
+    league_id: string; week_start: string | null; week_end: string | null;
+    player_id: string; full_name: string;
     team_id: string | null; team_name: string | null;
     pts: number | null; reb: number | null; ast: number | null;
     stl: number | null; blk: number | null; tov: number | null;
     fga: number | null; fta: number | null;
-    ts_pct: number | null; game_score: number | null;
+    weekly_score: number | null; ts_pct: number | null;
   }
   interface TrendingApiPayload {
     perfs: TrendingPerfRow[];
@@ -1767,21 +1767,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const leagueIds = leagueRows.map((l: any) => l.league_id as string);
     const perfs: TrendingPerfRow[] = [];
 
+    // Query the lightweight weekly-aggregated view instead of the heavy per-game
+    // view (vw_player_game_scores), which times out on Vercel serverless cold starts.
     const perLeague = await Promise.allSettled(
       leagueIds.map(async (lid) => {
         const { data: rows, error } = await supabaseAdmin
-          .from("vw_player_game_scores")
-          .select("league_id,game_key,game_date,week_start,player_id,full_name,team_id,team_name,pts,reb,ast,stl,blk,tov,fga,fta,ts_pct,game_score")
+          .from("vw_weekly_player_scores")
+          .select("league_id,week_start,week_end,player_id,full_name,team_id,team_name,pts,reb,ast,stl,blk,tov,fga,fta,weekly_score")
           .eq("league_id", lid)
           .order("week_start", { ascending: false, nullsFirst: false })
-          .order("game_score", { ascending: false })
-          .limit(2)
-          .returns<TrendingPerfRow[]>();
+          .order("weekly_score", { ascending: false })
+          .limit(1)
+          .returns<Omit<TrendingPerfRow, "ts_pct">[]>();
         if (error) {
           console.error("[TrendingPerf] league query error", lid, error.message);
           return [] as TrendingPerfRow[];
         }
-        return (rows || []).slice(0, 2);
+        // Compute ts_pct from available columns: pts / (2 * (fga + 0.44 * fta))
+        return (rows || []).slice(0, 1).map((r) => {
+          const pts = r.pts ?? 0;
+          const fga = r.fga ?? 0;
+          const fta = r.fta ?? 0;
+          const denom = 2 * (fga + 0.44 * fta);
+          const ts_pct = denom > 0 ? pts / denom : null;
+          return { ...r, ts_pct };
+        });
       })
     );
 
@@ -1794,10 +1804,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     perfs.sort((a, b) => {
-      const aw = a.week_start || a.game_date || "";
-      const bw = b.week_start || b.game_date || "";
+      const aw = a.week_start || "";
+      const bw = b.week_start || "";
       if (aw !== bw) return aw < bw ? 1 : -1;
-      return (b.game_score ?? 0) - (a.game_score ?? 0);
+      return (b.weekly_score ?? 0) - (a.weekly_score ?? 0);
     });
 
     const playerMeta: Record<string, { slug: string | null; photo_path_bg_removed: string | null }> = {};
