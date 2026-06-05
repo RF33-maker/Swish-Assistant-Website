@@ -1554,6 +1554,9 @@ export default function LeaguePage() {
       setParentStandingsGroups([]);
       
       const fetchUserAndLeague = async () => {
+        // Reset sibling seasons so a league without competition_id never shows stale options
+        setSiblingSeasons([]);
+
         const { data: { user } } = await supabase.auth.getUser();
         setCurrentUser(user);
         
@@ -3518,7 +3521,7 @@ export default function LeaguePage() {
                 <h2 className="text-3xl sm:text-4xl font-bold text-white drop-shadow-md">
                   {displayLeagueName || "League Name"}
                 </h2>
-                {siblingSeasons.length > 1 && (
+                {(league as any)?.competition_id && siblingSeasons.length > 1 && (
                   <select
                     value={slug}
                     onChange={(e) => navigate(`/league/${e.target.value}`)}
