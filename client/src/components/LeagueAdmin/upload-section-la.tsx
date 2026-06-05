@@ -26,7 +26,7 @@ const UploadSectionLA = ({ leagues }: any) => {
         const targets = explicitChildIds.filter((id) => id && id !== parentLeagueId);
         if (targets.length === 0) return;
         const { error } = await supabase
-          .from("leagues")
+          .from("competitions")
           .update({ parent_league_id: parentLeagueId })
           .in("league_id", targets)
           .eq("user_id", user.id)
@@ -51,7 +51,7 @@ const UploadSectionLA = ({ leagues }: any) => {
 
       const preExistingLeagueIds = snapshot.ids;
       const { data: candidates, error: fetchErr } = await supabase
-        .from("leagues")
+        .from("competitions")
         .select("league_id")
         .eq("user_id", user.id)
         .is("parent_league_id", null);
@@ -68,7 +68,7 @@ const UploadSectionLA = ({ leagues }: any) => {
       if (newChildIds.length === 0) return;
 
       const { error: updateErr } = await supabase
-        .from("leagues")
+        .from("competitions")
         .update({ parent_league_id: parentLeagueId })
         .in("league_id", newChildIds)
         .eq("user_id", user.id)
@@ -93,7 +93,7 @@ const UploadSectionLA = ({ leagues }: any) => {
     let snapshot: { ok: true; ids: Set<string> } | { ok: false } = { ok: false };
     try {
       const { data: existing, error: snapErr } = await supabase
-        .from("leagues")
+        .from("competitions")
         .select("league_id")
         .eq("user_id", user.id);
       if (snapErr) {

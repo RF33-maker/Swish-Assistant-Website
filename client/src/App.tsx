@@ -11,6 +11,7 @@ import NotFound from "@/pages/not-found";
 import AuthPage from "@/pages/auth";
 import LandingPage from "@/pages/landing-page";
 import LeaguePage from "./pages/pages/league/[slug]";
+import CompetitionPage from "./pages/pages/competition/[slug]";
 import LeagueAdminPage from "./pages/pages/league-admin/[slug]";
 import LeagueLeadersPage from "./pages/pages/league-leaders/[slug]";
 import PlayerStatsPage from "./pages/pages/player/[id]";
@@ -37,6 +38,7 @@ import { ProtectedRoute } from "./lib/protected-route";
 import ResetPassword from "./pages/reset-password";
 import SettingsPage from "@/pages/settings-page";
 import ProfilePage from "./pages/profile-page";
+import ImportPlayersPage from "@/pages/admin/import-players";
 import TestConnections from "./components/test-connections";
 import PaymentPage from "@/pages/payment";
 import ContactSalesPage from "@/pages/contact-sales";
@@ -52,15 +54,25 @@ function Router() {
       <Route path="/" component={LandingPage} />
       <Route path="/auth" component={AuthPage} />
       <Route path="/test" component={TestConnections} />
-      <Route path="/league/:slug" component={LeaguePage} />
-      <Route path="/league/:slug/player/:playerSlug" component={LeaguePage} />
-      <Route path="/league/:slug/teams" component={LeagueTeams} />
-      <Route path="/league/:slug/team-logos" component={TeamLogoManager} />
+      {/* /league/:slug  = league brand page (series hub) */}
+      <Route path="/league/:slug" component={CompetitionPage} />
+      {/* /competition/:slug = individual season/tournament page */}
+      <Route path="/competition/:slug" component={LeaguePage} />
+      <Route path="/competition/:slug/player/:playerSlug" component={LeaguePage} />
+      <Route path="/competition/:slug/teams" component={LeagueTeams} />
+      <Route path="/competition/:slug/team-logos" component={TeamLogoManager} />
+      <Route path="/competition-leaders/:slug" component={LeagueLeadersPage} />
+      {/* Legacy /league-leaders redirect handled by keeping old route */}
       <Route path="/league-leaders/:slug" component={LeagueLeadersPage} />
       <Route path="/players" component={PlayersListPage} />
       <Route path="/player/:slug" component={PlayerStatsPage} />
       <Route path="/teams" component={TeamsList} />
       <Route path="/team/:teamName" component={TeamProfile} />
+      <Route path="/competition/:competitionSlug/team/:teamName" component={TeamProfile} />
+      {/* Legacy redirects: old /league/:slug season URLs → /competition/:slug */}
+      <Route path="/league/:slug/player/:playerSlug" component={LeaguePage} />
+      <Route path="/league/:slug/teams" component={LeagueTeams} />
+      <Route path="/league/:slug/team-logos" component={TeamLogoManager} />
       <Route path="/league/:leagueSlug/team/:teamName" component={TeamProfile} />
       <Route path="/reset-password" component={ResetPassword} />
       <Route path="/privacy" component={PrivacyPolicyPage} />
@@ -88,7 +100,7 @@ function Router() {
       <ProtectedRoute path="/social-tools" component={SocialToolsPage} />
       <ProtectedRoute path="/api-widgets" component={WidgetBuilder} />
       <ProtectedRoute path="/news-manager" component={NewsManager} />
-
+      <ProtectedRoute path="/admin/import-players" component={ImportPlayersPage} />
 
       {/* Fallback */}
       <Route component={NotFound} />

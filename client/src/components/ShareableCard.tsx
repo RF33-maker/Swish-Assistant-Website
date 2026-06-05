@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Download, Share2, Loader2 } from "lucide-react";
+import { Download, Share2, Loader2, RefreshCw, AlertTriangle } from "lucide-react";
 import html2canvas from "html2canvas";
 import {
   Dialog,
@@ -54,15 +54,13 @@ interface ShareableCardProps {
   teamLogos?: ShareTeamLogo[];
   /**
    * When true, the captured PNG renders at a wider, social-friendly canvas
-   * (~1080px logical width) instead of the default ~512px strip. The modal
-   * preview is scaled down to fit while the export keeps full resolution.
+   * (~1080px logical width) instead of the default ~512px strip.
    * Used by share cards intended for Instagram / X feeds.
    */
   wide?: boolean;
 }
 
 const SHARE_WIDTH_WIDE = 1080;
-const PREVIEW_WIDTH_WIDE = 480;
 
 const BRAND_ORANGE = "#f97316";
 
@@ -167,53 +165,13 @@ export default function ShareableCard({
 }: ShareableCardProps) {
   const [open, setOpen] = useState(false);
   const [working, setWorking] = useState(false);
-  const [captureHeight, setCaptureHeight] = useState<number | null>(null);
-  // Measured width of the preview container so the scale adapts to mobile.
-  const [previewContainerWidth, setPreviewContainerWidth] = useState(PREVIEW_WIDTH_WIDE);
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState(false);
+
   const captureRef = useRef<HTMLDivElement>(null);
-  const previewContainerRef = useRef<HTMLDivElement>(null);
+  const blobRef = useRef<Blob | null>(null);
   const { toast } = useToast();
-
-  // Clamp the preview to whatever the container actually offers — this keeps
-  // the card fully on-screen on narrow mobile viewports.
-  const actualPreviewWidth = Math.min(PREVIEW_WIDTH_WIDE, previewContainerWidth);
-  const previewScale = wide ? actualPreviewWidth / SHARE_WIDTH_WIDE : 1;
-
-  useEffect(() => {
-    if (!open) return;
-
-    // Measure available preview width and track resize.
-    const container = previewContainerRef.current;
-    if (container) {
-      const updateWidth = () => setPreviewContainerWidth(container.clientWidth);
-      updateWidth();
-      const rw = new ResizeObserver(updateWidth);
-      rw.observe(container);
-      // Cleanup handled below via single cleanup fn.
-      if (!wide) return () => rw.disconnect();
-    }
-
-    if (!wide) return;
-
-    // Track the capture element height for the wide scale-outer container.
-    const el = captureRef.current;
-    if (!el) return;
-    const updateHeight = () => setCaptureHeight(el.scrollHeight);
-    updateHeight();
-    const rh = new ResizeObserver(updateHeight);
-    rh.observe(el);
-
-    const containerEl = previewContainerRef.current;
-    const rw2 = containerEl ? new ResizeObserver(() => {
-      if (containerEl) setPreviewContainerWidth(containerEl.clientWidth);
-    }) : null;
-    if (containerEl && rw2) rw2.observe(containerEl);
-
-    return () => {
-      rh.disconnect();
-      rw2?.disconnect();
-    };
-  }, [open, wide, shareContent, children]);
 
   const slug = (fileSlug || title)
     .toLowerCase()
@@ -224,30 +182,17 @@ export default function ShareableCard({
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")}-${slug}.png`;
 
-  // Use team primary color (with darker shade for the gradient end).
   const bandBase = normalizeHex(player.primaryColor);
   const bandDark = shadeHex(bandBase, 0.25);
   const bandStyle = {
     background: `linear-gradient(135deg, ${bandBase} 0%, ${bandDark} 100%)`,
   } as const;
 
-  // Title sits on the team-coloured band. If the band is light (e.g. a yellow
-  // team), pure brand orange disappears, so derive a band-readable variant.
   const titleColor = ensureContrast(BRAND_ORANGE, bandBase, 4.5);
-
-  // All other text on the band (player name, team, caption, footer URL,
-  // footer meta) is normally white-on-navy. If the team band is very light
-  // (e.g. yellow), white text vanishes; the contrast guard flips it to a
-  // dark variant so it stays readable. Muted variants reuse the same base
-  // colour with reduced opacity so they don't drift back to a transparent
-  // white that would be invisible on a light band.
   const bandTextColor = ensureContrast("#ffffff", bandBase, 4.5);
   const bandTextSubtle = withAlpha(bandTextColor, 0.85);
   const bandTextMuted = withAlpha(bandTextColor, 0.7);
 
-  // Body accents derived from the team colour. The body background stays
-  // white for legibility, so the accent strip uses the raw team colour and
-  // the subtle body tint is a near-white wash of it.
   const accentStripStart = bandBase;
   const accentStripEnd = shadeHex(bandBase, 0.25);
   const bodyTint = tintHex(bandBase, 0.94);
@@ -276,10 +221,6 @@ export default function ShareableCard({
   const generatePngBlob = async (): Promise<Blob | null> => {
     if (!captureRef.current) return null;
 
-    // Pre-fetch every <img> inside the capture area as a data URL.
-    // html2canvas runs in a cloned document and cannot re-request images
-    // that were CORS-blocked or cached under a different origin; converting
-    // them to data: URLs before the clone guarantees they appear in the PNG.
     const liveImgs = Array.from(
       captureRef.current.querySelectorAll<HTMLImageElement>("img"),
     );
@@ -294,13 +235,6 @@ export default function ShareableCard({
       }),
     );
 
-    // In wide mode the visible preview lives inside a CSS `transform: scale()`
-    // wrapper so it fits the modal. html2canvas measures bounds from the live
-    // element, so a transformed ancestor would shrink the captured canvas to
-    // the preview size. Force the canvas dimensions to the untransformed
-    // layout size and also strip the transform / fixed sizing on the scale
-    // wrapper inside the cloned document so the rendered output is the full
-    // 1080px-wide social card, not the ~480px preview.
     const captureEl = captureRef.current;
     const naturalWidth = wide ? SHARE_WIDTH_WIDE : captureEl.scrollWidth;
     const naturalHeight = captureEl.scrollHeight;
@@ -315,43 +249,14 @@ export default function ShareableCard({
       width: naturalWidth,
       height: naturalHeight,
       onclone: (doc) => {
-        // Strip the global `.dark` class from the cloned document so any
-        // `dark:` Tailwind variants inside the captured share card revert to
-        // their light-mode values — preventing white-on-white text on the
-        // exported PNG when the user has dark mode enabled.
         doc.documentElement.classList.remove("dark");
         doc.body.classList.remove("dark");
 
-        // Swap every image src to its pre-fetched data URL so the cloned
-        // document doesn't need to make network requests (which would hit
-        // CORS restrictions and produce blank image slots in the export).
         doc.querySelectorAll<HTMLImageElement>("img").forEach((img) => {
           const src = img.getAttribute("src") || img.src;
           const dataUrl = dataUrlMap.get(src);
           if (dataUrl) img.src = dataUrl;
         });
-
-        // Reset the scaling wrappers so the cloned share card renders at
-        // its natural 1080px width. Without this, html2canvas would draw
-        // the transformed (scaled-down) version into the canvas.
-        const scaler = doc.querySelector<HTMLElement>(
-          "[data-share-scale-wrapper='true']",
-        );
-        if (scaler) {
-          scaler.style.transform = "none";
-          scaler.style.position = "static";
-          scaler.style.width = `${SHARE_WIDTH_WIDE}px`;
-        }
-        const outer = doc.querySelector<HTMLElement>(
-          "[data-share-scale-outer='true']",
-        );
-        if (outer) {
-          outer.style.width = `${SHARE_WIDTH_WIDE}px`;
-          outer.style.height = "auto";
-          outer.style.minHeight = "0";
-          outer.style.position = "static";
-          outer.style.overflow = "visible";
-        }
       },
     });
     return await new Promise<Blob | null>((resolve) =>
@@ -359,10 +264,62 @@ export default function ShareableCard({
     );
   };
 
+  // Stable ref so event handlers always call the latest version.
+  const generatePngBlobRef = useRef(generatePngBlob);
+  generatePngBlobRef.current = generatePngBlob;
+
+  const runPreviewGeneration = async (cancelledRef: { current: boolean }) => {
+    setPreviewLoading(true);
+    setPreviewError(false);
+    try {
+      const blob = await generatePngBlobRef.current();
+      if (cancelledRef.current) return;
+      if (!blob) {
+        setPreviewError(true);
+        return;
+      }
+      blobRef.current = blob;
+      const url = URL.createObjectURL(blob);
+      setPreviewBlobUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return url;
+      });
+    } catch {
+      if (!cancelledRef.current) setPreviewError(true);
+    } finally {
+      if (!cancelledRef.current) setPreviewLoading(false);
+    }
+  };
+
+  const handleRegenerate = () => {
+    const cancelledRef = { current: false };
+    runPreviewGeneration(cancelledRef);
+  };
+
+  // Generate preview PNG when modal opens; clean up when it closes.
+  useEffect(() => {
+    if (!open) {
+      setPreviewBlobUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+      blobRef.current = null;
+      setPreviewError(false);
+      return;
+    }
+    const cancelledRef = { current: false };
+    runPreviewGeneration(cancelledRef);
+    return () => {
+      cancelledRef.current = true;
+    };
+  // Only re-run when open changes — generatePngBlobRef is stable by design.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   const handleDownload = async () => {
     setWorking(true);
     try {
-      const blob = await generatePngBlob();
+      const blob = blobRef.current ?? (await generatePngBlob());
       if (!blob) throw new Error("Capture failed");
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -388,7 +345,7 @@ export default function ShareableCard({
   const handleShare = async () => {
     setWorking(true);
     try {
-      const blob = await generatePngBlob();
+      const blob = blobRef.current ?? (await generatePngBlob());
       if (!blob) throw new Error("Capture failed");
       const file = new File([blob], fileName, { type: "image/png" });
 
@@ -431,497 +388,524 @@ export default function ShareableCard({
     }
   };
 
-  return (
-    <div className="relative group">
-      {children}
-
-      {/* Share button overlay */}
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          setOpen(true);
+  // The card markup rendered both off-screen (for capture) and never shown
+  // as live HTML in the modal. Keeping it always in the DOM means html2canvas
+  // always sees a clean, unscaled, full-resolution node.
+  const cardMarkup = (
+    <div
+      ref={captureRef}
+      className="bg-white"
+      data-share-card="true"
+      style={wide ? { width: SHARE_WIDTH_WIDE } : undefined}
+    >
+      {/* Header band */}
+      <div
+        className="relative overflow-hidden"
+        style={{
+          ...bandStyle,
+          minHeight: wide ? 260 : 170,
+          paddingLeft: wide ? 40 : 24,
+          paddingRight: wide ? 40 : 24,
+          paddingTop: wide ? 36 : 24,
+          paddingBottom: wide ? 32 : 20,
         }}
-        className="absolute top-2 right-2 md:top-3 md:right-3 z-10 inline-flex items-center justify-center h-8 w-8 rounded-full bg-white/90 dark:bg-neutral-800/90 border border-gray-200 dark:border-neutral-700 text-slate-600 dark:text-slate-300 hover:text-orange-600 hover:border-orange-400 hover:bg-orange-50 dark:hover:bg-neutral-700 transition-all shadow-sm opacity-60 hover:opacity-100 focus:opacity-100"
-        aria-label={`Share ${title}`}
-        title={`Share ${title}`}
-        data-testid={`share-${slug}`}
       >
-        <Share2 className="h-4 w-4" />
-      </button>
+        <DiagonalStripes position="tl" color={BRAND_ORANGE} />
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent
-          className={`w-[calc(100vw-16px)] ${wide ? "max-w-[540px]" : "max-w-lg"} p-0 bg-transparent border-none shadow-none max-h-[92vh] overflow-hidden flex flex-col [&>button]:bg-white/95 [&>button]:rounded-full [&>button]:p-1.5 [&>button]:right-2 [&>button]:top-2 [&>button]:text-slate-700 [&>button]:shadow-md [&>button]:z-20`}
-        >
-          <DialogTitle className="sr-only">
-            Share {title} for {player.name}
-          </DialogTitle>
-          <DialogDescription className="sr-only">
-            Preview a shareable image of {title} and download or share it.
-          </DialogDescription>
-
-          <div className="rounded-xl overflow-hidden bg-white shadow-2xl flex flex-col min-h-0">
-            {/* Scrollable preview area — ref lets us measure actual width for mobile scaling */}
-            <div ref={previewContainerRef} className="overflow-y-auto bg-slate-100 flex-1 min-h-0">
-              <div
-                data-share-scale-outer={wide ? "true" : undefined}
-                style={
-                  wide
-                    ? {
-                        width: actualPreviewWidth,
-                        height:
-                          captureHeight != null
-                            ? captureHeight * previewScale
-                            : undefined,
-                        minHeight: captureHeight == null ? 600 : undefined,
-                        margin: "0 auto",
-                        position: "relative",
-                        overflow: "hidden",
-                      }
-                    : undefined
-                }
-              >
-              <div
-                data-share-scale-wrapper={wide ? "true" : undefined}
-                style={
-                  wide
-                    ? {
-                        transform: `scale(${previewScale})`,
-                        transformOrigin: "top left",
-                        width: SHARE_WIDTH_WIDE,
-                        position: "absolute",
-                        top: 0,
-                        left: 0,
-                      }
-                    : undefined
-                }
-              >
-              <div
-                ref={captureRef}
-                className="bg-white"
-                data-share-card="true"
-                style={wide ? { width: SHARE_WIDTH_WIDE } : undefined}
-              >
-                {/* Header band */}
+        {teamLogos && teamLogos.length >= 2 ? (
+          <div
+            className="relative flex items-center h-full"
+            style={{ minHeight: wide ? 200 : 120, gap: wide ? 28 : 20 }}
+          >
+            <div
+              className="flex items-center flex-shrink-0"
+              style={{ gap: wide ? 14 : 8 }}
+            >
+              {[teamLogos[0], teamLogos[1]].map((tl, i) => {
+                const logoOuter = wide ? 110 : 60;
+                const logoInner = wide ? 96 : 52;
+                return (
                 <div
-                  className="relative overflow-hidden"
-                  style={{
-                    ...bandStyle,
-                    minHeight: wide ? 260 : 170,
-                    paddingLeft: wide ? 40 : 24,
-                    paddingRight: wide ? 40 : 24,
-                    paddingTop: wide ? 36 : 24,
-                    paddingBottom: wide ? 32 : 20,
-                  }}
+                  key={i}
+                  className="flex items-center"
+                  style={{ gap: wide ? 14 : 8 }}
                 >
-                  <DiagonalStripes position="tl" color={BRAND_ORANGE} />
-
-                  {/* Two-team variant: render the pair of team logos with a
-                      "VS" in between, in place of the single player photo /
-                      avatar. Used by Team & Player head-to-head share cards. */}
-                  {teamLogos && teamLogos.length >= 2 ? (
-                    <div
-                      className="relative flex items-center h-full"
-                      style={{ minHeight: wide ? 200 : 120, gap: wide ? 28 : 20 }}
-                    >
-                      <div
-                        className="flex items-center flex-shrink-0"
-                        style={{ gap: wide ? 14 : 8 }}
-                      >
-                        {[teamLogos[0], teamLogos[1]].map((tl, i) => {
-                          const logoOuter = wide ? 110 : 60;
-                          const logoInner = wide ? 96 : 52;
-                          return (
-                          <div
-                            key={i}
-                            className="flex items-center"
-                            style={{ gap: wide ? 14 : 8 }}
-                          >
-                            <div
-                              className="rounded-full bg-white/95 flex items-center justify-center overflow-hidden border-2 border-white/40 shadow"
-                              style={{ width: logoOuter, height: logoOuter }}
-                            >
-                              {tl.logoUrl ? (
-                                <img
-                                  src={tl.logoUrl}
-                                  alt={tl.name}
-                                  crossOrigin="anonymous"
-                                  width={logoInner}
-                                  height={logoInner}
-                                  style={{ width: logoInner, height: logoInner, objectFit: "contain" }}
-                                  onError={(e) => {
-                                    (e.currentTarget as HTMLImageElement).style.display = "none";
-                                  }}
-                                  data-testid={`share-team-logo-${i}`}
-                                />
-                              ) : (
-                                <span
-                                  className="font-bold"
-                                  style={{
-                                    color: shadeHex(player.primaryColor || BRAND_ORANGE, 0.25),
-                                    fontSize: wide ? 36 : 16,
-                                  }}
-                                >
-                                  {(tl.name || "?").charAt(0).toUpperCase()}
-                                </span>
-                              )}
-                            </div>
-                            {i === 0 && (
-                              <div
-                                className="font-black tracking-widest"
-                                style={{ color: titleColor, fontSize: wide ? 22 : 11 }}
-                              >
-                                VS
-                              </div>
-                            )}
-                          </div>
-                          );
-                        })}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div
-                          className="font-bold uppercase"
-                          style={{
-                            color: titleColor,
-                            fontSize: wide ? 16 : 10,
-                            letterSpacing: "0.22em",
-                            marginBottom: wide ? 10 : 6,
-                          }}
-                        >
-                          {title}
-                        </div>
-                        <div
-                          className="font-black leading-tight"
-                          style={{
-                            wordBreak: "break-word",
-                            color: bandTextColor,
-                            fontSize: wide ? 36 : 18,
-                          }}
-                        >
-                          {player.name}
-                        </div>
-                        {player.team && (
-                          <div
-                            className="leading-snug"
-                            style={{
-                              wordBreak: "break-word",
-                              color: bandTextSubtle,
-                              fontSize: wide ? 16 : 11,
-                              marginTop: wide ? 10 : 6,
-                            }}
-                          >
-                            {player.team}
-                          </div>
-                        )}
-                        {shareCaption && (
-                          <div
-                            className="uppercase"
-                            style={{
-                              color: bandTextMuted,
-                              fontSize: wide ? 13 : 10,
-                              letterSpacing: "0.18em",
-                              marginTop: wide ? 12 : 8,
-                            }}
-                          >
-                            {shareCaption}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                  <>
-                  {/* Team logo — large faded watermark anchored to the
-                      right side of the header background. Sits behind all
-                      other content (z-[1]) and adds brand presence without
-                      competing with the player photo or text. */}
-                  {player.teamLogoUrl && (
-                    <div
-                      aria-hidden="true"
-                      className="absolute pointer-events-none z-[1]"
-                      style={{
-                        right: wide ? 36 : 18,
-                        top: "50%",
-                        width: wide ? 210 : 118,
-                        height: wide ? 210 : 118,
-                        marginTop: wide ? -105 : -59,
-                        opacity: 0.18,
-                      }}
-                    >
+                  <div
+                    className="rounded-full bg-white/95 flex items-center justify-center overflow-hidden border-2 border-white/40 shadow"
+                    style={{ width: logoOuter, height: logoOuter }}
+                  >
+                    {tl.logoUrl ? (
                       <img
-                        src={player.teamLogoUrl}
-                        alt=""
+                        src={tl.logoUrl}
+                        alt={tl.name}
                         crossOrigin="anonymous"
                         style={{
-                          width: "100%",
-                          height: "100%",
-                          objectFit: "contain",
-                        }}
-                        onError={(e) => {
-                          (e.currentTarget as HTMLImageElement).style.display = "none";
-                        }}
-                      />
-                    </div>
-                  )}
-
-                  {player.photoUrl ? (
-                    <div
-                      className="absolute bottom-0 pointer-events-none z-[2]"
-                      style={{
-                        left: wide ? 32 : 16,
-                        width: wide ? 220 : 128,
-                        height: wide ? 280 : 168,
-                        overflow: "hidden",
-                      }}
-                    >
-                      {/* Soft circular spotlight behind the cutout */}
-                      <div
-                        aria-hidden="true"
-                        className="absolute rounded-full"
-                        style={{
-                          width: wide ? 180 : 104,
-                          height: wide ? 180 : 104,
-                          left: wide ? 20 : 12,
-                          top: wide ? 40 : 22,
-                          background:
-                            "radial-gradient(circle, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 70%)",
-                        }}
-                      />
-                      {/* Use height:100%/width:auto instead of object-fit:contain
-                          so html2canvas renders the image identically to the
-                          browser preview (html2canvas ignores object-fit). */}
-                      <img
-                        src={player.photoUrl}
-                        alt={player.name}
-                        crossOrigin="anonymous"
-                        style={{
-                          position: "absolute",
-                          bottom: 0,
-                          left: "50%",
-                          transform: "translateX(-50%)",
-                          height: "100%",
+                          maxWidth: logoInner,
+                          maxHeight: logoInner,
                           width: "auto",
-                          maxWidth: "none",
+                          height: "auto",
                           display: "block",
                         }}
                         onError={(e) => {
                           (e.currentTarget as HTMLImageElement).style.display = "none";
                         }}
+                        data-testid={`share-team-logo-${i}`}
                       />
-                    </div>
-                  ) : null}
-
-                  <div
-                    className="relative flex items-center h-full"
-                    style={{
-                      gap: wide ? 32 : 20,
-                      paddingLeft: player.photoUrl ? (wide ? 252 : 144) : 0,
-                      // Reserve space so text doesn't run behind the team logo
-                      // watermark (absolute-positioned at right:36/18, width:210/118).
-                      // Calculation: logo_width + logo_right - header_paddingRight + buffer
-                      paddingRight: player.teamLogoUrl ? (wide ? 230 : 130) : 0,
-                      minHeight: wide ? 200 : 120,
-                    }}
-                  >
-                    {!player.photoUrl && (
-                      <PlayerAvatar player={player} size={wide ? 140 : 76} />
+                    ) : (
+                      <span
+                        className="font-bold"
+                        style={{
+                          color: shadeHex(player.primaryColor || BRAND_ORANGE, 0.25),
+                          fontSize: wide ? 36 : 16,
+                        }}
+                      >
+                        {(tl.name || "?").charAt(0).toUpperCase()}
+                      </span>
                     )}
-                    <div className="flex-1 min-w-0 flex flex-col justify-center">
-                      <div
-                        className="font-bold uppercase"
-                        style={{
-                          color: titleColor,
-                          lineHeight: 1,
-                          marginBottom: wide ? 14 : 8,
-                          fontSize: wide ? 18 : 10,
-                          letterSpacing: "0.22em",
-                        }}
-                      >
-                        {title}
-                      </div>
-                      <div
-                        className="font-black"
-                        style={{
-                          wordBreak: "break-word",
-                          color: bandTextColor,
-                          lineHeight: 1.1,
-                          fontSize: wide ? 44 : 20,
-                        }}
-                      >
-                        {player.name}
-                      </div>
-                      {player.team && (
-                        <div
-                          style={{
-                            wordBreak: "break-word",
-                            color: bandTextSubtle,
-                            marginTop: wide ? 14 : 8,
-                            lineHeight: 1.1,
-                            fontSize: wide ? 22 : 12,
-                          }}
-                        >
-                          {player.team}
-                        </div>
-                      )}
-                      {shareCaption && (
-                        <div
-                          className="font-semibold uppercase"
-                          style={{
-                            color: bandTextMuted,
-                            marginTop: wide ? 16 : 10,
-                            lineHeight: 1,
-                            fontSize: wide ? 16 : 10,
-                            letterSpacing: "0.2em",
-                          }}
-                        >
-                          {shareCaption}
-                        </div>
-                      )}
-                    </div>
                   </div>
-                  </>
+                  {i === 0 && (
+                    <div
+                      className="font-black tracking-widest"
+                      style={{ color: titleColor, fontSize: wide ? 22 : 11 }}
+                    >
+                      VS
+                    </div>
                   )}
                 </div>
-
-                {/* Team-colour accent strip bridging the header band into the
-                    body, so the team brand carries through visually. */}
+                );
+              })}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div
+                className="font-bold uppercase"
+                style={{
+                  color: titleColor,
+                  fontSize: wide ? 16 : 10,
+                  letterSpacing: "0.22em",
+                  marginBottom: wide ? 10 : 6,
+                }}
+              >
+                {title}
+              </div>
+              <div
+                className="font-black leading-tight"
+                style={{
+                  wordBreak: "break-word",
+                  color: bandTextColor,
+                  fontSize: wide ? 36 : 18,
+                }}
+              >
+                {player.name}
+              </div>
+              {player.team && (
                 <div
-                  aria-hidden="true"
+                  className="leading-snug"
                   style={{
-                    height: wide ? 8 : 5,
-                    background: `linear-gradient(90deg, ${accentStripStart} 0%, ${accentStripEnd} 100%)`,
+                    wordBreak: "break-word",
+                    color: bandTextSubtle,
+                    fontSize: wide ? 16 : 11,
+                    marginTop: wide ? 10 : 6,
                   }}
-                />
-
-                {/* Card content. We force light styles here so that any
-                    `dark:` Tailwind variants from the embedded share content
-                    do not flip to white-on-white when the user is in dark
-                    mode. The on-page (non-modal) content keeps its own dark
-                    behaviour because it lives outside this wrapper. */}
-                <div
-                  className="share-content"
-                  style={{
-                    background: `linear-gradient(180deg, #ffffff 0%, ${bodyTint} 100%)`,
-                    color: "#0f172a",
-                    colorScheme: "light",
-                    padding: wide ? 36 : 16,
-                  }}
-                  data-share-body="true"
                 >
-                  {shareContent ?? children}
+                  {player.team}
                 </div>
-
-                {/* Footer band */}
+              )}
+              {shareCaption && (
                 <div
-                  className="relative flex items-center justify-between"
+                  className="uppercase"
                   style={{
-                    ...bandStyle,
-                    height: wide ? 110 : 72,
-                    paddingLeft: wide ? 40 : 24,
-                    paddingRight: wide ? 40 : 24,
+                    color: bandTextMuted,
+                    fontSize: wide ? 13 : 10,
+                    letterSpacing: "0.18em",
+                    marginTop: wide ? 12 : 8,
                   }}
                 >
-                  <DiagonalStripes position="br" color={BRAND_ORANGE} />
+                  {shareCaption}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+        <>
+        {player.teamLogoUrl && (
+          <div
+            aria-hidden="true"
+            className="absolute pointer-events-none z-[1]"
+            style={{
+              right: wide ? 36 : 18,
+              top: "50%",
+              width: wide ? 210 : 118,
+              height: wide ? 210 : 118,
+              marginTop: wide ? -105 : -59,
+              opacity: 0.18,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <img
+              src={player.teamLogoUrl}
+              alt=""
+              crossOrigin="anonymous"
+              style={{
+                maxWidth: "100%",
+                maxHeight: "100%",
+                width: "auto",
+                height: "auto",
+                display: "block",
+              }}
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).style.display = "none";
+              }}
+            />
+          </div>
+        )}
 
-                  <div
-                    className="relative flex items-center"
-                    style={{ gap: wide ? 18 : 12 }}
-                  >
-                    <img
-                      src={SwishLogo}
-                      alt="Swish Assistant"
-                      width={wide ? 56 : 36}
-                      height={wide ? 56 : 36}
-                      className="block flex-shrink-0"
-                      style={{ width: wide ? 56 : 36, height: wide ? 56 : 36 }}
-                      crossOrigin="anonymous"
-                    />
-                    <div
-                      className="font-bold tracking-wide"
-                      style={{
-                        color: bandTextColor,
-                        lineHeight: 1,
-                        fontSize: wide ? 24 : 16,
-                      }}
+        {player.photoUrl ? (
+          <div
+            className="absolute bottom-0 pointer-events-none z-[2]"
+            style={{
+              left: wide ? 32 : 16,
+              width: wide ? 220 : 128,
+              height: wide ? 280 : 168,
+              overflow: "hidden",
+            }}
+          >
+            <div
+              aria-hidden="true"
+              className="absolute rounded-full"
+              style={{
+                width: wide ? 180 : 104,
+                height: wide ? 180 : 104,
+                left: wide ? 20 : 12,
+                top: wide ? 40 : 22,
+                background:
+                  "radial-gradient(circle, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 70%)",
+              }}
+            />
+            <img
+              src={player.photoUrl}
+              alt={player.name}
+              crossOrigin="anonymous"
+              style={{
+                position: "absolute",
+                bottom: 0,
+                left: "50%",
+                transform: "translateX(-50%)",
+                height: "100%",
+                width: "auto",
+                maxWidth: "none",
+                display: "block",
+              }}
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).style.display = "none";
+              }}
+            />
+          </div>
+        ) : null}
+
+        <div
+          className="relative flex items-center h-full"
+          style={{
+            gap: wide ? 32 : 20,
+            paddingLeft: player.photoUrl ? (wide ? 252 : 144) : 0,
+            paddingRight: player.teamLogoUrl ? (wide ? 230 : 130) : 0,
+            minHeight: wide ? 200 : 120,
+          }}
+        >
+          {!player.photoUrl && (
+            <PlayerAvatar player={player} size={wide ? 140 : 76} />
+          )}
+          <div className="flex-1 min-w-0 flex flex-col justify-center">
+            <div
+              className="font-bold uppercase"
+              style={{
+                color: titleColor,
+                lineHeight: 1,
+                marginBottom: wide ? 14 : 8,
+                fontSize: wide ? 18 : 10,
+                letterSpacing: "0.22em",
+              }}
+            >
+              {title}
+            </div>
+            <div
+              className="font-black"
+              style={{
+                wordBreak: "break-word",
+                color: bandTextColor,
+                lineHeight: 1.1,
+                fontSize: wide ? 44 : 20,
+              }}
+            >
+              {player.name}
+            </div>
+            {player.team && (
+              <div
+                style={{
+                  wordBreak: "break-word",
+                  color: bandTextSubtle,
+                  marginTop: wide ? 14 : 8,
+                  lineHeight: 1.1,
+                  fontSize: wide ? 22 : 12,
+                }}
+              >
+                {player.team}
+              </div>
+            )}
+            {shareCaption && (
+              <div
+                className="font-semibold uppercase"
+                style={{
+                  color: bandTextMuted,
+                  marginTop: wide ? 16 : 10,
+                  lineHeight: 1,
+                  fontSize: wide ? 16 : 10,
+                  letterSpacing: "0.2em",
+                }}
+              >
+                {shareCaption}
+              </div>
+            )}
+          </div>
+        </div>
+        </>
+        )}
+      </div>
+
+      {/* Accent strip */}
+      <div
+        aria-hidden="true"
+        style={{
+          height: wide ? 8 : 5,
+          background: `linear-gradient(90deg, ${accentStripStart} 0%, ${accentStripEnd} 100%)`,
+        }}
+      />
+
+      {/* Card content */}
+      <div
+        className="share-content"
+        style={{
+          background: `linear-gradient(180deg, #ffffff 0%, ${bodyTint} 100%)`,
+          color: "#0f172a",
+          colorScheme: "light",
+          padding: wide ? 36 : 16,
+        }}
+        data-share-body="true"
+      >
+        {shareContent ?? children}
+      </div>
+
+      {/* Footer band */}
+      <div
+        className="relative flex items-center justify-between"
+        style={{
+          ...bandStyle,
+          height: wide ? 110 : 72,
+          paddingLeft: wide ? 40 : 24,
+          paddingRight: wide ? 40 : 24,
+        }}
+      >
+        <DiagonalStripes position="br" color={BRAND_ORANGE} />
+
+        <div
+          className="relative"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: wide ? 18 : 12,
+          }}
+        >
+          <img
+            src={SwishLogo}
+            alt="Swish Assistant"
+            crossOrigin="anonymous"
+            style={{
+              width: wide ? 56 : 36,
+              height: wide ? 56 : 36,
+              display: "block",
+              flexShrink: 0,
+            }}
+          />
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              color: bandTextColor,
+              lineHeight: 1,
+              fontSize: wide ? 24 : 16,
+              fontWeight: "bold",
+              letterSpacing: "0.025em",
+            }}
+          >
+            swishassistant.com
+          </div>
+        </div>
+
+        <div
+          className="relative"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            color: bandTextMuted,
+            lineHeight: 1,
+            fontSize: wide ? 16 : 11,
+            letterSpacing: "0.22em",
+            fontWeight: 600,
+            textTransform: "uppercase",
+            textAlign: "right",
+          }}
+        >
+          Stats &amp; Insights
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      {/* Off-screen capture node — always in the DOM so html2canvas sees a
+          clean, unscaled, full-resolution element regardless of modal state. */}
+      <div
+        aria-hidden="true"
+        style={{
+          position: "fixed",
+          left: -9999,
+          top: -9999,
+          pointerEvents: "none",
+          zIndex: -1,
+        }}
+      >
+        {cardMarkup}
+      </div>
+
+      <div className="relative group">
+        {children}
+
+        {/* Share button overlay */}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen(true);
+          }}
+          className="absolute top-2 right-2 md:top-3 md:right-3 z-10 inline-flex items-center justify-center h-8 w-8 rounded-full bg-white/90 dark:bg-neutral-800/90 border border-gray-200 dark:border-neutral-700 text-slate-600 dark:text-slate-300 hover:text-orange-600 hover:border-orange-400 hover:bg-orange-50 dark:hover:bg-neutral-700 transition-all shadow-sm opacity-60 hover:opacity-100 focus:opacity-100"
+          aria-label={`Share ${title}`}
+          title={`Share ${title}`}
+          data-testid={`share-${slug}`}
+        >
+          <Share2 className="h-4 w-4" />
+        </button>
+
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogContent
+            className={`w-[calc(100vw-16px)] ${wide ? "max-w-[540px]" : "max-w-lg"} p-0 bg-transparent border-none shadow-none max-h-[92vh] overflow-hidden flex flex-col [&>button]:bg-white/95 [&>button]:rounded-full [&>button]:p-1.5 [&>button]:right-2 [&>button]:top-2 [&>button]:text-slate-700 [&>button]:shadow-md [&>button]:z-20`}
+          >
+            <DialogTitle className="sr-only">
+              Share {title} for {player.name}
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              Preview a shareable image of {title} and download or share it.
+            </DialogDescription>
+
+            <div className="rounded-xl overflow-hidden bg-white shadow-2xl flex flex-col min-h-0">
+              {/* Preview area — shows the actual PNG that will be downloaded */}
+              <div className="overflow-y-auto bg-slate-100 flex-1 min-h-0 flex items-center justify-center" style={{ minHeight: 200 }}>
+                {previewLoading ? (
+                  <div className="flex flex-col items-center gap-3 py-16 text-slate-500">
+                    <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
+                    <span className="text-sm">Generating preview…</span>
+                  </div>
+                ) : previewError ? (
+                  <div className="flex flex-col items-center gap-3 py-16 text-slate-500">
+                    <AlertTriangle className="h-8 w-8 text-amber-500" />
+                    <span className="text-sm text-center px-4">
+                      Preview generation failed.
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRegenerate}
+                      className="gap-2"
                     >
-                      swishassistant.com
+                      <RefreshCw className="h-3.5 w-3.5" />
+                      Retry
+                    </Button>
+                  </div>
+                ) : previewBlobUrl ? (
+                  <img
+                    src={previewBlobUrl}
+                    alt={`Share preview for ${title}`}
+                    className="w-full h-auto block"
+                    style={{ display: "block" }}
+                  />
+                ) : null}
+              </div>
+
+              {/* Sticky action bar */}
+              {(() => {
+                const canNativeShare = (() => {
+                  try {
+                    const probe = new File([], "probe.png", { type: "image/png" });
+                    return !!(
+                      navigator.canShare &&
+                      (navigator as Navigator & { canShare?: (d: ShareData) => boolean }).canShare({ files: [probe] })
+                    );
+                  } catch {
+                    return false;
+                  }
+                })();
+
+                return (
+                  <div className="flex items-center gap-2 p-3 bg-white border-t border-slate-200 flex-shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={handleRegenerate}
+                      disabled={previewLoading || working}
+                      title="Regenerate preview"
+                      className="text-slate-500 hover:text-orange-600 flex-shrink-0"
+                      data-testid="share-regenerate-btn"
+                    >
+                      <RefreshCw className={`h-4 w-4 ${previewLoading ? "animate-spin" : ""}`} />
+                    </Button>
+                    <div className="flex-1 grid grid-cols-2 gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={handleDownload}
+                        disabled={working || previewLoading}
+                        className="gap-2"
+                        data-testid="share-download-btn"
+                      >
+                        {working ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Download className="h-4 w-4" />
+                        )}
+                        {canNativeShare ? "Files" : "Download"}
+                      </Button>
+                      <Button
+                        onClick={handleShare}
+                        disabled={working || previewLoading}
+                        className="gap-2 text-white"
+                        style={{ backgroundColor: BRAND_ORANGE }}
+                        data-testid="share-share-btn"
+                      >
+                        {working ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Share2 className="h-4 w-4" />
+                        )}
+                        {canNativeShare ? "Save to Photos" : "Share"}
+                      </Button>
                     </div>
                   </div>
-
-                  <div
-                    className="relative text-right font-semibold uppercase"
-                    style={{
-                      color: bandTextMuted,
-                      lineHeight: 1,
-                      fontSize: wide ? 16 : 11,
-                      letterSpacing: "0.22em",
-                    }}
-                  >
-                    Stats &amp; Insights
-                  </div>
-                </div>
-              </div>
-              </div>
-              </div>
+                );
+              })()}
             </div>
-
-            {/* Sticky action bar (NOT inside captureRef) */}
-            {(() => {
-              // Detect whether the device supports native file sharing (iOS /
-              // Android). We probe with a dummy PNG file so the label can tell
-              // the user exactly what will happen on their device.
-              const canNativeShare = (() => {
-                try {
-                  const probe = new File([], "probe.png", { type: "image/png" });
-                  return !!(
-                    navigator.canShare &&
-                    (navigator as Navigator & { canShare?: (d: ShareData) => boolean }).canShare({ files: [probe] })
-                  );
-                } catch {
-                  return false;
-                }
-              })();
-
-              return (
-                <div className="grid grid-cols-2 gap-2 p-3 bg-white border-t border-slate-200 flex-shrink-0">
-                  <Button
-                    variant="outline"
-                    onClick={handleDownload}
-                    disabled={working}
-                    className="gap-2"
-                    data-testid="share-download-btn"
-                  >
-                    {working ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Download className="h-4 w-4" />
-                    )}
-                    {/* On mobile, native share goes to Photos so "Download"
-                        becomes the fallback / desktop label */}
-                    {canNativeShare ? "Files" : "Download"}
-                  </Button>
-                  <Button
-                    onClick={handleShare}
-                    disabled={working}
-                    className="gap-2 text-white"
-                    style={{ backgroundColor: BRAND_ORANGE }}
-                    data-testid="share-share-btn"
-                  >
-                    {working ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Share2 className="h-4 w-4" />
-                    )}
-                    {/* When native share is available the OS sheet lets the user
-                        save directly to Photos / Camera Roll */}
-                    {canNativeShare ? "Save to Photos" : "Share"}
-                  </Button>
-                </div>
-              );
-            })()}
-          </div>
-        </DialogContent>
-      </Dialog>
-    </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+    </>
   );
 }

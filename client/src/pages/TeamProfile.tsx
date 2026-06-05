@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import ShotChart, { type ShotData } from "@/components/ShotChart";
+import { Instagram } from "lucide-react";
 
 interface League {
   league_id: string;
@@ -292,6 +293,7 @@ export default function TeamProfile() {
   const [search, setSearch] = useState("");
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [teamDescription, setTeamDescription] = useState<string | null>(null);
+  const [teamInstagramUrl, setTeamInstagramUrl] = useState<string | null>(null);
   const [isOwner, setIsOwner] = useState(false);
   const { user } = useAuth();
   const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
@@ -474,7 +476,7 @@ export default function TeamProfile() {
       }
 
       const { data, error } = await supabase
-        .from("leagues")
+        .from("competitions")
         .select("name, slug")
         .ilike("name", `%${search}%`)
         .eq("is_public", true)
@@ -491,7 +493,7 @@ export default function TeamProfile() {
 
   const handleSearch = () => {
     if (search.trim()) {
-      navigate(`/league/${search}`);
+      navigate(`/competition/${search}`);
     }
   };
 
@@ -508,7 +510,7 @@ export default function TeamProfile() {
         let leagueId: string | null = null;
         if (leagueSlug) {
           const { data: leagueData } = await supabase
-            .from("leagues")
+            .from("competitions")
             .select("league_id")
             .eq("slug", leagueSlug)
             .single();
@@ -540,7 +542,7 @@ export default function TeamProfile() {
         // Build teams query with optional league filter
         let teamsQuery = supabase
           .from("teams")
-          .select("description, league_id")
+          .select("description, league_id, social_instagram")
           .eq("name", normalizedTeamName);
         
         if (leagueId) {
@@ -577,6 +579,9 @@ export default function TeamProfile() {
         
         if (teamData?.description) {
           setTeamDescription(teamData.description);
+        }
+        if (teamData?.social_instagram) {
+          setTeamInstagramUrl(teamData.social_instagram);
         }
 
         if (!scheduleError && upcomingGamesData) {
@@ -888,7 +893,7 @@ export default function TeamProfile() {
           let league: League | null = null;
           if (allStats[0]?.league_id) {
             const { data: leagueData } = await supabase
-              .from("leagues")
+              .from("competitions")
               .select("*")
               .eq("league_id", allStats[0].league_id)
               .single();
@@ -976,7 +981,7 @@ export default function TeamProfile() {
         <meta
           property="og:url"
           content={leagueSlug 
-            ? `https://www.swishassistant.com/league/${leagueSlug}/team/${encodeURIComponent(team.name.toLowerCase().replace(/\s+/g, '-'))}`
+            ? `https://www.swishassistant.com/competition/${leagueSlug}/team/${encodeURIComponent(team.name.toLowerCase().replace(/\s+/g, '-'))}`
             : `https://www.swishassistant.com/team/${encodeURIComponent(team.name.toLowerCase().replace(/\s+/g, '-'))}`}
         />
         <meta
@@ -993,7 +998,7 @@ export default function TeamProfile() {
           }
         />
         <link rel="canonical" href={leagueSlug 
-          ? `https://www.swishassistant.com/league/${leagueSlug}/team/${encodeURIComponent(team.name.toLowerCase().replace(/\s+/g, '-'))}`
+          ? `https://www.swishassistant.com/competition/${leagueSlug}/team/${encodeURIComponent(team.name.toLowerCase().replace(/\s+/g, '-'))}`
           : `https://www.swishassistant.com/team/${encodeURIComponent(team.name.toLowerCase().replace(/\s+/g, '-'))}`} />
       </Helmet>
       
@@ -1032,7 +1037,7 @@ export default function TeamProfile() {
                   onClick={() => {
                     setSearch("");
                     setSuggestions([]);
-                    navigate(`/league/${item.slug}`);
+                    navigate(`/competition/${item.slug}`);
                   }}
                   className="px-4 py-2 cursor-pointer hover:bg-orange-100 dark:hover:bg-neutral-700 text-left text-slate-800 dark:text-white"
                 >
@@ -1053,7 +1058,7 @@ export default function TeamProfile() {
           </button>
           {team?.league && (
             <button
-              onClick={() => navigate(`/league/${team.league?.slug}`)}
+              onClick={() => navigate(`/competition/${team.league?.slug}`)}
               className="text-slate-600 dark:text-slate-300 hover:text-orange-500 dark:hover:text-orange-400"
             >
               Back to League
@@ -1091,13 +1096,24 @@ export default function TeamProfile() {
               <div className="text-base md:text-lg opacity-90">
                 Average Team Score: <span className="font-bold">{team.avgTeamPoints} PPG</span>
               </div>
-              {team.league && (
-                <div className="mt-3">
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {team.league && (
                   <span className="bg-white/20 px-3 py-1 rounded-full text-xs md:text-sm">
                     {team.league.name}
                   </span>
-                </div>
-              )}
+                )}
+                {teamInstagramUrl && (
+                  <a
+                    href={teamInstagramUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold text-white bg-white/20 hover:bg-white/30 border border-white/30 transition-colors"
+                  >
+                    <Instagram className="h-3 w-3" />
+                    Instagram
+                  </a>
+                )}
+              </div>
             </div>
           </div>
         </div>

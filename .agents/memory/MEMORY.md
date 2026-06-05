@@ -1,0 +1,2 @@
+- [Trending Performance backend caching](trending-perf-backend.md) — vw_player_game_scores times out from browser; must query server-side with in-memory cache.
+- [Leagues↔Competitions rename](leagues-competitions-rename.md) — "league" = brand, "competition" = season; DB migration still needed; two intentional .from("leagues") calls must stay.

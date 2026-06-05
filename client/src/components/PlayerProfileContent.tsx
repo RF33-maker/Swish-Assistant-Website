@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Trophy, Filter } from "lucide-react";
+import { ArrowLeft, Trophy, Filter, Instagram } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { generatePlayerAnalysis, type PlayerAnalysisData } from "@/lib/ai-analysis";
@@ -31,7 +31,7 @@ import { PlayerPerformanceSplits } from "@/components/PlayerPerformanceSplits";
 // `team_name`, `shirtNumber`, and `height_cm` when alias fields are
 // absent.
 const PLAYER_PROFILE_COLUMNS =
-  "id, slug, full_name, team_name, position, shirtNumber, league_id, photo_path_bg_removed, photo_path, photo_focus_y, height_cm, date_of_birth";
+  "id, slug, full_name, team_name, position, shirtNumber, league_id, photo_path_bg_removed, photo_path, photo_focus_y, height_cm, date_of_birth, current_team, previous_teams, instagram_handle";
 
 interface PlayerStat {
   id: string;
@@ -131,7 +131,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
   const [playerStats, setPlayerStats] = useState<PlayerStat[]>([]);
   const [seasonAverages, setSeasonAverages] = useState<SeasonAverages | null>(null);
   const [playerRankings, setPlayerRankings] = useState<PlayerRankings | null>(null);
-  const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string; position?: string; number?: number; leagueId?: string; playerId?: string; photoPath?: string | null; sharePhotoPath?: string | null; photoFocusY?: number | null; previousTeams?: string[]; height?: string | null; heightCm?: number | null; dateOfBirth?: string | null } | null>(null);
+  const [playerInfo, setPlayerInfo] = useState<{ name: string; team: string; position?: string; number?: number; leagueId?: string; playerId?: string; photoPath?: string | null; sharePhotoPath?: string | null; photoFocusY?: number | null; previousTeams?: string[]; height?: string | null; heightCm?: number | null; dateOfBirth?: string | null; instagramUrl?: string | null; instagramHandle?: string | null; dbCurrentTeam?: string | null; dbPreviousTeams?: string[] | null } | null>(null);
   const [playerLeagues, setPlayerLeagues] = useState<{ id: string; name: string; slug: string }[]>([]);
   const [playerMatches, setPlayerMatches] = useState<PlayerMatch[]>([]);
   const [nameVariations, setNameVariations] = useState<string[]>([]);
@@ -679,6 +679,11 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
           height: initialPlayer.height || null,
           heightCm: initialPlayer.height_cm || null,
           dateOfBirth: initialPlayer.date_of_birth || null,
+          instagramHandle: initialPlayer.instagram_handle || null,
+          dbCurrentTeam: initialPlayer.current_team || null,
+          dbPreviousTeams: (initialPlayer.previous_teams && initialPlayer.previous_teams.length > 0)
+            ? initialPlayer.previous_teams
+            : null,
         };
 
         const playerIds = matches.map(m => m.id);
@@ -1281,6 +1286,28 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
     };
   }, [playerInfo?.team, playerInfo?.leagueId]);
 
+  // Secondary graceful fetch for instagram_url — kept separate from the main
+  // profile query so that a missing column (pre-migration) fails silently here
+  // rather than breaking the entire player profile load.
+  useEffect(() => {
+    const playerId = playerInfo?.playerId;
+    if (!playerId) return;
+    let cancelled = false;
+    supabase
+      .from('players')
+      .select('social_instagram')
+      .eq('id', playerId)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (cancelled || error || !data) return;
+        const url = (data as any).social_instagram as string | null | undefined;
+        if (url) {
+          setPlayerInfo(prev => prev ? { ...prev, instagramUrl: url } : null);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [playerInfo?.playerId]);
+
   // Separate photo for share/social graphics — uses photo_path (original/non-bg-removed).
   // Falls back to the bg-removed banner photo if no original is set so existing players
   // still get a player image on shareable cards.
@@ -1491,6 +1518,36 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
         </div>
       )}
 
+      {playerInfo && (playerInfo.instagramHandle || playerInfo.dbCurrentTeam || (playerInfo.dbPreviousTeams && playerInfo.dbPreviousTeams.length > 0)) && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-1 py-2 mt-1">
+          {playerInfo.dbCurrentTeam && (
+            <span className="inline-flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300">
+              <span className="font-semibold text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wide">Current Team</span>
+              <span className="font-medium">{playerInfo.dbCurrentTeam}</span>
+            </span>
+          )}
+          {playerInfo.dbPreviousTeams && playerInfo.dbPreviousTeams.length > 0 && (
+            <span className="inline-flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300">
+              <span className="font-semibold text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wide">Also played for</span>
+              <span>{playerInfo.dbPreviousTeams.join(", ")}</span>
+            </span>
+          )}
+          {playerInfo.instagramHandle && (
+            <a
+              href={`https://www.instagram.com/${playerInfo.instagramHandle.replace(/^@/, "")}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-pink-600 dark:text-pink-400 hover:text-pink-700 dark:hover:text-pink-300 transition-colors"
+            >
+              <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current" aria-hidden="true">
+                <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/>
+              </svg>
+              @{playerInfo.instagramHandle.replace(/^@/, "")}
+            </a>
+          )}
+        </div>
+      )}
+
       <div className="space-y-4 md:space-y-5 mt-4 md:mt-5">
         {filteredSeasonAverages && (() => {
           type StatTile = { value: number; label: string; rank?: number };
@@ -1609,14 +1666,28 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
                       <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                         Season Averages
                       </span>
-                      {selectedLeagueFilter !== "all" && (
+                      {playerMatches.length > 1 ? (
+                        <Select value={selectedLeagueFilter} onValueChange={setSelectedLeagueFilter}>
+                          <SelectTrigger className="h-7 w-auto min-w-[130px] text-xs border-gray-200 dark:border-neutral-600 dark:bg-neutral-800 dark:text-white">
+                            <SelectValue placeholder="All Competitions" />
+                          </SelectTrigger>
+                          <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
+                            <SelectItem value="all" className="text-xs dark:text-white dark:focus:bg-neutral-700">All Competitions</SelectItem>
+                            {Array.from(new Set(playerMatches.map(m => m.league_id))).filter(Boolean).map(leagueId => (
+                              <SelectItem key={leagueId} value={leagueId} className="text-xs dark:text-white dark:focus:bg-neutral-700">
+                                {leagueNames.get(leagueId) || leagueId}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : selectedLeagueFilter !== "all" ? (
                         <span
                           className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
                           style={{ backgroundColor: pagePillBg, color: pageAccent }}
                         >
                           {leagueNames.get(selectedLeagueFilter) || 'Filtered'}
                         </span>
-                      )}
+                      ) : null}
                     </div>
                     <div className="grid grid-cols-3 md:grid-cols-6 gap-2 md:gap-2.5">
                       {seasonStats.map((stat, i) => (
@@ -1929,7 +2000,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
               {playerLeagues.map((league) => (
                 <button
                   key={league.id}
-                  onClick={() => setLocation(`/league/${league.slug}`)}
+                  onClick={() => setLocation(`/competition/${league.slug}`)}
                   className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-neutral-700 hover:border-orange-300 dark:hover:border-orange-500/50 bg-white dark:bg-neutral-800 hover:bg-orange-50 dark:hover:bg-neutral-700 transition-colors text-sm font-medium text-slate-700 dark:text-slate-300"
                 >
                   <Trophy className="h-4 w-4 text-orange-500" />
@@ -1937,6 +2008,21 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
                 </button>
               ))}
             </div>
+          </div>
+        )}
+
+        {playerInfo?.instagramUrl && (
+          <div className="mb-4">
+            <a
+              href={playerInfo.instagramUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold text-white hover:opacity-80 transition-opacity"
+              style={{ background: "linear-gradient(135deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)" }}
+            >
+              <Instagram className="h-4 w-4" />
+              Follow on Instagram
+            </a>
           </div>
         )}
 
@@ -2014,29 +2100,14 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
         </div>
         </ShareableCard>
 
-        {playerMatches.length > 1 && (
-          <div className="flex flex-wrap items-center gap-2">
-            <Filter className="h-4 w-4 text-orange-500" />
-            <span className="text-sm text-slate-600 dark:text-slate-400">Competition:</span>
-            <Select value={selectedLeagueFilter} onValueChange={setSelectedLeagueFilter}>
-              <SelectTrigger className="w-auto min-w-[160px] h-8 text-sm border-gray-200 dark:border-neutral-600 dark:bg-neutral-800 dark:text-white" data-testid="select-league-filter">
-                <SelectValue placeholder="Select" />
-              </SelectTrigger>
-              <SelectContent className="dark:bg-neutral-800 dark:border-neutral-700">
-                <SelectItem value="all" data-testid="select-league-all" className="dark:text-white dark:focus:bg-neutral-700">All Competitions</SelectItem>
-                {Array.from(new Set(playerMatches.map(m => m.league_id))).filter(Boolean).map(leagueId => (
-                  <SelectItem key={leagueId} value={leagueId} data-testid={`select-league-${leagueId}`} className="dark:text-white dark:focus:bg-neutral-700">
-                    {leagueNames.get(leagueId) || leagueId}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-
         <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-100 dark:border-neutral-800">
+          <div className="px-4 py-3 border-b border-gray-100 dark:border-neutral-800 flex items-center justify-between">
             <span className="text-base md:text-lg font-bold text-slate-800 dark:text-white">Game Log</span>
+            {selectedLeagueFilter !== "all" && (
+              <span className="text-xs text-slate-400 dark:text-slate-500">
+                Filtered: {leagueNames.get(selectedLeagueFilter) || 'Competition'}
+              </span>
+            )}
           </div>
           {filteredStats.length === 0 ? (
             <div className="p-6 md:p-8 text-center text-slate-500 dark:text-slate-400 text-sm">

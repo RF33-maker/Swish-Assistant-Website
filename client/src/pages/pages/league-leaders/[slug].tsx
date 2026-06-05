@@ -16,6 +16,7 @@ import {
   getAdvancedLeaderSections,
   type AdvancedLeaderDef,
 } from "@/lib/advancedStats";
+import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
 
 interface ChildLeague {
   league_id: string;
@@ -180,7 +181,7 @@ export default function LeagueLeadersPage() {
         setError(null);
 
         const { data: leagueData, error: leagueError } = await supabase
-          .from("leagues")
+          .from("competitions")
           .select("*")
           .eq("slug", slug)
           .single();
@@ -219,7 +220,7 @@ export default function LeagueLeadersPage() {
 
           const { data: pageData, error: pageError } = await supabase
             .from("player_stats")
-            .select("*, players:player_id(full_name, slug)")
+            .select("*, players:player_id(full_name, slug, photo_path_bg_removed)")
             .in("league_id", leagueIdsToQuery)
             .range(page * pageSize, (page + 1) * pageSize - 1);
           
@@ -387,6 +388,7 @@ export default function LeagueLeadersPage() {
           player_id: stat.player_id || stat.id,
           player_ids: new Set<string>([stat.player_id || stat.id]),
           player_slug: stat.players?.slug || null,
+          photo_path: stat.players?.photo_path_bg_removed || null,
           name: playerName,
           team_name: teamName,
           latest_game_ts: 0,
@@ -452,6 +454,9 @@ export default function LeagueLeadersPage() {
       target.name = getMostCompleteName([target.name, source.name]);
       if (!target.player_slug && source.player_slug) {
         target.player_slug = source.player_slug;
+      }
+      if (!target.photo_path && source.photo_path) {
+        target.photo_path = source.photo_path;
       }
       if (source.player_ids) {
         (source.player_ids as Set<string>).forEach((id: string) => (target.player_ids as Set<string>).add(id));
@@ -605,9 +610,21 @@ export default function LeagueLeadersPage() {
             >
               <div className="flex items-center gap-3">
                 <span className="text-base font-bold text-gray-400 dark:text-gray-500 w-5 text-center">{index + 1}</span>
+                {(() => {
+                  const photoUrl = getPlayerPhotoUrlCached(player.photo_path);
+                  return photoUrl ? (
+                    <img
+                      src={photoUrl}
+                      alt={player.name || ''}
+                      className="w-10 h-10 rounded-full object-cover object-top flex-shrink-0 bg-gray-100 dark:bg-neutral-800"
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; (e.currentTarget.nextElementSibling as HTMLElement | null)?.style && ((e.currentTarget.nextElementSibling as HTMLElement).style.display = 'flex'); }}
+                    />
+                  ) : null;
+                })()}
                 <div
-                  className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold"
+                  className="w-10 h-10 rounded-full items-center justify-center text-sm font-bold flex-shrink-0"
                   style={{
+                    display: getPlayerPhotoUrlCached(player.photo_path) ? 'none' : 'flex',
                     background: index === 0
                       ? 'linear-gradient(to bottom right, #facc15, #ca8a04)'
                       : index === 1
@@ -739,7 +756,7 @@ export default function LeagueLeadersPage() {
 
       <main className="flex-grow p-4 md:p-6 max-w-3xl mx-auto w-full space-y-5">
         <button
-          onClick={() => navigate(`/league/${slug}`)}
+          onClick={() => navigate(`/competition/${slug}`)}
           className="flex items-center gap-2 font-medium transition-colors opacity-90 hover:opacity-100"
           style={{ color: brandColor }}
         >

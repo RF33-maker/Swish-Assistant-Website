@@ -6,6 +6,7 @@ import { fetchLeagueData } from "@/lib/leagueData";
 import type { League } from "@shared/schema";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import LeagueDefaultImage from "@/assets/league-default.png";
+import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
 import { Helmet } from "react-helmet-async";
 import React from "react";
 import { GameSummaryRow } from "./GameSummaryRow";
@@ -18,7 +19,8 @@ import { TeamLogo } from "@/components/TeamLogo";
 import LeagueLeadersShareCard from "@/components/LeagueLeadersShareCard";
 import { TeamLogoUploader } from "@/components/TeamLogoUploader";
 import { InstagramCarousel } from "@/components/InstagramCarousel";
-import { ChevronRight, ChevronDown, Trophy, ArrowRight, Search, Users } from "lucide-react";
+import { InstagramFeedSection } from "@/components/InstagramFeedSection";
+import { ChevronRight, ChevronDown, Trophy, ArrowRight, Search, Users, Instagram } from "lucide-react";
 import { useGlobalSearch, type SearchSuggestion } from "@/hooks/useGlobalSearch";
 import { PlayerSearchAvatar } from "@/components/PlayerSearchAvatar";
 import { Link } from "wouter";
@@ -543,6 +545,7 @@ export default function LeaguePage() {
     const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [instagramUrls, setInstagramUrls] = useState<string[]>([]);
   const [newInstagramUrl, setNewInstagramUrl] = useState("");
@@ -560,13 +563,13 @@ export default function LeaguePage() {
     setPreviousSection(fromSection);
     setSelectedPlayerSlug(playerSlug);
     setActiveSection('player');
-    navigate(`/league/${slug}/player/${playerSlug}`);
+    navigate(`/competition/${slug}/player/${playerSlug}`);
   }, [slug, navigate]);
 
   const handlePlayerBack = useCallback(() => {
     setSelectedPlayerSlug(null);
     setActiveSection(previousSection);
-    navigate(`/league/${slug}`);
+    navigate(`/competition/${slug}`);
   }, [slug, navigate, previousSection]);
 
   const [comparisonMode, setComparisonMode] = useState<'player' | 'team'>('player'); // Toggle between player and team comparison
@@ -612,6 +615,7 @@ export default function LeaguePage() {
   const [selectedAgeGroup, setSelectedAgeGroup] = useState<string>('all');
   const [selectedStop, setSelectedStop] = useState<string>('all');
   const [parentStandingsGroups, setParentStandingsGroups] = useState<{ageGroup: string, standings: any[], poolAStandings: any[], poolBStandings: any[], hasPools: boolean}[]>([]);
+  const [siblingSeasons, setSiblingSeasons] = useState<{ name: string; slug: string; season: string | null }[]>([]);
 
   const getTeamLogoUrl = (teamName: string): string | undefined => {
     if (!teamName) return undefined;
@@ -1550,12 +1554,15 @@ export default function LeaguePage() {
       setParentStandingsGroups([]);
       
       const fetchUserAndLeague = async () => {
+        // Reset sibling seasons so a competition without competition_id never shows stale options
+        setSiblingSeasons([]);
+
         const { data: { user } } = await supabase.auth.getUser();
         setCurrentUser(user);
         
-        // Then fetch league data
+        // Then fetch competition (season) data
         const { data, error } = await supabase
-          .from("leagues")
+          .from("competitions")
           .select("*")
           .eq("slug", slug)
           .single();
@@ -1603,7 +1610,7 @@ export default function LeaguePage() {
           // Fetch parent league if this is a sub-competition
           if (data.parent_league_id) {
             const { data: parent, error: parentError } = await supabase
-              .from("leagues")
+              .from("competitions")
               .select("league_id, name, slug, logo_url")
               .eq("league_id", data.parent_league_id)
               .single();
@@ -1612,6 +1619,19 @@ export default function LeaguePage() {
               setParentLeague(parent);
             } else if (parentError) {
               console.error("Failed to fetch parent league:", parentError);
+            }
+          }
+
+          // Fetch sibling seasons from the same league brand
+          if ((data as any).competition_id) {
+            try {
+              const res = await fetch(`/api/league/${(data as any).competition_id}/competitions`);
+              if (res.ok) {
+                const seasons = await res.json();
+                setSiblingSeasons(seasons);
+              }
+            } catch (e) {
+              console.error("Failed to fetch sibling seasons:", e);
             }
           }
         }
@@ -1928,6 +1948,43 @@ export default function LeaguePage() {
     const handleCloseGameModal = () => {
       setIsGameModalOpen(false);
       setSelectedGameId(null);
+    };
+
+    const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file || !league?.league_id || !currentUser) return;
+
+      setUploadingLogo(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) { alert('Not authenticated'); return; }
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('leagueId', league.league_id);
+        formData.append('type', 'logo');
+
+        const response = await fetch('/api/league-banners/upload', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${session.access_token}` },
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const result = await response.json();
+          throw new Error(result.error || 'Logo upload failed');
+        }
+
+        const result = await response.json();
+        setLeague({ ...league, logo_url: result.publicUrl });
+        alert('Logo updated successfully!');
+      } catch (error) {
+        console.error('Logo upload error:', error);
+        alert(`Failed to upload logo: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      } finally {
+        setUploadingLogo(false);
+        event.target.value = '';
+      }
     };
 
     const handleBannerUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -2560,8 +2617,8 @@ export default function LeaguePage() {
         {
           const rosterIds = isParentFetch && parentChildIds.length > 0 ? parentChildIds : [statsLeagueId];
           const rosterQ = rosterIds.length === 1
-            ? supabase.from("players").select("id, full_name, slug").eq("league_id", rosterIds[0])
-            : supabase.from("players").select("id, full_name, slug").in("league_id", rosterIds);
+            ? supabase.from("players").select("id, full_name, slug, photo_path_bg_removed").eq("league_id", rosterIds[0])
+            : supabase.from("players").select("id, full_name, slug, photo_path_bg_removed").in("league_id", rosterIds);
           const { data: rosterResult, error: rosterError } = await rosterQ;
           if (rosterError) console.error("Error fetching roster:", rosterError);
           rosterData = rosterResult;
@@ -2570,6 +2627,7 @@ export default function LeaguePage() {
         const slugLookup = new Map<string, string>();
         const nameLookup = new Map<string, string>();
         const playerIdToName = new Map<string, string>();
+        const photoLookup = new Map<string, string>();
         
         rosterData?.forEach(p => {
           if (p.full_name) {
@@ -2580,6 +2638,9 @@ export default function LeaguePage() {
             if (p.full_name) {
               nameLookup.set(p.full_name.toLowerCase().trim(), p.slug);
             }
+          }
+          if (p.photo_path_bg_removed) {
+            photoLookup.set(p.id, p.photo_path_bg_removed);
           }
         });
         
@@ -2701,7 +2762,7 @@ export default function LeaguePage() {
               const chunk = uncoveredIds.slice(ci, ci + chunkSize);
               const { data: extraPlayers } = await supabase
                 .from("players")
-                .select("id, full_name, slug")
+                .select("id, full_name, slug, photo_path_bg_removed")
                 .in("id", chunk);
               extraPlayers?.forEach((p: any) => {
                 if (p.slug) {
@@ -2711,6 +2772,8 @@ export default function LeaguePage() {
                 }
                 if (p.full_name && p.id)
                   playerIdToName.set(p.id, p.full_name);
+                if (p.photo_path_bg_removed && p.id)
+                  photoLookup.set(p.id, p.photo_path_bg_removed);
               });
             }
             debugLog("📊 Secondary slug enrichment: resolved", uncoveredIds.length, "additional player IDs");
@@ -2718,6 +2781,14 @@ export default function LeaguePage() {
         }
 
         const finalResults = aggregatePlayerStats(allPlayerStats, slugLookup, nameLookup, playerIdToName);
+        finalResults.forEach((p: any) => {
+          if (!p.photoPath && p.playerIds instanceof Set) {
+            for (const pid of p.playerIds) {
+              const path = photoLookup.get(pid);
+              if (path) { p.photoPath = path; break; }
+            }
+          }
+        });
         debugLog("📊 Final player list has", finalResults.length, "players");
 
         if (isCancelled()) return;
@@ -3298,13 +3369,13 @@ export default function LeaguePage() {
       <meta property="og:type" content="website" />
       <meta
         property="og:url"
-        content={`https://www.swishassistant.com/league/${slug}`}
+        content={`https://www.swishassistant.com/competition/${slug}`}
       />
       <meta
         property="og:image"
         content="https://www.swishassistant.com/og-image.png"
       />
-      <link rel="canonical" href={`https://www.swishassistant.com/league/${slug}`} />
+      <link rel="canonical" href={`https://www.swishassistant.com/competition/${slug}`} />
     </Helmet>
 
     <div className="min-h-screen bg-[#fffaf1]">
@@ -3446,13 +3517,36 @@ export default function LeaguePage() {
             }}
           >
             <div className="absolute inset-0 bg-black/40 flex flex-col justify-end p-6">
-              <h2 className="text-3xl sm:text-4xl font-bold text-white drop-shadow-md">
-                {displayLeagueName || "League Name"}
-              </h2>
-              <p className="text-sm text-white/90 mt-1">
-            
-              </p>
-
+              <div className="flex items-center gap-3 flex-wrap">
+                <h2 className="text-3xl sm:text-4xl font-bold text-white drop-shadow-md">
+                  {displayLeagueName || "League Name"}
+                </h2>
+                {(league as any)?.competition_id && siblingSeasons.length > 1 && (
+                  <select
+                    value={slug}
+                    onChange={(e) => navigate(`/competition/${e.target.value}`)}
+                    className="text-xs font-semibold bg-white/20 hover:bg-white/30 border border-white/40 text-white rounded-full px-3 py-1 cursor-pointer backdrop-blur-sm transition-colors focus:outline-none focus:ring-1 focus:ring-white/60"
+                    style={{ WebkitAppearance: 'none', appearance: 'none', paddingRight: '1.5rem', backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='white'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center' }}
+                  >
+                    {siblingSeasons.map((s) => (
+                      <option key={s.slug} value={s.slug} style={{ background: '#1a1a2e', color: 'white' }}>
+                        {s.season || s.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+              {(league as any)?.instagram_handle && (
+                <a
+                  href={`https://www.instagram.com/${(league as any).instagram_handle}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 self-start inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold text-white bg-white/20 hover:bg-white/30 border border-white/30 transition-colors"
+                >
+                  <Instagram className="h-3 w-3" />
+                  @{(league as any).instagram_handle}
+                </a>
+              )}
             </div>
             
             {/* Banner Upload Button for League Owner */}
@@ -3487,6 +3581,36 @@ export default function LeaguePage() {
                   )}
                 </label>
 
+                {/* Logo upload */}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleLogoUpload}
+                  className="hidden"
+                  id="logo-upload"
+                  disabled={uploadingLogo}
+                />
+                <label
+                  htmlFor="logo-upload"
+                  className={`inline-flex items-center gap-2 px-4 py-2 bg-white/90 hover:bg-white text-slate-700 text-sm font-medium rounded-lg cursor-pointer transition-colors ${
+                    uploadingLogo ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                >
+                  {uploadingLogo ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      Change Logo
+                    </>
+                  )}
+                </label>
+
               </div>
             )}
             
@@ -3498,7 +3622,7 @@ export default function LeaguePage() {
         {parentLeague && (
           <div className="bg-white dark:bg-neutral-900 border-b border-gray-100 dark:border-neutral-800">
             <div className="max-w-7xl mx-auto px-4 md:px-6 py-3">
-              <Link href={`/league/${parentLeague.slug}`}>
+              <Link href={`/competition/${parentLeague.slug}`}>
                 <a className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-orange-400 dark:hover:text-orange-300 transition-colors group" data-testid="link-parent-league">
                   <div className="flex items-center gap-2">
                     {parentLeague.logo_url && (
@@ -5197,6 +5321,7 @@ export default function LeaguePage() {
                                   ? (entity.age_group ? shortenAgeLabel(entity.age_group) : `${entity.gamesPlayed || 0} GP`)
                                   : (entity.team || 'Unknown Team');
                                 const isClickable = isTeam ? !!entity.teamName : !!entity.slug;
+                                const photoUrl = !isTeam ? getPlayerPhotoUrlCached(entity.photoPath) : null;
                                 return (
                                   <div
                                     key={`${title}-${entity.slug || entity.teamName || entity.name}-${idx}`}
@@ -5212,6 +5337,23 @@ export default function LeaguePage() {
                                   >
                                     <div className="flex items-center gap-2.5 min-w-0 flex-1">
                                       <span className="text-xs font-bold w-5 text-center text-slate-400 dark:text-slate-500 shrink-0">{idx + 1}</span>
+                                      {!isTeam && (
+                                        photoUrl ? (
+                                          <img
+                                            src={photoUrl}
+                                            alt={displayName || ''}
+                                            className="w-8 h-8 rounded-full object-cover object-top flex-shrink-0 bg-gray-100 dark:bg-neutral-800"
+                                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                                          />
+                                        ) : (
+                                          <div
+                                            className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                                            style={{ backgroundColor: brandColor + '22', color: brandColor }}
+                                          >
+                                            {displayName?.charAt(0)?.toUpperCase() || '?'}
+                                          </div>
+                                        )
+                                      )}
                                       <div className="min-w-0 flex-1">
                                         <p className={`text-sm font-medium truncate ${isClickable ? 'hover:underline' : ''}`} style={{ color: brandColor }}>{displayName}</p>
                                         <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{subLine}</p>
@@ -5955,9 +6097,8 @@ export default function LeaguePage() {
             {activeSection === 'overview' && (<>
             {/* Instagram Embed */}
             <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4">
-              <div className="flex justify-between items-center mb-3">
-                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Instagram Feed</h3>
-                {isOwner && (
+              {isOwner && (
+                <div className="flex justify-end mb-1">
                   <button
                     onClick={() => setIsEditingInstagram(!isEditingInstagram)}
                     className="text-xs font-medium"
@@ -5966,8 +6107,8 @@ export default function LeaguePage() {
                   >
                     {isEditingInstagram ? 'Cancel' : 'Edit'}
                   </button>
-                )}
-              </div>
+                </div>
+              )}
 
               {isEditingInstagram && isOwner ? (
                 <div className="space-y-3">
@@ -6061,7 +6202,11 @@ export default function LeaguePage() {
                   </div>
                 </div>
               ) : (
-                <InstagramCarousel urls={instagramUrls} />
+                <InstagramFeedSection
+                  urls={instagramUrls}
+                  handle={(league as any)?.instagram_handle || undefined}
+                  brandColor={brandColorHex}
+                />
               )}
             </div>
 

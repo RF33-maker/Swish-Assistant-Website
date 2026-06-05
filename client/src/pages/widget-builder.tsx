@@ -65,7 +65,7 @@ export default function WidgetBuilder() {
   useEffect(() => {
     const fetchLeagues = async () => {
       const { data } = await supabase
-        .from("leagues")
+        .from("competitions")
         .select("league_id, name, slug")
         .eq("is_public", true)
         .order("name");

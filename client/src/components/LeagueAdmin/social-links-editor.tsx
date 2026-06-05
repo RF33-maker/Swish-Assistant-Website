@@ -9,7 +9,7 @@ export default function SocialLinksEditor({ leagueId }: { leagueId: string }) {
 
   useEffect(() => {
     const fetchLinks = async () => {
-      const { data } = await supabase.from("leagues").select("instagram_embed_url, youtube_embed_url").eq("id", leagueId).single();
+      const { data } = await supabase.from("competitions").select("instagram_embed_url, youtube_embed_url").eq("league_id", leagueId).single();
       if (data) {
         setInstagram(data.instagram_embed_url || "");
         setYouTube(data.youtube_embed_url || "");
@@ -21,7 +21,7 @@ export default function SocialLinksEditor({ leagueId }: { leagueId: string }) {
 
   const handleSave = async () => {
     const { error } = await supabase
-      .from("leagues")
+      .from("competitions")
       .update({ 
         instagram_embed_url: instagram, 
         youtube_embed_url: youtube 

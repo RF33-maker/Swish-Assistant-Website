@@ -17,8 +17,11 @@ import LatestScoresSection from "@/components/home/LatestScoresSection"
 import LatestNewsSection from "@/components/home/LatestNewsSection"
 import TopPlayersSection from "@/components/home/TopPlayersSection"
 import TrendingPerformanceSection from "@/components/home/TrendingPerformanceSection"
+import { InstagramFeedSection } from "@/components/InstagramFeedSection"
 import { useGlobalSearch } from "@/hooks/useGlobalSearch"
 import { PlayerSearchAvatar } from "@/components/PlayerSearchAvatar"
+
+const PLATFORM_INSTAGRAM_HANDLE = "swishassistant"
 
 function LeagueLogosCarousel() {
   const logos = [Ballpark, NBLBE, BCB, SLB]
@@ -49,6 +52,15 @@ function LeagueLogosCarousel() {
   )
 }
 
+function cleanLeagueName(name: string): string {
+  return name
+    .replace(/\s+\d{4}\/\d{4}\s*$/, '')
+    .replace(/\s+\d{4}\d{4}\s*$/, '')
+    .replace(/\s+\d{2}\/\d{2}\s*$/, '')
+    .replace(/\s+\d{4}\/\d{2}\s*$/, '')
+    .trim();
+}
+
 export default function LandingPage() {
   const [, setLocation] = useLocation()
   const [trendingLeagues, setTrendingLeagues] = useState<any[]>([]);
@@ -57,14 +69,42 @@ export default function LandingPage() {
   useEffect(() => {
     const fetchTrending = async () => {
       const { data, error } = await supabase
-        .from("leagues")
-        .select("name, slug, logo_url, banner_url, trending_position")
+        .from("competitions")
+        .select("name, slug, logo_url, banner_url, trending_position, competition_id, leagues:competition_id(name, slug, logo_url)")
         .eq("is_public", true)
         .not("trending_position", "is", null)
         .order("trending_position", { ascending: true })
-        .limit(4);
+        .limit(8);
 
-      if (!error) setTrendingLeagues(data || []);
+      if (!error && data) {
+        // Deduplicate: if a competition belongs to a league brand, show the league brand instead (once)
+        const seen = new Set<string>();
+        const deduped: any[] = [];
+        for (const comp of data) {
+          const leagueBrand = Array.isArray((comp as any).leagues)
+            ? (comp as any).leagues[0]
+            : (comp as any).leagues;
+          if (leagueBrand?.slug) {
+            if (!seen.has(`league:${leagueBrand.slug}`)) {
+              seen.add(`league:${leagueBrand.slug}`);
+              deduped.push({
+                name: leagueBrand.name,
+                slug: leagueBrand.slug,
+                logo_url: leagueBrand.logo_url || comp.logo_url,
+                banner_url: comp.banner_url,
+                _type: "league",
+              });
+            }
+          } else {
+            if (!seen.has(`competition:${comp.slug}`)) {
+              seen.add(`competition:${comp.slug}`);
+              deduped.push({ ...comp, _type: "competition" });
+            }
+          }
+          if (deduped.length >= 4) break;
+        }
+        setTrendingLeagues(deduped);
+      }
     };
 
     fetchTrending();
@@ -115,10 +155,26 @@ export default function LandingPage() {
                     className="px-4 py-2.5 cursor-pointer hover:bg-orange-50 dark:hover:bg-neutral-800 text-left border-b border-orange-100 dark:border-neutral-800 last:border-b-0 transition-colors duration-200"
                   >
                     <div className="flex items-center gap-3">
-                      {item.type === 'league' ? (
-                        <div className="h-8 w-8 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center flex-shrink-0">
-                          <Trophy className="h-4 w-4 text-white" />
-                        </div>
+                      {item.type === 'competition' ? (
+                        item.logo_url ? (
+                          <div className="h-8 w-8 rounded-full bg-white dark:bg-neutral-800 border border-orange-200 dark:border-neutral-600 flex items-center justify-center overflow-hidden flex-shrink-0">
+                            <img src={item.logo_url} alt={item.name} className="h-7 w-7 object-contain" />
+                          </div>
+                        ) : (
+                          <div className="h-8 w-8 rounded-full bg-gradient-to-br from-orange-400 to-amber-400 flex items-center justify-center flex-shrink-0">
+                            <Trophy className="h-4 w-4 text-white" />
+                          </div>
+                        )
+                      ) : item.type === 'league' ? (
+                        item.logo_url ? (
+                          <div className="h-8 w-8 rounded-full bg-white dark:bg-neutral-800 border border-orange-200 dark:border-neutral-600 flex items-center justify-center overflow-hidden flex-shrink-0">
+                            <img src={item.logo_url} alt={item.name} className="h-7 w-7 object-contain" />
+                          </div>
+                        ) : (
+                          <div className="h-8 w-8 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center flex-shrink-0">
+                            <Trophy className="h-4 w-4 text-white" />
+                          </div>
+                        )
                       ) : item.type === 'team' ? (
                         <div className="h-8 w-8 rounded-full bg-white dark:bg-neutral-800 border border-orange-200 dark:border-neutral-600 flex items-center justify-center overflow-hidden flex-shrink-0">
                           <TeamLogo teamName={item.name} leagueId={item.league_id} size="sm" />
@@ -208,17 +264,18 @@ export default function LandingPage() {
             {(trendingLeagues.length > 0
               ? trendingLeagues
               : [
-                  { name: "SLB Championship 25/26", slug: "super-league-basketball-20252026", logo_url: null, banner_url: null },
-                  { name: "British Championship Basketball", slug: "british-championship-basketball-20252026", logo_url: null, banner_url: null },
-                  { name: "NBL Division One 25/26", slug: "national-basketball-league-d1-mens-20252026", logo_url: null, banner_url: null },
-                  { name: "WNBL Division One 25/26", slug: "national-basketball-league-d1-womens-20252026", logo_url: null, banner_url: null },
+                  { name: "SLB Championship 25/26", slug: "super-league-basketball-20252026", logo_url: null, banner_url: null, _type: "competition" },
+                  { name: "British Championship Basketball", slug: "british-championship-basketball-20252026", logo_url: null, banner_url: null, _type: "competition" },
+                  { name: "NBL Division One 25/26", slug: "national-basketball-league-d1-mens-20252026", logo_url: null, banner_url: null, _type: "competition" },
+                  { name: "WNBL Division One 25/26", slug: "national-basketball-league-d1-womens-20252026", logo_url: null, banner_url: null, _type: "competition" },
                 ]
             ).map((league, i) => {
               const hasBanner = !!league.banner_url;
+              const isCompetition = league._type === "competition";
               return (
               <button
                 key={league.slug}
-                onClick={() => handleSelect({ type: 'league', name: league.name, slug: league.slug })}
+                onClick={() => handleSelect({ type: isCompetition ? 'competition' : 'league', name: league.name, slug: league.slug, logo_url: league.logo_url ?? null } as any)}
                 className="relative overflow-hidden rounded-2xl h-24 hover:scale-[1.03] hover:shadow-lg transition-all duration-300 animate-slide-in-left group"
                 style={{
                   animationDelay: `${0.8 + i * 0.075}s`,
@@ -236,7 +293,7 @@ export default function LandingPage() {
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
                 <div className="absolute bottom-0 left-0 right-0 p-4 flex items-end justify-between">
-                  <span className="font-semibold text-sm text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">{league.name}</span>
+                  <span className="font-semibold text-sm text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">{cleanLeagueName(league.name)}</span>
                   {league.logo_url && (
                     <img src={league.logo_url} alt={`${league.name} logo`} className="h-10 w-10 object-contain ml-2 flex-shrink-0" />
                   )}
@@ -288,6 +345,13 @@ export default function LandingPage() {
       {/* News & top players sections (scores ticker is rendered above the hero) */}
       <LatestNewsSection />
       <TopPlayersSection />
+
+      {/* Stay Connected — Instagram feed */}
+      <section className="py-6 md:py-8 bg-white dark:bg-neutral-950">
+        <div className="max-w-6xl mx-auto px-4 md:px-6">
+          <InstagramFeedSection handle={PLATFORM_INSTAGRAM_HANDLE} />
+        </div>
+      </section>
 
       {/* Newsletter Signup Section */}
       <section id="subscribe" className="py-20 bg-gradient-to-br from-orange-50 to-orange-100 dark:from-neutral-800 dark:to-neutral-900 relative overflow-hidden flex items-center">

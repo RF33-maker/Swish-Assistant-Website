@@ -10,6 +10,64 @@ import * as path from 'path';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+function generatePlayerSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function parseCSV(text: string): Record<string, string>[] {
+  const lines = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+  const nonEmpty = lines.filter((l) => l.trim().length > 0);
+  if (nonEmpty.length < 2) return [];
+
+  const parseRow = (line: string): string[] => {
+    const fields: string[] = [];
+    let i = 0;
+    while (i < line.length) {
+      if (line[i] === '"') {
+        let field = "";
+        i++;
+        while (i < line.length) {
+          if (line[i] === '"' && line[i + 1] === '"') {
+            field += '"';
+            i += 2;
+          } else if (line[i] === '"') {
+            i++;
+            break;
+          } else {
+            field += line[i++];
+          }
+        }
+        fields.push(field);
+        if (line[i] === ",") i++;
+      } else {
+        let field = "";
+        while (i < line.length && line[i] !== ",") field += line[i++];
+        fields.push(field.trim());
+        if (line[i] === ",") i++;
+      }
+    }
+    return fields;
+  };
+
+  const headers = parseRow(nonEmpty[0]).map((h) => h.trim().toLowerCase());
+  const rows: Record<string, string>[] = [];
+  for (let r = 1; r < nonEmpty.length; r++) {
+    const values = parseRow(nonEmpty[r]);
+    const row: Record<string, string> = {};
+    headers.forEach((h, idx) => {
+      row[h] = values[idx] ?? "";
+    });
+    rows.push(row);
+  }
+  return rows;
+}
+
 const upload = multer({ storage: multer.memoryStorage() });
 
 async function authenticateSupabaseUser(req: Request): Promise<string | null> {
@@ -430,7 +488,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/league-banners/upload", upload.single('file'), async (req, res) => {
+  app.post("/api/league-logos/upload", upload.single('file'), async (req, res) => {
     try {
       const userId = await authenticateSupabaseUser(req);
       if (!userId) {
@@ -446,7 +504,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const isOwner = await verifyLeagueOwnership(userId, leagueId);
       if (!isOwner) {
-        return res.status(403).json({ error: "Only league owners can upload banners" });
+        return res.status(403).json({ error: "Only league owners can upload logos" });
       }
 
       const fileExt = file.originalname.split('.').pop();
@@ -454,13 +512,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { data, error } = await supabaseAdmin.storage
         .from('league-banners')
+        .upload(`logos/${fileName}`, file.buffer, {
+          upsert: true,
+          contentType: file.mimetype,
+        });
+
+      if (error) {
+        console.error("Logo storage upload error:", error);
+        return res.status(500).json({ error: error.message });
+      }
+
+      const { data: { publicUrl } } = supabaseAdmin.storage
+        .from('league-banners')
+        .getPublicUrl(`logos/${fileName}`);
+
+      const { error: updateError } = await supabaseAdmin
+        .from('leagues')
+        .update({ logo_url: publicUrl })
+        .eq('league_id', leagueId);
+
+      if (updateError) {
+        console.error("Error updating league logo_url:", updateError);
+        return res.status(500).json({ error: updateError.message });
+      }
+
+      res.json({ success: true, publicUrl });
+    } catch (error) {
+      console.error("Logo upload error:", error);
+      res.status(500).json({ error: "Logo upload failed" });
+    }
+  });
+
+  app.post("/api/league-banners/upload", upload.single('file'), async (req, res) => {
+    try {
+      const userId = await authenticateSupabaseUser(req);
+      if (!userId) {
+        return res.status(401).json({ error: "Authentication required" });
+      }
+
+      const file = req.file;
+      const { leagueId, type } = req.body;
+      const isLogo = type === 'logo';
+
+      if (!file || !leagueId) {
+        return res.status(400).json({ error: "Missing required fields: file and leagueId" });
+      }
+
+      const isOwner = await verifyLeagueOwnership(userId, leagueId);
+      if (!isOwner) {
+        return res.status(403).json({ error: "Only league owners can upload assets" });
+      }
+
+      const fileExt = file.originalname.split('.').pop();
+      const fileName = isLogo
+        ? `logos/${leagueId}_${Date.now()}.${fileExt}`
+        : `${leagueId}_${Date.now()}.${fileExt}`;
+
+      const { error } = await supabaseAdmin.storage
+        .from('league-banners')
         .upload(fileName, file.buffer, {
           upsert: true,
           contentType: file.mimetype,
         });
 
       if (error) {
-        console.error("Banner storage upload error:", error);
+        console.error("Asset storage upload error:", error);
         return res.status(500).json({ error: error.message });
       }
 
@@ -468,20 +584,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from('league-banners')
         .getPublicUrl(fileName);
 
+      const updateField = isLogo ? { logo_url: publicUrl } : { banner_url: publicUrl };
+
       const { error: updateError } = await supabaseAdmin
         .from('leagues')
-        .update({ banner_url: publicUrl })
+        .update(updateField)
         .eq('league_id', leagueId);
 
       if (updateError) {
-        console.error("Error updating league banner_url:", updateError);
+        console.error("Error updating league asset:", updateError);
         return res.status(500).json({ error: updateError.message });
       }
 
       res.json({ success: true, publicUrl });
     } catch (error) {
-      console.error("Banner upload error:", error);
-      res.status(500).json({ error: "Banner upload failed" });
+      console.error("Asset upload error:", error);
+      res.status(500).json({ error: "Upload failed" });
+    }
+  });
+
+  app.get("/api/league/:leagueId/competitions", async (req: Request, res: Response) => {
+    try {
+      const { leagueId } = req.params;
+      if (!leagueId) return res.status(400).json({ error: "leagueId is required" });
+
+      const { data, error } = await supabaseAdmin
+        .from("competitions")
+        .select("name, slug, season")
+        .eq("competition_id", leagueId)
+        .order("season", { ascending: false });
+
+      if (error) {
+        console.error("league competitions error:", error);
+        return res.status(500).json({ error: "Failed to fetch competitions" });
+      }
+
+      res.json(data || []);
+    } catch (err: any) {
+      console.error("Error fetching league competitions:", err.message);
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 
@@ -494,7 +635,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // is_public=false yet still have a public-facing page. Branding data
       // (name, colors, logo) is low-sensitivity so we expose it regardless.
       const { data, error } = await supabaseAdmin
-        .from("leagues")
+        .from("competitions")
         .select("league_id, name, slug, brand_primary_colour, banner_url, logo_url")
         .eq("slug", slug)
         .single();
@@ -523,7 +664,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // No is_public filter — same reasoning as the slug variant above.
       const { data, error } = await supabaseAdmin
-        .from("leagues")
+        .from("competitions")
         .select("league_id, name, slug, brand_primary_colour, banner_url, logo_url")
         .eq("league_id", leagueId)
         .single();
@@ -559,7 +700,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!parentId) return res.status(400).json({ error: "parentId is required" });
 
       const { data, error } = await supabaseAdmin
-        .from("leagues")
+        .from("competitions")
         .select("league_id, name, slug, logo_url, age_group, stop")
         .eq("parent_league_id", parentId);
 
@@ -672,7 +813,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   async function filterLeagueIdsForPublicScope(ids: string[]): Promise<string[]> {
     if (ids.length === 0) return [];
     const { data, error } = await supabaseAdmin
-      .from("leagues")
+      .from("competitions")
       .select("league_id, is_public, parent_league_id")
       .in("league_id", ids);
     if (error || !data) {
@@ -693,7 +834,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const publicParents = new Set<string>();
     if (parentIdsToCheck.size > 0) {
       const { data: parents, error: parentErr } = await supabaseAdmin
-        .from("leagues")
+        .from("competitions")
         .select("league_id, is_public")
         .in("league_id", Array.from(parentIdsToCheck));
       if (parentErr) {
@@ -754,14 +895,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // child of that parent OR is the parent itself. This bypasses the
         // is_public gate for parent leagues that have is_public=false (e.g. REBA SL).
         const { data: childRows } = await supabaseAdmin
-          .from("leagues")
+          .from("competitions")
           .select("league_id")
           .in("league_id", ids)
           .eq("parent_league_id", parentLeagueId);
         const validatedIds = new Set((childRows || []).map((r: any) => r.league_id));
         // Allow the parent itself in case its own league_id is in the list.
         const { data: parentRow } = await supabaseAdmin
-          .from("leagues")
+          .from("competitions")
           .select("league_id")
           .eq("league_id", parentLeagueId)
           .single();
@@ -819,14 +960,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // This handles parent leagues that have is_public=false (e.g. REBA SL):
         // the children are allowed as long as they genuinely belong to this parent.
         const { data: childRows } = await supabaseAdmin
-          .from("leagues")
+          .from("competitions")
           .select("league_id")
           .in("league_id", leagueIds)
           .eq("parent_league_id", parentLeagueId);
         const validatedChildIds = new Set((childRows || []).map((r: any) => r.league_id));
         // Also allow the parent itself if it's in the list.
         const { data: parentRow } = await supabaseAdmin
-          .from("leagues")
+          .from("competitions")
           .select("league_id")
           .eq("league_id", parentLeagueId)
           .single();
@@ -874,7 +1015,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       const unique = Array.from(new Set(ids)).slice(0, 100);
       const { data, error } = await supabaseAdmin
-        .from("leagues")
+        .from("competitions")
         .select("league_id, name, parent_league_id, age_group, stop")
         .in("league_id", unique);
       if (error) {
@@ -905,7 +1046,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // No is_public filter — private child leagues must still resolve branding
       // via their public parent so that player profiles display the right colour.
       const { data, error } = await supabaseAdmin
-        .from("leagues")
+        .from("competitions")
         .select("logo_url, parent_league_id, brand_primary_colour, is_public")
         .eq("league_id", leagueId)
         .single();
@@ -925,7 +1066,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // No logo — try the parent league (private children inherit parent branding).
       if (data.parent_league_id) {
         const { data: parentData } = await supabaseAdmin
-          .from("leagues")
+          .from("competitions")
           .select("logo_url, brand_primary_colour")
           .eq("league_id", data.parent_league_id)
           .single();
@@ -1520,16 +1661,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Public leagues
     try {
       const { data: leagues } = await supabaseAdmin
-        .from("leagues")
+        .from("competitions")
         .select("slug, updated_at")
         .eq("is_public", true);
       for (const l of leagues || []) {
         const lastmod = l.updated_at
           ? new Date(l.updated_at).toISOString().split("T")[0]
           : today;
-        xml += sitemapUrl(`${SITE_BASE}/league/${xmlEscape(l.slug)}`, lastmod, "daily", "0.9");
-        xml += sitemapUrl(`${SITE_BASE}/league-leaders/${xmlEscape(l.slug)}`, lastmod, "daily", "0.8");
-        xml += sitemapUrl(`${SITE_BASE}/league/${xmlEscape(l.slug)}/teams`, lastmod, "weekly", "0.7");
+        xml += sitemapUrl(`${SITE_BASE}/competition/${xmlEscape(l.slug)}`, lastmod, "daily", "0.9");
+        xml += sitemapUrl(`${SITE_BASE}/competition-leaders/${xmlEscape(l.slug)}`, lastmod, "daily", "0.8");
+        xml += sitemapUrl(`${SITE_BASE}/competition/${xmlEscape(l.slug)}/teams`, lastmod, "weekly", "0.7");
       }
     } catch (err: any) {
       console.error("Sitemap: error fetching leagues:", err.message);
@@ -1578,6 +1719,251 @@ export async function registerRoutes(app: Express): Promise<Server> {
     xml += "</urlset>";
     return xml;
   }
+
+  // ── Trending Performances (home page card) ──────────────────────────────────
+  // Queries vw_player_game_scores server-side so we can cache the result in
+  // memory and avoid hammering Supabase with one query per user per page load.
+  // The view is slow (57014 timeouts under load); a single background query
+  // every TRENDING_TTL_MS serves all concurrent visitors from cache.
+  interface TrendingPerfRow {
+    league_id: string; game_key: string; game_date: string | null;
+    week_start: string | null; player_id: string; full_name: string;
+    team_id: string | null; team_name: string | null;
+    pts: number | null; reb: number | null; ast: number | null;
+    stl: number | null; blk: number | null; tov: number | null;
+    fga: number | null; fta: number | null;
+    ts_pct: number | null; game_score: number | null;
+  }
+  interface TrendingApiPayload {
+    perfs: TrendingPerfRow[];
+    leagueNames: Record<string, string>;
+    playerMeta: Record<string, { slug: string | null; photo_path_bg_removed: string | null }>;
+  }
+  const TRENDING_TTL_MS = 5 * 60 * 1000;
+  let trendingCache: { data: TrendingApiPayload; at: number } | null = null;
+  let trendingInFlight: Promise<TrendingApiPayload> | null = null;
+
+  async function fetchTrendingPerformances(): Promise<TrendingApiPayload> {
+    const empty: TrendingApiPayload = { perfs: [], leagueNames: {}, playerMeta: {} };
+
+    const { data: leagueRows, error: lErr } = await supabaseAdmin
+      .from("competitions")
+      .select("league_id, name, trending_position")
+      .eq("is_public", true)
+      .not("trending_position", "is", null)
+      .order("trending_position", { ascending: true, nullsFirst: false })
+      .limit(4);
+
+    if (lErr || !leagueRows || leagueRows.length === 0) {
+      console.error("[TrendingPerf] leagues error", lErr?.message);
+      return empty;
+    }
+
+    const leagueNames: Record<string, string> = {};
+    for (const l of leagueRows as { league_id: string; name: string | null }[]) {
+      if (l.name) leagueNames[l.league_id] = l.name;
+    }
+
+    const leagueIds = leagueRows.map((l: any) => l.league_id as string);
+    const perfs: TrendingPerfRow[] = [];
+
+    const perLeague = await Promise.allSettled(
+      leagueIds.map(async (lid) => {
+        const { data: rows, error } = await supabaseAdmin
+          .from("vw_player_game_scores")
+          .select("league_id,game_key,game_date,week_start,player_id,full_name,team_id,team_name,pts,reb,ast,stl,blk,tov,fga,fta,ts_pct,game_score")
+          .eq("league_id", lid)
+          .order("week_start", { ascending: false, nullsFirst: false })
+          .order("game_score", { ascending: false })
+          .limit(2)
+          .returns<TrendingPerfRow[]>();
+        if (error) {
+          console.error("[TrendingPerf] league query error", lid, error.message);
+          return [] as TrendingPerfRow[];
+        }
+        return (rows || []).slice(0, 2);
+      })
+    );
+
+    for (const result of perLeague) {
+      if (result.status === "fulfilled") {
+        for (const r of result.value) {
+          if (r?.league_id) perfs.push(r);
+        }
+      }
+    }
+
+    perfs.sort((a, b) => {
+      const aw = a.week_start || a.game_date || "";
+      const bw = b.week_start || b.game_date || "";
+      if (aw !== bw) return aw < bw ? 1 : -1;
+      return (b.game_score ?? 0) - (a.game_score ?? 0);
+    });
+
+    const playerMeta: Record<string, { slug: string | null; photo_path_bg_removed: string | null }> = {};
+    const playerIds = [...new Set(perfs.map((p) => p.player_id))];
+    if (playerIds.length > 0) {
+      const { data: metaRows, error: pErr } = await supabaseAdmin
+        .from("players")
+        .select("id, slug, photo_path_bg_removed")
+        .in("id", playerIds);
+      if (!pErr) {
+        for (const p of (metaRows || []) as { id: string; slug: string | null; photo_path_bg_removed: string | null }[]) {
+          playerMeta[p.id] = { slug: p.slug, photo_path_bg_removed: p.photo_path_bg_removed };
+        }
+      }
+    }
+
+    return { perfs, leagueNames, playerMeta };
+  }
+
+  app.get("/api/home/trending-performances", async (req: Request, res: Response) => {
+    const now = Date.now();
+    if (trendingCache && now - trendingCache.at < TRENDING_TTL_MS) {
+      return res.json(trendingCache.data);
+    }
+    // Deduplicate concurrent requests — only one in-flight fetch at a time.
+    if (!trendingInFlight) {
+      trendingInFlight = fetchTrendingPerformances().finally(() => {
+        trendingInFlight = null;
+      });
+    }
+    try {
+      const data = await trendingInFlight;
+      trendingCache = { data, at: Date.now() };
+      return res.json(data);
+    } catch (err: any) {
+      console.error("[TrendingPerf] fetch error", err.message);
+      if (trendingCache) return res.json(trendingCache.data);
+      return res.json({ perfs: [], leagueNames: {}, playerMeta: {} });
+    }
+  });
+
+  // ─── Player CSV import endpoint ─────────────────────────────────────────────
+  app.post("/api/admin/import-players", upload.single("file"), async (req: Request, res: Response) => {
+    try {
+      const userId = await authenticateSupabaseUser(req);
+      if (!userId) return res.status(401).json({ error: "Authentication required" });
+
+      // Verify the caller has the admin role in their Supabase app_metadata.
+      const { data: adminUserData, error: adminUserError } = await supabaseAdmin.auth.admin.getUserById(userId);
+      if (adminUserError || !adminUserData?.user) {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+      if (adminUserData.user.app_metadata?.role !== "admin") {
+        return res.status(403).json({ error: "Admin access required" });
+      }
+
+      const file = req.file;
+      if (!file) return res.status(400).json({ error: "No CSV file uploaded" });
+
+      const csvText = file.buffer.toString("utf-8");
+      const rows = parseCSV(csvText);
+
+      if (rows.length === 0) return res.status(400).json({ error: "CSV is empty or has no data rows" });
+
+      const { data: existingPlayers, error: playersError } = await supabaseAdmin
+        .from("players")
+        .select("id, full_name, slug");
+
+      if (playersError || !existingPlayers) {
+        return res.status(500).json({ error: "Failed to fetch existing players" });
+      }
+
+      const normalize = (s: string) =>
+        s.toLowerCase().replace(/\s+/g, " ").trim();
+
+      const playerByName = new Map<string, { id: string; slug: string }>();
+      for (const p of existingPlayers) {
+        if (p.full_name) playerByName.set(normalize(p.full_name), { id: p.id, slug: p.slug });
+      }
+
+      const existingSlugs = new Set(existingPlayers.map((p: any) => p.slug).filter(Boolean));
+
+      let updated = 0;
+      let created = 0;
+      let skipped = 0;
+      const errors: string[] = [];
+
+      for (const row of rows) {
+        const rawName = (row["full_name"] || "").trim();
+        if (!rawName) { skipped++; continue; }
+
+        const previousTeamsRaw = (row["previous_teams"] || "").trim();
+        const previousTeams = previousTeamsRaw
+          ? previousTeamsRaw.split(";").map((t: string) => t.trim()).filter(Boolean)
+          : null;
+
+        // Enrichment fields — the only fields updated on existing matched players.
+        const enrichmentOnly: Record<string, any> = {};
+        if (row["current_team"] !== undefined && row["current_team"] !== "")
+          enrichmentOnly.current_team = row["current_team"].trim();
+        if (previousTeams !== null && previousTeams.length > 0)
+          enrichmentOnly.previous_teams = previousTeams;
+        if (row["instagram_handle"] !== undefined && row["instagram_handle"] !== "")
+          enrichmentOnly.instagram_handle = row["instagram_handle"].replace(/^@/, "").trim();
+
+        // Additional fields allowed only for new inserts (do not overwrite stats-sourced data).
+        const insertExtras: Record<string, any> = {};
+        if (row["position"] !== undefined && row["position"] !== "")
+          insertExtras.position = row["position"].trim();
+        if (row["height_cm"] !== undefined && row["height_cm"] !== "") {
+          const h = parseFloat(row["height_cm"]);
+          if (!isNaN(h)) insertExtras.height_cm = h;
+        }
+        if (row["date_of_birth"] !== undefined && row["date_of_birth"] !== "")
+          insertExtras.date_of_birth = row["date_of_birth"].trim();
+
+        const normName = normalize(rawName);
+        const existing = playerByName.get(normName);
+
+        if (existing) {
+          if (Object.keys(enrichmentOnly).length === 0) { skipped++; continue; }
+          const { error: updateError } = await supabaseAdmin
+            .from("players")
+            .update(enrichmentOnly)
+            .eq("id", existing.id);
+
+          if (updateError) {
+            errors.push(`Row "${rawName}": ${updateError.message}`);
+          } else {
+            updated++;
+          }
+        } else {
+          const baseSlug = generatePlayerSlug(rawName);
+          let slug = baseSlug;
+          let counter = 1;
+          while (existingSlugs.has(slug)) {
+            slug = `${baseSlug}-${counter++}`;
+          }
+          existingSlugs.add(slug);
+
+          const newRow: Record<string, any> = {
+            full_name: rawName,
+            slug,
+            ...enrichmentOnly,
+            ...insertExtras,
+          };
+
+          const { error: insertError } = await supabaseAdmin
+            .from("players")
+            .insert(newRow);
+
+          if (insertError) {
+            errors.push(`Row "${rawName}" (new): ${insertError.message}`);
+          } else {
+            created++;
+            playerByName.set(normName, { id: "", slug });
+          }
+        }
+      }
+
+      return res.json({ updated, created, skipped, errors });
+    } catch (err: any) {
+      console.error("[import-players] error:", err.message);
+      return res.status(500).json({ error: err.message || "Internal server error" });
+    }
+  });
 
   app.get("/sitemap.xml", async (req: Request, res: Response) => {
     const now = Date.now();

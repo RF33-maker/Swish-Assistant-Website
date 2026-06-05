@@ -25,7 +25,7 @@ export default function PlayerStatsPage() {
 
     const fetchSuggestions = async () => {
       const [leaguesResponse, playersResponse] = await Promise.all([
-        supabase.from("leagues").select("name, slug").or(`name.ilike.%${searchQuery}%`).eq("is_public", true),
+        supabase.from("competitions").select("name, slug").or(`name.ilike.%${searchQuery}%`).eq("is_public", true),
         supabase.from("player_stats").select("name, team, id").ilike("name", `%${searchQuery}%`).limit(10),
       ]);
 
@@ -50,7 +50,7 @@ export default function PlayerStatsPage() {
   const handleSearchSelect = (item: any) => {
     setSearchQuery("");
     setSearchSuggestions([]);
-    if (item.type === 'league') setLocation(`/league/${item.slug}`);
+    if (item.type === 'league') setLocation(`/competition/${item.slug}`);
     else if (item.type === 'player') setLocation(`/player/${item.player_id}`);
   };
 
@@ -59,12 +59,12 @@ export default function PlayerStatsPage() {
     if (!searchQuery.trim()) return;
 
     const { data, error } = await supabase
-      .from("leagues").select("slug").ilike("name", `%${searchQuery.toLowerCase()}%`).eq("is_public", true);
+      .from("competitions").select("slug").ilike("name", `%${searchQuery.toLowerCase()}%`).eq("is_public", true);
 
     if (error) console.error("Supabase error:", error);
 
     if (data && data.length > 0) {
-      setLocation(`/league/${data[0].slug}`);
+      setLocation(`/competition/${data[0].slug}`);
     } else {
       const { data: playerData } = await supabase
         .from("player_stats").select("id, name").ilike("name", `%${searchQuery}%`).limit(1);

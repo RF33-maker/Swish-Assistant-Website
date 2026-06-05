@@ -8,9 +8,9 @@ export const users = pgTable("users", {
   password: text("password").notNull(),
 });
 
-// Team logos table for storing team logo assignments by league owners
-// Leagues table for storing league information and hierarchy
-export const leagues = pgTable("leagues", {
+// Competitions table — season/tournament instances within a league brand
+// (e.g. "Hoopsfix Pro Am 2026", "British Championship Regular Season 2025/26")
+export const leagues = pgTable("competitions", {
   league_id: uuid("league_id").primaryKey().defaultRandom(),
   parent_league_id: uuid("parent_league_id"), // References leagues.league_id for hierarchy
   name: varchar("name", { length: 255 }).notNull(),
@@ -31,6 +31,8 @@ export const leagues = pgTable("leagues", {
   trending_position: smallint("trending_position"),
   age_group: varchar("age_group", { length: 50 }),
   stop: smallint("stop"),
+  competition_id: uuid("competition_id"), // FK → competitions.id
+  season: text("season"), // e.g. "2025/26", "2026/27"
   created_at: timestamp("created_at").defaultNow(),
   updated_at: timestamp("updated_at").defaultNow(),
 });

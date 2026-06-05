@@ -60,7 +60,7 @@ export default function CustomizationSection({ league }: CustomizationSectionPro
 
     try {
       const { error } = await supabase
-        .from("leagues")
+        .from("competitions")
         .update({
           primary_color: primaryColor,
           secondary_color: secondaryColor,

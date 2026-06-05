@@ -3,13 +3,15 @@ import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 
 export type SearchSuggestion =
-  | { type: "league"; name: string; slug: string }
+  | { type: "competition"; name: string; slug: string; logo_url: string | null }
+  | { type: "league"; name: string; slug: string; logo_url: string | null }
   | { type: "team"; name: string; league_id: string; league_name: string; league_slug: string }
   | { type: "player"; name: string; team: string; player_id: string | number; player_slug: string | null; photo_url: string | null };
 
 interface LeagueRow {
   name: string;
   slug: string;
+  logo_url: string | null;
 }
 
 interface LeagueRef {
@@ -75,15 +77,22 @@ export function useGlobalSearch() {
         return;
       }
 
-      const [leaguesResponse, teamsResponse] = await Promise.all([
+      const [leaguesResponse, competitionsResponse, teamsResponse] = await Promise.all([
+        // Brand leagues (top-level series, e.g. "Hoopsfix Pro Am")
         supabase
           .from("leagues")
-          .select("name, slug")
+          .select("name, slug, logo_url")
+          .ilike("name", `%${query}%`)
+          .limit(5),
+        // Season/tournament instances (e.g. "Hoopsfix Pro Am 2026")
+        supabase
+          .from("competitions")
+          .select("name, slug, logo_url, competition_id")
           .or(`name.ilike.%${query}%`)
           .eq("is_public", true),
         supabase
           .from("teams")
-          .select("name, league_id, leagues:league_id(name, slug, is_public)")
+          .select("name, league_id, competitions:league_id(name, slug, is_public)")
           .ilike("name", `%${query}%`)
           .limit(20),
       ]);
@@ -94,7 +103,12 @@ export function useGlobalSearch() {
         .ilike("full_name", `%${query}%`)
         .limit(30);
 
-      const leagues: LeagueRow[] = (leaguesResponse.data as LeagueRow[] | null) || [];
+      // Brand league results (top-level series)
+      const leagueBrands: LeagueRow[] = (leaguesResponse.data as any) || [];
+      // Only surface standalone competitions (seasons not grouped under a brand league)
+      const standaloneCompetitions: LeagueRow[] = ((competitionsResponse.data as any[] | null) || []).filter(
+        (c: any) => !c.competition_id
+      );
       const players: PlayerRow[] = (playersResponse.data as PlayerRow[] | null) || [];
       const teams: TeamRow[] = (teamsResponse.data as TeamRow[] | null) || [];
 
@@ -158,9 +172,9 @@ export function useGlobalSearch() {
       });
 
       const uniqueTeams: SearchSuggestion[] = teams.reduce<SearchSuggestion[]>((acc, team) => {
-        const leagueJoin: LeagueRef | null = Array.isArray(team.leagues)
-          ? (team.leagues[0] ?? null)
-          : team.leagues;
+        const leagueJoin: LeagueRef | null = Array.isArray((team as any).competitions)
+          ? ((team as any).competitions[0] ?? null)
+          : (team as any).competitions;
         if (leagueJoin?.is_public === false) return acc;
         const alreadyPresent = acc.some(
           (t) => t.type === "team" && t.name === team.name && t.league_id === team.league_id
@@ -177,15 +191,25 @@ export function useGlobalSearch() {
         return acc;
       }, []);
 
-      const formattedLeagues: SearchSuggestion[] = leagues.map(
-        (league): SearchSuggestion => ({
+      const formattedLeagues: SearchSuggestion[] = leagueBrands.map(
+        (l): SearchSuggestion => ({
           type: "league",
-          name: league.name,
-          slug: league.slug,
+          name: l.name,
+          slug: l.slug,
+          logo_url: l.logo_url ?? null,
         })
       );
 
-      const combined = [...formattedLeagues, ...uniqueTeams, ...uniquePlayers].slice(0, 10);
+      const formattedCompetitions: SearchSuggestion[] = standaloneCompetitions.map(
+        (c): SearchSuggestion => ({
+          type: "competition",
+          name: c.name,
+          slug: c.slug,
+          logo_url: c.logo_url ?? null,
+        })
+      );
+
+      const combined = [...formattedLeagues, ...formattedCompetitions, ...uniqueTeams, ...uniquePlayers].slice(0, 10);
       setSuggestions(combined);
     };
 
@@ -197,12 +221,14 @@ export function useGlobalSearch() {
     setQuery("");
     setSuggestions([]);
 
-    if (item.type === "league") {
+    if (item.type === "competition") {
+      setLocation(`/competition/${item.slug}`);
+    } else if (item.type === "league") {
       setLocation(`/league/${item.slug}`);
     } else if (item.type === "team") {
       const encodedName = encodeURIComponent(item.name);
       if (item.league_slug) {
-        setLocation(`/league/${item.league_slug}/team/${encodedName}`);
+        setLocation(`/competition/${item.league_slug}/team/${encodedName}`);
       } else {
         setLocation(`/team/${encodedName}`);
       }
@@ -222,14 +248,14 @@ export function useGlobalSearch() {
     }
 
     const { data } = await supabase
-      .from("leagues")
+      .from("competitions")
       .select("slug")
       .ilike("name", `%${query.toLowerCase()}%`)
       .eq("is_public", true);
 
     if (data && data.length > 0) {
       const first = data[0] as { slug: string };
-      setLocation(`/league/${first.slug}`);
+      setLocation(`/competition/${first.slug}`);
     }
   };
 

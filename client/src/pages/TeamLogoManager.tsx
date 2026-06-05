@@ -45,7 +45,7 @@ export default function TeamLogoManager() {
       try {
         // Fetch league info
         const { data: leagueData, error: leagueError } = await supabase
-          .from("leagues")
+          .from("competitions")
           .select("*")
           .eq("slug", slug)
           .single();
@@ -224,7 +224,7 @@ export default function TeamLogoManager() {
           <h1 className="text-2xl font-bold text-slate-800 mb-2">Access Denied</h1>
           <p className="text-slate-600 mb-4">Only league owners can manage team logos.</p>
           <button
-            onClick={() => navigate(`/league/${slug}`)}
+            onClick={() => navigate(`/competition/${slug}`)}
             className="bg-orange-500 hover:bg-orange-600 text-white px-6 py-2 rounded-lg"
           >
             Back to League
@@ -254,7 +254,7 @@ export default function TeamLogoManager() {
             Home
           </button>
           <button
-            onClick={() => navigate(`/league/${slug}`)}
+            onClick={() => navigate(`/competition/${slug}`)}
             className="text-slate-600 hover:text-orange-500"
           >
             Back to League
