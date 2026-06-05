@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
+import { supabase } from "@/lib/supabase";
 import { Trophy } from "lucide-react";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
 
