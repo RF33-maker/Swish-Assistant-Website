@@ -1836,6 +1836,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return { perfs, leagueNames, playerMeta };
   }
 
+  // ─── Helpers for player-leaders name deduplication (mirrors fuzzyMatch.ts) ────
+  function plNormalizeName(name: string): string {
+    return name.toLowerCase().trim().replace(/\s+/g, ' ').replace(/[^a-z\s]/g, '');
+  }
+  function plNormalizeTeam(name: string): string {
+    if (!name) return '';
+    return name.trim()
+      .replace(/\s+Senior\s+Men\s*/gi, ' ')
+      .replace(/!/g, '')
+      .replace(/\s+I(?![IVX])\s*$/i, '')
+      .replace(/\s+/g, ' ').trim();
+  }
+  function plJaro(s1: string, s2: string): number {
+    const l1 = s1.length, l2 = s2.length;
+    if (!l1 && !l2) return 1; if (!l1 || !l2) return 0;
+    const win = Math.floor(Math.max(l1, l2) / 2) - 1;
+    const m1 = new Array(l1).fill(false), m2 = new Array(l2).fill(false);
+    let matches = 0, t = 0;
+    for (let i = 0; i < l1; i++) {
+      const lo = Math.max(0, i - win), hi = Math.min(i + win + 1, l2);
+      for (let j = lo; j < hi; j++) {
+        if (m2[j] || s1[i] !== s2[j]) continue;
+        m1[i] = m2[j] = true; matches++; break;
+      }
+    }
+    if (!matches) return 0;
+    let k = 0;
+    for (let i = 0; i < l1; i++) {
+      if (!m1[i]) continue; while (!m2[k]) k++;
+      if (s1[i] !== s2[k]) t++; k++;
+    }
+    const jaro = (matches / l1 + matches / l2 + (matches - t / 2) / matches) / 3;
+    let pLen = 0;
+    for (let i = 0; i < Math.min(4, l1, l2); i++) { if (s1[i] === s2[i]) pLen++; else break; }
+    return jaro + pLen * 0.1 * (1 - jaro);
+  }
+  function plNamesMatch(a: string, b: string): boolean {
+    const n1 = plNormalizeName(a), n2 = plNormalizeName(b);
+    if (n1 === n2) return true;
+    const p1 = n1.split(' ').filter(Boolean), p2 = n2.split(' ').filter(Boolean);
+    if (p1.length === p2.length && p1.length >= 2) {
+      const firstMatch = p1[0] === p2[0] ||
+        (p1[0].length === 1 && p2[0].startsWith(p1[0])) ||
+        (p2[0].length === 1 && p1[0].startsWith(p2[0])) ||
+        plJaro(p1[0], p2[0]) >= 0.82;
+      if (firstMatch && plJaro(p1[p1.length-1], p2[p2.length-1]) >= 0.85) return true;
+    }
+    if (p1.length !== p2.length && p1.length >= 1 && p2.length >= 1) {
+      const sh = p1.length < p2.length ? p1 : p2, lo = p1.length < p2.length ? p2 : p1;
+      if (plJaro(sh[sh.length-1], lo[lo.length-1]) >= 0.85) {
+        const sf = sh[0], lf = lo[0];
+        if ((sf.length === 1 && lf.startsWith(sf)) || (lf.length === 1 && sf.startsWith(lf))) return true;
+        if (plJaro(sf, lf) >= 0.8) return true;
+      }
+    }
+    return false;
+  }
+
   // ─── Home page: player leaders (same raw aggregation as league page) ──────────
   const playerLeadersCache = new Map<string, { data: any; at: number }>();
   const PLAYER_LEADERS_TTL = 5 * 60 * 1000;
@@ -1914,8 +1972,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         agg.totalAssists += stat.sassists || 0;
       }
 
+      // Second pass: merge same-team entries whose names fuzzy-match
+      // (mirrors aggregatePlayerStats cross-player-id merge on the league page)
+      const mergedPlayers: Array<{ name: string; team: string; player_id: string;
+        games: number; totalPoints: number; totalRebounds: number; totalAssists: number }> = [];
+      const processedIds = new Set<string>();
+
+      for (const [pid, player] of byPlayerId.entries()) {
+        if (processedIds.has(pid)) continue;
+        const normTeam = plNormalizeTeam(player.team);
+        for (const [otherId, other] of byPlayerId.entries()) {
+          if (otherId === pid || processedIds.has(otherId)) continue;
+          if (plNormalizeTeam(other.team) === normTeam && plNamesMatch(player.name, other.name)) {
+            player.games += other.games;
+            player.totalPoints += other.totalPoints;
+            player.totalRebounds += other.totalRebounds;
+            player.totalAssists += other.totalAssists;
+            // prefer the longer/more-complete name
+            if (other.name.length > player.name.length) player.name = other.name;
+            processedIds.add(otherId);
+          }
+        }
+        processedIds.add(pid);
+        mergedPlayers.push(player);
+      }
+
       // Enrich with slug + photo from players table
-      const playerIds = Array.from(byPlayerId.keys()).slice(0, 1000);
+      const playerIds = mergedPlayers.map(p => p.player_id).slice(0, 1000);
       const metaById = new Map<string, { slug: string | null; photo_path_bg_removed: string | null }>();
       if (playerIds.length > 0) {
         const { data: playerRows } = await supabaseAdmin
@@ -1927,7 +2010,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const allRows = Array.from(byPlayerId.values()).map((p) => {
+      const allRows = mergedPlayers.map((p) => {
         const gp = p.games || 1;
         const meta = metaById.get(p.player_id);
         return {
