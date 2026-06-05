@@ -29,8 +29,8 @@ INSERT INTO public.competitions (name, slug, description) VALUES
   ('Hoopsfix Pro Am',         'hoopsfix-pro-am',           'Hoopsfix Pro Am tournament series'),
   ('NBL Division One Men''s', 'nbl-division-one-mens',     'National Basketball League Division One (Men''s)'),
   ('NBL Division One Women''s','nbl-division-one-womens',  'National Basketball League Division One (Women''s)'),
-  ('British Championship',    'british-championship',       'British Championship Basketball'),
-  ('REBA SL',                 'reba-sl',                   'REBA Super League')
+  ('British Championship Basketball',    'british-championship-basketball',       'British Championship Basketball'),
+  ('REBA SL',                 'reba-sl',                   'REBA Summer League')
 ON CONFLICT (slug) DO NOTHING;
 
 -- ============================================================

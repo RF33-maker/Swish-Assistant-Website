@@ -61,13 +61,41 @@ export default function LandingPage() {
     const fetchTrending = async () => {
       const { data, error } = await supabase
         .from("leagues")
-        .select("name, slug, logo_url, banner_url, trending_position")
+        .select("name, slug, logo_url, banner_url, trending_position, competition_id, competitions:competition_id(name, slug, logo_url)")
         .eq("is_public", true)
         .not("trending_position", "is", null)
         .order("trending_position", { ascending: true })
-        .limit(4);
+        .limit(8);
 
-      if (!error) setTrendingLeagues(data || []);
+      if (!error && data) {
+        // Deduplicate: if a league belongs to a competition, show the competition instead (once)
+        const seen = new Set<string>();
+        const deduped: any[] = [];
+        for (const league of data) {
+          const comp = Array.isArray((league as any).competitions)
+            ? (league as any).competitions[0]
+            : (league as any).competitions;
+          if (comp?.slug) {
+            if (!seen.has(`comp:${comp.slug}`)) {
+              seen.add(`comp:${comp.slug}`);
+              deduped.push({
+                name: comp.name,
+                slug: comp.slug,
+                logo_url: comp.logo_url || league.logo_url,
+                banner_url: league.banner_url,
+                _type: "competition",
+              });
+            }
+          } else {
+            if (!seen.has(`league:${league.slug}`)) {
+              seen.add(`league:${league.slug}`);
+              deduped.push({ ...league, _type: "league" });
+            }
+          }
+          if (deduped.length >= 4) break;
+        }
+        setTrendingLeagues(deduped);
+      }
     };
 
     fetchTrending();
@@ -118,7 +146,17 @@ export default function LandingPage() {
                     className="px-4 py-2.5 cursor-pointer hover:bg-orange-50 dark:hover:bg-neutral-800 text-left border-b border-orange-100 dark:border-neutral-800 last:border-b-0 transition-colors duration-200"
                   >
                     <div className="flex items-center gap-3">
-                      {item.type === 'league' ? (
+                      {item.type === 'competition' ? (
+                        item.logo_url ? (
+                          <div className="h-8 w-8 rounded-full bg-white dark:bg-neutral-800 border border-orange-200 dark:border-neutral-600 flex items-center justify-center overflow-hidden flex-shrink-0">
+                            <img src={item.logo_url} alt={item.name} className="h-7 w-7 object-contain" />
+                          </div>
+                        ) : (
+                          <div className="h-8 w-8 rounded-full bg-gradient-to-br from-orange-400 to-amber-400 flex items-center justify-center flex-shrink-0">
+                            <Trophy className="h-4 w-4 text-white" />
+                          </div>
+                        )
+                      ) : item.type === 'league' ? (
                         item.logo_url ? (
                           <div className="h-8 w-8 rounded-full bg-white dark:bg-neutral-800 border border-orange-200 dark:border-neutral-600 flex items-center justify-center overflow-hidden flex-shrink-0">
                             <img src={item.logo_url} alt={item.name} className="h-7 w-7 object-contain" />
@@ -217,17 +255,18 @@ export default function LandingPage() {
             {(trendingLeagues.length > 0
               ? trendingLeagues
               : [
-                  { name: "SLB Championship 25/26", slug: "super-league-basketball-20252026", logo_url: null, banner_url: null },
-                  { name: "British Championship Basketball", slug: "british-championship-basketball-20252026", logo_url: null, banner_url: null },
-                  { name: "NBL Division One 25/26", slug: "national-basketball-league-d1-mens-20252026", logo_url: null, banner_url: null },
-                  { name: "WNBL Division One 25/26", slug: "national-basketball-league-d1-womens-20252026", logo_url: null, banner_url: null },
+                  { name: "SLB Championship 25/26", slug: "super-league-basketball-20252026", logo_url: null, banner_url: null, _type: "league" },
+                  { name: "British Championship Basketball", slug: "british-championship-basketball-20252026", logo_url: null, banner_url: null, _type: "league" },
+                  { name: "NBL Division One 25/26", slug: "national-basketball-league-d1-mens-20252026", logo_url: null, banner_url: null, _type: "league" },
+                  { name: "WNBL Division One 25/26", slug: "national-basketball-league-d1-womens-20252026", logo_url: null, banner_url: null, _type: "league" },
                 ]
             ).map((league, i) => {
               const hasBanner = !!league.banner_url;
+              const isCompetition = league._type === "competition";
               return (
               <button
                 key={league.slug}
-                onClick={() => handleSelect({ type: 'league', name: league.name, slug: league.slug })}
+                onClick={() => handleSelect({ type: isCompetition ? 'competition' : 'league', name: league.name, slug: league.slug, logo_url: league.logo_url ?? null } as any)}
                 className="relative overflow-hidden rounded-2xl h-24 hover:scale-[1.03] hover:shadow-lg transition-all duration-300 animate-slide-in-left group"
                 style={{
                   animationDelay: `${0.8 + i * 0.075}s`,

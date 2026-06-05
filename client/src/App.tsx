@@ -11,6 +11,7 @@ import NotFound from "@/pages/not-found";
 import AuthPage from "@/pages/auth";
 import LandingPage from "@/pages/landing-page";
 import LeaguePage from "./pages/pages/league/[slug]";
+import CompetitionPage from "./pages/pages/competition/[slug]";
 import LeagueAdminPage from "./pages/pages/league-admin/[slug]";
 import LeagueLeadersPage from "./pages/pages/league-leaders/[slug]";
 import PlayerStatsPage from "./pages/pages/player/[id]";
@@ -53,6 +54,7 @@ function Router() {
       <Route path="/" component={LandingPage} />
       <Route path="/auth" component={AuthPage} />
       <Route path="/test" component={TestConnections} />
+      <Route path="/competition/:slug" component={CompetitionPage} />
       <Route path="/league/:slug" component={LeaguePage} />
       <Route path="/league/:slug/player/:playerSlug" component={LeaguePage} />
       <Route path="/league/:slug/teams" component={LeagueTeams} />

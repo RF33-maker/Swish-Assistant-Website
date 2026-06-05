@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 
 export type SearchSuggestion =
+  | { type: "competition"; name: string; slug: string; logo_url: string | null }
   | { type: "league"; name: string; slug: string; logo_url: string | null }
   | { type: "team"; name: string; league_id: string; league_name: string; league_slug: string }
   | { type: "player"; name: string; team: string; player_id: string | number; player_slug: string | null; photo_url: string | null };
@@ -76,10 +77,15 @@ export function useGlobalSearch() {
         return;
       }
 
-      const [leaguesResponse, teamsResponse] = await Promise.all([
+      const [competitionsResponse, leaguesResponse, teamsResponse] = await Promise.all([
+        supabase
+          .from("competitions")
+          .select("name, slug, logo_url")
+          .ilike("name", `%${query}%`)
+          .limit(5),
         supabase
           .from("leagues")
-          .select("name, slug, logo_url")
+          .select("name, slug, logo_url, competition_id")
           .or(`name.ilike.%${query}%`)
           .eq("is_public", true),
         supabase
@@ -95,7 +101,12 @@ export function useGlobalSearch() {
         .ilike("full_name", `%${query}%`)
         .limit(30);
 
-      const leagues: LeagueRow[] = (leaguesResponse.data as LeagueRow[] | null) || [];
+      const competitions: { name: string; slug: string; logo_url: string | null }[] =
+        (competitionsResponse.data as any) || [];
+      // Only surface leagues that are NOT part of a competition (those are represented by their competition)
+      const leagues: LeagueRow[] = ((leaguesResponse.data as any[] | null) || []).filter(
+        (l: any) => !l.competition_id
+      );
       const players: PlayerRow[] = (playersResponse.data as PlayerRow[] | null) || [];
       const teams: TeamRow[] = (teamsResponse.data as TeamRow[] | null) || [];
 
@@ -178,6 +189,15 @@ export function useGlobalSearch() {
         return acc;
       }, []);
 
+      const formattedCompetitions: SearchSuggestion[] = competitions.map(
+        (c): SearchSuggestion => ({
+          type: "competition",
+          name: c.name,
+          slug: c.slug,
+          logo_url: c.logo_url ?? null,
+        })
+      );
+
       const formattedLeagues: SearchSuggestion[] = leagues.map(
         (league): SearchSuggestion => ({
           type: "league",
@@ -187,7 +207,7 @@ export function useGlobalSearch() {
         })
       );
 
-      const combined = [...formattedLeagues, ...uniqueTeams, ...uniquePlayers].slice(0, 10);
+      const combined = [...formattedCompetitions, ...formattedLeagues, ...uniqueTeams, ...uniquePlayers].slice(0, 10);
       setSuggestions(combined);
     };
 
@@ -199,7 +219,9 @@ export function useGlobalSearch() {
     setQuery("");
     setSuggestions([]);
 
-    if (item.type === "league") {
+    if (item.type === "competition") {
+      setLocation(`/competition/${item.slug}`);
+    } else if (item.type === "league") {
       setLocation(`/league/${item.slug}`);
     } else if (item.type === "team") {
       const encodedName = encodeURIComponent(item.name);
