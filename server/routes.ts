@@ -1752,39 +1752,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
       .eq("is_public", true)
       .not("trending_position", "is", null)
       .order("trending_position", { ascending: true, nullsFirst: false })
-      .limit(4);
+      .limit(8);
 
     if (lErr || !leagueRows || leagueRows.length === 0) {
       console.error("[TrendingPerf] leagues error", lErr?.message);
       return empty;
     }
 
+    // Exclude REBA SL and child leagues (same rule as the scores carousel)
+    const filteredRows = (leagueRows as { league_id: string; name: string | null; trending_position: number | null }[])
+      .filter((l) => !l.name?.toLowerCase().includes("reba"));
+
+    if (filteredRows.length === 0) return empty;
+
     const leagueNames: Record<string, string> = {};
-    for (const l of leagueRows as { league_id: string; name: string | null }[]) {
+    for (const l of filteredRows) {
       if (l.name) leagueNames[l.league_id] = l.name;
     }
 
-    const leagueIds = leagueRows.map((l: any) => l.league_id as string);
+    const leagueIds = filteredRows.map((l) => l.league_id);
+    console.log("[TrendingPerf] querying leagues:", leagueRows.map((l: any) => `${l.name} (pos ${l.trending_position})`));
     const perfs: TrendingPerfRow[] = [];
 
     // Query the lightweight weekly-aggregated view instead of the heavy per-game
     // view (vw_player_game_scores), which times out on Vercel serverless cold starts.
     const perLeague = await Promise.allSettled(
       leagueIds.map(async (lid) => {
+        const name = leagueNames[lid] || lid;
         const { data: rows, error } = await supabaseAdmin
           .from("vw_weekly_player_scores")
           .select("league_id,week_start,week_end,player_id,full_name,team_id,team_name,pts,reb,ast,stl,blk,tov,fga,fta,weekly_score")
           .eq("league_id", lid)
           .order("week_start", { ascending: false, nullsFirst: false })
           .order("weekly_score", { ascending: false })
-          .limit(1)
+          .limit(2)
           .returns<Omit<TrendingPerfRow, "ts_pct">[]>();
         if (error) {
-          console.error("[TrendingPerf] league query error", lid, error.message);
+          console.error("[TrendingPerf] league query error", name, error.message);
           return [] as TrendingPerfRow[];
         }
+        console.log(`[TrendingPerf] ${name}: ${rows?.length ?? 0} rows (most recent week_start: ${rows?.[0]?.week_start ?? "none"})`);
         // Compute ts_pct from available columns: pts / (2 * (fga + 0.44 * fta))
-        return (rows || []).slice(0, 1).map((r) => {
+        return (rows || []).slice(0, 2).map((r) => {
           const pts = r.pts ?? 0;
           const fga = r.fga ?? 0;
           const fta = r.fta ?? 0;
