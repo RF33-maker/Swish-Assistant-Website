@@ -1909,25 +1909,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const allowed = await filterLeagueIdsForPublicScope([leagueId]);
       if (!allowed.includes(leagueId)) return res.status(403).json({ error: "Forbidden" });
 
-      // Fetch raw game-by-game stats — same source as the league page
-      const { data: rows, error } = await supabaseAdmin
-        .from("player_stats")
-        .select(
-          "player_id, full_name, firstname, familyname, team_name, " +
-          "spoints, sreboundstotal, sassists, ssteals, sblocks, sturnovers, " +
-          "sfieldgoalsattempted, sfreethrowsattempted, sminutes"
-        )
-        .eq("league_id", leagueId)
-        .limit(5000);
+      // Resolve the effective league IDs to query — for parent leagues, player_stats
+      // rows live under the child competition IDs, not the parent's own ID.
+      // This mirrors the league page's psIds = isParentFetch ? parentChildIds : [statsLeagueId]
+      const { data: children } = await supabaseAdmin
+        .from("competitions")
+        .select("league_id")
+        .eq("parent_league_id", leagueId);
+      const childIds: string[] = (children || []).map((c: any) => c.league_id);
+      const queryIds: string[] = childIds.length > 0 ? childIds : [leagueId];
+      console.log(`[PlayerLeaders] ${leagueId}: querying ids=${JSON.stringify(queryIds)}`);
 
-      if (error) {
-        console.error("[PlayerLeaders] error", error.message);
-        return res.status(500).json({ error: error.message });
+      // Fetch ALL raw game-by-game stats — paginate to avoid the default 1 000-row
+      // PostgREST cap (same approach as /api/public/player-stats).
+      const SELECT_COLS =
+        "player_id, full_name, firstname, familyname, team_name, " +
+        "spoints, sreboundstotal, sassists, ssteals, sblocks, sturnovers, " +
+        "sfieldgoalsattempted, sfreethrowsattempted, sminutes";
+      const PAGE_SIZE = 1000;
+      const allStats: any[] = [];
+      let offset = 0;
+      while (true) {
+        const q = supabaseAdmin
+          .from("player_stats")
+          .select(SELECT_COLS)
+          .range(offset, offset + PAGE_SIZE - 1);
+        const { data: page, error: pageErr } = await (
+          queryIds.length === 1
+            ? q.eq("league_id", queryIds[0])
+            : q.in("league_id", queryIds)
+        );
+        if (pageErr) {
+          console.error("[PlayerLeaders] page error", pageErr.message);
+          return res.status(500).json({ error: pageErr.message });
+        }
+        if (!page || page.length === 0) break;
+        allStats.push(...page);
+        if (page.length < PAGE_SIZE) break; // last page
+        offset += PAGE_SIZE;
       }
 
-      if (!rows || rows.length === 0) {
-        return res.json({ scoring: [], rebounding: [], assists: [] });
+      if (allStats.length === 0) {
+        return res.json({ scoring: [], rebounding: [], assists: [],
+          scoring_total: [], rebounding_total: [], assists_total: [] });
       }
+      console.log(`[PlayerLeaders] ${leagueId}: ${allStats.length} rows fetched`);
 
       // Aggregate by player_id — mirrors aggregatePlayerStats on the league page
       const byPlayerId = new Map<string, {
@@ -1935,7 +1961,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         games: number; totalPoints: number; totalRebounds: number; totalAssists: number;
       }>();
 
-      for (const stat of rows as any[]) {
+      for (const stat of allStats) {
         if (!stat.player_id) continue;
         const name = (stat.full_name ||
           `${stat.firstname || ""} ${stat.familyname || ""}`.trim() ||
@@ -2029,10 +2055,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
       });
 
+      // Adaptive min-games qualifier — mirrors the league page's leadersQualifier logic.
+      // Averages leaderboards only; totals lists are unfiltered.
+      const maxGamesAny = allRows.reduce((m, p) => Math.max(m, p.games || 0), 0);
+      const minGames = maxGamesAny < 3
+        ? 1
+        : Math.max(3, Math.ceil(maxGamesAny * 0.4));
+      const qualified = allRows.filter((p) => (p.games || 0) >= minGames);
+      // Fall back to unfiltered if qualifier produces an empty list
+      const avgPool = qualified.length > 0 ? qualified : allRows;
+      console.log(`[PlayerLeaders] ${leagueId}: maxGames=${maxGamesAny} minGames=${minGames} qualified=${qualified.length}/${allRows.length}`);
+
       const result = {
-        scoring:          [...allRows].sort((a, b) => b.ppg       - a.ppg).slice(0, 5),
-        rebounding:       [...allRows].sort((a, b) => b.rpg       - a.rpg).slice(0, 5),
-        assists:          [...allRows].sort((a, b) => b.apg       - a.apg).slice(0, 5),
+        scoring:          [...avgPool].sort((a, b) => b.ppg       - a.ppg).slice(0, 5),
+        rebounding:       [...avgPool].sort((a, b) => b.rpg       - a.rpg).slice(0, 5),
+        assists:          [...avgPool].sort((a, b) => b.apg       - a.apg).slice(0, 5),
         scoring_total:    [...allRows].sort((a, b) => b.total_pts - a.total_pts).slice(0, 5),
         rebounding_total: [...allRows].sort((a, b) => b.total_reb - a.total_reb).slice(0, 5),
         assists_total:    [...allRows].sort((a, b) => b.total_ast - a.total_ast).slice(0, 5),
