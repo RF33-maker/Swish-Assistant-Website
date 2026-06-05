@@ -166,7 +166,7 @@ function buildRecords(games: GameRow[]): Record<string, string> {
 
 function ScoreCardSkeleton() {
   return (
-    <div className="flex-shrink-0 w-56 rounded-lg bg-neutral-900 border border-neutral-800 p-3 animate-pulse">
+    <div className="flex-shrink-0 w-36 sm:w-56 rounded-lg bg-neutral-900 border border-neutral-800 p-3 animate-pulse">
       <div className="h-3 w-16 bg-neutral-800 rounded mb-3" />
       <div className="space-y-2">
         <div className="h-5 bg-neutral-800 rounded" />
@@ -196,9 +196,15 @@ export default function LatestScoresSection() {
 
       if (!leagues || leagues.length === 0) return [];
 
-      const leagueIds = leagues.map((l) => l.league_id);
+      // Exclude REBA SL and all its child leagues from the carousel
+      const filteredLeagues = leagues.filter(
+        (l) => !l.name.toLowerCase().includes("reba")
+      );
+      if (filteredLeagues.length === 0) return [];
+
+      const leagueIds = filteredLeagues.map((l) => l.league_id);
       const slugById: Record<string, string> = {};
-      leagues.forEach((l) => { slugById[l.league_id] = l.slug; });
+      filteredLeagues.forEach((l) => { slugById[l.league_id] = l.slug; });
 
       const now = new Date();
       const windowEnd = new Date(now.getTime() + UPCOMING_WINDOW_MS);
@@ -427,7 +433,7 @@ export default function LatestScoresSection() {
                           <button
                             key={g.game_key}
                             onClick={() => handleCardClick(g)}
-                            className="snap-start text-left flex-shrink-0 w-[200px] rounded-md bg-neutral-900 hover:bg-neutral-800 border border-red-500/60 hover:border-red-500/90 transition-colors duration-200 p-2.5"
+                            className="snap-start text-left flex-shrink-0 w-[152px] sm:w-[200px] rounded-md bg-neutral-900 hover:bg-neutral-800 border border-red-500/60 hover:border-red-500/90 transition-colors duration-200 p-2.5"
                             data-testid={`live-card-${g.game_key}`}
                           >
                             <div className="flex items-center justify-between mb-1.5">
@@ -474,7 +480,7 @@ export default function LatestScoresSection() {
                           <button
                             key={g.game_key}
                             onClick={() => handleCardClick(g)}
-                            className="snap-start text-left flex-shrink-0 w-[200px] rounded-md bg-neutral-900 hover:bg-neutral-800 border border-orange-500/40 hover:border-orange-500/70 transition-colors duration-200 p-2.5"
+                            className="snap-start text-left flex-shrink-0 w-[152px] sm:w-[200px] rounded-md bg-neutral-900 hover:bg-neutral-800 border border-orange-500/40 hover:border-orange-500/70 transition-colors duration-200 p-2.5"
                             data-testid={`upcoming-card-${g.game_key}`}
                           >
                             <div className="flex items-center justify-between mb-1.5">
@@ -511,7 +517,7 @@ export default function LatestScoresSection() {
                         <button
                           key={g.game_key}
                           onClick={() => handleCardClick(g)}
-                          className="snap-start text-left flex-shrink-0 w-[200px] rounded-md bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 transition-colors duration-200 p-2.5"
+                          className="snap-start text-left flex-shrink-0 w-[152px] sm:w-[200px] rounded-md bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 transition-colors duration-200 p-2.5"
                           data-testid={`score-card-${g.game_key}`}
                         >
                           <div className="flex items-center justify-between mb-1.5">
