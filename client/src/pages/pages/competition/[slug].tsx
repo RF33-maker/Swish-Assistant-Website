@@ -70,7 +70,13 @@ export default function CompetitionPage() {
         .eq("is_public", true)
         .order("season", { ascending: false });
 
-      setSeasons((competitionsData as SeasonCompetition[] | null) || []);
+      const seasonList = (competitionsData as SeasonCompetition[] | null) || [];
+      if (seasonList.length > 0) {
+        // Go straight to the most recent season — the competition page has a season switcher built in
+        setLocation(`/competition/${seasonList[0].slug}`, { replace: true });
+        return;
+      }
+      setSeasons(seasonList);
       setLoading(false);
     };
 
