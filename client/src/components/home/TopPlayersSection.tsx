@@ -54,7 +54,6 @@ interface LeaderRow {
 }
 
 const MAX_LEAGUES = 6;
-const FETCH_LIMIT = 60;
 const ORANGE = "rgb(249, 115, 22)";
 
 type ViewMode = "averages" | "totals";
@@ -229,14 +228,17 @@ export default function TopPlayersSection() {
     queryFn: async () => {
       if (!currentLeague) return null;
 
+      // Fetch all players for this league (no stat-biased ordering) so that
+      // rebounding/assist leaders aren't cut off by a points-ordered limit.
+      // Pre-aggregated views have at most ~200 rows per league, so this is safe.
       const { data: rows, error: rowsErr } = await supabase
         .from("v_player_season_averages")
         .select(
           "player_name, team_id, team_name, games_played, avg_pts, avg_reb, avg_ast, total_pts, total_reb, total_ast"
         )
         .eq("league_id", currentLeague.league_id)
-        .order("avg_pts", { ascending: false })
-        .limit(FETCH_LIMIT)
+        .order("player_name", { ascending: true })
+        .limit(500)
         .returns<SeasonAverageRow[]>();
 
       if (rowsErr) {
