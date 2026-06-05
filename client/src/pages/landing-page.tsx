@@ -52,6 +52,15 @@ function LeagueLogosCarousel() {
   )
 }
 
+function cleanLeagueName(name: string): string {
+  return name
+    .replace(/\s+\d{4}\/\d{4}\s*$/, '')
+    .replace(/\s+\d{4}\d{4}\s*$/, '')
+    .replace(/\s+\d{2}\/\d{2}\s*$/, '')
+    .replace(/\s+\d{4}\/\d{2}\s*$/, '')
+    .trim();
+}
+
 export default function LandingPage() {
   const [, setLocation] = useLocation()
   const [trendingLeagues, setTrendingLeagues] = useState<any[]>([]);
@@ -284,7 +293,7 @@ export default function LandingPage() {
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
                 <div className="absolute bottom-0 left-0 right-0 p-4 flex items-end justify-between">
-                  <span className="font-semibold text-sm text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">{league.name}</span>
+                  <span className="font-semibold text-sm text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)]">{cleanLeagueName(league.name)}</span>
                   {league.logo_url && (
                     <img src={league.logo_url} alt={`${league.name} logo`} className="h-10 w-10 object-contain ml-2 flex-shrink-0" />
                   )}
