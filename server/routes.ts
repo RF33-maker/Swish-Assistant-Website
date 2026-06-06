@@ -1,5 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
+import * as https from "https";
+import * as http from "http";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { supabaseAdmin } from "./supabaseServiceClient";
 import { detectDuplicates } from "./playerMergeUtils";
@@ -91,30 +93,57 @@ async function verifyLeagueOwnership(userId: string, leagueId: string): Promise<
 
 const RENDER_BACKEND_URL = (process.env.VITE_BACKEND_URL || '').replace(/\/$/, '');
 
-async function proxyToRender(req: Request, res: Response, path: string) {
+function proxyToRender(req: Request, res: Response, urlPath: string): void {
   if (!RENDER_BACKEND_URL) {
-    return res.status(503).json({ error: 'VITE_BACKEND_URL is not configured on the server.' });
+    res.status(503).json({ error: 'VITE_BACKEND_URL is not configured on the server.' });
+    return;
   }
-  const targetUrl = `${RENDER_BACKEND_URL}${path}`;
+  const targetUrl = `${RENDER_BACKEND_URL}${urlPath}`;
   console.log(`[proxy] → ${req.method} ${targetUrl}`);
-  try {
-    const upstream = await fetch(targetUrl, {
-      method: req.method,
-      headers: { 'Content-Type': 'application/json' },
-      body: req.method !== 'GET' ? JSON.stringify(req.body) : undefined,
-      signal: AbortSignal.timeout(55_000),
-    });
-    const contentType = upstream.headers.get('content-type') || '';
-    const text = await upstream.text();
-    console.log(`[proxy] ← ${upstream.status} content-type="${contentType}" body-start="${text.slice(0, 120)}"`);
-    if (contentType.includes('text/html')) {
-      return res.status(502).json({ error: `Render backend returned HTML (status ${upstream.status}) — it may be sleeping or misconfigured. URL: ${targetUrl}` });
-    }
-    res.status(upstream.status).set('Content-Type', 'application/json').send(text);
-  } catch (err: any) {
-    console.error(`[proxy] ${path} error:`, err.message);
-    res.status(502).json({ error: `Upstream error: ${err.message}` });
+
+  const body = JSON.stringify(req.body);
+  let parsed: URL;
+  try { parsed = new URL(targetUrl); } catch {
+    res.status(500).json({ error: `Invalid VITE_BACKEND_URL: ${RENDER_BACKEND_URL}` });
+    return;
   }
+
+  const options: http.RequestOptions = {
+    hostname: parsed.hostname,
+    port: parsed.port || (parsed.protocol === 'https:' ? '443' : '80'),
+    path: parsed.pathname + parsed.search,
+    method: req.method,
+    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+    timeout: 55_000,
+  };
+
+  const transport = parsed.protocol === 'https:' ? https : http;
+  const proxyReq = transport.request(options, (proxyRes) => {
+    let data = '';
+    proxyRes.on('data', (chunk: Buffer) => { data += chunk.toString(); });
+    proxyRes.on('end', () => {
+      const ct = proxyRes.headers['content-type'] || '';
+      console.log(`[proxy] ← ${proxyRes.statusCode} content-type="${ct}" body-start="${data.slice(0, 100)}"`);
+      if (ct.includes('text/html')) {
+        res.status(502).json({ error: `Backend returned HTML (${proxyRes.statusCode}) — may be sleeping. URL: ${targetUrl}` });
+      } else {
+        res.status(proxyRes.statusCode || 500).set('Content-Type', 'application/json').send(data);
+      }
+    });
+  });
+
+  proxyReq.on('timeout', () => {
+    proxyReq.destroy();
+    res.status(504).json({ error: 'Python backend timed out after 55 seconds.' });
+  });
+
+  proxyReq.on('error', (err: Error) => {
+    console.error(`[proxy] error:`, err.message);
+    res.status(502).json({ error: `Upstream error: ${err.message}` });
+  });
+
+  proxyReq.write(body);
+  proxyReq.end();
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
