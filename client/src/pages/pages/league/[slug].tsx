@@ -1636,13 +1636,19 @@ export default function LeaguePage() {
             }
           }
 
-          // Fetch sibling seasons from the same league brand
+          // Fetch sibling seasons from the same league brand.
+          // Filter to same gender only — gender competitions (Men's/Women's) are not
+          // "seasons" of each other; they should be selected from the brand page instead.
           if ((data as any).competition_id) {
             try {
               const res = await fetch(`/api/league/${(data as any).competition_id}/competitions`);
               if (res.ok) {
-                const seasons = await res.json();
-                setSiblingSeasons(seasons);
+                const allSeasons: { name: string; slug: string; season: string | null; gender?: string | null }[] = await res.json();
+                const currentGender = (data as any).gender ?? null;
+                const filtered = currentGender
+                  ? allSeasons.filter(s => (s.gender ?? null) === currentGender)
+                  : allSeasons.filter(s => !(s as any).gender);
+                setSiblingSeasons(filtered);
               }
             } catch (e) {
               console.error("Failed to fetch sibling seasons:", e);
