@@ -81,7 +81,7 @@ async function authenticateSupabaseUser(req: Request): Promise<string | null> {
 
 async function verifyLeagueOwnership(userId: string, leagueId: string): Promise<boolean> {
   const { data, error } = await supabaseAdmin
-    .from('leagues')
+    .from('competitions')
     .select('user_id, created_by')
     .eq('league_id', leagueId)
     .single();
@@ -527,7 +527,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .getPublicUrl(`logos/${fileName}`);
 
       const { error: updateError } = await supabaseAdmin
-        .from('leagues')
+        .from('competitions')
         .update({ logo_url: publicUrl })
         .eq('league_id', leagueId);
 
@@ -587,7 +587,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updateField = isLogo ? { logo_url: publicUrl } : { banner_url: publicUrl };
 
       const { error: updateError } = await supabaseAdmin
-        .from('leagues')
+        .from('competitions')
         .update(updateField)
         .eq('league_id', leagueId);
 
@@ -1299,7 +1299,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Helper: fetch all league IDs in scope (the league itself + its direct children)
   async function getScopedLeagueIds(leagueId: string): Promise<string[]> {
     const { data } = await supabaseAdmin
-      .from('leagues')
+      .from('competitions')
       .select('league_id')
       .eq('parent_league_id', leagueId);
     const childIds = (data || []).map((r: any) => r.league_id);
