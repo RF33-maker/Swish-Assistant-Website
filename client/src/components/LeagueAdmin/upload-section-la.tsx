@@ -4,7 +4,6 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { getPythonBackendUrl } from "@/lib/backendUrl";
 
 const UploadSectionLA = ({ leagues }: any) => {
   const { user } = useAuth();
@@ -111,8 +110,15 @@ const UploadSectionLA = ({ leagues }: any) => {
 
     try {
       setStatusMessage("🔄 Parsing file...");
+      // In dev: use the Express proxy (/api/parse) to avoid CORS.
+      // In production: call the Python backend directly so Vercel serverless
+      // functions aren't involved (they crash on long-running upstream calls).
+      const backendUrl = import.meta.env.VITE_BACKEND_URL as string | undefined;
+      const parseUrl = (import.meta.env.DEV || !backendUrl)
+        ? `/api/parse`
+        : `${backendUrl.replace(/\/$/, "")}/api/parse`;
       const resp = await fetch(
-        `/api/parse`,
+        parseUrl,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
