@@ -608,7 +608,7 @@ export default function LeaguePage() {
   const [statsSortDirection, setStatsSortDirection] = useState<'asc' | 'desc'>('desc'); // Sort direction
   const [teamStatsSortColumn, setTeamStatsSortColumn] = useState<string>('PTS'); // Column to sort by in Team Statistics
   const [teamStatsSortDirection, setTeamStatsSortDirection] = useState<'asc' | 'desc'>('desc'); // Sort direction for team stats
-  const [childCompetitions, setChildCompetitions] = useState<Pick<League, 'league_id' | 'name' | 'slug' | 'logo_url'> & { age_group?: string | null; stop?: number | null }[]>([]);
+  const [childCompetitions, setChildCompetitions] = useState<Pick<League, 'league_id' | 'name' | 'slug' | 'logo_url'> & { age_group?: string | null; stop?: number | null; gender?: string | null }[]>([]);
   const [parentLeague, setParentLeague] = useState<Pick<League, 'league_id' | 'name' | 'slug' | 'logo_url'> | null>(null); // Parent league for breadcrumb
   const [isDividerVisible, setIsDividerVisible] = useState(false); // Track if orange divider is in view
   const dividerRef = useRef<HTMLDivElement>(null); // Ref for the orange divider
@@ -659,11 +659,20 @@ export default function LeaguePage() {
 
   const isParentLeague = childCompetitions.length > 0;
 
+  // Preferred sort order for gender labels so Men's always precedes Women's
+  const GENDER_ORDER = ["Men's", "Women's", "Men", "Women", "Male", "Female", "Mixed"];
+
+  // Derive the display label for a child competition:
+  // 1. Use gender column if set, 2. fall back to age_group, 3. strip parent name from competition name
+  const getChildLabel = (c: typeof childCompetitions[0]) =>
+    (c as any).gender ||
+    c.age_group ||
+    (league?.name ? c.name.replace(league.name, '').trim() || c.name : c.name);
+
   const childLeagueMap = useMemo(() => {
     const map = new Map<string, string>();
     childCompetitions.forEach(c => {
-      const label = c.age_group || (league?.name ? c.name.replace(league.name, '').trim() || c.name : c.name);
-      map.set(c.league_id, label);
+      map.set(c.league_id, getChildLabel(c));
     });
     return map;
   }, [childCompetitions, league?.name]);
@@ -671,30 +680,43 @@ export default function LeaguePage() {
   const ageGroupToLeagueIds = useMemo(() => {
     const map = new Map<string, string[]>();
     childCompetitions.forEach(c => {
-      const ag = c.age_group || (league?.name ? c.name.replace(league.name, '').trim() || c.name : c.name);
+      const ag = getChildLabel(c);
       if (!map.has(ag)) map.set(ag, []);
       map.get(ag)!.push(c.league_id);
     });
     return map;
   }, [childCompetitions, league?.name]);
 
+  // True when every child competition has a gender value set
+  const isGenderLeague = useMemo(
+    () => childCompetitions.length > 0 && childCompetitions.every(c => !!(c as any).gender),
+    [childCompetitions],
+  );
+
   const ageGroupLabels = useMemo(() => {
     const labels = Array.from(ageGroupToLeagueIds.keys());
     return labels.sort((a, b) => {
+      // Gender-aware sort: use GENDER_ORDER when all children have gender set
+      if (isGenderLeague) {
+        const ia = GENDER_ORDER.indexOf(a);
+        const ib = GENDER_ORDER.indexOf(b);
+        if (ia !== -1 && ib !== -1) return ia - ib;
+        if (ia !== -1) return -1;
+        if (ib !== -1) return 1;
+        return a.localeCompare(b);
+      }
+      // Default: numeric sort (for age groups like U12, U14) then alphabetical
       const numA = parseInt(a.replace(/\D/g, ''));
       const numB = parseInt(b.replace(/\D/g, ''));
       if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
       return a.localeCompare(b);
     });
-  }, [ageGroupToLeagueIds]);
+  }, [ageGroupToLeagueIds, isGenderLeague]);
 
   const availableStopsForAgeGroup = useMemo(() => {
     const leagueIdsForAg = selectedAgeGroup === 'all'
       ? childCompetitions
-      : childCompetitions.filter(c => {
-          const ag = c.age_group || (league?.name ? c.name.replace(league.name, '').trim() || c.name : c.name);
-          return ag === selectedAgeGroup;
-        });
+      : childCompetitions.filter(c => getChildLabel(c) === selectedAgeGroup);
     const stops = new Set<number>();
     leagueIdsForAg.forEach(c => { if (c.stop != null) stops.add(c.stop); });
     return Array.from(stops).sort((a, b) => a - b);
@@ -703,10 +725,7 @@ export default function LeaguePage() {
   const selectedAgeGroupLeagueIds = useMemo(() => {
     let candidates = selectedAgeGroup === 'all'
       ? childCompetitions
-      : childCompetitions.filter(c => {
-          const ag = c.age_group || (league?.name ? c.name.replace(league.name, '').trim() || c.name : c.name);
-          return ag === selectedAgeGroup;
-        });
+      : childCompetitions.filter(c => getChildLabel(c) === selectedAgeGroup);
     if (selectedStop !== 'all') {
       candidates = candidates.filter(c => c.stop != null && String(c.stop) === selectedStop);
     }

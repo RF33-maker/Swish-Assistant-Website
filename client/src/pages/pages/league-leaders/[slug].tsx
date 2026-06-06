@@ -22,6 +22,7 @@ interface ChildLeague {
   league_id: string;
   name: string;
   age_group?: string | null;
+  gender?: string | null;
 }
 
 interface League {
@@ -111,23 +112,34 @@ export default function LeagueLeadersPage() {
 
   const isParentLeague = childLeagues.length > 0;
 
+  const GENDER_ORDER = ["Men's", "Women's", "Men", "Women", "Male", "Female", "Mixed"];
+  const isGenderLeague = childLeagues.length > 0 && childLeagues.every(c => !!c.gender);
+
   const ageGroupOptions = useMemo(() => {
     if (!isParentLeague || !league) return [];
     const groupMap = new Map<string, string[]>();
     childLeagues.forEach(c => {
-      const ag = c.age_group || (league.name ? c.name.replace(league.name, '').trim() || c.name : c.name);
+      const ag = c.gender || c.age_group || (league.name ? c.name.replace(league.name, '').trim() || c.name : c.name);
       if (!groupMap.has(ag)) groupMap.set(ag, []);
       groupMap.get(ag)!.push(c.league_id);
     });
     return Array.from(groupMap.entries())
       .map(([ag, ids]) => ({ age_group: ag, league_ids: ids, displayLabel: ag }))
       .sort((a, b) => {
+        if (isGenderLeague) {
+          const ia = GENDER_ORDER.indexOf(a.age_group);
+          const ib = GENDER_ORDER.indexOf(b.age_group);
+          if (ia !== -1 && ib !== -1) return ia - ib;
+          if (ia !== -1) return -1;
+          if (ib !== -1) return 1;
+          return a.age_group.localeCompare(b.age_group);
+        }
         const numA = parseInt(a.age_group.replace(/\D/g, ''));
         const numB = parseInt(b.age_group.replace(/\D/g, ''));
         if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
         return a.age_group.localeCompare(b.age_group);
       });
-  }, [childLeagues, league, isParentLeague]);
+  }, [childLeagues, league, isParentLeague, isGenderLeague]);
 
   useEffect(() => {
     if (isParentLeague && ageGroupOptions.length > 0 && selectedAgeGroup === 'all') {
