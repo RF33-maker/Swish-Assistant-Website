@@ -102,7 +102,7 @@ async function proxyToRender(req: Request, res: Response, path: string) {
       method: req.method,
       headers: { 'Content-Type': 'application/json' },
       body: req.method !== 'GET' ? JSON.stringify(req.body) : undefined,
-      signal: AbortSignal.timeout(120_000),
+      signal: AbortSignal.timeout(55_000),
     });
     const contentType = upstream.headers.get('content-type') || '';
     const text = await upstream.text();
