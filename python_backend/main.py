@@ -4,6 +4,8 @@ import os
 import uuid
 import tempfile
 import io
+import json
+import re
 from datetime import datetime
 from openai import OpenAI
 import pandas as pd
@@ -156,7 +158,6 @@ def chat_league():
 
         raw_answer = completion.choices[0].message.content
 
-        # Parse SUGGESTIONS out of the response
         suggestions = []
         answer = raw_answer
         if 'SUGGESTIONS:' in raw_answer:
@@ -217,6 +218,9 @@ def ai_analysis():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
+# ─── PDF / Excel parsing helpers ──────────────────────────────────────────────
+
 def parse_excel(file_bytes):
     df = pd.read_excel(io.BytesIO(file_bytes), engine='openpyxl')
     records = df.to_dict(orient='records')
@@ -229,6 +233,7 @@ def parse_excel(file_bytes):
     }
 
 def parse_pdf(file_bytes):
+    """Extract text and tables from a PDF. Always returns raw_text."""
     import pdfplumber
     all_tables = []
     all_text = []
@@ -251,14 +256,240 @@ def parse_pdf(file_bytes):
                         if record:
                             all_tables.append(record)
 
+    combined_text = '\n'.join(all_text)
     columns = list(all_tables[0].keys()) if all_tables else []
     return {
         'file_type': 'pdf',
         'row_count': len(all_tables),
         'columns': columns,
         'data': all_tables,
-        'raw_text': '\n'.join(all_text) if not all_tables else None
+        'raw_text': combined_text,  # always returned, even when tables exist
     }
+
+
+# ─── AI extraction for FIBA box scores ────────────────────────────────────────
+
+def extract_box_score_with_ai(raw_text, file_name):
+    """Use GPT-4o-mini to extract structured FIBA box score data from raw PDF text."""
+    prompt = (
+        "You are a basketball stats extractor. Parse this FIBA box score text and return ONLY valid JSON.\n\n"
+        "Return this exact structure (use 0 for unknown numbers, null for unknown strings):\n"
+        "{\n"
+        '  "game_date": "YYYY-MM-DD or null",\n'
+        '  "home_team": "team name",\n'
+        '  "away_team": "team name",\n'
+        '  "home_score": 0,\n'
+        '  "away_score": 0,\n'
+        '  "players": [\n'
+        '    {\n'
+        '      "team": "team name",\n'
+        '      "number": "jersey number",\n'
+        '      "name": "full player name",\n'
+        '      "minutes": "MM:SS or null",\n'
+        '      "fgm": 0, "fga": 0,\n'
+        '      "fg3m": 0, "fg3a": 0,\n'
+        '      "ftm": 0, "fta": 0,\n'
+        '      "oreb": 0, "dreb": 0, "reb": 0,\n'
+        '      "ast": 0, "stl": 0, "blk": 0,\n'
+        '      "tov": 0, "pf": 0,\n'
+        '      "plus_minus": 0,\n'
+        '      "pts": 0\n'
+        '    }\n'
+        '  ]\n'
+        '}\n\n'
+        f'File name: {file_name}\n\n'
+        'BOX SCORE TEXT (extract ALL players from BOTH teams):\n'
+        + raw_text[:7000]
+    )
+
+    completion = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}],
+        response_format={"type": "json_object"},
+        max_tokens=4000,
+        temperature=0
+    )
+    return json.loads(completion.choices[0].message.content)
+
+
+# ─── Player find-or-create ────────────────────────────────────────────────────
+
+def _normalize_name(name):
+    return re.sub(r'\s+', ' ', str(name).strip()).lower()
+
+def _make_slug(name):
+    slug = re.sub(r'[^a-z0-9]+', '-', _normalize_name(name))
+    return slug.strip('-')
+
+def find_or_create_player(sb, full_name):
+    """Return player UUID, creating the player in the players table if not found."""
+    if not full_name or not str(full_name).strip():
+        return None
+    norm = _normalize_name(full_name)
+    try:
+        res = sb.table('players').select('id, full_name, slug').execute()
+        all_players = res.data or []
+        for p in all_players:
+            if _normalize_name(p.get('full_name', '')) == norm:
+                return p['id']
+
+        # Not found — create
+        base_slug = _make_slug(full_name)
+        existing_slugs = {p.get('slug', '') for p in all_players}
+        slug = base_slug
+        counter = 1
+        while slug in existing_slugs:
+            slug = f"{base_slug}-{counter}"
+            counter += 1
+
+        result = sb.table('players').insert({
+            'full_name': full_name.strip(),
+            'slug': slug
+        }).execute()
+        if result.data:
+            return result.data[0]['id']
+    except Exception as e:
+        print(f"[parse] find_or_create_player error for {full_name!r}: {e}", flush=True)
+    return None
+
+
+# ─── DB write helpers ─────────────────────────────────────────────────────────
+
+def _safe_int(v, default=0):
+    try:
+        return int(v or default)
+    except (TypeError, ValueError):
+        return default
+
+def write_pdf_players_to_db(sb, players, league_id, game_key):
+    """Write AI-extracted player list to player_stats. Returns count written."""
+    if not league_id or not players:
+        return 0
+
+    rows = []
+    for p in players:
+        full_name = (p.get('name') or '').strip()
+        if not full_name:
+            continue
+
+        player_id = find_or_create_player(sb, full_name)
+
+        reb = _safe_int(p.get('reb')) or (_safe_int(p.get('oreb')) + _safe_int(p.get('dreb')))
+
+        rows.append({
+            'league_id': league_id,
+            'game_key': game_key,
+            'player_id': player_id,
+            'full_name': full_name,
+            'team_name': (p.get('team') or '').strip(),
+            'spoints': _safe_int(p.get('pts')),
+            'sfieldgoalsmade': _safe_int(p.get('fgm')),
+            'sfieldgoalsattempted': _safe_int(p.get('fga')),
+            'sthreepointersmade': _safe_int(p.get('fg3m')),
+            'sthreepointersattempted': _safe_int(p.get('fg3a')),
+            'sfreethrowsmade': _safe_int(p.get('ftm')),
+            'sfreethrowsattempted': _safe_int(p.get('fta')),
+            'sreboundsoffensive': _safe_int(p.get('oreb')),
+            'sreboundsdefensive': _safe_int(p.get('dreb')),
+            'sreboundstotal': reb,
+            'sassists': _safe_int(p.get('ast')),
+            'ssteals': _safe_int(p.get('stl')),
+            'sblocks': _safe_int(p.get('blk')),
+            'sturnovers': _safe_int(p.get('tov')),
+            'sfoulspersonal': _safe_int(p.get('pf')),
+            'splusminuspoints': _safe_int(p.get('plus_minus')),
+            'sminutes': p.get('minutes') or '0:00',
+        })
+
+    if not rows:
+        print("[parse] no valid player rows to write", flush=True)
+        return 0
+
+    print(f"[parse] writing {len(rows)} rows to player_stats...", flush=True)
+    try:
+        result = sb.table('player_stats').upsert(rows, on_conflict='player_id,game_key').execute()
+        count = len(result.data or [])
+        print(f"[parse] upserted {count} rows OK", flush=True)
+        return count
+    except Exception as e:
+        print(f"[parse] upsert failed ({e}), trying insert...", flush=True)
+        try:
+            result = sb.table('player_stats').insert(rows).execute()
+            count = len(result.data or [])
+            print(f"[parse] inserted {count} rows OK", flush=True)
+            return count
+        except Exception as e2:
+            print(f"[parse] insert also failed: {e2}", flush=True)
+            return 0
+
+
+EXCEL_COL_MAP = {
+    'name': 'full_name', 'player': 'full_name', 'player name': 'full_name', 'player_name': 'full_name',
+    'team': 'team_name', 'club': 'team_name', 'team_name': 'team_name',
+    'min': 'sminutes', 'minutes': 'sminutes', 'sminutes': 'sminutes',
+    'pts': 'spoints', 'points': 'spoints', 'spoints': 'spoints',
+    'fgm': 'sfieldgoalsmade', 'fg made': 'sfieldgoalsmade', 'sfieldgoalsmade': 'sfieldgoalsmade',
+    'fga': 'sfieldgoalsattempted', 'fg att': 'sfieldgoalsattempted', 'sfieldgoalsattempted': 'sfieldgoalsattempted',
+    '3pm': 'sthreepointersmade', '3pt made': 'sthreepointersmade', '3m': 'sthreepointersmade', 'sthreepointersmade': 'sthreepointersmade',
+    '3pa': 'sthreepointersattempted', '3pt att': 'sthreepointersattempted', '3a': 'sthreepointersattempted', 'sthreepointersattempted': 'sthreepointersattempted',
+    'ftm': 'sfreethrowsmade', 'ft made': 'sfreethrowsmade', 'sfreethrowsmade': 'sfreethrowsmade',
+    'fta': 'sfreethrowsattempted', 'ft att': 'sfreethrowsattempted', 'sfreethrowsattempted': 'sfreethrowsattempted',
+    'oreb': 'sreboundsoffensive', 'off reb': 'sreboundsoffensive', 'or': 'sreboundsoffensive', 'sreboundsoffensive': 'sreboundsoffensive',
+    'dreb': 'sreboundsdefensive', 'def reb': 'sreboundsdefensive', 'dr': 'sreboundsdefensive', 'sreboundsdefensive': 'sreboundsdefensive',
+    'reb': 'sreboundstotal', 'tot reb': 'sreboundstotal', 'tr': 'sreboundstotal', 'sreboundstotal': 'sreboundstotal',
+    'ast': 'sassists', 'assists': 'sassists', 'sassists': 'sassists',
+    'stl': 'ssteals', 'steals': 'ssteals', 'ssteals': 'ssteals',
+    'blk': 'sblocks', 'blocks': 'sblocks', 'sblocks': 'sblocks',
+    'to': 'sturnovers', 'tov': 'sturnovers', 'turnovers': 'sturnovers', 'sturnovers': 'sturnovers',
+    'pf': 'sfoulspersonal', 'fouls': 'sfoulspersonal', 'sfoulspersonal': 'sfoulspersonal',
+    '+/-': 'splusminuspoints', 'plus minus': 'splusminuspoints', 'plus_minus': 'splusminuspoints', 'splusminuspoints': 'splusminuspoints',
+}
+
+def write_excel_players_to_db(sb, records, league_id, game_key):
+    """Map Excel rows to player_stats columns and write to DB. Returns count written."""
+    if not league_id or not records:
+        return 0
+
+    rows = []
+    for record in records:
+        mapped = {'league_id': league_id, 'game_key': game_key}
+        for raw_col, raw_val in record.items():
+            norm = str(raw_col).strip().lower()
+            db_col = EXCEL_COL_MAP.get(norm)
+            if db_col:
+                mapped[db_col] = raw_val
+
+        full_name = str(mapped.get('full_name') or '').strip()
+        if not full_name:
+            continue
+        mapped['full_name'] = full_name
+        player_id = find_or_create_player(sb, full_name)
+        if player_id:
+            mapped['player_id'] = player_id
+        rows.append(mapped)
+
+    if not rows:
+        return 0
+
+    print(f"[parse] writing {len(rows)} Excel rows to player_stats...", flush=True)
+    try:
+        result = sb.table('player_stats').upsert(rows, on_conflict='player_id,game_key').execute()
+        count = len(result.data or [])
+        print(f"[parse] Excel upserted {count} rows OK", flush=True)
+        return count
+    except Exception as e:
+        print(f"[parse] Excel upsert failed ({e}), trying insert...", flush=True)
+        try:
+            result = sb.table('player_stats').insert(rows).execute()
+            count = len(result.data or [])
+            print(f"[parse] Excel inserted {count} rows OK", flush=True)
+            return count
+        except Exception as e2:
+            print(f"[parse] Excel insert also failed: {e2}", flush=True)
+            return 0
+
+
+# ─── Main parse endpoint ──────────────────────────────────────────────────────
 
 @app.route('/api/parse', methods=['POST'])
 def parse_file():
@@ -279,7 +510,10 @@ def parse_file():
             bucket = 'XLSX Uploads'
             path_in_bucket = file_path
 
-        print(f"[parse] bucket='{bucket}' path='{path_in_bucket}' user={user_id} league={league_id}", flush=True)
+        file_name = path_in_bucket.split('/')[-1]
+        game_key = re.sub(r'[^a-z0-9_-]', '_', re.sub(r'\.(pdf|xlsx?)$', '', file_name, flags=re.IGNORECASE).lower())
+
+        print(f"[parse] bucket='{bucket}' path='{path_in_bucket}' game_key='{game_key}' league={league_id}", flush=True)
 
         sb = create_client(SUPABASE_URL, SUPABASE_KEY)
         try:
@@ -291,23 +525,56 @@ def parse_file():
         is_pdf = path_in_bucket.lower().endswith('.pdf')
 
         if is_pdf:
-            result = parse_pdf(file_bytes)
+            raw = parse_pdf(file_bytes)
+            raw_text = raw.get('raw_text', '') or ''
+            print(f"[parse] PDF text length: {len(raw_text)} chars", flush=True)
+
+            if not raw_text.strip():
+                return jsonify({'error': 'Could not extract any text from the PDF. Is it a scanned image?'}), 422
+
+            print("[parse] sending PDF text to AI for box score extraction...", flush=True)
+            game_data = extract_box_score_with_ai(raw_text, file_name)
+            players = game_data.get('players', [])
+            print(f"[parse] AI extracted {len(players)} players", flush=True)
+
+            rows_written = write_pdf_players_to_db(sb, players, league_id, game_key)
+
+            return jsonify({
+                'file_type': 'pdf',
+                'file_path': file_path,
+                'user_id': user_id,
+                'league_id': league_id,
+                'parent_league_id': parent_league_id,
+                'game_key': game_key,
+                'game_data': game_data,
+                'row_count': len(players),
+                'rows_written': rows_written,
+                'created_league_ids': [],
+            })
+
         else:
-            result = parse_excel(file_bytes)
+            raw = parse_excel(file_bytes)
+            excel_records = raw.get('data', [])
+            print(f"[parse] Excel rows: {len(excel_records)}, columns: {raw.get('columns', [])}", flush=True)
 
-        result['file_path'] = file_path
-        result['user_id'] = user_id
-        result['league_id'] = league_id
-        result['parent_league_id'] = parent_league_id
-        # Placeholder for downstream automation that creates child league rows.
-        # The frontend uses this list (when populated) to stamp parent_league_id
-        # only on those specific rows; otherwise it falls back to a snapshot diff.
-        result.setdefault('created_league_ids', [])
+            rows_written = write_excel_players_to_db(sb, excel_records, league_id, game_key)
 
-        return jsonify(result)
+            return jsonify({
+                **raw,
+                'file_path': file_path,
+                'user_id': user_id,
+                'league_id': league_id,
+                'parent_league_id': parent_league_id,
+                'game_key': game_key,
+                'rows_written': rows_written,
+                'created_league_ids': [],
+            })
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': f'Parse failed: {str(e)}'}), 500
+
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8000))
