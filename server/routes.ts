@@ -89,11 +89,37 @@ async function verifyLeagueOwnership(userId: string, leagueId: string): Promise<
   return data.user_id === userId || data.created_by === userId;
 }
 
+const RENDER_BACKEND_URL = (process.env.VITE_BACKEND_URL || '').replace(/\/$/, '');
+
+async function proxyToRender(req: Request, res: Response, path: string) {
+  if (!RENDER_BACKEND_URL) {
+    return res.status(503).json({ error: 'VITE_BACKEND_URL is not configured on the server.' });
+  }
+  const targetUrl = `${RENDER_BACKEND_URL}${path}`;
+  console.log(`[proxy] → ${req.method} ${targetUrl}`);
+  try {
+    const upstream = await fetch(targetUrl, {
+      method: req.method,
+      headers: { 'Content-Type': 'application/json' },
+      body: req.method !== 'GET' ? JSON.stringify(req.body) : undefined,
+      signal: AbortSignal.timeout(120_000),
+    });
+    const text = await upstream.text();
+    res.status(upstream.status).set('Content-Type', 'application/json').send(text);
+  } catch (err: any) {
+    console.error(`[proxy] ${path} error:`, err.message);
+    res.status(502).json({ error: `Upstream error: ${err.message}` });
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Test endpoint to verify routes are working
   app.get("/api/test", (req, res) => {
     res.json({ message: "API routes are working!", timestamp: new Date().toISOString() });
   });
+
+  // Proxy PDF/Excel parse to Render backend (server-side avoids CORS)
+  app.post("/api/parse", (req, res) => proxyToRender(req, res, "/api/parse"));
 
   // League chatbot AI — handled directly in Express via OpenAI Node SDK
   // (avoids dependency on the Python backend process which can go offline)
