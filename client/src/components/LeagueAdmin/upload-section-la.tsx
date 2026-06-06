@@ -112,7 +112,7 @@ const UploadSectionLA = ({ leagues }: any) => {
     try {
       setStatusMessage("🔄 Parsing file...");
       const resp = await fetch(
-        `${getPythonBackendUrl()}/api/parse`,
+        `/api/parse`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -141,7 +141,13 @@ const UploadSectionLA = ({ leagues }: any) => {
         const explicitIds: string[] | undefined = Array.isArray(data?.created_league_ids)
           ? data.created_league_ids
           : undefined;
-        setStatusMessage("✅ Parsing complete!");
+        const rowsWritten: number = data?.rows_written ?? 0;
+        const rowLabel = rowsWritten === 1 ? "record" : "records";
+        setStatusMessage(
+          rowsWritten > 0
+            ? `✅ Parsing complete! ${rowsWritten} player stat ${rowLabel} written to database.`
+            : "✅ Parsing complete! (0 records written — check that the file has recognisable player data)"
+        );
         await backfillParentLeagueId(selectedLeagueId, snapshot, explicitIds);
       } else {
         setStatusMessage(`❌ Parsing failed: ${data.error || "Unknown error"}`);

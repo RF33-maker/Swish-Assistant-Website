@@ -19,13 +19,6 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 5000,
     allowedHosts: true,
-    proxy: {
-      "/api/ai-analysis": { target: "http://localhost:8000", changeOrigin: true },
-      "/api/parse": { target: "http://localhost:8000", changeOrigin: true },
-      "/chat": { target: "http://localhost:8000", changeOrigin: true },
-      "/start": { target: "http://localhost:8000", changeOrigin: true },
-      "/health": { target: "http://localhost:8000", changeOrigin: true },
-    },
   },
   build: {
     outDir: "../dist",

@@ -45,7 +45,7 @@ export default function LeagueManagement() {
     setLoading(true);
     try {
       const { data, error } = await supabase
-        .from('leagues')
+        .from('competitions')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
@@ -88,7 +88,7 @@ export default function LeagueManagement() {
 
       // Check if slug already exists
       const { data: existingLeague } = await supabase
-        .from('leagues')
+        .from('competitions')
         .select('slug')
         .eq('slug', slug)
         .single();
@@ -104,7 +104,7 @@ export default function LeagueManagement() {
       }
 
       const { data, error } = await supabase
-        .from('leagues')
+        .from('competitions')
         .insert({
           name: newLeagueName.trim(),
           slug: slug,

@@ -75,15 +75,6 @@ task = "shell.exec"
 args = "tsx server/index.ts"
 waitForPort = 5000
 
-[[workflows.workflow]]
-name = "Python Backend"
-author = 39257275
-mode = "sequential"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd python_backend && python main.py"
-
 [agent]
 integrations = ["javascript_supabase:1.0.0", "javascript_openai:1.0.0"]
 

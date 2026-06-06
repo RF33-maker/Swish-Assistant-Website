@@ -85,7 +85,7 @@ export default function LeagueAdmin() {
     
     try {
       const { data, error } = await supabase
-        .from('leagues')
+        .from('competitions')
         .select('*')
         .eq('user_id', currentUser.id)
         .is('parent_league_id', null)
@@ -107,7 +107,7 @@ export default function LeagueAdmin() {
       setLoading(true);
       
       const { data: leagues, error } = await supabase
-        .from('leagues')
+        .from('competitions')
         .select('*')
         .eq('slug', slug)
         .single();
@@ -274,7 +274,7 @@ export default function LeagueAdmin() {
     setUpdatingInstagram(true);
     try {
       const { error } = await supabase
-        .from('leagues')
+        .from('competitions')
         .update({ instagram_embed_url: instagramUrl })
         .eq('league_id', league.league_id);
 

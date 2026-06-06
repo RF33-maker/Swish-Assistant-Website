@@ -13,9 +13,8 @@ import { getTeamLogoCached } from "@/utils/teamLogoCache";
 
 interface PerfRow {
   league_id: string;
-  game_key: string;
-  game_date: string | null;
   week_start: string | null;
+  week_end: string | null;
   player_id: string;
   full_name: string;
   team_id: string | null;
@@ -29,7 +28,7 @@ interface PerfRow {
   fga: number | null;
   fta: number | null;
   ts_pct: number | null;
-  game_score: number | null;
+  weekly_score: number | null;
 }
 
 interface PlayerMetaRow {
@@ -76,7 +75,7 @@ function Stat({ label, value }: { label: string; value: string | number }) {
 function StatBlock({ perf, tsPct }: { perf: PerfRow; tsPct: string }) {
   return (
     <div className="grid grid-cols-5 gap-y-3 gap-x-2">
-      <Stat label="GS" value={perf.game_score ?? 0} />
+      <Stat label="WS" value={perf.weekly_score ?? 0} />
       <Stat label="PTS" value={perf.pts ?? 0} />
       <Stat label="REB" value={perf.reb ?? 0} />
       <Stat label="AST" value={perf.ast ?? 0} />
@@ -148,7 +147,7 @@ function ShareStatBlock({
         className="grid grid-cols-5"
         style={{ rowGap: 36, columnGap: 12 }}
       >
-        <ShareStat label="GS" value={perf.game_score ?? 0} labelColor={labelColor} />
+        <ShareStat label="WS" value={perf.weekly_score ?? 0} labelColor={labelColor} />
         <ShareStat label="PTS" value={perf.pts ?? 0} labelColor={labelColor} />
         <ShareStat label="REB" value={perf.reb ?? 0} labelColor={labelColor} />
         <ShareStat label="AST" value={perf.ast ?? 0} labelColor={labelColor} />
@@ -171,7 +170,7 @@ export default function TrendingPerformanceSection() {
   );
 
   const { data, isLoading } = useQuery<TrendingData>({
-    queryKey: ["home", "trending-performance", "v11-backend"],
+    queryKey: ["home", "trending-performance", "v12-backend"],
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const empty: TrendingData = { perfs: [], leagueNames: {}, playerMeta: {} };
@@ -271,8 +270,8 @@ export default function TrendingPerformanceSection() {
     if (!perf) return;
     if (playerSlug) {
       setLocation(`/player/${playerSlug}`);
-    } else {
-      setLocation(`/game/${perf.game_key}`);
+    } else if (perf.league_id) {
+      setLocation(`/competition/${perf.league_id}`);
     }
   };
 
@@ -340,7 +339,7 @@ export default function TrendingPerformanceSection() {
           className="font-semibold uppercase"
           style={{ color: dateColor, fontSize: 18, letterSpacing: "0.14em" }}
         >
-          {formatDate(perf.game_date)}
+          {formatDate(perf.week_start)}
         </span>
       </div>
       <div
@@ -361,7 +360,7 @@ export default function TrendingPerformanceSection() {
     <div className="w-full max-w-xl mb-6 md:mb-8 text-left">
       <ShareableCard
         title="Top Performance"
-        fileSlug={`trending-${perf.player_id}-${perf.game_key}`}
+        fileSlug={`trending-${perf.player_id}-${perf.week_start}`}
         player={{
           name: perf.full_name,
           team: perf.team_name || leagueName || "",
@@ -369,7 +368,7 @@ export default function TrendingPerformanceSection() {
           primaryColor,
           teamLogoUrl: shareTeamLogoUrl,
         }}
-        shareCaption={leagueName ? `${leagueName} • ${formatDate(perf.game_date)}` : formatDate(perf.game_date)}
+        shareCaption={leagueName ? `${leagueName} • ${formatDate(perf.week_start)}` : formatDate(perf.week_start)}
         shareContent={shareBody}
         wide
       >
@@ -424,7 +423,7 @@ export default function TrendingPerformanceSection() {
                 {perf.full_name}
               </div>
               <div className="flex items-center gap-1.5 text-xs md:text-sm text-slate-500 dark:text-slate-400 truncate">
-                <span>{formatDate(perf.game_date)}</span>
+                <span>{formatDate(perf.week_start)}</span>
                 {perf.team_name && (
                   <>
                     <span aria-hidden="true">•</span>
@@ -454,7 +453,7 @@ export default function TrendingPerformanceSection() {
         <div className="flex items-center justify-center gap-1.5 mt-3">
           {perfs.map((p, i) => (
             <button
-              key={`${p.league_id}-${p.player_id}-${p.game_key}`}
+              key={`${p.league_id}-${p.player_id}-${p.week_start}`}
               type="button"
               onClick={(e) => {
                 e.stopPropagation();

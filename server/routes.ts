@@ -81,7 +81,7 @@ async function authenticateSupabaseUser(req: Request): Promise<string | null> {
 
 async function verifyLeagueOwnership(userId: string, leagueId: string): Promise<boolean> {
   const { data, error } = await supabaseAdmin
-    .from('leagues')
+    .from('competitions')
     .select('user_id, created_by')
     .eq('league_id', leagueId)
     .single();
@@ -89,22 +89,31 @@ async function verifyLeagueOwnership(userId: string, leagueId: string): Promise<
   return data.user_id === userId || data.created_by === userId;
 }
 
-const PYTHON_BACKEND = "http://localhost:8000";
+const RENDER_BACKEND_URL = (process.env.VITE_BACKEND_URL || '').replace(/\/$/, '');
 
-async function proxyToPython(req: Request, res: Response, path: string) {
+async function proxyToRender(req: Request, res: Response, path: string) {
+  if (!RENDER_BACKEND_URL) {
+    return res.status(503).json({ error: 'VITE_BACKEND_URL is not configured on the server.' });
+  }
+  const targetUrl = `${RENDER_BACKEND_URL}${path}`;
+  console.log(`[proxy] → ${req.method} ${targetUrl}`);
   try {
-    const url = `${PYTHON_BACKEND}${path}`;
-    const isGet = req.method === "GET";
-    const fetchRes = await fetch(url, {
+    const upstream = await fetch(targetUrl, {
       method: req.method,
-      headers: { "Content-Type": "application/json" },
-      body: isGet ? undefined : JSON.stringify(req.body),
+      headers: { 'Content-Type': 'application/json' },
+      body: req.method !== 'GET' ? JSON.stringify(req.body) : undefined,
+      signal: AbortSignal.timeout(120_000),
     });
-    const data = await fetchRes.json();
-    res.status(fetchRes.status).json(data);
+    const contentType = upstream.headers.get('content-type') || '';
+    const text = await upstream.text();
+    console.log(`[proxy] ← ${upstream.status} content-type="${contentType}" body-start="${text.slice(0, 120)}"`);
+    if (contentType.includes('text/html')) {
+      return res.status(502).json({ error: `Render backend returned HTML (status ${upstream.status}) — it may be sleeping or misconfigured. URL: ${targetUrl}` });
+    }
+    res.status(upstream.status).set('Content-Type', 'application/json').send(text);
   } catch (err: any) {
-    console.error(`Error proxying to Python ${path}:`, err.message);
-    res.status(502).json({ error: "Python backend unavailable", details: err.message });
+    console.error(`[proxy] ${path} error:`, err.message);
+    res.status(502).json({ error: `Upstream error: ${err.message}` });
   }
 }
 
@@ -114,14 +123,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ message: "API routes are working!", timestamp: new Date().toISOString() });
   });
 
-  // Python backend proxy routes
-  app.get("/start", (req, res) => proxyToPython(req, res, "/start"));
-  app.post("/chat", (req, res) => proxyToPython(req, res, "/chat"));
-  app.post("/api/ai-analysis", (req, res) => proxyToPython(req, res, "/api/ai-analysis"));
-  app.post("/api/parse", (req, res) => proxyToPython(req, res, "/api/parse"));
-  app.get("/players", (req, res) => proxyToPython(req, res, "/players"));
-  app.get("/chart_summary/:name", (req, res) => proxyToPython(req, res, `/chart_summary/${req.params.name}`));
-  app.post("/api/generate-summary", (req, res) => proxyToPython(req, res, "/api/generate-summary"));
+  // Proxy PDF/Excel parse to Render backend (server-side avoids CORS)
+  app.post("/api/parse", (req, res) => proxyToRender(req, res, "/api/parse"));
 
   // League chatbot AI — handled directly in Express via OpenAI Node SDK
   // (avoids dependency on the Python backend process which can go offline)
@@ -527,7 +530,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .getPublicUrl(`logos/${fileName}`);
 
       const { error: updateError } = await supabaseAdmin
-        .from('leagues')
+        .from('competitions')
         .update({ logo_url: publicUrl })
         .eq('league_id', leagueId);
 
@@ -587,7 +590,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updateField = isLogo ? { logo_url: publicUrl } : { banner_url: publicUrl };
 
       const { error: updateError } = await supabaseAdmin
-        .from('leagues')
+        .from('competitions')
         .update(updateField)
         .eq('league_id', leagueId);
 
@@ -1299,7 +1302,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Helper: fetch all league IDs in scope (the league itself + its direct children)
   async function getScopedLeagueIds(leagueId: string): Promise<string[]> {
     const { data } = await supabaseAdmin
-      .from('leagues')
+      .from('competitions')
       .select('league_id')
       .eq('parent_league_id', leagueId);
     const childIds = (data || []).map((r: any) => r.league_id);
@@ -1726,13 +1729,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // The view is slow (57014 timeouts under load); a single background query
   // every TRENDING_TTL_MS serves all concurrent visitors from cache.
   interface TrendingPerfRow {
-    league_id: string; game_key: string; game_date: string | null;
-    week_start: string | null; player_id: string; full_name: string;
+    league_id: string; week_start: string | null; week_end: string | null;
+    player_id: string; full_name: string;
     team_id: string | null; team_name: string | null;
     pts: number | null; reb: number | null; ast: number | null;
     stl: number | null; blk: number | null; tov: number | null;
     fga: number | null; fta: number | null;
-    ts_pct: number | null; game_score: number | null;
+    weekly_score: number | null; ts_pct: number | null;
   }
   interface TrendingApiPayload {
     perfs: TrendingPerfRow[];
@@ -1752,36 +1755,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
       .eq("is_public", true)
       .not("trending_position", "is", null)
       .order("trending_position", { ascending: true, nullsFirst: false })
-      .limit(4);
+      .limit(8);
 
     if (lErr || !leagueRows || leagueRows.length === 0) {
       console.error("[TrendingPerf] leagues error", lErr?.message);
       return empty;
     }
 
+    // Exclude REBA SL and child leagues (same rule as the scores carousel)
+    const filteredRows = (leagueRows as { league_id: string; name: string | null; trending_position: number | null }[])
+      .filter((l) => !l.name?.toLowerCase().includes("reba"));
+
+    if (filteredRows.length === 0) return empty;
+
     const leagueNames: Record<string, string> = {};
-    for (const l of leagueRows as { league_id: string; name: string | null }[]) {
+    for (const l of filteredRows) {
       if (l.name) leagueNames[l.league_id] = l.name;
     }
 
-    const leagueIds = leagueRows.map((l: any) => l.league_id as string);
+    const leagueIds = filteredRows.map((l) => l.league_id);
+    console.log("[TrendingPerf] querying leagues:", leagueRows.map((l: any) => `${l.name} (pos ${l.trending_position})`));
     const perfs: TrendingPerfRow[] = [];
 
+    // Query the lightweight weekly-aggregated view instead of the heavy per-game
+    // view (vw_player_game_scores), which times out on Vercel serverless cold starts.
     const perLeague = await Promise.allSettled(
       leagueIds.map(async (lid) => {
+        const name = leagueNames[lid] || lid;
         const { data: rows, error } = await supabaseAdmin
-          .from("vw_player_game_scores")
-          .select("league_id,game_key,game_date,week_start,player_id,full_name,team_id,team_name,pts,reb,ast,stl,blk,tov,fga,fta,ts_pct,game_score")
+          .from("vw_weekly_player_scores")
+          .select("league_id,week_start,week_end,player_id,full_name,team_id,team_name,pts,reb,ast,stl,blk,tov,fga,fta,weekly_score")
           .eq("league_id", lid)
           .order("week_start", { ascending: false, nullsFirst: false })
-          .order("game_score", { ascending: false })
+          .order("weekly_score", { ascending: false })
           .limit(2)
-          .returns<TrendingPerfRow[]>();
+          .returns<Omit<TrendingPerfRow, "ts_pct">[]>();
         if (error) {
-          console.error("[TrendingPerf] league query error", lid, error.message);
+          console.error("[TrendingPerf] league query error", name, error.message);
           return [] as TrendingPerfRow[];
         }
-        return (rows || []).slice(0, 2);
+        console.log(`[TrendingPerf] ${name}: ${rows?.length ?? 0} rows (most recent week_start: ${rows?.[0]?.week_start ?? "none"})`);
+        // Compute ts_pct from available columns: pts / (2 * (fga + 0.44 * fta))
+        return (rows || []).slice(0, 2).map((r) => {
+          const pts = r.pts ?? 0;
+          const fga = r.fga ?? 0;
+          const fta = r.fta ?? 0;
+          const denom = 2 * (fga + 0.44 * fta);
+          const ts_pct = denom > 0 ? pts / denom : null;
+          return { ...r, ts_pct };
+        });
       })
     );
 
@@ -1794,10 +1816,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     perfs.sort((a, b) => {
-      const aw = a.week_start || a.game_date || "";
-      const bw = b.week_start || b.game_date || "";
+      const aw = a.week_start || "";
+      const bw = b.week_start || "";
       if (aw !== bw) return aw < bw ? 1 : -1;
-      return (b.game_score ?? 0) - (a.game_score ?? 0);
+      return (b.weekly_score ?? 0) - (a.weekly_score ?? 0);
     });
 
     const playerMeta: Record<string, { slug: string | null; photo_path_bg_removed: string | null }> = {};
@@ -1816,6 +1838,253 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     return { perfs, leagueNames, playerMeta };
   }
+
+  // ─── Helpers for player-leaders name deduplication (mirrors fuzzyMatch.ts) ────
+  function plNormalizeName(name: string): string {
+    return name.toLowerCase().trim().replace(/\s+/g, ' ').replace(/[^a-z\s]/g, '');
+  }
+  function plNormalizeTeam(name: string): string {
+    if (!name) return '';
+    return name.trim()
+      .replace(/\s+Senior\s+Men\s*/gi, ' ')
+      .replace(/!/g, '')
+      .replace(/\s+I(?![IVX])\s*$/i, '')
+      .replace(/\s+/g, ' ').trim();
+  }
+  function plJaro(s1: string, s2: string): number {
+    const l1 = s1.length, l2 = s2.length;
+    if (!l1 && !l2) return 1; if (!l1 || !l2) return 0;
+    const win = Math.floor(Math.max(l1, l2) / 2) - 1;
+    const m1 = new Array(l1).fill(false), m2 = new Array(l2).fill(false);
+    let matches = 0, t = 0;
+    for (let i = 0; i < l1; i++) {
+      const lo = Math.max(0, i - win), hi = Math.min(i + win + 1, l2);
+      for (let j = lo; j < hi; j++) {
+        if (m2[j] || s1[i] !== s2[j]) continue;
+        m1[i] = m2[j] = true; matches++; break;
+      }
+    }
+    if (!matches) return 0;
+    let k = 0;
+    for (let i = 0; i < l1; i++) {
+      if (!m1[i]) continue; while (!m2[k]) k++;
+      if (s1[i] !== s2[k]) t++; k++;
+    }
+    const jaro = (matches / l1 + matches / l2 + (matches - t / 2) / matches) / 3;
+    let pLen = 0;
+    for (let i = 0; i < Math.min(4, l1, l2); i++) { if (s1[i] === s2[i]) pLen++; else break; }
+    return jaro + pLen * 0.1 * (1 - jaro);
+  }
+  function plNamesMatch(a: string, b: string): boolean {
+    const n1 = plNormalizeName(a), n2 = plNormalizeName(b);
+    if (n1 === n2) return true;
+    const p1 = n1.split(' ').filter(Boolean), p2 = n2.split(' ').filter(Boolean);
+    if (p1.length === p2.length && p1.length >= 2) {
+      const firstMatch = p1[0] === p2[0] ||
+        (p1[0].length === 1 && p2[0].startsWith(p1[0])) ||
+        (p2[0].length === 1 && p1[0].startsWith(p2[0])) ||
+        plJaro(p1[0], p2[0]) >= 0.82;
+      if (firstMatch && plJaro(p1[p1.length-1], p2[p2.length-1]) >= 0.85) return true;
+    }
+    if (p1.length !== p2.length && p1.length >= 1 && p2.length >= 1) {
+      const sh = p1.length < p2.length ? p1 : p2, lo = p1.length < p2.length ? p2 : p1;
+      if (plJaro(sh[sh.length-1], lo[lo.length-1]) >= 0.85) {
+        const sf = sh[0], lf = lo[0];
+        if ((sf.length === 1 && lf.startsWith(sf)) || (lf.length === 1 && sf.startsWith(lf))) return true;
+        if (plJaro(sf, lf) >= 0.8) return true;
+      }
+    }
+    return false;
+  }
+
+  // ─── Home page: player leaders (same raw aggregation as league page) ──────────
+  const playerLeadersCache = new Map<string, { data: any; at: number }>();
+  const PLAYER_LEADERS_TTL = 5 * 60 * 1000;
+
+  app.get("/api/home/player-leaders/:leagueId", async (req: Request, res: Response) => {
+    const { leagueId } = req.params;
+    const now = Date.now();
+    const cached = playerLeadersCache.get(leagueId);
+    if (cached && now - cached.at < PLAYER_LEADERS_TTL) return res.json(cached.data);
+
+    try {
+      // Verify the league is public
+      const allowed = await filterLeagueIdsForPublicScope([leagueId]);
+      if (!allowed.includes(leagueId)) return res.status(403).json({ error: "Forbidden" });
+
+      // Resolve the effective league IDs to query — for parent leagues, player_stats
+      // rows live under the child competition IDs, not the parent's own ID.
+      // This mirrors the league page's psIds = isParentFetch ? parentChildIds : [statsLeagueId]
+      const { data: children } = await supabaseAdmin
+        .from("competitions")
+        .select("league_id")
+        .eq("parent_league_id", leagueId);
+      const childIds: string[] = (children || []).map((c: any) => c.league_id);
+      const queryIds: string[] = childIds.length > 0 ? childIds : [leagueId];
+      console.log(`[PlayerLeaders] ${leagueId}: querying ids=${JSON.stringify(queryIds)}`);
+
+      // Fetch ALL raw game-by-game stats — paginate to avoid the default 1 000-row
+      // PostgREST cap (same approach as /api/public/player-stats).
+      const SELECT_COLS =
+        "player_id, full_name, firstname, familyname, team_name, " +
+        "spoints, sreboundstotal, sassists, ssteals, sblocks, sturnovers, " +
+        "sfieldgoalsattempted, sfreethrowsattempted, sminutes";
+      const PAGE_SIZE = 1000;
+      const allStats: any[] = [];
+      let offset = 0;
+      while (true) {
+        const q = supabaseAdmin
+          .from("player_stats")
+          .select(SELECT_COLS)
+          .range(offset, offset + PAGE_SIZE - 1);
+        const { data: page, error: pageErr } = await (
+          queryIds.length === 1
+            ? q.eq("league_id", queryIds[0])
+            : q.in("league_id", queryIds)
+        );
+        if (pageErr) {
+          console.error("[PlayerLeaders] page error", pageErr.message);
+          return res.status(500).json({ error: pageErr.message });
+        }
+        if (!page || page.length === 0) break;
+        allStats.push(...page);
+        if (page.length < PAGE_SIZE) break; // last page
+        offset += PAGE_SIZE;
+      }
+
+      if (allStats.length === 0) {
+        return res.json({ scoring: [], rebounding: [], assists: [],
+          scoring_total: [], rebounding_total: [], assists_total: [] });
+      }
+      console.log(`[PlayerLeaders] ${leagueId}: ${allStats.length} rows fetched`);
+
+      // Aggregate by player_id — mirrors aggregatePlayerStats on the league page
+      const byPlayerId = new Map<string, {
+        name: string; team: string; player_id: string;
+        games: number; totalPoints: number; totalRebounds: number; totalAssists: number;
+      }>();
+
+      for (const stat of allStats) {
+        if (!stat.player_id) continue;
+        const name = (stat.full_name ||
+          `${stat.firstname || ""} ${stat.familyname || ""}`.trim() ||
+          "Unknown").trim();
+        const team = stat.team_name || "";
+
+        const hasAnyStats =
+          (stat.spoints || 0) > 0 || (stat.sreboundstotal || 0) > 0 ||
+          (stat.sassists || 0) > 0 || (stat.ssteals || 0) > 0 ||
+          (stat.sblocks || 0) > 0 || (stat.sfieldgoalsattempted || 0) > 0 ||
+          (stat.sfreethrowsattempted || 0) > 0 || (stat.sturnovers || 0) > 0;
+
+        const mins = stat.sminutes;
+        let minutesPlayed = 0;
+        if (typeof mins === "number") minutesPlayed = mins;
+        else if (typeof mins === "string") {
+          const parts = mins.split(":");
+          minutesPlayed = parts.length === 2
+            ? parseInt(parts[0]) + parseInt(parts[1]) / 60
+            : parseFloat(mins) || 0;
+        }
+        if (!minutesPlayed && !hasAnyStats) continue; // DNP — skip
+
+        if (!byPlayerId.has(stat.player_id)) {
+          byPlayerId.set(stat.player_id, {
+            name, team, player_id: stat.player_id,
+            games: 0, totalPoints: 0, totalRebounds: 0, totalAssists: 0,
+          });
+        }
+        const agg = byPlayerId.get(stat.player_id)!;
+        agg.games += 1;
+        agg.totalPoints += stat.spoints || 0;
+        agg.totalRebounds += stat.sreboundstotal || 0;
+        agg.totalAssists += stat.sassists || 0;
+      }
+
+      // Second pass: merge same-team entries whose names fuzzy-match
+      // (mirrors aggregatePlayerStats cross-player-id merge on the league page)
+      const mergedPlayers: Array<{ name: string; team: string; player_id: string;
+        games: number; totalPoints: number; totalRebounds: number; totalAssists: number }> = [];
+      const processedIds = new Set<string>();
+
+      for (const [pid, player] of byPlayerId.entries()) {
+        if (processedIds.has(pid)) continue;
+        const normTeam = plNormalizeTeam(player.team);
+        for (const [otherId, other] of byPlayerId.entries()) {
+          if (otherId === pid || processedIds.has(otherId)) continue;
+          if (plNormalizeTeam(other.team) === normTeam && plNamesMatch(player.name, other.name)) {
+            player.games += other.games;
+            player.totalPoints += other.totalPoints;
+            player.totalRebounds += other.totalRebounds;
+            player.totalAssists += other.totalAssists;
+            // prefer the longer/more-complete name
+            if (other.name.length > player.name.length) player.name = other.name;
+            processedIds.add(otherId);
+          }
+        }
+        processedIds.add(pid);
+        mergedPlayers.push(player);
+      }
+
+      // Enrich with slug + photo from players table
+      const playerIds = mergedPlayers.map(p => p.player_id).slice(0, 1000);
+      const metaById = new Map<string, { slug: string | null; photo_path_bg_removed: string | null }>();
+      if (playerIds.length > 0) {
+        const { data: playerRows } = await supabaseAdmin
+          .from("players")
+          .select("id, slug, photo_path_bg_removed")
+          .in("id", playerIds);
+        (playerRows || []).forEach((p: any) => {
+          metaById.set(p.id, { slug: p.slug ?? null, photo_path_bg_removed: p.photo_path_bg_removed ?? null });
+        });
+      }
+
+      const allRows = mergedPlayers.map((p) => {
+        const gp = p.games || 1;
+        const meta = metaById.get(p.player_id);
+        return {
+          player_id: p.player_id,
+          full_name: p.name,
+          team: p.team,
+          slug: meta?.slug ?? null,
+          photo_path_bg_removed: meta?.photo_path_bg_removed ?? null,
+          games: p.games,
+          total_pts: p.totalPoints,
+          total_reb: p.totalRebounds,
+          total_ast: p.totalAssists,
+          ppg: Math.round((p.totalPoints / gp) * 10) / 10,
+          rpg: Math.round((p.totalRebounds / gp) * 10) / 10,
+          apg: Math.round((p.totalAssists / gp) * 10) / 10,
+        };
+      });
+
+      // Adaptive min-games qualifier — mirrors the league page's leadersQualifier logic.
+      // Averages leaderboards only; totals lists are unfiltered.
+      const maxGamesAny = allRows.reduce((m, p) => Math.max(m, p.games || 0), 0);
+      const minGames = maxGamesAny < 3
+        ? 1
+        : Math.max(3, Math.ceil(maxGamesAny * 0.4));
+      const qualified = allRows.filter((p) => (p.games || 0) >= minGames);
+      // Fall back to unfiltered if qualifier produces an empty list
+      const avgPool = qualified.length > 0 ? qualified : allRows;
+      console.log(`[PlayerLeaders] ${leagueId}: maxGames=${maxGamesAny} minGames=${minGames} qualified=${qualified.length}/${allRows.length}`);
+
+      const result = {
+        scoring:          [...avgPool].sort((a, b) => b.ppg       - a.ppg).slice(0, 5),
+        rebounding:       [...avgPool].sort((a, b) => b.rpg       - a.rpg).slice(0, 5),
+        assists:          [...avgPool].sort((a, b) => b.apg       - a.apg).slice(0, 5),
+        scoring_total:    [...allRows].sort((a, b) => b.total_pts - a.total_pts).slice(0, 5),
+        rebounding_total: [...allRows].sort((a, b) => b.total_reb - a.total_reb).slice(0, 5),
+        assists_total:    [...allRows].sort((a, b) => b.total_ast - a.total_ast).slice(0, 5),
+      };
+
+      playerLeadersCache.set(leagueId, { data: result, at: Date.now() });
+      return res.json(result);
+    } catch (err: any) {
+      console.error("[PlayerLeaders] error", err.message);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
 
   app.get("/api/home/trending-performances", async (req: Request, res: Response) => {
     const now = Date.now();
