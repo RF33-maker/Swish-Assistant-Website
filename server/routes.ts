@@ -92,7 +92,6 @@ async function verifyLeagueOwnership(userId: string, leagueId: string): Promise<
 const RENDER_BACKEND_URL = (process.env.VITE_BACKEND_URL || '').replace(/\/$/, '');
 
 async function proxyToRender(req: Request, res: Response, path: string) {
-  console.log(`[proxy] VITE_BACKEND_URL="${process.env.VITE_BACKEND_URL}" RENDER_BACKEND_URL="${RENDER_BACKEND_URL}"`);
   if (!RENDER_BACKEND_URL) {
     return res.status(503).json({ error: 'VITE_BACKEND_URL is not configured on the server.' });
   }
