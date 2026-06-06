@@ -89,39 +89,11 @@ async function verifyLeagueOwnership(userId: string, leagueId: string): Promise<
   return data.user_id === userId || data.created_by === userId;
 }
 
-const PYTHON_BACKEND = "http://localhost:8000";
-
-async function proxyToPython(req: Request, res: Response, path: string) {
-  try {
-    const url = `${PYTHON_BACKEND}${path}`;
-    const isGet = req.method === "GET";
-    const fetchRes = await fetch(url, {
-      method: req.method,
-      headers: { "Content-Type": "application/json" },
-      body: isGet ? undefined : JSON.stringify(req.body),
-    });
-    const data = await fetchRes.json();
-    res.status(fetchRes.status).json(data);
-  } catch (err: any) {
-    console.error(`Error proxying to Python ${path}:`, err.message);
-    res.status(502).json({ error: "Python backend unavailable", details: err.message });
-  }
-}
-
 export async function registerRoutes(app: Express): Promise<Server> {
   // Test endpoint to verify routes are working
   app.get("/api/test", (req, res) => {
     res.json({ message: "API routes are working!", timestamp: new Date().toISOString() });
   });
-
-  // Python backend proxy routes
-  app.get("/start", (req, res) => proxyToPython(req, res, "/start"));
-  app.post("/chat", (req, res) => proxyToPython(req, res, "/chat"));
-  app.post("/api/ai-analysis", (req, res) => proxyToPython(req, res, "/api/ai-analysis"));
-  app.post("/api/parse", (req, res) => proxyToPython(req, res, "/api/parse"));
-  app.get("/players", (req, res) => proxyToPython(req, res, "/players"));
-  app.get("/chart_summary/:name", (req, res) => proxyToPython(req, res, `/chart_summary/${req.params.name}`));
-  app.post("/api/generate-summary", (req, res) => proxyToPython(req, res, "/api/generate-summary"));
 
   // League chatbot AI — handled directly in Express via OpenAI Node SDK
   // (avoids dependency on the Python backend process which can go offline)
