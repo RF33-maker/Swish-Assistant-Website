@@ -157,7 +157,7 @@ export default function CompetitionPage() {
           <img
             src={league.logo_url || genderGroups[0]?.mostRecent.logo_url || seasons[0]?.logo_url || ""}
             alt={league.name}
-            className="w-20 h-20 object-contain mb-4 rounded-xl shadow-md"
+            className="w-20 h-20 object-contain mb-4 rounded-xl shadow-md bg-white dark:bg-white p-1"
           />
         ) : (
           <div className="w-20 h-20 rounded-xl bg-orange-100 dark:bg-neutral-800 flex items-center justify-center mb-4">
