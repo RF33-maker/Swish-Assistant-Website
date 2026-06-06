@@ -166,6 +166,36 @@ export default function LeagueAdmin() {
         }
         
         if (!scheduleResult.data || scheduleResult.data.length === 0) {
+          // Third fallback: teams table
+          const teamsTableResult = await supabase
+            .from('teams')
+            .select('name')
+            .in('league_id', queryLeagueIds);
+          
+          if (!teamsTableResult.error && teamsTableResult.data && teamsTableResult.data.length > 0) {
+            const uniqueTeams = Array.from(new Set(
+              teamsTableResult.data.map((t: any) => t.name).filter(Boolean)
+            )).sort() as string[];
+            setTeams(uniqueTeams);
+            return;
+          }
+
+          // Fourth fallback: v_game_results
+          const gameResultsResult = await supabase
+            .from('v_game_results')
+            .select('home_team, away_team')
+            .in('league_id', queryLeagueIds);
+          
+          if (!gameResultsResult.error && gameResultsResult.data && gameResultsResult.data.length > 0) {
+            const teamNames = new Set<string>();
+            gameResultsResult.data.forEach((game: any) => {
+              if (game.home_team) teamNames.add(game.home_team);
+              if (game.away_team) teamNames.add(game.away_team);
+            });
+            setTeams(Array.from(teamNames).sort());
+            return;
+          }
+
           setTeams([]);
           return;
         }
