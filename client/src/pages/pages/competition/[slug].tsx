@@ -198,26 +198,17 @@ export default function CompetitionPage() {
                   />
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6">
-                  {mostRecent.logo_url ? (
-                    <img
-                      src={mostRecent.logo_url}
-                      alt={gender}
-                      className="h-14 w-14 object-contain drop-shadow-lg"
-                    />
-                  ) : (
-                    <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center">
-                      <Users className="w-6 h-6 text-white" />
-                    </div>
-                  )}
-                  <span className="text-xl font-extrabold text-white drop-shadow-md tracking-tight">
-                    {gender}
-                  </span>
-                  {mostRecent.season && (
-                    <span className="text-xs font-medium text-white/60 bg-white/10 rounded-full px-3 py-0.5">
-                      {mostRecent.season}
+                <div className="absolute bottom-0 left-0 right-0 p-5 flex items-end justify-between">
+                  <div>
+                    <span className="text-xl font-extrabold text-white drop-shadow-md tracking-tight block">
+                      {gender}
                     </span>
-                  )}
+                    {mostRecent.season && (
+                      <span className="text-xs font-medium text-white/60">
+                        {mostRecent.season}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </button>
             ))}
