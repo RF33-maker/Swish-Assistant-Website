@@ -785,11 +785,7 @@ export default function LeaguePage() {
       if (teamStatsData.length === 0) return [];
       
       const filtered = isParentLeague && (filterAgeGroup !== 'all' || selectedStop !== 'all')
-        ? teamStatsData.filter((t: any) => {
-            if (filterAgeGroup !== 'all' && t.age_group !== filterAgeGroup) return false;
-            if (selectedStop !== 'all' && !selectedAgeGroupLeagueIds.includes(t.league_id)) return false;
-            return true;
-          })
+        ? teamStatsData.filter((t: any) => selectedAgeGroupLeagueIds.includes(t.league_id))
         : teamStatsData;
       
       return [...filtered].sort((a, b) => {
@@ -1117,8 +1113,7 @@ export default function LeaguePage() {
       return allPlayerAverages
         .map(player => {
           const matchingStats = (player.rawStats || []).filter((s: any) => {
-            if (agFilter && s.age_group !== filterAgeGroup) return false;
-            if (stopFilter && !selectedAgeGroupLeagueIds.includes(s.league_id)) return false;
+            if ((agFilter || stopFilter) && !selectedAgeGroupLeagueIds.includes(s.league_id)) return false;
             if (roundFilter && s.round !== filterRound) return false;
             return true;
           });
@@ -1695,7 +1690,7 @@ export default function LeaguePage() {
           const childNameMap = new Map<string, string>();
           if (isParent) {
             fetchedChildCompetitions.forEach((c: any) => {
-              const label = c.age_group || (data.name ? c.name.replace(data.name, '').trim() || c.name : c.name);
+              const label = c.gender || c.age_group || (data.name ? c.name.replace(data.name, '').trim() || c.name : c.name);
               childNameMap.set(c.league_id, label);
             });
           }
@@ -5623,11 +5618,7 @@ export default function LeaguePage() {
                     }
 
                     const teamPool = (isParentLeague && (filterAgeGroup !== 'all' || selectedStop !== 'all'))
-                      ? teamStatsData.filter((t: any) => {
-                          if (filterAgeGroup !== 'all' && t.age_group !== filterAgeGroup) return false;
-                          if (selectedStop !== 'all' && !selectedAgeGroupLeagueIds.includes(t.league_id)) return false;
-                          return true;
-                        })
+                      ? teamStatsData.filter((t: any) => selectedAgeGroupLeagueIds.includes(t.league_id))
                       : teamStatsData;
 
                     if (teamPool.length === 0) {
@@ -5883,7 +5874,7 @@ export default function LeaguePage() {
                   </div>
                   {(() => {
                     const filteredTeamStats = isParentLeague && filterAgeGroup !== 'all'
-                      ? teamStatsData.filter((t: any) => t.age_group === filterAgeGroup)
+                      ? teamStatsData.filter((t: any) => selectedAgeGroupLeagueIds.includes(t.league_id))
                       : teamStatsData;
                     return isLoadingTeamStats || filteredTeamStats.length === 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
