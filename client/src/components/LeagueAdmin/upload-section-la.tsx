@@ -112,7 +112,7 @@ const UploadSectionLA = ({ leagues }: any) => {
     try {
       setStatusMessage("🔄 Parsing file...");
       const resp = await fetch(
-        `${getPythonBackendUrl()}/api/parse`,
+        `/api/parse`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
