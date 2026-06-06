@@ -279,8 +279,14 @@ def parse_file():
             bucket = 'XLSX Uploads'
             path_in_bucket = file_path
 
+        print(f"[parse] bucket='{bucket}' path='{path_in_bucket}' user={user_id} league={league_id}", flush=True)
+
         sb = create_client(SUPABASE_URL, SUPABASE_KEY)
-        file_bytes = sb.storage.from_(bucket).download(path_in_bucket)
+        try:
+            file_bytes = sb.storage.from_(bucket).download(path_in_bucket)
+        except Exception as dl_err:
+            print(f"[parse] download error: {dl_err}", flush=True)
+            return jsonify({'error': f'File not found in storage: bucket={bucket!r} path={path_in_bucket!r} — {dl_err}'}), 404
 
         is_pdf = path_in_bucket.lower().endswith('.pdf')
 
