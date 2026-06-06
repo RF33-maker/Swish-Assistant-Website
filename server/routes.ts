@@ -92,6 +92,7 @@ async function verifyLeagueOwnership(userId: string, leagueId: string): Promise<
 const RENDER_BACKEND_URL = (process.env.VITE_BACKEND_URL || '').replace(/\/$/, '');
 
 async function proxyToRender(req: Request, res: Response, path: string) {
+  console.log(`[proxy] VITE_BACKEND_URL="${process.env.VITE_BACKEND_URL}" RENDER_BACKEND_URL="${RENDER_BACKEND_URL}"`);
   if (!RENDER_BACKEND_URL) {
     return res.status(503).json({ error: 'VITE_BACKEND_URL is not configured on the server.' });
   }
@@ -104,7 +105,12 @@ async function proxyToRender(req: Request, res: Response, path: string) {
       body: req.method !== 'GET' ? JSON.stringify(req.body) : undefined,
       signal: AbortSignal.timeout(120_000),
     });
+    const contentType = upstream.headers.get('content-type') || '';
     const text = await upstream.text();
+    console.log(`[proxy] ← ${upstream.status} content-type="${contentType}" body-start="${text.slice(0, 120)}"`);
+    if (contentType.includes('text/html')) {
+      return res.status(502).json({ error: `Render backend returned HTML (status ${upstream.status}) — it may be sleeping or misconfigured. URL: ${targetUrl}` });
+    }
     res.status(upstream.status).set('Content-Type', 'application/json').send(text);
   } catch (err: any) {
     console.error(`[proxy] ${path} error:`, err.message);
