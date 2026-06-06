@@ -3820,19 +3820,25 @@ export default function LeaguePage() {
               </button>
               </div>
 
-              {/* Age Group + Stop Dropdowns for Parent Leagues */}
+              {/* Competition filter pills for parent leagues (gender / age-group) */}
               {isParentLeague && ageGroupLabels.length > 0 && !(activeSection === 'player' && selectedPlayerSlug) && !(activeSection === 'team' && selectedTeamName) && (
-                <div className="flex items-center gap-2 flex-shrink-0" data-testid="age-group-tabs">
-                  <select
-                    value={selectedAgeGroup}
-                    onChange={(e) => { const v = e.target.value; setSelectedAgeGroup(v); setFilterAgeGroup(v); setStandingsView('full'); }}
-                    className="px-3 py-1.5 text-xs md:text-sm font-medium rounded-lg border-2 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
-                    style={{ borderColor: brandColor }}
-                  >
+                <div className="flex items-center gap-2 flex-shrink-0 flex-wrap" data-testid="age-group-tabs">
+                  <div className="flex gap-1.5 flex-wrap">
                     {ageGroupLabels.map((label) => (
-                      <option key={label} value={label}>{label}</option>
+                      <button
+                        key={label}
+                        onClick={() => { setSelectedAgeGroup(label); setFilterAgeGroup(label); setStandingsView('full'); }}
+                        className={`px-3 py-1.5 text-xs md:text-sm font-semibold rounded-full border-2 transition-colors whitespace-nowrap ${
+                          selectedAgeGroup === label
+                            ? 'text-white'
+                            : 'bg-white dark:bg-neutral-800 text-slate-600 dark:text-slate-300 border-gray-200 dark:border-neutral-600 hover:border-gray-400 dark:hover:border-neutral-400'
+                        }`}
+                        style={selectedAgeGroup === label ? { borderColor: brandColor, backgroundColor: brandColor } : {}}
+                      >
+                        {label}
+                      </button>
                     ))}
-                  </select>
+                  </div>
                   {availableStopsForAgeGroup.length > 1 && (
                     <select
                       value={selectedStop}
@@ -4893,7 +4899,9 @@ export default function LeaguePage() {
                     {(() => {
                       const now = new Date();
                       const filtered = schedule.filter(game => {
-                        if (filterAgeGroup !== 'all' && game.age_group !== filterAgeGroup) return false;
+                        if (filterAgeGroup !== 'all') {
+                          if (isParentLeague ? !selectedAgeGroupLeagueIds.includes(game.league_id) : game.age_group !== filterAgeGroup) return false;
+                        }
                         if (isParentLeague && selectedStop !== 'all' && !selectedAgeGroupLeagueIds.includes(game.league_id)) return false;
                         if (filterRound !== 'all' && game.round !== filterRound) return false;
                         return true;
