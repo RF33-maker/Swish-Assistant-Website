@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useRoute, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
-import { Trophy, Calendar, ChevronRight, ArrowLeft } from "lucide-react";
+import { Trophy, ArrowLeft, Users } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
 
@@ -19,7 +19,15 @@ interface SeasonCompetition {
   season: string | null;
   banner_url: string | null;
   logo_url: string | null;
+  gender: string | null;
 }
+
+interface GenderGroup {
+  gender: string;
+  mostRecent: SeasonCompetition;
+}
+
+const GENDER_ORDER = ["Men's", "Men", "Male", "Women's", "Women", "Female"];
 
 export default function CompetitionPage() {
   const [, params] = useRoute("/league/:slug");
@@ -28,6 +36,7 @@ export default function CompetitionPage() {
 
   const [league, setLeague] = useState<League | null>(null);
   const [seasons, setSeasons] = useState<SeasonCompetition[]>([]);
+  const [genderGroups, setGenderGroups] = useState<GenderGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -62,22 +71,43 @@ export default function CompetitionPage() {
 
       setLeague(leagueData as League);
 
-      // Fetch all season instances that belong to this league brand
+      // Fetch all competitions belonging to this league brand
       const { data: competitionsData } = await supabase
         .from("competitions")
-        .select("name, slug, season, banner_url, logo_url")
+        .select("name, slug, season, banner_url, logo_url, gender")
         .eq("competition_id", leagueData.id)
         .eq("is_public", true)
         .order("season", { ascending: false });
 
       const seasonList = (competitionsData as SeasonCompetition[] | null) || [];
-      if (seasonList.length > 0) {
-        // Go straight to the most recent season — the competition page has a season switcher built in
+
+      // Detect gender-based league: at least one competition has gender set
+      const isGenderLeague = seasonList.some(c => !!c.gender);
+
+      if (isGenderLeague) {
+        // Group by gender, pick the most recent competition per gender group
+        const grouped = new Map<string, SeasonCompetition>();
+        for (const comp of seasonList) {
+          const g = comp.gender || "Other";
+          if (!grouped.has(g)) grouped.set(g, comp);
+        }
+        const groups: GenderGroup[] = Array.from(grouped.entries())
+          .sort(([a], [b]) => {
+            const ai = GENDER_ORDER.findIndex(g => a.toLowerCase().startsWith(g.toLowerCase().replace("'s", "").trim()));
+            const bi = GENDER_ORDER.findIndex(g => b.toLowerCase().startsWith(g.toLowerCase().replace("'s", "").trim()));
+            return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+          })
+          .map(([gender, mostRecent]) => ({ gender, mostRecent }));
+        setGenderGroups(groups);
+        setSeasons([]);
+        setLoading(false);
+      } else if (seasonList.length > 0) {
+        // Year-over-year seasons — redirect straight to the most recent
         setLocation(`/competition/${seasonList[0].slug}`, { replace: true });
-        return;
+      } else {
+        setSeasons(seasonList);
+        setLoading(false);
       }
-      setSeasons(seasonList);
-      setLoading(false);
     };
 
     fetchData();
@@ -109,10 +139,8 @@ export default function CompetitionPage() {
 
   return (
     <div className="min-h-screen bg-white dark:bg-neutral-950 text-slate-900 dark:text-slate-100">
-      {/* Gradient top border */}
       <div className="h-[1px] bg-gradient-to-r from-orange-400 to-amber-400" />
 
-      {/* Header */}
       <header className="sticky top-0 z-30 bg-white/90 dark:bg-neutral-950/90 backdrop-blur border-b border-orange-100 dark:border-neutral-800 px-6 py-3 flex items-center justify-between">
         <img
           src={SwishLogo}
@@ -144,19 +172,51 @@ export default function CompetitionPage() {
             {league.description}
           </p>
         )}
-        <div className="mt-3 flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
-          <Calendar className="w-3.5 h-3.5" />
-          <span>{seasons.length} season{seasons.length !== 1 ? "s" : ""}</span>
-        </div>
+        {genderGroups.length > 0 && (
+          <p className="mt-2 text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wider font-medium">
+            Choose a competition
+          </p>
+        )}
       </div>
 
-      {/* Seasons grid */}
       <main className="max-w-2xl mx-auto px-6 pb-16">
-        {seasons.length === 0 ? (
-          <div className="text-center py-16 text-slate-400 dark:text-slate-500">
-            <p className="text-sm">No seasons available yet.</p>
+        {/* Gender-based competition picker */}
+        {genderGroups.length > 0 && (
+          <div className="flex flex-col sm:flex-row gap-4">
+            {genderGroups.map(({ gender, mostRecent }) => (
+              <button
+                key={gender}
+                onClick={() => setLocation(`/competition/${mostRecent.slug}`)}
+                className="relative flex-1 overflow-hidden rounded-2xl min-h-[160px] hover:scale-[1.02] hover:shadow-xl transition-all duration-200 text-left group"
+                style={{ backgroundColor: "#111" }}
+              >
+                {mostRecent.banner_url && (
+                  <img
+                    src={mostRecent.banner_url}
+                    alt=""
+                    className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:opacity-55 transition-opacity"
+                  />
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
+                <div className="absolute bottom-0 left-0 right-0 p-5 flex items-end justify-between">
+                  <div>
+                    <span className="text-xl font-extrabold text-white drop-shadow-md tracking-tight block">
+                      {gender}
+                    </span>
+                    {mostRecent.season && (
+                      <span className="text-xs font-medium text-white/60">
+                        {mostRecent.season}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </button>
+            ))}
           </div>
-        ) : (
+        )}
+
+        {/* Year-over-year season list (non-gender leagues — shown when no auto-redirect happened) */}
+        {seasons.length > 0 && (
           <div className="flex flex-col gap-3">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1">
               Seasons
@@ -185,15 +245,18 @@ export default function CompetitionPage() {
                       <span className="text-xs text-white/60">{s.name}</span>
                     )}
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                    {s.logo_url && (
-                      <img src={s.logo_url} alt="" className="h-9 w-9 object-contain" />
-                    )}
-                    <ChevronRight className="w-4 h-4 text-white/60 group-hover:text-white/90 transition-colors" />
-                  </div>
+                  {s.logo_url && (
+                    <img src={s.logo_url} alt="" className="h-9 w-9 object-contain" />
+                  )}
                 </div>
               </button>
             ))}
+          </div>
+        )}
+
+        {genderGroups.length === 0 && seasons.length === 0 && (
+          <div className="text-center py-16 text-slate-400 dark:text-slate-500">
+            <p className="text-sm">No competitions available yet.</p>
           </div>
         )}
       </main>

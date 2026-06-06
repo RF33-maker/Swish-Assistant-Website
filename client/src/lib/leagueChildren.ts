@@ -7,6 +7,7 @@ export type LeagueChild = {
   logo_url: string | null;
   age_group: string | null;
   stop: number | null;
+  gender: string | null;
 };
 
 const cache = new Map<string, Promise<LeagueChild[]>>();
@@ -18,7 +19,7 @@ export async function fetchLeagueChildren(parentId: string): Promise<LeagueChild
     try {
       const { data, error } = await supabase
         .from("competitions")
-        .select("league_id, name, slug, logo_url, age_group, stop")
+        .select("league_id, name, slug, logo_url, age_group, stop, gender")
         .eq("parent_league_id", parentId);
       if (error) return [];
       return (data || []) as LeagueChild[];

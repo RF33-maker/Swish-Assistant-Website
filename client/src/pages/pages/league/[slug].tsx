@@ -608,7 +608,7 @@ export default function LeaguePage() {
   const [statsSortDirection, setStatsSortDirection] = useState<'asc' | 'desc'>('desc'); // Sort direction
   const [teamStatsSortColumn, setTeamStatsSortColumn] = useState<string>('PTS'); // Column to sort by in Team Statistics
   const [teamStatsSortDirection, setTeamStatsSortDirection] = useState<'asc' | 'desc'>('desc'); // Sort direction for team stats
-  const [childCompetitions, setChildCompetitions] = useState<Pick<League, 'league_id' | 'name' | 'slug' | 'logo_url'> & { age_group?: string | null; stop?: number | null }[]>([]);
+  const [childCompetitions, setChildCompetitions] = useState<Pick<League, 'league_id' | 'name' | 'slug' | 'logo_url'> & { age_group?: string | null; stop?: number | null; gender?: string | null }[]>([]);
   const [parentLeague, setParentLeague] = useState<Pick<League, 'league_id' | 'name' | 'slug' | 'logo_url'> | null>(null); // Parent league for breadcrumb
   const [isDividerVisible, setIsDividerVisible] = useState(false); // Track if orange divider is in view
   const dividerRef = useRef<HTMLDivElement>(null); // Ref for the orange divider
@@ -659,11 +659,20 @@ export default function LeaguePage() {
 
   const isParentLeague = childCompetitions.length > 0;
 
+  // Preferred sort order for gender labels so Men's always precedes Women's
+  const GENDER_ORDER = ["Men's", "Women's", "Men", "Women", "Male", "Female", "Mixed"];
+
+  // Derive the display label for a child competition:
+  // 1. Use gender column if set, 2. fall back to age_group, 3. strip parent name from competition name
+  const getChildLabel = (c: typeof childCompetitions[0]) =>
+    (c as any).gender ||
+    c.age_group ||
+    (league?.name ? c.name.replace(league.name, '').trim() || c.name : c.name);
+
   const childLeagueMap = useMemo(() => {
     const map = new Map<string, string>();
     childCompetitions.forEach(c => {
-      const label = c.age_group || (league?.name ? c.name.replace(league.name, '').trim() || c.name : c.name);
-      map.set(c.league_id, label);
+      map.set(c.league_id, getChildLabel(c));
     });
     return map;
   }, [childCompetitions, league?.name]);
@@ -671,30 +680,43 @@ export default function LeaguePage() {
   const ageGroupToLeagueIds = useMemo(() => {
     const map = new Map<string, string[]>();
     childCompetitions.forEach(c => {
-      const ag = c.age_group || (league?.name ? c.name.replace(league.name, '').trim() || c.name : c.name);
+      const ag = getChildLabel(c);
       if (!map.has(ag)) map.set(ag, []);
       map.get(ag)!.push(c.league_id);
     });
     return map;
   }, [childCompetitions, league?.name]);
 
+  // True when every child competition has a gender value set
+  const isGenderLeague = useMemo(
+    () => childCompetitions.length > 0 && childCompetitions.every(c => !!(c as any).gender),
+    [childCompetitions],
+  );
+
   const ageGroupLabels = useMemo(() => {
     const labels = Array.from(ageGroupToLeagueIds.keys());
     return labels.sort((a, b) => {
+      // Gender-aware sort: use GENDER_ORDER when all children have gender set
+      if (isGenderLeague) {
+        const ia = GENDER_ORDER.indexOf(a);
+        const ib = GENDER_ORDER.indexOf(b);
+        if (ia !== -1 && ib !== -1) return ia - ib;
+        if (ia !== -1) return -1;
+        if (ib !== -1) return 1;
+        return a.localeCompare(b);
+      }
+      // Default: numeric sort (for age groups like U12, U14) then alphabetical
       const numA = parseInt(a.replace(/\D/g, ''));
       const numB = parseInt(b.replace(/\D/g, ''));
       if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
       return a.localeCompare(b);
     });
-  }, [ageGroupToLeagueIds]);
+  }, [ageGroupToLeagueIds, isGenderLeague]);
 
   const availableStopsForAgeGroup = useMemo(() => {
     const leagueIdsForAg = selectedAgeGroup === 'all'
       ? childCompetitions
-      : childCompetitions.filter(c => {
-          const ag = c.age_group || (league?.name ? c.name.replace(league.name, '').trim() || c.name : c.name);
-          return ag === selectedAgeGroup;
-        });
+      : childCompetitions.filter(c => getChildLabel(c) === selectedAgeGroup);
     const stops = new Set<number>();
     leagueIdsForAg.forEach(c => { if (c.stop != null) stops.add(c.stop); });
     return Array.from(stops).sort((a, b) => a - b);
@@ -703,10 +725,7 @@ export default function LeaguePage() {
   const selectedAgeGroupLeagueIds = useMemo(() => {
     let candidates = selectedAgeGroup === 'all'
       ? childCompetitions
-      : childCompetitions.filter(c => {
-          const ag = c.age_group || (league?.name ? c.name.replace(league.name, '').trim() || c.name : c.name);
-          return ag === selectedAgeGroup;
-        });
+      : childCompetitions.filter(c => getChildLabel(c) === selectedAgeGroup);
     if (selectedStop !== 'all') {
       candidates = candidates.filter(c => c.stop != null && String(c.stop) === selectedStop);
     }
@@ -766,11 +785,7 @@ export default function LeaguePage() {
       if (teamStatsData.length === 0) return [];
       
       const filtered = isParentLeague && (filterAgeGroup !== 'all' || selectedStop !== 'all')
-        ? teamStatsData.filter((t: any) => {
-            if (filterAgeGroup !== 'all' && t.age_group !== filterAgeGroup) return false;
-            if (selectedStop !== 'all' && !selectedAgeGroupLeagueIds.includes(t.league_id)) return false;
-            return true;
-          })
+        ? teamStatsData.filter((t: any) => selectedAgeGroupLeagueIds.includes(t.league_id))
         : teamStatsData;
       
       return [...filtered].sort((a, b) => {
@@ -1098,8 +1113,7 @@ export default function LeaguePage() {
       return allPlayerAverages
         .map(player => {
           const matchingStats = (player.rawStats || []).filter((s: any) => {
-            if (agFilter && s.age_group !== filterAgeGroup) return false;
-            if (stopFilter && !selectedAgeGroupLeagueIds.includes(s.league_id)) return false;
+            if ((agFilter || stopFilter) && !selectedAgeGroupLeagueIds.includes(s.league_id)) return false;
             if (roundFilter && s.round !== filterRound) return false;
             return true;
           });
@@ -1622,13 +1636,19 @@ export default function LeaguePage() {
             }
           }
 
-          // Fetch sibling seasons from the same league brand
+          // Fetch sibling seasons from the same league brand.
+          // Filter to same gender only — gender competitions (Men's/Women's) are not
+          // "seasons" of each other; they should be selected from the brand page instead.
           if ((data as any).competition_id) {
             try {
               const res = await fetch(`/api/league/${(data as any).competition_id}/competitions`);
               if (res.ok) {
-                const seasons = await res.json();
-                setSiblingSeasons(seasons);
+                const allSeasons: { name: string; slug: string; season: string | null; gender?: string | null }[] = await res.json();
+                const currentGender = (data as any).gender ?? null;
+                const filtered = currentGender
+                  ? allSeasons.filter(s => (s.gender ?? null) === currentGender)
+                  : allSeasons.filter(s => !(s as any).gender);
+                setSiblingSeasons(filtered);
               }
             } catch (e) {
               console.error("Failed to fetch sibling seasons:", e);
@@ -1676,7 +1696,7 @@ export default function LeaguePage() {
           const childNameMap = new Map<string, string>();
           if (isParent) {
             fetchedChildCompetitions.forEach((c: any) => {
-              const label = c.age_group || (data.name ? c.name.replace(data.name, '').trim() || c.name : c.name);
+              const label = c.gender || c.age_group || (data.name ? c.name.replace(data.name, '').trim() || c.name : c.name);
               childNameMap.set(c.league_id, label);
             });
           }
@@ -3806,19 +3826,25 @@ export default function LeaguePage() {
               </button>
               </div>
 
-              {/* Age Group + Stop Dropdowns for Parent Leagues */}
+              {/* Competition filter pills for parent leagues (gender / age-group) */}
               {isParentLeague && ageGroupLabels.length > 0 && !(activeSection === 'player' && selectedPlayerSlug) && !(activeSection === 'team' && selectedTeamName) && (
-                <div className="flex items-center gap-2 flex-shrink-0" data-testid="age-group-tabs">
-                  <select
-                    value={selectedAgeGroup}
-                    onChange={(e) => { const v = e.target.value; setSelectedAgeGroup(v); setFilterAgeGroup(v); setStandingsView('full'); }}
-                    className="px-3 py-1.5 text-xs md:text-sm font-medium rounded-lg border-2 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
-                    style={{ borderColor: brandColor }}
-                  >
+                <div className="flex items-center gap-2 flex-shrink-0 flex-wrap" data-testid="age-group-tabs">
+                  <div className="flex gap-1.5 flex-wrap">
                     {ageGroupLabels.map((label) => (
-                      <option key={label} value={label}>{label}</option>
+                      <button
+                        key={label}
+                        onClick={() => { setSelectedAgeGroup(label); setFilterAgeGroup(label); setStandingsView('full'); }}
+                        className={`px-3 py-1.5 text-xs md:text-sm font-semibold rounded-full border-2 transition-colors whitespace-nowrap ${
+                          selectedAgeGroup === label
+                            ? 'text-white'
+                            : 'bg-white dark:bg-neutral-800 text-slate-600 dark:text-slate-300 border-gray-200 dark:border-neutral-600 hover:border-gray-400 dark:hover:border-neutral-400'
+                        }`}
+                        style={selectedAgeGroup === label ? { borderColor: brandColor, backgroundColor: brandColor } : {}}
+                      >
+                        {label}
+                      </button>
                     ))}
-                  </select>
+                  </div>
                   {availableStopsForAgeGroup.length > 1 && (
                     <select
                       value={selectedStop}
@@ -4879,7 +4905,9 @@ export default function LeaguePage() {
                     {(() => {
                       const now = new Date();
                       const filtered = schedule.filter(game => {
-                        if (filterAgeGroup !== 'all' && game.age_group !== filterAgeGroup) return false;
+                        if (filterAgeGroup !== 'all') {
+                          if (isParentLeague ? !selectedAgeGroupLeagueIds.includes(game.league_id) : game.age_group !== filterAgeGroup) return false;
+                        }
                         if (isParentLeague && selectedStop !== 'all' && !selectedAgeGroupLeagueIds.includes(game.league_id)) return false;
                         if (filterRound !== 'all' && game.round !== filterRound) return false;
                         return true;
@@ -5604,11 +5632,7 @@ export default function LeaguePage() {
                     }
 
                     const teamPool = (isParentLeague && (filterAgeGroup !== 'all' || selectedStop !== 'all'))
-                      ? teamStatsData.filter((t: any) => {
-                          if (filterAgeGroup !== 'all' && t.age_group !== filterAgeGroup) return false;
-                          if (selectedStop !== 'all' && !selectedAgeGroupLeagueIds.includes(t.league_id)) return false;
-                          return true;
-                        })
+                      ? teamStatsData.filter((t: any) => selectedAgeGroupLeagueIds.includes(t.league_id))
                       : teamStatsData;
 
                     if (teamPool.length === 0) {
@@ -5864,7 +5888,7 @@ export default function LeaguePage() {
                   </div>
                   {(() => {
                     const filteredTeamStats = isParentLeague && filterAgeGroup !== 'all'
-                      ? teamStatsData.filter((t: any) => t.age_group === filterAgeGroup)
+                      ? teamStatsData.filter((t: any) => selectedAgeGroupLeagueIds.includes(t.league_id))
                       : teamStatsData;
                     return isLoadingTeamStats || filteredTeamStats.length === 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
