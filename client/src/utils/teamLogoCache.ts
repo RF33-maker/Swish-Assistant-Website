@@ -23,7 +23,7 @@ async function getParentLeagueId(leagueId: string): Promise<string | null> {
   const fetchPromise = (async () => {
     try {
       const { data } = await supabase
-        .from('leagues')
+        .from('competitions')
         .select('parent_league_id')
         .eq('league_id', leagueId)
         .single();

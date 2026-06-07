@@ -1,0 +1,841 @@
+index-DX-wppNr.js:481  GET https://swishassistant.com/api/home/trending-performances 500 (Internal Server Error)
+queryFn @ index-DX-wppNr.js:481
+a @ index-DX-wppNr.js:48
+p @ index-DX-wppNr.js:48
+start @ index-DX-wppNr.js:48
+fetch @ index-DX-wppNr.js:48
+b0 @ index-DX-wppNr.js:48
+onSubscribe @ index-DX-wppNr.js:48
+subscribe @ index-DX-wppNr.js:48
+(anonymous) @ index-DX-wppNr.js:48
+q9 @ index-DX-wppNr.js:38
+vC @ index-DX-wppNr.js:40
+Cp @ index-DX-wppNr.js:40
+UL @ index-DX-wppNr.js:40
+nA @ index-DX-wppNr.js:38
+Phe @ index-DX-wppNr.js:40
+yA @ index-DX-wppNr.js:40
+SK @ index-DX-wppNr.js:40
+k @ index-DX-wppNr.js:25
+M @ index-DX-wppNr.js:25
+postMessage
+G @ index-DX-wppNr.js:25
+O @ index-DX-wppNr.js:25
+t.unstable_scheduleCallback @ index-DX-wppNr.js:25
+IK @ index-DX-wppNr.js:40
+pi @ index-DX-wppNr.js:40
+tl @ index-DX-wppNr.js:40
+kC @ index-DX-wppNr.js:40
+CC.render.U4.render @ index-DX-wppNr.js:40
+(anonymous) @ index-DX-wppNr.js:1107
+index-DX-wppNr.js:413  GET https://omkwqpcgttrgvbhcxgqf.supabase.co/rest/v1/leagues?select=parent_league_id&league_id=eq.f2424d49-5451-472f-949d-8632c1ee747f 400 (Bad Request)
+(anonymous) @ index-DX-wppNr.js:413
+(anonymous) @ index-DX-wppNr.js:413
+l @ index-DX-wppNr.js:413
+Promise.then
+d @ index-DX-wppNr.js:413
+(anonymous) @ index-DX-wppNr.js:413
+mwe @ index-DX-wppNr.js:413
+(anonymous) @ index-DX-wppNr.js:413
+then @ index-DX-wppNr.js:408
+setTimeout
+s @ index-DX-wppNr.js:48
+o @ index-DX-wppNr.js:48
+batch @ index-DX-wppNr.js:48
+Nc @ index-DX-wppNr.js:48
+setData @ index-DX-wppNr.js:48
+onSuccess @ index-DX-wppNr.js:48
+A @ index-DX-wppNr.js:48
+Promise.then
+p @ index-DX-wppNr.js:48
+start @ index-DX-wppNr.js:48
+fetch @ index-DX-wppNr.js:48
+b0 @ index-DX-wppNr.js:48
+onSubscribe @ index-DX-wppNr.js:48
+subscribe @ index-DX-wppNr.js:48
+(anonymous) @ index-DX-wppNr.js:48
+q9 @ index-DX-wppNr.js:38
+vC @ index-DX-wppNr.js:40
+Cp @ index-DX-wppNr.js:40
+UL @ index-DX-wppNr.js:40
+nA @ index-DX-wppNr.js:38
+Phe @ index-DX-wppNr.js:40
+yA @ index-DX-wppNr.js:40
+SK @ index-DX-wppNr.js:40
+k @ index-DX-wppNr.js:25
+M @ index-DX-wppNr.js:25
+postMessage
+G @ index-DX-wppNr.js:25
+O @ index-DX-wppNr.js:25
+t.unstable_scheduleCallback @ index-DX-wppNr.js:25
+IK @ index-DX-wppNr.js:40
+pi @ index-DX-wppNr.js:40
+tl @ index-DX-wppNr.js:40
+kC @ index-DX-wppNr.js:40
+CC.render.U4.render @ index-DX-wppNr.js:40
+(anonymous) @ index-DX-wppNr.js:1107
+index-DX-wppNr.js:413  GET https://omkwqpcgttrgvbhcxgqf.supabase.co/rest/v1/leagues?select=parent_league_id&league_id=eq.1a38dce8-8f49-4b2e-beb8-3ac7a5a4e5ee 400 (Bad Request)
+(anonymous) @ index-DX-wppNr.js:413
+(anonymous) @ index-DX-wppNr.js:413
+l @ index-DX-wppNr.js:413
+Promise.then
+d @ index-DX-wppNr.js:413
+(anonymous) @ index-DX-wppNr.js:413
+mwe @ index-DX-wppNr.js:413
+(anonymous) @ index-DX-wppNr.js:413
+then @ index-DX-wppNr.js:408
+setTimeout
+s @ index-DX-wppNr.js:48
+o @ index-DX-wppNr.js:48
+batch @ index-DX-wppNr.js:48
+Nc @ index-DX-wppNr.js:48
+setData @ index-DX-wppNr.js:48
+onSuccess @ index-DX-wppNr.js:48
+A @ index-DX-wppNr.js:48
+Promise.then
+p @ index-DX-wppNr.js:48
+start @ index-DX-wppNr.js:48
+fetch @ index-DX-wppNr.js:48
+b0 @ index-DX-wppNr.js:48
+onSubscribe @ index-DX-wppNr.js:48
+subscribe @ index-DX-wppNr.js:48
+(anonymous) @ index-DX-wppNr.js:48
+q9 @ index-DX-wppNr.js:38
+vC @ index-DX-wppNr.js:40
+Cp @ index-DX-wppNr.js:40
+UL @ index-DX-wppNr.js:40
+nA @ index-DX-wppNr.js:38
+Phe @ index-DX-wppNr.js:40
+yA @ index-DX-wppNr.js:40
+SK @ index-DX-wppNr.js:40
+k @ index-DX-wppNr.js:25
+M @ index-DX-wppNr.js:25
+postMessage
+G @ index-DX-wppNr.js:25
+O @ index-DX-wppNr.js:25
+t.unstable_scheduleCallback @ index-DX-wppNr.js:25
+IK @ index-DX-wppNr.js:40
+pi @ index-DX-wppNr.js:40
+tl @ index-DX-wppNr.js:40
+kC @ index-DX-wppNr.js:40
+CC.render.U4.render @ index-DX-wppNr.js:40
+(anonymous) @ index-DX-wppNr.js:1107
+index-DX-wppNr.js:413  GET https://omkwqpcgttrgvbhcxgqf.supabase.co/rest/v1/leagues?select=parent_league_id&league_id=eq.4fe8e444-6fa3-4426-917c-23ad2b9bc88b 400 (Bad Request)
+(anonymous) @ index-DX-wppNr.js:413
+(anonymous) @ index-DX-wppNr.js:413
+l @ index-DX-wppNr.js:413
+Promise.then
+d @ index-DX-wppNr.js:413
+(anonymous) @ index-DX-wppNr.js:413
+mwe @ index-DX-wppNr.js:413
+(anonymous) @ index-DX-wppNr.js:413
+then @ index-DX-wppNr.js:408
+setTimeout
+s @ index-DX-wppNr.js:48
+o @ index-DX-wppNr.js:48
+batch @ index-DX-wppNr.js:48
+Nc @ index-DX-wppNr.js:48
+setData @ index-DX-wppNr.js:48
+onSuccess @ index-DX-wppNr.js:48
+A @ index-DX-wppNr.js:48
+Promise.then
+p @ index-DX-wppNr.js:48
+start @ index-DX-wppNr.js:48
+fetch @ index-DX-wppNr.js:48
+b0 @ index-DX-wppNr.js:48
+onSubscribe @ index-DX-wppNr.js:48
+subscribe @ index-DX-wppNr.js:48
+(anonymous) @ index-DX-wppNr.js:48
+q9 @ index-DX-wppNr.js:38
+vC @ index-DX-wppNr.js:40
+Cp @ index-DX-wppNr.js:40
+UL @ index-DX-wppNr.js:40
+nA @ index-DX-wppNr.js:38
+Phe @ index-DX-wppNr.js:40
+yA @ index-DX-wppNr.js:40
+SK @ index-DX-wppNr.js:40
+k @ index-DX-wppNr.js:25
+M @ index-DX-wppNr.js:25
+postMessage
+G @ index-DX-wppNr.js:25
+O @ index-DX-wppNr.js:25
+t.unstable_scheduleCallback @ index-DX-wppNr.js:25
+IK @ index-DX-wppNr.js:40
+pi @ index-DX-wppNr.js:40
+tl @ index-DX-wppNr.js:40
+kC @ index-DX-wppNr.js:40
+CC.render.U4.render @ index-DX-wppNr.js:40
+(anonymous) @ index-DX-wppNr.js:1107
+index-DX-wppNr.js:413  GET https://omkwqpcgttrgvbhcxgqf.supabase.co/rest/v1/leagues?select=parent_league_id&league_id=eq.2ab7e153-2d13-4cf9-8435-84f530883ff9 400 (Bad Request)
+(anonymous) @ index-DX-wppNr.js:413
+(anonymous) @ index-DX-wppNr.js:413
+l @ index-DX-wppNr.js:413
+Promise.then
+d @ index-DX-wppNr.js:413
+(anonymous) @ index-DX-wppNr.js:413
+mwe @ index-DX-wppNr.js:413
+(anonymous) @ index-DX-wppNr.js:413
+then @ index-DX-wppNr.js:408
+setTimeout
+s @ index-DX-wppNr.js:48
+o @ index-DX-wppNr.js:48
+batch @ index-DX-wppNr.js:48
+Nc @ index-DX-wppNr.js:48
+setData @ index-DX-wppNr.js:48
+onSuccess @ index-DX-wppNr.js:48
+A @ index-DX-wppNr.js:48
+Promise.then
+p @ index-DX-wppNr.js:48
+start @ index-DX-wppNr.js:48
+fetch @ index-DX-wppNr.js:48
+b0 @ index-DX-wppNr.js:48
+onSubscribe @ index-DX-wppNr.js:48
+subscribe @ index-DX-wppNr.js:48
+(anonymous) @ index-DX-wppNr.js:48
+q9 @ index-DX-wppNr.js:38
+vC @ index-DX-wppNr.js:40
+Cp @ index-DX-wppNr.js:40
+UL @ index-DX-wppNr.js:40
+nA @ index-DX-wppNr.js:38
+Phe @ index-DX-wppNr.js:40
+yA @ index-DX-wppNr.js:40
+SK @ index-DX-wppNr.js:40
+k @ index-DX-wppNr.js:25
+M @ index-DX-wppNr.js:25
+postMessage
+G @ index-DX-wppNr.js:25
+O @ index-DX-wppNr.js:25
+t.unstable_scheduleCallback @ index-DX-wppNr.js:25
+IK @ index-DX-wppNr.js:40
+pi @ index-DX-wppNr.js:40
+tl @ index-DX-wppNr.js:40
+kC @ index-DX-wppNr.js:40
+CC.render.U4.render @ index-DX-wppNr.js:40
+(anonymous) @ index-DX-wppNr.js:1107
+index-DX-wppNr.js:413  GET https://omkwqpcgttrgvbhcxgqf.supabase.co/rest/v1/leagues?select=parent_league_id&league_id=eq.68e8b854-1ce8-45fd-8b9c-e196915c60b3 400 (Bad Request)
+(anonymous) @ index-DX-wppNr.js:413
+(anonymous) @ index-DX-wppNr.js:413
+l @ index-DX-wppNr.js:413
+Promise.then
+d @ index-DX-wppNr.js:413
+(anonymous) @ index-DX-wppNr.js:413
+mwe @ index-DX-wppNr.js:413
+(anonymous) @ index-DX-wppNr.js:413
+then @ index-DX-wppNr.js:408
+setTimeout
+s @ index-DX-wppNr.js:48
+o @ index-DX-wppNr.js:48
+batch @ index-DX-wppNr.js:48
+Nc @ index-DX-wppNr.js:48
+setData @ index-DX-wppNr.js:48
+onSuccess @ index-DX-wppNr.js:48
+A @ index-DX-wppNr.js:48
+Promise.then
+p @ index-DX-wppNr.js:48
+start @ index-DX-wppNr.js:48
+fetch @ index-DX-wppNr.js:48
+b0 @ index-DX-wppNr.js:48
+onSubscribe @ index-DX-wppNr.js:48
+subscribe @ index-DX-wppNr.js:48
+(anonymous) @ index-DX-wppNr.js:48
+q9 @ index-DX-wppNr.js:38
+vC @ index-DX-wppNr.js:40
+Cp @ index-DX-wppNr.js:40
+UL @ index-DX-wppNr.js:40
+nA @ index-DX-wppNr.js:38
+Phe @ index-DX-wppNr.js:40
+yA @ index-DX-wppNr.js:40
+SK @ index-DX-wppNr.js:40
+k @ index-DX-wppNr.js:25
+M @ index-DX-wppNr.js:25
+postMessage
+G @ index-DX-wppNr.js:25
+O @ index-DX-wppNr.js:25
+t.unstable_scheduleCallback @ index-DX-wppNr.js:25
+IK @ index-DX-wppNr.js:40
+pi @ index-DX-wppNr.js:40
+tl @ index-DX-wppNr.js:40
+kC @ index-DX-wppNr.js:40
+CC.render.U4.render @ index-DX-wppNr.js:40
+(anonymous) @ index-DX-wppNr.js:1107
+index-DX-wppNr.js:413  GET https://omkwqpcgttrgvbhcxgqf.supabase.co/rest/v1/leagues?select=parent_league_id&league_id=eq.236fdf0e-9ea0-42dc-bac6-48c3c014776e 400 (Bad Request)
+(anonymous) @ index-DX-wppNr.js:413
+(anonymous) @ index-DX-wppNr.js:413
+l @ index-DX-wppNr.js:413
+Promise.then
+d @ index-DX-wppNr.js:413
+(anonymous) @ index-DX-wppNr.js:413
+mwe @ index-DX-wppNr.js:413
+(anonymous) @ index-DX-wppNr.js:413
+then @ index-DX-wppNr.js:408
+setTimeout
+s @ index-DX-wppNr.js:48
+o @ index-DX-wppNr.js:48
+batch @ index-DX-wppNr.js:48
+Nc @ index-DX-wppNr.js:48
+setData @ index-DX-wppNr.js:48
+onSuccess @ index-DX-wppNr.js:48
+A @ index-DX-wppNr.js:48
+Promise.then
+p @ index-DX-wppNr.js:48
+start @ index-DX-wppNr.js:48
+fetch @ index-DX-wppNr.js:48
+b0 @ index-DX-wppNr.js:48
+onSubscribe @ index-DX-wppNr.js:48
+subscribe @ index-DX-wppNr.js:48
+(anonymous) @ index-DX-wppNr.js:48
+q9 @ index-DX-wppNr.js:38
+vC @ index-DX-wppNr.js:40
+Cp @ index-DX-wppNr.js:40
+UL @ index-DX-wppNr.js:40
+nA @ index-DX-wppNr.js:38
+Phe @ index-DX-wppNr.js:40
+yA @ index-DX-wppNr.js:40
+SK @ index-DX-wppNr.js:40
+k @ index-DX-wppNr.js:25
+M @ index-DX-wppNr.js:25
+postMessage
+G @ index-DX-wppNr.js:25
+O @ index-DX-wppNr.js:25
+t.unstable_scheduleCallback @ index-DX-wppNr.js:25
+IK @ index-DX-wppNr.js:40
+pi @ index-DX-wppNr.js:40
+tl @ index-DX-wppNr.js:40
+kC @ index-DX-wppNr.js:40
+CC.render.U4.render @ index-DX-wppNr.js:40
+(anonymous) @ index-DX-wppNr.js:1107
+index-DX-wppNr.js:413  GET https://omkwqpcgttrgvbhcxgqf.supabase.co/rest/v1/leagues?select=parent_league_id&league_id=eq.fa85e5ff-4264-4b4e-8ffe-734bc9de758f 400 (Bad Request)
+(anonymous) @ index-DX-wppNr.js:413
+(anonymous) @ index-DX-wppNr.js:413
+l @ index-DX-wppNr.js:413
+Promise.then
+d @ index-DX-wppNr.js:413
+(anonymous) @ index-DX-wppNr.js:413
+mwe @ index-DX-wppNr.js:413
+(anonymous) @ index-DX-wppNr.js:413
+then @ index-DX-wppNr.js:408
+setTimeout
+s @ index-DX-wppNr.js:48
+o @ index-DX-wppNr.js:48
+batch @ index-DX-wppNr.js:48
+Nc @ index-DX-wppNr.js:48
+setData @ index-DX-wppNr.js:48
+onSuccess @ index-DX-wppNr.js:48
+A @ index-DX-wppNr.js:48
+Promise.then
+p @ index-DX-wppNr.js:48
+start @ index-DX-wppNr.js:48
+fetch @ index-DX-wppNr.js:48
+b0 @ index-DX-wppNr.js:48
+onSubscribe @ index-DX-wppNr.js:48
+subscribe @ index-DX-wppNr.js:48
+(anonymous) @ index-DX-wppNr.js:48
+q9 @ index-DX-wppNr.js:38
+vC @ index-DX-wppNr.js:40
+Cp @ index-DX-wppNr.js:40
+UL @ index-DX-wppNr.js:40
+nA @ index-DX-wppNr.js:38
+Phe @ index-DX-wppNr.js:40
+yA @ index-DX-wppNr.js:40
+SK @ index-DX-wppNr.js:40
+k @ index-DX-wppNr.js:25
+M @ index-DX-wppNr.js:25
+postMessage
+G @ index-DX-wppNr.js:25
+O @ index-DX-wppNr.js:25
+t.unstable_scheduleCallback @ index-DX-wppNr.js:25
+IK @ index-DX-wppNr.js:40
+pi @ index-DX-wppNr.js:40
+tl @ index-DX-wppNr.js:40
+kC @ index-DX-wppNr.js:40
+CC.render.U4.render @ index-DX-wppNr.js:40
+(anonymous) @ index-DX-wppNr.js:1107
+index-DX-wppNr.js:413  GET https://omkwqpcgttrgvbhcxgqf.supabase.co/rest/v1/leagues?select=parent_league_id&league_id=eq.aed56847-5247-4f07-bdd0-5804fbfa6320 400 (Bad Request)
+(anonymous) @ index-DX-wppNr.js:413
+(anonymous) @ index-DX-wppNr.js:413
+l @ index-DX-wppNr.js:413
+Promise.then
+d @ index-DX-wppNr.js:413
+(anonymous) @ index-DX-wppNr.js:413
+mwe @ index-DX-wppNr.js:413
+(anonymous) @ index-DX-wppNr.js:413
+then @ index-DX-wppNr.js:408
+setTimeout
+s @ index-DX-wppNr.js:48
+o @ index-DX-wppNr.js:48
+batch @ index-DX-wppNr.js:48
+Nc @ index-DX-wppNr.js:48
+setData @ index-DX-wppNr.js:48
+onSuccess @ index-DX-wppNr.js:48
+A @ index-DX-wppNr.js:48
+Promise.then
+p @ index-DX-wppNr.js:48
+start @ index-DX-wppNr.js:48
+fetch @ index-DX-wppNr.js:48
+b0 @ index-DX-wppNr.js:48
+onSubscribe @ index-DX-wppNr.js:48
+subscribe @ index-DX-wppNr.js:48
+(anonymous) @ index-DX-wppNr.js:48
+q9 @ index-DX-wppNr.js:38
+vC @ index-DX-wppNr.js:40
+Cp @ index-DX-wppNr.js:40
+UL @ index-DX-wppNr.js:40
+nA @ index-DX-wppNr.js:38
+Phe @ index-DX-wppNr.js:40
+yA @ index-DX-wppNr.js:40
+SK @ index-DX-wppNr.js:40
+k @ index-DX-wppNr.js:25
+M @ index-DX-wppNr.js:25
+postMessage
+G @ index-DX-wppNr.js:25
+O @ index-DX-wppNr.js:25
+t.unstable_scheduleCallback @ index-DX-wppNr.js:25
+IK @ index-DX-wppNr.js:40
+pi @ index-DX-wppNr.js:40
+tl @ index-DX-wppNr.js:40
+kC @ index-DX-wppNr.js:40
+CC.render.U4.render @ index-DX-wppNr.js:40
+(anonymous) @ index-DX-wppNr.js:1107
+index-DX-wppNr.js:460  GET https://swishassistant.com/api/home/player-leaders/f2424d49-5451-472f-949d-8632c1ee747f 500 (Internal Server Error)
+queryFn @ index-DX-wppNr.js:460
+a @ index-DX-wppNr.js:48
+p @ index-DX-wppNr.js:48
+start @ index-DX-wppNr.js:48
+fetch @ index-DX-wppNr.js:48
+b0 @ index-DX-wppNr.js:48
+setOptions @ index-DX-wppNr.js:48
+(anonymous) @ index-DX-wppNr.js:48
+vC @ index-DX-wppNr.js:40
+Cp @ index-DX-wppNr.js:40
+Phe @ index-DX-wppNr.js:40
+yA @ index-DX-wppNr.js:40
+UL @ index-DX-wppNr.js:40
+nA @ index-DX-wppNr.js:38
+(anonymous) @ index-DX-wppNr.js:40
+setTimeout
+s @ index-DX-wppNr.js:48
+o @ index-DX-wppNr.js:48
+batch @ index-DX-wppNr.js:48
+Nc @ index-DX-wppNr.js:48
+setData @ index-DX-wppNr.js:48
+onSuccess @ index-DX-wppNr.js:48
+A @ index-DX-wppNr.js:48
+Promise.then
+p @ index-DX-wppNr.js:48
+start @ index-DX-wppNr.js:48
+fetch @ index-DX-wppNr.js:48
+b0 @ index-DX-wppNr.js:48
+onSubscribe @ index-DX-wppNr.js:48
+subscribe @ index-DX-wppNr.js:48
+(anonymous) @ index-DX-wppNr.js:48
+q9 @ index-DX-wppNr.js:38
+vC @ index-DX-wppNr.js:40
+Cp @ index-DX-wppNr.js:40
+UL @ index-DX-wppNr.js:40
+nA @ index-DX-wppNr.js:38
+Phe @ index-DX-wppNr.js:40
+yA @ index-DX-wppNr.js:40
+SK @ index-DX-wppNr.js:40
+k @ index-DX-wppNr.js:25
+M @ index-DX-wppNr.js:25
+postMessage
+G @ index-DX-wppNr.js:25
+O @ index-DX-wppNr.js:25
+t.unstable_scheduleCallback @ index-DX-wppNr.js:25
+IK @ index-DX-wppNr.js:40
+pi @ index-DX-wppNr.js:40
+tl @ index-DX-wppNr.js:40
+kC @ index-DX-wppNr.js:40
+CC.render.U4.render @ index-DX-wppNr.js:40
+(anonymous) @ index-DX-wppNr.js:1107
+index-DX-wppNr.js:460  GET https://swishassistant.com/api/leagues/1a38dce8-8f49-4b2e-beb8-3ac7a5a4e5ee/team-logos 500 (Internal Server Error)
+(anonymous) @ index-DX-wppNr.js:460
+R_e @ index-DX-wppNr.js:460
+(anonymous) @ index-DX-wppNr.js:460
+await in (anonymous)
+Ku @ index-DX-wppNr.js:460
+(anonymous) @ index-DX-wppNr.js:460
+(anonymous) @ index-DX-wppNr.js:460
+vC @ index-DX-wppNr.js:40
+Cp @ index-DX-wppNr.js:40
+Phe @ index-DX-wppNr.js:40
+yA @ index-DX-wppNr.js:40
+UL @ index-DX-wppNr.js:40
+nA @ index-DX-wppNr.js:38
+(anonymous) @ index-DX-wppNr.js:40
+setTimeout
+s @ index-DX-wppNr.js:48
+o @ index-DX-wppNr.js:48
+batch @ index-DX-wppNr.js:48
+Nc @ index-DX-wppNr.js:48
+setData @ index-DX-wppNr.js:48
+onSuccess @ index-DX-wppNr.js:48
+A @ index-DX-wppNr.js:48
+Promise.then
+p @ index-DX-wppNr.js:48
+start @ index-DX-wppNr.js:48
+fetch @ index-DX-wppNr.js:48
+b0 @ index-DX-wppNr.js:48
+onSubscribe @ index-DX-wppNr.js:48
+subscribe @ index-DX-wppNr.js:48
+(anonymous) @ index-DX-wppNr.js:48
+q9 @ index-DX-wppNr.js:38
+vC @ index-DX-wppNr.js:40
+Cp @ index-DX-wppNr.js:40
+UL @ index-DX-wppNr.js:40
+nA @ index-DX-wppNr.js:38
+Phe @ index-DX-wppNr.js:40
+yA @ index-DX-wppNr.js:40
+SK @ index-DX-wppNr.js:40
+k @ index-DX-wppNr.js:25
+M @ index-DX-wppNr.js:25
+postMessage
+G @ index-DX-wppNr.js:25
+O @ index-DX-wppNr.js:25
+t.unstable_scheduleCallback @ index-DX-wppNr.js:25
+IK @ index-DX-wppNr.js:40
+pi @ index-DX-wppNr.js:40
+tl @ index-DX-wppNr.js:40
+kC @ index-DX-wppNr.js:40
+CC.render.U4.render @ index-DX-wppNr.js:40
+(anonymous) @ index-DX-wppNr.js:1107
+index-DX-wppNr.js:460  GET https://swishassistant.com/api/leagues/f2424d49-5451-472f-949d-8632c1ee747f/team-logos 500 (Internal Server Error)
+(anonymous) @ index-DX-wppNr.js:460
+R_e @ index-DX-wppNr.js:460
+(anonymous) @ index-DX-wppNr.js:460
+await in (anonymous)
+Ku @ index-DX-wppNr.js:460
+(anonymous) @ index-DX-wppNr.js:460
+(anonymous) @ index-DX-wppNr.js:460
+vC @ index-DX-wppNr.js:40
+Cp @ index-DX-wppNr.js:40
+Phe @ index-DX-wppNr.js:40
+yA @ index-DX-wppNr.js:40
+UL @ index-DX-wppNr.js:40
+nA @ index-DX-wppNr.js:38
+(anonymous) @ index-DX-wppNr.js:40
+setTimeout
+s @ index-DX-wppNr.js:48
+o @ index-DX-wppNr.js:48
+batch @ index-DX-wppNr.js:48
+Nc @ index-DX-wppNr.js:48
+setData @ index-DX-wppNr.js:48
+onSuccess @ index-DX-wppNr.js:48
+A @ index-DX-wppNr.js:48
+Promise.then
+p @ index-DX-wppNr.js:48
+start @ index-DX-wppNr.js:48
+fetch @ index-DX-wppNr.js:48
+b0 @ index-DX-wppNr.js:48
+onSubscribe @ index-DX-wppNr.js:48
+subscribe @ index-DX-wppNr.js:48
+(anonymous) @ index-DX-wppNr.js:48
+q9 @ index-DX-wppNr.js:38
+vC @ index-DX-wppNr.js:40
+Cp @ index-DX-wppNr.js:40
+UL @ index-DX-wppNr.js:40
+nA @ index-DX-wppNr.js:38
+Phe @ index-DX-wppNr.js:40
+yA @ index-DX-wppNr.js:40
+SK @ index-DX-wppNr.js:40
+k @ index-DX-wppNr.js:25
+M @ index-DX-wppNr.js:25
+postMessage
+G @ index-DX-wppNr.js:25
+O @ index-DX-wppNr.js:25
+t.unstable_scheduleCallback @ index-DX-wppNr.js:25
+IK @ index-DX-wppNr.js:40
+pi @ index-DX-wppNr.js:40
+tl @ index-DX-wppNr.js:40
+kC @ index-DX-wppNr.js:40
+CC.render.U4.render @ index-DX-wppNr.js:40
+(anonymous) @ index-DX-wppNr.js:1107
+index-DX-wppNr.js:460  GET https://swishassistant.com/api/leagues/4fe8e444-6fa3-4426-917c-23ad2b9bc88b/team-logos 500 (Internal Server Error)
+(anonymous) @ index-DX-wppNr.js:460
+R_e @ index-DX-wppNr.js:460
+(anonymous) @ index-DX-wppNr.js:460
+await in (anonymous)
+Ku @ index-DX-wppNr.js:460
+(anonymous) @ index-DX-wppNr.js:460
+(anonymous) @ index-DX-wppNr.js:460
+vC @ index-DX-wppNr.js:40
+Cp @ index-DX-wppNr.js:40
+Phe @ index-DX-wppNr.js:40
+yA @ index-DX-wppNr.js:40
+UL @ index-DX-wppNr.js:40
+nA @ index-DX-wppNr.js:38
+(anonymous) @ index-DX-wppNr.js:40
+setTimeout
+s @ index-DX-wppNr.js:48
+o @ index-DX-wppNr.js:48
+batch @ index-DX-wppNr.js:48
+Nc @ index-DX-wppNr.js:48
+setData @ index-DX-wppNr.js:48
+onSuccess @ index-DX-wppNr.js:48
+A @ index-DX-wppNr.js:48
+Promise.then
+p @ index-DX-wppNr.js:48
+start @ index-DX-wppNr.js:48
+fetch @ index-DX-wppNr.js:48
+b0 @ index-DX-wppNr.js:48
+onSubscribe @ index-DX-wppNr.js:48
+subscribe @ index-DX-wppNr.js:48
+(anonymous) @ index-DX-wppNr.js:48
+q9 @ index-DX-wppNr.js:38
+vC @ index-DX-wppNr.js:40
+Cp @ index-DX-wppNr.js:40
+UL @ index-DX-wppNr.js:40
+nA @ index-DX-wppNr.js:38
+Phe @ index-DX-wppNr.js:40
+yA @ index-DX-wppNr.js:40
+SK @ index-DX-wppNr.js:40
+k @ index-DX-wppNr.js:25
+M @ index-DX-wppNr.js:25
+postMessage
+G @ index-DX-wppNr.js:25
+O @ index-DX-wppNr.js:25
+t.unstable_scheduleCallback @ index-DX-wppNr.js:25
+IK @ index-DX-wppNr.js:40
+pi @ index-DX-wppNr.js:40
+tl @ index-DX-wppNr.js:40
+kC @ index-DX-wppNr.js:40
+CC.render.U4.render @ index-DX-wppNr.js:40
+(anonymous) @ index-DX-wppNr.js:1107
+index-DX-wppNr.js:460  GET https://swishassistant.com/api/leagues/236fdf0e-9ea0-42dc-bac6-48c3c014776e/team-logos 500 (Internal Server Error)
+(anonymous) @ index-DX-wppNr.js:460
+R_e @ index-DX-wppNr.js:460
+(anonymous) @ index-DX-wppNr.js:460
+await in (anonymous)
+Ku @ index-DX-wppNr.js:460
+(anonymous) @ index-DX-wppNr.js:460
+(anonymous) @ index-DX-wppNr.js:460
+vC @ index-DX-wppNr.js:40
+Cp @ index-DX-wppNr.js:40
+Phe @ index-DX-wppNr.js:40
+yA @ index-DX-wppNr.js:40
+UL @ index-DX-wppNr.js:40
+nA @ index-DX-wppNr.js:38
+(anonymous) @ index-DX-wppNr.js:40
+setTimeout
+s @ index-DX-wppNr.js:48
+o @ index-DX-wppNr.js:48
+batch @ index-DX-wppNr.js:48
+Nc @ index-DX-wppNr.js:48
+setData @ index-DX-wppNr.js:48
+onSuccess @ index-DX-wppNr.js:48
+A @ index-DX-wppNr.js:48
+Promise.then
+p @ index-DX-wppNr.js:48
+start @ index-DX-wppNr.js:48
+fetch @ index-DX-wppNr.js:48
+b0 @ index-DX-wppNr.js:48
+onSubscribe @ index-DX-wppNr.js:48
+subscribe @ index-DX-wppNr.js:48
+(anonymous) @ index-DX-wppNr.js:48
+q9 @ index-DX-wppNr.js:38
+vC @ index-DX-wppNr.js:40
+Cp @ index-DX-wppNr.js:40
+UL @ index-DX-wppNr.js:40
+nA @ index-DX-wppNr.js:38
+Phe @ index-DX-wppNr.js:40
+yA @ index-DX-wppNr.js:40
+SK @ index-DX-wppNr.js:40
+k @ index-DX-wppNr.js:25
+M @ index-DX-wppNr.js:25
+postMessage
+G @ index-DX-wppNr.js:25
+O @ index-DX-wppNr.js:25
+t.unstable_scheduleCallback @ index-DX-wppNr.js:25
+IK @ index-DX-wppNr.js:40
+pi @ index-DX-wppNr.js:40
+tl @ index-DX-wppNr.js:40
+kC @ index-DX-wppNr.js:40
+CC.render.U4.render @ index-DX-wppNr.js:40
+(anonymous) @ index-DX-wppNr.js:1107
+index-DX-wppNr.js:460  GET https://swishassistant.com/api/leagues/aed56847-5247-4f07-bdd0-5804fbfa6320/team-logos 500 (Internal Server Error)
+(anonymous) @ index-DX-wppNr.js:460
+R_e @ index-DX-wppNr.js:460
+(anonymous) @ index-DX-wppNr.js:460
+await in (anonymous)
+Ku @ index-DX-wppNr.js:460
+(anonymous) @ index-DX-wppNr.js:460
+(anonymous) @ index-DX-wppNr.js:460
+vC @ index-DX-wppNr.js:40
+Cp @ index-DX-wppNr.js:40
+Phe @ index-DX-wppNr.js:40
+yA @ index-DX-wppNr.js:40
+UL @ index-DX-wppNr.js:40
+nA @ index-DX-wppNr.js:38
+(anonymous) @ index-DX-wppNr.js:40
+setTimeout
+s @ index-DX-wppNr.js:48
+o @ index-DX-wppNr.js:48
+batch @ index-DX-wppNr.js:48
+Nc @ index-DX-wppNr.js:48
+setData @ index-DX-wppNr.js:48
+onSuccess @ index-DX-wppNr.js:48
+A @ index-DX-wppNr.js:48
+Promise.then
+p @ index-DX-wppNr.js:48
+start @ index-DX-wppNr.js:48
+fetch @ index-DX-wppNr.js:48
+b0 @ index-DX-wppNr.js:48
+onSubscribe @ index-DX-wppNr.js:48
+subscribe @ index-DX-wppNr.js:48
+(anonymous) @ index-DX-wppNr.js:48
+q9 @ index-DX-wppNr.js:38
+vC @ index-DX-wppNr.js:40
+Cp @ index-DX-wppNr.js:40
+UL @ index-DX-wppNr.js:40
+nA @ index-DX-wppNr.js:38
+Phe @ index-DX-wppNr.js:40
+yA @ index-DX-wppNr.js:40
+SK @ index-DX-wppNr.js:40
+k @ index-DX-wppNr.js:25
+M @ index-DX-wppNr.js:25
+postMessage
+G @ index-DX-wppNr.js:25
+O @ index-DX-wppNr.js:25
+t.unstable_scheduleCallback @ index-DX-wppNr.js:25
+IK @ index-DX-wppNr.js:40
+pi @ index-DX-wppNr.js:40
+tl @ index-DX-wppNr.js:40
+kC @ index-DX-wppNr.js:40
+CC.render.U4.render @ index-DX-wppNr.js:40
+(anonymous) @ index-DX-wppNr.js:1107
+index-DX-wppNr.js:40 ReferenceError: useMemo is not defined
+    at det (index-DX-wppNr.js:1107:51236)
+    at k4 (index-DX-wppNr.js:38:17031)
+    at FK (index-DX-wppNr.js:40:44104)
+    at PK (index-DX-wppNr.js:40:39822)
+    at jhe (index-DX-wppNr.js:40:39748)
+    at b_ (index-DX-wppNr.js:40:39598)
+    at NP (index-DX-wppNr.js:40:35960)
+    at UL (index-DX-wppNr.js:40:36765)
+    at nA (index-DX-wppNr.js:38:3288)
+    at index-DX-wppNr.js:40:34286
+fP @ index-DX-wppNr.js:40
+AK.a.componentDidCatch.n.callback @ index-DX-wppNr.js:40
+yL @ index-DX-wppNr.js:38
+ML @ index-DX-wppNr.js:40
+NK @ index-DX-wppNr.js:40
+Che @ index-DX-wppNr.js:40
+Phe @ index-DX-wppNr.js:40
+yA @ index-DX-wppNr.js:40
+UL @ index-DX-wppNr.js:40
+nA @ index-DX-wppNr.js:38
+(anonymous) @ index-DX-wppNr.js:40
+setTimeout
+s @ index-DX-wppNr.js:48
+o @ index-DX-wppNr.js:48
+batch @ index-DX-wppNr.js:48
+Nc @ index-DX-wppNr.js:48
+setData @ index-DX-wppNr.js:48
+onSuccess @ index-DX-wppNr.js:48
+A @ index-DX-wppNr.js:48
+Promise.then
+p @ index-DX-wppNr.js:48
+start @ index-DX-wppNr.js:48
+fetch @ index-DX-wppNr.js:48
+b0 @ index-DX-wppNr.js:48
+setOptions @ index-DX-wppNr.js:48
+(anonymous) @ index-DX-wppNr.js:48
+vC @ index-DX-wppNr.js:40
+Cp @ index-DX-wppNr.js:40
+Phe @ index-DX-wppNr.js:40
+yA @ index-DX-wppNr.js:40
+UL @ index-DX-wppNr.js:40
+nA @ index-DX-wppNr.js:38
+(anonymous) @ index-DX-wppNr.js:40
+setTimeout
+s @ index-DX-wppNr.js:48
+o @ index-DX-wppNr.js:48
+batch @ index-DX-wppNr.js:48
+Nc @ index-DX-wppNr.js:48
+setData @ index-DX-wppNr.js:48
+onSuccess @ index-DX-wppNr.js:48
+A @ index-DX-wppNr.js:48
+Promise.then
+p @ index-DX-wppNr.js:48
+start @ index-DX-wppNr.js:48
+fetch @ index-DX-wppNr.js:48
+b0 @ index-DX-wppNr.js:48
+onSubscribe @ index-DX-wppNr.js:48
+subscribe @ index-DX-wppNr.js:48
+(anonymous) @ index-DX-wppNr.js:48
+q9 @ index-DX-wppNr.js:38
+vC @ index-DX-wppNr.js:40
+Cp @ index-DX-wppNr.js:40
+Phe @ index-DX-wppNr.js:40
+yA @ index-DX-wppNr.js:40
+UL @ index-DX-wppNr.js:40
+nA @ index-DX-wppNr.js:38
+(anonymous) @ index-DX-wppNr.js:40
+index-DX-wppNr.js:408 ErrorBoundary caught an error: ReferenceError: useMemo is not defined
+    at det (index-DX-wppNr.js:1107:51236)
+    at k4 (index-DX-wppNr.js:38:17031)
+    at FK (index-DX-wppNr.js:40:44104)
+    at PK (index-DX-wppNr.js:40:39822)
+    at jhe (index-DX-wppNr.js:40:39748)
+    at b_ (index-DX-wppNr.js:40:39598)
+    at NP (index-DX-wppNr.js:40:35960)
+    at UL (index-DX-wppNr.js:40:36765)
+    at nA (index-DX-wppNr.js:38:3288)
+    at index-DX-wppNr.js:40:34286 {componentStack: '\n    at det (https://swishassistant.com/assets/ind…sistant.com/assets/index-DX-wppNr.js:1107:148127)'}
+componentDidCatch @ index-DX-wppNr.js:408
+AK.a.componentDidCatch.n.callback @ index-DX-wppNr.js:40
+yL @ index-DX-wppNr.js:38
+ML @ index-DX-wppNr.js:40
+NK @ index-DX-wppNr.js:40
+Che @ index-DX-wppNr.js:40
+Phe @ index-DX-wppNr.js:40
+yA @ index-DX-wppNr.js:40
+UL @ index-DX-wppNr.js:40
+nA @ index-DX-wppNr.js:38
+(anonymous) @ index-DX-wppNr.js:40
+setTimeout
+s @ index-DX-wppNr.js:48
+o @ index-DX-wppNr.js:48
+batch @ index-DX-wppNr.js:48
+Nc @ index-DX-wppNr.js:48
+setData @ index-DX-wppNr.js:48
+onSuccess @ index-DX-wppNr.js:48
+A @ index-DX-wppNr.js:48
+Promise.then
+p @ index-DX-wppNr.js:48
+start @ index-DX-wppNr.js:48
+fetch @ index-DX-wppNr.js:48
+b0 @ index-DX-wppNr.js:48
+setOptions @ index-DX-wppNr.js:48
+(anonymous) @ index-DX-wppNr.js:48
+vC @ index-DX-wppNr.js:40
+Cp @ index-DX-wppNr.js:40
+Phe @ index-DX-wppNr.js:40
+yA @ index-DX-wppNr.js:40
+UL @ index-DX-wppNr.js:40
+nA @ index-DX-wppNr.js:38
+(anonymous) @ index-DX-wppNr.js:40
+setTimeout
+s @ index-DX-wppNr.js:48
+o @ index-DX-wppNr.js:48
+batch @ index-DX-wppNr.js:48
+Nc @ index-DX-wppNr.js:48
+setData @ index-DX-wppNr.js:48
+onSuccess @ index-DX-wppNr.js:48
+A @ index-DX-wppNr.js:48
+Promise.then
+p @ index-DX-wppNr.js:48
+start @ index-DX-wppNr.js:48
+fetch @ index-DX-wppNr.js:48
+b0 @ index-DX-wppNr.js:48
+onSubscribe @ index-DX-wppNr.js:48
+subscribe @ index-DX-wppNr.js:48
+(anonymous) @ index-DX-wppNr.js:48
+q9 @ index-DX-wppNr.js:38
+vC @ index-DX-wppNr.js:40
+Cp @ index-DX-wppNr.js:40
+Phe @ index-DX-wppNr.js:40
+yA @ index-DX-wppNr.js:40
+UL @ index-DX-wppNr.js:40
+nA @ index-DX-wppNr.js:38
+(anonymous) @ index-DX-wppNr.js:40

@@ -2106,7 +2106,7 @@ export default function LeaguePage() {
             : JSON.stringify(cleanUrls);
         
         const { data, error } = await supabase
-          .from('leagues')
+          .from('competitions')
           .update({ instagram_embed_url: instagramValue })
           .eq('league_id', league.league_id)
           .select()
@@ -2136,7 +2136,7 @@ export default function LeaguePage() {
       setUpdatingYoutube(true);
       try {
         const { data, error } = await supabase
-          .from('leagues')
+          .from('competitions')
           .update({ youtube_embed_url: youtubeUrl })
           .eq('league_id', league.league_id)
           .select()

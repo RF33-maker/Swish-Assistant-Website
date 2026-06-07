@@ -310,7 +310,7 @@ export default function GamePage() {
     queryFn: async () => {
       if (!gameData?.league_id) return null;
       const { data, error } = await db
-        .from('leagues')
+        .from('competitions')
         .select('slug, banner_url, logo_url, primary_color, secondary_color, accent_color')
         .eq('league_id', gameData.league_id)
         .single();
