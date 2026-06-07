@@ -761,15 +761,26 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
           )
         );
 
+        // Helper: fetch league info via server endpoint (bypasses RLS /
+        // column-name mismatch on the anon client's leagues table).
+        const fetchLeagueInfo = async (ids: string[]): Promise<LeagueRow[]> => {
+          if (ids.length === 0) return [];
+          try {
+            const resp = await fetch('/api/public/league-info', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ids }),
+            });
+            if (!resp.ok) return [];
+            const map = await resp.json() as Record<string, { name: string; parent_league_id: string | null; age_group: string | null; stop: number | null }>;
+            return Object.entries(map).map(([league_id, info]) => ({ league_id, ...info }));
+          } catch {
+            return [];
+          }
+        };
+
         const matchLeaguesPromise: Promise<{ data: LeagueRow[] }> =
-          matchLeagueIds.length > 0
-            ? Promise.resolve(
-                supabase
-                  .from('leagues')
-                  .select('league_id, name, parent_league_id, age_group, stop')
-                  .in('league_id', matchLeagueIds)
-              ).then(({ data }) => ({ data: (data as LeagueRow[] | null) || [] }))
-            : Promise.resolve({ data: [] });
+          fetchLeagueInfo(matchLeagueIds).then(data => ({ data }));
 
         // Render the banner from the basic players-table info before
         // we wait on stats so a slow / timing-out player_stats query
@@ -1005,23 +1016,11 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
 
             const extraLeagueInfoFetch: Promise<Record<string, { name: string; parent_league_id: string | null; age_group: string | null; stop: number | null }>> =
               extraLeagueIds.length > 0
-                ? supabase
-                    .from('leagues')
-                    .select('league_id, name, parent_league_id, age_group, stop')
-                    .in('league_id', extraLeagueIds)
-                    .then(({ data }) => {
-                      const result: Record<string, any> = {};
-                      (data || []).forEach((row: any) => {
-                        result[row.league_id] = {
-                          name: row.name,
-                          parent_league_id: row.parent_league_id || null,
-                          age_group: row.age_group || null,
-                          stop: row.stop ?? null,
-                        };
-                      });
-                      return result;
-                    })
-                    .catch(() => ({}))
+                ? fetchLeagueInfo(extraLeagueIds).then(rows => {
+                    const result: Record<string, any> = {};
+                    rows.forEach(row => { result[row.league_id] = { name: row.name, parent_league_id: row.parent_league_id || null, age_group: row.age_group || null, stop: row.stop ?? null }; });
+                    return result;
+                  }).catch(() => ({}))
                 : Promise.resolve({});
 
             const [gamesResp, publicLeaguesResp, extraLeagueInfoMap] = await Promise.all([
@@ -1064,13 +1063,8 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
               (pid) => !leagueMapLocal.has(pid)
             );
             if (uniqueParentIds.length > 0) {
-              const { data: parentLeagues } = await supabase
-                .from('leagues')
-                .select('league_id, name')
-                .in('league_id', uniqueParentIds);
-              if (parentLeagues) {
-                parentLeagues.forEach((pl) => leagueMapLocal.set(pl.league_id, pl.name));
-              }
+              const parentLeagues = await fetchLeagueInfo(uniqueParentIds);
+              parentLeagues.forEach((pl) => leagueMapLocal.set(pl.league_id, pl.name));
             }
 
             if (leagueMapLocal.size > 0) {
