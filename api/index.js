@@ -447,7 +447,16 @@ import multer from "multer";
 import OpenAI from "openai";
 import * as fs from "fs";
 import * as path from "path";
-var openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+var _openai = null;
+function getOpenAI() {
+  if (!_openai) {
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY environment variable is not set");
+    }
+    _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  }
+  return _openai;
+}
 function generatePlayerSlug(name) {
   return name.toLowerCase().trim().replace(/[^\w\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").replace(/^-+|-+$/g, "");
 }
@@ -606,7 +615,7 @@ ${league_data}`
         systemPrompt = "You are an expert basketball league analyst. Help with performance analysis, player statistics, team strategies, and league insights. Be concise and data-driven. Bold all player and team names. At the very end append: SUGGESTIONS: <q1> | <q2> | <q3>";
         userMessage = `Question about league ${league_id}: ${question}`;
       }
-      const completion = await openai.chat.completions.create({
+      const completion = await getOpenAI().chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
           { role: "system", content: systemPrompt },
