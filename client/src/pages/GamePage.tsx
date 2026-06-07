@@ -23,10 +23,12 @@ interface GameSchedule {
 }
 
 interface PlayerStat {
-  firstname: string;
-  familyname: string;
-  team_name: string;
-  side: string;
+  firstname?: string;
+  familyname?: string;
+  full_name?: string;
+  player_name?: string;
+  team_name?: string;
+  side?: string;
   spoints: number;
   sreboundstotal: number;
   sassists: number;
@@ -788,11 +790,17 @@ export default function GamePage() {
   const awayTeamRecord = computeRecord(awayTeamId);
 
   // Computed before early returns so hook order is stable
-  const homePlayerStats = playerStats?.filter(p => p.side === "1")
-    .sort((a, b) => (b.spoints || 0) - (a.spoints || 0)) || [];
+  const hasSideData = playerStats?.some(p => p.side === "1" || p.side === "2");
 
-  const awayPlayerStats = playerStats?.filter(p => p.side === "2")
-    .sort((a, b) => (b.spoints || 0) - (a.spoints || 0)) || [];
+  const homePlayerStats = (hasSideData
+    ? playerStats?.filter(p => p.side === "1")
+    : playerStats?.filter(p => p.team_name === gameData?.hometeam)
+  )?.sort((a, b) => (b.spoints || 0) - (a.spoints || 0)) || [];
+
+  const awayPlayerStats = (hasSideData
+    ? playerStats?.filter(p => p.side === "2")
+    : playerStats?.filter(p => p.team_name === gameData?.awayteam)
+  )?.sort((a, b) => (b.spoints || 0) - (a.spoints || 0)) || [];
 
   const gameSuggestions = useMemo(() => {
     const home = gameData?.hometeam || 'home team';
@@ -877,13 +885,26 @@ export default function GamePage() {
     }
   }
 
-  const isGamePlayed = isFinal || isLive;
-  
-  const homeTeamStats = teamStats?.find(t => t.side === "1");
-  const awayTeamStats = teamStats?.find(t => t.side === "2");
-  
-  const homeScore = homeTeamStats?.tot_spoints ?? null;
-  const awayScore = awayTeamStats?.tot_spoints ?? null;
+  // Show stats section if game is live/final OR if stats data already exists
+  const hasStatsData = (teamStats?.length ?? 0) > 0 || (playerStats?.length ?? 0) > 0;
+  const isGamePlayed = isFinal || isLive || hasStatsData;
+
+  // Find team stats — try side-based match first, fall back to name match
+  const hasSideTeamData = teamStats?.some(t => t.side === "1" || t.side === "2");
+  const homeTeamStats = hasSideTeamData
+    ? teamStats?.find(t => t.side === "1")
+    : teamStats?.find(t => t.name === gameData?.hometeam);
+  const awayTeamStats = hasSideTeamData
+    ? teamStats?.find(t => t.side === "2")
+    : teamStats?.find(t => t.name === gameData?.awayteam);
+
+  // Score from team_stats; fall back to latest live event score string ("home-away")
+  const latestScoredEvent = liveEvents?.find(e => e.score && e.score.includes('-'));
+  const liveEventScores = latestScoredEvent?.score
+    ? latestScoredEvent.score.split('-').map(Number)
+    : null;
+  const homeScore = homeTeamStats?.tot_spoints ?? (liveEventScores ? liveEventScores[0] : null);
+  const awayScore = awayTeamStats?.tot_spoints ?? (liveEventScores ? liveEventScores[1] : null);
 
   return (
     <div className="min-h-screen bg-[#fffaf1] dark:bg-neutral-950 text-slate-800 dark:text-white transition-colors">
@@ -1357,7 +1378,7 @@ export default function GamePage() {
                                 </div>
                                 {[...homePlayerStats].sort((a, b) => (b.spoints || 0) - (a.spoints || 0)).slice(0, 3).map((p, i) => (
                                   <div key={i} className="flex justify-between items-center text-sm">
-                                    <span className="text-slate-700 dark:text-slate-300">{p.firstname} {p.familyname}</span>
+                                    <span className="text-slate-700 dark:text-slate-300">{p.full_name || p.player_name || `${p.firstname || ''} ${p.familyname || ''}`.trim()}</span>
                                     <span className="font-bold text-orange-500">{p.spoints || 0} PTS</span>
                                   </div>
                                 ))}
@@ -1369,7 +1390,7 @@ export default function GamePage() {
                                 </div>
                                 {[...awayPlayerStats].sort((a, b) => (b.spoints || 0) - (a.spoints || 0)).slice(0, 3).map((p, i) => (
                                   <div key={i} className="flex justify-between items-center text-sm">
-                                    <span className="text-slate-700 dark:text-slate-300">{p.firstname} {p.familyname}</span>
+                                    <span className="text-slate-700 dark:text-slate-300">{p.full_name || p.player_name || `${p.firstname || ''} ${p.familyname || ''}`.trim()}</span>
                                     <span className="font-bold text-orange-500">{p.spoints || 0} PTS</span>
                                   </div>
                                 ))}
@@ -1450,7 +1471,7 @@ export default function GamePage() {
                                 {homePlayerStats.map((player, idx) => (
                                   <tr key={idx} className="border-t border-orange-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800">
                                     <td className="py-2 px-3 sticky left-0 bg-white dark:bg-neutral-800 font-medium whitespace-nowrap">
-                                      {player.firstname} {player.familyname}
+                                      {player.full_name || player.player_name || `${player.firstname || ''} ${player.familyname || ''}`.trim() || 'Unknown'}
                                     </td>
                                     <td className="text-center py-2 px-2 text-slate-500">{parseMinutes(player.sminutes)}</td>
                                     <td className="text-center py-2 px-2 font-semibold text-orange-500">{player.spoints || 0}</td>
@@ -1506,7 +1527,7 @@ export default function GamePage() {
                                 {awayPlayerStats.map((player, idx) => (
                                   <tr key={idx} className="border-t border-orange-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800">
                                     <td className="py-2 px-3 sticky left-0 bg-white dark:bg-neutral-800 font-medium whitespace-nowrap">
-                                      {player.firstname} {player.familyname}
+                                      {player.full_name || player.player_name || `${player.firstname || ''} ${player.familyname || ''}`.trim() || 'Unknown'}
                                     </td>
                                     <td className="text-center py-2 px-2 text-slate-500">{parseMinutes(player.sminutes)}</td>
                                     <td className="text-center py-2 px-2 font-semibold text-orange-500">{player.spoints || 0}</td>
