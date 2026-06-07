@@ -218,7 +218,7 @@ export function GameSwitcherBar({ leagueId, currentGameKey, isTestMode }: GameSw
     const diffDays = Math.floor(Math.abs(diffMs) / (1000 * 60 * 60 * 24));
 
     if (diffDays === 0) {
-      return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
     }
     if (diffDays === 1 && diffMs > 0) {
       return 'Yesterday';
@@ -226,7 +226,7 @@ export function GameSwitcherBar({ leagueId, currentGameKey, isTestMode }: GameSw
     if (diffDays === 1 && diffMs < 0) {
       return 'Tomorrow';
     }
-    return date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+    return date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
   };
 
   const handleGameClick = (game: Game) => {

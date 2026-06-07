@@ -137,7 +137,7 @@ function formatMatchTime(matchtime: string): string {
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-    timeZone: 'Europe/London'
+    timeZone: 'UTC'
   });
 }
 
@@ -148,7 +148,7 @@ function formatDate(matchtime: string): string {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
-    timeZone: 'Europe/London'
+    timeZone: 'UTC'
   });
 }
 
@@ -157,7 +157,7 @@ function formatTime(matchtime: string): string {
   return date.toLocaleTimeString('en-GB', {
     hour: '2-digit',
     minute: '2-digit',
-    timeZone: 'Europe/London'
+    timeZone: 'UTC'
   });
 }
 
