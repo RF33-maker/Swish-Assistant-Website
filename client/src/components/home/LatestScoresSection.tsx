@@ -85,7 +85,7 @@ const FINAL_STATUSES = new Set([
 const LIVE_STATUS_KEYWORDS = ["live", "in_progress", "in progress", "playing", "q1", "q2", "q3", "q4", "ot", "halftime", "half time"];
 
 function isFinal(s: string | null | undefined) {
-  if (!s) return true; // assume final when scores present and no status given
+  if (!s) return false; // unknown status — don't assume final
   return FINAL_STATUSES.has(s.toLowerCase().trim());
 }
 
@@ -136,7 +136,7 @@ function upcomingLabel(matchTime: string, now: Date): string {
   const today = startOfDay(now).getTime();
   const day = startOfDay(t).getTime();
   const dayDiff = Math.round((day - today) / (24 * 60 * 60 * 1000));
-  if (dayDiff <= 0) return "TONIGHT";
+  if (dayDiff <= 0) return "TODAY";
   if (dayDiff === 1) return "TOMORROW";
   return "UPCOMING";
 }
@@ -209,6 +209,9 @@ export default function LatestScoresSection() {
       const now = new Date();
       const windowEnd = new Date(now.getTime() + UPCOMING_WINDOW_MS);
 
+      // Look back 6 hours so in-progress games that started earlier are included
+      const windowStart = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+
       const [resultsRes, scheduleRes] = await Promise.all([
         supabase
           .from("v_game_results")
@@ -223,7 +226,7 @@ export default function LatestScoresSection() {
           .from("game_schedule")
           .select("game_key, league_id, matchtime, hometeam, awayteam, status")
           .in("league_id", leagueIds)
-          .gte("matchtime", now.toISOString())
+          .gte("matchtime", windowStart.toISOString())
           .lte("matchtime", windowEnd.toISOString())
           .order("matchtime", { ascending: true })
           .limit(200)
@@ -233,6 +236,15 @@ export default function LatestScoresSection() {
       const games = resultsRes.data;
       const schedule = scheduleRes.data;
 
+      // Build a status lookup from game_schedule — it's the authoritative source
+      // for live/in-progress status (v_game_results may have stale or null status)
+      const scheduleStatusByKey: Record<string, string> = {};
+      const scheduleRowByKey: Record<string, ScheduleRow> = {};
+      (schedule || []).forEach((s) => {
+        if (s.game_key && s.status) scheduleStatusByKey[s.game_key] = s.status;
+        if (s.game_key) scheduleRowByKey[s.game_key] = s;
+      });
+
       const liveByLeague: Record<string, LiveItem[]> = {};
       const liveKeys = new Set<string>();
       const finishedKeys = new Set<string>();
@@ -240,8 +252,10 @@ export default function LatestScoresSection() {
 
       (games || []).forEach((g) => {
         if (!g.home_team || !g.away_team) return;
-        // Live: explicit live status, OR partial scores with a non-final status.
-        if (g.game_status && !isFinal(g.game_status) && isLiveStatus(g.game_status)) {
+        // Use game_schedule status as override — it's more reliable than v_game_results
+        const effectiveStatus = (g.game_key && scheduleStatusByKey[g.game_key]) || g.game_status;
+        // Live: explicit live status in either source
+        if (isLiveStatus(effectiveStatus)) {
           if (g.game_key) liveKeys.add(g.game_key);
           if (!liveByLeague[g.league_id]) liveByLeague[g.league_id] = [];
           liveByLeague[g.league_id].push({
@@ -258,7 +272,7 @@ export default function LatestScoresSection() {
           return;
         }
         if (g.home_score === null || g.away_score === null) return;
-        if (!isFinal(g.game_status)) return;
+        if (!isFinal(effectiveStatus)) return;
         if (g.game_key) finishedKeys.add(g.game_key);
         if (!resultsByLeague[g.league_id]) resultsByLeague[g.league_id] = [];
         resultsByLeague[g.league_id].push(g);
@@ -271,7 +285,7 @@ export default function LatestScoresSection() {
         const statusLower = (s.status || "").toLowerCase();
         if (FINAL_STATUSES.has(statusLower)) return;
 
-        // Live game found in schedule (status indicates live)
+        // Live game found only in schedule (no scores yet)
         if (isLiveStatus(s.status)) {
           liveKeys.add(s.game_key);
           if (!liveByLeague[s.league_id]) liveByLeague[s.league_id] = [];
