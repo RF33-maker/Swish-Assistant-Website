@@ -1,6 +1,10 @@
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const tailwindConfig = require('./tailwind.config.cjs');
+
 export default {
   plugins: {
-    tailwindcss: { config: './tailwind.config.cjs' },
+    tailwindcss: tailwindConfig,
     autoprefixer: {},
   },
 };
