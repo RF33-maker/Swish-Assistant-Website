@@ -85,7 +85,7 @@ const FINAL_STATUSES = new Set([
 const LIVE_STATUS_KEYWORDS = ["live", "in_progress", "in progress", "playing", "q1", "q2", "q3", "q4", "ot", "halftime", "half time"];
 
 function isFinal(s: string | null | undefined) {
-  if (!s) return true; // assume final when scores present and no status given
+  if (!s) return false; // unknown status — don't assume final
   return FINAL_STATUSES.has(s.toLowerCase().trim());
 }
 
@@ -209,6 +209,9 @@ export default function LatestScoresSection() {
       const now = new Date();
       const windowEnd = new Date(now.getTime() + UPCOMING_WINDOW_MS);
 
+      // Look back 6 hours so in-progress games that started earlier are included
+      const windowStart = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+
       const [resultsRes, scheduleRes] = await Promise.all([
         supabase
           .from("v_game_results")
@@ -223,7 +226,7 @@ export default function LatestScoresSection() {
           .from("game_schedule")
           .select("game_key, league_id, matchtime, hometeam, awayteam, status")
           .in("league_id", leagueIds)
-          .gte("matchtime", now.toISOString())
+          .gte("matchtime", windowStart.toISOString())
           .lte("matchtime", windowEnd.toISOString())
           .order("matchtime", { ascending: true })
           .limit(200)
