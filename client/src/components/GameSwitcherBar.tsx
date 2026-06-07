@@ -1,6 +1,5 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
-import { supabase } from "@/lib/supabase";
 import { TeamLogo } from "./TeamLogo";
 import { generateGameSlug } from "@/lib/gameSlug";
 import { CheckCircle2, Clock, Radio } from "lucide-react";
@@ -33,122 +32,66 @@ export function GameSwitcherBar({ leagueId, currentGameKey, isTestMode }: GameSw
   const [, navigate] = useLocation();
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const db = useMemo(() => {
-    return isTestMode ? supabase.schema("test") : supabase;
-  }, [isTestMode]);
-
   const fetchGames = async () => {
+    try {
+      const schema = isTestMode ? "test" : "public";
+      const res = await fetch(`/api/game-switcher/${leagueId}?schema=${schema}`);
+      if (!res.ok) return;
+      const { games: rawGames, teamStats, liveEvents } = await res.json() as {
+        games: Game[];
+        teamStats: { game_key: string; name: string; tot_spoints: number }[];
+        liveEvents: { game_key: string; period: number; clock: string; created_at: string }[];
+      };
+
+      const uniqueGames: Game[] = rawGames.map(g => ({ ...g }));
+
+      const scoresByGame: Record<string, { home_score?: number; away_score?: number }> = {};
+      teamStats.forEach(stat => {
+        if (!scoresByGame[stat.game_key]) scoresByGame[stat.game_key] = {};
+        const game = uniqueGames.find(g => g.game_key === stat.game_key);
+        if (!game) return;
+        const sn = (stat.name || '').toLowerCase().trim();
+        const ht = (game.hometeam || '').toLowerCase().trim();
+        const at = (game.awayteam || '').toLowerCase().trim();
+        if (sn === ht || sn.includes(ht) || ht.includes(sn)) {
+          scoresByGame[stat.game_key].home_score = stat.tot_spoints;
+        } else if (sn === at || sn.includes(at) || at.includes(sn)) {
+          scoresByGame[stat.game_key].away_score = stat.tot_spoints;
+        }
+      });
+      uniqueGames.forEach(game => {
+        game.home_score = scoresByGame[game.game_key]?.home_score;
+        game.away_score = scoresByGame[game.game_key]?.away_score;
+      });
+
+      const latestByGame: Record<string, { period: number; clock: string; created_at: string }> = {};
+      liveEvents.forEach(ev => {
+        if (!latestByGame[ev.game_key]) {
+          latestByGame[ev.game_key] = { period: ev.period, clock: ev.clock, created_at: ev.created_at };
+        }
+      });
+
+      const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
       const now = new Date();
-      const sevenDaysAgo = new Date(now);
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      const sevenDaysFromNow = new Date(now);
-      sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
-
-      let fetchedGames: any[] = [];
-
-      const [liveResponse, rangeResponse] = await Promise.all([
-        db
-          .from("game_schedule")
-          .select("game_key, hometeam, awayteam, matchtime, status")
-          .eq("league_id", leagueId)
-          .or("status.ilike.%live%,status.eq.in_progress"),
-        db
-          .from("game_schedule")
-          .select("game_key, hometeam, awayteam, matchtime, status")
-          .eq("league_id", leagueId)
-          .gte("matchtime", sevenDaysAgo.toISOString())
-          .lte("matchtime", sevenDaysFromNow.toISOString())
-          .order("matchtime", { ascending: true })
-      ]);
-
-      fetchedGames = [...(liveResponse.data || []), ...(rangeResponse.data || [])];
-
-      const uniqueGames = fetchedGames.filter((game, index, self) =>
-        index === self.findIndex(g => g.game_key === game.game_key)
-      );
-
-      if (uniqueGames.length > 0) {
-        const gameKeys = uniqueGames.map(g => g.game_key);
-        const { data: teamStatsData } = await db
-          .from("team_stats")
-          .select("game_key, name, tot_spoints")
-          .in("game_key", gameKeys);
-
-        const scoresByGame: Record<string, { home_score?: number; away_score?: number }> = {};
-
-        if (teamStatsData) {
-          teamStatsData.forEach(stat => {
-            if (!scoresByGame[stat.game_key]) {
-              scoresByGame[stat.game_key] = {};
-            }
-            const game = uniqueGames.find(g => g.game_key === stat.game_key);
-            if (game) {
-              const statNameLower = (stat.name || '').toLowerCase().trim();
-              const homeTeamLower = (game.hometeam || '').toLowerCase().trim();
-              const awayTeamLower = (game.awayteam || '').toLowerCase().trim();
-
-              if (statNameLower === homeTeamLower ||
-                  statNameLower.includes(homeTeamLower) ||
-                  homeTeamLower.includes(statNameLower)) {
-                scoresByGame[stat.game_key].home_score = stat.tot_spoints;
-              } else if (statNameLower === awayTeamLower ||
-                         statNameLower.includes(awayTeamLower) ||
-                         awayTeamLower.includes(statNameLower)) {
-                scoresByGame[stat.game_key].away_score = stat.tot_spoints;
-              }
-            }
-          });
-        }
-
-        uniqueGames.forEach(game => {
-          game.home_score = scoresByGame[game.game_key]?.home_score;
-          game.away_score = scoresByGame[game.game_key]?.away_score;
-        });
-      }
-
-      let live = uniqueGames.filter(g => getGameCategory(g) === 'live');
-
-      if (live.length > 0) {
-        const liveKeys = live.map(g => g.game_key);
-        const { data: liveEventsData } = await db
-          .from("live_events")
-          .select("game_key, period, clock, created_at")
-          .in("game_key", liveKeys)
-          .order("created_at", { ascending: false });
-
-        const latestByGame: Record<string, { period: number; clock: string; created_at: string }> = {};
-        if (liveEventsData) {
-          liveEventsData.forEach(ev => {
-            if (!latestByGame[ev.game_key]) {
-              latestByGame[ev.game_key] = { period: ev.period, clock: ev.clock, created_at: ev.created_at };
-            }
-          });
-        }
-
-        const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
-        const now = new Date();
-        uniqueGames.forEach(game => {
-          if (getGameCategory(game) !== 'live') return;
-          const latest = latestByGame[game.game_key];
-          if (latest) {
-            game.current_period = latest.period;
-            game.current_clock = latest.clock;
-            const timeSinceLastEvent = now.getTime() - new Date(latest.created_at).getTime();
-            if (timeSinceLastEvent >= FOUR_HOURS_MS) {
-              game.status = 'final';
-            }
-          } else {
-            const matchDate = new Date(game.matchtime);
-            const timeSinceStart = now.getTime() - matchDate.getTime();
-            if (isNaN(timeSinceStart) || timeSinceStart >= FOUR_HOURS_MS) {
-              game.status = 'final';
-            }
+      uniqueGames.forEach(game => {
+        if (getGameCategory(game) !== 'live') return;
+        const latest = latestByGame[game.game_key];
+        if (latest) {
+          game.current_period = latest.period;
+          game.current_clock = latest.clock;
+          if (now.getTime() - new Date(latest.created_at).getTime() >= FOUR_HOURS_MS) {
+            game.status = 'final';
           }
-        });
+        } else {
+          const matchDate = new Date(game.matchtime);
+          const timeSinceStart = now.getTime() - matchDate.getTime();
+          if (isNaN(timeSinceStart) || timeSinceStart >= FOUR_HOURS_MS) {
+            game.status = 'final';
+          }
+        }
+      });
 
-        live = uniqueGames.filter(g => getGameCategory(g) === 'live');
-      }
-
+      const live = uniqueGames.filter(g => getGameCategory(g) === 'live');
       setLiveCount(live.length);
 
       if (!hasSetDefaultTab) {
@@ -162,6 +105,9 @@ export function GameSwitcherBar({ leagueId, currentGameKey, isTestMode }: GameSw
       }
 
       setAllGames(uniqueGames);
+    } catch (err) {
+      console.error("[GameSwitcherBar] fetch error", err);
+    }
   };
 
   useEffect(() => {
