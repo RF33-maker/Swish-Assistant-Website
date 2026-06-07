@@ -55,7 +55,7 @@ const leagueLogoFetching = new Map<string, Promise<LeagueLogoData>>();
 async function getLeagueLogoViaSupabase(leagueId: string): Promise<LeagueLogoData> {
   try {
     const { data, error } = await supabase
-      .from('leagues')
+      .from('competitions')
       .select('logo_url, parent_league_id, brand_primary_colour')
       .eq('league_id', leagueId)
       .single();
@@ -71,7 +71,7 @@ async function getLeagueLogoViaSupabase(leagueId: string): Promise<LeagueLogoDat
 
     if (data.parent_league_id) {
       const { data: parentData } = await supabase
-        .from('leagues')
+        .from('competitions')
         .select('logo_url, brand_primary_colour')
         .eq('league_id', data.parent_league_id)
         .single();

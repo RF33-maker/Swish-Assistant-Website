@@ -31,7 +31,6 @@ function ensureInitialized(): Promise<void> {
   if (!initPromise) {
     initPromise = (async () => {
       await registerRoutes(app);
-
       app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
         const status = err.status || err.statusCode || 500;
         const message = err.message || "Internal Server Error";
@@ -44,10 +43,7 @@ function ensureInitialized(): Promise<void> {
 
 ensureInitialized().catch(console.error);
 
-export default async function handler(
-  req: IncomingMessage,
-  res: ServerResponse
-) {
+export default async function handler(req: IncomingMessage, res: ServerResponse) {
   await ensureInitialized();
   return new Promise<void>((resolve, reject) => {
     res.on("finish", resolve);

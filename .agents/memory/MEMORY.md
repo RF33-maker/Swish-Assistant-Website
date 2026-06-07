@@ -1,3 +1,4 @@
 - [Trending Performance backend caching](trending-perf-backend.md) — vw_player_game_scores times out from browser; must query server-side with in-memory cache.
 - [Leagues↔Competitions rename](leagues-competitions-rename.md) — "league" = brand, "competition" = season; DB migration still needed; two intentional .from("leagues") calls must stay.
 - [Parse proxy pattern](parse-proxy-pattern.md) — /api/parse must use relative URL in frontend and be proxied server-side via Express to avoid CORS; VITE_BACKEND_URL is the Python backend (a separate Replit project, not Render).
+- [Vercel serverless bundling](vercel-bundle.md) — Vercel can't resolve local server/ imports at runtime; esbuild bundles api/_source.ts into api/index.js at deploy time.
