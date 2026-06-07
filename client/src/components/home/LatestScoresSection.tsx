@@ -236,6 +236,15 @@ export default function LatestScoresSection() {
       const games = resultsRes.data;
       const schedule = scheduleRes.data;
 
+      // Build a status lookup from game_schedule — it's the authoritative source
+      // for live/in-progress status (v_game_results may have stale or null status)
+      const scheduleStatusByKey: Record<string, string> = {};
+      const scheduleRowByKey: Record<string, ScheduleRow> = {};
+      (schedule || []).forEach((s) => {
+        if (s.game_key && s.status) scheduleStatusByKey[s.game_key] = s.status;
+        if (s.game_key) scheduleRowByKey[s.game_key] = s;
+      });
+
       const liveByLeague: Record<string, LiveItem[]> = {};
       const liveKeys = new Set<string>();
       const finishedKeys = new Set<string>();
@@ -243,8 +252,10 @@ export default function LatestScoresSection() {
 
       (games || []).forEach((g) => {
         if (!g.home_team || !g.away_team) return;
-        // Live: explicit live status, OR partial scores with a non-final status.
-        if (g.game_status && !isFinal(g.game_status) && isLiveStatus(g.game_status)) {
+        // Use game_schedule status as override — it's more reliable than v_game_results
+        const effectiveStatus = (g.game_key && scheduleStatusByKey[g.game_key]) || g.game_status;
+        // Live: explicit live status in either source
+        if (isLiveStatus(effectiveStatus)) {
           if (g.game_key) liveKeys.add(g.game_key);
           if (!liveByLeague[g.league_id]) liveByLeague[g.league_id] = [];
           liveByLeague[g.league_id].push({
@@ -261,7 +272,7 @@ export default function LatestScoresSection() {
           return;
         }
         if (g.home_score === null || g.away_score === null) return;
-        if (!isFinal(g.game_status)) return;
+        if (!isFinal(effectiveStatus)) return;
         if (g.game_key) finishedKeys.add(g.game_key);
         if (!resultsByLeague[g.league_id]) resultsByLeague[g.league_id] = [];
         resultsByLeague[g.league_id].push(g);
@@ -274,7 +285,7 @@ export default function LatestScoresSection() {
         const statusLower = (s.status || "").toLowerCase();
         if (FINAL_STATUSES.has(statusLower)) return;
 
-        // Live game found in schedule (status indicates live)
+        // Live game found only in schedule (no scores yet)
         if (isLiveStatus(s.status)) {
           liveKeys.add(s.game_key);
           if (!liveByLeague[s.league_id]) liveByLeague[s.league_id] = [];
