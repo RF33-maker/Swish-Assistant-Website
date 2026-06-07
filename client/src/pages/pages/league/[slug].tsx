@@ -1762,7 +1762,8 @@ export default function LeaguePage() {
                 kickoff_time: game.match_time ? new Date(game.match_time).toLocaleTimeString('en-US', {
                   hour: '2-digit',
                   minute: '2-digit',
-                  hour12: true
+                  hour12: true,
+                  timeZone: 'UTC'
                 }) : undefined,
                 venue: game.competition_name,
                 team1_score: game.home_score,

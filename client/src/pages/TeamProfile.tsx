@@ -1463,7 +1463,8 @@ export default function TeamProfile() {
                             month: 'short', 
                             day: 'numeric',
                             hour: '2-digit',
-                            minute: '2-digit'
+                            minute: '2-digit',
+                            timeZone: 'UTC'
                           })}
                         </div>
                       </div>

@@ -31,7 +31,7 @@ import { PlayerPerformanceSplits } from "@/components/PlayerPerformanceSplits";
 // `team_name`, `shirtNumber`, and `height_cm` when alias fields are
 // absent.
 const PLAYER_PROFILE_COLUMNS =
-  "id, slug, full_name, team_name, position, shirtNumber, league_id, photo_path_bg_removed, photo_path, photo_focus_y, height_cm, date_of_birth, current_team, previous_teams, instagram_handle";
+  "id, slug, full_name, team_name, position, shirtNumber, league_id, photo_path_bg_removed, photo_path, photo_focus_y, height_cm, date_of_birth, current_team, social_instagram";
 
 interface PlayerStat {
   id: string;
@@ -679,11 +679,9 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
           height: initialPlayer.height || null,
           heightCm: initialPlayer.height_cm || null,
           dateOfBirth: initialPlayer.date_of_birth || null,
-          instagramHandle: initialPlayer.instagram_handle || null,
+          instagramHandle: initialPlayer.social_instagram || null,
           dbCurrentTeam: initialPlayer.current_team || null,
-          dbPreviousTeams: (initialPlayer.previous_teams && initialPlayer.previous_teams.length > 0)
-            ? initialPlayer.previous_teams
-            : null,
+          dbPreviousTeams: null,
         };
 
         const playerIds = matches.map(m => m.id);

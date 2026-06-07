@@ -43,7 +43,7 @@ function formatDateUK(dateStr: string): string {
   return date.toLocaleDateString('en-GB', { 
     day: 'numeric',
     month: 'short',
-    timeZone: 'Europe/London'
+    timeZone: 'UTC'
   }).toUpperCase();
 }
 
@@ -399,7 +399,7 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
       hour: 'numeric',
       minute: '2-digit',
       hour12: true,
-      timeZone: 'Europe/London'
+      timeZone: 'UTC'
     }).toUpperCase();
   };
 

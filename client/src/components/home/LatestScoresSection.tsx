@@ -108,7 +108,7 @@ function shortTeam(name: string): string {
 function formatDate(s: string | null) {
   if (!s) return "";
   try {
-    return new Date(s).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return new Date(s).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
   } catch {
     return "";
   }
@@ -120,6 +120,7 @@ function formatTime(s: string | null) {
     return new Date(s).toLocaleTimeString("en-US", {
       hour: "numeric",
       minute: "2-digit",
+      timeZone: "UTC",
     });
   } catch {
     return "";
