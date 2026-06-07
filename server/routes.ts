@@ -2115,6 +2115,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ─── GameSwitcherBar server proxy ───────────────────────────────────────────
+  // Proxies game_schedule / team_stats / live_events queries server-side so
+  // they never hit Supabase directly from the browser (avoids CORS issues on
+  // custom domains like swishassistant.com).
+  app.get("/api/game-switcher/:leagueId", async (req: Request, res: Response) => {
+    const { leagueId } = req.params;
+    const schema = (req.query.schema as string) === "test" ? "test" : "public";
+    const db = schema === "test" ? supabaseAdmin.schema("test") : supabaseAdmin;
+
+    const now = new Date();
+    const sevenDaysAgo = new Date(now); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const sevenDaysFromNow = new Date(now); sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
+
+    try {
+      const [liveResp, rangeResp] = await Promise.all([
+        db.from("game_schedule")
+          .select("game_key, hometeam, awayteam, matchtime, status")
+          .eq("league_id", leagueId)
+          .or("status.ilike.%live%,status.eq.in_progress"),
+        db.from("game_schedule")
+          .select("game_key, hometeam, awayteam, matchtime, status")
+          .eq("league_id", leagueId)
+          .gte("matchtime", sevenDaysAgo.toISOString())
+          .lte("matchtime", sevenDaysFromNow.toISOString())
+          .order("matchtime", { ascending: true }),
+      ]);
+
+      const combined = [...(liveResp.data || []), ...(rangeResp.data || [])];
+      const unique = combined.filter((g, i, arr) => i === arr.findIndex(x => x.game_key === g.game_key));
+
+      let teamStats: any[] = [];
+      let liveEvents: any[] = [];
+
+      if (unique.length > 0) {
+        const gameKeys = unique.map(g => g.game_key);
+        const [tsResp, leResp] = await Promise.all([
+          db.from("team_stats").select("game_key, name, tot_spoints").in("game_key", gameKeys),
+          db.from("live_events").select("game_key, period, clock, created_at")
+            .in("game_key", gameKeys).order("created_at", { ascending: false }),
+        ]);
+        teamStats = tsResp.data || [];
+        liveEvents = leResp.data || [];
+      }
+
+      return res.json({ games: unique, teamStats, liveEvents });
+    } catch (err: any) {
+      console.error("[GameSwitcher] error", err.message);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   app.get("/api/home/trending-performances", async (req: Request, res: Response) => {
     const now = Date.now();
     if (trendingCache && now - trendingCache.at < TRENDING_TTL_MS) {
