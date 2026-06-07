@@ -117,6 +117,63 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
         normalizeTeamName(stat.team_name || stat.team || '') === normalizedTeamName
       );
 
+      // Pre-season fallback: if no player_stats exist yet, pull roster from the players table
+      if (allStats.length === 0) {
+        // Step 1: resolve team_id from the teams table
+        let resolvedTeamId: string | null = null;
+        const { data: teamsRows } = await supabase
+          .from("teams")
+          .select("team_id, name")
+          .in("league_id", effectiveLeagueIds);
+        if (teamsRows) {
+          const match = teamsRows.find(
+            (t: any) => normalizeTeamName(t.name || '') === normalizedTeamName
+          );
+          resolvedTeamId = match?.team_id ?? null;
+        }
+
+        // Step 2: query players by team_id (direct), or fall back to league+team_name match
+        let preSeasonPlayers: any[] = [];
+        if (resolvedTeamId) {
+          const { data: playersById } = await supabase
+            .from("players")
+            .select("id, full_name, slug, photo_path_bg_removed, position, team_id")
+            .eq("team_id", resolvedTeamId);
+          preSeasonPlayers = playersById || [];
+        } else {
+          const { data: playersByName } = await supabase
+            .from("players")
+            .select("id, full_name, slug, photo_path_bg_removed, position, team_name")
+            .in("league_id", effectiveLeagueIds)
+            .ilike("team_name", `%${normalizedTeamName}%`);
+          preSeasonPlayers = (playersByName || []).filter(
+            (p: any) => normalizeTeamName(p.team_name || '') === normalizedTeamName
+          );
+        }
+
+        const preSeasonRoster = preSeasonPlayers.map((p: any) => ({
+          id: p.id,
+          name: p.full_name || 'Unknown',
+          slug: p.slug || null,
+          position: p.position || '',
+          photoPath: p.photo_path_bg_removed || null,
+        }));
+
+        return {
+          name: decodeURIComponent(teamName),
+          roster: [],
+          preSeasonRoster,
+          games: [],
+          totalGames: 0,
+          avgTeamPoints: 0,
+          wins: 0,
+          losses: 0,
+          totals: {},
+          perGame: {},
+          allStats: [],
+        };
+      }
+
       const gamesByGameKey = allStats.reduce((acc: Record<string, any>, stat: any) => {
         if (!acc[stat.game_key]) {
           acc[stat.game_key] = {
@@ -313,6 +370,7 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
   });
 
   const cTd = "px-2 py-1.5 text-center text-xs whitespace-nowrap";
+  const isPreSeason = !!(teamData?.preSeasonRoster && teamData.preSeasonRoster.length > 0 && teamData.roster.length === 0);
 
   if (isLoading) {
     return (
@@ -361,14 +419,22 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
                 </h1>
                 <div className="flex flex-wrap items-center gap-2 mt-2">
                   <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-white/80 dark:bg-neutral-800/80 text-slate-700 dark:text-slate-300 backdrop-blur-sm">
-                    {teamData.roster.length} Players
+                    {isPreSeason ? teamData.preSeasonRoster.length : teamData.roster.length} Players
                   </span>
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-white/80 dark:bg-neutral-800/80 backdrop-blur-sm" style={{ color: readableBrand.body }}>
-                    {teamData.wins}-{teamData.losses}
-                  </span>
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-white/80 dark:bg-neutral-800/80 text-slate-700 dark:text-slate-300 backdrop-blur-sm">
-                    {teamData.avgTeamPoints} PPG
-                  </span>
+                  {isPreSeason ? (
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100/90 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300 backdrop-blur-sm">
+                      Pre-season
+                    </span>
+                  ) : (
+                    <>
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-white/80 dark:bg-neutral-800/80 backdrop-blur-sm" style={{ color: readableBrand.body }}>
+                        {teamData.wins}-{teamData.losses}
+                      </span>
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-white/80 dark:bg-neutral-800/80 text-slate-700 dark:text-slate-300 backdrop-blur-sm">
+                        {teamData.avgTeamPoints} PPG
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -377,7 +443,9 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
       </div>
 
       <div className="flex rounded-lg overflow-hidden border border-gray-200 dark:border-neutral-700 w-fit">
-        {(["overview", "playerStats", "shotChart"] as const).map(tab => (
+        {(["overview", "playerStats", "shotChart"] as const)
+          .filter(tab => isPreSeason ? tab === 'overview' : true)
+          .map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -391,7 +459,54 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
         ))}
       </div>
 
-      {activeTab === 'overview' && (
+      {activeTab === 'overview' && isPreSeason && (
+        <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100 dark:border-neutral-800 flex items-center justify-between">
+            <span className="text-base md:text-lg font-bold text-slate-800 dark:text-white">Squad</span>
+            <span className="text-xs text-amber-600 dark:text-amber-400 font-medium bg-amber-50 dark:bg-amber-900/30 px-2.5 py-1 rounded-full">
+              No games played yet — showing registered squad
+            </span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 p-4">
+            {teamData.preSeasonRoster.map((player: any) => (
+              <div
+                key={player.id}
+                className={`flex flex-col items-center gap-2 p-3 rounded-lg border border-gray-100 dark:border-neutral-800 bg-gray-50/50 dark:bg-neutral-800/30 text-center ${player.slug ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700 transition-colors' : ''}`}
+                onClick={() => {
+                  if (player.slug && onPlayerClick) onPlayerClick(player.slug);
+                  else if (player.slug) navigate(`/player/${player.slug}`);
+                }}
+              >
+                {player.photoPath ? (
+                  <img
+                    src={player.photoPath}
+                    alt={player.name}
+                    className="w-12 h-12 rounded-full object-cover border-2 border-white dark:border-neutral-700 shadow-sm"
+                  />
+                ) : (
+                  <div
+                    className="w-12 h-12 rounded-full flex items-center justify-center text-white text-base font-bold shadow-sm flex-shrink-0"
+                    style={{ backgroundColor: readableBrand.accent }}
+                  >
+                    {player.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+                  </div>
+                )}
+                <div>
+                  <div className="text-xs font-semibold text-slate-800 dark:text-white leading-tight">{player.name}</div>
+                  {player.position && (
+                    <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 uppercase tracking-wide">{player.position}</div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          {teamData.preSeasonRoster.length === 0 && (
+            <div className="p-8 text-center text-slate-500 dark:text-slate-400 text-sm">No registered players found.</div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'overview' && !isPreSeason && (
         <>
           <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3 block">Team Averages</span>
