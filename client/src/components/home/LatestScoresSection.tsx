@@ -136,7 +136,7 @@ function upcomingLabel(matchTime: string, now: Date): string {
   const today = startOfDay(now).getTime();
   const day = startOfDay(t).getTime();
   const dayDiff = Math.round((day - today) / (24 * 60 * 60 * 1000));
-  if (dayDiff <= 0) return "TONIGHT";
+  if (dayDiff <= 0) return "TODAY";
   if (dayDiff === 1) return "TOMORROW";
   return "UPCOMING";
 }
