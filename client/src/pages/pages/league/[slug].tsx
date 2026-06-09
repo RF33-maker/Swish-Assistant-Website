@@ -49,6 +49,7 @@ import {
   getAdvancedLeaderSections,
   type AdvancedLeaderDef,
 } from "@/lib/advancedStats";
+import LeagueTrendingPerformances from "@/components/league/LeagueTrendingPerformances";
 
 // Compact label for age group filter UI ("Under 18 Boys" -> "U18 Boys").
 function shortenAgeLabel(label: string): string {
@@ -5744,6 +5745,16 @@ export default function LeaguePage() {
             {/* Overview Section - Default view */}
             {activeSection === 'overview' && (
               <>
+                {/* Top Performances This Week */}
+                {slug && (
+                  <div className="-mx-4 md:-mx-6">
+                    <LeagueTrendingPerformances
+                      leagueSlug={slug}
+                      brandColor={brandColorHex}
+                    />
+                  </div>
+                )}
+
                 {/* League Leaders Quick View */}
                 <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
                   <div className="flex justify-between items-center mb-4 md:mb-6">
