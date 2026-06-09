@@ -76,7 +76,7 @@ function buildCompactCard({
   const statValue  = isDark ? "#ffffff"  : "#0f172a";
   const statLabel  = isDark ? "#94a3b8"  : "#64748b";
   const accent     = "#f97316";
-  const watermark  = "#ffffff";
+  const watermark  = isDark ? "#ffffff" : "#f97316";
   const avatarBg   = isDark ? "#374151"  : "linear-gradient(135deg, #ffedd5, #fef9c3)";
 
   const initials = perf.full_name
@@ -144,7 +144,7 @@ function buildCompactCard({
             <img src={photoUrl} alt={perf.full_name} crossOrigin="anonymous"
               style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           ) : (
-            <span style={{ color: "#ea580c", fontWeight: 700, fontSize: 13 }}>{initials}</span>
+            <span style={{ color: "#ea580c", fontWeight: 700, fontSize: 13, lineHeight: 1, display: "block", textAlign: "center" }}>{initials}</span>
           )}
         </div>
         <div>
@@ -172,16 +172,10 @@ function buildCompactCard({
         {row2.map((s) => <StatCell key={s.label} {...s} />)}
       </div>
 
-      {/* Watermark strip — bleeds to card edges so white text is always legible */}
-      <div style={{
-        display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 7,
-        marginTop: 14, marginLeft: -18, marginRight: -18, marginBottom: -18,
-        padding: "7px 18px",
-        backgroundColor: "#0f172a",
-        borderBottomLeftRadius: 16, borderBottomRightRadius: 16,
-      }}>
-        <img src={SwishLogo} alt="" crossOrigin="anonymous" style={{ height: 16, width: "auto", display: "block", verticalAlign: "middle" }} />
-        <span style={{ fontSize: 10, color: watermark, fontWeight: 600, lineHeight: 1, verticalAlign: "middle" }}>
+      {/* Watermark */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6, marginTop: 14 }}>
+        <img src={SwishLogo} alt="" crossOrigin="anonymous" style={{ height: 13, width: "auto", display: "block" }} />
+        <span style={{ fontSize: 10, color: watermark, fontWeight: 600, lineHeight: 1 }}>
           www.swishassistant.com
         </span>
       </div>
