@@ -234,23 +234,92 @@ export default function ShareableCard({
     }
   };
 
+  /**
+   * Reads all CSS custom-property values defined on bare `:root` / `html`
+   * selectors from the document's own stylesheets (no CSSOM mutation, no
+   * flash). Returns a map of `--prop-name → value` for light-mode.
+   */
+  const getLightModeCssVars = (): Map<string, string> => {
+    const vars = new Map<string, string>();
+    try {
+      Array.from(document.styleSheets).forEach((sheet) => {
+        try {
+          Array.from(sheet.cssRules).forEach((rule) => {
+            if (
+              rule instanceof CSSStyleRule &&
+              (rule.selectorText === ":root" || rule.selectorText === "html")
+            ) {
+              Array.from(rule.style).forEach((prop) => {
+                if (prop.startsWith("--"))
+                  vars.set(prop, rule.style.getPropertyValue(prop).trim());
+              });
+            }
+          });
+        } catch {
+          // cross-origin stylesheet — skip
+        }
+      });
+    } catch {
+      // silently ignore
+    }
+    return vars;
+  };
+
   const generatePngBlob = async (): Promise<Blob | null> => {
     if (generateCardBlob) return generateCardBlob();
     if (!captureRef.current) return null;
 
+    // ── 1. Collect every image URL we know about ──────────────────────────
+    // Include both DOM-scanned <img> tags AND images referenced in props,
+    // so logos from teamLogos / player props are always pre-fetched even if
+    // the React component hasn't mounted them yet.
     const liveImgs = Array.from(
       captureRef.current.querySelectorAll<HTMLImageElement>("img"),
     );
+    const propSrcs = [
+      player.photoUrl,
+      player.teamLogoUrl,
+      ...(teamLogos?.map((t) => t.logoUrl) ?? []),
+    ].filter((s): s is string => !!s);
+    const domSrcs = liveImgs
+      .map((img) => img.getAttribute("src") || img.src)
+      .filter(Boolean) as string[];
+    const allSrcs = [...new Set([...propSrcs, ...domSrcs])];
+
+    // ── 2. Pre-fetch all images as data-URLs (avoids CORS taint) ─────────
     const dataUrlMap = new Map<string, string>();
     await Promise.all(
-      liveImgs.map(async (img) => {
-        const src = img.getAttribute("src") || img.src;
-        if (src && !dataUrlMap.has(src)) {
+      allSrcs.map(async (src) => {
+        if (!dataUrlMap.has(src)) {
           const dataUrl = await fetchAsDataUrl(src);
           if (dataUrl) dataUrlMap.set(src, dataUrl);
         }
       }),
     );
+
+    // ── 3. Wait for in-DOM images to finish loading ────────────────────────
+    await Promise.all(
+      liveImgs.map(
+        (img) =>
+          img.complete
+            ? Promise.resolve()
+            : new Promise<void>((res) => {
+                img.addEventListener("load",  () => res(), { once: true });
+                img.addEventListener("error", () => res(), { once: true });
+              }),
+      ),
+    );
+
+    // ── 4. Snapshot light-mode CSS vars for SVG resolution ────────────────
+    const lightVars = getLightModeCssVars();
+
+    const resolveCssVar = (value: string): string => {
+      if (!value?.includes("var(")) return value;
+      return value.replace(/var\(\s*(--[^,)]+)\s*(?:,([^)]*))?\)/g, (_, name, fallback) => {
+        const trimName = name.trim();
+        return lightVars.get(trimName) ?? fallback?.trim() ?? _;
+      });
+    };
 
     const captureEl = captureRef.current;
     const isCompactCapture = !!captureCard;
@@ -259,8 +328,6 @@ export default function ShareableCard({
       : wide ? SHARE_WIDTH_WIDE : captureEl.scrollWidth;
     const naturalHeight = captureEl.scrollHeight;
     const canvas = await html2canvas(captureEl, {
-      // Compact card: transparent bg so rounded corners are see-through when
-      // overlaid on social posts. Regular card: white (existing behaviour).
       backgroundColor: isCompactCapture ? null : "#ffffff",
       scale: isCompactCapture ? 3 : 2,
       useCORS: true,
@@ -271,16 +338,32 @@ export default function ShareableCard({
       width: naturalWidth,
       height: naturalHeight,
       onclone: (doc) => {
-        // For the compact card, colors are explicit inline styles so we don't
-        // strip dark classes — the caller controls light/dark via props.
         if (!isCompactCapture) {
           doc.documentElement.classList.remove("dark");
           doc.body.classList.remove("dark");
         }
+
+        // Replace img src with pre-fetched data-URLs
         doc.querySelectorAll<HTMLImageElement>("img").forEach((img) => {
           const src = img.getAttribute("src") || img.src;
           const dataUrl = dataUrlMap.get(src);
           if (dataUrl) img.src = dataUrl;
+        });
+
+        // Resolve CSS custom properties in SVG presentation attributes and
+        // inline styles so shot charts (and any other SVG content) capture
+        // correctly. html2canvas doesn't resolve var() in SVG attributes.
+        const SVG_ATTRS = [
+          "stroke", "fill", "color", "stop-color",
+          "flood-color", "lighting-color",
+        ] as const;
+        doc.querySelectorAll<Element>("svg, svg *").forEach((el) => {
+          SVG_ATTRS.forEach((attr) => {
+            const val = el.getAttribute(attr);
+            if (val?.includes("var(")) el.setAttribute(attr, resolveCssVar(val));
+          });
+          const style = el.getAttribute("style");
+          if (style?.includes("var(")) el.setAttribute("style", resolveCssVar(style));
         });
       },
     });
