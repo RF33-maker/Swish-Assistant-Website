@@ -530,8 +530,8 @@ export default function ShareableCard({
               style={{ gap: wide ? 14 : 8 }}
             >
               {[teamLogos[0], teamLogos[1]].map((tl, i) => {
-                const logoOuter = wide ? 110 : 60;
-                const logoInner = wide ? 96 : 52;
+                const logoOuter = wide ? 148 : 80;
+                const logoInner = wide ? 130 : 68;
                 return (
                 <div
                   key={i}
@@ -642,10 +642,10 @@ export default function ShareableCard({
             style={{
               right: wide ? 36 : 18,
               top: "50%",
-              width: wide ? 210 : 118,
-              height: wide ? 210 : 118,
-              marginTop: wide ? -105 : -59,
-              opacity: 0.18,
+              width: wide ? 270 : 148,
+              height: wide ? 270 : 148,
+              marginTop: wide ? -135 : -74,
+              opacity: 0.22,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
