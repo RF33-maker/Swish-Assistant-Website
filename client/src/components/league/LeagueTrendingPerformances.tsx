@@ -57,12 +57,14 @@ function buildCompactCard({
   perf,
   tsPct,
   photoUrl,
+  teamLogoUrl,
   leagueName,
   isDark,
 }: {
   perf: PerfRow;
   tsPct: string;
   photoUrl: string | null;
+  teamLogoUrl: string | null;
   leagueName: string | undefined;
   isDark: boolean;
 }) {
@@ -153,6 +155,10 @@ function buildCompactCard({
           </div>
           <div style={{ fontSize: 11, color: metaColor, marginTop: 2 }}>
             {formatDate(perf.week_start)}{perf.team_name ? ` • ${perf.team_name}` : ""}
+            {teamLogoUrl && (
+              <img src={teamLogoUrl} alt="" crossOrigin="anonymous"
+                style={{ height: 13, width: "auto", verticalAlign: "middle", marginLeft: 4 }} />
+            )}
           </div>
         </div>
       </div>
@@ -172,11 +178,11 @@ function buildCompactCard({
         {row2.map((s) => <StatCell key={s.label} {...s} />)}
       </div>
 
-      {/* Watermark */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6, marginTop: 14 }}>
+      {/* Watermark — inline elements inside a right-aligned block; most reliable for html2canvas */}
+      <div style={{ textAlign: "right", marginTop: 14 }}>
         <img src={SwishLogo} alt="" crossOrigin="anonymous"
-          style={{ height: 12, width: "auto", flexShrink: 0, verticalAlign: "middle" }} />
-        <span style={{ fontSize: 10, color: watermark, fontWeight: 600, lineHeight: "12px", verticalAlign: "middle" }}>
+          style={{ height: 12, width: "auto", verticalAlign: "middle", marginRight: 4 }} />
+        <span style={{ fontSize: 10, color: watermark, fontWeight: 600, verticalAlign: "middle" }}>
           www.swishassistant.com
         </span>
       </div>
@@ -239,7 +245,7 @@ function PerfCard({
     else if (perf.league_id) setLocation(`/competition/${perf.league_id}`);
   };
 
-  const captureCard = buildCompactCard({ perf, tsPct, photoUrl, leagueName, isDark });
+  const captureCard = buildCompactCard({ perf, tsPct, photoUrl, teamLogoUrl: shareTeamLogoUrl, leagueName, isDark });
 
   return (
     <ShareableCard
