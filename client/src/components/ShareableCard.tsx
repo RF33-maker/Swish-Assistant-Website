@@ -66,6 +66,12 @@ interface ShareableCardProps {
    * so rounded corners show through when overlaid on social posts.
    */
   captureCard?: ReactNode;
+  /**
+   * When provided, calling this function produces the PNG blob directly —
+   * bypassing html2canvas entirely. Use this for canvas-drawn cards that need
+   * pixel-perfect output (e.g. the trending performance card).
+   */
+  generateCardBlob?: () => Promise<Blob | null>;
 }
 
 const SHARE_WIDTH_WIDE = 1080;
@@ -171,6 +177,7 @@ export default function ShareableCard({
   teamLogos,
   wide,
   captureCard,
+  generateCardBlob,
 }: ShareableCardProps) {
   const [open, setOpen] = useState(false);
   const [working, setWorking] = useState(false);
@@ -228,6 +235,7 @@ export default function ShareableCard({
   };
 
   const generatePngBlob = async (): Promise<Blob | null> => {
+    if (generateCardBlob) return generateCardBlob();
     if (!captureRef.current) return null;
 
     const liveImgs = Array.from(

@@ -6,7 +6,7 @@ import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
 import ShareableCard from "@/components/ShareableCard";
 import { useTeamBranding } from "@/hooks/useTeamBranding";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
-import SwishLogo from "@/assets/Swish Assistant Logo.png";
+import { generateTrendingCardBlob } from "@/lib/generateTrendingCard";
 
 interface PerfRow {
   league_id: string;
@@ -86,143 +86,6 @@ function StatBlock({ perf, tsPct }: { perf: PerfRow; tsPct: string }) {
   );
 }
 
-/** Builds the compact capture card — pixel-matches the on-screen card. */
-function buildCompactCard({
-  perf,
-  tsPct,
-  photoUrl,
-  teamLogoUrl,
-  leagueName,
-  isDark,
-}: {
-  perf: PerfRow;
-  tsPct: string;
-  photoUrl: string | null;
-  teamLogoUrl: string | null;
-  leagueName: string | undefined;
-  isDark: boolean;
-}) {
-  const CARD_W = 560;
-  const bg          = isDark ? "#171717" : "#ffffff";
-  const border      = isDark ? "#262626" : "#e2e8f0";
-  const titleColor  = isDark ? "#f1f5f9" : "#0f172a";
-  const nameColor   = isDark ? "#f1f5f9" : "#0f172a";
-  const metaColor   = isDark ? "#94a3b8" : "#64748b";
-  const divider     = isDark ? "#262626" : "#e2e8f0";
-  const statValue   = isDark ? "#ffffff"  : "#0f172a";
-  const statLabel   = isDark ? "#94a3b8"  : "#64748b";
-  const accent      = "#f97316";
-  const watermark   = isDark ? "#ffffff" : "#f97316";
-  const avatarBg    = isDark ? "#374151"  : "linear-gradient(135deg, #ffedd5, #fef9c3)";
-
-  const initials = perf.full_name
-    .split(" ").filter(Boolean).map((n) => n[0]).slice(0, 2).join("").toUpperCase();
-
-  const row1 = [
-    { label: "WS",  value: perf.weekly_score ?? 0 },
-    { label: "PTS", value: perf.pts ?? 0 },
-    { label: "REB", value: perf.reb ?? 0 },
-    { label: "AST", value: perf.ast ?? 0 },
-    { label: "STL", value: perf.stl ?? 0 },
-  ];
-  const row2 = [
-    { label: "BLK", value: perf.blk ?? 0 },
-    { label: "TOV", value: perf.tov ?? 0 },
-    { label: "FGA", value: perf.fga ?? 0 },
-    { label: "FTA", value: perf.fta ?? 0 },
-    { label: "TS%", value: tsPct },
-  ];
-
-  const StatCell = ({ label, value }: { label: string; value: string | number }) => (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
-      <span style={{ fontWeight: 700, fontSize: 22, color: statValue, lineHeight: 1.1, fontVariantNumeric: "tabular-nums" }}>
-        {value}
-      </span>
-      <span style={{ fontSize: 10, color: statLabel, textTransform: "uppercase", letterSpacing: "0.05em", marginTop: 4 }}>
-        {label}
-      </span>
-    </div>
-  );
-
-  return (
-    <div
-      style={{
-        width: CARD_W,
-        backgroundColor: bg,
-        border: `1px solid ${border}`,
-        borderRadius: 16,
-        padding: 20,
-        fontFamily: "system-ui, -apple-system, ui-sans-serif, sans-serif",
-        boxSizing: "border-box",
-        overflow: "hidden",
-      }}
-    >
-      {/* Title row — matches on-screen header */}
-      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 12 }}>
-        <span style={{ fontWeight: 700, fontSize: 18, color: titleColor, lineHeight: 1 }}>
-          Trending Performance
-        </span>
-        {leagueName && (
-          <span style={{ fontWeight: 600, fontSize: 10, color: accent, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-            {leagueName}
-          </span>
-        )}
-      </div>
-
-      {/* Player row */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-        <div style={{
-          width: 48, height: 48, borderRadius: "50%", overflow: "hidden", flexShrink: 0,
-          background: avatarBg,
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          {photoUrl ? (
-            <img src={photoUrl} alt={perf.full_name} crossOrigin="anonymous"
-              style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-          ) : (
-            <span style={{ color: "#ea580c", fontWeight: 700, fontSize: 15, lineHeight: 1, display: "block", textAlign: "center" }}>{initials}</span>
-          )}
-        </div>
-        <div>
-          <div style={{ fontWeight: 600, fontSize: 15, color: nameColor, lineHeight: 1.3 }}>
-            {perf.full_name}
-          </div>
-          <div style={{ fontSize: 12, color: metaColor, marginTop: 2 }}>
-            {formatDate(perf.week_start)}{perf.team_name ? ` • ${perf.team_name}` : ""}
-            {teamLogoUrl && (
-              <img src={teamLogoUrl} alt="" crossOrigin="anonymous"
-                style={{ height: 14, width: "auto", verticalAlign: "middle", marginLeft: 5 }} />
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Divider */}
-      <div style={{ height: 1, backgroundColor: divider, marginBottom: 16 }} />
-
-      {/* Stats row 1 — flex so each cell gets exactly 1/5 width, no boxes */}
-      <div style={{ display: "flex" }}>
-        {row1.map((s) => <StatCell key={s.label} {...s} />)}
-      </div>
-
-      <div style={{ height: 12 }} />
-
-      {/* Stats row 2 */}
-      <div style={{ display: "flex" }}>
-        {row2.map((s) => <StatCell key={s.label} {...s} />)}
-      </div>
-
-      {/* Watermark — inline elements inside a right-aligned block; most reliable for html2canvas */}
-      <div style={{ textAlign: "right", marginTop: 16 }}>
-        <img src={SwishLogo} alt="" crossOrigin="anonymous"
-          style={{ height: 13, width: "auto", verticalAlign: "middle", marginRight: 5 }} />
-        <span style={{ fontSize: 11, color: watermark, fontWeight: 600, verticalAlign: "middle" }}>
-          www.swishassistant.com
-        </span>
-      </div>
-    </div>
-  );
-}
 
 export default function TrendingPerformanceSection() {
   const [, setLocation] = useLocation();
@@ -358,7 +221,26 @@ export default function TrendingPerformanceSection() {
 
   if (!perf) return null;
 
-  const captureCard = buildCompactCard({ perf, tsPct, photoUrl, teamLogoUrl: shareTeamLogoUrl, leagueName, isDark });
+  const generateCardBlob = () => generateTrendingCardBlob({
+    playerName: perf.full_name,
+    teamName: perf.team_name,
+    weekStart: perf.week_start,
+    tsPct,
+    ws: perf.weekly_score,
+    pts: perf.pts,
+    reb: perf.reb,
+    ast: perf.ast,
+    stl: perf.stl,
+    blk: perf.blk,
+    tov: perf.tov,
+    fga: perf.fga,
+    fta: perf.fta,
+    photoUrl,
+    teamLogoUrl: shareTeamLogoUrl,
+    leagueName,
+    isDark,
+    cardWidth: 560,
+  });
 
   return (
     <div className="w-full max-w-xl mb-6 md:mb-8 text-left">
@@ -373,7 +255,7 @@ export default function TrendingPerformanceSection() {
           teamLogoUrl: shareTeamLogoUrl,
         }}
         shareCaption={leagueName ? `${leagueName} • ${formatDate(perf.week_start)}` : formatDate(perf.week_start)}
-        captureCard={captureCard}
+        generateCardBlob={generateCardBlob}
       >
         <div
           role="button"
