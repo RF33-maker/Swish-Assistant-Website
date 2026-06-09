@@ -208,8 +208,9 @@ function buildCompactCard({
 
       {/* Watermark */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 6, marginTop: 16 }}>
-        <img src={SwishLogo} alt="" crossOrigin="anonymous" style={{ height: 14, width: "auto", display: "block" }} />
-        <span style={{ fontSize: 11, color: watermark, fontWeight: 600, lineHeight: 1 }}>
+        <img src={SwishLogo} alt="" crossOrigin="anonymous"
+          style={{ height: 13, width: "auto", flexShrink: 0, verticalAlign: "middle" }} />
+        <span style={{ fontSize: 11, color: watermark, fontWeight: 600, lineHeight: "13px", verticalAlign: "middle" }}>
           www.swishassistant.com
         </span>
       </div>
