@@ -86,7 +86,7 @@ function StatBlock({ perf, tsPct }: { perf: PerfRow; tsPct: string }) {
   );
 }
 
-/** Builds the compact capture card that mirrors the website card. */
+/** Builds the compact capture card — pixel-matches the on-screen card. */
 function buildCompactCard({
   perf,
   tsPct,
@@ -100,36 +100,47 @@ function buildCompactCard({
   leagueName: string | undefined;
   isDark: boolean;
 }) {
-  const CARD_W = 480;
-  const bg = isDark ? "#171717" : "#ffffff";
-  const border = isDark ? "#404040" : "#e2e8f0";
-  const textPrimary = isDark ? "#f1f5f9" : "#0f172a";
-  const textSecondary = isDark ? "#94a3b8" : "#64748b";
-  const divider = isDark ? "#404040" : "#e2e8f0";
-  const statBg = isDark ? "#262626" : "#f8fafc";
-  const accent = "#f97316";
-  const watermarkText = isDark ? "#71717a" : "#94a3b8";
+  const CARD_W = 560;
+  const bg          = isDark ? "#171717" : "#ffffff";
+  const border      = isDark ? "#262626" : "#e2e8f0";
+  const titleColor  = isDark ? "#f1f5f9" : "#0f172a";
+  const nameColor   = isDark ? "#f1f5f9" : "#0f172a";
+  const metaColor   = isDark ? "#94a3b8" : "#64748b";
+  const divider     = isDark ? "#262626" : "#e2e8f0";
+  const statValue   = isDark ? "#ffffff"  : "#0f172a";
+  const statLabel   = isDark ? "#94a3b8"  : "#64748b";
+  const accent      = "#f97316";
+  const watermark   = isDark ? "#52525b"  : "#94a3b8";
+  const avatarBg    = isDark ? "#374151"  : "linear-gradient(135deg, #ffedd5, #fef9c3)";
 
   const initials = perf.full_name
-    .split(" ")
-    .filter(Boolean)
-    .map((n) => n[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
+    .split(" ").filter(Boolean).map((n) => n[0]).slice(0, 2).join("").toUpperCase();
 
-  const stats = [
+  const row1 = [
     { label: "WS",  value: perf.weekly_score ?? 0 },
     { label: "PTS", value: perf.pts ?? 0 },
     { label: "REB", value: perf.reb ?? 0 },
     { label: "AST", value: perf.ast ?? 0 },
     { label: "STL", value: perf.stl ?? 0 },
+  ];
+  const row2 = [
     { label: "BLK", value: perf.blk ?? 0 },
     { label: "TOV", value: perf.tov ?? 0 },
     { label: "FGA", value: perf.fga ?? 0 },
     { label: "FTA", value: perf.fta ?? 0 },
     { label: "TS%", value: tsPct },
   ];
+
+  const StatCell = ({ label, value }: { label: string; value: string | number }) => (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
+      <span style={{ fontWeight: 700, fontSize: 22, color: statValue, lineHeight: 1.1, fontVariantNumeric: "tabular-nums" }}>
+        {value}
+      </span>
+      <span style={{ fontSize: 10, color: statLabel, textTransform: "uppercase", letterSpacing: "0.05em", marginTop: 4 }}>
+        {label}
+      </span>
+    </div>
+  );
 
   return (
     <div
@@ -138,79 +149,67 @@ function buildCompactCard({
         backgroundColor: bg,
         border: `1px solid ${border}`,
         borderRadius: 16,
-        padding: 16,
-        fontFamily: "'Poppins', ui-sans-serif, system-ui, sans-serif",
+        padding: 20,
+        fontFamily: "system-ui, -apple-system, ui-sans-serif, sans-serif",
         boxSizing: "border-box",
         overflow: "hidden",
       }}
     >
-      {/* Top label row */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <span style={{ fontSize: 10, fontWeight: 700, color: accent, textTransform: "uppercase", letterSpacing: "0.12em" }}>
+      {/* Title row — matches on-screen header */}
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 12 }}>
+        <span style={{ fontWeight: 700, fontSize: 18, color: titleColor, lineHeight: 1 }}>
           Trending Performance
         </span>
         {leagueName && (
-          <span style={{ fontSize: 10, fontWeight: 600, color: textSecondary, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+          <span style={{ fontWeight: 600, fontSize: 10, color: accent, textTransform: "uppercase", letterSpacing: "0.05em" }}>
             {leagueName}
           </span>
         )}
       </div>
 
       {/* Player row */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-        <div
-          style={{
-            width: 44, height: 44, borderRadius: "50%", overflow: "hidden", flexShrink: 0,
-            background: isDark ? "#374151" : "linear-gradient(135deg, #fed7aa, #fef3c7)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-          }}
-        >
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+        <div style={{
+          width: 48, height: 48, borderRadius: "50%", overflow: "hidden", flexShrink: 0,
+          background: avatarBg,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
           {photoUrl ? (
-            <img src={photoUrl} alt={perf.full_name} crossOrigin="anonymous" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            <img src={photoUrl} alt={perf.full_name} crossOrigin="anonymous"
+              style={{ width: "100%", height: "100%", objectFit: "cover" }} />
           ) : (
-            <span style={{ color: "#ea580c", fontWeight: 700, fontSize: 14 }}>{initials}</span>
+            <span style={{ color: "#ea580c", fontWeight: 700, fontSize: 15 }}>{initials}</span>
           )}
         </div>
         <div>
-          <div style={{ fontWeight: 600, color: textPrimary, fontSize: 15, lineHeight: 1.3 }}>
+          <div style={{ fontWeight: 600, fontSize: 15, color: nameColor, lineHeight: 1.3 }}>
             {perf.full_name}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, color: textSecondary, fontSize: 12 }}>
-            <span>{formatDate(perf.week_start)}</span>
-            {perf.team_name && (
-              <span>• {perf.team_name}</span>
-            )}
+          <div style={{ fontSize: 12, color: metaColor, marginTop: 2 }}>
+            {formatDate(perf.week_start)}{perf.team_name ? ` • ${perf.team_name}` : ""}
           </div>
         </div>
       </div>
 
       {/* Divider */}
-      <div style={{ height: 1, backgroundColor: divider, marginBottom: 12 }} />
+      <div style={{ height: 1, backgroundColor: divider, marginBottom: 16 }} />
 
-      {/* Stats grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "8px 6px" }}>
-        {stats.map(({ label, value }) => (
-          <div
-            key={label}
-            style={{
-              display: "flex", flexDirection: "column", alignItems: "center",
-              padding: "8px 4px", backgroundColor: statBg, borderRadius: 8,
-            }}
-          >
-            <span style={{ fontWeight: 700, color: textPrimary, fontSize: 18, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
-              {value}
-            </span>
-            <span style={{ color: accent, fontSize: 9, textTransform: "uppercase", letterSpacing: "0.08em", marginTop: 3, fontWeight: 600 }}>
-              {label}
-            </span>
-          </div>
-        ))}
+      {/* Stats row 1 — flex so each cell gets exactly 1/5 width, no boxes */}
+      <div style={{ display: "flex" }}>
+        {row1.map((s) => <StatCell key={s.label} {...s} />)}
+      </div>
+
+      <div style={{ height: 12 }} />
+
+      {/* Stats row 2 */}
+      <div style={{ display: "flex" }}>
+        {row2.map((s) => <StatCell key={s.label} {...s} />)}
       </div>
 
       {/* Watermark */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 5, marginTop: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 5, marginTop: 14 }}>
         <img src={SwishLogo} alt="" crossOrigin="anonymous" style={{ height: 14, width: "auto", display: "block" }} />
-        <span style={{ fontSize: 9, color: watermarkText, fontWeight: 500 }}>www.swishassistant.com</span>
+        <span style={{ fontSize: 9, color: watermark, fontWeight: 500 }}>www.swishassistant.com</span>
       </div>
     </div>
   );
