@@ -5814,38 +5814,42 @@ export default function LeaguePage() {
                     });
 
                     const gridContent = isLoading ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+                      <div className="flex flex-col gap-3">
                         {Array.from({ length: 3 }).map((_, i) => (
                           <LeaderCardSkeleton key={`leader-skeleton-${i}`} />
                         ))}
                       </div>
                     ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+                      <div className="flex flex-col gap-3">
                         {quickCategories.map(({ title, list, avgLabel, totalLabel }) => {
                           const unitLabel = leagueLeadersView === 'averages' ? avgLabel : totalLabel;
                           return (
-                            <div key={title} className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4 shadow-inner">
-                              <h3 className="text-xs md:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 md:mb-3 text-center">{title}</h3>
-                              <ul className="space-y-1 text-xs md:text-sm text-slate-800 dark:text-white">
+                            <div key={title} className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4">
+                              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">{title}</h3>
+                              <ul className="divide-y divide-gray-100 dark:divide-neutral-700">
                                 {Array.isArray(list) &&
                                   list.slice(0, 5).map((p, i) => (
                                     <li
                                       key={`${title}-${p.name}-${i}`}
-                                      className={`flex justify-between ${p.slug ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700 rounded px-1 -mx-1 transition-colors' : ''}`}
+                                      className={`flex items-center justify-between py-2 ${p.slug ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700 rounded px-2 -mx-2 transition-colors' : 'px-2 -mx-2'}`}
                                       onClick={() => {
                                         if (p.slug) {
                                           handleSelectPlayer(p.slug, activeSection);
                                         }
                                       }}
                                     >
-                                      <span
-                                        className={`truncate mr-2 ${p.slug ? 'hover:underline' : ''}`}
-                                        style={p.slug ? { color: brandColor } : undefined}
-                                        onMouseEnter={(e) => { if (p.slug) (e.target as HTMLElement).style.color = brandColorHover; }}
-                                        onMouseLeave={(e) => { if (p.slug) (e.target as HTMLElement).style.color = brandColor; }}
-                                      >{p.name}</span>
-                                      <span className="font-medium whitespace-nowrap" style={{ color: brandColor }}>
-                                        {p.value} {unitLabel}
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <span className="text-xs font-bold tabular-nums text-slate-400 dark:text-slate-500 w-4 shrink-0">{i + 1}</span>
+                                        <span
+                                          className={`text-sm font-medium text-slate-800 dark:text-white truncate ${p.slug ? 'hover:underline' : ''}`}
+                                          style={p.slug ? { color: brandColor } : undefined}
+                                          onMouseEnter={(e) => { if (p.slug) (e.target as HTMLElement).style.color = brandColorHover; }}
+                                          onMouseLeave={(e) => { if (p.slug) (e.target as HTMLElement).style.color = brandColor; }}
+                                        >{p.name}</span>
+                                        {p.team && <span className="text-xs text-slate-400 dark:text-slate-500 truncate hidden sm:block">· {p.team}</span>}
+                                      </div>
+                                      <span className="text-sm font-bold tabular-nums whitespace-nowrap ml-3 shrink-0" style={{ color: brandColor }}>
+                                        {p.value} <span className="text-xs font-medium opacity-70">{unitLabel}</span>
                                       </span>
                                     </li>
                                   ))}
