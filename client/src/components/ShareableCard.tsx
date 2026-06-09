@@ -58,6 +58,14 @@ interface ShareableCardProps {
    * Used by share cards intended for Instagram / X feeds.
    */
   wide?: boolean;
+  /**
+   * When provided, this element is what gets captured as the PNG instead of
+   * the default big banner card. Use this to produce a compact card that
+   * mirrors the website UI. Colors should be explicit inline styles so dark
+   * mode is handled by the caller. The PNG will have a transparent background
+   * so rounded corners show through when overlaid on social posts.
+   */
+  captureCard?: ReactNode;
 }
 
 const SHARE_WIDTH_WIDE = 1080;
@@ -162,6 +170,7 @@ export default function ShareableCard({
   shareCaption,
   teamLogos,
   wide,
+  captureCard,
 }: ShareableCardProps) {
   const [open, setOpen] = useState(false);
   const [working, setWorking] = useState(false);
@@ -236,11 +245,16 @@ export default function ShareableCard({
     );
 
     const captureEl = captureRef.current;
-    const naturalWidth = wide ? SHARE_WIDTH_WIDE : captureEl.scrollWidth;
+    const isCompactCapture = !!captureCard;
+    const naturalWidth = isCompactCapture
+      ? captureEl.scrollWidth
+      : wide ? SHARE_WIDTH_WIDE : captureEl.scrollWidth;
     const naturalHeight = captureEl.scrollHeight;
     const canvas = await html2canvas(captureEl, {
-      backgroundColor: "#ffffff",
-      scale: 2,
+      // Compact card: transparent bg so rounded corners are see-through when
+      // overlaid on social posts. Regular card: white (existing behaviour).
+      backgroundColor: isCompactCapture ? null : "#ffffff",
+      scale: isCompactCapture ? 3 : 2,
       useCORS: true,
       allowTaint: true,
       logging: false,
@@ -249,9 +263,12 @@ export default function ShareableCard({
       width: naturalWidth,
       height: naturalHeight,
       onclone: (doc) => {
-        doc.documentElement.classList.remove("dark");
-        doc.body.classList.remove("dark");
-
+        // For the compact card, colors are explicit inline styles so we don't
+        // strip dark classes — the caller controls light/dark via props.
+        if (!isCompactCapture) {
+          doc.documentElement.classList.remove("dark");
+          doc.body.classList.remove("dark");
+        }
         doc.querySelectorAll<HTMLImageElement>("img").forEach((img) => {
           const src = img.getAttribute("src") || img.src;
           const dataUrl = dataUrlMap.get(src);
@@ -765,7 +782,8 @@ export default function ShareableCard({
   return (
     <>
       {/* Off-screen capture node — always in the DOM so html2canvas sees a
-          clean, unscaled, full-resolution element regardless of modal state. */}
+          clean, unscaled, full-resolution element regardless of modal state.
+          When captureCard is provided it replaces the default banner layout. */}
       <div
         aria-hidden="true"
         style={{
@@ -776,7 +794,11 @@ export default function ShareableCard({
           zIndex: -1,
         }}
       >
-        {cardMarkup}
+        {captureCard ? (
+          <div ref={captureRef}>{captureCard}</div>
+        ) : (
+          cardMarkup
+        )}
       </div>
 
       <div className="relative group">

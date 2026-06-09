@@ -3,13 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { TeamLogo } from "@/components/TeamLogo";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
-import ShareableCard, {
-  ensureContrast,
-  shadeHex,
-  tintHex,
-} from "@/components/ShareableCard";
+import ShareableCard from "@/components/ShareableCard";
 import { useTeamBranding } from "@/hooks/useTeamBranding";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
+import SwishLogo from "@/assets/Swish Assistant Logo.png";
 
 interface PerfRow {
   league_id: string;
@@ -49,76 +46,134 @@ function formatDate(s: string | null) {
 function Stat({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="flex flex-col items-center min-w-[36px]">
-      <span className="text-sm font-bold text-slate-900 dark:text-white tabular-nums">
-        {value}
-      </span>
-      <span className="text-[9px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
-        {label}
-      </span>
+      <span className="text-sm font-bold text-slate-900 dark:text-white tabular-nums">{value}</span>
+      <span className="text-[9px] uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</span>
     </div>
   );
 }
 
-function ShareStat({
-  label,
-  value,
-  labelColor,
-}: {
-  label: string;
-  value: string | number;
-  labelColor: string;
-}) {
-  return (
-    <div className="flex flex-col items-center" style={{ minWidth: 88 }}>
-      <span
-        className="font-black tabular-nums leading-none"
-        style={{ color: "#0f172a", fontSize: 44 }}
-      >
-        {value}
-      </span>
-      <span
-        className="font-semibold uppercase tracking-wide"
-        style={{ color: labelColor, fontSize: 16, marginTop: 10, letterSpacing: "0.08em" }}
-      >
-        {label}
-      </span>
-    </div>
-  );
-}
-
-function ShareStatBlock({
+/** Builds the compact capture card that mirrors the website card. */
+function buildCompactCard({
   perf,
   tsPct,
-  labelColor,
-  panelBg,
-  panelBorder,
+  photoUrl,
+  leagueName,
+  isDark,
 }: {
   perf: PerfRow;
   tsPct: string;
-  labelColor: string;
-  panelBg: string;
-  panelBorder: string;
+  photoUrl: string | null;
+  leagueName: string | undefined;
+  isDark: boolean;
 }) {
+  const CARD_W = 400;
+  const bg = isDark ? "#171717" : "#ffffff";
+  const border = isDark ? "#404040" : "#e2e8f0";
+  const textPrimary = isDark ? "#f1f5f9" : "#0f172a";
+  const textSecondary = isDark ? "#94a3b8" : "#64748b";
+  const divider = isDark ? "#404040" : "#e2e8f0";
+  const statBg = isDark ? "#262626" : "#f8fafc";
+  const accent = "#f97316";
+  const watermarkText = isDark ? "#71717a" : "#94a3b8";
+
+  const initials = perf.full_name
+    .split(" ")
+    .filter(Boolean)
+    .map((n) => n[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+
+  const stats = [
+    { label: "WS",  value: perf.weekly_score ?? 0 },
+    { label: "PTS", value: perf.pts ?? 0 },
+    { label: "REB", value: perf.reb ?? 0 },
+    { label: "AST", value: perf.ast ?? 0 },
+    { label: "STL", value: perf.stl ?? 0 },
+    { label: "BLK", value: perf.blk ?? 0 },
+    { label: "TOV", value: perf.tov ?? 0 },
+    { label: "FGA", value: perf.fga ?? 0 },
+    { label: "FTA", value: perf.fta ?? 0 },
+    { label: "TS%", value: tsPct },
+  ];
+
   return (
     <div
-      className="rounded-2xl"
       style={{
-        backgroundColor: panelBg,
-        border: `1px solid ${panelBorder}`,
-        padding: "28px 20px",
+        width: CARD_W,
+        backgroundColor: bg,
+        border: `1px solid ${border}`,
+        borderRadius: 16,
+        padding: 14,
+        fontFamily: "'Poppins', ui-sans-serif, system-ui, sans-serif",
+        boxSizing: "border-box",
+        overflow: "hidden",
       }}
     >
-      <div className="grid grid-cols-5" style={{ rowGap: 36, columnGap: 12 }}>
-        <ShareStat label="WS" value={perf.weekly_score ?? 0} labelColor={labelColor} />
-        <ShareStat label="PTS" value={perf.pts ?? 0} labelColor={labelColor} />
-        <ShareStat label="REB" value={perf.reb ?? 0} labelColor={labelColor} />
-        <ShareStat label="AST" value={perf.ast ?? 0} labelColor={labelColor} />
-        <ShareStat label="STL" value={perf.stl ?? 0} labelColor={labelColor} />
-        <ShareStat label="BLK" value={perf.blk ?? 0} labelColor={labelColor} />
-        <ShareStat label="TOV" value={perf.tov ?? 0} labelColor={labelColor} />
-        <ShareStat label="FGA" value={perf.fga ?? 0} labelColor={labelColor} />
-        <ShareStat label="FTA" value={perf.fta ?? 0} labelColor={labelColor} />
-        <ShareStat label="TS%" value={tsPct} labelColor={labelColor} />
+      {/* Top label row */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <span style={{ fontSize: 9, fontWeight: 700, color: accent, textTransform: "uppercase", letterSpacing: "0.12em" }}>
+          Trending Performance
+        </span>
+        {leagueName && (
+          <span style={{ fontSize: 9, fontWeight: 600, color: textSecondary, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            {leagueName}
+          </span>
+        )}
+      </div>
+
+      {/* Player row */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        <div
+          style={{
+            width: 38, height: 38, borderRadius: "50%", overflow: "hidden", flexShrink: 0,
+            background: isDark ? "#374151" : "linear-gradient(135deg, #fed7aa, #fef3c7)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}
+        >
+          {photoUrl ? (
+            <img src={photoUrl} alt={perf.full_name} crossOrigin="anonymous" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+          ) : (
+            <span style={{ color: "#ea580c", fontWeight: 700, fontSize: 12 }}>{initials}</span>
+          )}
+        </div>
+        <div>
+          <div style={{ fontWeight: 600, color: textPrimary, fontSize: 13, lineHeight: 1.3 }}>
+            {perf.full_name}
+          </div>
+          <div style={{ color: textSecondary, fontSize: 11 }}>
+            {formatDate(perf.week_start)}{perf.team_name ? ` • ${perf.team_name}` : ""}
+          </div>
+        </div>
+      </div>
+
+      {/* Divider */}
+      <div style={{ height: 1, backgroundColor: divider, marginBottom: 10 }} />
+
+      {/* Stats grid 5×2 */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "6px 4px" }}>
+        {stats.map(({ label, value }) => (
+          <div
+            key={label}
+            style={{
+              display: "flex", flexDirection: "column", alignItems: "center",
+              padding: "6px 2px", backgroundColor: statBg, borderRadius: 6,
+            }}
+          >
+            <span style={{ fontWeight: 700, color: textPrimary, fontSize: 15, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
+              {value}
+            </span>
+            <span style={{ color: accent, fontSize: 8, textTransform: "uppercase", letterSpacing: "0.08em", marginTop: 2, fontWeight: 600 }}>
+              {label}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {/* Watermark */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 4, marginTop: 8 }}>
+        <img src={SwishLogo} alt="" crossOrigin="anonymous" style={{ height: 12, width: "auto", display: "block" }} />
+        <span style={{ fontSize: 8, color: watermarkText, fontWeight: 500 }}>www.swishassistant.com</span>
       </div>
     </div>
   );
@@ -128,7 +183,6 @@ function PerfCard({
   perf,
   playerMeta,
   leagueName,
-  brandColor,
 }: {
   perf: PerfRow;
   playerMeta: TrendingData["playerMeta"];
@@ -151,14 +205,23 @@ function PerfCard({
     let cancelled = false;
     setShareTeamLogoUrl(null);
     if (!perf.team_name || !perf.league_id) return;
-    void getTeamLogoCached({
-      leagueId: perf.league_id,
-      teamName: perf.team_name,
-    }).then((url) => {
+    void getTeamLogoCached({ leagueId: perf.league_id, teamName: perf.team_name }).then((url) => {
       if (!cancelled) setShareTeamLogoUrl(url);
     });
     return () => { cancelled = true; };
   }, [perf.team_name, perf.league_id]);
+
+  const [isDark, setIsDark] = useState(
+    () => typeof document !== "undefined" && document.documentElement.classList.contains("dark")
+  );
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const observer = new MutationObserver(() => {
+      setIsDark(document.documentElement.classList.contains("dark"));
+    });
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
 
   const tsPct = useMemo(() => {
     return perf.ts_pct !== null && perf.ts_pct !== undefined
@@ -167,45 +230,11 @@ function PerfCard({
   }, [perf.ts_pct]);
 
   const goToPlayer = () => {
-    if (playerSlug) {
-      setLocation(`/player/${playerSlug}`);
-    } else if (perf.league_id) {
-      setLocation(`/competition/${perf.league_id}`);
-    }
+    if (playerSlug) setLocation(`/player/${playerSlug}`);
+    else if (perf.league_id) setLocation(`/competition/${perf.league_id}`);
   };
 
-  const labelColor = ensureContrast(primaryColor, "#ffffff", 4.5);
-  const panelBg = tintHex(primaryColor, 0.92);
-  const panelBorder = tintHex(primaryColor, 0.7);
-  const dividerColor = tintHex(primaryColor, 0.65);
-  const dateColor = ensureContrast(shadeHex(primaryColor, 0.35), "#ffffff", 4.5);
-
-  const shareBody = (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <span
-          className="font-bold uppercase"
-          style={{ color: labelColor, fontSize: 18, letterSpacing: "0.16em" }}
-        >
-          {leagueName || "Featured League"}
-        </span>
-        <span
-          className="font-semibold uppercase"
-          style={{ color: dateColor, fontSize: 18, letterSpacing: "0.14em" }}
-        >
-          {formatDate(perf.week_start)}
-        </span>
-      </div>
-      <div aria-hidden="true" style={{ height: 2, backgroundColor: dividerColor }} />
-      <ShareStatBlock
-        perf={perf}
-        tsPct={tsPct}
-        labelColor={labelColor}
-        panelBg={panelBg}
-        panelBorder={panelBorder}
-      />
-    </div>
-  );
+  const captureCard = buildCompactCard({ perf, tsPct, photoUrl, leagueName, isDark });
 
   return (
     <ShareableCard
@@ -219,18 +248,14 @@ function PerfCard({
         teamLogoUrl: shareTeamLogoUrl,
       }}
       shareCaption={leagueName ? `${leagueName} • ${formatDate(perf.week_start)}` : formatDate(perf.week_start)}
-      shareContent={shareBody}
-      wide
+      captureCard={captureCard}
     >
       <div
         role="button"
         tabIndex={0}
         onClick={goToPlayer}
         onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            goToPlayer();
-          }
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); goToPlayer(); }
         }}
         className="group block w-full text-left rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 shadow-sm hover:shadow-md hover:border-orange-300 dark:hover:border-orange-500/50 transition-all p-3 md:p-4 cursor-pointer focus:outline-none focus:ring-2 focus:ring-orange-400 h-full"
         data-testid="league-trending-perf-card"
@@ -247,20 +272,13 @@ function PerfCard({
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="font-semibold text-sm text-slate-900 dark:text-white truncate">
-              {perf.full_name}
-            </div>
+            <div className="font-semibold text-sm text-slate-900 dark:text-white truncate">{perf.full_name}</div>
             <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 truncate">
               <span>{formatDate(perf.week_start)}</span>
               {perf.team_name && (
                 <>
                   <span aria-hidden="true">·</span>
-                  <TeamLogo
-                    teamName={perf.team_name}
-                    leagueId={perf.league_id}
-                    size="xs"
-                    className="!w-4 !h-4"
-                  />
+                  <TeamLogo teamName={perf.team_name} leagueId={perf.league_id} size="xs" className="!w-4 !h-4" />
                 </>
               )}
             </div>
@@ -270,9 +288,9 @@ function PerfCard({
         {/* Divider */}
         <div className="border-t border-slate-200 dark:border-neutral-800 mb-2" />
 
-        {/* Stats */}
+        {/* Stats — compact 5-col view (full 10 in download) */}
         <div className="grid grid-cols-5 gap-y-2 gap-x-1">
-          <Stat label="WS" value={perf.weekly_score ?? 0} />
+          <Stat label="WS"  value={perf.weekly_score ?? 0} />
           <Stat label="PTS" value={perf.pts ?? 0} />
           <Stat label="REB" value={perf.reb ?? 0} />
           <Stat label="AST" value={perf.ast ?? 0} />
@@ -327,10 +345,7 @@ export default function LeagueTrendingPerformances({ leagueSlug, brandColor }: P
         <div className="h-5 w-48 bg-slate-200 dark:bg-neutral-800 rounded animate-pulse mb-3" />
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           {[0, 1, 2, 3, 4].map((i) => (
-            <div
-              key={i}
-              className="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 p-3 animate-pulse"
-            >
+            <div key={i} className="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 p-3 animate-pulse">
               <div className="flex items-center gap-2 mb-3">
                 <div className="h-10 w-10 rounded-full bg-slate-200 dark:bg-neutral-800" />
                 <div className="flex-1 space-y-1.5">
