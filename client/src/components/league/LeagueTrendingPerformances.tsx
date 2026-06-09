@@ -76,7 +76,7 @@ function buildCompactCard({
   const statValue  = isDark ? "#ffffff"  : "#0f172a";
   const statLabel  = isDark ? "#94a3b8"  : "#64748b";
   const accent     = "#f97316";
-  const watermark  = isDark ? "#52525b"  : "#94a3b8";
+  const watermark  = "#ffffff";
   const avatarBg   = isDark ? "#374151"  : "linear-gradient(135deg, #ffedd5, #fef9c3)";
 
   const initials = perf.full_name
@@ -172,10 +172,18 @@ function buildCompactCard({
         {row2.map((s) => <StatCell key={s.label} {...s} />)}
       </div>
 
-      {/* Watermark */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 4, marginTop: 12 }}>
-        <img src={SwishLogo} alt="" crossOrigin="anonymous" style={{ height: 13, width: "auto", display: "block" }} />
-        <span style={{ fontSize: 9, color: watermark, fontWeight: 500 }}>www.swishassistant.com</span>
+      {/* Watermark strip — bleeds to card edges so white text is always legible */}
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 7,
+        marginTop: 14, marginLeft: -18, marginRight: -18, marginBottom: -18,
+        padding: "7px 18px",
+        backgroundColor: "#0f172a",
+        borderBottomLeftRadius: 16, borderBottomRightRadius: 16,
+      }}>
+        <img src={SwishLogo} alt="" crossOrigin="anonymous" style={{ height: 16, width: "auto", display: "block", verticalAlign: "middle" }} />
+        <span style={{ fontSize: 10, color: watermark, fontWeight: 600, lineHeight: 1, verticalAlign: "middle" }}>
+          www.swishassistant.com
+        </span>
       </div>
     </div>
   );
