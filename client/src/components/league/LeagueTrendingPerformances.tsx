@@ -150,37 +150,40 @@ function PerfCard({
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") { e.preventDefault(); goToPlayer(); }
         }}
-        className="group flex items-center gap-3 w-full text-left rounded-xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 shadow-sm hover:shadow-md hover:border-orange-300 dark:hover:border-orange-500/50 transition-all px-3 py-2.5 cursor-pointer focus:outline-none focus:ring-2 focus:ring-orange-400"
+        className="group w-full text-left rounded-xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 shadow-sm hover:shadow-md hover:border-orange-300 dark:hover:border-orange-500/50 transition-all px-3 pt-2.5 pb-2 cursor-pointer focus:outline-none focus:ring-2 focus:ring-orange-400"
         data-testid="league-trending-perf-card"
       >
-        {/* Avatar */}
-        <div className="h-9 w-9 rounded-full overflow-hidden bg-gradient-to-br from-orange-100 to-amber-100 dark:from-neutral-800 dark:to-neutral-800 flex items-center justify-center flex-shrink-0">
-          {photoUrl ? (
-            <img src={photoUrl} alt={perf.full_name} className="h-full w-full object-cover" />
-          ) : (
-            <span className="text-orange-600 dark:text-orange-300 font-bold text-xs">
-              {perf.full_name.split(" ").map((n) => n[0]).slice(0, 2).join("")}
-            </span>
-          )}
-        </div>
-
-        {/* Name + date/team */}
-        <div className="flex-1 min-w-0">
-          <div className="font-semibold text-sm text-slate-900 dark:text-white truncate leading-tight">{perf.full_name}</div>
-          <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            <span>{formatDate(perf.week_start)}</span>
-            {perf.team_name && (
-              <>
-                <span aria-hidden="true">·</span>
-                <TeamLogo teamName={perf.team_name} leagueId={perf.league_id} size="xs" className="!w-3.5 !h-3.5" />
-                <span className="truncate max-w-[90px] hidden sm:inline">{perf.team_name}</span>
-              </>
+        {/* Top row: avatar + name + team — pr-9 leaves room for the share button */}
+        <div className="flex items-center gap-2.5 pr-9 mb-2">
+          <div className="h-8 w-8 rounded-full overflow-hidden bg-gradient-to-br from-orange-100 to-amber-100 dark:from-neutral-800 dark:to-neutral-800 flex items-center justify-center flex-shrink-0">
+            {photoUrl ? (
+              <img src={photoUrl} alt={perf.full_name} className="h-full w-full object-cover" />
+            ) : (
+              <span className="text-orange-600 dark:text-orange-300 font-bold text-xs">
+                {perf.full_name.split(" ").map((n) => n[0]).slice(0, 2).join("")}
+              </span>
             )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="font-semibold text-sm text-slate-900 dark:text-white truncate leading-tight">{perf.full_name}</div>
+            <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+              <span className="shrink-0">{formatDate(perf.week_start)}</span>
+              {perf.team_name && (
+                <>
+                  <span aria-hidden="true" className="shrink-0">·</span>
+                  <TeamLogo teamName={perf.team_name} leagueId={perf.league_id} size="xs" className="!w-3.5 !h-3.5 shrink-0" />
+                  <span className="truncate">{perf.team_name}</span>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Stats in a single horizontal row */}
-        <div className="flex items-center gap-3 md:gap-5 shrink-0">
+        {/* Divider */}
+        <div className="border-t border-slate-100 dark:border-neutral-800 mb-2" />
+
+        {/* Stats — full width, evenly spaced */}
+        <div className="flex items-center justify-between">
           <Stat label="WS"  value={perf.weekly_score ?? 0} />
           <Stat label="PTS" value={perf.pts ?? 0} />
           <Stat label="REB" value={perf.reb ?? 0} />
