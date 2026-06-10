@@ -150,43 +150,43 @@ function PerfCard({
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") { e.preventDefault(); goToPlayer(); }
         }}
-        className="group block w-full text-left rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 shadow-sm hover:shadow-md hover:border-orange-300 dark:hover:border-orange-500/50 transition-all p-3 md:p-4 cursor-pointer focus:outline-none focus:ring-2 focus:ring-orange-400 h-full"
+        className="group flex items-center gap-3 w-full text-left rounded-xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 shadow-sm hover:shadow-md hover:border-orange-300 dark:hover:border-orange-500/50 transition-all px-3 py-2.5 cursor-pointer focus:outline-none focus:ring-2 focus:ring-orange-400"
         data-testid="league-trending-perf-card"
       >
-        {/* Player avatar + name */}
-        <div className="flex items-center gap-2 mb-3">
-          <div className="h-10 w-10 rounded-full overflow-hidden bg-gradient-to-br from-orange-100 to-amber-100 dark:from-neutral-800 dark:to-neutral-800 flex items-center justify-center flex-shrink-0">
-            {photoUrl ? (
-              <img src={photoUrl} alt={perf.full_name} className="h-full w-full object-cover" />
-            ) : (
-              <span className="text-orange-600 dark:text-orange-300 font-bold text-xs">
-                {perf.full_name.split(" ").map((n) => n[0]).slice(0, 2).join("")}
-              </span>
+        {/* Avatar */}
+        <div className="h-9 w-9 rounded-full overflow-hidden bg-gradient-to-br from-orange-100 to-amber-100 dark:from-neutral-800 dark:to-neutral-800 flex items-center justify-center flex-shrink-0">
+          {photoUrl ? (
+            <img src={photoUrl} alt={perf.full_name} className="h-full w-full object-cover" />
+          ) : (
+            <span className="text-orange-600 dark:text-orange-300 font-bold text-xs">
+              {perf.full_name.split(" ").map((n) => n[0]).slice(0, 2).join("")}
+            </span>
+          )}
+        </div>
+
+        {/* Name + date/team */}
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold text-sm text-slate-900 dark:text-white truncate leading-tight">{perf.full_name}</div>
+          <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            <span>{formatDate(perf.week_start)}</span>
+            {perf.team_name && (
+              <>
+                <span aria-hidden="true">·</span>
+                <TeamLogo teamName={perf.team_name} leagueId={perf.league_id} size="xs" className="!w-3.5 !h-3.5" />
+                <span className="truncate max-w-[90px] hidden sm:inline">{perf.team_name}</span>
+              </>
             )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="font-semibold text-sm text-slate-900 dark:text-white truncate">{perf.full_name}</div>
-            <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 truncate">
-              <span>{formatDate(perf.week_start)}</span>
-              {perf.team_name && (
-                <>
-                  <span aria-hidden="true">·</span>
-                  <TeamLogo teamName={perf.team_name} leagueId={perf.league_id} size="xs" className="!w-4 !h-4" />
-                </>
-              )}
-            </div>
           </div>
         </div>
 
-        {/* Divider */}
-        <div className="border-t border-slate-200 dark:border-neutral-800 mb-2" />
-
-        {/* Stats — compact 5-col view (full 10 in download) */}
-        <div className="grid grid-cols-5 gap-y-2 gap-x-1">
+        {/* Stats in a single horizontal row */}
+        <div className="flex items-center gap-3 md:gap-5 shrink-0">
           <Stat label="WS"  value={perf.weekly_score ?? 0} />
           <Stat label="PTS" value={perf.pts ?? 0} />
           <Stat label="REB" value={perf.reb ?? 0} />
           <Stat label="AST" value={perf.ast ?? 0} />
+          <Stat label="STL" value={perf.stl ?? 0} />
+          <Stat label="BLK" value={perf.blk ?? 0} />
           <Stat label="TS%" value={tsPct} />
         </div>
       </div>
@@ -236,20 +236,17 @@ export default function LeagueTrendingPerformances({ leagueSlug, brandColor }: P
     return (
       <div className="w-full py-4 px-4 md:px-6">
         <div className="h-5 w-48 bg-slate-200 dark:bg-neutral-800 rounded animate-pulse mb-3" />
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div className="flex flex-col gap-2">
           {[0, 1, 2, 3, 4].map((i) => (
-            <div key={i} className="rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 p-3 animate-pulse">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="h-10 w-10 rounded-full bg-slate-200 dark:bg-neutral-800" />
-                <div className="flex-1 space-y-1.5">
-                  <div className="h-3 w-24 bg-slate-200 dark:bg-neutral-800 rounded" />
-                  <div className="h-2.5 w-16 bg-slate-200 dark:bg-neutral-800 rounded" />
-                </div>
+            <div key={i} className="flex items-center gap-3 rounded-xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 px-3 py-2.5 animate-pulse">
+              <div className="h-9 w-9 rounded-full bg-slate-200 dark:bg-neutral-800 shrink-0" />
+              <div className="flex-1 space-y-1.5">
+                <div className="h-3 w-32 bg-slate-200 dark:bg-neutral-800 rounded" />
+                <div className="h-2.5 w-20 bg-slate-200 dark:bg-neutral-800 rounded" />
               </div>
-              <div className="border-t border-slate-100 dark:border-neutral-800 mb-2" />
-              <div className="grid grid-cols-5 gap-1">
-                {[0, 1, 2, 3, 4].map((j) => (
-                  <div key={j} className="h-8 bg-slate-200 dark:bg-neutral-800 rounded" />
+              <div className="flex gap-4 shrink-0">
+                {[0, 1, 2, 3, 4, 5, 6].map((j) => (
+                  <div key={j} className="h-8 w-8 bg-slate-200 dark:bg-neutral-800 rounded" />
                 ))}
               </div>
             </div>
@@ -274,7 +271,7 @@ export default function LeagueTrendingPerformances({ leagueSlug, brandColor }: P
           style={{ background: `linear-gradient(to right, ${accentColor}40, transparent)` }}
         />
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="flex flex-col gap-2">
         {perfs.map((perf) => (
           <PerfCard
             key={`${perf.player_id}-${perf.week_start}`}
