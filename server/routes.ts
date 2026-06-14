@@ -2175,6 +2175,135 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Per-slug cache for league-scoped trending performances (keyed by slug).
+  const leagueTrendingCache = new Map<string, { data: TrendingApiPayload; at: number }>();
+  const leagueTrendingInFlight = new Map<string, Promise<TrendingApiPayload>>();
+
+  async function fetchLeagueTrendingPerformances(slug: string): Promise<TrendingApiPayload> {
+    const empty: TrendingApiPayload = { perfs: [], leagueNames: {}, playerMeta: {} };
+
+    // Resolve the league_id from the slug (could be a URL slug string or a UUID).
+    // Enforce is_public=true so private leagues cannot be accessed by unauthenticated callers.
+    // Only include league_id in the OR filter when the slug looks like a UUID to avoid
+    // PostgreSQL parse errors (league_id is a uuid column, not a text column).
+    // competition_id and league_id are both uuid columns — only include them in
+    // the OR filter when the slug param is itself a valid UUID, otherwise
+    // PostgreSQL will throw "invalid input syntax for type uuid".
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const isUuid = UUID_RE.test(slug);
+
+    let leagueQuery = supabaseAdmin
+      .from("competitions")
+      .select("league_id, name, is_public")
+      .eq("is_public", true);
+
+    if (isUuid) {
+      leagueQuery = leagueQuery.or(`slug.eq.${slug},competition_id.eq.${slug},league_id.eq.${slug}`);
+    } else {
+      leagueQuery = leagueQuery.eq("slug", slug);
+    }
+
+    const { data: leagueRow, error: lErr } = await leagueQuery.maybeSingle();
+
+    if (lErr || !leagueRow) {
+      console.error("[LeagueTrendingPerf] league lookup error (not found or not public)", slug, lErr?.message);
+      return empty;
+    }
+
+    const { league_id, name } = leagueRow as { league_id: string; name: string | null; is_public: boolean };
+    const leagueNames: Record<string, string> = { [league_id]: name || slug };
+
+    // First find the most recent week_start for this league so we only show
+    // current-week performances, not spill from prior weeks when < 5 rows exist.
+    const { data: latestWeek } = await supabaseAdmin
+      .from("vw_weekly_player_scores")
+      .select("week_start")
+      .eq("league_id", league_id)
+      .order("week_start", { ascending: false, nullsFirst: false })
+      .limit(1)
+      .returns<{ week_start: string | null }[]>();
+
+    const mostRecentWeekStart = latestWeek?.[0]?.week_start ?? null;
+
+    let query = supabaseAdmin
+      .from("vw_weekly_player_scores")
+      .select("league_id,week_start,week_end,player_id,full_name,team_id,team_name,pts,reb,ast,stl,blk,tov,fga,fta,weekly_score")
+      .eq("league_id", league_id)
+      .order("weekly_score", { ascending: false });
+
+    if (mostRecentWeekStart) {
+      query = query.eq("week_start", mostRecentWeekStart);
+    }
+
+    const { data: rows, error } = await query
+      .limit(5)
+      .returns<Omit<TrendingPerfRow, "ts_pct">[]>();
+
+    if (error) {
+      console.error("[LeagueTrendingPerf] query error", slug, error.message);
+      return empty;
+    }
+
+    const perfs: TrendingPerfRow[] = (rows || []).map((r) => {
+      const pts = r.pts ?? 0;
+      const fga = r.fga ?? 0;
+      const fta = r.fta ?? 0;
+      const denom = 2 * (fga + 0.44 * fta);
+      const ts_pct = denom > 0 ? pts / denom : null;
+      return { ...r, ts_pct };
+    });
+
+    const playerMeta: Record<string, { slug: string | null; photo_path_bg_removed: string | null }> = {};
+    const playerIds = [...new Set(perfs.map((p) => p.player_id))];
+    if (playerIds.length > 0) {
+      const { data: metaRows, error: pErr } = await supabaseAdmin
+        .from("players")
+        .select("id, slug, photo_path_bg_removed")
+        .in("id", playerIds);
+      if (!pErr) {
+        for (const p of (metaRows || []) as { id: string; slug: string | null; photo_path_bg_removed: string | null }[]) {
+          playerMeta[p.id] = { slug: p.slug, photo_path_bg_removed: p.photo_path_bg_removed };
+        }
+      }
+    }
+
+    console.log(`[LeagueTrendingPerf] ${slug}: ${perfs.length} rows`);
+    return { perfs, leagueNames, playerMeta };
+  }
+
+  app.get("/api/league/:slug/trending-performances", async (req: Request, res: Response) => {
+    const { slug } = req.params;
+    const now = Date.now();
+    const cached = leagueTrendingCache.get(slug);
+    if (cached && now - cached.at < TRENDING_TTL_MS) {
+      // Serve cached result — if it has no leagueNames the league wasn't found/public.
+      if (Object.keys(cached.data.leagueNames).length === 0) {
+        return res.status(404).json({ error: "League not found or not public" });
+      }
+      return res.json(cached.data);
+    }
+    if (!leagueTrendingInFlight.has(slug)) {
+      const p = fetchLeagueTrendingPerformances(slug).finally(() => {
+        leagueTrendingInFlight.delete(slug);
+      });
+      leagueTrendingInFlight.set(slug, p);
+    }
+    try {
+      const data = await leagueTrendingInFlight.get(slug)!;
+      // Only cache successful league lookups (leagueNames populated = public league found).
+      // Don't persist "not found" results so a later publish/add can succeed without a restart.
+      if (Object.keys(data.leagueNames).length > 0) {
+        leagueTrendingCache.set(slug, { data, at: Date.now() });
+        return res.json(data);
+      }
+      return res.status(404).json({ error: "League not found or not public" });
+    } catch (err: any) {
+      console.error("[LeagueTrendingPerf] fetch error", slug, err.message);
+      if (cached) return res.json(cached.data);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   app.get("/api/home/trending-performances", async (req: Request, res: Response) => {
     const now = Date.now();
     if (trendingCache && now - trendingCache.at < TRENDING_TTL_MS) {

@@ -2042,23 +2042,25 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
             return undefined;
           })()}
           shareContent={
-            <div
-              className="flex flex-col items-center justify-center bg-white"
-              style={{ gap: 18, padding: "8px 0" }}
-            >
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "4px 0", width: "100%" }}>
               <span
-                className="font-bold uppercase text-slate-500 self-stretch"
-                style={{ fontSize: 18, letterSpacing: "0.18em" }}
+                style={{
+                  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+                  fontWeight: 700,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.18em",
+                  fontSize: 17,
+                  color: "#64748b",
+                }}
               >
                 Shot Chart
               </span>
-              <div style={{ width: "100%", maxWidth: 760 }}>
-                <ShotChart
-                  shots={playerShotData || []}
-                  loading={playerShotsLoading}
-                  emptyMessage="No shot data available for this player."
-                />
-              </div>
+              <ShotChart
+                shots={playerShotData || []}
+                loading={playerShotsLoading}
+                emptyMessage="No shot data available for this player."
+                shareMode
+              />
             </div>
           }
           wide

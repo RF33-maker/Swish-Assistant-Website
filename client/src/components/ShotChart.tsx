@@ -35,6 +35,8 @@ interface ShotChartProps {
   emptyMessage?: string;
   compact?: boolean;
   pulseRecent?: boolean;
+  /** Strips interactive chrome and forces a horizontal layout for share-card capture. */
+  shareMode?: boolean;
 }
 
 const CW = 500;
@@ -225,6 +227,7 @@ export default function ShotChart({
   emptyMessage = "No shot data available",
   compact = false,
   pulseRecent = false,
+  shareMode = false,
 }: ShotChartProps) {
   const {
     showPlayerFilter = false,
@@ -342,7 +345,99 @@ export default function ShotChart({
   const formatSubType = (st: string) =>
     st.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase()).trim();
 
-  const dotR = compact ? 4 : 5;
+  const dotR = shareMode ? 5 : compact ? 4 : 5;
+
+  // ── Share-mode: a clean, fixed-layout capture surface ──────────────────
+  if (shareMode) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {/* Summary line */}
+        <div
+          style={{
+            fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif",
+            fontSize: 15,
+            color: "#64748b",
+            fontWeight: 500,
+          }}
+        >
+          <span style={{ fontWeight: 700, color: "#ea580c" }}>{makes}/{total}</span> FG ({percentage}%)
+        </div>
+
+        {/* Court + zone stats side-by-side */}
+        <div style={{ display: "flex", flexDirection: "row", gap: 28, alignItems: "flex-start" }}>
+          {/* Court SVG */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <svg viewBox={`0 0 ${CW} ${CH}`} style={{ width: "100%", height: "auto", display: "block" }}>
+              <defs>
+                <filter id="shotGlowMadeSM" x="-50%" y="-50%" width="200%" height="200%">
+                  <feGaussianBlur stdDeviation="1.2" result="b" />
+                  <feMerge>
+                    <feMergeNode in="b" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+              </defs>
+              <HalfCourt />
+              {projected.map(({ shot, sx, sy, idx }) => {
+                const fill = shot.success ? COLOR_MADE : COLOR_MISSED;
+                return (
+                  <g key={shot.id ?? idx} transform={`translate(${sx} ${sy}) rotate(45)`}>
+                    <rect
+                      x={-dotR} y={-dotR} width={dotR * 2} height={dotR * 2}
+                      fill={fill}
+                      opacity={shot.success ? 0.92 : 0.78}
+                      stroke={shot.success ? MADE_STROKE : "transparent"}
+                      strokeWidth={shot.success ? 0.4 : 0}
+                      filter={shot.success ? "url(#shotGlowMadeSM)" : undefined}
+                    />
+                  </g>
+                );
+              })}
+            </svg>
+            {/* Legend */}
+            <div style={{ display: "flex", justifyContent: "center", gap: 20, marginTop: 10, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", fontSize: 12, color: "#64748b" }}>
+              {[{ color: COLOR_MISSED, label: "Missed" }, { color: COLOR_MADE, label: "Made" }].map(({ color, label }) => (
+                <div key={label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                  <span style={{ display: "inline-block", width: 10, height: 10, background: color, transform: "rotate(45deg)" }} />
+                  {label}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Zone breakdown — single column */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 18, flexShrink: 0, width: 148, paddingTop: 8, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
+            {ZONES.map((z) => {
+              const s = zoneStats[z.key];
+              const pct = s.total > 0 ? (s.made / s.total) * 100 : null;
+              const color =
+                pct === null
+                  ? "#94a3b8"
+                  : overallPct > 0 && pct / 100 > overallPct + 0.03
+                  ? "#f97316"
+                  : overallPct > 0 && pct / 100 < overallPct - 0.03
+                  ? "#0284c7"
+                  : "#334155";
+              return (
+                <div key={z.key} style={{ lineHeight: 1.2 }}>
+                  <div style={{ fontWeight: 700, fontSize: 24, color, fontVariantNumeric: "tabular-nums" }}>
+                    {pct === null ? "—" : pct.toFixed(1)}
+                    {pct !== null && <span style={{ fontSize: 14, fontWeight: 600 }}>%</span>}
+                  </div>
+                  <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#94a3b8", marginTop: 3 }}>
+                    {z.label}
+                    {s.total > 0 && (
+                      <span style={{ color: "#cbd5e1", textTransform: "none", letterSpacing: 0 }}> · {s.made}-{s.total}</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">

@@ -58,6 +58,20 @@ interface ShareableCardProps {
    * Used by share cards intended for Instagram / X feeds.
    */
   wide?: boolean;
+  /**
+   * When provided, this element is what gets captured as the PNG instead of
+   * the default big banner card. Use this to produce a compact card that
+   * mirrors the website UI. Colors should be explicit inline styles so dark
+   * mode is handled by the caller. The PNG will have a transparent background
+   * so rounded corners show through when overlaid on social posts.
+   */
+  captureCard?: ReactNode;
+  /**
+   * When provided, calling this function produces the PNG blob directly —
+   * bypassing html2canvas entirely. Use this for canvas-drawn cards that need
+   * pixel-perfect output (e.g. the trending performance card).
+   */
+  generateCardBlob?: () => Promise<Blob | null>;
 }
 
 const SHARE_WIDTH_WIDE = 1080;
@@ -162,6 +176,8 @@ export default function ShareableCard({
   shareCaption,
   teamLogos,
   wide,
+  captureCard,
+  generateCardBlob,
 }: ShareableCardProps) {
   const [open, setOpen] = useState(false);
   const [working, setWorking] = useState(false);
@@ -218,29 +234,102 @@ export default function ShareableCard({
     }
   };
 
+  /**
+   * Reads all CSS custom-property values defined on bare `:root` / `html`
+   * selectors from the document's own stylesheets (no CSSOM mutation, no
+   * flash). Returns a map of `--prop-name → value` for light-mode.
+   */
+  const getLightModeCssVars = (): Map<string, string> => {
+    const vars = new Map<string, string>();
+    try {
+      Array.from(document.styleSheets).forEach((sheet) => {
+        try {
+          Array.from(sheet.cssRules).forEach((rule) => {
+            if (
+              rule instanceof CSSStyleRule &&
+              (rule.selectorText === ":root" || rule.selectorText === "html")
+            ) {
+              Array.from(rule.style).forEach((prop) => {
+                if (prop.startsWith("--"))
+                  vars.set(prop, rule.style.getPropertyValue(prop).trim());
+              });
+            }
+          });
+        } catch {
+          // cross-origin stylesheet — skip
+        }
+      });
+    } catch {
+      // silently ignore
+    }
+    return vars;
+  };
+
   const generatePngBlob = async (): Promise<Blob | null> => {
+    if (generateCardBlob) return generateCardBlob();
     if (!captureRef.current) return null;
 
+    // ── 1. Collect every image URL we know about ──────────────────────────
+    // Include both DOM-scanned <img> tags AND images referenced in props,
+    // so logos from teamLogos / player props are always pre-fetched even if
+    // the React component hasn't mounted them yet.
     const liveImgs = Array.from(
       captureRef.current.querySelectorAll<HTMLImageElement>("img"),
     );
+    const propSrcs = [
+      player.photoUrl,
+      player.teamLogoUrl,
+      ...(teamLogos?.map((t) => t.logoUrl) ?? []),
+    ].filter((s): s is string => !!s);
+    const domSrcs = liveImgs
+      .map((img) => img.getAttribute("src") || img.src)
+      .filter(Boolean) as string[];
+    const allSrcs = [...new Set([...propSrcs, ...domSrcs])];
+
+    // ── 2. Pre-fetch all images as data-URLs (avoids CORS taint) ─────────
     const dataUrlMap = new Map<string, string>();
     await Promise.all(
-      liveImgs.map(async (img) => {
-        const src = img.getAttribute("src") || img.src;
-        if (src && !dataUrlMap.has(src)) {
+      allSrcs.map(async (src) => {
+        if (!dataUrlMap.has(src)) {
           const dataUrl = await fetchAsDataUrl(src);
           if (dataUrl) dataUrlMap.set(src, dataUrl);
         }
       }),
     );
 
+    // ── 3. Wait for in-DOM images to finish loading ────────────────────────
+    await Promise.all(
+      liveImgs.map(
+        (img) =>
+          img.complete
+            ? Promise.resolve()
+            : new Promise<void>((res) => {
+                img.addEventListener("load",  () => res(), { once: true });
+                img.addEventListener("error", () => res(), { once: true });
+              }),
+      ),
+    );
+
+    // ── 4. Snapshot light-mode CSS vars for SVG resolution ────────────────
+    const lightVars = getLightModeCssVars();
+
+    const resolveCssVar = (value: string): string => {
+      if (!value?.includes("var(")) return value;
+      return value.replace(/var\(\s*(--[^,)]+)\s*(?:,([^)]*))?\)/g, (_, name, fallback) => {
+        const trimName = name.trim();
+        return lightVars.get(trimName) ?? fallback?.trim() ?? _;
+      });
+    };
+
     const captureEl = captureRef.current;
-    const naturalWidth = wide ? SHARE_WIDTH_WIDE : captureEl.scrollWidth;
+    const isCompactCapture = !!captureCard;
+    const naturalWidth = isCompactCapture
+      ? captureEl.scrollWidth
+      : wide ? SHARE_WIDTH_WIDE : captureEl.scrollWidth;
     const naturalHeight = captureEl.scrollHeight;
     const canvas = await html2canvas(captureEl, {
-      backgroundColor: "#ffffff",
-      scale: 2,
+      backgroundColor: isCompactCapture ? null : "#ffffff",
+      scale: isCompactCapture ? 3 : 2,
       useCORS: true,
       allowTaint: true,
       logging: false,
@@ -249,13 +338,32 @@ export default function ShareableCard({
       width: naturalWidth,
       height: naturalHeight,
       onclone: (doc) => {
-        doc.documentElement.classList.remove("dark");
-        doc.body.classList.remove("dark");
+        if (!isCompactCapture) {
+          doc.documentElement.classList.remove("dark");
+          doc.body.classList.remove("dark");
+        }
 
+        // Replace img src with pre-fetched data-URLs
         doc.querySelectorAll<HTMLImageElement>("img").forEach((img) => {
           const src = img.getAttribute("src") || img.src;
           const dataUrl = dataUrlMap.get(src);
           if (dataUrl) img.src = dataUrl;
+        });
+
+        // Resolve CSS custom properties in SVG presentation attributes and
+        // inline styles so shot charts (and any other SVG content) capture
+        // correctly. html2canvas doesn't resolve var() in SVG attributes.
+        const SVG_ATTRS = [
+          "stroke", "fill", "color", "stop-color",
+          "flood-color", "lighting-color",
+        ] as const;
+        doc.querySelectorAll<Element>("svg, svg *").forEach((el) => {
+          SVG_ATTRS.forEach((attr) => {
+            const val = el.getAttribute(attr);
+            if (val?.includes("var(")) el.setAttribute(attr, resolveCssVar(val));
+          });
+          const style = el.getAttribute("style");
+          if (style?.includes("var(")) el.setAttribute("style", resolveCssVar(style));
         });
       },
     });
@@ -422,8 +530,8 @@ export default function ShareableCard({
               style={{ gap: wide ? 14 : 8 }}
             >
               {[teamLogos[0], teamLogos[1]].map((tl, i) => {
-                const logoOuter = wide ? 110 : 60;
-                const logoInner = wide ? 96 : 52;
+                const logoOuter = wide ? 148 : 80;
+                const logoInner = wide ? 130 : 68;
                 return (
                 <div
                   key={i}
@@ -534,10 +642,10 @@ export default function ShareableCard({
             style={{
               right: wide ? 36 : 18,
               top: "50%",
-              width: wide ? 210 : 118,
-              height: wide ? 210 : 118,
-              marginTop: wide ? -105 : -59,
-              opacity: 0.18,
+              width: wide ? 270 : 148,
+              height: wide ? 270 : 148,
+              marginTop: wide ? -135 : -74,
+              opacity: 0.22,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -765,7 +873,8 @@ export default function ShareableCard({
   return (
     <>
       {/* Off-screen capture node — always in the DOM so html2canvas sees a
-          clean, unscaled, full-resolution element regardless of modal state. */}
+          clean, unscaled, full-resolution element regardless of modal state.
+          When captureCard is provided it replaces the default banner layout. */}
       <div
         aria-hidden="true"
         style={{
@@ -776,7 +885,11 @@ export default function ShareableCard({
           zIndex: -1,
         }}
       >
-        {cardMarkup}
+        {captureCard ? (
+          <div ref={captureRef}>{captureCard}</div>
+        ) : (
+          cardMarkup
+        )}
       </div>
 
       <div className="relative group">
