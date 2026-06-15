@@ -649,6 +649,37 @@ export default function LeaguePage() {
   const brandColorHover = leagueBrandColors 
     ? `rgb(${Math.max(0, leagueBrandColors.primaryRgb.r - 20)}, ${Math.max(0, leagueBrandColors.primaryRgb.g - 20)}, ${Math.max(0, leagueBrandColors.primaryRgb.b - 20)})`
     : 'rgb(70, 70, 70)';
+
+  const [isDarkMode, setIsDarkMode] = useState(() =>
+    typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
+  );
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDarkMode(document.documentElement.classList.contains('dark'));
+    });
+    observer.observe(document.documentElement, { attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+
+  const _brandRgb = leagueBrandColors?.primaryRgb;
+  const _isColorDark = _brandRgb
+    ? (_brandRgb.r * 0.299 + _brandRgb.g * 0.587 + _brandRgb.b * 0.114) < 140
+    : true;
+  const _DARK_MODE_FALLBACK = 'rgb(255, 255, 255)';
+  const _DARK_MODE_FALLBACK_HOVER = 'rgb(203, 213, 225)';
+  const _lightenedBrand = _brandRgb
+    ? `rgb(${Math.round(_brandRgb.r + (255 - _brandRgb.r) * 0.55)}, ${Math.round(_brandRgb.g + (255 - _brandRgb.g) * 0.55)}, ${Math.round(_brandRgb.b + (255 - _brandRgb.b) * 0.55)})`
+    : _DARK_MODE_FALLBACK;
+  const _lightenedBrandHover = _brandRgb
+    ? `rgb(${Math.round(_brandRgb.r + (255 - _brandRgb.r) * 0.4)}, ${Math.round(_brandRgb.g + (255 - _brandRgb.g) * 0.4)}, ${Math.round(_brandRgb.b + (255 - _brandRgb.b) * 0.4)})`
+    : _DARK_MODE_FALLBACK_HOVER;
+
+  const playerLinkColor = isDarkMode
+    ? (_isColorDark ? _DARK_MODE_FALLBACK : _lightenedBrand)
+    : brandColor;
+  const playerLinkColorHover = isDarkMode
+    ? (_isColorDark ? _DARK_MODE_FALLBACK_HOVER : _lightenedBrandHover)
+    : brandColorHover;
   const brandBorderLight = leagueBrandColors 
     ? `rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.2)` 
     : 'rgba(100, 100, 100, 0.2)';
@@ -4401,9 +4432,9 @@ export default function LeaguePage() {
                               <div className="min-w-0">
                                 <div
                                   className={`font-medium text-xs md:text-sm truncate ${player.slug ? 'hover:underline cursor-pointer' : 'text-slate-900 dark:text-white'}`}
-                                  style={player.slug ? { color: brandColor } : undefined}
-                                  onMouseEnter={(e) => { if (player.slug) (e.target as HTMLElement).style.color = brandColorHover; }}
-                                  onMouseLeave={(e) => { if (player.slug) (e.target as HTMLElement).style.color = brandColor; }}
+                                  style={player.slug ? { color: playerLinkColor } : undefined}
+                                  onMouseEnter={(e) => { if (player.slug) (e.target as HTMLElement).style.color = playerLinkColorHover; }}
+                                  onMouseLeave={(e) => { if (player.slug) (e.target as HTMLElement).style.color = playerLinkColor; }}
                                 >{player.name}</div>
                                 <div className="text-[10px] md:text-xs text-slate-500 dark:text-slate-400 truncate">{player.team}</div>
                               </div>
@@ -5386,7 +5417,7 @@ export default function LeaguePage() {
                                         )
                                       )}
                                       <div className="min-w-0 flex-1">
-                                        <p className={`text-sm font-medium truncate ${isClickable ? 'hover:underline' : ''}`} style={{ color: brandColor }}>{displayName}</p>
+                                        <p className={`text-sm font-medium truncate ${isClickable ? 'hover:underline' : ''}`} style={{ color: playerLinkColor }}>{displayName}</p>
                                         <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{subLine}</p>
                                       </div>
                                     </div>
@@ -5843,13 +5874,13 @@ export default function LeaguePage() {
                                         <span className="text-xs font-bold tabular-nums text-slate-400 dark:text-slate-500 w-4 shrink-0">{i + 1}</span>
                                         <span
                                           className={`text-sm font-medium text-slate-800 dark:text-white truncate ${p.slug ? 'hover:underline' : ''}`}
-                                          style={p.slug ? { color: brandColor } : undefined}
-                                          onMouseEnter={(e) => { if (p.slug) (e.target as HTMLElement).style.color = brandColorHover; }}
-                                          onMouseLeave={(e) => { if (p.slug) (e.target as HTMLElement).style.color = brandColor; }}
+                                          style={p.slug ? { color: playerLinkColor } : undefined}
+                                          onMouseEnter={(e) => { if (p.slug) (e.target as HTMLElement).style.color = playerLinkColorHover; }}
+                                          onMouseLeave={(e) => { if (p.slug) (e.target as HTMLElement).style.color = playerLinkColor; }}
                                         >{p.name}</span>
                                         {p.team && <span className="text-xs text-slate-400 dark:text-slate-500 truncate hidden sm:block">· {p.team}</span>}
                                       </div>
-                                      <span className="text-sm font-bold tabular-nums whitespace-nowrap ml-3 shrink-0" style={{ color: brandColor }}>
+                                      <span className="text-sm font-bold tabular-nums whitespace-nowrap ml-3 shrink-0" style={{ color: playerLinkColor }}>
                                         {p.value} <span className="text-xs font-medium opacity-70">{unitLabel}</span>
                                       </span>
                                     </li>
