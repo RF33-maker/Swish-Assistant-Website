@@ -10,6 +10,8 @@ export interface TrendingCardOptions {
   playerName: string;
   teamName: string | null;
   gameDate: string | null;
+  opponentName?: string | null;
+  gameResult?: string | null;
   tsPct: string;
   gmSc: number | null;
   pts: number | null;
@@ -85,7 +87,7 @@ function roundRect(
 
 export async function generateTrendingCardBlob(opts: TrendingCardOptions): Promise<Blob | null> {
   const {
-    playerName, teamName, gameDate, tsPct,
+    playerName, teamName, gameDate, opponentName, gameResult, tsPct,
     gmSc, pts, reb, ast, stl, blk, tov,
     fgm, fga, ftm, fta,
     photoUrl, teamLogoUrl, leagueName, isDark,
@@ -198,19 +200,46 @@ export async function generateTrendingCardBlob(opts: TrendingCardOptions): Promi
   ctx.fillText(playerName, nameX, y + 19);
 
   const metaY    = y + 38;
-  let metaText = fmtDate(gameDate);
-  if (teamName) metaText += ` • ${teamName}`;
   ctx.font      = "400 12px system-ui,-apple-system,sans-serif";
   ctx.fillStyle = metaCol;
-  ctx.fillText(metaText, nameX, metaY);
 
+  let metaDrawX = nameX;
+
+  // Draw team logo if available
   if (teamLogoImg && teamName) {
-    const metaW   = ctx.measureText(metaText).width;
     const LOGO_H  = 14;
     const LOGO_W  = teamLogoImg.naturalWidth > 0
       ? (LOGO_H * teamLogoImg.naturalWidth) / teamLogoImg.naturalHeight
       : LOGO_H;
-    ctx.drawImage(teamLogoImg, nameX + metaW + 6, metaY - 12, LOGO_W, LOGO_H);
+    ctx.drawImage(teamLogoImg, metaDrawX, metaY - 12, LOGO_W, LOGO_H);
+    metaDrawX += LOGO_W + 5;
+  }
+
+  if (opponentName) {
+    const vsText = `vs ${opponentName}`;
+    ctx.fillStyle = metaCol;
+    ctx.fillText(vsText, metaDrawX, metaY);
+    if (gameResult) {
+      const vsW = ctx.measureText(vsText).width;
+      ctx.fillText(" · ", metaDrawX + vsW, metaY);
+      const sepW = ctx.measureText(" · ").width;
+      // Color W green, L red
+      ctx.font = "600 12px system-ui,-apple-system,sans-serif";
+      if (gameResult.startsWith("W")) {
+        ctx.fillStyle = isDark ? "#4ade80" : "#16a34a";
+      } else if (gameResult.startsWith("L")) {
+        ctx.fillStyle = isDark ? "#f87171" : "#dc2626";
+      } else {
+        ctx.fillStyle = metaCol;
+      }
+      ctx.fillText(gameResult, metaDrawX + vsW + sepW, metaY);
+      ctx.font = "400 12px system-ui,-apple-system,sans-serif";
+      ctx.fillStyle = metaCol;
+    }
+  } else {
+    let metaText = fmtDate(gameDate);
+    if (teamName) metaText += ` • ${teamName}`;
+    ctx.fillText(metaText, metaDrawX, metaY);
   }
 
   y += PLAYER_BLOCK + DIV_PRE;

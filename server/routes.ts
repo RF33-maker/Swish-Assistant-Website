@@ -1780,6 +1780,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     fga: number | null; fta: number | null;
     fgm?: number | null; ftm?: number | null;
     game_score: number | null; ts_pct: number | null;
+    opponent_name?: string | null;
+    game_result?: string | null;
   }
   interface TrendingApiPayload {
     perfs: TrendingPerfRow[];
@@ -1906,6 +1908,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const perf of perfs) {
         const s = shootingMap[`${perf.game_key}_${perf.player_id}`];
         if (s) { perf.fgm = s.fgm; perf.ftm = s.ftm; }
+      }
+    }
+
+    // Fetch opponent name + game result from v_game_results.
+    if (gameKeys.length > 0) {
+      const { data: gameRows } = await supabaseAdmin
+        .from("v_game_results")
+        .select("game_key,home_team,away_team,home_score,away_score")
+        .in("game_key", gameKeys)
+        .returns<{ game_key: string; home_team: string | null; away_team: string | null; home_score: number | null; away_score: number | null }[]>();
+      const gameMap: Record<string, { home_team: string | null; away_team: string | null; home_score: number | null; away_score: number | null }> = {};
+      for (const g of (gameRows || [])) {
+        gameMap[g.game_key] = { home_team: g.home_team, away_team: g.away_team, home_score: g.home_score, away_score: g.away_score };
+      }
+      for (const perf of perfs) {
+        if (!perf.game_key) continue;
+        const g = gameMap[perf.game_key];
+        if (!g) continue;
+        const isHome = g.home_team && perf.team_name && g.home_team.toLowerCase() === perf.team_name.toLowerCase();
+        const myScore = isHome ? g.home_score : g.away_score;
+        const oppScore = isHome ? g.away_score : g.home_score;
+        perf.opponent_name = isHome ? g.away_team : g.home_team;
+        if (myScore !== null && oppScore !== null) {
+          const wl = myScore > oppScore ? "W" : myScore < oppScore ? "L" : "T";
+          perf.game_result = `${wl} ${myScore}-${oppScore}`;
+        }
       }
     }
 
@@ -2311,6 +2339,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const perf of perfs) {
         const s = shootingMap[`${perf.game_key}_${perf.player_id}`];
         if (s) { perf.fgm = s.fgm; perf.ftm = s.ftm; }
+      }
+    }
+
+    // Fetch opponent name + game result from v_game_results.
+    if (gameKeys.length > 0) {
+      const { data: gameRows } = await supabaseAdmin
+        .from("v_game_results")
+        .select("game_key,home_team,away_team,home_score,away_score")
+        .in("game_key", gameKeys)
+        .returns<{ game_key: string; home_team: string | null; away_team: string | null; home_score: number | null; away_score: number | null }[]>();
+      const gameMap: Record<string, { home_team: string | null; away_team: string | null; home_score: number | null; away_score: number | null }> = {};
+      for (const g of (gameRows || [])) {
+        gameMap[g.game_key] = { home_team: g.home_team, away_team: g.away_team, home_score: g.home_score, away_score: g.away_score };
+      }
+      for (const perf of perfs) {
+        if (!perf.game_key) continue;
+        const g = gameMap[perf.game_key];
+        if (!g) continue;
+        const isHome = g.home_team && perf.team_name && g.home_team.toLowerCase() === perf.team_name.toLowerCase();
+        const myScore = isHome ? g.home_score : g.away_score;
+        const oppScore = isHome ? g.away_score : g.home_score;
+        perf.opponent_name = isHome ? g.away_team : g.home_team;
+        if (myScore !== null && oppScore !== null) {
+          const wl = myScore > oppScore ? "W" : myScore < oppScore ? "L" : "T";
+          perf.game_result = `${wl} ${myScore}-${oppScore}`;
+        }
       }
     }
 

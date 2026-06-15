@@ -28,6 +28,8 @@ interface PerfRow {
   fta: number | null;
   ts_pct: number | null;
   game_score: number | null;
+  opponent_name?: string | null;
+  game_result?: string | null;
 }
 
 interface TrendingData {
@@ -114,6 +116,8 @@ function PerfCard({
     playerName: perf.full_name,
     teamName: perf.team_name,
     gameDate: perf.game_date,
+    opponentName: perf.opponent_name,
+    gameResult: perf.game_result,
     tsPct,
     gmSc: perf.game_score,
     pts: perf.pts,
@@ -171,13 +175,26 @@ function PerfCard({
           <div className="flex-1 min-w-0">
             <div className="font-semibold text-sm text-slate-900 dark:text-white truncate leading-tight">{perf.full_name}</div>
             <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
-              <span className="shrink-0">{formatDate(perf.game_date)}</span>
               {perf.team_name && (
                 <>
-                  <span aria-hidden="true" className="shrink-0">·</span>
                   <TeamLogo teamName={perf.team_name} leagueId={perf.league_id} size="xs" className="!w-3.5 !h-3.5 shrink-0" />
-                  <span className="truncate">{perf.team_name}</span>
                 </>
+              )}
+              {perf.opponent_name ? (
+                <>
+                  <span className="shrink-0">vs</span>
+                  <span className="truncate">{perf.opponent_name}</span>
+                  {perf.game_result && (
+                    <>
+                      <span aria-hidden="true" className="shrink-0">·</span>
+                      <span className={`font-semibold shrink-0 ${perf.game_result.startsWith("W") ? "text-green-600 dark:text-green-400" : perf.game_result.startsWith("L") ? "text-red-500 dark:text-red-400" : ""}`}>
+                        {perf.game_result}
+                      </span>
+                    </>
+                  )}
+                </>
+              ) : (
+                <span className="shrink-0">{formatDate(perf.game_date)}</span>
               )}
             </div>
           </div>

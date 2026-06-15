@@ -28,6 +28,8 @@ interface PerfRow {
   fta: number | null;
   ts_pct: number | null;
   game_score: number | null;
+  opponent_name?: string | null;
+  game_result?: string | null;
 }
 
 interface PlayerMetaRow {
@@ -100,7 +102,7 @@ export default function TrendingPerformanceSection() {
   );
 
   const { data, isLoading } = useQuery<TrendingData>({
-    queryKey: ["home", "trending-performance", "v13-gmsc"],
+    queryKey: ["home", "trending-performance", "v14-opponent"],
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const empty: TrendingData = { perfs: [], leagueNames: {}, playerMeta: {} };
@@ -227,6 +229,8 @@ export default function TrendingPerformanceSection() {
     playerName: perf.full_name,
     teamName: perf.team_name,
     gameDate: perf.game_date,
+    opponentName: perf.opponent_name,
+    gameResult: perf.game_result,
     tsPct,
     gmSc: perf.game_score,
     pts: perf.pts,
@@ -299,13 +303,27 @@ export default function TrendingPerformanceSection() {
             <div className="flex-1 min-w-0">
               <div className="font-semibold text-slate-900 dark:text-white truncate">{perf.full_name}</div>
               <div className="flex items-center gap-1.5 text-xs md:text-sm text-slate-500 dark:text-slate-400 truncate">
-                <span>{formatDate(perf.game_date)}</span>
                 {perf.team_name && (
                   <>
-                    <span aria-hidden="true">•</span>
                     <TeamLogo teamName={perf.team_name} leagueId={perf.league_id} size="xs" className="!w-5 !h-5" />
                     <span className="sr-only">{perf.team_name}</span>
                   </>
+                )}
+                {perf.opponent_name ? (
+                  <>
+                    <span aria-hidden="true">vs</span>
+                    <span className="truncate">{perf.opponent_name}</span>
+                    {perf.game_result && (
+                      <>
+                        <span aria-hidden="true">·</span>
+                        <span className={`font-semibold shrink-0 ${perf.game_result.startsWith("W") ? "text-green-600 dark:text-green-400" : perf.game_result.startsWith("L") ? "text-red-500 dark:text-red-400" : ""}`}>
+                          {perf.game_result}
+                        </span>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <span>{formatDate(perf.game_date)}</span>
                 )}
               </div>
             </div>
