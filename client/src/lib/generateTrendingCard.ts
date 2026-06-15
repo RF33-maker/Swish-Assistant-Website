@@ -9,16 +9,18 @@ import SwishLogoSrc from "@/assets/Swish Assistant Logo.png";
 export interface TrendingCardOptions {
   playerName: string;
   teamName: string | null;
-  weekStart: string | null;
+  gameDate: string | null;
   tsPct: string;
-  ws: number | null;
+  gmSc: number | null;
   pts: number | null;
   reb: number | null;
   ast: number | null;
   stl: number | null;
   blk: number | null;
   tov: number | null;
+  fgm: number | null;
   fga: number | null;
+  ftm: number | null;
   fta: number | null;
   photoUrl: string | null;
   teamLogoUrl: string | null;
@@ -83,8 +85,9 @@ function roundRect(
 
 export async function generateTrendingCardBlob(opts: TrendingCardOptions): Promise<Blob | null> {
   const {
-    playerName, teamName, weekStart, tsPct,
-    ws, pts, reb, ast, stl, blk, tov, fga, fta,
+    playerName, teamName, gameDate, tsPct,
+    gmSc, pts, reb, ast, stl, blk, tov,
+    fgm, fga, ftm, fta,
     photoUrl, teamLogoUrl, leagueName, isDark,
     cardWidth = 560,
   } = opts;
@@ -195,7 +198,7 @@ export async function generateTrendingCardBlob(opts: TrendingCardOptions): Promi
   ctx.fillText(playerName, nameX, y + 19);
 
   const metaY    = y + 38;
-  let metaText = fmtDate(weekStart);
+  let metaText = fmtDate(gameDate);
   if (teamName) metaText += ` • ${teamName}`;
   ctx.font      = "400 12px system-ui,-apple-system,sans-serif";
   ctx.fillStyle = metaCol;
@@ -220,29 +223,35 @@ export async function generateTrendingCardBlob(opts: TrendingCardOptions): Promi
   ctx.stroke();
   y += 1 + DIV_POST;
 
+  const colW = (W - PAD * 2) / 5;
+
+  // Row 1: primary stats
   const row1 = [
-    { label: "WS",  value: String(ws  ?? 0) },
-    { label: "PTS", value: String(pts ?? 0) },
-    { label: "REB", value: String(reb ?? 0) },
-    { label: "AST", value: String(ast ?? 0) },
-    { label: "STL", value: String(stl ?? 0) },
+    { label: "GmSc", value: String(gmSc ?? 0) },
+    { label: "PTS",  value: String(pts ?? 0) },
+    { label: "REB",  value: String(reb ?? 0) },
+    { label: "AST",  value: String(ast ?? 0) },
+    { label: "STL",  value: String(stl ?? 0) },
   ];
+  // Row 2: secondary stats — FG and FT shown as "makes/attempts" (e.g. 8/12)
   const row2 = [
     { label: "BLK", value: String(blk ?? 0) },
     { label: "TOV", value: String(tov ?? 0) },
-    { label: "FGA", value: String(fga ?? 0) },
-    { label: "FTA", value: String(fta ?? 0) },
+    { label: "FG",  value: `${fgm ?? 0}/${fga ?? 0}` },
+    { label: "FT",  value: `${ftm ?? 0}/${fta ?? 0}` },
     { label: "TS%", value: tsPct },
   ];
-
-  const colW = (W - PAD * 2) / 5;
 
   const drawRow = (row: { label: string; value: string }[], rowY: number) => {
     row.forEach((s, i) => {
       const cx = PAD + colW * i + colW / 2;
       ctx.textAlign    = "center";
       ctx.textBaseline = "alphabetic";
-      ctx.font         = "700 22px system-ui,-apple-system,sans-serif";
+      // Slightly smaller font for fraction values so they fit the column width
+      const isFraction = s.value.includes("/");
+      ctx.font         = isFraction
+        ? "700 17px system-ui,-apple-system,sans-serif"
+        : "700 22px system-ui,-apple-system,sans-serif";
       ctx.fillStyle    = valCol;
       ctx.fillText(s.value, cx, rowY + 26);
       ctx.font         = "500 10px system-ui,-apple-system,sans-serif";

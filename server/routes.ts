@@ -1766,14 +1766,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // memory and avoid hammering Supabase with one query per user per page load.
   // The view is slow (57014 timeouts under load); a single background query
   // every TRENDING_TTL_MS serves all concurrent visitors from cache.
+  // vw_player_game_scores columns (confirmed 2026-06-15):
+  // league_id, game_key, game_date, week_start, player_id, full_name,
+  // team_id, team_name, pts, reb, ast, stl, blk, tov, fga, fta,
+  // ts_pct, box_impact, win_flag, ts_bonus_points, win_bonus_points,
+  // game_score, game_rank
   interface TrendingPerfRow {
-    league_id: string; week_start: string | null; week_end: string | null;
+    league_id: string; game_date: string | null; game_key: string | null;
     player_id: string; full_name: string;
     team_id: string | null; team_name: string | null;
     pts: number | null; reb: number | null; ast: number | null;
     stl: number | null; blk: number | null; tov: number | null;
     fga: number | null; fta: number | null;
-    weekly_score: number | null; ts_pct: number | null;
+    fgm?: number | null; ftm?: number | null;
+    game_score: number | null; ts_pct: number | null;
   }
   interface TrendingApiPayload {
     perfs: TrendingPerfRow[];
@@ -1815,33 +1821,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.log("[TrendingPerf] querying leagues:", leagueRows.map((l: any) => `${l.name} (pos ${l.trending_position})`));
     const perfs: TrendingPerfRow[] = [];
 
-    // Query the lightweight weekly-aggregated view instead of the heavy per-game
-    // view (vw_player_game_scores), which times out on Vercel serverless cold starts.
+    // Query vw_player_game_scores (per-game view). For each league, first find the
+    // most recent game_date, then fetch the top 2 performers scoped to that date.
+    // This prevents leakage from older game dates when fewer than 2 rows exist
+    // on the newest date. ts_pct is pre-computed in the view.
     const perLeague = await Promise.allSettled(
       leagueIds.map(async (lid) => {
         const name = leagueNames[lid] || lid;
-        const { data: rows, error } = await supabaseAdmin
-          .from("vw_weekly_player_scores")
-          .select("league_id,week_start,week_end,player_id,full_name,team_id,team_name,pts,reb,ast,stl,blk,tov,fga,fta,weekly_score")
+
+        const { data: latestGame } = await supabaseAdmin
+          .from("vw_player_game_scores")
+          .select("game_date")
           .eq("league_id", lid)
-          .order("week_start", { ascending: false, nullsFirst: false })
-          .order("weekly_score", { ascending: false })
+          .order("game_date", { ascending: false, nullsFirst: false })
+          .limit(1)
+          .returns<{ game_date: string | null }[]>();
+
+        const mostRecentGameDate = latestGame?.[0]?.game_date ?? null;
+
+        let query = supabaseAdmin
+          .from("vw_player_game_scores")
+          .select("league_id,game_date,game_key,player_id,full_name,team_id,team_name,pts,reb,ast,stl,blk,tov,fga,fta,game_score,ts_pct")
+          .eq("league_id", lid)
+          .order("game_score", { ascending: false });
+
+        if (mostRecentGameDate) {
+          query = query.eq("game_date", mostRecentGameDate);
+        }
+
+        const { data: rows, error } = await query
           .limit(2)
-          .returns<Omit<TrendingPerfRow, "ts_pct">[]>();
+          .returns<TrendingPerfRow[]>();
+
         if (error) {
           console.error("[TrendingPerf] league query error", name, error.message);
           return [] as TrendingPerfRow[];
         }
-        console.log(`[TrendingPerf] ${name}: ${rows?.length ?? 0} rows (most recent week_start: ${rows?.[0]?.week_start ?? "none"})`);
-        // Compute ts_pct from available columns: pts / (2 * (fga + 0.44 * fta))
-        return (rows || []).slice(0, 2).map((r) => {
-          const pts = r.pts ?? 0;
-          const fga = r.fga ?? 0;
-          const fta = r.fta ?? 0;
-          const denom = 2 * (fga + 0.44 * fta);
-          const ts_pct = denom > 0 ? pts / denom : null;
-          return { ...r, ts_pct };
-        });
+        console.log(`[TrendingPerf] ${name}: ${rows?.length ?? 0} rows (most recent game_date: ${mostRecentGameDate ?? "none"})`);
+        return rows || [];
       })
     );
 
@@ -1854,10 +1871,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     perfs.sort((a, b) => {
-      const aw = a.week_start || "";
-      const bw = b.week_start || "";
+      const aw = a.game_date || "";
+      const bw = b.game_date || "";
       if (aw !== bw) return aw < bw ? 1 : -1;
-      return (b.weekly_score ?? 0) - (a.weekly_score ?? 0);
+      return (b.game_score ?? 0) - (a.game_score ?? 0);
     });
 
     const playerMeta: Record<string, { slug: string | null; photo_path_bg_removed: string | null }> = {};
@@ -1871,6 +1888,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         for (const p of (metaRows || []) as { id: string; slug: string | null; photo_path_bg_removed: string | null }[]) {
           playerMeta[p.id] = { slug: p.slug, photo_path_bg_removed: p.photo_path_bg_removed };
         }
+      }
+    }
+
+    // Fetch FGM/FTM from player_stats so the card can show "makes/attempts" (e.g. 8/12).
+    const gameKeys = [...new Set(perfs.filter(p => p.game_key).map(p => p.game_key!))];
+    if (gameKeys.length > 0 && playerIds.length > 0) {
+      const { data: shootingRows } = await supabaseAdmin
+        .from("player_stats")
+        .select("game_key,player_id,sfieldgoalsmade,sfreethrowsmade")
+        .in("game_key", gameKeys)
+        .in("player_id", playerIds);
+      const shootingMap: Record<string, { fgm: number | null; ftm: number | null }> = {};
+      for (const row of (shootingRows || []) as { game_key: string; player_id: string; sfieldgoalsmade: number | null; sfreethrowsmade: number | null }[]) {
+        shootingMap[`${row.game_key}_${row.player_id}`] = { fgm: row.sfieldgoalsmade, ftm: row.sfreethrowsmade };
+      }
+      for (const perf of perfs) {
+        const s = shootingMap[`${perf.game_key}_${perf.player_id}`];
+        if (s) { perf.fgm = s.fgm; perf.ftm = s.ftm; }
       }
     }
 
@@ -2213,45 +2248,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const { league_id, name } = leagueRow as { league_id: string; name: string | null; is_public: boolean };
     const leagueNames: Record<string, string> = { [league_id]: name || slug };
 
-    // First find the most recent week_start for this league so we only show
-    // current-week performances, not spill from prior weeks when < 5 rows exist.
-    const { data: latestWeek } = await supabaseAdmin
-      .from("vw_weekly_player_scores")
-      .select("week_start")
+    // First find the most recent game_date for this league so we only show
+    // performances from the latest game date, not spill from prior dates.
+    const { data: latestGame } = await supabaseAdmin
+      .from("vw_player_game_scores")
+      .select("game_date")
       .eq("league_id", league_id)
-      .order("week_start", { ascending: false, nullsFirst: false })
+      .order("game_date", { ascending: false, nullsFirst: false })
       .limit(1)
-      .returns<{ week_start: string | null }[]>();
+      .returns<{ game_date: string | null }[]>();
 
-    const mostRecentWeekStart = latestWeek?.[0]?.week_start ?? null;
+    const mostRecentGameDate = latestGame?.[0]?.game_date ?? null;
 
     let query = supabaseAdmin
-      .from("vw_weekly_player_scores")
-      .select("league_id,week_start,week_end,player_id,full_name,team_id,team_name,pts,reb,ast,stl,blk,tov,fga,fta,weekly_score")
+      .from("vw_player_game_scores")
+      .select("league_id,game_date,game_key,player_id,full_name,team_id,team_name,pts,reb,ast,stl,blk,tov,fga,fta,game_score,ts_pct")
       .eq("league_id", league_id)
-      .order("weekly_score", { ascending: false });
+      .order("game_score", { ascending: false });
 
-    if (mostRecentWeekStart) {
-      query = query.eq("week_start", mostRecentWeekStart);
+    if (mostRecentGameDate) {
+      query = query.eq("game_date", mostRecentGameDate);
     }
 
     const { data: rows, error } = await query
       .limit(5)
-      .returns<Omit<TrendingPerfRow, "ts_pct">[]>();
+      .returns<TrendingPerfRow[]>();
 
     if (error) {
       console.error("[LeagueTrendingPerf] query error", slug, error.message);
       return empty;
     }
 
-    const perfs: TrendingPerfRow[] = (rows || []).map((r) => {
-      const pts = r.pts ?? 0;
-      const fga = r.fga ?? 0;
-      const fta = r.fta ?? 0;
-      const denom = 2 * (fga + 0.44 * fta);
-      const ts_pct = denom > 0 ? pts / denom : null;
-      return { ...r, ts_pct };
-    });
+    // ts_pct is pre-computed in vw_player_game_scores, no calculation needed.
+    const perfs: TrendingPerfRow[] = rows || [];
 
     const playerMeta: Record<string, { slug: string | null; photo_path_bg_removed: string | null }> = {};
     const playerIds = [...new Set(perfs.map((p) => p.player_id))];
@@ -2264,6 +2293,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         for (const p of (metaRows || []) as { id: string; slug: string | null; photo_path_bg_removed: string | null }[]) {
           playerMeta[p.id] = { slug: p.slug, photo_path_bg_removed: p.photo_path_bg_removed };
         }
+      }
+    }
+
+    // Fetch FGM/FTM from player_stats so the card can show "makes/attempts" (e.g. 8/12).
+    const gameKeys = [...new Set(perfs.filter(p => p.game_key).map(p => p.game_key!))];
+    if (gameKeys.length > 0 && playerIds.length > 0) {
+      const { data: shootingRows } = await supabaseAdmin
+        .from("player_stats")
+        .select("game_key,player_id,sfieldgoalsmade,sfreethrowsmade")
+        .in("game_key", gameKeys)
+        .in("player_id", playerIds);
+      const shootingMap: Record<string, { fgm: number | null; ftm: number | null }> = {};
+      for (const row of (shootingRows || []) as { game_key: string; player_id: string; sfieldgoalsmade: number | null; sfreethrowsmade: number | null }[]) {
+        shootingMap[`${row.game_key}_${row.player_id}`] = { fgm: row.sfieldgoalsmade, ftm: row.sfreethrowsmade };
+      }
+      for (const perf of perfs) {
+        const s = shootingMap[`${perf.game_key}_${perf.player_id}`];
+        if (s) { perf.fgm = s.fgm; perf.ftm = s.ftm; }
       }
     }
 
