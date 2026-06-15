@@ -7,6 +7,7 @@ import { ArrowLeft, Trophy, Filter, Instagram } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { generatePlayerAnalysis, type PlayerAnalysisData } from "@/lib/ai-analysis";
+import { normalizeInstagramHandle } from "@/lib/instagram";
 import { TeamLogo } from "@/components/TeamLogo";
 import { PlayerBanner } from "@/components/PlayerBanner";
 import { useTeamBranding } from "@/hooks/useTeamBranding";
@@ -1526,7 +1527,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
           )}
           {playerInfo.instagramHandle && (
             <a
-              href={`https://www.instagram.com/${playerInfo.instagramHandle.replace(/^@/, "")}`}
+              href={`https://www.instagram.com/${normalizeInstagramHandle(playerInfo.instagramHandle)}`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 text-sm font-medium text-pink-600 dark:text-pink-400 hover:text-pink-700 dark:hover:text-pink-300 transition-colors"

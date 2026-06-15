@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useLocation, useParams } from "wouter";
 import { supabase, getSupabaseForLeague, getDataLeagueId } from "@/lib/supabase";
 import { fetchLeagueChildren } from "@/lib/leagueChildren";
+import { normalizeInstagramHandle } from "@/lib/instagram";
 import { fetchLeagueData } from "@/lib/leagueData";
 import type { League } from "@shared/schema";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
@@ -3560,13 +3561,13 @@ export default function LeaguePage() {
               </div>
               {(league as any)?.instagram_handle && (
                 <a
-                  href={`https://www.instagram.com/${(league as any).instagram_handle}`}
+                  href={`https://www.instagram.com/${normalizeInstagramHandle((league as any).instagram_handle)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="mt-2 self-start inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold text-white bg-white/20 hover:bg-white/30 border border-white/30 transition-colors"
                 >
                   <Instagram className="h-3 w-3" />
-                  @{(league as any).instagram_handle}
+                  @{normalizeInstagramHandle((league as any).instagram_handle)}
                 </a>
               )}
             </div>
