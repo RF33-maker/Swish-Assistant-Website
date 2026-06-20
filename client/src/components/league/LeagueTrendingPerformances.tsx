@@ -10,8 +10,8 @@ import { generateTrendingCardBlob } from "@/lib/generateTrendingCard";
 
 interface PerfRow {
   league_id: string;
-  week_start: string | null;
-  week_end: string | null;
+  game_date: string | null;
+  game_key: string | null;
   player_id: string;
   full_name: string;
   team_id: string | null;
@@ -22,10 +22,14 @@ interface PerfRow {
   stl: number | null;
   blk: number | null;
   tov: number | null;
+  fgm?: number | null;
   fga: number | null;
+  ftm?: number | null;
   fta: number | null;
   ts_pct: number | null;
-  weekly_score: number | null;
+  game_score: number | null;
+  opponent_name?: string | null;
+  game_result?: string | null;
 }
 
 interface TrendingData {
@@ -111,16 +115,20 @@ function PerfCard({
   const generateCardBlob = () => generateTrendingCardBlob({
     playerName: perf.full_name,
     teamName: perf.team_name,
-    weekStart: perf.week_start,
+    gameDate: perf.game_date,
+    opponentName: perf.opponent_name,
+    gameResult: perf.game_result,
     tsPct,
-    ws: perf.weekly_score,
+    gmSc: perf.game_score,
     pts: perf.pts,
     reb: perf.reb,
     ast: perf.ast,
     stl: perf.stl,
     blk: perf.blk,
     tov: perf.tov,
+    fgm: perf.fgm ?? null,
     fga: perf.fga,
+    ftm: perf.ftm ?? null,
     fta: perf.fta,
     photoUrl,
     teamLogoUrl: shareTeamLogoUrl,
@@ -132,7 +140,7 @@ function PerfCard({
   return (
     <ShareableCard
       title="Top Performance"
-      fileSlug={`trending-${perf.player_id}-${perf.week_start}`}
+      fileSlug={`trending-${perf.player_id}-${perf.game_date}`}
       player={{
         name: perf.full_name,
         team: perf.team_name || leagueName || "",
@@ -140,7 +148,7 @@ function PerfCard({
         primaryColor,
         teamLogoUrl: shareTeamLogoUrl,
       }}
-      shareCaption={leagueName ? `${leagueName} • ${formatDate(perf.week_start)}` : formatDate(perf.week_start)}
+      shareCaption={leagueName ? `${leagueName} • ${formatDate(perf.game_date)}` : formatDate(perf.game_date)}
       generateCardBlob={generateCardBlob}
     >
       <div
@@ -167,13 +175,26 @@ function PerfCard({
           <div className="flex-1 min-w-0">
             <div className="font-semibold text-sm text-slate-900 dark:text-white truncate leading-tight">{perf.full_name}</div>
             <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
-              <span className="shrink-0">{formatDate(perf.week_start)}</span>
               {perf.team_name && (
                 <>
-                  <span aria-hidden="true" className="shrink-0">·</span>
                   <TeamLogo teamName={perf.team_name} leagueId={perf.league_id} size="xs" className="!w-3.5 !h-3.5 shrink-0" />
-                  <span className="truncate">{perf.team_name}</span>
                 </>
+              )}
+              {perf.opponent_name ? (
+                <>
+                  <span className="shrink-0">vs</span>
+                  <span className="truncate">{perf.opponent_name}</span>
+                  {perf.game_result && (
+                    <>
+                      <span aria-hidden="true" className="shrink-0">·</span>
+                      <span className={`font-semibold shrink-0 ${perf.game_result.startsWith("W") ? "text-green-600 dark:text-green-400" : perf.game_result.startsWith("L") ? "text-red-500 dark:text-red-400" : ""}`}>
+                        {perf.game_result}
+                      </span>
+                    </>
+                  )}
+                </>
+              ) : (
+                <span className="shrink-0">{formatDate(perf.game_date)}</span>
               )}
             </div>
           </div>
@@ -184,7 +205,7 @@ function PerfCard({
 
         {/* Stats — full width, evenly spaced */}
         <div className="flex items-center justify-between">
-          <Stat label="WS"  value={perf.weekly_score ?? 0} />
+          <Stat label="GmSc" value={perf.game_score ?? 0} />
           <Stat label="PTS" value={perf.pts ?? 0} />
           <Stat label="REB" value={perf.reb ?? 0} />
           <Stat label="AST" value={perf.ast ?? 0} />
@@ -267,7 +288,7 @@ export default function LeagueTrendingPerformances({ leagueSlug, brandColor }: P
     <div className="w-full py-4 px-4 md:px-6">
       <div className="flex items-center gap-2 mb-3">
         <h3 className="text-sm font-semibold text-slate-900 dark:text-white uppercase tracking-wide">
-          Top Performances This Week
+          Top Performances
         </h3>
         <div
           className="flex-1 h-px"
@@ -277,7 +298,7 @@ export default function LeagueTrendingPerformances({ leagueSlug, brandColor }: P
       <div className="flex flex-col gap-2">
         {perfs.map((perf) => (
           <PerfCard
-            key={`${perf.player_id}-${perf.week_start}`}
+            key={`${perf.player_id}-${perf.game_date}`}
             perf={perf}
             playerMeta={playerMeta}
             leagueName={leagueNames[perf.league_id]}

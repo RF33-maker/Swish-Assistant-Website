@@ -10,8 +10,8 @@ import { generateTrendingCardBlob } from "@/lib/generateTrendingCard";
 
 interface PerfRow {
   league_id: string;
-  week_start: string | null;
-  week_end: string | null;
+  game_date: string | null;
+  game_key: string | null;
   player_id: string;
   full_name: string;
   team_id: string | null;
@@ -22,10 +22,14 @@ interface PerfRow {
   stl: number | null;
   blk: number | null;
   tov: number | null;
+  fgm?: number | null;
   fga: number | null;
+  ftm?: number | null;
   fta: number | null;
   ts_pct: number | null;
-  weekly_score: number | null;
+  game_score: number | null;
+  opponent_name?: string | null;
+  game_result?: string | null;
 }
 
 interface PlayerMetaRow {
@@ -72,7 +76,7 @@ function Stat({ label, value }: { label: string; value: string | number }) {
 function StatBlock({ perf, tsPct }: { perf: PerfRow; tsPct: string }) {
   return (
     <div className="grid grid-cols-5 gap-y-3 gap-x-2">
-      <Stat label="WS" value={perf.weekly_score ?? 0} />
+      <Stat label="GmSc" value={perf.game_score ?? 0} />
       <Stat label="PTS" value={perf.pts ?? 0} />
       <Stat label="REB" value={perf.reb ?? 0} />
       <Stat label="AST" value={perf.ast ?? 0} />
@@ -98,7 +102,7 @@ export default function TrendingPerformanceSection() {
   );
 
   const { data, isLoading } = useQuery<TrendingData>({
-    queryKey: ["home", "trending-performance", "v12-backend"],
+    queryKey: ["home", "trending-performance", "v14-opponent"],
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const empty: TrendingData = { perfs: [], leagueNames: {}, playerMeta: {} };
@@ -224,16 +228,20 @@ export default function TrendingPerformanceSection() {
   const generateCardBlob = () => generateTrendingCardBlob({
     playerName: perf.full_name,
     teamName: perf.team_name,
-    weekStart: perf.week_start,
+    gameDate: perf.game_date,
+    opponentName: perf.opponent_name,
+    gameResult: perf.game_result,
     tsPct,
-    ws: perf.weekly_score,
+    gmSc: perf.game_score,
     pts: perf.pts,
     reb: perf.reb,
     ast: perf.ast,
     stl: perf.stl,
     blk: perf.blk,
     tov: perf.tov,
+    fgm: perf.fgm ?? null,
     fga: perf.fga,
+    ftm: perf.ftm ?? null,
     fta: perf.fta,
     photoUrl,
     teamLogoUrl: shareTeamLogoUrl,
@@ -246,7 +254,7 @@ export default function TrendingPerformanceSection() {
     <div className="w-full max-w-xl mb-6 md:mb-8 text-left">
       <ShareableCard
         title="Top Performance"
-        fileSlug={`trending-${perf.player_id}-${perf.week_start}`}
+        fileSlug={`trending-${perf.player_id}-${perf.game_date}`}
         player={{
           name: perf.full_name,
           team: perf.team_name || leagueName || "",
@@ -254,7 +262,7 @@ export default function TrendingPerformanceSection() {
           primaryColor,
           teamLogoUrl: shareTeamLogoUrl,
         }}
-        shareCaption={leagueName ? `${leagueName} • ${formatDate(perf.week_start)}` : formatDate(perf.week_start)}
+        shareCaption={leagueName ? `${leagueName} • ${formatDate(perf.game_date)}` : formatDate(perf.game_date)}
         generateCardBlob={generateCardBlob}
       >
         <div
@@ -295,13 +303,27 @@ export default function TrendingPerformanceSection() {
             <div className="flex-1 min-w-0">
               <div className="font-semibold text-slate-900 dark:text-white truncate">{perf.full_name}</div>
               <div className="flex items-center gap-1.5 text-xs md:text-sm text-slate-500 dark:text-slate-400 truncate">
-                <span>{formatDate(perf.week_start)}</span>
                 {perf.team_name && (
                   <>
-                    <span aria-hidden="true">•</span>
                     <TeamLogo teamName={perf.team_name} leagueId={perf.league_id} size="xs" className="!w-5 !h-5" />
                     <span className="sr-only">{perf.team_name}</span>
                   </>
+                )}
+                {perf.opponent_name ? (
+                  <>
+                    <span aria-hidden="true">vs</span>
+                    <span className="truncate">{perf.opponent_name}</span>
+                    {perf.game_result && (
+                      <>
+                        <span aria-hidden="true">·</span>
+                        <span className={`font-semibold shrink-0 ${perf.game_result.startsWith("W") ? "text-green-600 dark:text-green-400" : perf.game_result.startsWith("L") ? "text-red-500 dark:text-red-400" : ""}`}>
+                          {perf.game_result}
+                        </span>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <span>{formatDate(perf.game_date)}</span>
                 )}
               </div>
             </div>
@@ -320,7 +342,7 @@ export default function TrendingPerformanceSection() {
         <div className="flex items-center justify-center gap-1.5 mt-3">
           {perfs.map((p, i) => (
             <button
-              key={`${p.league_id}-${p.player_id}-${p.week_start}`}
+              key={`${p.league_id}-${p.player_id}-${p.game_date}`}
               type="button"
               onClick={(e) => { e.stopPropagation(); setIndex(i); }}
               aria-label={`Show performance ${i + 1} of ${perfs.length}`}
