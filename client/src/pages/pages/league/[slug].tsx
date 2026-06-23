@@ -1927,7 +1927,7 @@ export default function LeaguePage() {
       // Established season: require at least 3 games, scaling up to ~40% of
       // the leading player's GP for older / fuller seasons.
       return {
-        minGames: Math.max(3, Math.ceil(maxGames * 0.4)),
+        minGames: Math.max(1, Math.ceil(maxGames * 0.4)),
         isEarlySeason: false,
       };
     }, [filteredByAgeGroupRound]);
