@@ -194,6 +194,22 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
 
       if (updateError) throw updateError;
 
+      // Also update every other record that shares the same name across leagues
+      // so the photo appears consistently on every competition page.
+      if (playerInfo.name) {
+        const { data: sameNameRows } = await supabase
+          .from('players')
+          .select('id')
+          .ilike('full_name', playerInfo.name.trim())
+          .neq('id', playerInfo.playerId);
+        if (sameNameRows && sameNameRows.length > 0) {
+          await supabase
+            .from('players')
+            .update({ photo_path_bg_removed: filePath })
+            .in('id', sameNameRows.map((r: { id: string }) => r.id));
+        }
+      }
+
       setPlayerInfo(prev => prev ? { ...prev, photoPath: filePath } : null);
       // Bust browser/CDN cache so the freshly uploaded image is shown immediately.
       setPhotoCacheBuster(Date.now());
