@@ -142,18 +142,30 @@ export function PlayerPhotoUploader() {
 
       if (uploadError) throw uploadError;
 
-      // Update the player's photo_path in the database
+      // Update ALL player records that share this name across every league/competition
+      // so the photo appears in stats tables, trending cards, and leaderboards everywhere.
+      const nameLower = selectedPlayer.name.toLowerCase().trim();
+      const { data: allMatches, error: fetchErr } = await supabase
+        .from("players")
+        .select("id")
+        .ilike("full_name", nameLower);
+      if (fetchErr) console.warn("Could not fetch duplicate player records:", fetchErr);
+
+      const idsToUpdate = allMatches && allMatches.length > 0
+        ? allMatches.map((r: { id: string }) => r.id)
+        : [selectedPlayer.id];
+
       const { error: updateError } = await supabase
         .from("players")
-        .update({ photo_path: filePath })
-        .eq("id", selectedPlayer.id);
+        .update({ photo_path: filePath, photo_path_bg_removed: filePath })
+        .in("id", idsToUpdate);
 
       if (updateError) {
         console.error("Failed to update photo_path:", updateError);
         throw updateError;
       }
 
-      setMessage({ type: "success", text: "Photo uploaded and linked!" });
+      setMessage({ type: "success", text: `Photo uploaded and linked to ${idsToUpdate.length} player record${idsToUpdate.length !== 1 ? "s" : ""}!` });
 
       const { data } = supabase.storage
         .from("player-photos")
