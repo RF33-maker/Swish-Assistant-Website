@@ -2164,7 +2164,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const maxGamesAny = allRows.reduce((m, p) => Math.max(m, p.games || 0), 0);
       const minGames = maxGamesAny < 3
         ? 1
-        : Math.max(3, Math.ceil(maxGamesAny * 0.4));
+        : Math.max(1, Math.ceil(maxGamesAny * 0.4));
       const qualified = allRows.filter((p) => (p.games || 0) >= minGames);
       // Fall back to unfiltered if qualifier produces an empty list
       const avgPool = qualified.length > 0 ? qualified : allRows;
