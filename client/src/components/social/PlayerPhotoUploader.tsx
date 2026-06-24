@@ -157,7 +157,7 @@ export function PlayerPhotoUploader() {
 
       const { error: updateError } = await supabase
         .from("players")
-        .update({ photo_path: filePath, photo_path_bg_removed: filePath })
+        .update({ photo_path: filePath })
         .in("id", idsToUpdate);
 
       if (updateError) {
