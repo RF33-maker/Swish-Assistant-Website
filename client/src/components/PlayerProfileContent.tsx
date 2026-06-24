@@ -196,17 +196,24 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
 
       // Also update every other record that shares the same name across leagues
       // so the photo appears consistently on every competition page.
+      // Uses fuzzy matching (namesMatch) to catch abbreviated/alternate spellings
+      // like "M. Hosten" or "Elvis" vs "Elvisi".
       if (playerInfo.name) {
-        const { data: sameNameRows } = await supabase
+        const nameParts = playerInfo.name.trim().split(/\s+/);
+        const lastName = nameParts[nameParts.length - 1];
+        const { data: candidates } = await supabase
           .from('players')
-          .select('id')
-          .ilike('full_name', playerInfo.name.trim())
+          .select('id, full_name')
+          .ilike('full_name', `%${lastName}%`)
           .neq('id', playerInfo.playerId);
-        if (sameNameRows && sameNameRows.length > 0) {
+        const matchIds = (candidates || [])
+          .filter((r: { id: string; full_name: string }) => namesMatch(r.full_name, playerInfo.name!))
+          .map((r: { id: string }) => r.id);
+        if (matchIds.length > 0) {
           await supabase
             .from('players')
             .update({ photo_path_bg_removed: filePath })
-            .in('id', sameNameRows.map((r: { id: string }) => r.id));
+            .in('id', matchIds);
         }
       }
 
