@@ -21,6 +21,39 @@ function getOpenAI(): OpenAI {
   return _openai;
 }
 
+// ── Photo fallback map ──────────────────────────────────────────────────────
+// Keyed by normalised full name (lowercase, trimmed, collapsed whitespace,
+// non-alpha stripped) → photo_path_bg_removed.  Used as a fallback when a
+// player's specific ID has no photo set but another record for the same person
+// (different league/season) does.
+function normalisePlayerName(name: string): string {
+  return name.toLowerCase().trim().replace(/\s+/g, ' ').replace(/[^a-z\s]/g, '');
+}
+
+const PHOTO_FALLBACK_TTL_MS = 5 * 60 * 1000;
+let photoFallbackCache: { map: Map<string, string>; at: number } | null = null;
+
+async function fetchPhotoFallbackMap(): Promise<Map<string, string>> {
+  const now = Date.now();
+  if (photoFallbackCache && now - photoFallbackCache.at < PHOTO_FALLBACK_TTL_MS) {
+    return photoFallbackCache.map;
+  }
+  const { data } = await supabaseAdmin
+    .from('players')
+    .select('full_name, photo_path_bg_removed')
+    .not('photo_path_bg_removed', 'is', null)
+    .neq('photo_path_bg_removed', '');
+  const map = new Map<string, string>();
+  for (const row of (data || []) as { full_name: string; photo_path_bg_removed: string }[]) {
+    if (row.full_name && row.photo_path_bg_removed) {
+      const key = normalisePlayerName(row.full_name);
+      if (key && !map.has(key)) map.set(key, row.photo_path_bg_removed);
+    }
+  }
+  photoFallbackCache = { map, at: now };
+  return map;
+}
+
 function generatePlayerSlug(name: string): string {
   return name
     .toLowerCase()
@@ -1891,6 +1924,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           playerMeta[p.id] = { slug: p.slug, photo_path_bg_removed: p.photo_path_bg_removed };
         }
       }
+      // Fallback: fill missing photos by normalised name across all leagues
+      const fallbackMap = await fetchPhotoFallbackMap();
+      for (const perf of perfs) {
+        const meta = playerMeta[perf.player_id];
+        if (!meta?.photo_path_bg_removed && perf.full_name) {
+          const key = normalisePlayerName(perf.full_name);
+          const fallback = fallbackMap.get(key);
+          if (fallback) {
+            playerMeta[perf.player_id] = { slug: meta?.slug ?? null, photo_path_bg_removed: fallback };
+          }
+        }
+      }
     }
 
     // Fetch FGM/FTM from player_stats so the card can show "makes/attempts" (e.g. 8/12).
@@ -2138,6 +2183,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         (playerRows || []).forEach((p: any) => {
           metaById.set(p.id, { slug: p.slug ?? null, photo_path_bg_removed: p.photo_path_bg_removed ?? null });
         });
+        // Fallback: fill missing photos by normalised name across all leagues
+        const fallbackMap = await fetchPhotoFallbackMap();
+        for (const player of mergedPlayers) {
+          const meta = metaById.get(player.player_id);
+          if (!meta?.photo_path_bg_removed && player.name) {
+            const key = normalisePlayerName(player.name);
+            const fallback = fallbackMap.get(key);
+            if (fallback) {
+              metaById.set(player.player_id, { slug: meta?.slug ?? null, photo_path_bg_removed: fallback });
+            }
+          }
+        }
       }
 
       const allRows = mergedPlayers.map((p) => {
@@ -2320,6 +2377,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!pErr) {
         for (const p of (metaRows || []) as { id: string; slug: string | null; photo_path_bg_removed: string | null }[]) {
           playerMeta[p.id] = { slug: p.slug, photo_path_bg_removed: p.photo_path_bg_removed };
+        }
+      }
+      // Fallback: fill missing photos by normalised name across all leagues
+      const fallbackMap = await fetchPhotoFallbackMap();
+      for (const perf of perfs) {
+        const meta = playerMeta[perf.player_id];
+        if (!meta?.photo_path_bg_removed && perf.full_name) {
+          const key = normalisePlayerName(perf.full_name);
+          const fallback = fallbackMap.get(key);
+          if (fallback) {
+            playerMeta[perf.player_id] = { slug: meta?.slug ?? null, photo_path_bg_removed: fallback };
+          }
         }
       }
     }
