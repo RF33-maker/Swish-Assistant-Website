@@ -641,6 +641,24 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
         const searchTerms = initialPlayer.full_name.split(' ').filter((t: string) => t.length > 2);
         const searchQuery = searchTerms[searchTerms.length - 1] || initialPlayer.full_name;
 
+        // ── Identity group lookup ──────────────────────────────────────────────
+        // Check whether this player belongs to a canonical identity group.
+        // If so, we fetch all linked player_id rows directly — this is more
+        // reliable than fuzzy name matching for players with name variations
+        // across leagues (e.g. "Elvis" vs "Elvisi", "M. Hosten" vs "Myles Hosten").
+        let identityLinkedIds: string[] = [];
+        try {
+          const identityRes = await fetch(`/api/player-identities/for-player/${initialPlayer.id}`);
+          if (identityRes.ok) {
+            const { identity } = await identityRes.json();
+            if (identity?.playerIds && Array.isArray(identity.playerIds)) {
+              identityLinkedIds = identity.playerIds.filter((id: string) => id !== initialPlayer.id);
+            }
+          }
+        } catch {
+          // Non-fatal — fall through to fuzzy matching below
+        }
+
         // Fetch only the small set of name-variant players we'll match
         // against. We use a contains-style match here intentionally: this
         // path needs to find variants with extra middle initials, suffixes,
@@ -649,16 +667,22 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
         // surname), and we cap the fetch at 20 rows + only the columns
         // PLAYER_PROFILE_COLUMNS exposes — the previous `.limit(100)` with
         // `select('*')` was wasteful for what is essentially a dedupe loop.
-        const { data: allPlayersData, error: allPlayersError } = await supabase
+        const allPlayersResult = await supabase
           .from('players').select(PLAYER_PROFILE_COLUMNS).ilike('full_name', `%${searchQuery}%`).limit(20);
+        const { data: allPlayersData, error: allPlayersError } = allPlayersResult;
+
+        const identityPlayersRes = identityLinkedIds.length > 0
+          ? await supabase.from('players').select(PLAYER_PROFILE_COLUMNS).in('id', identityLinkedIds)
+          : { data: null as any, error: null };
 
         // Always keep the slug-resolved `initialPlayer` in the candidate set —
         // with the tighter limit, a common surname could push the canonical
         // record off the ilike result, breaking the namesMatch dedupe and
         // leaving `playerIds` empty for the stats fetch below.
+        const seen = new Set<string>([initialPlayer.id]);
         let allPlayers: any[] = [initialPlayer];
+
         if (!allPlayersError && allPlayersData && allPlayersData.length > 0) {
-          const seen = new Set<string>([initialPlayer.id]);
           allPlayers = [
             initialPlayer,
             ...allPlayersData.filter((p: any) => {
@@ -669,7 +693,22 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
           ];
         }
 
-        const matchingPlayers = allPlayers.filter(player => namesMatch(player.full_name, initialPlayer.full_name));
+        // Inject any identity-group linked players that weren't caught by the
+        // fuzzy name search (e.g. different surnames, initialised first names).
+        if (identityPlayersRes.data && identityPlayersRes.data.length > 0) {
+          for (const p of identityPlayersRes.data) {
+            if (p?.id && !seen.has(p.id)) {
+              seen.add(p.id);
+              allPlayers.push(p);
+            }
+          }
+        }
+
+        // Filter by fuzzy name match OR explicit identity link
+        const identityIdSet = new Set(identityLinkedIds);
+        const matchingPlayers = allPlayers.filter(player =>
+          namesMatch(player.full_name, initialPlayer.full_name) || identityIdSet.has(player.id)
+        );
 
         const matches: PlayerMatch[] = matchingPlayers.map(p => ({
           id: p.id,

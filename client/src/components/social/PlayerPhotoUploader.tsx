@@ -142,30 +142,68 @@ export function PlayerPhotoUploader() {
 
       if (uploadError) throw uploadError;
 
-      // Update ALL player records that share this name across every league/competition
-      // so the photo appears in stats tables, trending cards, and leaderboards everywhere.
-      const nameLower = selectedPlayer.name.toLowerCase().trim();
-      const { data: allMatches, error: fetchErr } = await supabase
-        .from("players")
-        .select("id")
-        .ilike("full_name", nameLower);
-      if (fetchErr) console.warn("Could not fetch duplicate player records:", fetchErr);
-
-      const idsToUpdate = allMatches && allMatches.length > 0
-        ? allMatches.map((r: { id: string }) => r.id)
-        : [selectedPlayer.id];
-
-      const { error: updateError } = await supabase
-        .from("players")
-        .update({ photo_path: filePath })
-        .in("id", idsToUpdate);
-
-      if (updateError) {
-        console.error("Failed to update photo_path:", updateError);
-        throw updateError;
+      // Step 1: Check if this player belongs to a canonical identity group.
+      // If so, sync the photo to ALL linked records via the identity API.
+      let syncedViaIdentity = false;
+      let totalSynced = 1;
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData.session?.access_token;
+        if (token) {
+          const identityRes = await fetch(`/api/player-identities/for-player/${selectedPlayer.id}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (identityRes.ok) {
+            const { identity } = await identityRes.json();
+            if (identity?.id) {
+              const syncRes = await fetch(`/api/player-identities/${identity.id}/sync-photo`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ photoPath: filePath }),
+              });
+              if (!syncRes.ok) {
+                const errJson = await syncRes.json().catch(() => ({}));
+                throw new Error(errJson.error || `Photo sync failed (${syncRes.status})`);
+              }
+              syncedViaIdentity = true;
+              totalSynced = identity.playerIds?.length || 1;
+            }
+          }
+        }
+      } catch (identityErr) {
+        console.warn("[PlayerPhotoUploader] Identity sync skipped:", identityErr);
       }
 
-      setMessage({ type: "success", text: `Photo uploaded and linked to ${idsToUpdate.length} player record${idsToUpdate.length !== 1 ? "s" : ""}!` });
+      // Step 2: Fallback — update all records sharing this name (exact ilike match).
+      // This covers players not yet in an identity group.
+      if (!syncedViaIdentity) {
+        const nameLower = selectedPlayer.name.toLowerCase().trim();
+        const { data: allMatches, error: fetchErr } = await supabase
+          .from("players")
+          .select("id")
+          .ilike("full_name", nameLower);
+        if (fetchErr) console.warn("Could not fetch duplicate player records:", fetchErr);
+
+        const idsToUpdate = allMatches && allMatches.length > 0
+          ? allMatches.map((r: { id: string }) => r.id)
+          : [selectedPlayer.id];
+
+        const { error: updateError } = await supabase
+          .from("players")
+          .update({ photo_path: filePath })
+          .in("id", idsToUpdate);
+
+        if (updateError) {
+          console.error("Failed to update photo_path:", updateError);
+          throw updateError;
+        }
+        totalSynced = idsToUpdate.length;
+      }
+
+      setMessage({
+        type: "success",
+        text: `Photo uploaded and synced to ${totalSynced} player record${totalSynced !== 1 ? "s" : ""}${syncedViaIdentity ? " via identity group" : ""}.`,
+      });
 
       const { data } = supabase.storage
         .from("player-photos")

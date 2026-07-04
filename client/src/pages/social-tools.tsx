@@ -5,6 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { PlayerPerformanceCardV1 } from "@/components/social/PlayerPerformanceCardV1";
 import { PlayerPhotoUploader } from "@/components/social/PlayerPhotoUploader";
+import { PlayerIdentityManager } from "@/components/social/PlayerIdentityManager";
 import { PostQueueSection } from "@/components/social/PostQueueSection";
 import type { PlayerPerformanceV1Data } from "@/types/socialCards";
 import { useRef, useState, useEffect, useMemo, useCallback } from "react";
@@ -840,6 +841,7 @@ export default function SocialToolsPage() {
             </Card>
             
             <PlayerPhotoUploader />
+            <PlayerIdentityManager />
           </div>
         </div>
         
