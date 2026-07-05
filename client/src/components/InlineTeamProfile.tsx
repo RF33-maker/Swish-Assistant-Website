@@ -262,7 +262,30 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
         if (playerName.length > p.name.length) p.name = playerName;
       });
 
-      const roster = Array.from(playerStatsMap.values())
+      // Second pass: merge same-named players who have different player_id rows in the DB
+      const normName = (n: string) => n.toLowerCase().trim().replace(/\s+/g, ' ');
+      const mergedByName = new Map<string, any>();
+      for (const p of playerStatsMap.values()) {
+        const key = normName(p.name);
+        if (mergedByName.has(key)) {
+          const existing = mergedByName.get(key)!;
+          existing.games += p.games;
+          existing.totalMinutes += p.totalMinutes;
+          existing.rawStats = existing.rawStats.concat(p.rawStats);
+          existing.totalPoints += p.totalPoints;
+          existing.totalRebounds += p.totalRebounds;
+          existing.totalAssists += p.totalAssists;
+          existing.totalSteals += p.totalSteals;
+          existing.totalBlocks += p.totalBlocks;
+          existing.totalTurnovers += p.totalTurnovers;
+          if (p.name.length > existing.name.length) existing.name = p.name;
+          if (!existing.slug && p.slug) existing.slug = p.slug;
+        } else {
+          mergedByName.set(key, { ...p, rawStats: [...p.rawStats] });
+        }
+      }
+
+      const roster = Array.from(mergedByName.values())
         .filter(p => p.games > 0)
         .sort((a, b) => (b.totalPoints / b.games) - (a.totalPoints / a.games));
 
