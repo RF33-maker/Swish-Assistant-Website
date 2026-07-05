@@ -195,7 +195,7 @@ export default function TrendingPerformanceSection() {
   const goToPerformance = () => {
     if (!perf) return;
     if (playerSlug) setLocation(`/player/${playerSlug}`);
-    else if (perf.league_id) setLocation(`/competition/${perf.league_id}`);
+    else if (perf.player_id) setLocation(`/player/${perf.player_id}`);
   };
 
   if (isLoading) {
