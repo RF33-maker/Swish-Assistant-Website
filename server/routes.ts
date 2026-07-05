@@ -1512,31 +1512,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Players must belong to this league or one of its sub-leagues" });
       }
 
-      // Re-point player_stats rows from duplicate → canonical
+      console.log(`[merge-players] starting merge: duplicate=${duplicateId} → canonical=${canonicalId}`);
+
+      // Step 1: Re-point game_rosters rows from duplicate → canonical
+      const { error: rosterError } = await supabaseAdmin
+        .from('game_rosters')
+        .update({ player_id: canonicalId })
+        .eq('player_id', duplicateId);
+
+      if (rosterError) {
+        console.error('[merge-players] step1 game_rosters failed:', rosterError.message, rosterError);
+        return res.status(500).json({ error: `Failed to update game rosters: ${rosterError.message}` });
+      }
+      console.log('[merge-players] step1 game_rosters OK');
+
+      // Step 2: Handle player_identity_members
+      // If the canonical already has a membership row, just delete the duplicate's row (UNIQUE constraint);
+      // otherwise re-point it to the canonical player.
+      const { data: canonicalMembership, error: memberLookupError } = await supabaseAdmin
+        .from('player_identity_members')
+        .select('id')
+        .eq('player_id', canonicalId)
+        .maybeSingle();
+
+      if (memberLookupError) {
+        console.error('[merge-players] step2 identity lookup failed:', memberLookupError.message, memberLookupError);
+        return res.status(500).json({ error: `Failed to check player identity membership: ${memberLookupError.message}` });
+      }
+      console.log('[merge-players] step2 identity lookup OK, canonicalMembership=', canonicalMembership?.id ?? null);
+
+      if (canonicalMembership) {
+        // Canonical already has a membership — delete the duplicate's row to avoid a UNIQUE violation
+        const { error: memberDeleteError } = await supabaseAdmin
+          .from('player_identity_members')
+          .delete()
+          .eq('player_id', duplicateId);
+        if (memberDeleteError) {
+          console.error('[merge-players] step2 identity delete failed:', memberDeleteError.message, memberDeleteError);
+          return res.status(500).json({ error: `Failed to remove duplicate player identity membership: ${memberDeleteError.message}` });
+        }
+        console.log('[merge-players] step2 identity delete OK');
+      } else {
+        // Canonical has no membership — safe to re-point the duplicate's row
+        const { error: memberUpdateError } = await supabaseAdmin
+          .from('player_identity_members')
+          .update({ player_id: canonicalId })
+          .eq('player_id', duplicateId);
+        if (memberUpdateError) {
+          console.error('[merge-players] step2 identity update failed:', memberUpdateError.message, memberUpdateError);
+          return res.status(500).json({ error: `Failed to re-point player identity membership: ${memberUpdateError.message}` });
+        }
+        console.log('[merge-players] step2 identity update OK');
+      }
+
+      // Step 3: Re-point player_stats rows from duplicate → canonical
       const { error: updateError } = await supabaseAdmin
         .from('player_stats')
         .update({ player_id: canonicalId })
         .eq('player_id', duplicateId);
 
-      if (updateError) return res.status(500).json({ error: `Failed to update stats: ${updateError.message}` });
+      if (updateError) {
+        console.error('[merge-players] step3 player_stats failed:', updateError.message, updateError);
+        return res.status(500).json({ error: `Failed to update stats: ${updateError.message}` });
+      }
+      console.log('[merge-players] step3 player_stats OK');
 
-      // Delete the duplicate player record
+      // Step 4: Delete the duplicate player record
+      // All FK references have been re-pointed above, so this should succeed.
+      // If it still fails, we report the partial state clearly — no data is lost because the
+      // duplicate player record still exists and all stats/rosters now point to the canonical.
       const { error: deleteError } = await supabaseAdmin
         .from('players')
         .delete()
         .eq('id', duplicateId);
 
       if (deleteError) {
-        // Attempt to roll back the stats repoint so we don't leave data in a partial state
-        const { error: rollbackError } = await supabaseAdmin
-          .from('player_stats')
-          .update({ player_id: duplicateId })
-          .eq('player_id', canonicalId);
-        if (rollbackError) {
-          console.error('Merge rollback failed — stats may be in partial state:', rollbackError.message);
-        }
-        return res.status(500).json({ error: `Merge failed and was rolled back: ${deleteError.message}` });
+        console.error(`[merge-players] step4 DELETE failed: duplicate=${duplicateId} canonical=${canonicalId}`, deleteError.message, deleteError);
+        return res.status(500).json({
+          error: `All records were re-pointed to the canonical player, but the duplicate player record could not be removed: ${deleteError.message}. The data is consistent — you may retry deleting the duplicate manually.`,
+        });
       }
+      console.log('[merge-players] step4 DELETE OK — merge complete');
 
       res.json({
         success: true,
