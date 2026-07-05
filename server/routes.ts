@@ -21,6 +21,39 @@ function getOpenAI(): OpenAI {
   return _openai;
 }
 
+// ── Photo fallback map ──────────────────────────────────────────────────────
+// Keyed by normalised full name (lowercase, trimmed, collapsed whitespace,
+// non-alpha stripped) → photo_path_bg_removed.  Used as a fallback when a
+// player's specific ID has no photo set but another record for the same person
+// (different league/season) does.
+function normalisePlayerName(name: string): string {
+  return name.toLowerCase().trim().replace(/\s+/g, ' ').replace(/[^a-z\s]/g, '');
+}
+
+const PHOTO_FALLBACK_TTL_MS = 5 * 60 * 1000;
+let photoFallbackCache: { map: Map<string, string>; at: number } | null = null;
+
+async function fetchPhotoFallbackMap(): Promise<Map<string, string>> {
+  const now = Date.now();
+  if (photoFallbackCache && now - photoFallbackCache.at < PHOTO_FALLBACK_TTL_MS) {
+    return photoFallbackCache.map;
+  }
+  const { data } = await supabaseAdmin
+    .from('players')
+    .select('full_name, photo_path_bg_removed')
+    .not('photo_path_bg_removed', 'is', null)
+    .neq('photo_path_bg_removed', '');
+  const map = new Map<string, string>();
+  for (const row of (data || []) as { full_name: string; photo_path_bg_removed: string }[]) {
+    if (row.full_name && row.photo_path_bg_removed) {
+      const key = normalisePlayerName(row.full_name);
+      if (key && !map.has(key)) map.set(key, row.photo_path_bg_removed);
+    }
+  }
+  photoFallbackCache = { map, at: now };
+  return map;
+}
+
 function generatePlayerSlug(name: string): string {
   return name
     .toLowerCase()
@@ -88,6 +121,15 @@ async function authenticateSupabaseUser(req: Request): Promise<string | null> {
   const { data, error } = await supabaseAdmin.auth.getUser(token);
   if (error || !data.user) return null;
   return data.user.id;
+}
+
+async function requireAdmin(req: Request, res: Response): Promise<string | null> {
+  const userId = await authenticateSupabaseUser(req);
+  if (!userId) { res.status(401).json({ error: 'Authentication required' }); return null; }
+  const { data: adminUserData, error: adminUserError } = await supabaseAdmin.auth.admin.getUserById(userId);
+  if (adminUserError || !adminUserData?.user) { res.status(403).json({ error: 'Admin access required' }); return null; }
+  if (adminUserData.user.app_metadata?.role !== 'admin') { res.status(403).json({ error: 'Admin access required' }); return null; }
+  return userId;
 }
 
 async function verifyLeagueOwnership(userId: string, leagueId: string): Promise<boolean> {
@@ -1506,6 +1548,331 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ── Player Identities API ────────────────────────────────────────────────
+  // Links multiple players.id rows to a single canonical real-world person.
+  // Tables required (run supabase/migrations/20260625_player_identities.sql):
+  //   player_identities       (id, canonical_name, photo_path, photo_path_bg_removed, …)
+  //   player_identity_members (id, identity_id, player_id UNIQUE, …)
+  //
+  // These endpoints are admin-only (authentication required).
+
+  // GET /api/player-identities?name=<search>
+  // Returns all identities, optionally filtered by canonical_name ilike.
+  // Requires admin role.
+  app.get('/api/player-identities', async (req: Request, res: Response) => {
+    try {
+      const userId = await requireAdmin(req, res);
+      if (!userId) return;
+
+      const name = (req.query.name as string | undefined) || '';
+      let q = supabaseAdmin
+        .from('player_identities')
+        .select('id, canonical_name, photo_path, photo_path_bg_removed, created_at')
+        .order('canonical_name');
+      if (name.trim()) q = q.ilike('canonical_name', `%${name.trim()}%`);
+      const { data, error } = await q;
+      if (error) {
+        if ((error as any).code === '42P01') {
+          return res.status(503).json({ error: 'player_identities table not yet created. Run the migration first.', migration: true });
+        }
+        return res.status(500).json({ error: error.message });
+      }
+      res.json({ identities: data || [] });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/player-identities/:identityId/members
+  // Returns all player_id rows linked to an identity. Requires admin role.
+  app.get('/api/player-identities/:identityId/members', async (req: Request, res: Response) => {
+    try {
+      const userId = await requireAdmin(req, res);
+      if (!userId) return;
+
+      const { identityId } = req.params;
+      const { data, error } = await supabaseAdmin
+        .from('player_identity_members')
+        .select('id, player_id, created_at')
+        .eq('identity_id', identityId)
+        .order('created_at');
+      if (error) return res.status(500).json({ error: error.message });
+
+      const playerIds = (data || []).map((r: any) => r.player_id);
+      if (playerIds.length === 0) return res.json({ members: [] });
+
+      const { data: players, error: pErr } = await supabaseAdmin
+        .from('players')
+        .select('id, full_name, team_name, league_id, slug')
+        .in('id', playerIds);
+      if (pErr) return res.status(500).json({ error: pErr.message });
+
+      const playerMap = new Map((players || []).map((p: any) => [p.id, p]));
+      const members = (data || []).map((r: any) => ({
+        memberId: r.id,
+        playerId: r.player_id,
+        player: playerMap.get(r.player_id) || null,
+      }));
+      res.json({ members });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/player-identities/for-player/:playerId
+  // Returns the identity group for a player (if any), including all sibling player_ids.
+  app.get('/api/player-identities/for-player/:playerId', async (req: Request, res: Response) => {
+    try {
+      const { playerId } = req.params;
+      const { data: membership, error: mErr } = await supabaseAdmin
+        .from('player_identity_members')
+        .select('identity_id')
+        .eq('player_id', playerId)
+        .maybeSingle();
+      if (mErr) {
+        if ((mErr as any).code === '42P01') return res.json({ identity: null });
+        return res.status(500).json({ error: mErr.message });
+      }
+      if (!membership) return res.json({ identity: null });
+
+      const identityId = membership.identity_id;
+      const [idRes, membersRes] = await Promise.all([
+        supabaseAdmin
+          .from('player_identities')
+          .select('id, canonical_name, photo_path, photo_path_bg_removed')
+          .eq('id', identityId)
+          .single(),
+        supabaseAdmin
+          .from('player_identity_members')
+          .select('player_id')
+          .eq('identity_id', identityId),
+      ]);
+      if (idRes.error) return res.status(500).json({ error: idRes.error.message });
+      const playerIds = (membersRes.data || []).map((r: any) => r.player_id);
+      res.json({ identity: { ...idRes.data, playerIds } });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/player-identities
+  // Creates a new identity group from an array of playerIds. Requires admin role.
+  // Body: { canonicalName: string, playerIds: string[] }
+  app.post('/api/player-identities', async (req: Request, res: Response) => {
+    try {
+      const userId = await requireAdmin(req, res);
+      if (!userId) return;
+
+      const { canonicalName, playerIds } = req.body as { canonicalName?: string; playerIds?: string[] };
+      if (!canonicalName || !playerIds || playerIds.length < 2) {
+        return res.status(400).json({ error: 'canonicalName and at least two playerIds are required' });
+      }
+
+      // Check if any of these players are already in a different identity group
+      const { data: existing } = await supabaseAdmin
+        .from('player_identity_members')
+        .select('player_id, identity_id')
+        .in('player_id', playerIds);
+      if (existing && existing.length > 0) {
+        const alreadyLinked = (existing as any[]).map((r) => r.player_id);
+        return res.status(409).json({
+          error: 'Some players are already in an identity group. Unlink them first.',
+          alreadyLinked,
+        });
+      }
+
+      // Fetch best available photo from any of the player records
+      const { data: playerRows } = await supabaseAdmin
+        .from('players')
+        .select('id, photo_path, photo_path_bg_removed')
+        .in('id', playerIds);
+      const withPhoto = (playerRows || []).find((p: any) => p.photo_path_bg_removed || p.photo_path);
+      const canonicalPhoto = withPhoto?.photo_path || null;
+      const canonicalPhotoBg = withPhoto?.photo_path_bg_removed || null;
+
+      // Create identity record
+      const { data: identity, error: idErr } = await supabaseAdmin
+        .from('player_identities')
+        .insert({ canonical_name: canonicalName, photo_path: canonicalPhoto, photo_path_bg_removed: canonicalPhotoBg })
+        .select('id')
+        .single();
+      if (idErr) {
+        if ((idErr as any).code === '42P01') {
+          return res.status(503).json({ error: 'player_identities table not yet created. Run the migration first.', migration: true });
+        }
+        return res.status(500).json({ error: idErr.message });
+      }
+
+      // Insert members
+      const memberRows = playerIds.map((pid: string) => ({ identity_id: identity.id, player_id: pid }));
+      const { error: memErr } = await supabaseAdmin
+        .from('player_identity_members')
+        .insert(memberRows);
+      if (memErr) {
+        await supabaseAdmin.from('player_identities').delete().eq('id', identity.id);
+        return res.status(500).json({ error: memErr.message });
+      }
+
+      // Propagate photo to all linked player records
+      if (canonicalPhoto || canonicalPhotoBg) {
+        const updatePayload: Record<string, string | null> = {};
+        if (canonicalPhoto) updatePayload.photo_path = canonicalPhoto;
+        if (canonicalPhotoBg) updatePayload.photo_path_bg_removed = canonicalPhotoBg;
+        await supabaseAdmin.from('players').update(updatePayload).in('id', playerIds);
+      }
+
+      photoFallbackCache = null;
+      res.json({ id: identity.id, canonicalName, playerIds });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/player-identities/:identityId/members
+  // Adds a player to an existing identity group. Requires admin role.
+  // Body: { playerId: string }
+  app.post('/api/player-identities/:identityId/members', async (req: Request, res: Response) => {
+    try {
+      const userId = await requireAdmin(req, res);
+      if (!userId) return;
+
+      const { identityId } = req.params;
+      const { playerId } = req.body as { playerId?: string };
+      if (!playerId) return res.status(400).json({ error: 'playerId is required' });
+
+      // Verify identity exists
+      const { data: identity, error: idErr } = await supabaseAdmin
+        .from('player_identities')
+        .select('id, photo_path, photo_path_bg_removed')
+        .eq('id', identityId)
+        .single();
+      if (idErr || !identity) return res.status(404).json({ error: 'Identity not found' });
+
+      // Check not already in another group
+      const { data: existingMembership } = await supabaseAdmin
+        .from('player_identity_members')
+        .select('identity_id')
+        .eq('player_id', playerId)
+        .maybeSingle();
+      if (existingMembership) {
+        return res.status(409).json({ error: 'Player is already in an identity group. Unlink first.' });
+      }
+
+      const { error: memErr } = await supabaseAdmin
+        .from('player_identity_members')
+        .insert({ identity_id: identityId, player_id: playerId });
+      if (memErr) return res.status(500).json({ error: memErr.message });
+
+      // Propagate canonical photo to the newly added player
+      if (identity.photo_path || identity.photo_path_bg_removed) {
+        const updatePayload: Record<string, string | null> = {};
+        if (identity.photo_path) updatePayload.photo_path = identity.photo_path;
+        if (identity.photo_path_bg_removed) updatePayload.photo_path_bg_removed = identity.photo_path_bg_removed;
+        await supabaseAdmin.from('players').update(updatePayload).eq('id', playerId);
+      }
+
+      photoFallbackCache = null;
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // DELETE /api/player-identities/:identityId/members/:playerId
+  // Removes a player from an identity group (does not delete the player row).
+  // Requires admin role. Returns { success, deleted } where deleted=true if the group was dissolved.
+  app.delete('/api/player-identities/:identityId/members/:playerId', async (req: Request, res: Response) => {
+    try {
+      const userId = await requireAdmin(req, res);
+      if (!userId) return;
+
+      const { identityId, playerId } = req.params;
+      const { error } = await supabaseAdmin
+        .from('player_identity_members')
+        .delete()
+        .eq('identity_id', identityId)
+        .eq('player_id', playerId);
+      if (error) return res.status(500).json({ error: error.message });
+
+      // If group now has < 2 members, delete the identity entirely
+      const { data: remaining } = await supabaseAdmin
+        .from('player_identity_members')
+        .select('player_id')
+        .eq('identity_id', identityId);
+      let deleted = false;
+      if (!remaining || remaining.length < 2) {
+        await supabaseAdmin.from('player_identities').delete().eq('id', identityId);
+        deleted = true;
+      }
+
+      photoFallbackCache = null;
+      res.json({ success: true, deleted });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // DELETE /api/player-identities/:identityId
+  // Deletes the entire identity group (cascade removes all members). Requires admin role.
+  app.delete('/api/player-identities/:identityId', async (req: Request, res: Response) => {
+    try {
+      const userId = await requireAdmin(req, res);
+      if (!userId) return;
+
+      const { identityId } = req.params;
+      const { error } = await supabaseAdmin
+        .from('player_identities')
+        .delete()
+        .eq('id', identityId);
+      if (error) return res.status(500).json({ error: error.message });
+
+      photoFallbackCache = null;
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/player-identities/:identityId/sync-photo
+  // Propagates a photo uploaded to any member player to all other members + identity record.
+  // Requires admin role. Body: { photoPath?: string, photoPathBgRemoved?: string }
+  app.post('/api/player-identities/:identityId/sync-photo', async (req: Request, res: Response) => {
+    try {
+      const userId = await requireAdmin(req, res);
+      if (!userId) return;
+
+      const { identityId } = req.params;
+      const { photoPath, photoPathBgRemoved } = req.body as { photoPath?: string; photoPathBgRemoved?: string };
+      if (!photoPath && !photoPathBgRemoved) {
+        return res.status(400).json({ error: 'photoPath or photoPathBgRemoved is required' });
+      }
+
+      // Get all member player_ids
+      const { data: members } = await supabaseAdmin
+        .from('player_identity_members')
+        .select('player_id')
+        .eq('identity_id', identityId);
+      const playerIds = (members || []).map((r: any) => r.player_id);
+
+      const identityUpdate: Record<string, string> = {};
+      const playerUpdate: Record<string, string> = {};
+      if (photoPath) { identityUpdate.photo_path = photoPath; playerUpdate.photo_path = photoPath; }
+      if (photoPathBgRemoved) { identityUpdate.photo_path_bg_removed = photoPathBgRemoved; playerUpdate.photo_path_bg_removed = photoPathBgRemoved; }
+
+      await Promise.all([
+        supabaseAdmin.from('player_identities').update(identityUpdate).eq('id', identityId),
+        playerIds.length > 0
+          ? supabaseAdmin.from('players').update(playerUpdate).in('id', playerIds)
+          : Promise.resolve(),
+      ]);
+
+      photoFallbackCache = null;
+      res.json({ success: true, syncedTo: playerIds.length });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ---- News Articles CRUD API ----
   // Routes through Express so slugs are always generated/validated server-side.
 
@@ -1891,6 +2258,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           playerMeta[p.id] = { slug: p.slug, photo_path_bg_removed: p.photo_path_bg_removed };
         }
       }
+      // Fallback: fill missing photos by normalised name across all leagues
+      const fallbackMap = await fetchPhotoFallbackMap();
+      for (const perf of perfs) {
+        const meta = playerMeta[perf.player_id];
+        if (!meta?.photo_path_bg_removed && perf.full_name) {
+          const key = normalisePlayerName(perf.full_name);
+          const fallback = fallbackMap.get(key);
+          if (fallback) {
+            playerMeta[perf.player_id] = { slug: meta?.slug ?? null, photo_path_bg_removed: fallback };
+          }
+        }
+      }
     }
 
     // Fetch FGM/FTM from player_stats so the card can show "makes/attempts" (e.g. 8/12).
@@ -2138,6 +2517,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         (playerRows || []).forEach((p: any) => {
           metaById.set(p.id, { slug: p.slug ?? null, photo_path_bg_removed: p.photo_path_bg_removed ?? null });
         });
+        // Fallback: fill missing photos by normalised name across all leagues
+        const fallbackMap = await fetchPhotoFallbackMap();
+        for (const player of mergedPlayers) {
+          const meta = metaById.get(player.player_id);
+          if (!meta?.photo_path_bg_removed && player.name) {
+            const key = normalisePlayerName(player.name);
+            const fallback = fallbackMap.get(key);
+            if (fallback) {
+              metaById.set(player.player_id, { slug: meta?.slug ?? null, photo_path_bg_removed: fallback });
+            }
+          }
+        }
       }
 
       const allRows = mergedPlayers.map((p) => {
@@ -2320,6 +2711,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!pErr) {
         for (const p of (metaRows || []) as { id: string; slug: string | null; photo_path_bg_removed: string | null }[]) {
           playerMeta[p.id] = { slug: p.slug, photo_path_bg_removed: p.photo_path_bg_removed };
+        }
+      }
+      // Fallback: fill missing photos by normalised name across all leagues
+      const fallbackMap = await fetchPhotoFallbackMap();
+      for (const perf of perfs) {
+        const meta = playerMeta[perf.player_id];
+        if (!meta?.photo_path_bg_removed && perf.full_name) {
+          const key = normalisePlayerName(perf.full_name);
+          const fallback = fallbackMap.get(key);
+          if (fallback) {
+            playerMeta[perf.player_id] = { slug: meta?.slug ?? null, photo_path_bg_removed: fallback };
+          }
         }
       }
     }
