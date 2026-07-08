@@ -1512,36 +1512,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Players must belong to this league or one of its sub-leagues" });
       }
 
-      // Re-point player_stats rows from duplicate → canonical
-      const { error: updateError } = await supabaseAdmin
-        .from('player_stats')
-        .update({ player_id: canonicalId })
-        .eq('player_id', duplicateId);
+      console.log(`[merge-players] calling merge_players_bulk: duplicate=${duplicateId} → canonical=${canonicalId}`);
 
-      if (updateError) return res.status(500).json({ error: `Failed to update stats: ${updateError.message}` });
+      const { data: rpcResult, error: rpcError } = await supabaseAdmin.rpc('merge_players_bulk', {
+        p_pairs: [{ keep_id: canonicalId, remove_id: duplicateId }],
+      });
 
-      // Delete the duplicate player record
-      const { error: deleteError } = await supabaseAdmin
-        .from('players')
-        .delete()
-        .eq('id', duplicateId);
-
-      if (deleteError) {
-        // Attempt to roll back the stats repoint so we don't leave data in a partial state
-        const { error: rollbackError } = await supabaseAdmin
-          .from('player_stats')
-          .update({ player_id: duplicateId })
-          .eq('player_id', canonicalId);
-        if (rollbackError) {
-          console.error('Merge rollback failed — stats may be in partial state:', rollbackError.message);
-        }
-        return res.status(500).json({ error: `Merge failed and was rolled back: ${deleteError.message}` });
+      if (rpcError) {
+        console.error('[merge-players] RPC failed:', rpcError.message, rpcError);
+        return res.status(500).json({ error: `Merge failed: ${rpcError.message}` });
       }
+
+      const result = rpcResult as { processed?: number; skipped?: number; errors?: string[] } | null;
+      const mergeErrors = result?.errors ?? [];
+      if (mergeErrors.length > 0) {
+        console.error('[merge-players] RPC returned errors:', mergeErrors);
+        return res.status(500).json({ error: mergeErrors.join('; ') });
+      }
+
+      console.log(`[merge-players] RPC complete — processed=${result?.processed ?? 0}, skipped=${result?.skipped ?? 0}`);
 
       res.json({
         success: true,
         canonicalName: canonical.full_name || '',
         duplicateName: duplicate.full_name || '',
+        processed: result?.processed ?? 0,
+        skipped: result?.skipped ?? 0,
       });
     } catch (err: any) {
       res.status(500).json({ error: err.message });

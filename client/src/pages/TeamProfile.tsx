@@ -382,7 +382,24 @@ export default function TeamProfile() {
       }
     });
 
-    return Array.from(byPlayerId.values())
+    // Second pass: merge same-named players who have different player_id rows in the DB
+    const normName = (n: string) => n.toLowerCase().trim().replace(/\s+/g, ' ');
+    const byName = new Map<string, any>();
+    for (const p of byPlayerId.values()) {
+      const key = normName(p.name);
+      if (byName.has(key)) {
+        const existing = byName.get(key)!;
+        existing.games += p.games;
+        existing.totalMinutes += p.totalMinutes;
+        existing.rawStats = existing.rawStats.concat(p.rawStats);
+        if (p.name.length > existing.name.length) existing.name = p.name;
+        if (!existing.slug && p.slug) existing.slug = p.slug;
+      } else {
+        byName.set(key, { ...p, rawStats: [...p.rawStats] });
+      }
+    }
+
+    return Array.from(byName.values())
       .filter(p => p.games > 0)
       .sort((a, b) => {
         const totalA = a.rawStats.reduce((s: number, st: any) => s + (st.spoints || 0), 0);

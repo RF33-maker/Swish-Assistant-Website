@@ -2307,6 +2307,22 @@ export default function LeaguePage() {
       totalPersonalFouls: number;
       totalPlusMinus: number;
       rawStats: any[];
+      leagueIds: Set<string>;
+    };
+
+    // Two players should only ever be merged together if they share at least
+    // one underlying competition/league_id (i.e. the same age group for
+    // parent leagues that aggregate multiple age-group sub-competitions).
+    // If either side has no league_id info (e.g. non-parent leagues where
+    // every stat row shares the same single league_id) we fall back to
+    // allowing the merge, since there is no age-group boundary to enforce.
+    const hasLeagueOverlap = (a: Set<string>, b: Set<string>): boolean => {
+      if (a.size === 0 || b.size === 0) return true;
+      let overlap = false;
+      a.forEach((id: string) => {
+        if (b.has(id)) overlap = true;
+      });
+      return overlap;
     };
 
     const parseMinutesPlayed = (stat: any): number => {
@@ -2331,7 +2347,7 @@ export default function LeaguePage() {
     const aggregatePlayerStats = (playerStats: any[], slugLookup: Map<string, string>, nameLookup: Map<string, string>, playerIdToName?: Map<string, string>): any[] => {
       if (!playerStats || playerStats.length === 0) return [];
 
-      const byPlayerId = new Map<string, PlayerAggregate>();
+      const byPlayerId = new Map<string, PlayerAggregate[]>();
       const noPlayerId: any[] = [];
 
       playerStats.forEach(stat => {
@@ -2350,8 +2366,19 @@ export default function LeaguePage() {
         const didPlay = minutesPlayed > 0 || hasAnyStats;
         
         if (stat.player_id) {
-          if (!byPlayerId.has(stat.player_id)) {
-            byPlayerId.set(stat.player_id, {
+          // NOTE: `player_id` values are not guaranteed to be globally unique across
+          // different competitions in the source data (the same id has been observed
+          // reused for two completely different real players in different age groups).
+          // To avoid silently merging unrelated players, we only merge a stat row into
+          // an existing aggregate for this player_id if the name is actually similar;
+          // otherwise we start a new aggregate bucket for that id.
+          const bucketsForId = byPlayerId.get(stat.player_id) || [];
+          if (bucketsForId.length === 0) {
+            byPlayerId.set(stat.player_id, bucketsForId);
+          }
+          let agg = bucketsForId.find(b => areSimilarNames(b.name, playerName));
+          if (!agg) {
+            agg = {
               name: playerName,
               team: team,
               latestGameTs: stat.game_date || '',
@@ -2363,15 +2390,17 @@ export default function LeaguePage() {
               totalFGM: 0, totalFGA: 0, total2PM: 0, total2PA: 0,
               total3PM: 0, total3PA: 0, totalFTM: 0, totalFTA: 0,
               totalORB: 0, totalDRB: 0, totalMinutes: 0,
-              totalPersonalFouls: 0, totalPlusMinus: 0, rawStats: []
-            });
+              totalPersonalFouls: 0, totalPlusMinus: 0, rawStats: [],
+              leagueIds: new Set<string>()
+            };
+            bucketsForId.push(agg);
           }
-          const agg = byPlayerId.get(stat.player_id)!;
           const gameDate = stat.game_date || '';
           if (gameDate > agg.latestGameTs) {
             agg.latestGameTs = gameDate;
             agg.team = team;
           }
+          if (stat.league_id) agg.leagueIds.add(stat.league_id);
           if (didPlay) {
             agg.games += 1;
             agg.totalPoints += stat.spoints || 0;
@@ -2405,19 +2434,33 @@ export default function LeaguePage() {
         }
       });
 
+      // Flatten the per-player_id buckets into unique entries. A single player_id can
+      // now map to multiple distinct aggregates (see note above about id collisions),
+      // so we assign each a synthetic composite key for the dedup/merge bookkeeping below.
+      const flatPlayerEntries: [string, PlayerAggregate][] = [];
+      byPlayerId.forEach((buckets: PlayerAggregate[], playerId: string) => {
+        buckets.forEach((bucket: PlayerAggregate, idx: number) => {
+          flatPlayerEntries.push([`${playerId}::${idx}`, bucket]);
+        });
+      });
+
       const mergedPlayers: PlayerAggregate[] = [];
       const processedIds = new Set<string>();
 
-      for (const [playerId, player] of byPlayerId.entries()) {
+      for (const [playerId, player] of flatPlayerEntries) {
         if (processedIds.has(playerId)) continue;
         
         const playerTeamNormalized = normalizeTeamName(player.team);
         const similarPlayers: [string, PlayerAggregate][] = [];
-        for (const [otherId, otherPlayer] of byPlayerId.entries()) {
+        for (const [otherId, otherPlayer] of flatPlayerEntries) {
           if (otherId !== playerId && !processedIds.has(otherId)) {
             const otherTeamNormalized = normalizeTeamName(otherPlayer.team);
             const sameTeam = playerTeamNormalized === otherTeamNormalized;
-            if (sameTeam && areSimilarNames(player.name, otherPlayer.name)) {
+            if (
+              sameTeam &&
+              areSimilarNames(player.name, otherPlayer.name) &&
+              hasLeagueOverlap(player.leagueIds, otherPlayer.leagueIds)
+            ) {
               similarPlayers.push([otherId, otherPlayer]);
             }
           }
@@ -2425,7 +2468,8 @@ export default function LeaguePage() {
         
         if (similarPlayers.length > 0) {
           for (const [otherId, other] of similarPlayers) {
-            player.playerIds.add(otherId);
+            other.playerIds.forEach((id: string) => player.playerIds.add(id));
+            other.leagueIds.forEach((id: string) => player.leagueIds.add(id));
             player.games += other.games;
             player.totalPoints += other.totalPoints;
             player.totalRebounds += other.totalRebounds;
@@ -2461,9 +2505,11 @@ export default function LeaguePage() {
           `${stat.firstname || ''} ${stat.familyname || ''}`.trim() ||
           stat.name || 'Unknown Player';
         const team = stat.team || stat.team_name || 'Unknown';
-        let existingPlayer = mergedPlayers.find(p => areSimilarNames(p.name, playerName));
+        const statLeagueIds = stat.league_id ? new Set<string>([stat.league_id]) : new Set<string>();
+        let existingPlayer = mergedPlayers.find(p => areSimilarNames(p.name, playerName) && hasLeagueOverlap(p.leagueIds, statLeagueIds));
         
         if (existingPlayer) {
+          if (stat.league_id) existingPlayer.leagueIds.add(stat.league_id);
           existingPlayer.games += 1;
           existingPlayer.totalPoints += stat.spoints || 0;
           existingPlayer.totalRebounds += stat.sreboundstotal || 0;
@@ -2508,7 +2554,8 @@ export default function LeaguePage() {
             totalFTM: stat.sfreethrowsmade || 0, totalFTA: stat.sfreethrowsattempted || 0,
             totalORB: stat.sreboundsoffensive || 0, totalDRB: stat.sreboundsdefensive || 0,
             totalMinutes: 0, totalPersonalFouls: stat.sfoulspersonal || 0,
-            totalPlusMinus: stat.splusminuspoints || 0, rawStats: [stat]
+            totalPlusMinus: stat.splusminuspoints || 0, rawStats: [stat],
+            leagueIds: statLeagueIds
           };
           const minutesParts = stat.sminutes?.split(':');
           if (minutesParts && minutesParts.length === 2) {
@@ -2539,6 +2586,7 @@ export default function LeaguePage() {
             if (existingPlayer.playerIds.has(id)) overlaps = true;
           });
           if (overlaps) continue;
+          if (!hasLeagueOverlap(player.leagueIds, existingPlayer.leagueIds)) continue;
 
           if (strictNamesMatch(player.name, existingPlayer.name)) {
             existingPlayer.games += player.games;
@@ -2563,6 +2611,7 @@ export default function LeaguePage() {
             existingPlayer.totalPlusMinus += player.totalPlusMinus;
             existingPlayer.rawStats.push(...player.rawStats);
             player.playerIds.forEach((id: string) => existingPlayer.playerIds.add(id));
+            player.leagueIds.forEach((id: string) => existingPlayer.leagueIds.add(id));
             if (player.latestGameTs > existingPlayer.latestGameTs) {
               existingPlayer.latestGameTs = player.latestGameTs;
               existingPlayer.team = player.team;
@@ -2573,7 +2622,7 @@ export default function LeaguePage() {
           }
         }
         if (!foundMatch) {
-          crossTeamMerged.push({ ...player, playerIds: new Set(player.playerIds) });
+          crossTeamMerged.push({ ...player, playerIds: new Set(player.playerIds), leagueIds: new Set(player.leagueIds) });
         }
       });
 
