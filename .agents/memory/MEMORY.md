@@ -2,3 +2,4 @@
 - [Leagues↔Competitions rename](leagues-competitions-rename.md) — "league" = brand, "competition" = season; DB migration still needed; two intentional .from("leagues") calls must stay.
 - [Parse proxy pattern](parse-proxy-pattern.md) — /api/parse must use relative URL in frontend and be proxied server-side via Express to avoid CORS; VITE_BACKEND_URL is the Python backend (a separate Replit project, not Render).
 - [Vercel serverless bundling](vercel-bundle.md) — Vercel can't resolve local server/ imports at runtime; esbuild bundles api/_source.ts into api/index.js at deploy time.
+- [player_id collisions across competitions](player-id-collisions.md) — same player_id can belong to 2 different real people in different age groups; never merge stats by id alone, verify name similarity too.
