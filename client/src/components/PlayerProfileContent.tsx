@@ -368,10 +368,19 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
     return () => { cancelled = true; };
   }, [selectedLeagueIds]);
 
+  // When exactly one league is filtered, use that league's ID for team-logo
+  // colour extraction so the banner reflects the filtered league's branding
+  // (e.g. NBL D1 red) rather than the player's primary registration league.
+  // Falls back to the player's own leagueId when no filter is active.
+  const teamBrandingLeagueId = useMemo(() => {
+    if (selectedLeagueIds.size === 1) return Array.from(selectedLeagueIds)[0];
+    return playerInfo?.leagueId || "";
+  }, [selectedLeagueIds, playerInfo?.leagueId]);
+
   const { primaryColor: brandedPrimary } = useTeamBranding({
     teamName: playerInfo?.team || "",
-    leagueId: playerInfo?.leagueId || "",
-    enabled: !brandColorOverride && !singleLeagueBrandColor && !!playerInfo?.team && !!playerInfo?.leagueId,
+    leagueId: teamBrandingLeagueId,
+    enabled: !brandColorOverride && !singleLeagueBrandColor && !!playerInfo?.team && !!teamBrandingLeagueId,
   });
 
   const primaryColor = brandColorOverride || singleLeagueBrandColor || brandedPrimary;
