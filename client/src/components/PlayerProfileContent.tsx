@@ -377,13 +377,37 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
     return playerInfo?.leagueId || "";
   }, [selectedLeagueIds, playerInfo?.leagueId]);
 
+  // Derive the player's team name within the selected league so that
+  // extractTeamColors looks up the right logo (e.g. NBL D1 red team, not the
+  // REBA SL team). playerMatches has one entry per identity record, each with
+  // its own league_id and team. Fall back to the primary team when unfiltered.
+  const teamNameForBranding = useMemo(() => {
+    if (selectedLeagueIds.size !== 1) return playerInfo?.team || "";
+    const selectedId = Array.from(selectedLeagueIds)[0];
+    // Direct match on the selected league/competition ID
+    const direct = playerMatches.find(m => m.league_id === selectedId);
+    if (direct) return direct.team;
+    // Parent-league selected: search its child competitions
+    for (const compId of expandedCompIds) {
+      const child = playerMatches.find(m => m.league_id === compId);
+      if (child) return child.team;
+    }
+    return playerInfo?.team || "";
+  }, [selectedLeagueIds, playerMatches, expandedCompIds, playerInfo?.team]);
+
+  // Allow team-branding extraction when a specific league is selected, even
+  // when a brandColorOverride is present (inline profile case). The selected
+  // league's team logo colour should win over the fixed parent-league colour.
+  const hasLeagueFilter = selectedLeagueIds.size === 1;
   const { primaryColor: brandedPrimary } = useTeamBranding({
-    teamName: playerInfo?.team || "",
+    teamName: teamNameForBranding,
     leagueId: teamBrandingLeagueId,
-    enabled: !brandColorOverride && !singleLeagueBrandColor && !!playerInfo?.team && !!teamBrandingLeagueId,
+    enabled: !singleLeagueBrandColor && !!teamNameForBranding && !!teamBrandingLeagueId && (!brandColorOverride || hasLeagueFilter),
   });
 
-  const primaryColor = brandColorOverride || singleLeagueBrandColor || brandedPrimary;
+  // Priority: league's own brand colour > (if filter active: team logo colour
+  // in that league, else: parent override colour) > team logo colour fallback.
+  const primaryColor = singleLeagueBrandColor || (hasLeagueFilter ? brandedPrimary : brandColorOverride) || brandedPrimary;
   const readablePrimary = useReadableTeamColor(primaryColor);
 
   // ── Re-run rankings and AI analysis when the league filter changes ────────
@@ -1925,7 +1949,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
             photoUploading={photoUploading}
             fileInputRef={fileInputRef}
             isAuthenticated={!!user}
-            brandColorOverride={brandColorOverride || singleLeagueBrandColor || undefined}
+            brandColorOverride={hasLeagueFilter ? primaryColor || undefined : brandColorOverride || singleLeagueBrandColor || undefined}
           />
         </div>
       )}
