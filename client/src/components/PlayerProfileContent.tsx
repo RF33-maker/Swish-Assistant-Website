@@ -1937,7 +1937,9 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
       {playerInfo && (
         <div className="w-screen relative" style={{ marginLeft: 'calc(-50vw + 50%)', marginRight: 'calc(-50vw + 50%)' }}>
           <PlayerBanner
-            playerInfo={playerInfo}
+            playerInfo={hasLeagueFilter && teamNameForBranding && teamBrandingLeagueId
+              ? { ...playerInfo, team: teamNameForBranding, leagueId: teamBrandingLeagueId }
+              : playerInfo}
             playerPhotoUrl={playerPhotoUrl}
             showFocusAdjuster={showFocusAdjuster}
             setShowFocusAdjuster={setShowFocusAdjuster}
