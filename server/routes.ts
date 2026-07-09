@@ -1099,16 +1099,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const unique = Array.from(new Set(ids)).slice(0, 100);
       const { data, error } = await supabaseAdmin
         .from("competitions")
-        .select("league_id, name, parent_league_id, age_group, stop")
+        .select("league_id, name, slug, parent_league_id, age_group, stop")
         .in("league_id", unique);
       if (error) {
         console.error("Error in /api/public/league-info:", error.message);
         return res.status(500).json({ error: "Internal server error" });
       }
-      const result: Record<string, { name: string; parent_league_id: string | null; age_group: string | null; stop: number | null }> = {};
+      const result: Record<string, { name: string; slug: string | null; parent_league_id: string | null; age_group: string | null; stop: number | null }> = {};
       for (const row of data || []) {
         result[row.league_id] = {
           name: row.name,
+          slug: row.slug || null,
           parent_league_id: row.parent_league_id || null,
           age_group: row.age_group || null,
           stop: row.stop ?? null,

@@ -69,6 +69,7 @@ interface PlayerOnOffImpactProfileRow {
 interface PlayerPerformanceSplitsProps {
   playerId: string;
   leagueId?: string;
+  leagueIds?: string[];
   teamId?: string;
   playerName?: string;
   playerTeam?: string;
@@ -298,6 +299,7 @@ function MetricTable({
 export function PlayerPerformanceSplits({
   playerId,
   leagueId,
+  leagueIds,
   teamId,
   playerName = "Player",
   playerTeam = "",
@@ -307,8 +309,12 @@ export function PlayerPerformanceSplits({
 }: PlayerPerformanceSplitsProps) {
   const [expanded, setExpanded] = useState(false);
 
+  // Resolve the effective league filter: leagueIds (multi) takes precedence
+  // over the legacy leagueId (single). An empty array means no filter.
+  const effectiveLeagueIds: string[] = leagueIds ?? (leagueId ? [leagueId] : []);
+
   const { data: row, isLoading, isError } = useQuery<PlayerOnOffImpactProfileRow | null>({
-    queryKey: ["player-on-off-impact-profile", playerId, leagueId, teamId],
+    queryKey: ["player-on-off-impact-profile", playerId, effectiveLeagueIds.join(','), teamId],
     queryFn: async () => {
       let query = supabase
         .from("player_on_off_impact_profile_v1")
@@ -317,7 +323,11 @@ export function PlayerPerformanceSplits({
         .order("on_possessions_for", { ascending: false })
         .limit(1);
 
-      if (leagueId) query = query.eq("league_id", leagueId);
+      if (effectiveLeagueIds.length === 1) {
+        query = query.eq("league_id", effectiveLeagueIds[0]);
+      } else if (effectiveLeagueIds.length > 1) {
+        query = query.in("league_id", effectiveLeagueIds);
+      }
       if (teamId) query = query.eq("team_id", teamId);
 
       const { data, error } = await query;
