@@ -3622,7 +3622,7 @@ export default function LeaguePage() {
             <div className="absolute inset-0 bg-black/40 flex flex-col justify-end p-6">
               <div className="flex items-center gap-3 flex-wrap">
                 <h2 className="text-3xl sm:text-4xl font-bold text-white drop-shadow-md">
-                  {displayLeagueName || "League Name"}
+                  {(displayLeagueName || "League Name").replace(/\s*FIBA$/i, "")}
                 </h2>
                 {(league as any)?.competition_id && siblingSeasons.length > 1 && (
                   <select
