@@ -150,8 +150,17 @@ async function getServerLogoMap(leagueId: string): Promise<Record<string, string
 function findInLogoMap(map: Record<string, string>, teamName: string): string | undefined {
   if (map[teamName]) return map[teamName];
   const lower = teamName.toLowerCase();
-  const entry = Object.entries(map).find(([k]) => k.toLowerCase() === lower);
-  return entry?.[1];
+  // Exact case-insensitive match
+  const exact = Object.entries(map).find(([k]) => k.toLowerCase() === lower);
+  if (exact) return exact[1];
+  // Prefix match: storage file names sometimes have a trailing roman numeral or
+  // "Senior Men" suffix that the stats table omits (e.g. "Barking Abbey Senior
+  // Men" matches "Barking Abbey Senior Men I"). Prefer the longest match.
+  const prefixMatches = Object.entries(map)
+    .filter(([k]) => k.toLowerCase().startsWith(lower) || lower.startsWith(k.toLowerCase()))
+    .sort((a, b) => b[0].length - a[0].length);
+  if (prefixMatches.length > 0) return prefixMatches[0][1];
+  return undefined;
 }
 
 interface GetTeamLogoCachedArgs {

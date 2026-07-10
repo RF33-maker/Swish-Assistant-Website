@@ -515,55 +515,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/leagues/:leagueId/team-logos", async (req, res) => {
     try {
       const { leagueId } = req.params;
-      
-      // Get all teams for this league from player_stats
-      const { data: playerStats, error: teamsError } = await supabaseAdmin
-        .from('player_stats')
-        .select('team_name')
-        .eq('league_id', leagueId);
 
-      if (teamsError) {
-        console.error("Error fetching teams:", teamsError);
-        return res.status(500).json({ error: "Failed to fetch teams" });
+      // List all files in the bucket whose name starts with this league's ID.
+      // This is a single API call rather than N*5 HEAD requests — much faster.
+      const prefix = leagueId + "_";
+      const { data: storageFiles, error: listError } = await supabaseAdmin.storage
+        .from('team-logos')
+        .list('', { limit: 500, search: leagueId.substring(0, 8) });
+
+      if (listError) {
+        console.error("Error listing team-logos bucket:", listError);
+        return res.json({});
       }
 
-      // Get unique team names
-      const teams = Array.from(new Set(
-        playerStats?.map((stat: any) => stat.team_name).filter(Boolean) || []
-      ));
+      // Filter to only files that belong to this exact league ID
+      const leagueFiles = (storageFiles || []).filter(f => f.name.startsWith(prefix));
 
-      // Check for existing logo files for each team using direct storage access
+      if (leagueFiles.length === 0) {
+        return res.json({});
+      }
+
+      // Build a normalised-name → public-URL map from the storage listing.
+      // File names look like: <leagueId>_<Team_Name_With_Underscores>.<ext>
       const teamLogos: Record<string, string> = {};
-      
-      for (const teamName of teams) {
-        try {
-          const extensions = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
-          let found = false;
-          
-          for (const ext of extensions) {
-            const fileName = `${leagueId}_${teamName.replace(/\s+/g, '_')}.${ext}`;
-            
-            const { data } = supabaseAdmin.storage
-              .from('team-logos')
-              .getPublicUrl(fileName);
-            
-            // Check if file exists by trying to fetch it
-            try {
-              const response = await fetch(data.publicUrl, { method: 'HEAD' });
-              if (response.ok) {
-                teamLogos[teamName] = data.publicUrl;
-                found = true;
-                break;
-              }
-            } catch (error) {
-              // Continue to next extension
-            }
-          }
-        } catch (error) {
-          // Continue to next team
-        }
+      for (const file of leagueFiles) {
+        const withoutLeaguePrefix = file.name.slice(prefix.length);
+        // Strip extension
+        const nameWithUnderscores = withoutLeaguePrefix.replace(/\.[^.]+$/, "");
+        const teamName = nameWithUnderscores.replace(/_/g, " ");
+        const { data: urlData } = supabaseAdmin.storage
+          .from('team-logos')
+          .getPublicUrl(file.name);
+        teamLogos[teamName] = urlData.publicUrl;
       }
 
+      res.set('Cache-Control', 'public, max-age=300');
       res.json(teamLogos);
     } catch (error) {
       console.error("Error fetching team logos API:", error);
@@ -693,7 +679,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { data, error } = await supabaseAdmin
         .from("competitions")
-        .select("name, slug, season, gender")
+        .select("name, slug, season, gender, division")
         .eq("competition_id", leagueId)
         .order("season", { ascending: false });
 
@@ -1099,16 +1085,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const unique = Array.from(new Set(ids)).slice(0, 100);
       const { data, error } = await supabaseAdmin
         .from("competitions")
-        .select("league_id, name, parent_league_id, age_group, stop")
+        .select("league_id, name, slug, parent_league_id, age_group, stop")
         .in("league_id", unique);
       if (error) {
         console.error("Error in /api/public/league-info:", error.message);
         return res.status(500).json({ error: "Internal server error" });
       }
-      const result: Record<string, { name: string; parent_league_id: string | null; age_group: string | null; stop: number | null }> = {};
+      const result: Record<string, { name: string; slug: string | null; parent_league_id: string | null; age_group: string | null; stop: number | null }> = {};
       for (const row of data || []) {
         result[row.league_id] = {
           name: row.name,
+          slug: row.slug || null,
           parent_league_id: row.parent_league_id || null,
           age_group: row.age_group || null,
           stop: row.stop ?? null,

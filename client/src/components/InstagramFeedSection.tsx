@@ -145,6 +145,10 @@ export function InstagramFeedSection({
   const hasPostUrls = postUrls.length > 0;
   const hasHandle = !!effectiveHandle;
 
+  // Hooks must be called unconditionally — keep these above any early return.
+  const scrollPrev = useCallback(() => api?.scrollPrev(), [api]);
+  const scrollNext = useCallback(() => api?.scrollNext(), [api]);
+
   // Nothing to render.
   if (!hasPostUrls && !hasHandle) return null;
 
@@ -152,9 +156,6 @@ export function InstagramFeedSection({
   const avatarUrl = effectiveHandle
     ? `https://unavatar.io/instagram/${effectiveHandle}`
     : null;
-
-  const scrollPrev = useCallback(() => api?.scrollPrev(), [api]);
-  const scrollNext = useCallback(() => api?.scrollNext(), [api]);
 
   // Align timestamps with post URL positions.
   const cardTimestamps: Array<string | null | undefined> = postUrls.map((url) => {
