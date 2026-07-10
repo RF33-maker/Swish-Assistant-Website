@@ -39,7 +39,7 @@ import { PlayerComparison } from "@/components/PlayerComparison";
 import { TeamComparison } from "@/components/TeamComparison";
 import { TournamentBracket } from "@/components/TournamentBracket";
 import { normalizeTeamName } from "@/lib/teamUtils";
-import { namesMatch, getMostCompleteName, strictNamesMatch } from "@/lib/fuzzyMatch";
+import { namesMatch, getMostCompleteName, strictNamesMatch, normalizeName } from "@/lib/fuzzyMatch";
 import { DEBUG, debugLog } from "@/utils/debug";
 import { usePublicLeagueBrandingBySlug } from "@/hooks/usePublicLeagueBranding";
 import { InlinePlayerProfile } from "@/components/InlinePlayerProfile";
@@ -2316,16 +2316,8 @@ export default function LeaguePage() {
     // If either side has no league_id info (e.g. non-parent leagues where
     // every stat row shares the same single league_id) we fall back to
     // allowing the merge, since there is no age-group boundary to enforce.
-    const hasLeagueOverlap = (a: Set<string>, b: Set<string>, siblings?: Set<string>): boolean => {
+    const hasLeagueOverlap = (a: Set<string>, b: Set<string>): boolean => {
       if (a.size === 0 || b.size === 0) return true;
-      // If both sets contain only IDs from the same parent league's children,
-      // treat them as overlapping — the same player can appear in different stops
-      // (child competitions) and should be merged across them.
-      if (siblings && siblings.size > 0) {
-        const aInFamily = [...a].every(id => siblings.has(id));
-        const bInFamily = [...b].every(id => siblings.has(id));
-        if (aInFamily && bInFamily) return true;
-      }
       let overlap = false;
       a.forEach((id: string) => {
         if (b.has(id)) overlap = true;
@@ -2467,7 +2459,7 @@ export default function LeaguePage() {
             if (
               sameTeam &&
               areSimilarNames(player.name, otherPlayer.name) &&
-              hasLeagueOverlap(player.leagueIds, otherPlayer.leagueIds, siblingLeagueIds)
+              hasLeagueOverlap(player.leagueIds, otherPlayer.leagueIds)
             ) {
               similarPlayers.push([otherId, otherPlayer]);
             }
@@ -2514,7 +2506,7 @@ export default function LeaguePage() {
           stat.name || 'Unknown Player';
         const team = stat.team || stat.team_name || 'Unknown';
         const statLeagueIds = stat.league_id ? new Set<string>([stat.league_id]) : new Set<string>();
-        let existingPlayer = mergedPlayers.find(p => areSimilarNames(p.name, playerName) && hasLeagueOverlap(p.leagueIds, statLeagueIds, siblingLeagueIds));
+        let existingPlayer = mergedPlayers.find(p => areSimilarNames(p.name, playerName) && hasLeagueOverlap(p.leagueIds, statLeagueIds));
         
         if (existingPlayer) {
           if (stat.league_id) existingPlayer.leagueIds.add(stat.league_id);
@@ -2594,7 +2586,7 @@ export default function LeaguePage() {
             if (existingPlayer.playerIds.has(id)) overlaps = true;
           });
           if (overlaps) continue;
-          if (!hasLeagueOverlap(player.leagueIds, existingPlayer.leagueIds, siblingLeagueIds)) continue;
+          if (!hasLeagueOverlap(player.leagueIds, existingPlayer.leagueIds)) continue;
 
           if (strictNamesMatch(player.name, existingPlayer.name)) {
             existingPlayer.games += player.games;
@@ -2634,7 +2626,60 @@ export default function LeaguePage() {
         }
       });
 
-      const playersWithGames = crossTeamMerged.filter(player => player.games > 0);
+      // Final exact-name dedup pass for parent leagues only.
+      // Players who played across multiple stops (child competitions) can end up
+      // with different player_ids per stop, so the existing merge stages (which
+      // guard on league overlap or player_id overlap) leave them as separate
+      // entries. This pass uses EXACT normalized name + exact normalized team
+      // matching — no fuzzy — so "Jayden Wise-Malcolm" cannot match "Jayden Wise".
+      let deduped = crossTeamMerged;
+      if (siblingLeagueIds && siblingLeagueIds.size > 0) {
+        const exactDedup: PlayerAggregate[] = [];
+        for (const player of crossTeamMerged) {
+          const allInFamily = [...player.leagueIds].every(id => siblingLeagueIds!.has(id));
+          if (!allInFamily) { exactDedup.push(player); continue; }
+          const nName = normalizeName(player.name);
+          const nTeam = normalizeTeamName(player.team);
+          const match = exactDedup.find(p => {
+            if (![...p.leagueIds].every(id => siblingLeagueIds!.has(id))) return false;
+            return normalizeName(p.name) === nName && normalizeTeamName(p.team) === nTeam;
+          });
+          if (match) {
+            player.playerIds.forEach((id: string) => match.playerIds.add(id));
+            player.leagueIds.forEach((id: string) => match.leagueIds.add(id));
+            match.games += player.games;
+            match.totalPoints += player.totalPoints;
+            match.totalRebounds += player.totalRebounds;
+            match.totalAssists += player.totalAssists;
+            match.totalSteals += player.totalSteals;
+            match.totalBlocks += player.totalBlocks;
+            match.totalTurnovers += player.totalTurnovers;
+            match.totalFGM += player.totalFGM;
+            match.totalFGA += player.totalFGA;
+            match.total2PM += player.total2PM;
+            match.total2PA += player.total2PA;
+            match.total3PM += player.total3PM;
+            match.total3PA += player.total3PA;
+            match.totalFTM += player.totalFTM;
+            match.totalFTA += player.totalFTA;
+            match.totalORB += player.totalORB;
+            match.totalDRB += player.totalDRB;
+            match.totalMinutes += player.totalMinutes;
+            match.totalPersonalFouls += player.totalPersonalFouls;
+            match.totalPlusMinus += player.totalPlusMinus;
+            match.rawStats.push(...player.rawStats);
+            if (player.latestGameTs > match.latestGameTs) {
+              match.latestGameTs = player.latestGameTs;
+              match.team = player.team;
+            }
+          } else {
+            exactDedup.push(player);
+          }
+        }
+        deduped = exactDedup;
+      }
+
+      const playersWithGames = deduped.filter(player => player.games > 0);
       
       return playersWithGames.map((player) => {
         let playerSlug: string | null = null;
