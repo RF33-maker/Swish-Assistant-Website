@@ -2316,8 +2316,16 @@ export default function LeaguePage() {
     // If either side has no league_id info (e.g. non-parent leagues where
     // every stat row shares the same single league_id) we fall back to
     // allowing the merge, since there is no age-group boundary to enforce.
-    const hasLeagueOverlap = (a: Set<string>, b: Set<string>): boolean => {
+    const hasLeagueOverlap = (a: Set<string>, b: Set<string>, siblings?: Set<string>): boolean => {
       if (a.size === 0 || b.size === 0) return true;
+      // If both sets contain only IDs from the same parent league's children,
+      // treat them as overlapping — the same player can appear in different stops
+      // (child competitions) and should be merged across them.
+      if (siblings && siblings.size > 0) {
+        const aInFamily = [...a].every(id => siblings.has(id));
+        const bInFamily = [...b].every(id => siblings.has(id));
+        if (aInFamily && bInFamily) return true;
+      }
       let overlap = false;
       a.forEach((id: string) => {
         if (b.has(id)) overlap = true;
@@ -2344,7 +2352,7 @@ export default function LeaguePage() {
       return namesMatch(name1, name2);
     };
 
-    const aggregatePlayerStats = (playerStats: any[], slugLookup: Map<string, string>, nameLookup: Map<string, string>, playerIdToName?: Map<string, string>): any[] => {
+    const aggregatePlayerStats = (playerStats: any[], slugLookup: Map<string, string>, nameLookup: Map<string, string>, playerIdToName?: Map<string, string>, siblingLeagueIds?: Set<string>): any[] => {
       if (!playerStats || playerStats.length === 0) return [];
 
       const byPlayerId = new Map<string, PlayerAggregate[]>();
@@ -2459,7 +2467,7 @@ export default function LeaguePage() {
             if (
               sameTeam &&
               areSimilarNames(player.name, otherPlayer.name) &&
-              hasLeagueOverlap(player.leagueIds, otherPlayer.leagueIds)
+              hasLeagueOverlap(player.leagueIds, otherPlayer.leagueIds, siblingLeagueIds)
             ) {
               similarPlayers.push([otherId, otherPlayer]);
             }
@@ -2506,7 +2514,7 @@ export default function LeaguePage() {
           stat.name || 'Unknown Player';
         const team = stat.team || stat.team_name || 'Unknown';
         const statLeagueIds = stat.league_id ? new Set<string>([stat.league_id]) : new Set<string>();
-        let existingPlayer = mergedPlayers.find(p => areSimilarNames(p.name, playerName) && hasLeagueOverlap(p.leagueIds, statLeagueIds));
+        let existingPlayer = mergedPlayers.find(p => areSimilarNames(p.name, playerName) && hasLeagueOverlap(p.leagueIds, statLeagueIds, siblingLeagueIds));
         
         if (existingPlayer) {
           if (stat.league_id) existingPlayer.leagueIds.add(stat.league_id);
@@ -2586,7 +2594,7 @@ export default function LeaguePage() {
             if (existingPlayer.playerIds.has(id)) overlaps = true;
           });
           if (overlaps) continue;
-          if (!hasLeagueOverlap(player.leagueIds, existingPlayer.leagueIds)) continue;
+          if (!hasLeagueOverlap(player.leagueIds, existingPlayer.leagueIds, siblingLeagueIds)) continue;
 
           if (strictNamesMatch(player.name, existingPlayer.name)) {
             existingPlayer.games += player.games;
@@ -2816,7 +2824,7 @@ export default function LeaguePage() {
             page++;
 
             if (!isCancelled()) {
-              const intermediateResults = aggregatePlayerStats(allPlayerStats, slugLookup, nameLookup, playerIdToName);
+              const intermediateResults = aggregatePlayerStats(allPlayerStats, slugLookup, nameLookup, playerIdToName, isParentFetch ? new Set(parentChildIds) : undefined);
               if (intermediateResults.length > 0) {
                 setAllPlayerAverages(intermediateResults);
                 setFilteredPlayerAverages(intermediateResults);
@@ -2883,7 +2891,7 @@ export default function LeaguePage() {
           }
         }
 
-        const finalResults = aggregatePlayerStats(allPlayerStats, slugLookup, nameLookup, playerIdToName);
+        const finalResults = aggregatePlayerStats(allPlayerStats, slugLookup, nameLookup, playerIdToName, isParentFetch ? new Set(parentChildIds) : undefined);
         finalResults.forEach((p: any) => {
           if (!p.photoPath && p.playerIds instanceof Set) {
             for (const pid of p.playerIds) {
