@@ -2634,15 +2634,26 @@ export default function LeaguePage() {
       // matching — no fuzzy — so "Jayden Wise-Malcolm" cannot match "Jayden Wise".
       let deduped = crossTeamMerged;
       if (siblingLeagueIds && siblingLeagueIds.size > 0) {
+        // Extract age-group prefix from a team name, e.g. "15U Team 2" → "15u".
+        // Returns null if no age-group prefix is present.
+        const agePrefix = (team: string): string | null => {
+          const m = team.match(/^(\d+[uU])\b/);
+          return m ? m[1].toLowerCase() : null;
+        };
         const exactDedup: PlayerAggregate[] = [];
         for (const player of crossTeamMerged) {
           const allInFamily = [...player.leagueIds].every(id => siblingLeagueIds!.has(id));
           if (!allInFamily) { exactDedup.push(player); continue; }
           const nName = normalizeName(player.name);
-          const nTeam = normalizeTeamName(player.team);
+          const pAge = agePrefix(player.team);
           const match = exactDedup.find(p => {
             if (![...p.leagueIds].every(id => siblingLeagueIds!.has(id))) return false;
-            return normalizeName(p.name) === nName && normalizeTeamName(p.team) === nTeam;
+            if (normalizeName(p.name) !== nName) return false;
+            // If both entries have an age-group prefix they must match (prevents
+            // merging same name across different age groups, e.g. 15U vs 16U).
+            const eAge = agePrefix(p.team);
+            if (pAge && eAge && pAge !== eAge) return false;
+            return true;
           });
           if (match) {
             player.playerIds.forEach((id: string) => match.playerIds.add(id));
