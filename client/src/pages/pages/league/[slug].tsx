@@ -617,7 +617,7 @@ export default function LeaguePage() {
   const [selectedAgeGroup, setSelectedAgeGroup] = useState<string>('all');
   const [selectedStop, setSelectedStop] = useState<string>('all');
   const [parentStandingsGroups, setParentStandingsGroups] = useState<{ageGroup: string, standings: any[], poolAStandings: any[], poolBStandings: any[], hasPools: boolean}[]>([]);
-  const [siblingSeasons, setSiblingSeasons] = useState<{ name: string; slug: string; season: string | null }[]>([]);
+  const [siblingSeasons, setSiblingSeasons] = useState<{ name: string; slug: string; season: string | null; division?: string | null }[]>([]);
 
   const getTeamLogoUrl = (teamName: string): string | undefined => {
     if (!teamName) return undefined;
@@ -3633,7 +3633,7 @@ export default function LeaguePage() {
                   >
                     {siblingSeasons.map((s) => (
                       <option key={s.slug} value={s.slug} style={{ background: '#1a1a2e', color: 'white' }}>
-                        {s.season || s.name}
+                        {s.division || s.season || s.name}
                       </option>
                     ))}
                   </select>
