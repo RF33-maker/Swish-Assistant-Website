@@ -116,6 +116,11 @@ interface PlayerProfileContentProps {
   playerSlug: string;
   brandColorOverride?: string;
   onBack?: () => void;
+  /** Pre-aggregated player IDs from the league page (e.g. same person across
+   *  multiple REBA SL stops with different DB player_ids). These are injected
+   *  directly into the identity lookup so the profile shows all games without
+   *  needing the player_identities DB table to be populated. */
+  linkedPlayerIds?: string[];
 }
 
 const getTeamAbbreviation = (name: string): string => {
@@ -222,7 +227,7 @@ function LeagueDropdown({ leagues, selectedLeagueIds, onToggle, onClear, label, 
   );
 }
 
-export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }: PlayerProfileContentProps) {
+export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, linkedPlayerIds }: PlayerProfileContentProps) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { user } = useAuth();
@@ -974,13 +979,21 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
         // If so, we fetch all linked player_id rows directly — this is more
         // reliable than fuzzy name matching for players with name variations
         // across leagues (e.g. "Elvis" vs "Elvisi", "M. Hosten" vs "Myles Hosten").
-        let identityLinkedIds: string[] = [];
+        //
+        // Seed with any pre-aggregated IDs passed in from the league page (e.g.
+        // the same person appearing under different player_ids across REBA SL
+        // stops). This avoids needing the player_identities table to be
+        // populated for the profile to show all games.
+        let identityLinkedIds: string[] = (linkedPlayerIds || []).filter(id => id !== initialPlayer.id);
         try {
           const identityRes = await fetch(`/api/player-identities/for-player/${initialPlayer.id}`);
           if (identityRes.ok) {
             const { identity } = await identityRes.json();
             if (identity?.playerIds && Array.isArray(identity.playerIds)) {
-              identityLinkedIds = identity.playerIds.filter((id: string) => id !== initialPlayer.id);
+              const dbLinked = identity.playerIds.filter((id: string) => id !== initialPlayer.id);
+              // Merge DB-linked IDs without duplicating already-seeded ones
+              const seen = new Set(identityLinkedIds);
+              dbLinked.forEach((id: string) => { if (!seen.has(id)) { seen.add(id); identityLinkedIds.push(id); } });
             }
           }
         } catch {

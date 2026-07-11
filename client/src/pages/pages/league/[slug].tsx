@@ -558,12 +558,14 @@ export default function LeaguePage() {
   const [updatingYoutube, setUpdatingYoutube] = useState(false);
   const [activeSection, setActiveSection] = useState(urlPlayerSlug ? 'player' : 'overview');
   const [selectedPlayerSlug, setSelectedPlayerSlug] = useState<string | null>(urlPlayerSlug || null);
+  const [selectedPlayerLinkedIds, setSelectedPlayerLinkedIds] = useState<string[]>([]);
   const [selectedTeamName, setSelectedTeamName] = useState<string | null>(null);
   const [previousSection, setPreviousSection] = useState<string>('overview');
 
-  const handleSelectPlayer = useCallback((playerSlug: string, fromSection: string) => {
+  const handleSelectPlayer = useCallback((playerSlug: string, fromSection: string, linkedIds?: string[]) => {
     setPreviousSection(fromSection);
     setSelectedPlayerSlug(playerSlug);
+    setSelectedPlayerLinkedIds(linkedIds || []);
     setActiveSection('player');
     navigate(`/competition/${slug}/player/${playerSlug}`);
   }, [slug, navigate]);
@@ -1140,13 +1142,16 @@ export default function LeaguePage() {
     const filteredByAgeGroupRound = useMemo(() => {
       const agFilter = filterAgeGroup !== 'all';
       const stopFilter = isParentLeague && selectedStop !== 'all';
+      // Age-group TAB selection (e.g. "19+") must also gate the league_id
+      // filter even when the internal dropdown and stop filter are both 'all'.
+      const ageTabFilter = isParentLeague && selectedAgeGroup !== 'all';
       const roundFilter = filterRound !== 'all';
-      if (!agFilter && !stopFilter && !roundFilter) return allPlayerAverages;
+      if (!agFilter && !stopFilter && !roundFilter && !ageTabFilter) return allPlayerAverages;
 
       return allPlayerAverages
         .map(player => {
           const matchingStats = (player.rawStats || []).filter((s: any) => {
-            if ((agFilter || stopFilter) && !selectedAgeGroupLeagueIds.includes(s.league_id)) return false;
+            if ((agFilter || stopFilter || ageTabFilter) && !selectedAgeGroupLeagueIds.includes(s.league_id)) return false;
             if (roundFilter && s.round !== filterRound) return false;
             return true;
           });
@@ -1216,7 +1221,7 @@ export default function LeaguePage() {
           };
         })
         .filter(Boolean) as any[];
-    }, [allPlayerAverages, filterAgeGroup, filterRound, selectedStop, selectedAgeGroupLeagueIds, isParentLeague]);
+    }, [allPlayerAverages, filterAgeGroup, filterRound, selectedStop, selectedAgeGroup, selectedAgeGroupLeagueIds, isParentLeague]);
 
     useEffect(() => {
       debugLog("🔍 Filtering players. Search term:", statsSearch);
@@ -4536,7 +4541,7 @@ export default function LeaguePage() {
                             className={`border-b border-gray-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors ${player.slug ? 'cursor-pointer' : ''}`}
                             onClick={() => {
                               if (player.slug) {
-                                handleSelectPlayer(player.slug, activeSection);
+                                handleSelectPlayer(player.slug, activeSection, player.playerIds ? Array.from(player.playerIds as Set<string>) : []);
                               }
                             }}
                             data-testid={`player-row-${player.id}`}
@@ -5287,6 +5292,7 @@ export default function LeaguePage() {
                   brandColor={brandColor}
                   leagueSlug={slug}
                   onBack={handlePlayerBack}
+                  linkedPlayerIds={selectedPlayerLinkedIds}
                 />
               </div>
             )}
