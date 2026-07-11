@@ -5,16 +5,14 @@ interface InlinePlayerProfileProps {
   brandColor: string;
   onBack: () => void;
   leagueSlug?: string;
-  linkedPlayerIds?: string[];
 }
 
-export function InlinePlayerProfile({ playerSlug, brandColor, onBack, linkedPlayerIds }: InlinePlayerProfileProps) {
+export function InlinePlayerProfile({ playerSlug, brandColor, onBack }: InlinePlayerProfileProps) {
   return (
     <PlayerProfileContent
       playerSlug={playerSlug}
       brandColorOverride={brandColor}
       onBack={onBack}
-      linkedPlayerIds={linkedPlayerIds}
     />
   );
 }

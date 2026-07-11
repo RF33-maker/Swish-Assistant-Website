@@ -116,11 +116,6 @@ interface PlayerProfileContentProps {
   playerSlug: string;
   brandColorOverride?: string;
   onBack?: () => void;
-  /** Pre-aggregated player IDs from the league page (e.g. same person across
-   *  multiple REBA SL stops with different DB player_ids). These are injected
-   *  directly into the identity lookup so the profile shows all games without
-   *  needing the player_identities DB table to be populated. */
-  linkedPlayerIds?: string[];
 }
 
 const getTeamAbbreviation = (name: string): string => {
@@ -227,7 +222,7 @@ function LeagueDropdown({ leagues, selectedLeagueIds, onToggle, onClear, label, 
   );
 }
 
-export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, linkedPlayerIds }: PlayerProfileContentProps) {
+export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }: PlayerProfileContentProps) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { user } = useAuth();
@@ -980,11 +975,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         // reliable than fuzzy name matching for players with name variations
         // across leagues (e.g. "Elvis" vs "Elvisi", "M. Hosten" vs "Myles Hosten").
         //
-        // Seed with any pre-aggregated IDs passed in from the league page (e.g.
-        // the same person appearing under different player_ids across REBA SL
-        // stops). This avoids needing the player_identities table to be
-        // populated for the profile to show all games.
-        let identityLinkedIds: string[] = (linkedPlayerIds || []).filter(id => id !== initialPlayer.id);
+        let identityLinkedIds: string[] = [];
         try {
           const identityRes = await fetch(`/api/player-identities/for-player/${initialPlayer.id}`);
           if (identityRes.ok) {
@@ -1090,13 +1081,6 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
 
         const playerIds = matches.map(m => m.id);
 
-        // Merge in any pre-aggregated IDs passed from the league page (e.g.
-        // REBA SL stop-specific player_ids that live in the test schema and
-        // therefore never appear in public.players fuzzy-matching above).
-        // player_stats is in the public schema and contains rows for ALL
-        // player_ids, so querying by these IDs directly finds the games.
-        const allStatsPlayerIds = Array.from(new Set([...playerIds, ...(linkedPlayerIds || [])]));
-
         // Note: previously this query joined `players:player_id(full_name, league_id)`
         // which forced a costly nested lookup and frequently triggered Supabase
         // statement timeouts (code 57014) on players with many games. Both fields
@@ -1163,7 +1147,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         type LeagueRow = { league_id: string } & LeagueInfo;
 
         const statsPromise = Promise.all(
-          allStatsPlayerIds.map((pid) =>
+          playerIds.map((pid) =>
             supabase
               .from('player_stats')
               .select(STATS_COLUMNS)
@@ -1229,69 +1213,6 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
           const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
           return tb - ta;
         });
-
-        // Backfill playerMatches for any linkedPlayerIds that have stats but
-        // are NOT already in `matches` (e.g. REBA SL stop-specific player_ids
-        // that don't appear in public.players). This is the source of truth for
-        // filterableLeagues — without these entries the league filter stays
-        // hidden and those games appear with no league label.
-        if (linkedPlayerIds && linkedPlayerIds.length > 0) {
-          const existingIds = new Set(matches.map((m: PlayerMatch) => m.id));
-          const extraIds = new Set(linkedPlayerIds.filter(id => !existingIds.has(id)));
-          if (extraIds.size > 0) {
-            const extraMatches: PlayerMatch[] = [];
-            const seenKey = new Set<string>();
-            for (const stat of stats) {
-              if (!extraIds.has(stat.player_id)) continue;
-              const key = `${stat.player_id}::${stat.league_id}`;
-              if (seenKey.has(key)) continue;
-              seenKey.add(key);
-              const name = stat.full_name
-                || `${stat.firstname || ''} ${stat.familyname || ''}`.trim()
-                || pInfo.name;
-              extraMatches.push({
-                id: stat.player_id,
-                name,
-                full_name: name,
-                team: stat.team_name || '',
-                league_id: stat.league_id,
-                position: stat.playingposition,
-                number: stat.shirtnumber,
-                slug: undefined,
-                matchScore: 1.0,
-              });
-            }
-            if (extraMatches.length > 0) {
-              setPlayerMatches([...matches, ...extraMatches]);
-              // Fetch league info for the newly discovered league_ids so
-              // leagueNames and competitionParentMap are populated for the filter.
-              const knownIds = new Set(matchLeagueIds);
-              const newLeagueIds = Array.from(
-                new Set(extraMatches.map(m => m.league_id).filter((id): id is string => !!id && !knownIds.has(id)))
-              );
-              if (newLeagueIds.length > 0) {
-                fetchLeagueInfo(newLeagueIds).then(rows => {
-                  if (!rows.length) return;
-                  setLeagueNames(prev => {
-                    const next = new Map(prev);
-                    for (const row of rows) {
-                      if (row.name) next.set(row.league_id, row.name);
-                      if (row.parent_league_id && row.name) next.set(row.parent_league_id, row.name);
-                    }
-                    return next;
-                  });
-                  setCompetitionParentMap(prev => {
-                    const next = new Map(prev);
-                    for (const row of rows) {
-                      if (row.parent_league_id) next.set(row.league_id, row.parent_league_id);
-                    }
-                    return next;
-                  });
-                }).catch(() => {});
-              }
-            }
-          }
-        }
 
         // Override the static players-table team with the team from the
         // player's most recent game entry. Stats are now sorted newest-first

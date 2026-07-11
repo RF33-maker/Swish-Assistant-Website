@@ -558,14 +558,12 @@ export default function LeaguePage() {
   const [updatingYoutube, setUpdatingYoutube] = useState(false);
   const [activeSection, setActiveSection] = useState(urlPlayerSlug ? 'player' : 'overview');
   const [selectedPlayerSlug, setSelectedPlayerSlug] = useState<string | null>(urlPlayerSlug || null);
-  const [selectedPlayerLinkedIds, setSelectedPlayerLinkedIds] = useState<string[]>([]);
   const [selectedTeamName, setSelectedTeamName] = useState<string | null>(null);
   const [previousSection, setPreviousSection] = useState<string>('overview');
 
-  const handleSelectPlayer = useCallback((playerSlug: string, fromSection: string, linkedIds?: string[]) => {
+  const handleSelectPlayer = useCallback((playerSlug: string, fromSection: string) => {
     setPreviousSection(fromSection);
     setSelectedPlayerSlug(playerSlug);
-    setSelectedPlayerLinkedIds(linkedIds || []);
     setActiveSection('player');
     navigate(`/competition/${slug}/player/${playerSlug}`);
   }, [slug, navigate]);
@@ -2716,7 +2714,20 @@ export default function LeaguePage() {
             }
           }
         }
-        
+        // Final fallback: derive a canonical-style slug from the player's
+        // display name. This generates e.g. "jaydon-wise-malcolm" from
+        // "Jaydon Wise-Malcolm", which matches the canonical public.players
+        // slug even when the player_id isn't registered under this league
+        // (e.g. REBA SL players whose public.players record has a different
+        // league_id). Without this, playerSlug stays null → the row isn't
+        // clickable and clicking via another path opens the wrong profile.
+        if (!playerSlug && player.name && player.name !== 'Unknown Player') {
+          playerSlug = player.name
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+        }
+
         const firstId = player.playerIds.size > 0 
           ? Array.from(player.playerIds)[0] 
           : `name_${player.name.toLowerCase().replace(/\s+/g, '_')}`;
@@ -4541,7 +4552,7 @@ export default function LeaguePage() {
                             className={`border-b border-gray-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors ${player.slug ? 'cursor-pointer' : ''}`}
                             onClick={() => {
                               if (player.slug) {
-                                handleSelectPlayer(player.slug, activeSection, player.playerIds ? Array.from(player.playerIds as Set<string>) : []);
+                                handleSelectPlayer(player.slug, activeSection);
                               }
                             }}
                             data-testid={`player-row-${player.id}`}
@@ -5292,7 +5303,6 @@ export default function LeaguePage() {
                   brandColor={brandColor}
                   leagueSlug={slug}
                   onBack={handlePlayerBack}
-                  linkedPlayerIds={selectedPlayerLinkedIds}
                 />
               </div>
             )}
