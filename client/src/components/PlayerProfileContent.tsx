@@ -1089,6 +1089,14 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         };
 
         const playerIds = matches.map(m => m.id);
+
+        // Merge in any pre-aggregated IDs passed from the league page (e.g.
+        // REBA SL stop-specific player_ids that live in the test schema and
+        // therefore never appear in public.players fuzzy-matching above).
+        // player_stats is in the public schema and contains rows for ALL
+        // player_ids, so querying by these IDs directly finds the games.
+        const allStatsPlayerIds = Array.from(new Set([...playerIds, ...(linkedPlayerIds || [])]));
+
         // Note: previously this query joined `players:player_id(full_name, league_id)`
         // which forced a costly nested lookup and frequently triggered Supabase
         // statement timeouts (code 57014) on players with many games. Both fields
@@ -1155,7 +1163,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         type LeagueRow = { league_id: string } & LeagueInfo;
 
         const statsPromise = Promise.all(
-          playerIds.map((pid) =>
+          allStatsPlayerIds.map((pid) =>
             supabase
               .from('player_stats')
               .select(STATS_COLUMNS)
