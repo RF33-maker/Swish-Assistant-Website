@@ -560,10 +560,12 @@ export default function LeaguePage() {
   const [selectedPlayerSlug, setSelectedPlayerSlug] = useState<string | null>(urlPlayerSlug || null);
   const [selectedTeamName, setSelectedTeamName] = useState<string | null>(null);
   const [previousSection, setPreviousSection] = useState<string>('overview');
+  const [selectedPlayerLinkedIds, setSelectedPlayerLinkedIds] = useState<string[]>([]);
 
-  const handleSelectPlayer = useCallback((playerSlug: string, fromSection: string) => {
+  const handleSelectPlayer = useCallback((playerSlug: string, fromSection: string, linkedIds?: string[]) => {
     setPreviousSection(fromSection);
     setSelectedPlayerSlug(playerSlug);
+    setSelectedPlayerLinkedIds(linkedIds || []);
     setActiveSection('player');
     navigate(`/competition/${slug}/player/${playerSlug}`);
   }, [slug, navigate]);
@@ -4552,7 +4554,7 @@ export default function LeaguePage() {
                             className={`border-b border-gray-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors ${player.slug ? 'cursor-pointer' : ''}`}
                             onClick={() => {
                               if (player.slug) {
-                                handleSelectPlayer(player.slug, activeSection);
+                                handleSelectPlayer(player.slug, activeSection, player.playerIds ? Array.from(player.playerIds as Set<string>) : []);
                               }
                             }}
                             data-testid={`player-row-${player.id}`}
@@ -5303,6 +5305,7 @@ export default function LeaguePage() {
                   brandColor={brandColor}
                   leagueSlug={slug}
                   onBack={handlePlayerBack}
+                  linkedPlayerIds={selectedPlayerLinkedIds}
                 />
               </div>
             )}

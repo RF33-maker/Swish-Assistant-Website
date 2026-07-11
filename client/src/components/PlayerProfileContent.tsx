@@ -116,6 +116,7 @@ interface PlayerProfileContentProps {
   playerSlug: string;
   brandColorOverride?: string;
   onBack?: () => void;
+  linkedPlayerIds?: string[];
 }
 
 const getTeamAbbreviation = (name: string): string => {
@@ -222,7 +223,7 @@ function LeagueDropdown({ leagues, selectedLeagueIds, onToggle, onClear, label, 
   );
 }
 
-export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }: PlayerProfileContentProps) {
+export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, linkedPlayerIds }: PlayerProfileContentProps) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { user } = useAuth();
@@ -1081,6 +1082,13 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
 
         const playerIds = matches.map(m => m.id);
 
+        // Merge in any pre-aggregated IDs passed from the league page (e.g.
+        // the same person appearing under different player_ids across REBA SL
+        // age groups). These IDs are used only for the stats fetch — the
+        // profile info and league names are resolved from the stats rows
+        // themselves by the background enrichment pass.
+        const allStatsPlayerIds = Array.from(new Set([...playerIds, ...(linkedPlayerIds || [])]));
+
         // Note: previously this query joined `players:player_id(full_name, league_id)`
         // which forced a costly nested lookup and frequently triggered Supabase
         // statement timeouts (code 57014) on players with many games. Both fields
@@ -1147,7 +1155,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
         type LeagueRow = { league_id: string } & LeagueInfo;
 
         const statsPromise = Promise.all(
-          playerIds.map((pid) =>
+          allStatsPlayerIds.map((pid) =>
             supabase
               .from('player_stats')
               .select(STATS_COLUMNS)
@@ -1590,19 +1598,27 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
   const filterableLeagues = useMemo(() => {
     const seen = new Set<string>();
     const leagues: { id: string; name: string }[] = [];
-    for (const match of playerMatches) {
-      if (!match.league_id) continue;
-      const parentId = competitionParentMap.get(match.league_id) || match.league_id;
+    const addLeague = (leagueId: string) => {
+      const parentId = competitionParentMap.get(leagueId) || leagueId;
       if (!seen.has(parentId)) {
         seen.add(parentId);
         leagues.push({
           id: parentId,
-          name: leagueNames.get(parentId) || leagueNames.get(match.league_id) || match.league_id,
+          name: leagueNames.get(parentId) || leagueNames.get(leagueId) || parentId,
         });
       }
+    };
+    for (const match of playerMatches) {
+      if (match.league_id) addLeague(match.league_id);
+    }
+    // Also pick up leagues that came in via linkedPlayerIds stats
+    // (those player IDs may not be in public.players so they won't
+    // appear in playerMatches, but their stats have league_id set).
+    for (const stat of playerStats) {
+      if (stat.league_id) addLeague(stat.league_id);
     }
     return leagues;
-  }, [playerMatches, leagueNames, competitionParentMap]);
+  }, [playerMatches, playerStats, leagueNames, competitionParentMap]);
 
   const filteredSeasonAverages = useMemo(() => {
     if (!filteredStats || filteredStats.length === 0) return null;
