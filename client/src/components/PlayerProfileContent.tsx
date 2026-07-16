@@ -2054,8 +2054,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
       {pinnedGames.length > 0 && playerInfo && (
         <div className="mt-4 md:mt-5 bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
           <div className="flex items-center gap-2 mb-3">
-            <Trophy className="h-4 w-4 text-orange-500" />
-            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Performance Cards</span>
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Performances</span>
           </div>
           <div className={`grid gap-4 ${pinnedGames.length === 1 ? 'grid-cols-1 max-w-[260px]' : 'grid-cols-1 sm:grid-cols-2'}`}>
             {pinnedGames.map(({ stat, label }) => (
