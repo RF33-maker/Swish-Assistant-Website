@@ -21,6 +21,8 @@ import { extractColorsFromImage } from "@/lib/colorExtractor";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
 import { PlayerPerformanceSplits } from "@/components/PlayerPerformanceSplits";
+import { PerformanceCardDownload } from "@/components/social/PerformanceCardDownload";
+import { computeGmSc } from "@/lib/performanceCardUtils";
 
 // Only the columns actually consumed by this profile view, so we never
 // pull every column of the (wide) players table on a cold load.
@@ -116,6 +118,7 @@ interface PlayerProfileContentProps {
   playerSlug: string;
   brandColorOverride?: string;
   onBack?: () => void;
+  linkedPlayerIds?: string[];
 }
 
 const getTeamAbbreviation = (name: string): string => {
@@ -222,7 +225,7 @@ function LeagueDropdown({ leagues, selectedLeagueIds, onToggle, onClear, label, 
   );
 }
 
-export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }: PlayerProfileContentProps) {
+export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, linkedPlayerIds }: PlayerProfileContentProps) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { user } = useAuth();
@@ -255,6 +258,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
   const [showFocusAdjuster, setShowFocusAdjuster] = useState(false);
   const [tempFocusY, setTempFocusY] = useState<number>(50);
   const [savingFocus, setSavingFocus] = useState(false);
+  const [selectedGameForCard, setSelectedGameForCard] = useState<PlayerStat | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── Parent-league expansion memos ────────────────────────────────────────
@@ -974,13 +978,17 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
         // If so, we fetch all linked player_id rows directly — this is more
         // reliable than fuzzy name matching for players with name variations
         // across leagues (e.g. "Elvis" vs "Elvisi", "M. Hosten" vs "Myles Hosten").
+        //
         let identityLinkedIds: string[] = [];
         try {
           const identityRes = await fetch(`/api/player-identities/for-player/${initialPlayer.id}`);
           if (identityRes.ok) {
             const { identity } = await identityRes.json();
             if (identity?.playerIds && Array.isArray(identity.playerIds)) {
-              identityLinkedIds = identity.playerIds.filter((id: string) => id !== initialPlayer.id);
+              const dbLinked = identity.playerIds.filter((id: string) => id !== initialPlayer.id);
+              // Merge DB-linked IDs without duplicating already-seeded ones
+              const seen = new Set(identityLinkedIds);
+              dbLinked.forEach((id: string) => { if (!seen.has(id)) { seen.add(id); identityLinkedIds.push(id); } });
             }
           }
         } catch {
@@ -1076,6 +1084,14 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
         };
 
         const playerIds = matches.map(m => m.id);
+
+        // Merge in any pre-aggregated IDs passed from the league page (e.g.
+        // the same person appearing under different player_ids across REBA SL
+        // age groups). These IDs are used only for the stats fetch — the
+        // profile info and league names are resolved from the stats rows
+        // themselves by the background enrichment pass.
+        const allStatsPlayerIds = Array.from(new Set([...playerIds, ...(linkedPlayerIds || [])]));
+
         // Note: previously this query joined `players:player_id(full_name, league_id)`
         // which forced a costly nested lookup and frequently triggered Supabase
         // statement timeouts (code 57014) on players with many games. Both fields
@@ -1142,7 +1158,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
         type LeagueRow = { league_id: string } & LeagueInfo;
 
         const statsPromise = Promise.all(
-          playerIds.map((pid) =>
+          allStatsPlayerIds.map((pid) =>
             supabase
               .from('player_stats')
               .select(STATS_COLUMNS)
@@ -1578,6 +1594,22 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
     return stats.filter(stat => parseMinutesPlayed(stat) > 0);
   }, [playerStats, expandedCompIds]);
 
+  const pinnedGames = useMemo(() => {
+    if (filteredStats.length === 0) return [];
+    const sorted = [...filteredStats].sort((a, b) => {
+      const da = new Date(a.game_date || a.created_at || '').getTime();
+      const db = new Date(b.game_date || b.created_at || '').getTime();
+      return db - da;
+    });
+    const mostRecent = sorted[0];
+    const bestGame = [...filteredStats].sort((a, b) => computeGmSc(b) - computeGmSc(a))[0];
+    if (mostRecent.id === bestGame.id) return [{ stat: mostRecent, label: 'Best / Most Recent' }];
+    return [
+      { stat: mostRecent, label: 'Most Recent' },
+      { stat: bestGame, label: 'Best Game' },
+    ];
+  }, [filteredStats]);
+
   // ── League filter data ────────────────────────────────────────────────────
   // One item per parent league (or self if no parent). Competitions that share
   // a parent brand (e.g. "Hoopsfix Pro-Am 2024-25" + "2025-26") collapse into
@@ -1585,19 +1617,27 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
   const filterableLeagues = useMemo(() => {
     const seen = new Set<string>();
     const leagues: { id: string; name: string }[] = [];
-    for (const match of playerMatches) {
-      if (!match.league_id) continue;
-      const parentId = competitionParentMap.get(match.league_id) || match.league_id;
+    const addLeague = (leagueId: string) => {
+      const parentId = competitionParentMap.get(leagueId) || leagueId;
       if (!seen.has(parentId)) {
         seen.add(parentId);
         leagues.push({
           id: parentId,
-          name: leagueNames.get(parentId) || leagueNames.get(match.league_id) || match.league_id,
+          name: leagueNames.get(parentId) || leagueNames.get(leagueId) || parentId,
         });
       }
+    };
+    for (const match of playerMatches) {
+      if (match.league_id) addLeague(match.league_id);
+    }
+    // Also pick up leagues that came in via linkedPlayerIds stats
+    // (those player IDs may not be in public.players so they won't
+    // appear in playerMatches, but their stats have league_id set).
+    for (const stat of playerStats) {
+      if (stat.league_id) addLeague(stat.league_id);
     }
     return leagues;
-  }, [playerMatches, leagueNames, competitionParentMap]);
+  }, [playerMatches, playerStats, leagueNames, competitionParentMap]);
 
   const filteredSeasonAverages = useMemo(() => {
     if (!filteredStats || filteredStats.length === 0) return null;
@@ -2008,6 +2048,27 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
               @{playerInfo.instagramHandle.replace(/^@/, "")}
             </a>
           )}
+        </div>
+      )}
+
+      {pinnedGames.length > 0 && playerInfo && (
+        <div className="mt-4 md:mt-5 bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Trophy className="h-4 w-4 text-orange-500" />
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Performance Cards</span>
+          </div>
+          <div className={`grid gap-4 ${pinnedGames.length === 1 ? 'grid-cols-1 max-w-[260px]' : 'grid-cols-1 sm:grid-cols-2'}`}>
+            {pinnedGames.map(({ stat, label }) => (
+              <PerformanceCardDownload
+                key={stat.id}
+                stat={stat}
+                playerName={playerInfo.name}
+                playerPhotoPath={playerInfo.photoPath}
+                photoFocusY={playerInfo.photoFocusY}
+                label={label}
+              />
+            ))}
+          </div>
         </div>
       )}
 
@@ -2560,13 +2621,18 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
         <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-100 dark:border-neutral-800 flex items-center justify-between">
             <span className="text-base md:text-lg font-bold text-slate-800 dark:text-white">Game Log</span>
-            {selectedLeagueIds.size > 0 && (
-              <span className="text-xs text-slate-400 dark:text-slate-500">
-                {selectedLeagueIds.size === 1
-                  ? `Filtered: ${leagueNames.get(Array.from(selectedLeagueIds)[0]) || 'League'}`
-                  : `${selectedLeagueIds.size} leagues selected`}
-              </span>
-            )}
+            <div className="flex items-center gap-2">
+              {filteredStats.length > 0 && (
+                <span className="text-xs text-slate-400 dark:text-slate-500 hidden sm:block">Click a row to generate a card</span>
+              )}
+              {selectedLeagueIds.size > 0 && (
+                <span className="text-xs text-slate-400 dark:text-slate-500">
+                  {selectedLeagueIds.size === 1
+                    ? `Filtered: ${leagueNames.get(Array.from(selectedLeagueIds)[0]) || 'League'}`
+                    : `${selectedLeagueIds.size} leagues selected`}
+                </span>
+              )}
+            </div>
           </div>
           {filteredStats.length === 0 ? (
             <div className="p-6 md:p-8 text-center text-slate-500 dark:text-slate-400 text-sm">
@@ -2597,7 +2663,8 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
                     return (
                       <tr
                         key={game.id}
-                        className={`border-b border-gray-50 dark:border-neutral-800/50 text-slate-700 dark:text-slate-300 ${index % 2 === 1 ? 'bg-gray-50/50 dark:bg-neutral-800/30' : ''}`}
+                        onClick={() => setSelectedGameForCard(game)}
+                        className={`border-b border-gray-50 dark:border-neutral-800/50 text-slate-700 dark:text-slate-300 cursor-pointer hover:bg-orange-50/60 dark:hover:bg-orange-900/10 transition-colors ${index % 2 === 1 ? 'bg-gray-50/50 dark:bg-neutral-800/30' : ''}`}
                         data-testid={`game-row-${game.id}`}
                       >
                         <td className="px-2 py-1.5 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">{formatDate(game.game_date || game.created_at)}</td>
@@ -2621,6 +2688,47 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack }:
           )}
         </div>
       </div>
+
+      {selectedGameForCard && playerInfo && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          onClick={() => setSelectedGameForCard(null)}
+        >
+          <div
+            className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl w-full max-w-xs sm:max-w-sm mx-auto overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-neutral-800">
+              <span className="text-sm font-bold text-slate-800 dark:text-white">
+                Performance Card
+                {(selectedGameForCard.opponent && selectedGameForCard.opponent.trim()) && (
+                  <span className="font-normal text-slate-500 dark:text-slate-400 ml-1.5">
+                    vs {selectedGameForCard.opponent.trim()}
+                  </span>
+                )}
+              </span>
+              <button
+                onClick={() => setSelectedGameForCard(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors"
+                aria-label="Close"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-4">
+              <PerformanceCardDownload
+                key={selectedGameForCard.id}
+                stat={selectedGameForCard}
+                playerName={playerInfo.name}
+                playerPhotoPath={playerInfo.photoPath}
+                photoFocusY={playerInfo.photoFocusY}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

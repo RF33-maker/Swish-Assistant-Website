@@ -560,10 +560,12 @@ export default function LeaguePage() {
   const [selectedPlayerSlug, setSelectedPlayerSlug] = useState<string | null>(urlPlayerSlug || null);
   const [selectedTeamName, setSelectedTeamName] = useState<string | null>(null);
   const [previousSection, setPreviousSection] = useState<string>('overview');
+  const [selectedPlayerLinkedIds, setSelectedPlayerLinkedIds] = useState<string[]>([]);
 
-  const handleSelectPlayer = useCallback((playerSlug: string, fromSection: string) => {
+  const handleSelectPlayer = useCallback((playerSlug: string, fromSection: string, linkedIds?: string[]) => {
     setPreviousSection(fromSection);
     setSelectedPlayerSlug(playerSlug);
+    setSelectedPlayerLinkedIds(linkedIds || []);
     setActiveSection('player');
     navigate(`/competition/${slug}/player/${playerSlug}`);
   }, [slug, navigate]);
@@ -745,6 +747,48 @@ export default function LeaguePage() {
       return a.localeCompare(b);
     });
   }, [ageGroupToLeagueIds, isGenderLeague]);
+
+  const visibleAgeGroupLabels = useMemo(() => {
+    const stopFiltered = selectedStop !== 'all'
+      ? ageGroupLabels.filter(label => {
+          const ids = ageGroupToLeagueIds.get(label) || [];
+          return ids.some(id => {
+            const comp = childCompetitions.find(c => c.league_id === id);
+            return comp && String(comp.stop) === selectedStop;
+          });
+        })
+      : ageGroupLabels;
+
+    if (filterRound === 'all') return stopFiltered;
+
+    const labelsWithRound = new Set<string>();
+    // schedule items store age_group (the child competition label) + round directly
+    schedule.forEach(g => {
+      if (g.round === filterRound && g.age_group) {
+        labelsWithRound.add(g.age_group);
+      }
+    });
+    // also check rawStats (loaded lazily) via league_id -> label map
+    allPlayerAverages.forEach(p => {
+      (p.rawStats || []).forEach((s: any) => {
+        if (s.round === filterRound && s.league_id) {
+          const label = childLeagueMap.get(s.league_id);
+          if (label) labelsWithRound.add(label);
+        }
+      });
+    });
+    // if neither source has data yet, show all pills rather than hiding everything
+    if (labelsWithRound.size === 0) return stopFiltered;
+    return stopFiltered.filter(label => labelsWithRound.has(label));
+  }, [ageGroupLabels, filterRound, selectedStop, schedule, allPlayerAverages, childLeagueMap, ageGroupToLeagueIds, childCompetitions]);
+
+  useEffect(() => {
+    if (filterRound === 'all') return;
+    if (selectedAgeGroup !== 'all' && !visibleAgeGroupLabels.includes(selectedAgeGroup)) {
+      setSelectedAgeGroup('all');
+      setFilterAgeGroup('all');
+    }
+  }, [filterRound, visibleAgeGroupLabels]);
 
   const availableStopsForAgeGroup = useMemo(() => {
     const leagueIdsForAg = selectedAgeGroup === 'all'
@@ -1140,13 +1184,16 @@ export default function LeaguePage() {
     const filteredByAgeGroupRound = useMemo(() => {
       const agFilter = filterAgeGroup !== 'all';
       const stopFilter = isParentLeague && selectedStop !== 'all';
+      // Age-group TAB selection (e.g. "19+") must also gate the league_id
+      // filter even when the internal dropdown and stop filter are both 'all'.
+      const ageTabFilter = isParentLeague && selectedAgeGroup !== 'all';
       const roundFilter = filterRound !== 'all';
-      if (!agFilter && !stopFilter && !roundFilter) return allPlayerAverages;
+      if (!agFilter && !stopFilter && !roundFilter && !ageTabFilter) return allPlayerAverages;
 
       return allPlayerAverages
         .map(player => {
           const matchingStats = (player.rawStats || []).filter((s: any) => {
-            if ((agFilter || stopFilter) && !selectedAgeGroupLeagueIds.includes(s.league_id)) return false;
+            if ((agFilter || stopFilter || ageTabFilter) && !selectedAgeGroupLeagueIds.includes(s.league_id)) return false;
             if (roundFilter && s.round !== filterRound) return false;
             return true;
           });
@@ -1216,7 +1263,7 @@ export default function LeaguePage() {
           };
         })
         .filter(Boolean) as any[];
-    }, [allPlayerAverages, filterAgeGroup, filterRound, selectedStop, selectedAgeGroupLeagueIds, isParentLeague]);
+    }, [allPlayerAverages, filterAgeGroup, filterRound, selectedStop, selectedAgeGroup, selectedAgeGroupLeagueIds, isParentLeague]);
 
     useEffect(() => {
       debugLog("🔍 Filtering players. Search term:", statsSearch);
@@ -2711,7 +2758,20 @@ export default function LeaguePage() {
             }
           }
         }
-        
+        // Final fallback: derive a canonical-style slug from the player's
+        // display name. This generates e.g. "jaydon-wise-malcolm" from
+        // "Jaydon Wise-Malcolm", which matches the canonical public.players
+        // slug even when the player_id isn't registered under this league
+        // (e.g. REBA SL players whose public.players record has a different
+        // league_id). Without this, playerSlug stays null → the row isn't
+        // clickable and clicking via another path opens the wrong profile.
+        if (!playerSlug && player.name && player.name !== 'Unknown Player') {
+          playerSlug = player.name
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+        }
+
         const firstId = player.playerIds.size > 0 
           ? Array.from(player.playerIds)[0] 
           : `name_${player.name.toLowerCase().replace(/\s+/g, '_')}`;
@@ -3977,7 +4037,7 @@ export default function LeaguePage() {
               {isParentLeague && ageGroupLabels.length > 0 && !(activeSection === 'player' && selectedPlayerSlug) && !(activeSection === 'team' && selectedTeamName) && (
                 <div className="flex items-center gap-2 flex-shrink-0 flex-wrap" data-testid="age-group-tabs">
                   <div className="flex gap-1.5 flex-wrap">
-                    {ageGroupLabels.map((label) => (
+                    {visibleAgeGroupLabels.map((label) => (
                       <button
                         key={label}
                         onClick={() => { setSelectedAgeGroup(label); setFilterAgeGroup(label); setStandingsView('full'); }}
@@ -4536,7 +4596,7 @@ export default function LeaguePage() {
                             className={`border-b border-gray-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors ${player.slug ? 'cursor-pointer' : ''}`}
                             onClick={() => {
                               if (player.slug) {
-                                handleSelectPlayer(player.slug, activeSection);
+                                handleSelectPlayer(player.slug, activeSection, player.playerIds ? Array.from(player.playerIds as Set<string>) : []);
                               }
                             }}
                             data-testid={`player-row-${player.id}`}
@@ -5287,6 +5347,7 @@ export default function LeaguePage() {
                   brandColor={brandColor}
                   leagueSlug={slug}
                   onBack={handlePlayerBack}
+                  linkedPlayerIds={selectedPlayerLinkedIds}
                 />
               </div>
             )}
