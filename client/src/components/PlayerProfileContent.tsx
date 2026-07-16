@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
@@ -2688,9 +2689,9 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         </div>
       </div>
 
-      {selectedGameForCard && playerInfo && (
+      {selectedGameForCard && playerInfo && createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
           onClick={() => setSelectedGameForCard(null)}
         >
           <div
@@ -2726,7 +2727,8 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
               />
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
