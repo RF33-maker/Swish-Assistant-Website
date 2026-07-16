@@ -748,6 +748,48 @@ export default function LeaguePage() {
     });
   }, [ageGroupToLeagueIds, isGenderLeague]);
 
+  const visibleAgeGroupLabels = useMemo(() => {
+    const stopFiltered = selectedStop !== 'all'
+      ? ageGroupLabels.filter(label => {
+          const ids = ageGroupToLeagueIds.get(label) || [];
+          return ids.some(id => {
+            const comp = childCompetitions.find(c => c.league_id === id);
+            return comp && String(comp.stop) === selectedStop;
+          });
+        })
+      : ageGroupLabels;
+
+    if (filterRound === 'all') return stopFiltered;
+
+    const labelsWithRound = new Set<string>();
+    // schedule items store age_group (the child competition label) + round directly
+    schedule.forEach(g => {
+      if (g.round === filterRound && g.age_group) {
+        labelsWithRound.add(g.age_group);
+      }
+    });
+    // also check rawStats (loaded lazily) via league_id -> label map
+    allPlayerAverages.forEach(p => {
+      (p.rawStats || []).forEach((s: any) => {
+        if (s.round === filterRound && s.league_id) {
+          const label = childLeagueMap.get(s.league_id);
+          if (label) labelsWithRound.add(label);
+        }
+      });
+    });
+    // if neither source has data yet, show all pills rather than hiding everything
+    if (labelsWithRound.size === 0) return stopFiltered;
+    return stopFiltered.filter(label => labelsWithRound.has(label));
+  }, [ageGroupLabels, filterRound, selectedStop, schedule, allPlayerAverages, childLeagueMap, ageGroupToLeagueIds, childCompetitions]);
+
+  useEffect(() => {
+    if (filterRound === 'all') return;
+    if (selectedAgeGroup !== 'all' && !visibleAgeGroupLabels.includes(selectedAgeGroup)) {
+      setSelectedAgeGroup('all');
+      setFilterAgeGroup('all');
+    }
+  }, [filterRound, visibleAgeGroupLabels]);
+
   const availableStopsForAgeGroup = useMemo(() => {
     const leagueIdsForAg = selectedAgeGroup === 'all'
       ? childCompetitions
@@ -3995,7 +4037,7 @@ export default function LeaguePage() {
               {isParentLeague && ageGroupLabels.length > 0 && !(activeSection === 'player' && selectedPlayerSlug) && !(activeSection === 'team' && selectedTeamName) && (
                 <div className="flex items-center gap-2 flex-shrink-0 flex-wrap" data-testid="age-group-tabs">
                   <div className="flex gap-1.5 flex-wrap">
-                    {ageGroupLabels.map((label) => (
+                    {visibleAgeGroupLabels.map((label) => (
                       <button
                         key={label}
                         onClick={() => { setSelectedAgeGroup(label); setFilterAgeGroup(label); setStandingsView('full'); }}
