@@ -3756,6 +3756,8 @@ export default function LeaguePage() {
                 onGameClick={handleCarouselGameClick}
                 childLeagueIds={isParentLeague ? childCompetitions.map(c => c.league_id) : undefined}
                 childLeagueMap={isParentLeague ? childLeagueMap : undefined}
+                selectedGameKey={selectedGameKey}
+                brandColor={brandColorHex || brandColor}
               />
             </div>
           )}

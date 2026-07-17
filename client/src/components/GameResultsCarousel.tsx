@@ -36,6 +36,8 @@ interface GameResultsCarouselProps {
   onGameClick: (data: GameClickData) => void;
   childLeagueIds?: string[];
   childLeagueMap?: Map<string, string>;
+  selectedGameKey?: string | null;
+  brandColor?: string;
 }
 
 function formatDateUK(dateStr: string): string {
@@ -65,7 +67,7 @@ function formatRelativeDate(dateStr: string): string {
   return formatDateUK(dateStr);
 }
 
-export default function GameResultsCarousel({ leagueId, slug, onGameClick, childLeagueIds, childLeagueMap }: GameResultsCarouselProps) {
+export default function GameResultsCarousel({ leagueId, slug, onGameClick, childLeagueIds, childLeagueMap, selectedGameKey, brandColor }: GameResultsCarouselProps) {
   const [allGames, setAllGames] = useState<GameItem[]>([]);
   const [loading, setLoading] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -442,6 +444,7 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
             {sortedGames.map((game, idx) => {
               const prevGame = idx > 0 ? sortedGames[idx - 1] : null;
               const showDivider = prevGame && prevGame.status !== game.status;
+              const isSelected = selectedGameKey === game.game_key;
 
               return (
                 <div key={game.game_key} className="flex items-stretch">
@@ -449,9 +452,17 @@ export default function GameResultsCarousel({ leagueId, slug, onGameClick, child
                     <div className="w-px bg-gray-200 dark:bg-white/20 my-2 flex-shrink-0" />
                   )}
                   <div
-                    className={`flex-shrink-0 cursor-pointer transition-all hover:bg-gray-50 dark:hover:bg-white/10 px-3 py-2 border-r border-gray-100 dark:border-white/5 relative ${
-                      game.status === 'LIVE' ? 'bg-red-50 dark:bg-red-500/8' : ''
+                    className={`flex-shrink-0 cursor-pointer transition-all px-3 py-2 border-r border-gray-100 dark:border-white/5 relative ${
+                      isSelected
+                        ? ''
+                        : game.status === 'LIVE'
+                        ? 'bg-red-50 dark:bg-red-500/8 hover:bg-red-100/60 dark:hover:bg-red-500/15'
+                        : 'hover:bg-gray-50 dark:hover:bg-white/10'
                     }`}
+                    style={isSelected ? {
+                      backgroundColor: brandColor ? `${brandColor}1a` : 'rgba(100,100,100,0.10)',
+                      boxShadow: `inset 0 0 0 2px ${brandColor || 'rgba(100,100,100,0.4)'}`,
+                    } : undefined}
                     onClick={() => onGameClick({
                       gameKey: game.game_key,
                       status: game.status,
