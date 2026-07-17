@@ -397,8 +397,10 @@ export default function LatestScoresSection() {
   };
 
   const handleCardClick = (g: CardItem) => {
-    if (g.kind === "result" || g.kind === "live") {
-      setLocation(`/game/${g.game_key}`);
+    if ((g.kind === "result" || g.kind === "live") && g.league_slug) {
+      setLocation(`/competition/${g.league_slug}/game/${g.game_key}`);
+    } else if (g.kind === "upcoming" && g.league_slug) {
+      setLocation(`/competition/${g.league_slug}`);
     } else if (g.league_slug) {
       setLocation(`/competition/${g.league_slug}`);
     }
