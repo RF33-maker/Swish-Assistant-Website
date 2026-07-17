@@ -117,7 +117,7 @@ export default function LandingPage() {
 
       {/* Top header: logo (clickable home) + search bar + hamburger sidebar trigger */}
       <header className="bg-[#0a0a0f] border-b border-neutral-800">
-        <div className="max-w-7xl mx-auto flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3">
+        <div className="w-full flex items-center gap-3 md:gap-4 px-4 md:px-6 py-3">
           <button
             type="button"
             aria-label="Go to home"
@@ -128,7 +128,7 @@ export default function LandingPage() {
             <img src={SwishLogo} alt="Swish Logo" className="h-9 md:h-10" />
           </button>
 
-          <div className="flex-1 relative max-w-2xl">
+          <div className="flex-1 relative">
             <div className="search-bar-animated-border" style={{ background: '#0a0a0f' }}>
               <form
                 onSubmit={handleSubmit}
