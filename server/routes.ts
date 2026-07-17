@@ -2939,6 +2939,94 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  function escapeHtml(str: string): string {
+    return str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  app.get("/competition/:slug/game/:gameKey", async (req: Request, res: Response, next) => {
+    try {
+      const { slug, gameKey } = req.params;
+
+      const ua = (req.headers["user-agent"] || "").toLowerCase();
+      const isSocialBot = /twitterbot|facebookexternalhit|linkedinbot|whatsapp|slackbot|telegrambot|applebot|googlebot|bingbot|duckduckbot|discordbot|embedly|quora link preview|rogerbot|showyoubot|outbrain|pinterest|vkshare|w3c_validator|facebot/.test(ua);
+      if (!isSocialBot) return next();
+
+      const { data: game } = await supabaseAdmin
+        .from("v_game_detail")
+        .select("home_team, away_team, home_score, away_score, match_time, competitionname, game_status")
+        .eq("game_key", gameKey)
+        .limit(1)
+        .maybeSingle();
+
+      if (!game) return next();
+
+      const d = game as any;
+      const homeTeam: string = d.home_team || "Home";
+      const awayTeam: string = d.away_team || "Away";
+      const homeScore: number = d.home_score ?? 0;
+      const awayScore: number = d.away_score ?? 0;
+      const competitionName: string = d.competitionname || slug;
+      const status: string = d.game_status || "Final";
+
+      const matchDate = d.match_time
+        ? new Date(d.match_time).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+        : "";
+
+      const ogTitle = `${awayTeam} ${awayScore} - ${homeScore} ${homeTeam} | ${competitionName}`;
+      const ogDescription = matchDate
+        ? `${status} score from ${competitionName} on ${matchDate}. ${awayTeam} vs ${homeTeam}.`
+        : `${status} score: ${awayTeam} ${awayScore} \u2013 ${homeScore} ${homeTeam}. ${competitionName}.`;
+      const ogUrl = `https://www.swishassistant.com/competition/${encodeURIComponent(slug)}/game/${encodeURIComponent(gameKey)}`;
+      const ogImage = "https://www.swishassistant.com/og-image.png";
+
+      const safeTitle = escapeHtml(ogTitle);
+      const safeDescription = escapeHtml(ogDescription);
+
+      const injectedTags = `    <title>${safeTitle}</title>
+    <meta name="description" content="${safeDescription}" />
+    <meta property="og:title" content="${safeTitle}" />
+    <meta property="og:description" content="${safeDescription}" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="${ogUrl}" />
+    <meta property="og:image" content="${ogImage}" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${safeTitle}" />
+    <meta name="twitter:description" content="${safeDescription}" />
+    <meta name="twitter:image" content="${ogImage}" />
+    <link rel="canonical" href="${ogUrl}" />`;
+
+      const candidatePaths = [
+        path.resolve(import.meta.dirname, "public", "index.html"),
+        path.resolve(import.meta.dirname, "..", "client", "index.html"),
+      ];
+      let template = "";
+      for (const p of candidatePaths) {
+        if (fs.existsSync(p)) {
+          template = await fs.promises.readFile(p, "utf-8");
+          break;
+        }
+      }
+      if (!template) return next();
+
+      let html = template;
+      html = html.replace(/<title>[\s\S]*?<\/title>/i, "");
+      html = html.replace(/<meta\s+name="description"[^>]*>/gi, "");
+      html = html.replace(/<meta\s+property="og:[^"]*"[^>]*>/gi, "");
+      html = html.replace(/<meta\s+name="twitter:[^"]*"[^>]*>/gi, "");
+      html = html.replace(/<link\s+rel="canonical"[^>]*>/gi, "");
+      html = html.replace(/<\/head>/, `  ${injectedTags}\n  </head>`);
+
+      res.status(200).set({ "Content-Type": "text/html", "Cache-Control": "public, max-age=60" }).end(html);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   app.get("/sitemap.xml", async (req: Request, res: Response) => {
     const now = Date.now();
     const forceRefresh = req.query.refresh === "1";

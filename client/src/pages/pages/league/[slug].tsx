@@ -44,6 +44,7 @@ import { DEBUG, debugLog } from "@/utils/debug";
 import { usePublicLeagueBrandingBySlug } from "@/hooks/usePublicLeagueBranding";
 import { InlinePlayerProfile } from "@/components/InlinePlayerProfile";
 import { InlineTeamProfile } from "@/components/InlineTeamProfile";
+import { InlineGameDetail, type GameInfo as InlineGameInfo } from "@/components/InlineGameDetail";
 import {
   accumulateAdvancedRow,
   makeAdvancedAggregator,
@@ -516,7 +517,7 @@ const PLAYER_STAT_LEGENDS: Record<string, string[]> = {
 };
 
 export default function LeaguePage() {
-  const { slug, playerSlug: urlPlayerSlug } = useParams();
+  const { slug, playerSlug: urlPlayerSlug, gameKey: urlGameKey } = useParams();
   const db = useMemo(() => getSupabaseForLeague(slug), [slug]);
     // SEO formatting helper for title
     const formatTitle = (text?: string) =>
@@ -556,11 +557,13 @@ export default function LeaguePage() {
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [isEditingYoutube, setIsEditingYoutube] = useState(false);
   const [updatingYoutube, setUpdatingYoutube] = useState(false);
-  const [activeSection, setActiveSection] = useState(urlPlayerSlug ? 'player' : 'overview');
+  const [activeSection, setActiveSection] = useState(urlPlayerSlug ? 'player' : (urlGameKey ? 'game' : 'overview'));
   const [selectedPlayerSlug, setSelectedPlayerSlug] = useState<string | null>(urlPlayerSlug || null);
   const [selectedTeamName, setSelectedTeamName] = useState<string | null>(null);
   const [previousSection, setPreviousSection] = useState<string>('overview');
   const [selectedPlayerLinkedIds, setSelectedPlayerLinkedIds] = useState<string[]>([]);
+  const [selectedGameKey, setSelectedGameKey] = useState<string | null>(urlGameKey ? decodeURIComponent(urlGameKey) : null);
+  const [inlineGameInfo, setInlineGameInfo] = useState<InlineGameInfo | null>(null);
 
   const handleSelectPlayer = useCallback((playerSlug: string, fromSection: string, linkedIds?: string[]) => {
     setPreviousSection(fromSection);
@@ -572,6 +575,21 @@ export default function LeaguePage() {
 
   const handlePlayerBack = useCallback(() => {
     setSelectedPlayerSlug(null);
+    setActiveSection(previousSection);
+    navigate(`/competition/${slug}`);
+  }, [slug, navigate, previousSection]);
+
+  const handleSelectGame = useCallback((gameKey: string, fromSection: string) => {
+    setPreviousSection(fromSection);
+    setSelectedGameKey(gameKey);
+    setInlineGameInfo(null);
+    setActiveSection('game');
+    navigate(`/competition/${slug}/game/${encodeURIComponent(gameKey)}`);
+  }, [slug, navigate]);
+
+  const handleGameBack = useCallback(() => {
+    setSelectedGameKey(null);
+    setInlineGameInfo(null);
     setActiveSection(previousSection);
     navigate(`/competition/${slug}`);
   }, [slug, navigate, previousSection]);
@@ -2024,8 +2042,7 @@ export default function LeaguePage() {
     const topAssistsList = getTopList("sassists");
 
     const handleGameClick = (gameId: string) => {
-      setSelectedGameId(gameId);
-      setIsGameModalOpen(true);
+      handleSelectGame(gameId, activeSection);
     };
 
     const handleCarouselGameClick = (data: {
@@ -2038,12 +2055,7 @@ export default function LeaguePage() {
       awayScore: number | null;
       hasGamePage?: boolean;
     }) => {
-      if (data.hasGamePage) {
-        navigate(`/game/${encodeURIComponent(data.gameKey)}`);
-      } else {
-        setSelectedGameId(data.gameKey);
-        setIsGameModalOpen(true);
-      }
+      handleSelectGame(data.gameKey, activeSection);
     };
 
     const handleCloseGameModal = () => {
@@ -3574,35 +3586,50 @@ export default function LeaguePage() {
 
   <>
     <Helmet>
-      <title>{`${league?.name || formatTitle(slug)} | League Stats | Swish Assistant`}</title>
-      <meta
-        name="description"
-        content={
-          league?.description ||
-          `Explore ${league?.name || formatTitle(slug)} league stats, team standings, and player performance on Swish Assistant.`
-        }
-      />
-      <meta
-        property="og:title"
-        content={`${league?.name || formatTitle(slug)} | League Stats | Swish Assistant`}
-      />
-      <meta
-        property="og:description"
-        content={
-          league?.description ||
-          `Explore ${league?.name || formatTitle(slug)} league stats, team standings, and player performance on Swish Assistant.`
-        }
-      />
-      <meta property="og:type" content="website" />
-      <meta
-        property="og:url"
-        content={`https://www.swishassistant.com/competition/${slug}`}
-      />
-      <meta
-        property="og:image"
-        content="https://www.swishassistant.com/og-image.png"
-      />
-      <link rel="canonical" href={`https://www.swishassistant.com/competition/${slug}`} />
+      {selectedGameKey && inlineGameInfo ? (
+        <>
+          <title>{`${inlineGameInfo.teams[0] || ''} vs ${inlineGameInfo.teams[1] || ''} — ${inlineGameInfo.teamScores[inlineGameInfo.teams[0]] ?? ''}–${inlineGameInfo.teamScores[inlineGameInfo.teams[1]] ?? ''} | ${league?.name || formatTitle(slug)} | Swish Assistant`}</title>
+          <meta name="description" content={`Box score and game recap: ${inlineGameInfo.teams[0]} vs ${inlineGameInfo.teams[1]} in ${league?.name || formatTitle(slug)}.`} />
+          <meta property="og:title" content={`${inlineGameInfo.teams[0]} vs ${inlineGameInfo.teams[1]} — ${inlineGameInfo.teamScores[inlineGameInfo.teams[0]] ?? ''}–${inlineGameInfo.teamScores[inlineGameInfo.teams[1]] ?? ''} | ${league?.name || formatTitle(slug)}`} />
+          <meta property="og:description" content={`Box score and game recap: ${inlineGameInfo.teams[0]} ${inlineGameInfo.teamScores[inlineGameInfo.teams[0]] ?? 0} – ${inlineGameInfo.teamScores[inlineGameInfo.teams[1]] ?? 0} ${inlineGameInfo.teams[1]} on ${new Date(inlineGameInfo.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}.`} />
+          <meta property="og:type" content="website" />
+          <meta property="og:url" content={`https://www.swishassistant.com/competition/${slug}/game/${encodeURIComponent(selectedGameKey)}`} />
+          <meta property="og:image" content="https://www.swishassistant.com/og-image.png" />
+          <link rel="canonical" href={`https://www.swishassistant.com/competition/${slug}/game/${encodeURIComponent(selectedGameKey)}`} />
+        </>
+      ) : (
+        <>
+          <title>{`${league?.name || formatTitle(slug)} | League Stats | Swish Assistant`}</title>
+          <meta
+            name="description"
+            content={
+              league?.description ||
+              `Explore ${league?.name || formatTitle(slug)} league stats, team standings, and player performance on Swish Assistant.`
+            }
+          />
+          <meta
+            property="og:title"
+            content={`${league?.name || formatTitle(slug)} | League Stats | Swish Assistant`}
+          />
+          <meta
+            property="og:description"
+            content={
+              league?.description ||
+              `Explore ${league?.name || formatTitle(slug)} league stats, team standings, and player performance on Swish Assistant.`
+            }
+          />
+          <meta property="og:type" content="website" />
+          <meta
+            property="og:url"
+            content={`https://www.swishassistant.com/competition/${slug}`}
+          />
+          <meta
+            property="og:image"
+            content="https://www.swishassistant.com/og-image.png"
+          />
+          <link rel="canonical" href={`https://www.swishassistant.com/competition/${slug}`} />
+        </>
+      )}
     </Helmet>
 
     <div className="min-h-screen bg-[#fffaf1]">
@@ -3729,6 +3756,8 @@ export default function LeaguePage() {
                 onGameClick={handleCarouselGameClick}
                 childLeagueIds={isParentLeague ? childCompetitions.map(c => c.league_id) : undefined}
                 childLeagueMap={isParentLeague ? childLeagueMap : undefined}
+                selectedGameKey={selectedGameKey}
+                brandColor={brandColorHex || brandColor}
               />
             </div>
           )}
@@ -4034,7 +4063,7 @@ export default function LeaguePage() {
               </div>
 
               {/* Competition filter pills for parent leagues (gender / age-group) */}
-              {isParentLeague && ageGroupLabels.length > 0 && !(activeSection === 'player' && selectedPlayerSlug) && !(activeSection === 'team' && selectedTeamName) && (
+              {isParentLeague && ageGroupLabels.length > 0 && !(activeSection === 'player' && selectedPlayerSlug) && !(activeSection === 'team' && selectedTeamName) && !(activeSection === 'game' && selectedGameKey) && (
                 <div className="flex items-center gap-2 flex-shrink-0 flex-wrap" data-testid="age-group-tabs">
                   <div className="flex gap-1.5 flex-wrap">
                     {visibleAgeGroupLabels.map((label) => (
@@ -5367,6 +5396,19 @@ export default function LeaguePage() {
                   onPlayerClick={(playerSlug) => {
                     handleSelectPlayer(playerSlug, 'team');
                   }}
+                />
+              </div>
+            )}
+
+            {activeSection === 'game' && selectedGameKey && (
+              <div className="md:col-span-3">
+                <InlineGameDetail
+                  gameKey={selectedGameKey}
+                  brandColor={brandColor}
+                  leagueName={league?.name}
+                  leagueSlug={slug}
+                  onBack={handleGameBack}
+                  onGameInfoLoaded={(info) => setInlineGameInfo(info)}
                 />
               </div>
             )}

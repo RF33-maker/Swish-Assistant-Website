@@ -69,6 +69,9 @@ function Router() {
       <Route path="/teams" component={TeamsList} />
       <Route path="/team/:teamName" component={TeamProfile} />
       <Route path="/competition/:competitionSlug/team/:teamName" component={TeamProfile} />
+      {/* Game detail inline in league page */}
+      <Route path="/competition/:slug/game/:gameKey" component={LeaguePage} />
+      <Route path="/league/:slug/game/:gameKey" component={LeaguePage} />
       {/* Legacy redirects: old /league/:slug season URLs → /competition/:slug */}
       <Route path="/league/:slug/player/:playerSlug" component={LeaguePage} />
       <Route path="/league/:slug/teams" component={LeagueTeams} />
