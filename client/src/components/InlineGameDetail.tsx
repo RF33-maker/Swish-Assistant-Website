@@ -254,16 +254,22 @@ export function InlineGameDetail({
             sturnovers: r.turnovers ?? r.sturnovers,
           });
 
-          const hasSide = boxRows.some((r: any) => r.side === "1" || r.side === "2");
+          const norm = (s: string | null | undefined) => (s || "").trim().toLowerCase();
+          const homeNorm = norm(homeName);
+          const awayNorm = norm(awayName);
+          // Use side field when present on a row, fall back to case-insensitive
+          // team_name match. This handles the mixed case where one team has side
+          // values in v_box_score and the other does not (e.g. Just Cardio).
+          const matchesHome = (r: any) =>
+            r.side === "1" || (!r.side && norm(r.team_name || r.team) === homeNorm);
+          const matchesAway = (r: any) =>
+            r.side === "2" || (!r.side && norm(r.team_name || r.team) === awayNorm);
+
           const allStats: PlayerStat[] = boxRows.map(toStat);
-          const homeStats = (hasSide
-            ? boxRows.filter((r: any) => r.side === "1")
-            : boxRows.filter((r: any) => (r.team_name || r.team) === homeName)
-          ).map(toStat).sort((a, b) => (b.spoints || 0) - (a.spoints || 0));
-          const awayStats = (hasSide
-            ? boxRows.filter((r: any) => r.side === "2")
-            : boxRows.filter((r: any) => (r.team_name || r.team) === awayName)
-          ).map(toStat).sort((a, b) => (b.spoints || 0) - (a.spoints || 0));
+          const homeStats = boxRows.filter(matchesHome)
+            .map(toStat).sort((a, b) => (b.spoints || 0) - (a.spoints || 0));
+          const awayStats = boxRows.filter(matchesAway)
+            .map(toStat).sort((a, b) => (b.spoints || 0) - (a.spoints || 0));
 
           setHomePlayerStats(homeStats);
           setAwayPlayerStats(awayStats);
