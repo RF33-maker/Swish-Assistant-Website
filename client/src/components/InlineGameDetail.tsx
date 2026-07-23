@@ -161,10 +161,55 @@ export function InlineGameDetail({
         if (d.league_id) setLeagueId(d.league_id);
         if (d.competitionname) setCompetitionName(d.competitionname);
 
-        const homeName = d.home_team || "";
-        const awayName = d.away_team || "";
+        let homeName = d.home_team || "";
+        let awayName = d.away_team || "";
         const homeScore = d.home_score ?? 0;
         const awayScore = d.away_score ?? 0;
+
+        // Detect when v_game_detail returns a coach name instead of a real team name.
+        // This happens when home_team / away_team equals the coach fields on the same row.
+        const looksLikeCoach = (name: string) =>
+          !!name && (name === d.home_coach || name === d.away_coach);
+
+        if (looksLikeCoach(homeName) || looksLikeCoach(awayName)) {
+          const { data: tsRows } = await supabase
+            .from("team_stats")
+            .select("name, tot_spoints")
+            .eq("game_key", gameKey);
+
+          if (tsRows && tsRows.length > 0) {
+            const teamNames = Array.from(
+              new Set(tsRows.map((r: any) => r.name).filter(Boolean))
+            ) as string[];
+
+            if (teamNames.length >= 2) {
+              const scoreFor = (name: string) =>
+                (tsRows as any[])
+                  .filter((r: any) => r.name === name)
+                  .reduce((acc: number, r: any) => acc + (r.tot_spoints || 0), 0);
+
+              const s0 = scoreFor(teamNames[0]);
+              const s1 = scoreFor(teamNames[1]);
+
+              if (s0 === homeScore && s1 === awayScore) {
+                homeName = teamNames[0];
+                awayName = teamNames[1];
+              } else if (s1 === homeScore && s0 === awayScore) {
+                homeName = teamNames[1];
+                awayName = teamNames[0];
+              } else {
+                homeName = teamNames[0];
+                awayName = teamNames[1];
+              }
+            } else if (teamNames.length === 1) {
+              if (!looksLikeCoach(homeName)) {
+                awayName = teamNames[0];
+              } else {
+                homeName = teamNames[0];
+              }
+            }
+          }
+        }
 
         const info: GameInfo = {
           date: d.match_time || new Date().toISOString(),
@@ -255,6 +300,61 @@ export function InlineGameDetail({
           });
 
           const norm = (s: string | null | undefined) => (s || "").trim().toLowerCase();
+
+          // --- Name correction using box score as ground truth ---
+          // v_game_detail sometimes has a coach name where a team name should be.
+          // If the current homeName/awayName don't appear in the box score team
+          // names, replace with whatever the box score actually contains.
+          const hasSideField = boxRows.some((r: any) => r.side === "1" || r.side === "2");
+          if (!hasSideField) {
+            const boxTeamNames = Array.from(
+              new Set(boxRows.map((r: any) => (r.team_name || r.team || "") as string).filter(Boolean))
+            ) as string[];
+
+            const homeInBox = boxTeamNames.some(t => norm(t) === norm(homeName));
+            const awayInBox = boxTeamNames.some(t => norm(t) === norm(awayName));
+
+            if (!homeInBox || !awayInBox) {
+              // One or both names are wrong — figure out the correct ones
+              const scoreFor = (t: string) =>
+                boxRows.filter((r: any) => norm(r.team_name || r.team) === norm(t))
+                  .reduce((acc: number, r: any) => acc + (r.points ?? r.spoints ?? 0), 0);
+
+              if (!homeInBox && awayInBox) {
+                const candidates = boxTeamNames.filter(t => norm(t) !== norm(awayName));
+                if (candidates.length > 0) homeName = candidates[0];
+              } else if (!awayInBox && homeInBox) {
+                const candidates = boxTeamNames.filter(t => norm(t) !== norm(homeName));
+                if (candidates.length > 0) awayName = candidates[0];
+              } else if (boxTeamNames.length >= 2) {
+                // Both wrong — try score matching, fall back to position order
+                const s0 = scoreFor(boxTeamNames[0]);
+                const s1 = scoreFor(boxTeamNames[1]);
+                if (s0 === homeScore && s1 === awayScore) {
+                  homeName = boxTeamNames[0]; awayName = boxTeamNames[1];
+                } else if (s1 === homeScore && s0 === awayScore) {
+                  homeName = boxTeamNames[1]; awayName = boxTeamNames[0];
+                } else {
+                  homeName = boxTeamNames[0]; awayName = boxTeamNames[1];
+                }
+              }
+
+              // Re-apply corrected names to all downstream state
+              const correctedInfo: GameInfo = {
+                ...info,
+                hometeam: homeName,
+                awayteam: awayName,
+                teams: [homeName, awayName].filter(Boolean),
+                teamScores: { [homeName]: homeScore, [awayName]: awayScore },
+              };
+              setGameInfo(correctedInfo);
+              if (onGameInfoLoaded) onGameInfoLoaded(correctedInfo);
+              if (homeName) setHomeTeamStats(makeTeamRow("home", homeName));
+              if (awayName) setAwayTeamStats(makeTeamRow("away", awayName));
+            }
+          }
+          // --- End name correction ---
+
           const homeNorm = norm(homeName);
           const awayNorm = norm(awayName);
           // Use side field when present on a row, fall back to case-insensitive
