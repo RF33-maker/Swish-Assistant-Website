@@ -132,15 +132,65 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
             const detail = gameDetail as any;
             if (detail.league_id) setLeagueId(detail.league_id);
             gameDate = detail.match_time || gameDate;
+
+            // Detect when v_game_detail returns a coach name instead of a real team name.
+            // This happens when home_team / away_team equals a coach field on the same row.
+            const looksLikeCoach = (name: string) =>
+              !!name && (name === detail.home_coach || name === detail.away_coach);
+
+            let detailHomeName: string = detail.home_team || "";
+            let detailAwayName: string = detail.away_team || "";
+
+            if (looksLikeCoach(detailHomeName) || looksLikeCoach(detailAwayName)) {
+              const { data: tsRows } = await supabase
+                .from("team_stats")
+                .select("name, tot_spoints")
+                .eq("game_key", gameId);
+
+              if (tsRows && tsRows.length > 0) {
+                const teamNames = Array.from(
+                  new Set((tsRows as any[]).map((r: any) => r.name).filter(Boolean))
+                ) as string[];
+
+                if (teamNames.length >= 2) {
+                  const scoreFor = (name: string) =>
+                    (tsRows as any[])
+                      .filter((r: any) => r.name === name)
+                      .reduce((acc: number, r: any) => acc + (r.tot_spoints || 0), 0);
+
+                  const s0 = scoreFor(teamNames[0]);
+                  const s1 = scoreFor(teamNames[1]);
+                  const hs = detail.home_score ?? 0;
+                  const as_ = detail.away_score ?? 0;
+
+                  if (s0 === hs && s1 === as_) {
+                    detailHomeName = teamNames[0];
+                    detailAwayName = teamNames[1];
+                  } else if (s1 === hs && s0 === as_) {
+                    detailHomeName = teamNames[1];
+                    detailAwayName = teamNames[0];
+                  } else {
+                    detailHomeName = teamNames[0];
+                    detailAwayName = teamNames[1];
+                  }
+                } else if (teamNames.length === 1) {
+                  if (!looksLikeCoach(detailHomeName)) {
+                    detailAwayName = teamNames[0];
+                  } else {
+                    detailHomeName = teamNames[0];
+                  }
+                }
+              }
+            }
             
-            if (detail.home_team) teamsInfo[detail.home_team] = detail.home_score || 0;
-            if (detail.away_team) teamsInfo[detail.away_team] = detail.away_score || 0;
+            if (detailHomeName) teamsInfo[detailHomeName] = detail.home_score || 0;
+            if (detailAwayName) teamsInfo[detailAwayName] = detail.away_score || 0;
             
             // Build team_stats-like data for downstream use
             const fakeTeamStats = [];
-            if (detail.home_team) {
+            if (detailHomeName) {
               fakeTeamStats.push({
-                name: detail.home_team, tot_spoints: detail.home_score,
+                name: detailHomeName, tot_spoints: detail.home_score,
                 p1_score: detail.home_q1, p2_score: detail.home_q2, p3_score: detail.home_q3, p4_score: detail.home_q4,
                 tot_sfieldgoalsmade: detail.home_fgm, tot_sfieldgoalsattempted: detail.home_fga, tot_sfieldgoalspercentage: detail.home_fg_pct,
                 tot_sthreepointersmade: detail.home_3pm, tot_sthreepointersattempted: detail.home_3pa, tot_sthreepointerspercentage: detail.home_3p_pct,
@@ -156,9 +206,9 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                 coach: detail.home_coach, league_id: detail.league_id, game_key: detail.game_key,
               });
             }
-            if (detail.away_team) {
+            if (detailAwayName) {
               fakeTeamStats.push({
-                name: detail.away_team, tot_spoints: detail.away_score,
+                name: detailAwayName, tot_spoints: detail.away_score,
                 p1_score: detail.away_q1, p2_score: detail.away_q2, p3_score: detail.away_q3, p4_score: detail.away_q4,
                 tot_sfieldgoalsmade: detail.away_fgm, tot_sfieldgoalsattempted: detail.away_fga, tot_sfieldgoalspercentage: detail.away_fg_pct,
                 tot_sthreepointersmade: detail.away_3pm, tot_sthreepointersattempted: detail.away_3pa, tot_sthreepointerspercentage: detail.away_3p_pct,
@@ -275,6 +325,26 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
             if (teamsFromStats.length > 0 && !selectedTeam) {
               setSelectedTeam(teamsFromStats[0]);
             }
+
+            // Remap teamStatsFromDb entries whose names don't match the confirmed
+            // box-score team names. This fixes the case where v_game_detail returned
+            // a coach name that the looksLikeCoach check didn't catch.
+            setTeamStatsFromDb(prev => {
+              if (prev.length === 0) return prev;
+              const normStr = (s: string) => (s || "").trim().toLowerCase();
+              const hasAllMatch = prev.every(row =>
+                teamsFromStats.some(t => normStr(t) === normStr(row.name))
+              );
+              if (hasAllMatch) return prev; // names already correct — no-op
+
+              // Remap by matching tot_spoints → updatedTeamsInfo score
+              return prev.map(row => {
+                if (teamsFromStats.some(t => normStr(t) === normStr(row.name))) return row;
+                const pts = row.tot_spoints ?? 0;
+                const corrected = teamsFromStats.find(t => updatedTeamsInfo[t] === pts);
+                return corrected ? { ...row, name: corrected } : row;
+              });
+            });
           }
           
           setGameStats(processedStats);
