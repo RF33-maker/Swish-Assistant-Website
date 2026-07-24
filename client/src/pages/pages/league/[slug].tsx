@@ -81,14 +81,27 @@ type GameSchedule = {
 const teamNameMap: Record<string, string> = {
   'Essex Rebels (M)': 'Essex Rebels',
   'MK Breakers': 'Milton Keynes Breakers',
+  // Ball Park Summer League D2 team name variants
+  'Bath': 'Bath Basketball',
+  'Phoenix NextGen Allstars': 'Phoenix NextGen Stars',
+  'Phoenix NextGen All Stars': 'Phoenix NextGen Stars',
+  'Phoenix Nextgen Allstars': 'Phoenix NextGen Stars',
+  'Phoenix Nextgen All Stars': 'Phoenix NextGen Stars',
+  'Phoenix Nextgen Stars': 'Phoenix NextGen Stars',
+  'DIAWYSC Tempo': 'DIAWYSC',
 };
+
+// Build a lowercase → canonical map for case-insensitive lookups
+const teamNameMapLower = Object.fromEntries(
+  Object.entries(teamNameMap).map(([k, v]) => [k.toLowerCase(), v])
+);
 
 // Apply both normalization and specific mappings
 const normalizeAndMapTeamName = (name: string): string => {
   if (!name) return '';
   const trimmed = name.trim();
-  // First check specific mappings
-  const mapped = teamNameMap[trimmed] || trimmed;
+  // Case-insensitive lookup in teamNameMap
+  const mapped = teamNameMapLower[trimmed.toLowerCase()] || trimmed;
   // Then apply general normalization (strips Senior Men, !, and Roman numeral I)
   return normalizeTeamName(mapped);
 };
@@ -1409,6 +1422,8 @@ export default function LeaguePage() {
         }
 
         const teamMap = new Map<string, any>();
+
+        console.log('[TeamStats] raw names:', [...new Set(rawTeamStats.map((s: any) => s.name))]);
 
         rawTeamStats.forEach(stat => {
           if (!stat.name) return;

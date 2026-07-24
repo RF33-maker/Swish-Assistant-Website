@@ -22,8 +22,8 @@ export function normalizeTeamName(name: string): string {
   // Remove "Senior Men" (case-insensitive)
   normalized = normalized.replace(/\s+Senior\s+Men\s*/gi, ' ');
   
-  // Remove "!" characters
-  normalized = normalized.replace(/!/g, '');
+  // Remove "!" characters and leading "#" characters
+  normalized = normalized.replace(/!/g, '').replace(/^#+/, '');
   
   // Remove Roman numeral "I" at the end (but NOT II, III, IV, etc.)
   // This regex matches " I" at the end of the string, ensuring it's not followed by another "I" or "V"
