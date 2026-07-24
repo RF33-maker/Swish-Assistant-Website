@@ -1066,6 +1066,24 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
 
         const canonicalName = getMostCompleteName(variations);
 
+        // In parent leagues (e.g. REBA SL) the same physical player has one
+        // row per age-group competition. Only one row typically has
+        // photo_path_bg_removed set — whichever competition received the
+        // upload first. If the slug resolved to the photo-less record, scan
+        // all fuzzy-matched rows and use the first photo we find so the
+        // banner always renders the photo regardless of which record was
+        // clicked.
+        const photoSourceRecord = matchingPlayers.find(p => p.photo_path_bg_removed) ?? null;
+        const bestPhotoBgRemoved: string | null = photoSourceRecord?.photo_path_bg_removed ?? null;
+        const bestPhotoPath: string | null =
+          matchingPlayers.find(p => p.photo_path)?.photo_path ?? null;
+        // Use the focus-Y from whichever record owns the photo so the crop
+        // position is always in sync with the image being displayed.
+        const bestPhotoFocusY: number | null =
+          initialPlayer.photo_path_bg_removed
+            ? (initialPlayer.photo_focus_y ?? null)
+            : (photoSourceRecord?.photo_focus_y ?? null);
+
         let pInfo = {
           name: canonicalName,
           team: initialPlayer.team_name || initialPlayer.team,
@@ -1073,9 +1091,9 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
           number: initialPlayer.shirtNumber ?? initialPlayer.number,
           leagueId: initialPlayer.league_id,
           playerId: initialPlayer.id,
-          photoPath: initialPlayer.photo_path_bg_removed,
-          sharePhotoPath: initialPlayer.photo_path,
-          photoFocusY: initialPlayer.photo_focus_y,
+          photoPath: initialPlayer.photo_path_bg_removed || bestPhotoBgRemoved,
+          sharePhotoPath: initialPlayer.photo_path || bestPhotoPath,
+          photoFocusY: bestPhotoFocusY,
           height: initialPlayer.height || null,
           heightCm: initialPlayer.height_cm || null,
           dateOfBirth: initialPlayer.date_of_birth || null,
