@@ -81,6 +81,10 @@ type GameSchedule = {
 const teamNameMap: Record<string, string> = {
   'Essex Rebels (M)': 'Essex Rebels',
   'MK Breakers': 'Milton Keynes Breakers',
+  // Ball Park Summer League D2 team name variants
+  'Bath': 'Bath Basketball',
+  'Phoenix NextGen Allstars': 'Phoenix NextGen Stars',
+  'DIAWYSC Tempo': 'DIAWYSC',
 };
 
 // Apply both normalization and specific mappings
