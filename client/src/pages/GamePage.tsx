@@ -29,6 +29,7 @@ interface PlayerStat {
   player_name?: string;
   team_name?: string;
   side?: string;
+  shirtnumber?: string | number | null;
   spoints: number;
   sreboundstotal: number;
   sassists: number;
@@ -1468,12 +1469,21 @@ export default function GamePage() {
                                   <th className="text-center py-2 px-2">FG</th>
                                   <th className="text-center py-2 px-2">3PT</th>
                                   <th className="text-center py-2 px-2">FT</th>
+                                  <th className="text-center py-2 px-2">EFF</th>
                                 </tr>
                               </thead>
                               <tbody className="text-slate-800 dark:text-slate-200">
-                                {homePlayerStats.map((player, idx) => (
+                                {homePlayerStats.map((player, idx) => {
+                                  const eff = (player.spoints || 0) + (player.sreboundstotal || 0) + (player.sassists || 0) + (player.ssteals || 0) + (player.sblocks || 0)
+                                    - ((player.sfieldgoalsattempted || 0) - (player.sfieldgoalsmade || 0))
+                                    - ((player.sfreethrowsattempted || 0) - (player.sfreethrowsmade || 0))
+                                    - (player.sturnovers || 0);
+                                  return (
                                   <tr key={idx} className="border-t border-orange-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800">
                                     <td className="py-2 px-3 sticky left-0 bg-white dark:bg-neutral-800 font-medium whitespace-nowrap">
+                                      {player.shirtnumber != null && String(player.shirtnumber).trim() !== "" && (
+                                        <span className="text-slate-400 dark:text-slate-500 text-xs mr-1.5">#{player.shirtnumber}</span>
+                                      )}
                                       {player.full_name || player.player_name || `${player.firstname || ''} ${player.familyname || ''}`.trim() || 'Unknown'}
                                     </td>
                                     <td className="text-center py-2 px-2 text-slate-500">{parseMinutes(player.sminutes)}</td>
@@ -1492,8 +1502,10 @@ export default function GamePage() {
                                     <td className="text-center py-2 px-2 text-slate-500 whitespace-nowrap">
                                       {player.sfreethrowsmade || 0}/{player.sfreethrowsattempted || 0}
                                     </td>
+                                    <td className="text-center py-2 px-2 font-semibold text-slate-600 dark:text-slate-300">{eff}</td>
                                   </tr>
-                                ))}
+                                  );
+                                })}
                               </tbody>
                             </table>
                           </div>
@@ -1524,12 +1536,21 @@ export default function GamePage() {
                                   <th className="text-center py-2 px-2">FG</th>
                                   <th className="text-center py-2 px-2">3PT</th>
                                   <th className="text-center py-2 px-2">FT</th>
+                                  <th className="text-center py-2 px-2">EFF</th>
                                 </tr>
                               </thead>
                               <tbody className="text-slate-800 dark:text-slate-200">
-                                {awayPlayerStats.map((player, idx) => (
+                                {awayPlayerStats.map((player, idx) => {
+                                  const eff = (player.spoints || 0) + (player.sreboundstotal || 0) + (player.sassists || 0) + (player.ssteals || 0) + (player.sblocks || 0)
+                                    - ((player.sfieldgoalsattempted || 0) - (player.sfieldgoalsmade || 0))
+                                    - ((player.sfreethrowsattempted || 0) - (player.sfreethrowsmade || 0))
+                                    - (player.sturnovers || 0);
+                                  return (
                                   <tr key={idx} className="border-t border-orange-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800">
                                     <td className="py-2 px-3 sticky left-0 bg-white dark:bg-neutral-800 font-medium whitespace-nowrap">
+                                      {player.shirtnumber != null && String(player.shirtnumber).trim() !== "" && (
+                                        <span className="text-slate-400 dark:text-slate-500 text-xs mr-1.5">#{player.shirtnumber}</span>
+                                      )}
                                       {player.full_name || player.player_name || `${player.firstname || ''} ${player.familyname || ''}`.trim() || 'Unknown'}
                                     </td>
                                     <td className="text-center py-2 px-2 text-slate-500">{parseMinutes(player.sminutes)}</td>
@@ -1548,8 +1569,10 @@ export default function GamePage() {
                                     <td className="text-center py-2 px-2 text-slate-500 whitespace-nowrap">
                                       {player.sfreethrowsmade || 0}/{player.sfreethrowsattempted || 0}
                                     </td>
+                                    <td className="text-center py-2 px-2 font-semibold text-slate-600 dark:text-slate-300">{eff}</td>
                                   </tr>
-                                ))}
+                                  );
+                                })}
                               </tbody>
                             </table>
                           </div>

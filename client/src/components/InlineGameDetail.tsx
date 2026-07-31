@@ -32,6 +32,7 @@ interface PlayerStat {
   firstname: string;
   familyname: string;
   team: string;
+  jersey_number?: string | number | null;
   sminutes?: string;
   spoints: number;
   sfieldgoalsmade?: number;
@@ -284,6 +285,7 @@ export function InlineGameDetail({
             firstname: r.player_name || `${r.firstname || ""} ${r.familyname || ""}`.trim() || "Unknown",
             familyname: "",
             team: r.team_name || r.team || "",
+            jersey_number: r.jersey_number ?? r.shirtnumber ?? null,
             sminutes: r.minutes ?? r.sminutes,
             spoints: r.points ?? r.spoints ?? 0,
             sfieldgoalsmade: r.fgm ?? r.sfieldgoalsmade,
@@ -500,12 +502,21 @@ export function InlineGameDetail({
                 <th className="text-center py-2 px-2">FG</th>
                 <th className="text-center py-2 px-2">3PT</th>
                 <th className="text-center py-2 px-2">FT</th>
+                <th className="text-center py-2 px-2">EFF</th>
               </tr>
             </thead>
             <tbody className="text-slate-800 dark:text-slate-200">
-              {players.map((p, i) => (
+              {players.map((p, i) => {
+                const eff = (p.spoints || 0) + (p.sreboundstotal || 0) + (p.sassists || 0) + (p.ssteals || 0) + (p.sblocks || 0)
+                  - ((p.sfieldgoalsattempted || 0) - (p.sfieldgoalsmade || 0))
+                  - ((p.sfreethrowsattempted || 0) - (p.sfreethrowsmade || 0))
+                  - (p.sturnovers || 0);
+                return (
                 <tr key={i} className="border-t border-orange-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800">
                   <td className="py-2 px-3 sticky left-0 bg-white dark:bg-neutral-800 font-medium whitespace-nowrap">
+                    {p.jersey_number != null && String(p.jersey_number).trim() !== "" && (
+                      <span className="text-slate-400 dark:text-slate-500 text-xs mr-1.5">#{p.jersey_number}</span>
+                    )}
                     {p.firstname} {p.familyname}
                   </td>
                   <td className="text-center py-2 px-2 text-slate-500">{parseMinutes(p.sminutes)}</td>
@@ -518,8 +529,10 @@ export function InlineGameDetail({
                   <td className="text-center py-2 px-2 text-slate-500 whitespace-nowrap">{p.sfieldgoalsmade || 0}/{p.sfieldgoalsattempted || 0}</td>
                   <td className="text-center py-2 px-2 text-slate-500 whitespace-nowrap">{p.sthreepointersmade || 0}/{p.sthreepointersattempted || 0}</td>
                   <td className="text-center py-2 px-2 text-slate-500 whitespace-nowrap">{p.sfreethrowsmade || 0}/{p.sfreethrowsattempted || 0}</td>
+                  <td className="text-center py-2 px-2 font-semibold text-slate-600 dark:text-slate-300">{eff}</td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
