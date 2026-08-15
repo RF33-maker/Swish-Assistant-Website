@@ -93,7 +93,7 @@ const teamNameMapLower = Object.fromEntries(
   Object.entries(teamNameMap).map(([k, v]) => [k.toLowerCase(), v])
 );
 
-// Natural sort comparator for round strings: "Round 10" sorts after "Round 9"
+// Sort rounds numerically so "Round 10" comes after "Round 9", not after "Round 1"
 const naturalSortRounds = (a: string, b: string): number => {
   const numA = parseInt(a.match(/(\d+)$/)?.[1] ?? '', 10);
   const numB = parseInt(b.match(/(\d+)$/)?.[1] ?? '', 10);
