@@ -807,7 +807,8 @@ export default function LeaguePage() {
     // also check rawStats (loaded lazily) via league_id -> label map
     allPlayerAverages.forEach(p => {
       (p.rawStats || []).forEach((s: any) => {
-        if (String(s.stop) === filterRound && s.league_id) {
+        const sRoundVal = (s.round != null && s.round !== '') ? s.round : (s.stop != null ? String(s.stop) : null);
+        if (sRoundVal === filterRound && s.league_id) {
           const label = childLeagueMap.get(s.league_id);
           if (label) labelsWithRound.add(label);
         }
@@ -1211,8 +1212,13 @@ export default function LeaguePage() {
       const rds = new Set<string>();
       allPlayerAverages.forEach(p => {
         (p.rawStats || []).forEach((s: any) => {
-          // round data is stored as the numeric `stop` column in player_stats
-          if (s.stop != null) rds.add(String(s.stop));
+          // player_stats stores round data in `round` (text) for most leagues,
+          // and in `stop` (numeric) for REBA-style tournament stops.
+          // Read whichever is present so both sources show up.
+          const val = (s.round != null && s.round !== '') ? s.round
+                    : (s.stop != null) ? String(s.stop)
+                    : null;
+          if (val) rds.add(val);
         });
       });
       return [...rds].sort(naturalSortRounds);
@@ -1231,7 +1237,10 @@ export default function LeaguePage() {
         .map(player => {
           const matchingStats = (player.rawStats || []).filter((s: any) => {
             if ((agFilter || stopFilter || ageTabFilter) && !selectedAgeGroupLeagueIds.includes(s.league_id)) return false;
-            if (roundFilter && String(s.stop) !== filterRound) return false;
+            if (roundFilter) {
+              const sRound = (s.round != null && s.round !== '') ? s.round : (s.stop != null ? String(s.stop) : null);
+              if (sRound !== filterRound) return false;
+            }
             return true;
           });
           if (matchingStats.length === 0) return null;
