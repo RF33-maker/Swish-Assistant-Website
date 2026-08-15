@@ -770,7 +770,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { data, error } = await supabaseAdmin
         .from("competitions")
-        .select("league_id, name, slug, logo_url, age_group, stop")
+        .select("league_id, name, slug, logo_url, age_group, stop, gender")
         .eq("parent_league_id", parentId);
 
       if (error) {

@@ -1,4 +1,8 @@
-import { supabase } from "@/lib/supabase";
+// NOTE: intentionally uses the server-side /api/public/league-children endpoint
+// (backed by the service-role Supabase client) rather than the anon client directly.
+// Private child competitions (is_public=false) are filtered out by RLS when using
+// the anon key, which causes stops/age-groups to disappear intermittently depending
+// on whether the viewer happens to be authenticated as an owner.
 
 export type LeagueChild = {
   league_id: string;
@@ -17,12 +21,10 @@ export async function fetchLeagueChildren(parentId: string): Promise<LeagueChild
   if (cache.has(parentId)) return cache.get(parentId)!;
   const p = (async () => {
     try {
-      const { data, error } = await supabase
-        .from("competitions")
-        .select("league_id, name, slug, logo_url, age_group, stop, gender")
-        .eq("parent_league_id", parentId);
-      if (error) return [];
-      return (data || []) as LeagueChild[];
+      const res = await fetch(`/api/public/league-children/${encodeURIComponent(parentId)}`);
+      if (!res.ok) return [];
+      const json = await res.json();
+      return (json.children || []) as LeagueChild[];
     } catch {
       return [];
     }
