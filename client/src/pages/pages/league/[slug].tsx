@@ -828,13 +828,14 @@ export default function LeaguePage() {
   }, [filterRound, visibleAgeGroupLabels]);
 
   const availableStopsForAgeGroup = useMemo(() => {
-    const leagueIdsForAg = selectedAgeGroup === 'all'
-      ? childCompetitions
-      : childCompetitions.filter(c => getChildLabel(c) === selectedAgeGroup);
+    // Collect stops from ALL child competitions, not just the selected age group.
+    // Filtering by age group here hides valid stops that exist for other age
+    // groups (e.g. Stop 10 exists for 15U/18+ but not 14U, so auto-selecting
+    // 14U would make Stop 10 disappear from the dropdown entirely).
     const stops = new Set<number>();
-    leagueIdsForAg.forEach(c => { if (c.stop != null) stops.add(c.stop); });
+    childCompetitions.forEach(c => { if (c.stop != null) stops.add(c.stop); });
     return Array.from(stops).sort((a, b) => a - b);
-  }, [selectedAgeGroup, childCompetitions, league?.name]);
+  }, [childCompetitions]);
 
   const selectedAgeGroupLeagueIds = useMemo(() => {
     let candidates = selectedAgeGroup === 'all'
