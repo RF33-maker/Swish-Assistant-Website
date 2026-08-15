@@ -43,23 +43,25 @@ export default function ResetPassword() {
   };
 
   return (
-    <div className="p-6 max-w-md mx-auto">
-      <h1 className="text-xl font-semibold mb-4">Reset Your Password</h1>
+    <div className="min-h-screen flex items-center justify-center p-4 md:p-6 bg-gradient-to-br from-orange-100 via-white to-white">
+      <div className="w-full max-w-full md:max-w-md bg-white p-6 md:p-8 rounded-xl shadow-md border border-gray-200">
+        <h1 className="text-xl md:text-2xl font-semibold mb-4 md:mb-6 text-center text-gray-800">Reset Your Password</h1>
 
-      <input
-        type="password"
-        placeholder="New password"
-        onChange={(e) => setNewPassword(e.target.value)}
-        className="border p-2 mb-2 w-full"
-      />
-      <button
-        onClick={handleSubmit}
-        className="bg-blue-500 text-white px-4 py-2 w-full rounded"
-      >
-        Submit
-      </button>
+        <input
+          type="password"
+          placeholder="New password"
+          onChange={(e) => setNewPassword(e.target.value)}
+          className="border border-gray-300 p-2 md:p-3 mb-3 md:mb-4 w-full rounded-md text-sm md:text-base focus:ring-orange-300 focus:border-orange-400"
+        />
+        <button
+          onClick={handleSubmit}
+          className="bg-[#FFC285] hover:bg-[#ffb76c] text-white px-4 py-2 md:py-3 w-full rounded-md font-medium text-sm md:text-base transition"
+        >
+          Submit
+        </button>
 
-      {error && <p className="text-red-500 mt-2">{error}</p>}
+        {error && <p className="text-red-500 mt-3 md:mt-4 text-sm md:text-base text-center">{error}</p>}
+      </div>
     </div>
   );
 }

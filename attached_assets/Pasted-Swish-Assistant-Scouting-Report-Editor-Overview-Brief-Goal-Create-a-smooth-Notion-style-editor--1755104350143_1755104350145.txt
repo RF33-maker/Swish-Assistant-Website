@@ -1,0 +1,144 @@
+Swish Assistant – Scouting Report Editor (Overview Brief)
+Goal
+Create a smooth, Notion-style editor where coaches can:
+
+chat with an AI assistant,
+
+insert the AI’s answers and live stats into an editable document,
+
+apply polished templates, and
+
+export as clean, print-ready PDFs (DOCX later).
+
+Core Outcomes (what “done” looks like)
+Rich editor with blocks for Game Header, Four Factors, Player Cards, Stat Tables, and AI Summaries.
+
+Template gallery with sports-specific templates (e.g., Scouting Report, Game Recap).
+
+“Send to Doc” from chat: one click inserts formatted content at the cursor.
+
+Smart Variables (e.g., {{team.name}}) auto-resolve using document context.
+
+Autosave to Supabase (JSONB), with “Saved/Saving…” status.
+
+PDF export that matches on-screen layout (playoff-ready aesthetics).
+
+Branding ready (league colors/logos) and clean page breaks.
+
+Users & Primary Flows
+Create from Template → Edit → Export
+
+User opens Template Gallery → picks a template → variables resolve from context → document opens in editor → user edits → Export PDF.
+
+Chat → Insert to Document
+
+User asks AI → clicks “Send to Doc” → formatted AI Summary or Stat Table block appears in the editor → user tweaks → Export.
+
+Feature Set
+Editor
+Notion-like UX (TipTap/ProseMirror recommended).
+
+Blocks:
+
+Game Header (logos, teams, date, venue, final score).
+
+Four Factors (“Focus Areas”: eFG%, TOV%, ORB%, FT Rate) pulled from stats; Freeze/Unfreeze values.
+
+Player Card (photo, team, PPG/RPG/APG; later add shot chart).
+
+Stat Table (sortable columns; supports team and player views).
+
+AI Summary (text inserted from chatbot with “Regenerate/Tighten/Expand” controls later).
+
+Slash menu to insert blocks, drag handles, inline toolbar.
+
+Autosave (debounced), version timestamp, basic undo/redo.
+
+Templates
+Template Gallery with thumbnails & descriptions.
+
+Templates stored as TipTap JSON (in Supabase).
+
+On create, Smart Variables resolve using document context (league/team/game).
+
+Starter set:
+
+Scouting Report (Header → Focus Areas → Tendencies → AI Summary → Key Players).
+
+Game Summary/Recap (Scoreline → Four Factors → Player highlights → Coach notes).
+
+Blank Canvas.
+
+Chat → Doc
+In chat UI, responses have “Send to Doc” action.
+
+Inserts AI Summary or Stat Table as structured blocks at cursor (not raw text).
+
+Normalizes response (removes emojis/extra fluff) before insert.
+
+Data & Storage (Supabase)
+documents: id, owner_id, title, content(jsonb), context(jsonb), status, created_at, updated_at
+
+templates: id, name, description, content(jsonb), thumbnail_url, created_at
+
+assets (optional): id, document_id, type(image|pdf), url, meta(jsonb), created_at
+
+RLS: owners can read/write their docs; templates are public read.
+
+Exports
+PDF via headless Chromium/Playwright using print CSS:
+
+A4, print background, page breaks for big blocks, header/footer optional.
+
+DOCX (phase 2): map core blocks to tables/headings.
+
+Integrations
+Supabase: auth/session, read/write documents/templates, store assets.
+
+Swish stats: blocks pull stats from existing endpoints or from document context payload (league_id, game_id, teams, players).
+
+Branding: use league/team colors & logos if present in context.
+
+Non-Functional Requirements
+Snappy editor performance on 1–10 page reports.
+
+Reliable autosave (no data loss on reload).
+
+Export fidelity: printed PDF matches editor layout closely.
+
+Simple theming: CSS variables for brand colors.
+
+Code organized, typed (TS), and ready for incremental features (collab, versions).
+
+Acceptance Criteria (checklist)
+ Template Gallery loads from Supabase; can create a document from any template.
+
+ On create, Smart Variables in template are resolved using provided context.
+
+ Editor supports blocks: Game Header, Four Factors, Player Card, Stat Table, AI Summary.
+
+ Chat response → Send to Doc inserts a formatted block at the cursor.
+
+ Four Factors can fetch from stats context and Freeze/Unfreeze values.
+
+ Autosave works with visible “Saved/Saving…” state.
+
+ Export PDF returns a styled A4 PDF with correct page breaks and logos.
+
+ Basic theming works (league colors/logos in header).
+
+ RLS: users only see their docs; templates are readable by all.
+
+Phased Delivery (recommended)
+Phase 1 (MVP): editor + gallery + smart variables + chat insert + PDF export + autosave.
+Phase 2: DOCX export, version history, template theming per league, improved Stat Table (sorting, columns).
+Phase 3: Real-time collaboration (Y.js), shot charts, video clip blocks, advanced AI controls.
+
+Inputs the Agent Will Need
+Supabase URL & anon key.
+
+Existing stats endpoints or the shape of context (e.g., { league_id, game_id, home_team, away_team, four_factors: {...} }).
+
+Brand assets for a sample league (logos, primary/secondary colors).
+
+Example template JSON (Agent can seed if not provided).

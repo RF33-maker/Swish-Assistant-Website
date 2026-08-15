@@ -1,0 +1,48 @@
+Your task is to enhance the visual design of the SEO description block on all league pages in the Swish Assistant frontend. This block must remain SEO-friendly while looking more polished and integrated with the page layout.
+
+REQUIREMENTS:
+1. The SEO description block must appear directly below the league H1 and above the game carousel (do not move the carousel).
+2. It must dynamically use:
+   - leagueName (from the league record)
+   - leagueDescription (same field currently used in the Overview tab)
+3. The design must be visually improved WITHOUT changing SEO structure (keep H2 + p tags intact).
+
+DESIGN UPGRADES TO IMPLEMENT:
+- Add a soft top gradient fade so the block transitions smoothly from the banner.
+- Wrap the description inside a centered card container with:
+  * white background
+  * slight rounded corners
+  * light shadow (shadow-sm)
+  * thin border using orange-100
+  * padding for readability
+- Add a small orange accent divider under the H2 title.
+- Reduce extra space above the block so it sits closer to the H1.
+- Paragraph text should be left-aligned (better readability), but the H2 remains centered.
+- Ensure full width on mobile and max-w-4xl on desktop.
+
+THE FINAL JSX BLOCK SHOULD LOOK LIKE THIS (insert directly under the H1):
+
+<div className="w-full bg-gradient-to-b from-transparent to-[#fffaf5] pt-4 pb-10 px-4">
+  <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-sm p-8 border border-orange-100">
+    <h2 className="text-2xl font-semibold text-slate-900 text-center mb-3">
+      About {leagueName}
+    </h2>
+    <div className="h-1 w-20 bg-orange-500 mx-auto mb-6 rounded-full"></div>
+    <p className="text-slate-700 leading-relaxed text-base text-left">
+      {leagueDescription}
+    </p>
+  </div>
+</div>
+
+IMPLEMENTATION NOTES:
+- Locate the file responsible for rendering league pages (likely LeaguePage.tsx or similar).
+- Find the existing H1 for the league title.
+- Insert the JSX block immediately after the H1.
+- Remove or disable any old temporary wrapper used for the SEO block.
+- DO NOT remove or alter the Overview tab; it should continue to show the full league description.
+- Ensure the new block updates automatically for every league slug.
+
+WHAT TO DELIVER:
+- Updated .tsx file(s) with the improved SEO description block implemented.
+- Visually clean, responsive layout.
+- No breaking changes to the carousel, tabs, or existing components.

@@ -1,0 +1,153 @@
+I’m having an issue with player profile photos in production.
+
+Context:
+- Project: Swish Assistant (React + TypeScript + Tailwind + Supabase).
+- I have a Supabase Storage bucket called `player-photos`.
+- My `players` table has a `photo_path` column that stores the storage path (e.g. `player_id/primary.jpg`).
+- In Supabase (production), the files are in the `player-photos` bucket and `photo_path` is correctly set for players.
+- Social card templates and my Swish Social Tool use these photos correctly.
+- BUT on the **player profile page** (e.g. `/player/hamza-ibrahim`), the profile pictures do not load in production.
+
+I suspect the profile page is:
+- Either not selecting `photo_path` in its Supabase query, or
+- Manually building the image URL using `VITE_SUPABASE_URL` instead of using `supabase.storage.from('player-photos').getPublicUrl(photo_path)`.
+
+I want you to FIX the player profile image logic so it consistently uses `photo_path` + `getPublicUrl`, and make sure it works in both dev and production.
+
+### Tasks
+
+1. **Find the player profile page component**
+
+   - Locate the page that serves URLs like `/player/[slug]` or `/player/[id]`.
+   - This is the Swish Assistant player profile page; it shows player name, team, stats, etc., and currently renders a profile avatar / header image.
+
+2. **Update the Supabase query to include `photo_path`**
+
+   - In the Supabase query where we fetch the player (probably something like):
+
+     ```ts
+     const { data } = await supabase
+       .from("players")
+       .select("id, name, team, ...")
+       .eq("slug", slug)
+       .single();
+     ```
+
+   - Make sure `photo_path` is included in the `.select` list:
+
+     ```ts
+     const { data } = await supabase
+       .from("players")
+       .select("id, name, team, photo_path, ...")
+       .eq("slug", slug)
+       .single();
+     ```
+
+   - Update the TypeScript type used for the player on this page to include:
+
+     ```ts
+     photo_path: string | null;
+     ```
+
+3. **Stop manually concatenating the Supabase URL**
+
+   - On the profile page there is currently an `<img>` for the player photo that likely looks like this (or similar):
+
+     ```tsx
+     {playerInfo.playerId && playerInfo.photoPath ? (
+       <img
+         src={`${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/player-photos/${playerInfo.photoPath}`}
+         alt={playerInfo.name}
+         ...
+       />
+     ) : (
+       // fallback avatar
+     )}
+     ```
+
+   - Remove this hard-coded string concatenation using `VITE_SUPABASE_URL`.
+   - Instead, use Supabase’s `getPublicUrl` for the `player-photos` bucket.
+
+4. **Use `supabase.storage.from('player-photos').getPublicUrl(photo_path)` on the profile page**
+
+   - Import the Supabase client at the top of the profile page if it’s not already imported:
+
+     ```ts
+     import { supabase } from "@/supabaseClient"; // adjust path if needed
+     ```
+
+   - Create a memoized computed URL from `photo_path`:
+
+     ```ts
+     const playerPhotoUrl = useMemo(() => {
+       if (!playerInfo?.photoPath) return null;
+
+       const { data } = supabase
+         .storage
+         .from("player-photos")
+         .getPublicUrl(playerInfo.photoPath);
+
+       return data.publicUrl || null;
+     }, [playerInfo?.photoPath]);
+     ```
+
+     Adjust property names (`photoPath` vs `photo_path`) to match whatever is used in the component state.
+
+   - Then update the JSX where the profile image is rendered to use `playerPhotoUrl`:
+
+     ```tsx
+     {playerInfo.playerId && playerPhotoUrl ? (
+       <>
+         <img
+           src={playerPhotoUrl}
+           alt={playerInfo.name}
+           className="absolute inset-0 w-full h-full object-cover"
+           style={{
+             objectPosition: `50% ${
+               showFocusAdjuster
+                 ? tempFocusY
+                 : (playerInfo.photoFocusY ?? 50)
+             }%`
+           }}
+           onError={(e) => {
+             (e.target as HTMLImageElement).style.display = "none";
+           }}
+         />
+         {/* existing gradient overlays, keep them as they are */}
+       </>
+     ) : (
+       // existing fallback avatar block
+     )}
+     ```
+
+   - Make sure the existing gradient overlays and fallback avatar remain unchanged; only swap out how the main `<img>` `src` is constructed.
+
+5. **Ensure consistency between `photoPath` and `photo_path`**
+
+   - If the state object uses `photoPath` (camelCase), but the DB column is `photo_path` (snake_case), make sure you correctly map it when building `playerInfo` after the Supabase query:
+
+     ```ts
+     setPlayerInfo({
+       ...,
+       photoPath: data.photo_path,
+       ...
+     });
+     ```
+
+   - The important part is that whatever field the JSX uses (e.g. `playerInfo.photoPath`) is actually populated from the Supabase `photo_path` column, and `playerPhotoUrl` uses that same value.
+
+6. **Do NOT touch storage policies or bucket names in code**
+
+   - Assume the bucket is named exactly `player-photos` and already exists in the project.
+   - Assume the `photo_path` values match the object paths in that bucket.
+   - The fix should be purely in how the front-end builds and uses the image URL on the player profile page.
+
+### Expected result
+
+After these changes:
+
+- The player profile page will:
+  - Fetch `photo_path` from the `players` table.
+  - Derive a public URL via `supabase.storage.from("player-photos").getPublicUrl(photo_path)`.
+  - Use that URL as the `src` of the profile image.
+- Player profile photos should display correctly in **both development and production**, matching the behavior I already see in my Swish Social Tool and social card templates.

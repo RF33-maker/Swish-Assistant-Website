@@ -33,10 +33,17 @@ function useAuthProviderValue(): AuthContextType {
   } = useQuery<SelectUser | null, Error>({
     queryKey: ["user"],
     queryFn: async () => {
-      const { data, error } = await supabase.auth.getUser();
-      if (error) throw new Error(error.message);
-      return data?.user ?? null;
+      try {
+        const { data, error } = await supabase.auth.getUser();
+        if (error) {
+          return null; // Return null instead of throwing
+        }
+        return data?.user ?? null;
+      } catch (err) {
+        return null; // Return null instead of throwing
+      }
     },
+    retry: false, // Don't retry auth failures
   });
 
   const loginMutation = useMutation({
@@ -51,7 +58,11 @@ function useAuthProviderValue(): AuthContextType {
     },
     onSuccess: (user: SelectUser) => {
       queryClient.setQueryData(["user"], user);
-      setLocation("/"); // ✅ redirect
+      setLocation("/dashboard");
+      toast({
+        title: "Welcome back!",
+        description: `Successfully logged in`,
+      });
     },
     onError: (error: Error) => {
       toast({
@@ -74,6 +85,10 @@ function useAuthProviderValue(): AuthContextType {
     },
     onSuccess: (user: SelectUser) => {
       queryClient.setQueryData(["user"], user);
+      toast({
+        title: "Registration successful",
+        description: "Please check your email to verify your account",
+      });
     },
     onError: (error: Error) => {
       toast({
@@ -91,6 +106,11 @@ function useAuthProviderValue(): AuthContextType {
     },
     onSuccess: () => {
       queryClient.setQueryData(["user"], null);
+      setLocation("/");
+      toast({
+        title: "Logged out",
+        description: "Successfully logged out",
+      });
     },
     onError: (error: Error) => {
       toast({

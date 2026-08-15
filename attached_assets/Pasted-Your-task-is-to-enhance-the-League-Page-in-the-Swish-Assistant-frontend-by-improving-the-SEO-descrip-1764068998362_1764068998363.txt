@@ -1,0 +1,82 @@
+Your task is to enhance the League Page in the Swish Assistant frontend by improving the SEO description block that appears directly beneath the banner and H1, and above the game carousel.
+
+This update must remain SEO-safe and dynamic for ALL league slugs.
+
+=======================================
+GOALS
+=======================================
+
+1. Improve the design of the SEO description block.
+2. Add optional league logo rendering if available.
+3. Add smooth fade-in animation to the block.
+4. Ensure the design looks premium, centered, and responsive on all devices.
+5. Keep the existing Overview tab untouched.
+
+=======================================
+SEO BLOCK REQUIREMENTS
+=======================================
+
+The SEO block must:
+- Appear directly under the league title (H1) and above the game carousel.
+- Use the existing dynamic fields:
+    leagueName
+    leagueDescription
+    leagueLogo (if provided)
+- Be visually improved using:
+    * a soft top gradient fade (blending banner → content)
+    * white card container (rounded-xl, shadow-sm, thin orange border)
+    * clean spacing (pt-4 pb-10 px-4)
+- H2 title centered
+- Accent divider beneath the title
+- Paragraph text left-aligned for readability
+- Include fade-in animation (use Tailwind or existing animation classes)
+
+=======================================
+FINAL JSX SNIPPET TO INSERT UNDER H1
+=======================================
+
+Use this JSX structure:
+
+<div className="w-full bg-gradient-to-b from-transparent to-[#fffaf5] pt-4 pb-10 px-4 animate-fadeInUp">
+  <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-sm p-8 border border-orange-100">
+    <div className="flex flex-col md:flex-row md:items-center md:justify-center mb-4">
+
+      {leagueLogo && (
+        <img
+          src={leagueLogo}
+          alt={`${leagueName} logo`}
+          className="h-14 w-auto mx-auto md:mx-0 mb-4 md:mb-0 md:mr-4 drop-shadow-sm"
+        />
+      )}
+
+      <h2 className="text-2xl font-semibold text-slate-900 text-center md:text-left">
+        About {leagueName}
+      </h2>
+    </div>
+
+    <div className="h-1 w-20 bg-orange-500 mx-auto mb-6 rounded-full"></div>
+
+    <p className="text-slate-700 leading-relaxed text-base text-left">
+      {leagueDescription}
+    </p>
+  </div>
+</div>
+
+=======================================
+IMPLEMENTATION INSTRUCTIONS
+=======================================
+
+- Locate the React component for rendering league pages (likely LeaguePage.tsx or similar).
+- Insert this SEO block immediately after the H1 title.
+- Ensure leagueLogo, leagueName, and leagueDescription are pulled from existing league data.
+- Remove any older placeholder SEO block.
+- Do NOT modify the Overview tab section.
+- Maintain mobile responsiveness.
+
+=======================================
+WHAT TO DELIVER
+=======================================
+
+- Updated .tsx file(s) with the new SEO block implemented exactly as specified.
+- Fully responsive, modern, visually polished block.
+- No changes to carousel, tabs, admin controls, or other league page components.

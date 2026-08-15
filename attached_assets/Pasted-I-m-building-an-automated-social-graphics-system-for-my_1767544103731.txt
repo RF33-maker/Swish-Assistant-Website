@@ -1,0 +1,198 @@
+I’m building an automated social graphics system for my basketball stats site (Swish Assistant).
+
+Goal:
+- I want to auto-generate “performance cards” from my stats database.
+- Each graphic is a template (designed in Canva), and the site will fill in the stats + player photo.
+- This first template is a “Player Night” card (big points, full stat line).
+- Later there will be multiple templates (player records, team performance, leaders, etc.), so please structure the code to be reusable.
+
+Tech:
+- React + TypeScript + Tailwind (Vite-based project).
+- Supabase is my backend.
+- I will add a blank Canva template PNG at: `public/card-templates/player-night-v1.png` (background only, no numbers, no text, no photo).
+
+I need you to set up a **new area for social card templates** and wire the first one up.
+
+### TASKS
+
+1. **Create a dedicated area for social card templates**
+   - Create folder: `src/components/social/` if it doesn’t exist.
+   - Create `src/types/socialCards.ts` to hold shared types for social cards.
+   - In `src/types/socialCards.ts`, define:
+
+     ```ts
+     export type PlayerNightV1Data = {
+       player_name: string;
+       team_name: string;
+       opponent_name: string;
+
+       points: number;
+       rebounds: number;
+       assists: number;
+       steals: number;
+       blocks: number;
+
+       fg: string;          // e.g. "10/20"
+       three_pt: string;    // e.g. "1/1"
+       ft: string;          // e.g. "1/1"
+       turnovers: number;   // e.g. 4
+       ts_percent: string;  // e.g. "41.1"
+       plus_minus: string;  // e.g. "+11" or "41.1"
+
+       home_score: number;
+       away_score: number;
+
+       home_logo_url?: string;
+       away_logo_url?: string;
+       photo_url?: string;
+     };
+
+     export type SocialCard = {
+       id: string;
+       template: string;
+       card_type: string;
+       data: any;          // will be cast to specific types (e.g. PlayerNightV1Data)
+       image_url?: string | null;
+       caption?: string | null;
+     };
+     ```
+
+2. **Implement the Player Night template component**
+
+   - Create `src/components/social/PlayerNightCardV1.tsx`.
+   - This component:
+     - Accepts `data: PlayerNightV1Data` as props.
+     - Renders a fixed 1080×1350 card.
+     - Uses the blank Canva PNG as a background: `background-image: url('/card-templates/player-night-v1.png')`.
+     - Positions the dynamic bits (photo, big number, stats) over that background.
+
+   Use Tailwind for layout. Start from this structure and refine positions to match a typical IG portrait card:
+
+   ```tsx
+   import React from "react";
+   import type { PlayerNightV1Data } from "@/types/socialCards";
+
+   type Props = { data: PlayerNightV1Data };
+
+   export const PlayerNightCardV1: React.FC<Props> = ({ data }) => {
+     return (
+       <div
+         className="
+           relative
+           w-[1080px] h-[1350px]
+           text-white
+           overflow-hidden
+         "
+         style={{
+           backgroundImage: "url('/card-templates/player-night-v1.png')",
+           backgroundSize: "cover",
+           backgroundPosition: "center",
+         }}
+       >
+         {/* Player photo clipped into the angled shape */}
+         <div
+           className="
+             absolute
+             left-[80px] top-[120px]
+             w-[420px] h-[520px]
+             overflow-hidden
+             rounded-[40px]
+             [transform:skewY(-6deg)]
+             [clip-path:polygon(0%_5%,100%_0%,100%_95%,0%_100%)]
+           "
+         >
+           {data.photo_url && (
+             <img
+               src={data.photo_url}
+               alt={data.player_name}
+               className="w-full h-full object-cover [transform:skewY(6deg)]"
+             />
+           )}
+         </div>
+
+         {/* Big stacked points numbers, e.g. 41 / 41 / 41 */}
+         <div className="absolute right-[210px] top-[260px] flex flex-col gap-10 text-[120px] font-extrabold leading-none tracking-tight">
+           <span>{data.points}</span>
+           <span>{data.points}</span>
+           <span>{data.points}</span>
+         </div>
+
+         {/* Score + team logos under the image */}
+         <div className="absolute left-[330px] top-[680px] flex items-center gap-4">
+           {data.home_logo_url && (
+             <img
+               src={data.home_logo_url}
+               alt={data.team_name}
+               className="w-[70px] h-[70px] object-contain"
+             />
+           )}
+
+           <span className="text-3xl font-semibold tracking-[0.2em]">
+             {data.home_score} - {data.away_score}
+           </span>
+
+           {data.away_logo_url && (
+             <img
+               src={data.away_logo_url}
+               alt={data.opponent_name}
+               className="w-[70px] h-[70px] object-contain"
+             />
+           )}
+         </div>
+
+         {/* Stat labels row: PTS / REB / AST / STL / BLK */}
+         <div className="absolute left-1/2 -translate-x-1/2 bottom-[250px] flex gap-20 text-center text-[22px] font-semibold">
+           <div>
+             <div className="text-[28px] mb-1">{data.points}</div>
+             <div className="text-[16px] uppercase tracking-[0.2em]">PTS</div>
+           </div>
+           <div>
+             <div className="text-[28px] mb-1">{data.rebounds}</div>
+             <div className="text-[16px] uppercase tracking-[0.2em]">REB</div>
+           </div>
+           <div>
+             <div className="text-[28px] mb-1">{data.assists}</div>
+             <div className="text-[16px] uppercase tracking-[0.2em]">AST</div>
+           </div>
+           <div>
+             <div className="text-[28px] mb-1">{data.steals}</div>
+             <div className="text-[16px] uppercase tracking-[0.2em]">STL</div>
+           </div>
+           <div>
+             <div className="text-[28px] mb-1">{data.blocks}</div>
+             <div className="text-[16px] uppercase tracking-[0.2em]">BLK</div>
+           </div>
+         </div>
+
+         {/* Shooting + advanced stats row: FG / 3PT / FT / TO / TS% / +/- */}
+         <div className="absolute left-1/2 -translate-x-1/2 bottom-[170px] flex gap-16 text-center text-[20px] font-semibold">
+           <div>
+             <div className="text-[26px] mb-1">{data.fg}</div>
+             <div className="text-[14px] uppercase tracking-[0.2em]">FG</div>
+           </div>
+           <div>
+             <div className="text-[26px] mb-1">{data.three_pt}</div>
+             <div className="text-[14px] uppercase tracking-[0.2em]">3PT</div>
+           </div>
+           <div>
+             <div className="text-[26px] mb-1">{data.ft}</div>
+             <div className="text-[14px] uppercase tracking-[0.2em]">FT</div>
+           </div>
+           <div>
+             <div className="text-[26px] mb-1">{data.turnovers}</div>
+             <div className="text-[14px] uppercase tracking-[0.2em]">TO</div>
+           </div>
+           <div>
+             <div className="text-[26px] mb-1">{data.ts_percent}</div>
+             <div className="text-[14px] uppercase tracking-[0.2em]">TS%</div>
+           </div>
+           <div>
+             <div className="text-[26px] mb-1 text-[#41ff41]">
+               {data.plus_minus}
+             </div>
+             <div className="text-[14px] uppercase tracking-[0.2em]">+/-</div>
+           </div>
+         </div>
+       </div>
+     );
+   };

@@ -1,0 +1,82 @@
+You are updating the Swish Assistant frontend.
+
+Goal:
+Update the TEAM_STAT_COLUMNS mapping so the Team Stats dropdowns include the FULL NBA-style placeholder columns for Advanced, Four Factors, Scoring, and Misc (with opponent metrics). 
+This is a structure-only update. No calculations should be applied yet.
+
+Instructions:
+
+1. Locate the file where TEAM_STAT_COLUMNS (or its equivalent) is defined.
+
+2. Replace the existing column mappings for these categories with the following:
+
+Advanced: [
+  { key: "off_rating", label: "OFFRTG" },
+  { key: "def_rating", label: "DEFRTG" },
+  { key: "net_rating", label: "NETRTG" },
+  { key: "pace", label: "PACE" },
+  { key: "ast_percent", label: "AST%" },
+  { key: "ast_to_ratio", label: "AST/TO" },
+  { key: "oreb_percent", label: "OREB%" },
+  { key: "dreb_percent", label: "DREB%" },
+  { key: "reb_percent", label: "REB%" },
+  { key: "tov_percent", label: "TOV%" },
+  { key: "efg_percent", label: "EFG%" },
+  { key: "ts_percent", label: "TS%" },
+  { key: "ft_rate", label: "FTA RATE" },
+  { key: "three_point_rate", label: "3P RATE" },
+  { key: "pie", label: "PIE" }
+];
+
+FourFactors: [
+  { key: "efg_percent", label: "EFG%" },
+  { key: "ft_rate", label: "FTA RATE" },
+  { key: "tov_percent", label: "TOV%" },
+  { key: "oreb_percent", label: "OREB%" },
+  { key: "opp_efg_percent", label: "OPP EFG%" },
+  { key: "opp_ft_rate", label: "OPP FTA RATE" },
+  { key: "opp_tov_percent", label: "OPP TOV%" },
+  { key: "opp_oreb_percent", label: "OPP OREB%" }
+];
+
+Scoring: [
+  { key: "fga_percent_2pt", label: "%FGA 2PT" },
+  { key: "fga_percent_3pt", label: "%FGA 3PT" },
+  { key: "fga_percent_midrange", label: "%FGA MR" },
+  { key: "pts_percent_2pt", label: "%PTS 2PT" },
+  { key: "pts_percent_3pt", label: "%PTS 3PT" },
+  { key: "pts_percent_midrange", label: "%PTS MR" },
+  { key: "pts_percent_pitp", label: "%PTS PITP" },
+  { key: "pts_percent_fastbreak", label: "%PTS FBPS" },
+  { key: "pts_percent_second_chance", label: "%PTS 2ND CH" },
+  { key: "pts_percent_off_turnovers", label: "%PTS OFFTO" },
+  { key: "pts_percent_ft", label: "%PTS FT" },
+  { key: "tot_spointsinthepaint", label: "PITP" },
+  { key: "tot_spointsfastbreak", label: "FB PTS" },
+  { key: "tot_spointssecondchance", label: "2ND CH" },
+  { key: "tot_spointsfromturnovers", label: "PTS OFF TO" },
+  { key: "tot_sfreethrowsmade", label: "FTM" },
+  { key: "tot_sthreepointersmade", label: "3PM" },
+  { key: "tot_stwopointersmade", label: "2PM" }
+];
+
+Misc: [
+  { key: "tot_timesscoreslevel", label: "TIES" },
+  { key: "tot_leadchanges", label: "LEAD CHG" },
+  { key: "tot_timeleading", label: "TIME LEADING" },
+  { key: "tot_biggestscoringrun", label: "BIG RUN" },
+  { key: "tot_splusminuspoints", label: "+/-" },
+  { key: "opp_sthreepointersmade", label: "OPP 3PM" },
+  { key: "opp_sfieldgoalsmade", label: "OPP FGM" },
+  { key: "opp_sfieldgoalsattempted", label: "OPP FGA" },
+  { key: "opp_points", label: "OPP PTS" },
+  { key: "opp_turnovers", label: "OPP TO" }
+];
+
+3. Ensure the team stats table correctly renders these placeholders.
+
+4. Do NOT change frontend style, layout, or backend logic.
+
+5. Ensure mobile responsiveness remains intact.
+
+6. Return only the code changes needed.

@@ -1,0 +1,33 @@
+10:29:46.672 Running build in Washington, D.C., USA (East) – iad1
+10:29:46.672 Build machine configuration: 2 cores, 8 GB
+10:29:46.797 Cloning github.com/RF33-maker/Swish-Assistant-Website (Branch: feature/league-pages, Commit: b4189d7)
+10:29:49.680 Cloning completed: 2.883s
+10:29:49.804 Restored build cache from previous deployment (CLcWny1WbcnS3bhtQdVL7GN3s8pn)
+10:29:50.032 Running "vercel build"
+10:29:50.727 Vercel CLI 53.2.0
+10:29:51.584 Running "install" command: `npm ci`...
+10:29:52.823 npm error code EUSAGE
+10:29:52.824 npm error
+10:29:52.825 npm error `npm ci` can only install packages when your package.json and package-lock.json or npm-shrinkwrap.json are in sync. Please update your lock file with `npm install` before continuing.
+10:29:52.825 npm error
+10:29:52.825 npm error Missing: bufferutil@4.0.8 from lock file
+10:29:52.826 npm error
+10:29:52.826 npm error Clean install a project
+10:29:52.826 npm error
+10:29:52.826 npm error Usage:
+10:29:52.827 npm error npm ci
+10:29:52.827 npm error
+10:29:52.827 npm error Options:
+10:29:52.828 npm error [--install-strategy <hoisted|nested|shallow|linked>] [--legacy-bundling]
+10:29:52.828 npm error [--global-style] [--omit <dev|optional|peer> [--omit <dev|optional|peer> ...]]
+10:29:52.828 npm error [--include <prod|dev|optional|peer> [--include <prod|dev|optional|peer> ...]]
+10:29:52.829 npm error [--strict-peer-deps] [--foreground-scripts] [--ignore-scripts] [--no-audit]
+10:29:52.829 npm error [--no-bin-links] [--no-fund] [--dry-run]
+10:29:52.829 npm error [-w|--workspace <workspace-name> [-w|--workspace <workspace-name> ...]]
+10:29:52.829 npm error [-ws|--workspaces] [--include-workspace-root] [--install-links]
+10:29:52.830 npm error
+10:29:52.830 npm error aliases: clean-install, ic, install-clean, isntall-clean
+10:29:52.830 npm error
+10:29:52.830 npm error Run "npm help ci" for more info
+10:29:52.831 npm error A complete log of this run can be found in: /vercel/.npm/_logs/2026-05-08T09_29_51_883Z-debug-0.log
+10:29:52.859 Error: Command "npm ci" exited with 1

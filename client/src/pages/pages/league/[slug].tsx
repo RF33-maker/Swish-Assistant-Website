@@ -1,465 +1,6706 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useLocation, useParams } from "wouter";
-import { supabase } from "@/lib/supabase";
+import { supabase, getSupabaseForLeague, getDataLeagueId } from "@/lib/supabase";
+import { fetchLeagueChildren } from "@/lib/leagueChildren";
+import { normalizeInstagramHandle } from "@/lib/instagram";
+import { fetchLeagueData } from "@/lib/leagueData";
+import type { League } from "@shared/schema";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import LeagueDefaultImage from "@/assets/league-default.png";
+import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
+import { Helmet } from "react-helmet-async";
 import React from "react";
 import { GameSummaryRow } from "./GameSummaryRow";
+import GameResultsCarousel from "@/components/GameResultsCarousel";
+import GameDetailModal from "@/components/GameDetailModal";
+import GamePreviewModal from "@/components/GamePreviewModal";
 
+import LeagueChatbot from "@/components/LeagueChatbot";
+import { TeamLogo } from "@/components/TeamLogo";
+import LeagueLeadersShareCard from "@/components/LeagueLeadersShareCard";
+import { TeamLogoUploader } from "@/components/TeamLogoUploader";
+import { InstagramCarousel } from "@/components/InstagramCarousel";
+import { InstagramFeedSection } from "@/components/InstagramFeedSection";
+import { ChevronRight, ChevronDown, Trophy, ArrowRight, Search, Users, Instagram } from "lucide-react";
+import { useGlobalSearch, type SearchSuggestion } from "@/hooks/useGlobalSearch";
+import { PlayerSearchAvatar } from "@/components/PlayerSearchAvatar";
+import { Link } from "wouter";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { EditableDescription } from "@/components/EditableDescription";
+import { 
+  LoadingSkeleton, 
+  PlayerRowSkeleton, 
+  StandingsRowSkeleton, 
+  LeaderCardSkeleton,
+  ProfileSkeleton,
+  CompactLoadingSkeleton
+} from "@/components/skeletons/LoadingSkeleton";
+import { PlayerComparison } from "@/components/PlayerComparison";
+import { TeamComparison } from "@/components/TeamComparison";
+import { TournamentBracket } from "@/components/TournamentBracket";
+import { normalizeTeamName, buildFuzzyTeamAliasMap } from "@/lib/teamUtils";
+import { namesMatch, getMostCompleteName, strictNamesMatch, normalizeName } from "@/lib/fuzzyMatch";
+import { DEBUG, debugLog } from "@/utils/debug";
+import { usePublicLeagueBrandingBySlug } from "@/hooks/usePublicLeagueBranding";
+import { InlinePlayerProfile } from "@/components/InlinePlayerProfile";
+import { InlineTeamProfile } from "@/components/InlineTeamProfile";
+import { InlineGameDetail, type GameInfo as InlineGameInfo } from "@/components/InlineGameDetail";
+import {
+  accumulateAdvancedRow,
+  makeAdvancedAggregator,
+  getAdvancedLeaderSections,
+  type AdvancedLeaderDef,
+} from "@/lib/advancedStats";
+import LeagueTrendingPerformances from "@/components/league/LeagueTrendingPerformances";
 
-  export default function LeaguePage() {
-    const { slug } = useParams();
-    const [search, setSearch] = useState("");
+// Compact label for age group filter UI ("Under 18 Boys" -> "U18 Boys").
+function shortenAgeLabel(label: string): string {
+  if (!label) return label;
+  return label
+    .replace(/^Under\s*-?\s*/i, "U")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+type GameSchedule = {
+  game_id: string;
+  game_date: string;
+  team1: string;
+  team2: string;
+  kickoff_time?: string;
+  venue?: string;
+  team1_score?: number;
+  team2_score?: number;
+  status?: string;
+  numeric_id?: string;
+  age_group?: string;
+  round?: string;
+};
+
+// Team name mapping for known variations that aren't covered by normalization
+const teamNameMap: Record<string, string> = {
+  // Intentional canonical renames — too different for fuzzy distance to infer
+  'MK Breakers': 'Milton Keynes Breakers',
+  // Abbreviation / shortened forms that fuzzy can't catch
+  'Bath': 'Bath Basketball',
+  'DIAWYSC Tempo': 'DIAWYSC',
+  // Note: Phoenix NextGen variants and "Essex Rebels (M)" were removed here because
+  // buildFuzzyTeamAliasMap now clusters them automatically at render time.
+};
+
+// Build a lowercase → canonical map for case-insensitive lookups
+const teamNameMapLower = Object.fromEntries(
+  Object.entries(teamNameMap).map(([k, v]) => [k.toLowerCase(), v])
+);
+
+// Sort rounds numerically so "Round 10" comes after "Round 9", not after "Round 1"
+const naturalSortRounds = (a: string, b: string): number => {
+  const numA = parseInt(a.match(/(\d+)$/)?.[1] ?? '', 10);
+  const numB = parseInt(b.match(/(\d+)$/)?.[1] ?? '', 10);
+  if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+  return a.localeCompare(b);
+};
+
+// Apply both normalization and specific mappings
+const normalizeAndMapTeamName = (name: string): string => {
+  if (!name) return '';
+  const trimmed = name.trim();
+  // Case-insensitive lookup in teamNameMap
+  const mapped = teamNameMapLower[trimmed.toLowerCase()] || trimmed;
+  // Then apply general normalization (strips Senior Men, !, and Roman numeral I)
+  return normalizeTeamName(mapped);
+};
+
+// Helper function to calculate stat value based on mode
+const getStatValueByMode = (
+  team: any,
+  mode: 'Per Game' | 'Totals' | 'Per 100 Possessions',
+  totalField: string,
+  avgField?: string
+): number => {
+  switch (mode) {
+    case 'Per Game':
+      return avgField ? (parseFloat(team[avgField]) || 0) : (team.gamesPlayed > 0 ? team[totalField] / team.gamesPlayed : 0);
+    case 'Totals':
+      return team[totalField] || 0;
+    case 'Per 100 Possessions':
+      // Normalize to per-100-possession basis, rounded to 1 decimal
+      const per100Value = team.totalPossessions > 0 ? (team[totalField] / team.totalPossessions) * 100 : 0;
+      return Math.round(per100Value * 10) / 10;
+    default:
+      return team[totalField] || 0;
+  }
+};
+
+// Team stats column configuration by category
+type TeamStatColumn = {
+  key: string;
+  label: string;
+  sortable: boolean;
+  getValue: (team: any, mode: 'Per Game' | 'Totals' | 'Per 100 Possessions') => number | string;
+  format?: (value: number) => string;
+};
+
+const TEAM_STAT_COLUMNS: Record<string, TeamStatColumn[]> = {
+  Traditional: [
+    {
+      key: 'PTS',
+      label: 'PTS',
+      sortable: true,
+      getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPoints', 'ppg'),
+    },
+    {
+      key: 'FGM',
+      label: 'FGM',
+      sortable: true,
+      getValue: (team, mode) => getStatValueByMode(team, mode, 'totalFGM', 'avgFGM'),
+    },
+    {
+      key: 'FGA',
+      label: 'FGA',
+      sortable: true,
+      getValue: (team, mode) => getStatValueByMode(team, mode, 'totalFGA', 'avgFGA'),
+    },
+    {
+      key: 'FG%',
+      label: 'FG%',
+      sortable: true,
+      getValue: (team) => parseFloat(team.fgPercentage) || 0,
+      format: (value) => value.toFixed(1),
+    },
+    {
+      key: '3PM',
+      label: '3PM',
+      sortable: true,
+      getValue: (team, mode) => getStatValueByMode(team, mode, 'total3PM', 'avg3PM'),
+    },
+    {
+      key: '3PA',
+      label: '3PA',
+      sortable: true,
+      getValue: (team, mode) => getStatValueByMode(team, mode, 'total3PA', 'avg3PA'),
+    },
+    {
+      key: '3P%',
+      label: '3P%',
+      sortable: true,
+      getValue: (team) => parseFloat(team.threePtPercentage) || 0,
+      format: (value) => value.toFixed(1),
+    },
+    {
+      key: 'REB',
+      label: 'REB',
+      sortable: true,
+      getValue: (team, mode) => getStatValueByMode(team, mode, 'totalRebounds', 'rpg'),
+    },
+    {
+      key: 'AST',
+      label: 'AST',
+      sortable: true,
+      getValue: (team, mode) => getStatValueByMode(team, mode, 'totalAssists', 'apg'),
+    },
+    {
+      key: 'STL',
+      label: 'STL',
+      sortable: true,
+      getValue: (team, mode) => getStatValueByMode(team, mode, 'totalSteals', 'spg'),
+    },
+    {
+      key: 'BLK',
+      label: 'BLK',
+      sortable: true,
+      getValue: (team, mode) => getStatValueByMode(team, mode, 'totalBlocks', 'bpg'),
+    },
+    {
+      key: 'TO',
+      label: 'TO',
+      sortable: true,
+      getValue: (team, mode) => getStatValueByMode(team, mode, 'totalTurnovers', 'tpg'),
+    },
+    {
+      key: 'PF',
+      label: 'PF',
+      sortable: true,
+      getValue: (team, mode) => getStatValueByMode(team, mode, 'totalFouls', 'avgPF'),
+    },
+    {
+      key: '+/-',
+      label: '+/-',
+      sortable: true,
+      getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPlusMinus', 'avgPlusMinus'),
+    },
+  ],
+  Advanced: [
+    { key: 'OFFRTG', label: 'OFFRTG', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOffRating', 'avgOffRating') },
+    { key: 'DEFRTG', label: 'DEFRTG', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalDefRating', 'avgDefRating') },
+    { key: 'NETRTG', label: 'NETRTG', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalNetRating', 'avgNetRating') },
+    { key: 'PACE', label: 'PACE', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPace', 'avgPace') },
+    { key: 'AST%', label: 'AST%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalAstPercent', 'avgAstPercent') },
+    { key: 'AST/TO', label: 'AST/TO', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalAstToRatio', 'avgAstToRatio') },
+    { key: 'OREB%', label: 'OREB%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOrebPercent', 'avgOrebPercent') },
+    { key: 'DREB%', label: 'DREB%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalDrebPercent', 'avgDrebPercent') },
+    { key: 'REB%', label: 'REB%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalRebPercent', 'avgRebPercent') },
+    { key: 'TOV%', label: 'TOV%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalTovPercent', 'avgTovPercent') },
+    { key: 'EFG%', label: 'EFG%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalEfgPercent', 'avgEfgPercent') },
+    { key: 'TS%', label: 'TS%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalTsPercent', 'avgTsPercent') },
+    { key: 'FTA RATE', label: 'FTA RATE', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalFtRate', 'avgFtRate') },
+    { key: '3P RATE', label: '3P RATE', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalThreePointRate', 'avgThreePointRate') },
+    { key: 'PIE', label: 'PIE', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPie', 'avgPie') },
+  ],
+  'Four Factors': [
+    { key: 'EFG%', label: 'EFG%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalEfgPercent', 'avgEfgPercent') },
+    { key: 'FTA RATE', label: 'FTA RATE', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalFtRate', 'avgFtRate') },
+    { key: 'TOV%', label: 'TOV%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalTovPercent', 'avgTovPercent') },
+    { key: 'OREB%', label: 'OREB%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOrebPercent', 'avgOrebPercent') },
+    { key: 'OPP EFG%', label: 'OPP EFG%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppEfgPercent', 'avgOppEfgPercent') },
+    { key: 'OPP FTA RATE', label: 'OPP FTA RATE', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppFtRate', 'avgOppFtRate') },
+    { key: 'OPP TOV%', label: 'OPP TOV%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppTovPercent', 'avgOppTovPercent') },
+    { key: 'OPP OREB%', label: 'OPP OREB%', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppOrebPercent', 'avgOppOrebPercent') },
+  ],
+  Scoring: [
+    { key: '%FGA 2PT', label: '%FGA 2PT', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalFgaPercent2pt', 'avgFgaPercent2pt') },
+    { key: '%FGA 3PT', label: '%FGA 3PT', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalFgaPercent3pt', 'avgFgaPercent3pt') },
+    { key: '%FGA MR', label: '%FGA MR', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalFgaPercentMidrange', 'avgFgaPercentMidrange'), format: (value) => value === 0 ? '' : value.toFixed(1) },
+    { key: '%PTS 2PT', label: '%PTS 2PT', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPtsPercent2pt', 'avgPtsPercent2pt') },
+    { key: '%PTS 3PT', label: '%PTS 3PT', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPtsPercent3pt', 'avgPtsPercent3pt') },
+    { key: '%PTS MR', label: '%PTS MR', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPtsPercentMidrange', 'avgPtsPercentMidrange'), format: (value) => value === 0 ? '' : value.toFixed(1) },
+    { key: '%PTS PITP', label: '%PTS PITP', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPtsPercentPitp', 'avgPtsPercentPitp') },
+    { key: '%PTS FBPS', label: '%PTS FBPS', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPtsPercentFastbreak', 'avgPtsPercentFastbreak') },
+    { key: '%PTS 2ND CH', label: '%PTS 2ND CH', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPtsPercentSecondChance', 'avgPtsPercentSecondChance') },
+    { key: '%PTS OFFTO', label: '%PTS OFFTO', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPtsPercentOffTurnovers', 'avgPtsPercentOffTurnovers') },
+    { key: '%PTS FT', label: '%PTS FT', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPtsPercentFt', 'avgPtsPercentFt') },
+    { key: 'PITP', label: 'PITP', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPITP', 'avgPITP') },
+    { key: 'FB PTS', label: 'FB PTS', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalFBPTS', 'avgFBPTS') },
+    { key: '2ND CH', label: '2ND CH', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'total2ndCH', 'avg2ndCH') },
+    { key: 'PTS OFF TO', label: 'PTS OFF TO', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalPtsFromTurnovers', 'avgPtsFromTurnovers') },
+    { key: 'FTM', label: 'FTM', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalFTM', 'avgFTM') },
+    { key: '3PM', label: '3PM', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'total3PM', 'avg3PM') },
+    { key: '2PM', label: '2PM', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'total2PM', 'avg2PM') },
+  ],
+  Misc: [
+    { key: 'OPP PTS', label: 'OPP PTS', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppPoints', 'avgOppPoints') },
+    { key: 'OPP TO', label: 'OPP TO', sortable: true, getValue: (team, mode) => getStatValueByMode(team, mode, 'totalOppTurnovers', 'avgOppTurnovers') },
+  ],
+};
+
+// Dynamic legends for each category
+const TEAM_STAT_LEGENDS: Record<string, string[]> = {
+  Traditional: [
+    'GP = Games Played',
+    'PTS = Points',
+    'FGM = Field Goals Made',
+    'FGA = Field Goals Attempted',
+    'FG% = Field Goal Percentage',
+    '3PM = 3-Pointers Made',
+    '3PA = 3-Pointers Attempted',
+    '3P% = 3-Point Percentage',
+    'REB = Rebounds',
+    'AST = Assists',
+    'STL = Steals',
+    'BLK = Blocks',
+    'TO = Turnovers',
+    'PF = Personal Fouls',
+    '+/- = Plus/Minus'
+  ],
+  Advanced: [
+    'OFFRTG = Offensive Rating',
+    'DEFRTG = Defensive Rating',
+    'NETRTG = Net Rating',
+    'PACE = Pace of Play',
+    'AST% = Assist Percentage',
+    'AST/TO = Assist to Turnover Ratio',
+    'OREB% = Offensive Rebound Percentage',
+    'DREB% = Defensive Rebound Percentage',
+    'REB% = Total Rebound Percentage',
+    'TOV% = Turnover Percentage',
+    'EFG% = Effective Field Goal Percentage',
+    'TS% = True Shooting Percentage',
+    'FTA RATE = Free Throw Attempt Rate',
+    '3P RATE = Three-Point Attempt Rate',
+    'PIE = Player Impact Estimate'
+  ],
+  'Four Factors': [
+    'EFG% = Effective Field Goal Percentage',
+    'FTA RATE = Free Throw Attempt Rate',
+    'TOV% = Turnover Percentage',
+    'OREB% = Offensive Rebound Percentage',
+    'OPP EFG% = Opponent Effective FG%',
+    'OPP FTA RATE = Opponent FT Attempt Rate',
+    'OPP TOV% = Opponent Turnover %',
+    'OPP OREB% = Opponent Offensive Rebound %'
+  ],
+  Scoring: [
+    '%FGA 2PT = % of FGA from 2-Point Range',
+    '%FGA 3PT = % of FGA from 3-Point Range',
+    '%FGA MR = % of FGA from Mid-Range',
+    '%PTS 2PT = % of Points from 2-Pointers',
+    '%PTS 3PT = % of Points from 3-Pointers',
+    '%PTS MR = % of Points from Mid-Range',
+    '%PTS PITP = % of Points in the Paint',
+    '%PTS FBPS = % of Points from Fastbreaks',
+    '%PTS 2ND CH = % of Points from 2nd Chance',
+    '%PTS OFFTO = % of Points off Turnovers',
+    '%PTS FT = % of Points from Free Throws',
+    'PITP = Points In The Paint',
+    'FB PTS = Fastbreak Points',
+    '2ND CH = Second Chance Points',
+    'PTS OFF TO = Points from Turnovers',
+    'FTM = Free Throws Made',
+    '3PM = 3-Pointers Made',
+    '2PM = 2-Pointers Made'
+  ],
+  Misc: [
+    'OPP PTS = Opponent Points',
+    'OPP TO = Opponent Turnovers'
+  ]
+};
+
+// Helper function to apply player stats mode transformations
+const applyPlayerMode = (
+  statKey: string,
+  value: number,
+  gamesPlayed: number,
+  totalMinutes: number,
+  playerMode: 'Total' | 'Per Game' | 'Per 40'
+): number => {
+  // These stats are already rates/percentages - return as-is across all modes
+  const rateStats = [
+    'efg_percent', 'ts_percent', 'three_point_rate',
+    'ast_percent', 'ast_to_ratio',
+    'oreb_percent', 'dreb_percent', 'reb_percent',
+    'tov_percent', 'usage_percent', 'pie',
+    'off_rating', 'def_rating', 'net_rating',
+    'pts_percent_2pt', 'pts_percent_3pt', 'pts_percent_ft',
+    'pts_percent_midrange', 'pts_percent_pitp', 'pts_percent_fastbreak',
+    'pts_percent_second_chance', 'pts_percent_off_turnovers'
+  ];
+
+  // For rate stats, return the value unchanged across all modes
+  if (rateStats.includes(statKey)) {
+    return value;
+  }
+
+  // For minutes, handle per mode
+  if (statKey === 'sminutes') {
+    if (playerMode === 'Total') return value;
+    return gamesPlayed > 0 ? value / gamesPlayed : 0;
+  }
+
+  // For counting stats
+  if (playerMode === 'Total') return value;
+
+  if (playerMode === 'Per Game') {
+    return gamesPlayed > 0 ? value / gamesPlayed : 0;
+  }
+
+  if (playerMode === 'Per 40') {
+    // Scale counting stats to per-40-minute basis
+    return totalMinutes > 0 ? (value / totalMinutes) * 40 : 0;
+  }
+
+  return value;
+};
+
+const computeEfficiencyFromRawStats = (rawStats: any[], games: number, totalMinutes: number, mode: 'Total' | 'Per Game' | 'Per 40'): number => {
+  const totals = rawStats.reduce((acc, stat) => ({
+    pts: acc.pts + (stat.spoints || 0),
+    reb: acc.reb + (stat.sreboundstotal || 0),
+    ast: acc.ast + (stat.sassists || 0),
+    stl: acc.stl + (stat.ssteals || 0),
+    blk: acc.blk + (stat.sblocks || 0),
+    fga: acc.fga + (stat.sfieldgoalsattempted || 0),
+    fgm: acc.fgm + (stat.sfieldgoalsmade || 0),
+    fta: acc.fta + (stat.sfreethrowsattempted || 0),
+    ftm: acc.ftm + (stat.sfreethrowsmade || 0),
+    to: acc.to + (stat.sturnovers || 0),
+  }), { pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, fga: 0, fgm: 0, fta: 0, ftm: 0, to: 0 });
+
+  const totalEff = (totals.pts + totals.reb + totals.ast + totals.stl + totals.blk)
+    - (totals.fga - totals.fgm) - (totals.fta - totals.ftm) - totals.to;
+
+  if (mode === 'Total') return totalEff;
+  if (mode === 'Per 40') return totalMinutes > 0 ? (totalEff / totalMinutes) * 40 : 0;
+  return games > 0 ? totalEff / games : 0;
+};
+
+// Player stats column configuration by category
+// Note: Advanced, Scoring, and Misc categories reference fields that are calculated by the backend
+// (advanced_player_stats.py). Traditional stats use raw Supabase fields that are always present.
+type PlayerStatColumn = {
+  key: string;
+  label: string;
+};
+
+const PLAYER_STAT_COLUMNS: Record<string, PlayerStatColumn[]> = {
+  Traditional: [
+    { key: "spoints", label: "PTS" },
+    { key: "sminutes", label: "MIN" },
+    { key: "sfieldgoalsmade", label: "FGM" },
+    { key: "sfieldgoalsattempted", label: "FGA" },
+    { key: "sthreepointersmade", label: "3PM" },
+    { key: "sthreepointersattempted", label: "3PA" },
+    { key: "sfreethrowsmade", label: "FTM" },
+    { key: "sfreethrowsattempted", label: "FTA" },
+    { key: "sreboundstotal", label: "REB" },
+    { key: "sassists", label: "AST" },
+    { key: "sturnovers", label: "TO" },
+    { key: "ssteals", label: "STL" },
+    { key: "sblocks", label: "BLK" },
+    { key: "efficiency", label: "EFF" },
+  ],
+  Advanced: [
+    { key: "efg_percent", label: "EFG%" },
+    { key: "ts_percent", label: "TS%" },
+    { key: "usage_percent", label: "USG%" },
+    { key: "ast_percent", label: "AST%" },
+    { key: "ast_to_ratio", label: "AST/TO" },
+    { key: "oreb_percent", label: "OREB%" },
+    { key: "dreb_percent", label: "DREB%" },
+    { key: "reb_percent", label: "REB%" },
+    { key: "tov_percent", label: "TOV%" },
+    { key: "three_point_rate", label: "3P RATE" },
+    { key: "player_possessions", label: "POSS" },
+    { key: "off_rating", label: "OFFRTG" },
+    { key: "def_rating", label: "DEFRTG" },
+    { key: "net_rating", label: "NETRTG" },
+    { key: "pie", label: "PIE" },
+  ],
+  Scoring: [
+    { key: "pts_percent_2pt", label: "%PTS 2PT" },
+    { key: "pts_percent_3pt", label: "%PTS 3PT" },
+    { key: "pts_percent_ft", label: "%PTS FT" },
+    { key: "pts_percent_midrange", label: "%PTS MR" },
+    { key: "pts_percent_pitp", label: "%PTS PITP" },
+    { key: "pts_percent_fastbreak", label: "%PTS FBPS" },
+    { key: "pts_percent_second_chance", label: "%PTS 2ND CH" },
+    { key: "pts_percent_off_turnovers", label: "%PTS OFFTO" }
+  ],
+  Misc: [
+    { key: "splusminuspoints", label: "+/-" },
+    { key: "sfoulspersonal", label: "PF" },
+    { key: "sblocksreceived", label: "BLK AGAINST" }
+  ]
+};
+
+// Dynamic legends for each player stat category
+const PLAYER_STAT_LEGENDS: Record<string, string[]> = {
+  Traditional: [
+    'PTS = Points',
+    'MIN = Minutes',
+    'FGM = Field Goals Made',
+    'FGA = Field Goals Attempted',
+    '3PM = Three-Pointers Made',
+    '3PA = Three-Pointers Attempted',
+    'FTM = Free Throws Made',
+    'FTA = Free Throws Attempted',
+    'REB = Total Rebounds',
+    'AST = Assists',
+    'TO = Turnovers',
+    'STL = Steals',
+    'BLK = Blocks',
+    'EFF = Efficiency (PTS + REB + AST + STL + BLK - Missed FG - Missed FT - TO)'
+  ],
+  Advanced: [
+    'EFG% = Effective Field Goal Percentage',
+    'TS% = True Shooting Percentage',
+    'USG% = Usage Percentage',
+    'AST% = Assist Percentage',
+    'AST/TO = Assist to Turnover Ratio',
+    'OREB% = Offensive Rebound Percentage',
+    'DREB% = Defensive Rebound Percentage',
+    'REB% = Total Rebound Percentage',
+    'TOV% = Turnover Percentage',
+    '3P RATE = Three-Point Attempt Rate',
+    'POSS = Player Possessions',
+    'OFFRTG = Offensive Rating',
+    'DEFRTG = Defensive Rating',
+    'NETRTG = Net Rating',
+    'PIE = Player Impact Estimate'
+  ],
+  Scoring: [
+    '%PTS 2PT = % of Points from 2-Pointers',
+    '%PTS 3PT = % of Points from 3-Pointers',
+    '%PTS FT = % of Points from Free Throws',
+    '%PTS MR = % of Points from Mid-Range',
+    '%PTS PITP = % of Points in the Paint',
+    '%PTS FBPS = % of Points from Fastbreaks',
+    '%PTS 2ND CH = % of Points from 2nd Chance',
+    '%PTS OFFTO = % of Points off Turnovers'
+  ],
+  Misc: [
+    '+/- = Plus/Minus',
+    'PF = Personal Fouls',
+    'BLK AGAINST = Blocks Received'
+  ]
+};
+
+export default function LeaguePage() {
+  const { slug, playerSlug: urlPlayerSlug, gameKey: urlGameKey } = useParams();
+  const db = useMemo(() => getSupabaseForLeague(slug), [slug]);
+    // SEO formatting helper for title
+    const formatTitle = (text?: string) =>
+      text
+        ? text
+            .split("-")
+            .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(" ")
+        : "";
+
     const [location, navigate] = useLocation();
+    const { query: search, setQuery: setSearch, suggestions, handleSelect: handleSelectSearch, handleSubmit: handleSubmitSearch } = useGlobalSearch();
     const [league, setLeague] = useState(null);
     const [topScorer, setTopScorer] = useState<PlayerStat | null>(null);
     const [topRebounder, setTopRebounder] = useState<PlayerStat | null>(null);
     const [topAssists, setTopAssists] = useState<PlayerStat | null>(null);
     const [standings, setStandings] = useState([]);
-    const [schedule, setSchedule] = useState([]);
-    const [suggestions, setSuggestions] = useState<any[]>([]);
+    const [teamLogoMap, setTeamLogoMap] = useState<Map<string, string>>(new Map());
+    const [schedule, setSchedule] = useState<GameSchedule[]>([]);
     const [gameSummaries, setGameSummaries] = useState<any[]>([]);
     const [playerStats, setPlayerStats] = useState<any[]>([]);
     const [aiSummary, setAiSummary] = useState<string | null>(null);
-    const [playerSearch, setPlayerSearch] = useState("");
-    const [expandedPlayer, setExpandedPlayer] = useState<number | null>(null);
     const [prompt, setPrompt] = useState("");
-    const [sortField, setSortField] = useState("points");
-    const [sortOrder, setSortOrder] = useState("desc");
     const [sortBy, setSortBy] = useState("points");
-    
+    const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
+    const [isGameModalOpen, setIsGameModalOpen] = useState(false);
+    const [selectedPreviewGame, setSelectedPreviewGame] = useState<GameSchedule | null>(null);
+    const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [instagramUrls, setInstagramUrls] = useState<string[]>([]);
+  const [newInstagramUrl, setNewInstagramUrl] = useState("");
+  const [isEditingInstagram, setIsEditingInstagram] = useState(false);
+  const [updatingInstagram, setUpdatingInstagram] = useState(false);
+  const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [isEditingYoutube, setIsEditingYoutube] = useState(false);
+  const [updatingYoutube, setUpdatingYoutube] = useState(false);
+  const [activeSection, setActiveSection] = useState(urlPlayerSlug ? 'player' : (urlGameKey ? 'game' : 'overview'));
+  const [selectedPlayerSlug, setSelectedPlayerSlug] = useState<string | null>(urlPlayerSlug || null);
+  const [selectedTeamName, setSelectedTeamName] = useState<string | null>(null);
+  const [previousSection, setPreviousSection] = useState<string>('overview');
+  const [selectedPlayerLinkedIds, setSelectedPlayerLinkedIds] = useState<string[]>([]);
+  const [selectedGameKey, setSelectedGameKey] = useState<string | null>(urlGameKey ? decodeURIComponent(urlGameKey) : null);
+  const [inlineGameInfo, setInlineGameInfo] = useState<InlineGameInfo | null>(null);
 
+  const handleSelectPlayer = useCallback((playerSlug: string, fromSection: string, linkedIds?: string[]) => {
+    setPreviousSection(fromSection);
+    setSelectedPlayerSlug(playerSlug);
+    setSelectedPlayerLinkedIds(linkedIds || []);
+    setActiveSection('player');
+    navigate(`/competition/${slug}/player/${playerSlug}`);
+  }, [slug, navigate]);
+
+  const handlePlayerBack = useCallback(() => {
+    setSelectedPlayerSlug(null);
+    setActiveSection(previousSection);
+    navigate(`/competition/${slug}`);
+  }, [slug, navigate, previousSection]);
+
+  const handleSelectGame = useCallback((gameKey: string, fromSection: string) => {
+    setPreviousSection(fromSection);
+    setSelectedGameKey(gameKey);
+    setInlineGameInfo(null);
+    setActiveSection('game');
+    navigate(`/competition/${slug}/game/${encodeURIComponent(gameKey)}`);
+  }, [slug, navigate]);
+
+  const handleGameBack = useCallback(() => {
+    setSelectedGameKey(null);
+    setInlineGameInfo(null);
+    setActiveSection(previousSection);
+    navigate(`/competition/${slug}`);
+  }, [slug, navigate, previousSection]);
+
+  const [comparisonMode, setComparisonMode] = useState<'player' | 'team'>('player'); // Toggle between player and team comparison
+  const [allPlayerAverages, setAllPlayerAverages] = useState<any[]>([]);
+  const [filteredPlayerAverages, setFilteredPlayerAverages] = useState<any[]>([]);
+  const [statsSearch, setStatsSearch] = useState("");
+  const [displayedPlayerCount, setDisplayedPlayerCount] = useState(20); // For pagination
+  const [isLoadingStats, setIsLoadingStats] = useState(false);
+  const [isLoadingMoreStats, setIsLoadingMoreStats] = useState(false);
+  const isFetchingStatsRef = useRef(false);
+  const [isLoadingStandings, setIsLoadingStandings] = useState(false);
+  const [isLoadingLeaders, setIsLoadingLeaders] = useState(false);
+  const [isLoadingSchedule, setIsLoadingSchedule] = useState(false);
+  const [teamStatsData, setTeamStatsData] = useState<any[]>([]);
+  const [isLoadingTeamStats, setIsLoadingTeamStats] = useState(false);
+  const [teamStatsCategory, setTeamStatsCategory] = useState<'Traditional' | 'Advanced' | 'Four Factors' | 'Scoring' | 'Misc'>('Traditional'); // Category dropdown
+  const [teamStatsMode, setTeamStatsMode] = useState<'Per Game' | 'Totals' | 'Per 100 Possessions'>('Per Game'); // Mode dropdown
+  const [leagueLeadersView, setLeagueLeadersView] = useState<'averages' | 'totals'>('averages'); // Toggle for league leaders
+  const [leadersSubject, setLeadersSubject] = useState<'player' | 'team'>('player'); // Player vs Team leaders
+  const [leadersCategory, setLeadersCategory] = useState<'Traditional' | 'Advanced'>('Traditional'); // Traditional vs Advanced leaders
+  const [playerStatsView, setPlayerStatsView] = useState<'Total' | 'Per Game' | 'Per 40'>('Per Game'); // Mode selector for player statistics table
+  const [playerStatsCategory, setPlayerStatsCategory] = useState<'Traditional' | 'Advanced' | 'Scoring' | 'Misc'>('Traditional'); // Category dropdown for player stats
+  const [standingsView, setStandingsView] = useState<'poolA' | 'poolB' | 'full'>('full'); // Toggle for standings view
+  const [poolAStandings, setPoolAStandings] = useState<any[]>([]);
+  const [poolBStandings, setPoolBStandings] = useState<any[]>([]);
+  const [fullLeagueStandings, setFullLeagueStandings] = useState<any[]>([]);
+  const [previousRankings, setPreviousRankings] = useState<Record<string, number>>({});
+  const [hasPools, setHasPools] = useState(false); // Track if league has pools
+  const [viewMode, setViewMode] = useState<'standings' | 'bracket'>('standings'); // Toggle between standings and bracket
+  const [scheduleView, setScheduleView] = useState<'upcoming' | 'results'>('upcoming');
+  const [filterAgeGroup, setFilterAgeGroup] = useState<string>('all');
+  const [filterRound, setFilterRound] = useState<string>('all');
+  const [playerCategoryDropdownOpen, setPlayerCategoryDropdownOpen] = useState(false);
+  const [teamCategoryDropdownOpen, setTeamCategoryDropdownOpen] = useState(false);
+  const [statsSortColumn, setStatsSortColumn] = useState<string>('PTS'); // Column to sort by in Player Statistics
+  const [statsSortDirection, setStatsSortDirection] = useState<'asc' | 'desc'>('desc'); // Sort direction
+  const [teamStatsSortColumn, setTeamStatsSortColumn] = useState<string>('PTS'); // Column to sort by in Team Statistics
+  const [teamStatsSortDirection, setTeamStatsSortDirection] = useState<'asc' | 'desc'>('desc'); // Sort direction for team stats
+  const [childCompetitions, setChildCompetitions] = useState<Pick<League, 'league_id' | 'name' | 'slug' | 'logo_url'> & { age_group?: string | null; stop?: number | null; gender?: string | null }[]>([]);
+  const [parentLeague, setParentLeague] = useState<Pick<League, 'league_id' | 'name' | 'slug' | 'logo_url'> | null>(null); // Parent league for breadcrumb
+  const [isDividerVisible, setIsDividerVisible] = useState(false); // Track if orange divider is in view
+  const dividerRef = useRef<HTMLDivElement>(null); // Ref for the orange divider
+  const [selectedAgeGroup, setSelectedAgeGroup] = useState<string>('all');
+  const [selectedStop, setSelectedStop] = useState<string>('all');
+  const [parentStandingsGroups, setParentStandingsGroups] = useState<{ageGroup: string, standings: any[], poolAStandings: any[], poolBStandings: any[], hasPools: boolean}[]>([]);
+  const [siblingSeasons, setSiblingSeasons] = useState<{ name: string; slug: string; season: string | null; division?: string | null }[]>([]);
+
+  const getTeamLogoUrl = (teamName: string): string | undefined => {
+    if (!teamName) return undefined;
+    const normalized = normalizeAndMapTeamName(teamName);
+    return teamLogoMap.get(normalized);
+  };
+
+  const { colors: leagueBrandColors, brandingData: publicBrandingData } = usePublicLeagueBrandingBySlug({
+    slug,
+    fallbackLeague: league ? {
+      ...league,
+      brand_primary_colour: (league as any).brand_primary_colour ?? null,
+    } : null,
+    enabled: !!slug,
+  });
+
+  const displayBannerUrl = league?.banner_url || publicBrandingData?.banner_url;
+  const displayLogoUrl = league?.logo_url || publicBrandingData?.logo_url;
+  const displayLeagueName = league?.name || publicBrandingData?.name;
+
+  const brandColor = leagueBrandColors?.primary || 'rgb(100, 100, 100)';
+  const brandColorHex = leagueBrandColors
+    ? `#${[
+        leagueBrandColors.primaryRgb.r,
+        leagueBrandColors.primaryRgb.g,
+        leagueBrandColors.primaryRgb.b,
+      ].map((n) => Math.max(0, Math.min(255, n)).toString(16).padStart(2, '0')).join('')}`
+    : '#646464';
+  const brandColorHover = leagueBrandColors 
+    ? `rgb(${Math.max(0, leagueBrandColors.primaryRgb.r - 20)}, ${Math.max(0, leagueBrandColors.primaryRgb.g - 20)}, ${Math.max(0, leagueBrandColors.primaryRgb.b - 20)})`
+    : 'rgb(70, 70, 70)';
+
+  const [isDarkMode, setIsDarkMode] = useState(() =>
+    typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
+  );
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDarkMode(document.documentElement.classList.contains('dark'));
+    });
+    observer.observe(document.documentElement, { attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+
+  const _brandRgb = leagueBrandColors?.primaryRgb;
+  const _isColorDark = _brandRgb
+    ? (_brandRgb.r * 0.299 + _brandRgb.g * 0.587 + _brandRgb.b * 0.114) < 140
+    : true;
+  const _DARK_MODE_FALLBACK = 'rgb(255, 255, 255)';
+  const _DARK_MODE_FALLBACK_HOVER = 'rgb(203, 213, 225)';
+  const _lightenedBrand = _brandRgb
+    ? `rgb(${Math.round(_brandRgb.r + (255 - _brandRgb.r) * 0.55)}, ${Math.round(_brandRgb.g + (255 - _brandRgb.g) * 0.55)}, ${Math.round(_brandRgb.b + (255 - _brandRgb.b) * 0.55)})`
+    : _DARK_MODE_FALLBACK;
+  const _lightenedBrandHover = _brandRgb
+    ? `rgb(${Math.round(_brandRgb.r + (255 - _brandRgb.r) * 0.4)}, ${Math.round(_brandRgb.g + (255 - _brandRgb.g) * 0.4)}, ${Math.round(_brandRgb.b + (255 - _brandRgb.b) * 0.4)})`
+    : _DARK_MODE_FALLBACK_HOVER;
+
+  const playerLinkColor = isDarkMode
+    ? (_isColorDark ? _DARK_MODE_FALLBACK : _lightenedBrand)
+    : brandColor;
+  const playerLinkColorHover = isDarkMode
+    ? (_isColorDark ? _DARK_MODE_FALLBACK_HOVER : _lightenedBrandHover)
+    : brandColorHover;
+  const brandBorderLight = leagueBrandColors 
+    ? `rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.2)` 
+    : 'rgba(100, 100, 100, 0.2)';
+  const brandBg10 = leagueBrandColors
+    ? `rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.1)`
+    : 'rgba(100, 100, 100, 0.1)';
+  const brandBg50 = leagueBrandColors
+    ? `rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.05)`
+    : 'rgba(100, 100, 100, 0.05)';
+
+  const isParentLeague = childCompetitions.length > 0;
+
+  // Preferred sort order for gender labels so Men's always precedes Women's
+  const GENDER_ORDER = ["Men's", "Women's", "Men", "Women", "Male", "Female", "Mixed"];
+
+  // Derive the display label for a child competition:
+  // 1. Use gender column if set, 2. fall back to age_group, 3. strip parent name from competition name
+  const getChildLabel = (c: typeof childCompetitions[0]) =>
+    (c as any).gender ||
+    c.age_group ||
+    (league?.name ? c.name.replace(league.name, '').trim() || c.name : c.name);
+
+  const childLeagueMap = useMemo(() => {
+    const map = new Map<string, string>();
+    childCompetitions.forEach(c => {
+      map.set(c.league_id, getChildLabel(c));
+    });
+    return map;
+  }, [childCompetitions, league?.name]);
+
+  const ageGroupToLeagueIds = useMemo(() => {
+    const map = new Map<string, string[]>();
+    childCompetitions.forEach(c => {
+      const ag = getChildLabel(c);
+      if (!map.has(ag)) map.set(ag, []);
+      map.get(ag)!.push(c.league_id);
+    });
+    return map;
+  }, [childCompetitions, league?.name]);
+
+  // True when every child competition has a gender value set
+  const isGenderLeague = useMemo(
+    () => childCompetitions.length > 0 && childCompetitions.every(c => !!(c as any).gender),
+    [childCompetitions],
+  );
+
+  const ageGroupLabels = useMemo(() => {
+    const labels = Array.from(ageGroupToLeagueIds.keys());
+    return labels.sort((a, b) => {
+      // Gender-aware sort: use GENDER_ORDER when all children have gender set
+      if (isGenderLeague) {
+        const ia = GENDER_ORDER.indexOf(a);
+        const ib = GENDER_ORDER.indexOf(b);
+        if (ia !== -1 && ib !== -1) return ia - ib;
+        if (ia !== -1) return -1;
+        if (ib !== -1) return 1;
+        return a.localeCompare(b);
+      }
+      // Default: numeric sort (for age groups like U12, U14) then alphabetical
+      const numA = parseInt(a.replace(/\D/g, ''));
+      const numB = parseInt(b.replace(/\D/g, ''));
+      if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+      return a.localeCompare(b);
+    });
+  }, [ageGroupToLeagueIds, isGenderLeague]);
+
+  const visibleAgeGroupLabels = useMemo(() => {
+    const stopFiltered = selectedStop !== 'all'
+      ? ageGroupLabels.filter(label => {
+          const ids = ageGroupToLeagueIds.get(label) || [];
+          return ids.some(id => {
+            const comp = childCompetitions.find(c => c.league_id === id);
+            return comp && String(comp.stop) === selectedStop;
+          });
+        })
+      : ageGroupLabels;
+
+    if (filterRound === 'all') return stopFiltered;
+
+    const labelsWithRound = new Set<string>();
+    // schedule items store age_group (the child competition label) + round directly
+    schedule.forEach(g => {
+      if (g.round === filterRound && g.age_group) {
+        labelsWithRound.add(g.age_group);
+      }
+    });
+    // also check rawStats (loaded lazily) via league_id -> label map
+    allPlayerAverages.forEach(p => {
+      (p.rawStats || []).forEach((s: any) => {
+        if (String(s.stop) === filterRound && s.league_id) {
+          const label = childLeagueMap.get(s.league_id);
+          if (label) labelsWithRound.add(label);
+        }
+      });
+    });
+    // if neither source has data yet, show all pills rather than hiding everything
+    if (labelsWithRound.size === 0) return stopFiltered;
+    return stopFiltered.filter(label => labelsWithRound.has(label));
+  }, [ageGroupLabels, filterRound, selectedStop, schedule, allPlayerAverages, childLeagueMap, ageGroupToLeagueIds, childCompetitions]);
+
+  useEffect(() => {
+    if (filterRound === 'all') return;
+    if (selectedAgeGroup !== 'all' && !visibleAgeGroupLabels.includes(selectedAgeGroup)) {
+      setSelectedAgeGroup('all');
+      setFilterAgeGroup('all');
+    }
+  }, [filterRound, visibleAgeGroupLabels]);
+
+  const availableStopsForAgeGroup = useMemo(() => {
+    const leagueIdsForAg = selectedAgeGroup === 'all'
+      ? childCompetitions
+      : childCompetitions.filter(c => getChildLabel(c) === selectedAgeGroup);
+    const stops = new Set<number>();
+    leagueIdsForAg.forEach(c => { if (c.stop != null) stops.add(c.stop); });
+    return Array.from(stops).sort((a, b) => a - b);
+  }, [selectedAgeGroup, childCompetitions, league?.name]);
+
+  const selectedAgeGroupLeagueIds = useMemo(() => {
+    let candidates = selectedAgeGroup === 'all'
+      ? childCompetitions
+      : childCompetitions.filter(c => getChildLabel(c) === selectedAgeGroup);
+    if (selectedStop !== 'all') {
+      candidates = candidates.filter(c => c.stop != null && String(c.stop) === selectedStop);
+    }
+    return candidates.map(c => c.league_id);
+  }, [selectedAgeGroup, selectedStop, childCompetitions, league?.name]);
+
+  useEffect(() => {
+    setSelectedStop('all');
+  }, [selectedAgeGroup]);
+
+  useEffect(() => {
+    if (isParentLeague && ageGroupLabels.length > 0 && selectedAgeGroup === 'all') {
+      const first = ageGroupLabels[0];
+      setSelectedAgeGroup(first);
+      setFilterAgeGroup(first);
+    }
+  }, [isParentLeague, ageGroupLabels]);
+
+  const [brandFadedIn, setBrandFadedIn] = useState(false);
+  useEffect(() => {
+    if (leagueBrandColors) {
+      const raf = requestAnimationFrame(() => {
+        setBrandFadedIn(true);
+      });
+      return () => cancelAnimationFrame(raf);
+    } else {
+      setBrandFadedIn(false);
+    }
+  }, [leagueBrandColors]);
+
+    // Intersection Observer for orange divider animation
+    useEffect(() => {
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              setIsDividerVisible(true);
+            }
+          });
+        },
+        { threshold: 0.5 } // Trigger when 50% of element is visible
+      );
+
+      if (dividerRef.current) {
+        observer.observe(dividerRef.current);
+      }
+
+      return () => {
+        if (dividerRef.current) {
+          observer.unobserve(dividerRef.current);
+        }
+      };
+    }, [league?.description]);
+
+
+    const sortedTeamStats = useMemo(() => {
+      if (teamStatsData.length === 0) return [];
+      
+      const filtered = isParentLeague && (filterAgeGroup !== 'all' || selectedStop !== 'all')
+        ? teamStatsData.filter((t: any) => selectedAgeGroupLeagueIds.includes(t.league_id))
+        : teamStatsData;
+      
+      return [...filtered].sort((a, b) => {
+        let valueA: number, valueB: number;
+        
+        switch (teamStatsSortColumn) {
+          case 'GP':
+            valueA = a.gamesPlayed || 0;
+            valueB = b.gamesPlayed || 0;
+            break;
+          case 'FGM':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalFGM', 'avgFGM');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalFGM', 'avgFGM');
+            break;
+          case 'FGA':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalFGA', 'avgFGA');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalFGA', 'avgFGA');
+            break;
+          case 'FG%':
+            valueA = parseFloat(a.fgPercentage) || 0;
+            valueB = parseFloat(b.fgPercentage) || 0;
+            break;
+          case '2PM':
+            valueA = getStatValueByMode(a, teamStatsMode, 'total2PM', 'avg2PM');
+            valueB = getStatValueByMode(b, teamStatsMode, 'total2PM', 'avg2PM');
+            break;
+          case '2PA':
+            valueA = getStatValueByMode(a, teamStatsMode, 'total2PA', 'avg2PA');
+            valueB = getStatValueByMode(b, teamStatsMode, 'total2PA', 'avg2PA');
+            break;
+          case '2P%':
+            valueA = parseFloat(a.twoPtPercentage) || 0;
+            valueB = parseFloat(b.twoPtPercentage) || 0;
+            break;
+          case '3PM':
+            valueA = getStatValueByMode(a, teamStatsMode, 'total3PM', 'avg3PM');
+            valueB = getStatValueByMode(b, teamStatsMode, 'total3PM', 'avg3PM');
+            break;
+          case '3PA':
+            valueA = getStatValueByMode(a, teamStatsMode, 'total3PA', 'avg3PA');
+            valueB = getStatValueByMode(b, teamStatsMode, 'total3PA', 'avg3PA');
+            break;
+          case '3P%':
+            valueA = parseFloat(a.threePtPercentage) || 0;
+            valueB = parseFloat(b.threePtPercentage) || 0;
+            break;
+          case 'FTM':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalFTM', 'avgFTM');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalFTM', 'avgFTM');
+            break;
+          case 'FTA':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalFTA', 'avgFTA');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalFTA', 'avgFTA');
+            break;
+          case 'FT%':
+            valueA = parseFloat(a.ftPercentage) || 0;
+            valueB = parseFloat(b.ftPercentage) || 0;
+            break;
+          case 'ORB':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalORB', 'avgORB');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalORB', 'avgORB');
+            break;
+          case 'DRB':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalDRB', 'avgDRB');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalDRB', 'avgDRB');
+            break;
+          case 'REB':
+          case 'TRB':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalRebounds', 'rpg');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalRebounds', 'rpg');
+            break;
+          case 'AST':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalAssists', 'apg');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalAssists', 'apg');
+            break;
+          case 'STL':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalSteals', 'spg');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalSteals', 'spg');
+            break;
+          case 'BLK':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalBlocks', 'bpg');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalBlocks', 'bpg');
+            break;
+          case 'TO':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalTurnovers', 'tpg');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalTurnovers', 'tpg');
+            break;
+          case 'PF':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalFouls', 'avgPF');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalFouls', 'avgPF');
+            break;
+          case '+/-':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPlusMinus', 'avgPlusMinus');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPlusMinus', 'avgPlusMinus');
+            break;
+          case 'PTS':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPoints', 'ppg');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPoints', 'ppg');
+            break;
+          case 'PITP':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPITP', 'avgPITP');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPITP', 'avgPITP');
+            break;
+          case 'FB PTS':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalFBPTS', 'avgFBPTS');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalFBPTS', 'avgFBPTS');
+            break;
+          case '2ND CH':
+            valueA = getStatValueByMode(a, teamStatsMode, 'total2ndCH', 'avg2ndCH');
+            valueB = getStatValueByMode(b, teamStatsMode, 'total2ndCH', 'avg2ndCH');
+            break;
+          // Advanced stats
+          case 'OFFRTG':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalOffRating', 'avgOffRating');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalOffRating', 'avgOffRating');
+            break;
+          case 'DEFRTG':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalDefRating', 'avgDefRating');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalDefRating', 'avgDefRating');
+            break;
+          case 'NETRTG':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalNetRating', 'avgNetRating');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalNetRating', 'avgNetRating');
+            break;
+          case 'PACE':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPace', 'avgPace');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPace', 'avgPace');
+            break;
+          case 'AST%':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalAstPercent', 'avgAstPercent');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalAstPercent', 'avgAstPercent');
+            break;
+          case 'AST/TO':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalAstToRatio', 'avgAstToRatio');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalAstToRatio', 'avgAstToRatio');
+            break;
+          case 'OREB%':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalOrebPercent', 'avgOrebPercent');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalOrebPercent', 'avgOrebPercent');
+            break;
+          case 'DREB%':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalDrebPercent', 'avgDrebPercent');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalDrebPercent', 'avgDrebPercent');
+            break;
+          case 'REB%':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalRebPercent', 'avgRebPercent');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalRebPercent', 'avgRebPercent');
+            break;
+          case 'TOV%':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalTovPercent', 'avgTovPercent');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalTovPercent', 'avgTovPercent');
+            break;
+          case 'EFG%':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalEfgPercent', 'avgEfgPercent');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalEfgPercent', 'avgEfgPercent');
+            break;
+          case 'TS%':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalTsPercent', 'avgTsPercent');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalTsPercent', 'avgTsPercent');
+            break;
+          case 'FTA RATE':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalFtRate', 'avgFtRate');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalFtRate', 'avgFtRate');
+            break;
+          case '3P RATE':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalThreePointRate', 'avgThreePointRate');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalThreePointRate', 'avgThreePointRate');
+            break;
+          case 'PIE':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPie', 'avgPie');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPie', 'avgPie');
+            break;
+          // Opponent stats
+          case 'OPP EFG%':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalOppEfgPercent', 'avgOppEfgPercent');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalOppEfgPercent', 'avgOppEfgPercent');
+            break;
+          case 'OPP FTA RATE':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalOppFtRate', 'avgOppFtRate');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalOppFtRate', 'avgOppFtRate');
+            break;
+          case 'OPP TOV%':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalOppTovPercent', 'avgOppTovPercent');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalOppTovPercent', 'avgOppTovPercent');
+            break;
+          case 'OPP OREB%':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalOppOrebPercent', 'avgOppOrebPercent');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalOppOrebPercent', 'avgOppOrebPercent');
+            break;
+          case 'OPP 3PM':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalOpp3PM', 'avgOpp3PM');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalOpp3PM', 'avgOpp3PM');
+            break;
+          case 'OPP FGM':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalOppFGM', 'avgOppFGM');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalOppFGM', 'avgOppFGM');
+            break;
+          case 'OPP FGA':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalOppFGA', 'avgOppFGA');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalOppFGA', 'avgOppFGA');
+            break;
+          case 'OPP PTS':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalOppPoints', 'avgOppPoints');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalOppPoints', 'avgOppPoints');
+            break;
+          case 'OPP TO':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalOppTurnovers', 'avgOppTurnovers');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalOppTurnovers', 'avgOppTurnovers');
+            break;
+          // Scoring breakdown percentages
+          case '%FGA 2PT':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalFgaPercent2pt', 'avgFgaPercent2pt');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalFgaPercent2pt', 'avgFgaPercent2pt');
+            break;
+          case '%FGA 3PT':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalFgaPercent3pt', 'avgFgaPercent3pt');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalFgaPercent3pt', 'avgFgaPercent3pt');
+            break;
+          case '%FGA MR':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalFgaPercentMidrange', 'avgFgaPercentMidrange');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalFgaPercentMidrange', 'avgFgaPercentMidrange');
+            break;
+          case '%PTS 2PT':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPtsPercent2pt', 'avgPtsPercent2pt');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPtsPercent2pt', 'avgPtsPercent2pt');
+            break;
+          case '%PTS 3PT':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPtsPercent3pt', 'avgPtsPercent3pt');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPtsPercent3pt', 'avgPtsPercent3pt');
+            break;
+          case '%PTS MR':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPtsPercentMidrange', 'avgPtsPercentMidrange');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPtsPercentMidrange', 'avgPtsPercentMidrange');
+            break;
+          case '%PTS PITP':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPtsPercentPitp', 'avgPtsPercentPitp');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPtsPercentPitp', 'avgPtsPercentPitp');
+            break;
+          case '%PTS FBPS':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPtsPercentFastbreak', 'avgPtsPercentFastbreak');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPtsPercentFastbreak', 'avgPtsPercentFastbreak');
+            break;
+          case '%PTS 2ND CH':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPtsPercentSecondChance', 'avgPtsPercentSecondChance');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPtsPercentSecondChance', 'avgPtsPercentSecondChance');
+            break;
+          case '%PTS OFFTO':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPtsPercentOffTurnovers', 'avgPtsPercentOffTurnovers');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPtsPercentOffTurnovers', 'avgPtsPercentOffTurnovers');
+            break;
+          case '%PTS FT':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPtsPercentFt', 'avgPtsPercentFt');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPtsPercentFt', 'avgPtsPercentFt');
+            break;
+          case 'PTS OFF TO':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPtsFromTurnovers', 'avgPtsFromTurnovers');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPtsFromTurnovers', 'avgPtsFromTurnovers');
+            break;
+          // Misc stats
+          case 'TIES':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalTimesScoresLevel', 'avgTimesScoresLevel');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalTimesScoresLevel', 'avgTimesScoresLevel');
+            break;
+          case 'LEAD CHG':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalLeadChanges', 'avgLeadChanges');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalLeadChanges', 'avgLeadChanges');
+            break;
+          case 'TIME LEADING':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalTimeLeading', 'avgTimeLeading');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalTimeLeading', 'avgTimeLeading');
+            break;
+          case 'BIG RUN':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalBiggestScoringRun', 'avgBiggestScoringRun');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalBiggestScoringRun', 'avgBiggestScoringRun');
+            break;
+          case 'MISC +/-':
+            valueA = getStatValueByMode(a, teamStatsMode, 'totalPlusMinus', 'avgPlusMinus');
+            valueB = getStatValueByMode(b, teamStatsMode, 'totalPlusMinus', 'avgPlusMinus');
+            break;
+          default:
+            valueA = 0;
+            valueB = 0;
+        }
+        
+        return teamStatsSortDirection === 'desc' ? valueB - valueA : valueA - valueB;
+      });
+    }, [teamStatsData, teamStatsSortColumn, teamStatsSortDirection, teamStatsMode, isParentLeague, filterAgeGroup, selectedStop, selectedAgeGroupLeagueIds]);
+
+    // Get active columns based on selected category
+    const activeTeamStatColumns = useMemo(() => {
+      return TEAM_STAT_COLUMNS[teamStatsCategory] || TEAM_STAT_COLUMNS['Traditional'];
+    }, [teamStatsCategory]);
+
+    // Get active player stat columns based on selected category
+    const activePlayerStatColumns = useMemo(() => {
+      return PLAYER_STAT_COLUMNS[playerStatsCategory] || PLAYER_STAT_COLUMNS['Traditional'];
+    }, [playerStatsCategory]);
+
+    const availableAgeGroups = useMemo(() => {
+      const ags = new Set<string>();
+      allPlayerAverages.forEach(p => {
+        (p.rawStats || []).forEach((s: any) => {
+          if (s.age_group) ags.add(s.age_group);
+        });
+      });
+      return [...ags].sort();
+    }, [allPlayerAverages]);
+
+    const availableRounds = useMemo(() => {
+      const rds = new Set<string>();
+      allPlayerAverages.forEach(p => {
+        (p.rawStats || []).forEach((s: any) => {
+          // round data is stored as the numeric `stop` column in player_stats
+          if (s.stop != null) rds.add(String(s.stop));
+        });
+      });
+      return [...rds].sort(naturalSortRounds);
+    }, [allPlayerAverages]);
+
+    const filteredByAgeGroupRound = useMemo(() => {
+      const agFilter = filterAgeGroup !== 'all';
+      const stopFilter = isParentLeague && selectedStop !== 'all';
+      // Age-group TAB selection (e.g. "19+") must also gate the league_id
+      // filter even when the internal dropdown and stop filter are both 'all'.
+      const ageTabFilter = isParentLeague && selectedAgeGroup !== 'all';
+      const roundFilter = filterRound !== 'all';
+      if (!agFilter && !stopFilter && !roundFilter && !ageTabFilter) return allPlayerAverages;
+
+      return allPlayerAverages
+        .map(player => {
+          const matchingStats = (player.rawStats || []).filter((s: any) => {
+            if ((agFilter || stopFilter || ageTabFilter) && !selectedAgeGroupLeagueIds.includes(s.league_id)) return false;
+            if (roundFilter && String(s.stop) !== filterRound) return false;
+            return true;
+          });
+          if (matchingStats.length === 0) return null;
+
+          const games = matchingStats.length;
+          const totalPoints = matchingStats.reduce((sum: number, s: any) => sum + (s.spoints || 0), 0);
+          const totalRebounds = matchingStats.reduce((sum: number, s: any) => sum + (s.sreboundstotal || 0), 0);
+          const totalAssists = matchingStats.reduce((sum: number, s: any) => sum + (s.sassists || 0), 0);
+          const totalSteals = matchingStats.reduce((sum: number, s: any) => sum + (s.ssteals || 0), 0);
+          const totalBlocks = matchingStats.reduce((sum: number, s: any) => sum + (s.sblocks || 0), 0);
+          const totalTurnovers = matchingStats.reduce((sum: number, s: any) => sum + (s.sturnovers || 0), 0);
+          const totalFGM = matchingStats.reduce((sum: number, s: any) => sum + (s.sfieldgoalsmade || 0), 0);
+          const totalFGA = matchingStats.reduce((sum: number, s: any) => sum + (s.sfieldgoalsattempted || 0), 0);
+          const total2PM = matchingStats.reduce((sum: number, s: any) => sum + (s.stwopointersmade || 0), 0);
+          const total2PA = matchingStats.reduce((sum: number, s: any) => sum + (s.stwopointersattempted || 0), 0);
+          const total3PM = matchingStats.reduce((sum: number, s: any) => sum + (s.sthreepointersmade || 0), 0);
+          const total3PA = matchingStats.reduce((sum: number, s: any) => sum + (s.sthreepointersattempted || 0), 0);
+          const totalFTM = matchingStats.reduce((sum: number, s: any) => sum + (s.sfreethrowsmade || 0), 0);
+          const totalFTA = matchingStats.reduce((sum: number, s: any) => sum + (s.sfreethrowsattempted || 0), 0);
+          const totalORB = matchingStats.reduce((sum: number, s: any) => sum + (s.sreboundsoffensive || 0), 0);
+          const totalDRB = matchingStats.reduce((sum: number, s: any) => sum + (s.sreboundsdefensive || 0), 0);
+          const totalMinutes = matchingStats.reduce((sum: number, s: any) => {
+            const mins = s.sminutes || s.minutes_played;
+            if (!mins) return sum;
+            if (typeof mins === 'number') return sum + mins;
+            if (typeof mins === 'string') {
+              const parts = mins.split(':');
+              if (parts.length === 2) return sum + parseInt(parts[0]) + parseInt(parts[1]) / 60;
+              return sum + (parseFloat(mins) || 0);
+            }
+            return sum;
+          }, 0);
+          const totalPersonalFouls = matchingStats.reduce((sum: number, s: any) => sum + (s.sfoulspersonal || 0), 0);
+          const totalPlusMinus = matchingStats.reduce((sum: number, s: any) => sum + (s.splusminuspoints || 0), 0);
+
+          return {
+            ...player,
+            games,
+            totalPoints, totalRebounds, totalAssists, totalSteals, totalBlocks,
+            totalTurnovers, totalFGM, totalFGA, total2PM, total2PA, total3PM, total3PA,
+            totalFTM, totalFTA, totalORB, totalDRB, totalMinutes, totalPersonalFouls, totalPlusMinus,
+            rawStats: matchingStats,
+            avgPoints: (totalPoints / games).toFixed(1),
+            avgRebounds: (totalRebounds / games).toFixed(1),
+            avgAssists: (totalAssists / games).toFixed(1),
+            avgSteals: (totalSteals / games).toFixed(1),
+            avgBlocks: (totalBlocks / games).toFixed(1),
+            avgTurnovers: (totalTurnovers / games).toFixed(1),
+            avgMinutes: (totalMinutes / games).toFixed(1),
+            avgFGM: (totalFGM / games).toFixed(1),
+            avgFGA: (totalFGA / games).toFixed(1),
+            avg2PM: (total2PM / games).toFixed(1),
+            avg2PA: (total2PA / games).toFixed(1),
+            avg3PM: (total3PM / games).toFixed(1),
+            avg3PA: (total3PA / games).toFixed(1),
+            avgFTM: (totalFTM / games).toFixed(1),
+            avgFTA: (totalFTA / games).toFixed(1),
+            avgORB: (totalORB / games).toFixed(1),
+            avgDRB: (totalDRB / games).toFixed(1),
+            avgPersonalFouls: (totalPersonalFouls / games).toFixed(1),
+            avgPlusMinus: (totalPlusMinus / games).toFixed(1),
+            fgPercentage: totalFGA > 0 ? ((totalFGM / totalFGA) * 100).toFixed(1) : '0.0',
+            twoPercentage: total2PA > 0 ? ((total2PM / total2PA) * 100).toFixed(1) : '0.0',
+            threePercentage: total3PA > 0 ? ((total3PM / total3PA) * 100).toFixed(1) : '0.0',
+            ftPercentage: totalFTA > 0 ? ((totalFTM / totalFTA) * 100).toFixed(1) : '0.0'
+          };
+        })
+        .filter(Boolean) as any[];
+    }, [allPlayerAverages, filterAgeGroup, filterRound, selectedStop, selectedAgeGroup, selectedAgeGroupLeagueIds, isParentLeague]);
 
     useEffect(() => {
-      const fetchSuggestions = async () => {
-        if (search.trim().length === 0) {
-          setSuggestions([]);
+      debugLog("🔍 Filtering players. Search term:", statsSearch);
+      debugLog("📊 All players:", allPlayerAverages.length);
+      
+      let filtered = filteredByAgeGroupRound;
+      
+      if (statsSearch.trim()) {
+        filtered = filteredByAgeGroupRound.filter(player => 
+          player.name.toLowerCase().includes(statsSearch.toLowerCase())
+        );
+      }
+
+      // Apply sorting based on selected column and direction
+      const sorted = [...filtered].sort((a, b) => {
+        let valueA: number, valueB: number;
+        
+        if (statsSortColumn === 'GP') {
+          valueA = a.games || 0;
+          valueB = b.games || 0;
+        } else {
+          const column = activePlayerStatColumns.find(col => col.label === statsSortColumn);
+          
+          if (column) {
+            if (column.key === 'efficiency') {
+              valueA = computeEfficiencyFromRawStats(a.rawStats || [], a.games, a.totalMinutes || 0, playerStatsView);
+              valueB = computeEfficiencyFromRawStats(b.rawStats || [], b.games, b.totalMinutes || 0, playerStatsView);
+            } else {
+            const rawStatsA = a.rawStats || [];
+            const rawStatsB = b.rawStats || [];
+            
+            // Rate stats should be averaged, not summed
+            const rateStats = [
+              'efg_percent', 'ts_percent', 'three_point_rate',
+              'ast_percent', 'ast_to_ratio',
+              'oreb_percent', 'dreb_percent', 'reb_percent',
+              'tov_percent', 'usage_percent', 'pie',
+              'off_rating', 'def_rating', 'net_rating',
+              'pts_percent_2pt', 'pts_percent_3pt', 'pts_percent_ft',
+              'pts_percent_midrange', 'pts_percent_pitp', 'pts_percent_fastbreak',
+              'pts_percent_second_chance', 'pts_percent_off_turnovers'
+            ];
+            
+            const isRateStat = rateStats.includes(column.key);
+            
+            // Calculate aggregated values from raw stats
+            const aggregatedA = rawStatsA.reduce((acc: number, stat: any) => {
+              const statValue = stat[column.key];
+              return acc + (typeof statValue === 'number' ? statValue : (typeof statValue === 'string' && !isNaN(parseFloat(statValue)) ? parseFloat(statValue) : 0));
+            }, 0);
+            const aggregatedB = rawStatsB.reduce((acc: number, stat: any) => {
+              const statValue = stat[column.key];
+              return acc + (typeof statValue === 'number' ? statValue : (typeof statValue === 'string' && !isNaN(parseFloat(statValue)) ? parseFloat(statValue) : 0));
+            }, 0);
+            
+            // For rate stats, convert sum to average before applying mode transformation
+            const baseA = isRateStat && rawStatsA.length > 0 ? aggregatedA / rawStatsA.length : aggregatedA;
+            const baseB = isRateStat && rawStatsB.length > 0 ? aggregatedB / rawStatsB.length : aggregatedB;
+            
+            // Apply mode transformation
+            valueA = applyPlayerMode(column.key, baseA, a.games, a.totalMinutes || 0, playerStatsView);
+            valueB = applyPlayerMode(column.key, baseB, b.games, b.totalMinutes || 0, playerStatsView);
+            }
+          } else {
+            valueA = 0;
+            valueB = 0;
+          }
+        }
+        
+        return statsSortDirection === 'desc' ? valueB - valueA : valueA - valueB;
+      });
+      
+      setFilteredPlayerAverages(sorted);
+      if (statsSearch.trim()) {
+        setDisplayedPlayerCount(20); // Reset pagination when searching
+      }
+    }, [statsSearch, filteredByAgeGroupRound, statsSortColumn, statsSortDirection, playerStatsView, activePlayerStatColumns]);
+
+    // Reset standings view to 'full' if no pools exist and user is on a pool view
+    useEffect(() => {
+      if (!hasPools && (standingsView === 'poolA' || standingsView === 'poolB')) {
+        setStandingsView('full');
+      }
+    }, [hasPools, standingsView]);
+
+    // Fetch and aggregate team statistics
+    const fetchTeamStats = async () => {
+      if (!league?.league_id) return;
+      
+      setIsLoadingTeamStats(true);
+      try {
+        const fetchLeagueId = getDataLeagueId(slug, league.league_id);
+        const parentChildIdsForTeamStats = childCompetitions.map(c => c.league_id);
+        const isParentTeamStatsFetch = parentChildIdsForTeamStats.length > 0;
+        let rawTeamStats: any[] | null = null;
+        let error: any = null;
+        {
+          const idsToFetch = isParentTeamStatsFetch ? parentChildIdsForTeamStats : [fetchLeagueId];
+          const q = idsToFetch.length === 1
+            ? db.from("team_stats").select("*").eq("league_id", idsToFetch[0])
+            : db.from("team_stats").select("*").in("league_id", idsToFetch);
+          const result = await q;
+          rawTeamStats = result.data;
+          error = result.error;
+        }
+
+        if (error) {
+          console.error("Error fetching team stats:", error);
+          setIsLoadingTeamStats(false);
           return;
         }
 
-        const { data, error } = await supabase
-          .from("leagues")
-          .select("name, slug")
-          .ilike("name", `%${search}%`)
-          .eq("is_public", true)
-          .limit(5);
-
-        if (!error) {
-          setSuggestions(data || []);
-        } else {
-          console.error("Suggestion error:", error);
+        if (!rawTeamStats || rawTeamStats.length === 0) {
+          setTeamStatsData([]);
+          setIsLoadingTeamStats(false);
+          return;
         }
-      };
 
-      const delay = setTimeout(fetchSuggestions, 300);
-      return () => clearTimeout(delay);
-    }, [search]);
+        const parentChildNameMapForTeamStats = new Map<string, string>();
+        if (isParentTeamStatsFetch) {
+          childCompetitions.forEach(c => {
+            const label = c.age_group || (league?.name ? c.name.replace(league.name, '').trim() || c.name : c.name);
+            parentChildNameMapForTeamStats.set(c.league_id, label);
+          });
+        }
 
+        // Build fuzzy alias map from raw team names in team_stats rows
+        const rawTeamStatNames = rawTeamStats.map((s: any) => s.name).filter(Boolean);
+        const teamStatNameFreq = new Map<string, number>();
+        rawTeamStatNames.forEach((n: string) => {
+          teamStatNameFreq.set(n, (teamStatNameFreq.get(n) ?? 0) + 1);
+        });
+        const fuzzyAliasMapForTeamStats = buildFuzzyTeamAliasMap(rawTeamStatNames, teamStatNameFreq);
 
-    useEffect(() => {
-      const fetchLeague = async () => {
-        const { data, error } = await supabase
-          .from("leagues")
-          .select("*")
-          .eq("slug", slug)
-          .single();
-        console.log("Resolved league from slug:", slug, "→ ID:", data?.league_id);
+        const normalizeTeamStatName = (name: string): string => {
+          if (!name) return '';
+          const trimmed = name.trim();
+          const fuzzyMapped = fuzzyAliasMapForTeamStats.get(trimmed) ?? trimmed;
+          return normalizeAndMapTeamName(fuzzyMapped);
+        };
 
+        const teamMap = new Map<string, any>();
 
-        if (data?.league_id) {
-          const fetchTopStats = async () => {
-            const { data: scorerData } = await supabase
-              .from("player_stats")
-              .select("name, points")
-              .eq("league_id", data.league_id)
-              .order("points", { ascending: false })
-              .limit(1)
-              .single();
+        console.log('[TeamStats] raw names:', [...new Set(rawTeamStats.map((s: any) => s.name))]);
 
-            const { data: reboundData } = await supabase
-              .from("player_stats")
-              .select("name, rebounds_total")
-              .eq("league_id", data.league_id)
-              .order("rebounds_total", { ascending: false })
-              .limit(1)
-              .single();
+        rawTeamStats.forEach(stat => {
+          if (!stat.name) return;
 
-            const { data: assistData } = await supabase
-              .from("player_stats")
-              .select("name, assists")
-              .eq("league_id", data.league_id)
-              .order("assists", { ascending: false })
-              .limit(1)
-              .single();
+          const normalizedName = normalizeTeamStatName(stat.name);
+          const ageGroup = isParentTeamStatsFetch ? (parentChildNameMapForTeamStats.get(stat.league_id) || '') : '';
 
-            const { data: recentGames } = await supabase
-              .from("player_stats")
-              .select("name, team_name, game_date, points, assists, rebounds_total")
-              .eq("league_id", data.league_id)
-              .order("game_date", { ascending: false })
-              .limit(5);
+          const mapKey = isParentTeamStatsFetch ? `${normalizedName}__${ageGroup}` : normalizedName;
 
-            const { data: allPlayerStats } = await supabase
-              .from("player_stats")
-              .select("*")
-              .eq("league_id", data.league_id);
+          if (!teamMap.has(mapKey)) {
+            teamMap.set(mapKey, {
+              teamName: normalizedName,
+              age_group: ageGroup,
+              gamesPlayed: 0,
+              totalMinutes: 0,
+              totalPoints: 0,
+              totalFGM: 0,
+              totalFGA: 0,
+              total3PM: 0,
+              total3PA: 0,
+              total2PM: 0,
+              total2PA: 0,
+              totalFTM: 0,
+              totalFTA: 0,
+              totalRebounds: 0,
+              totalORB: 0,
+              totalDRB: 0,
+              totalAssists: 0,
+              totalSteals: 0,
+              totalBlocks: 0,
+              totalTurnovers: 0,
+              totalFouls: 0,
+              totalPlusMinus: 0,
+              totalPITP: 0,
+              totalFBPTS: 0,
+              total2ndCH: 0,
+              // Advanced stats
+              totalOffRating: 0,
+              totalDefRating: 0,
+              totalNetRating: 0,
+              totalPace: 0,
+              totalAstPercent: 0,
+              totalAstToRatio: 0,
+              totalOrebPercent: 0,
+              totalDrebPercent: 0,
+              totalRebPercent: 0,
+              totalTovPercent: 0,
+              totalEfgPercent: 0,
+              totalTsPercent: 0,
+              totalFtRate: 0,
+              totalThreePointRate: 0,
+              totalPie: 0,
+              // Opponent stats
+              totalOppEfgPercent: 0,
+              totalOppFtRate: 0,
+              totalOppTovPercent: 0,
+              totalOppOrebPercent: 0,
+              totalOpp3PM: 0,
+              totalOppFGM: 0,
+              totalOppFGA: 0,
+              totalOppPoints: 0,
+              totalOppTurnovers: 0,
+              // Misc stats
+              totalTimesScoresLevel: 0,
+              totalLeadChanges: 0,
+              totalTimeLeading: 0,
+              totalBiggestScoringRun: 0,
+              // Scoring breakdown percentages
+              totalFgaPercent2pt: 0,
+              totalFgaPercent3pt: 0,
+              totalFgaPercentMidrange: 0,
+              totalPtsPercent2pt: 0,
+              totalPtsPercent3pt: 0,
+              totalPtsPercentMidrange: 0,
+              totalPtsPercentPitp: 0,
+              totalPtsPercentFastbreak: 0,
+              totalPtsPercentSecondChance: 0,
+              totalPtsPercentOffTurnovers: 0,
+              totalPtsPercentFt: 0,
+              totalPtsFromTurnovers: 0
+            });
+          }
 
-            setTopScorer(scorerData);
-            setTopRebounder(reboundData);
-            setTopAssists(assistData);
-            setGameSummaries(recentGames || []);
-            setPlayerStats(allPlayerStats || []);
+          const team = teamMap.get(mapKey)!;
+          team.gamesPlayed += 1;
+          // Parse and add minutes
+          if (stat.sminutes) {
+            const minutesParts = stat.sminutes.split(':');
+            if (minutesParts && minutesParts.length === 2) {
+              const minutes = parseInt(minutesParts[0]) + parseInt(minutesParts[1]) / 60;
+              team.totalMinutes += minutes;
+            }
+          }
+          team.totalPoints += stat.tot_spoints || 0;
+          team.totalFGM += stat.tot_sfieldgoalsmade || 0;
+          team.totalFGA += stat.tot_sfieldgoalsattempted || 0;
+          team.total3PM += stat.tot_sthreepointersmade || 0;
+          team.total3PA += stat.tot_sthreepointersattempted || 0;
+          team.total2PM += stat.tot_stwopointersmade || 0;
+          team.total2PA += stat.tot_stwopointersattempted || 0;
+          team.totalFTM += stat.tot_sfreethrowsmade || 0;
+          team.totalFTA += stat.tot_sfreethrowsattempted || 0;
+          team.totalRebounds += stat.tot_sreboundstotal || 0;
+          team.totalORB += stat.tot_sreboundsoffensive || 0;
+          team.totalDRB += stat.tot_sreboundsdefensive || 0;
+          team.totalAssists += stat.tot_sassists || 0;
+          team.totalSteals += stat.tot_ssteals || 0;
+          team.totalBlocks += stat.tot_sblocks || 0;
+          team.totalTurnovers += stat.tot_sturnovers || 0;
+          team.totalFouls += stat.tot_sfoulspersonal || 0;
+          team.totalPlusMinus += stat.tot_splusminuspoints || 0;
+          team.totalPITP += stat.tot_spointsinthepaint || 0;
+          team.totalFBPTS += stat.tot_spointsfastbreak || 0;
+          team.total2ndCH += stat.tot_spointssecondchance || 0;
+          // Advanced stats
+          team.totalOffRating += stat.off_rating || 0;
+          team.totalDefRating += stat.def_rating || 0;
+          team.totalNetRating += stat.net_rating || 0;
+          team.totalPace += stat.pace || 0;
+          team.totalAstPercent += stat.ast_percent || 0;
+          team.totalAstToRatio += stat.ast_to_ratio || 0;
+          team.totalOrebPercent += stat.oreb_percent || 0;
+          team.totalDrebPercent += stat.dreb_percent || 0;
+          team.totalRebPercent += stat.reb_percent || 0;
+          team.totalTovPercent += stat.tov_percent || 0;
+          team.totalEfgPercent += stat.efg_percent || 0;
+          team.totalTsPercent += stat.ts_percent || 0;
+          team.totalFtRate += stat.ft_rate || 0;
+          team.totalThreePointRate += stat.three_point_rate || 0;
+          team.totalPie += stat.pie || 0;
+          // Opponent stats
+          team.totalOppEfgPercent += stat.opp_efg_percent || 0;
+          team.totalOppFtRate += stat.opp_ft_rate || 0;
+          team.totalOppTovPercent += stat.opp_tov_percent || 0;
+          team.totalOppOrebPercent += stat.opp_oreb_percent || 0;
+          team.totalOpp3PM += stat.opp_sthreepointersmade || 0;
+          team.totalOppFGM += stat.opp_sfieldgoalsmade || 0;
+          team.totalOppFGA += stat.opp_sfieldgoalsattempted || 0;
+          team.totalOppPoints += stat.opp_points || 0;
+          team.totalOppTurnovers += stat.opp_turnovers || 0;
+          // Misc stats
+          team.totalTimesScoresLevel += stat.tot_timesscoreslevel || 0;
+          team.totalLeadChanges += stat.tot_leadchanges || 0;
+          team.totalTimeLeading += stat.tot_timeleading || 0;
+          team.totalBiggestScoringRun += stat.tot_biggestscoringrun || 0;
+          // Scoring breakdown percentages
+          team.totalFgaPercent2pt += stat.fga_percent_2pt || 0;
+          team.totalFgaPercent3pt += stat.fga_percent_3pt || 0;
+          team.totalFgaPercentMidrange += stat.fga_percent_midrange || 0;
+          team.totalPtsPercent2pt += stat.pts_percent_2pt || 0;
+          team.totalPtsPercent3pt += stat.pts_percent_3pt || 0;
+          team.totalPtsPercentMidrange += stat.pts_percent_midrange || 0;
+          team.totalPtsPercentPitp += stat.pts_percent_pitp || 0;
+          team.totalPtsPercentFastbreak += stat.pts_percent_fastbreak || 0;
+          team.totalPtsPercentSecondChance += stat.pts_percent_second_chance || 0;
+          team.totalPtsPercentOffTurnovers += stat.pts_percent_off_turnovers || 0;
+          team.totalPtsPercentFt += stat.pts_percent_ft || 0;
+          team.totalPtsFromTurnovers += stat.tot_spointsfromturnovers || 0;
+        });
+
+        // Calculate percentages, averages, and possessions
+        const aggregatedStats = Array.from(teamMap.values()).map(team => {
+          // Calculate possessions: FGA + 0.44 * FTA - ORB + TO
+          const totalPossessions = team.totalFGA + (0.44 * team.totalFTA) - team.totalORB + team.totalTurnovers;
+          
+          return {
+          ...team,
+          totalPossessions,
+          // Percentages (use totals for accurate calculation)
+          fgPercentage: team.totalFGA > 0 ? ((team.totalFGM / team.totalFGA) * 100).toFixed(1) : '0.0',
+          threePtPercentage: team.total3PA > 0 ? ((team.total3PM / team.total3PA) * 100).toFixed(1) : '0.0',
+          twoPtPercentage: team.total2PA > 0 ? ((team.total2PM / team.total2PA) * 100).toFixed(1) : '0.0',
+          ftPercentage: team.totalFTA > 0 ? ((team.totalFTM / team.totalFTA) * 100).toFixed(1) : '0.0',
+          // Averages
+          ppg: team.gamesPlayed > 0 ? (team.totalPoints / team.gamesPlayed).toFixed(1) : '0.0',
+          rpg: team.gamesPlayed > 0 ? (team.totalRebounds / team.gamesPlayed).toFixed(1) : '0.0',
+          apg: team.gamesPlayed > 0 ? (team.totalAssists / team.gamesPlayed).toFixed(1) : '0.0',
+          spg: team.gamesPlayed > 0 ? (team.totalSteals / team.gamesPlayed).toFixed(1) : '0.0',
+          bpg: team.gamesPlayed > 0 ? (team.totalBlocks / team.gamesPlayed).toFixed(1) : '0.0',
+          tpg: team.gamesPlayed > 0 ? (team.totalTurnovers / team.gamesPlayed).toFixed(1) : '0.0',
+          avgFGM: team.gamesPlayed > 0 ? (team.totalFGM / team.gamesPlayed).toFixed(1) : '0.0',
+          avgFGA: team.gamesPlayed > 0 ? (team.totalFGA / team.gamesPlayed).toFixed(1) : '0.0',
+          avg2PM: team.gamesPlayed > 0 ? (team.total2PM / team.gamesPlayed).toFixed(1) : '0.0',
+          avg2PA: team.gamesPlayed > 0 ? (team.total2PA / team.gamesPlayed).toFixed(1) : '0.0',
+          avg3PM: team.gamesPlayed > 0 ? (team.total3PM / team.gamesPlayed).toFixed(1) : '0.0',
+          avg3PA: team.gamesPlayed > 0 ? (team.total3PA / team.gamesPlayed).toFixed(1) : '0.0',
+          avgFTM: team.gamesPlayed > 0 ? (team.totalFTM / team.gamesPlayed).toFixed(1) : '0.0',
+          avgFTA: team.gamesPlayed > 0 ? (team.totalFTA / team.gamesPlayed).toFixed(1) : '0.0',
+          avgORB: team.gamesPlayed > 0 ? (team.totalORB / team.gamesPlayed).toFixed(1) : '0.0',
+          avgDRB: team.gamesPlayed > 0 ? (team.totalDRB / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPF: team.gamesPlayed > 0 ? (team.totalFouls / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPlusMinus: team.gamesPlayed > 0 ? (team.totalPlusMinus / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPITP: team.gamesPlayed > 0 ? (team.totalPITP / team.gamesPlayed).toFixed(1) : '0.0',
+          avgFBPTS: team.gamesPlayed > 0 ? (team.totalFBPTS / team.gamesPlayed).toFixed(1) : '0.0',
+          avg2ndCH: team.gamesPlayed > 0 ? (team.total2ndCH / team.gamesPlayed).toFixed(1) : '0.0',
+          // Advanced stats averages
+          avgOffRating: team.gamesPlayed > 0 ? (team.totalOffRating / team.gamesPlayed).toFixed(1) : '0.0',
+          avgDefRating: team.gamesPlayed > 0 ? (team.totalDefRating / team.gamesPlayed).toFixed(1) : '0.0',
+          avgNetRating: team.gamesPlayed > 0 ? (team.totalNetRating / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPace: team.gamesPlayed > 0 ? (team.totalPace / team.gamesPlayed).toFixed(1) : '0.0',
+          avgAstPercent: team.gamesPlayed > 0 ? (team.totalAstPercent / team.gamesPlayed).toFixed(1) : '0.0',
+          avgAstToRatio: team.gamesPlayed > 0 ? (team.totalAstToRatio / team.gamesPlayed).toFixed(1) : '0.0',
+          avgOrebPercent: team.gamesPlayed > 0 ? (team.totalOrebPercent / team.gamesPlayed).toFixed(1) : '0.0',
+          avgDrebPercent: team.gamesPlayed > 0 ? (team.totalDrebPercent / team.gamesPlayed).toFixed(1) : '0.0',
+          avgRebPercent: team.gamesPlayed > 0 ? (team.totalRebPercent / team.gamesPlayed).toFixed(1) : '0.0',
+          avgTovPercent: team.gamesPlayed > 0 ? (team.totalTovPercent / team.gamesPlayed).toFixed(1) : '0.0',
+          avgEfgPercent: team.gamesPlayed > 0 ? (team.totalEfgPercent / team.gamesPlayed).toFixed(1) : '0.0',
+          avgTsPercent: team.gamesPlayed > 0 ? (team.totalTsPercent / team.gamesPlayed).toFixed(1) : '0.0',
+          avgFtRate: team.gamesPlayed > 0 ? (team.totalFtRate / team.gamesPlayed).toFixed(1) : '0.0',
+          avgThreePointRate: team.gamesPlayed > 0 ? (team.totalThreePointRate / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPie: team.gamesPlayed > 0 ? (team.totalPie / team.gamesPlayed).toFixed(3) : '0.000',
+          // Opponent stats averages
+          avgOppEfgPercent: team.gamesPlayed > 0 ? (team.totalOppEfgPercent / team.gamesPlayed).toFixed(1) : '0.0',
+          avgOppFtRate: team.gamesPlayed > 0 ? (team.totalOppFtRate / team.gamesPlayed).toFixed(1) : '0.0',
+          avgOppTovPercent: team.gamesPlayed > 0 ? (team.totalOppTovPercent / team.gamesPlayed).toFixed(1) : '0.0',
+          avgOppOrebPercent: team.gamesPlayed > 0 ? (team.totalOppOrebPercent / team.gamesPlayed).toFixed(1) : '0.0',
+          avgOpp3PM: team.gamesPlayed > 0 ? (team.totalOpp3PM / team.gamesPlayed).toFixed(1) : '0.0',
+          avgOppFGM: team.gamesPlayed > 0 ? (team.totalOppFGM / team.gamesPlayed).toFixed(1) : '0.0',
+          avgOppFGA: team.gamesPlayed > 0 ? (team.totalOppFGA / team.gamesPlayed).toFixed(1) : '0.0',
+          avgOppPoints: team.gamesPlayed > 0 ? (team.totalOppPoints / team.gamesPlayed).toFixed(1) : '0.0',
+          avgOppTurnovers: team.gamesPlayed > 0 ? (team.totalOppTurnovers / team.gamesPlayed).toFixed(1) : '0.0',
+          // Misc stats averages
+          avgTimesScoresLevel: team.gamesPlayed > 0 ? (team.totalTimesScoresLevel / team.gamesPlayed).toFixed(1) : '0.0',
+          avgLeadChanges: team.gamesPlayed > 0 ? (team.totalLeadChanges / team.gamesPlayed).toFixed(1) : '0.0',
+          avgTimeLeading: team.gamesPlayed > 0 ? (team.totalTimeLeading / team.gamesPlayed).toFixed(1) : '0.0',
+          avgBiggestScoringRun: team.gamesPlayed > 0 ? (team.totalBiggestScoringRun / team.gamesPlayed).toFixed(1) : '0.0',
+          // Scoring breakdown percentages averages
+          avgFgaPercent2pt: team.gamesPlayed > 0 ? (team.totalFgaPercent2pt / team.gamesPlayed).toFixed(1) : '0.0',
+          avgFgaPercent3pt: team.gamesPlayed > 0 ? (team.totalFgaPercent3pt / team.gamesPlayed).toFixed(1) : '0.0',
+          avgFgaPercentMidrange: team.gamesPlayed > 0 ? (team.totalFgaPercentMidrange / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPtsPercent2pt: team.gamesPlayed > 0 ? (team.totalPtsPercent2pt / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPtsPercent3pt: team.gamesPlayed > 0 ? (team.totalPtsPercent3pt / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPtsPercentMidrange: team.gamesPlayed > 0 ? (team.totalPtsPercentMidrange / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPtsPercentPitp: team.gamesPlayed > 0 ? (team.totalPtsPercentPitp / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPtsPercentFastbreak: team.gamesPlayed > 0 ? (team.totalPtsPercentFastbreak / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPtsPercentSecondChance: team.gamesPlayed > 0 ? (team.totalPtsPercentSecondChance / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPtsPercentOffTurnovers: team.gamesPlayed > 0 ? (team.totalPtsPercentOffTurnovers / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPtsPercentFt: team.gamesPlayed > 0 ? (team.totalPtsPercentFt / team.gamesPlayed).toFixed(1) : '0.0',
+          avgPtsFromTurnovers: team.gamesPlayed > 0 ? (team.totalPtsFromTurnovers / team.gamesPlayed).toFixed(1) : '0.0'
           };
+        }).sort((a, b) => parseFloat(b.ppg) - parseFloat(a.ppg)); // Sort by PPG
 
-          fetchTopStats();
-        }
-
-        if (error) console.error("Failed to fetch league:", error);
-        setLeague(data);
-      };
-
-      fetchLeague();
-    }, [slug]);
-
-    const handleSearch = () => {
-      if (search.trim()) {
-        navigate(`/league/${search}`);
+        setTeamStatsData(aggregatedStats);
+      } catch (error) {
+        console.error("Error processing team stats:", error);
+      } finally {
+        setIsLoadingTeamStats(false);
       }
     };
 
-    const sortMap: Record<string, string> = {
-      "Top Scorers": "points",
-      "Top Rebounders": "rebounds_total",
-      "Top Playmakers": "assists",
-    };
+    useEffect(() => {
+      setSelectedAgeGroup('all');
+      setFilterAgeGroup('all');
+      setFilterRound('all');
+      setParentStandingsGroups([]);
+      
+      const fetchUserAndLeague = async () => {
+        // Reset sibling seasons so a competition without competition_id never shows stale options
+        setSiblingSeasons([]);
 
-    const sortedStats = [...playerStats].sort((a, b) => {
-      const aValue = a[sortField] ?? 0;
-      const bValue = b[sortField] ?? 0;
-      return sortOrder === "asc" ? aValue - bValue : bValue - aValue;
-    });
+        const { data: { user } } = await supabase.auth.getUser();
+        setCurrentUser(user);
+        
+        // Then fetch competition (season) data
+        const { data, error } = await supabase
+          .from("competitions")
+          .select("*")
+          .eq("slug", slug)
+          .single();
+        
 
-    const getTopList = (key: string) => {
-      const grouped = playerStats.reduce((acc, curr) => {
-        const playerKey = curr.name;
-        if (!acc[playerKey]) {
-          acc[playerKey] = { ...curr, games: 1 };
-        } else {
-          acc[playerKey][key] += curr[key];
-          acc[playerKey].games += 1;
+        let fetchedChildCompetitions: any[] = [];
+        
+        if (data) {
+          setLeague(data);
+          const ownerStatus = user?.id === data.user_id || user?.id === data.created_by;
+          setIsOwner(ownerStatus);
+          
+          if (data.instagram_embed_url) {
+            try {
+              const parsed = JSON.parse(data.instagram_embed_url);
+              if (Array.isArray(parsed)) {
+                setInstagramUrls(parsed.filter(url => url && url.trim()));
+              } else if (typeof parsed === 'string') {
+                setInstagramUrls([parsed.trim()]);
+              } else {
+                setInstagramUrls([data.instagram_embed_url]);
+              }
+            } catch {
+              setInstagramUrls([data.instagram_embed_url]);
+            }
+          } else {
+            setInstagramUrls([]);
+          }
+          
+          setYoutubeUrl(data.youtube_embed_url || "");
+          
+          // Use the service-role-backed endpoint so private (is_public=false)
+          // children still roll up under their public parent. The anon-key
+          // supabase client is filtered by RLS on the `leagues` table and
+          // would otherwise return 0 children for parents whose kids have
+          // been hidden from search via is_public=false.
+          try {
+            const competitions = await fetchLeagueChildren(data.league_id);
+            setChildCompetitions(competitions);
+            fetchedChildCompetitions = competitions;
+          } catch (competitionsError) {
+            console.error("Failed to fetch child competitions:", competitionsError);
+          }
+          
+          // Fetch parent league if this is a sub-competition
+          if (data.parent_league_id) {
+            const { data: parent, error: parentError } = await supabase
+              .from("competitions")
+              .select("league_id, name, slug, logo_url")
+              .eq("league_id", data.parent_league_id)
+              .single();
+            
+            if (parent && !parentError) {
+              setParentLeague(parent);
+            } else if (parentError) {
+              console.error("Failed to fetch parent league:", parentError);
+            }
+          }
+
+          // Fetch sibling seasons from the same league brand.
+          // Filter to same gender only — gender competitions (Men's/Women's) are not
+          // "seasons" of each other; they should be selected from the brand page instead.
+          if ((data as any).competition_id) {
+            try {
+              const res = await fetch(`/api/league/${(data as any).competition_id}/competitions`);
+              if (res.ok) {
+                const allSeasons: { name: string; slug: string; season: string | null; gender?: string | null }[] = await res.json();
+                const currentGender = (data as any).gender ?? null;
+                const filtered = currentGender
+                  ? allSeasons.filter(s => (s.gender ?? null) === currentGender)
+                  : allSeasons.filter(s => !(s as any).gender);
+                setSiblingSeasons(filtered);
+              }
+            } catch (e) {
+              console.error("Failed to fetch sibling seasons:", e);
+            }
+          }
         }
-        return acc;
-      }, {});
+        
+        if (error) {
+          console.error("Failed to fetch league:", error);
+          // Still set empty league data to show the page structure
+          setLeague(null);
+        }
 
-      const players = Object.values(grouped).map((p: any) => ({
-        ...p,
-        avg: (p[key] / p.games).toFixed(1),
-      }));
+        if (data?.league_id) {
+          setIsLoadingLeaders(true);
+          setIsLoadingStandings(true);
+          const effectiveLeagueId = getDataLeagueId(slug, data.league_id);
+          const childIds = fetchedChildCompetitions.map((c: any) => c.league_id);
+          const isParent = childIds.length > 0;
+          const queryLeagueIds = isParent ? childIds : [effectiveLeagueId];
 
-      return players.sort((a, b) => b.avg - a.avg).slice(0, 5);
+          const logoLeagueIds = isParent ? [data.league_id, ...childIds] : [effectiveLeagueId];
+          try {
+            const logoRes = await fetch('/api/public/team-logos', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ leagueIds: logoLeagueIds }),
+            });
+            const map = new Map<string, string>();
+            if (logoRes.ok) {
+              const json = await logoRes.json();
+              const logoRows: Array<{ team_name: string; logo_url: string }> = json.rows || [];
+              logoRows.forEach((row) => {
+                const normalized = normalizeAndMapTeamName(row.team_name);
+                if (normalized && row.logo_url) {
+                  map.set(normalized, row.logo_url);
+                }
+              });
+            }
+            setTeamLogoMap(map);
+          } catch {
+            setTeamLogoMap(new Map());
+          }
+          
+          const childNameMap = new Map<string, string>();
+          if (isParent) {
+            fetchedChildCompetitions.forEach((c: any) => {
+              const label = c.gender || c.age_group || (data.name ? c.name.replace(data.name, '').trim() || c.name : c.name);
+              childNameMap.set(c.league_id, label);
+            });
+          }
+
+          const applyLeagueFilter = (query: any) => {
+            return isParent ? query.in("league_id", queryLeagueIds) : query.eq("league_id", effectiveLeagueId);
+          };
+          
+          const fetchTopStats = async () => {
+            setIsLoadingSchedule(true);
+            const { data: scorerRows } = await applyLeagueFilter(
+              db.from("player_stats").select("firstname, familyname, spoints")
+            ).order("spoints", { ascending: false }).limit(1);
+            const scorerData = scorerRows?.[0] || null;
+
+            const { data: reboundRows } = await applyLeagueFilter(
+              db.from("player_stats").select("firstname, familyname, sreboundstotal")
+            ).order("sreboundstotal", { ascending: false }).limit(1);
+            const reboundData = reboundRows?.[0] || null;
+
+            const { data: assistRows } = await applyLeagueFilter(
+              db.from("player_stats").select("firstname, familyname, sassists")
+            ).order("sassists", { ascending: false }).limit(1);
+            const assistData = assistRows?.[0] || null;
+
+            const { data: recentGames } = await applyLeagueFilter(
+              db.from("player_stats").select("firstname, familyname, created_at, spoints, sassists, sreboundstotal")
+            ).order("created_at", { ascending: false }).limit(5);
+
+            const { data: allPlayerStats, error: allStatsError } = await applyLeagueFilter(
+              db.from("player_stats").select("*")
+            );
+
+            const processPlayerData = (player: any) => {
+              if (!player) return null;
+              return {
+                ...player,
+                name: player.firstname && player.familyname ? 
+                  `${player.firstname} ${player.familyname}` : 
+                  player.firstname || player.familyname || 'Unknown Player',
+                team: 'Team Not Available'
+              };
+            };
+            
+            setTopScorer(processPlayerData(scorerData));
+            setTopRebounder(processPlayerData(reboundData));
+            setTopAssists(processPlayerData(assistData));
+            
+            const processedRecentGames = recentGames?.map(processPlayerData) || [];
+            setGameSummaries(processedRecentGames);
+            setPlayerStats(allPlayerStats || []);
+            
+            const { data: gameResults, error: gameResultsError } = await applyLeagueFilter(
+              db.from('v_game_results').select('*').limit(2000)
+            );
+
+            if (gameResults && !gameResultsError) {
+              const games: GameSchedule[] = gameResults.map((game: any) => ({
+                game_id: game.game_key,
+                game_date: game.match_time,
+                team1: game.home_team,
+                team2: game.away_team,
+                kickoff_time: game.match_time ? new Date(game.match_time).toLocaleTimeString('en-US', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: true,
+                  timeZone: 'UTC'
+                }) : undefined,
+                venue: game.competition_name,
+                team1_score: game.home_score,
+                team2_score: game.away_score,
+                status: game.game_status === 'Final' ? 'FINAL' : game.game_status,
+                age_group: isParent && game.league_id ? (childNameMap.get(game.league_id) || game.age_group || undefined) : (game.age_group || undefined),
+                round: game.round || undefined,
+                numeric_id: game.game_key
+              })).filter((game: GameSchedule) => game.team1 && game.team2);
+
+              const sortedGames = games.sort((a, b) => {
+                if (!a.game_date || !b.game_date) return 0;
+                const dateA = new Date(a.game_date).getTime();
+                const dateB = new Date(b.game_date).getTime();
+                return dateB - dateA;
+              });
+
+              setSchedule(sortedGames);
+            } else if (gameResultsError) {
+              console.error("Error fetching from v_game_results:", gameResultsError);
+              setSchedule([]);
+            }
+            
+            if (isParent) {
+              try {
+                const groups: {ageGroup: string, standings: any[], poolAStandings: any[], poolBStandings: any[], hasPools: boolean}[] = [];
+                for (const child of fetchedChildCompetitions) {
+                  const ageGroup = childNameMap.get(child.league_id) || child.name;
+                  const result = await calculateStandingsForLeague(child.league_id, league?.league_id);
+                  if (result.standings.length > 0) {
+                    groups.push({ ageGroup, standings: result.standings, poolAStandings: result.poolAStandings, poolBStandings: result.poolBStandings, hasPools: result.hasPools });
+                  }
+                }
+                setParentStandingsGroups(groups);
+                const allStandings = groups.flatMap(g => g.standings.map((s: any) => ({ ...s, ageGroup: g.ageGroup })));
+                setFullLeagueStandings(allStandings);
+                setStandings(allStandings);
+              } catch (standingsErr) {
+                console.error("Error calculating parent league standings:", standingsErr);
+              }
+            } else {
+              try {
+                await calculateStandingsWithTeamStats(effectiveLeagueId, allPlayerStats || [], league?.parent_league_id ?? undefined);
+              } catch (standingsErr) {
+                console.error("Error in calculateStandingsWithTeamStats:", standingsErr);
+              }
+              
+              try {
+                await calculatePoolStandings(effectiveLeagueId, league?.parent_league_id ?? undefined);
+              } catch (poolErr) {
+                console.error("Error in calculatePoolStandings:", poolErr);
+              }
+            }
+            
+            setIsLoadingLeaders(false);
+            setIsLoadingStandings(false);
+            setIsLoadingSchedule(false);
+          };
+
+          fetchTopStats().catch(err => {
+            console.error("Error in fetchTopStats:", err);
+            setIsLoadingLeaders(false);
+            setIsLoadingStandings(false);
+            setIsLoadingSchedule(false);
+          });
+        }
+      };
+
+      fetchUserAndLeague();
+    }, [slug]);
+
+    // Ref to track last fetched league_id for deduplication
+    const lastFetchedLeagueRef = useRef<string | null>(null);
+    const playerAveragesCancelledRef = useRef(false);
+
+    useEffect(() => {
+      const leagueId = league?.league_id;
+      
+      if (!leagueId) return;
+      
+      const childIds = childCompetitions.map(c => c.league_id).sort().join(',');
+      const fetchKey = `${leagueId}:${childIds}`;
+      
+      playerAveragesCancelledRef.current = false;
+      
+      if (lastFetchedLeagueRef.current === fetchKey) return;
+      
+      lastFetchedLeagueRef.current = fetchKey;
+      
+      debugLog("🔄 Player averages useEffect triggered, league_id:", leagueId, "childIds:", childIds);
+      
+      fetchAllPlayerAverages();
+      
+      return () => {
+        playerAveragesCancelledRef.current = true;
+        isFetchingStatsRef.current = false;
+      };
+    }, [league?.league_id, childCompetitions]);
+
+    useEffect(() => {
+      if (league?.league_id) {
+        fetchTeamStats();
+      }
+    }, [league?.league_id, childCompetitions]);
+
+    const sortMap: Record<string, string> = {
+      "Top Scorers": "spoints",
+      "Top Rebounders": "sreboundstotal",
+      "Top Playmakers": "sassists",
     };
 
-    const topScorers = getTopList("points");
-    const topRebounders = getTopList("rebounds_total");
-    const topAssistsList = getTopList("assists");
+    // Adaptive minimum-games qualifier — keeps per-game leaderboards meaningful
+    // without locking new-season leagues out. Cumulative "totals" view never
+    // applies this filter.
+    const leadersQualifier = useMemo(() => {
+      if (!filteredByAgeGroupRound.length) {
+        return { minGames: 0, isEarlySeason: false };
+      }
+      const maxGames = filteredByAgeGroupRound.reduce(
+        (m: number, p: any) => Math.max(m, p.games || 0),
+        0,
+      );
+      // Early-season: when no player has yet played 3+ games, don't filter
+      // anyone out — the section would otherwise look empty for new leagues.
+      if (maxGames < 3) {
+        return { minGames: 1, isEarlySeason: true };
+      }
+      // Established season: require at least 3 games, scaling up to ~40% of
+      // the leading player's GP for older / fuller seasons.
+      return {
+        minGames: Math.max(1, Math.ceil(maxGames * 0.4)),
+        isEarlySeason: false,
+      };
+    }, [filteredByAgeGroupRound]);
+    const leadersMinGames = leadersQualifier.minGames;
+    const leadersIsEarlySeason = leadersQualifier.isEarlySeason;
 
+    const getTopList = useMemo(() => (statKey: string) => {
+      const statToFields: Record<string, { avgField: string; totalField: string }> = {
+        'spoints': { avgField: 'avgPoints', totalField: 'totalPoints' },
+        'sreboundstotal': { avgField: 'avgRebounds', totalField: 'totalRebounds' },
+        'sassists': { avgField: 'avgAssists', totalField: 'totalAssists' }
+      };
+      
+      const fields = statToFields[statKey];
+      if (!fields || !filteredByAgeGroupRound.length) return [];
+      
+      const fieldToUse = leagueLeadersView === 'averages' ? fields.avgField : fields.totalField;
+
+      // Apply adaptive games qualifier to per-game (averages) view only.
+      // If qualifier empties the pool (e.g. brand-new season), fall back
+      // to the unfiltered list so the section never goes blank.
+      const isAverages = leagueLeadersView === 'averages';
+      const qualified = isAverages && leadersMinGames > 1
+        ? filteredByAgeGroupRound.filter((p: any) => (p.games || 0) >= leadersMinGames)
+        : filteredByAgeGroupRound;
+      const pool = qualified.length > 0 ? qualified : filteredByAgeGroupRound;
+
+      const result = [...pool]
+        .sort((a, b) => {
+          const aVal = parseFloat(a[fieldToUse]) || 0;
+          const bVal = parseFloat(b[fieldToUse]) || 0;
+          return bVal - aVal;
+        })
+        .slice(0, 10)
+        .map(player => ({
+          ...player,
+          value: leagueLeadersView === 'averages' 
+            ? player[fields.avgField] 
+            : Math.round(player[fields.totalField])
+        }));
+      
+      return result;
+    }, [filteredByAgeGroupRound, leagueLeadersView, leadersMinGames]);
+
+    const topScorers = getTopList("spoints");
+    const topRebounders = getTopList("sreboundstotal");
+    const topAssistsList = getTopList("sassists");
+
+    const handleGameClick = (gameId: string) => {
+      handleSelectGame(gameId, activeSection);
+    };
+
+    const handleCarouselGameClick = (data: {
+      gameKey: string;
+      status: 'LIVE' | 'FINAL' | 'SCHEDULED';
+      homeTeam: string;
+      awayTeam: string;
+      gameDate: string;
+      homeScore: number | null;
+      awayScore: number | null;
+      hasGamePage?: boolean;
+    }) => {
+      handleSelectGame(data.gameKey, activeSection);
+    };
+
+    const handleCloseGameModal = () => {
+      setIsGameModalOpen(false);
+      setSelectedGameId(null);
+    };
+
+    const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file || !league?.league_id || !currentUser) return;
+
+      setUploadingLogo(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) { alert('Not authenticated'); return; }
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('leagueId', league.league_id);
+        formData.append('type', 'logo');
+
+        const response = await fetch('/api/league-banners/upload', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${session.access_token}` },
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const result = await response.json();
+          throw new Error(result.error || 'Logo upload failed');
+        }
+
+        const result = await response.json();
+        setLeague({ ...league, logo_url: result.publicUrl });
+        alert('Logo updated successfully!');
+      } catch (error) {
+        console.error('Logo upload error:', error);
+        alert(`Failed to upload logo: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      } finally {
+        setUploadingLogo(false);
+        event.target.value = '';
+      }
+    };
+
+    const handleBannerUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file || !league?.league_id || !currentUser) {
+        console.error('Missing requirements:', { file: !!file, league_id: league?.league_id, user: !!currentUser });
+        return;
+      }
+
+      setUploadingBanner(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) {
+          alert('Not authenticated');
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('leagueId', league.league_id);
+
+        const response = await fetch('/api/league-banners/upload', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${session.access_token}` },
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const result = await response.json();
+          throw new Error(result.error || 'Banner upload failed');
+        }
+
+        const result = await response.json();
+        const updatedLeagueData = { ...league, banner_url: result.publicUrl };
+        setLeague(updatedLeagueData);
+        
+        alert('Banner updated successfully!');
+      } catch (error) {
+        console.error('Banner upload error:', error);
+        alert(`Failed to upload banner: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      } finally {
+        setUploadingBanner(false);
+        // Reset file input
+        event.target.value = '';
+      }
+    };
+
+    // Handle Instagram URL update
+    const normalizeInstagramUrl = (url: string): string => {
+      try {
+        const trimmed = url.trim();
+        // Parse URL to normalize it
+        const urlObj = new URL(trimmed);
+        // Remove trailing slash
+        urlObj.pathname = urlObj.pathname.replace(/\/$/, '');
+        // Remove query parameters for consistency
+        urlObj.search = '';
+        return urlObj.toString();
+      } catch {
+        // If URL parsing fails, just trim
+        return url.trim();
+      }
+    };
+
+    const handleAddInstagramUrl = () => {
+      if (!newInstagramUrl.trim()) return;
+      
+      const normalized = normalizeInstagramUrl(newInstagramUrl);
+      
+      // Check if URL already exists (compare normalized versions)
+      const normalizedExisting = instagramUrls.map(u => normalizeInstagramUrl(u));
+      if (normalizedExisting.includes(normalized)) {
+        alert('This URL is already in the list');
+        return;
+      }
+      
+      setInstagramUrls([...instagramUrls, normalized]);
+      setNewInstagramUrl("");
+    };
+
+    const handleRemoveInstagramUrl = (index: number) => {
+      setInstagramUrls(instagramUrls.filter((_, i) => i !== index));
+    };
+
+    const handleInstagramUpdate = async () => {
+      if (!isOwner || !league) return;
+      
+      setUpdatingInstagram(true);
+      try {
+        // Filter out empty URLs
+        const cleanUrls = instagramUrls.filter(url => url && url.trim());
+        
+        // Store as JSON array if multiple URLs, or single URL string for backward compatibility
+        const instagramValue = cleanUrls.length === 0 
+          ? null 
+          : cleanUrls.length === 1 
+            ? cleanUrls[0] 
+            : JSON.stringify(cleanUrls);
+        
+        const { data, error } = await supabase
+          .from('competitions')
+          .update({ instagram_embed_url: instagramValue })
+          .eq('league_id', league.league_id)
+          .select()
+          .single();
+
+        if (error) {
+          console.error('Instagram update error:', error);
+          alert('Failed to update Instagram URLs');
+          return;
+        }
+
+        setLeague({ ...league, instagram_embed_url: instagramValue });
+        setIsEditingInstagram(false);
+        alert('Instagram URLs updated successfully!');
+      } catch (error) {
+        console.error('Instagram update error:', error);
+        alert(`Failed to update Instagram URLs: ${error.message}`);
+      } finally {
+        setUpdatingInstagram(false);
+      }
+    };
+
+    // Handle YouTube URL update
+    const handleYoutubeUpdate = async () => {
+      if (!isOwner || !league) return;
+      
+      setUpdatingYoutube(true);
+      try {
+        const { data, error } = await supabase
+          .from('competitions')
+          .update({ youtube_embed_url: youtubeUrl })
+          .eq('league_id', league.league_id)
+          .select()
+          .single();
+
+        if (error) {
+          console.error('YouTube update error:', error);
+          alert('Failed to update YouTube URL');
+          return;
+        }
+
+        setLeague({ ...league, youtube_embed_url: youtubeUrl });
+        setIsEditingYoutube(false);
+        alert('YouTube URL updated successfully!');
+      } catch (error) {
+        console.error('YouTube update error:', error);
+        alert(`Failed to update YouTube URL: ${error.message}`);
+      } finally {
+        setUpdatingYoutube(false);
+      }
+    };
+
+    // Convert Instagram profile URL to embed URL for latest posts
+    const getInstagramEmbedUrl = (url: string) => {
+      if (!url) return null;
+      
+      
+      // Clean the URL by removing query parameters
+      const cleanUrl = url.split('?')[0];
+      
+      // Check if it's a profile URL (instagram.com/username)
+      const profileRegex = /(?:instagram\.com\/)([A-Za-z0-9._]+)(?:\/)?$/;
+      const profileMatch = cleanUrl.match(profileRegex);
+      
+      if (profileMatch) {
+        const embedUrl = `https://www.instagram.com/${profileMatch[1]}/embed`;
+        return embedUrl;
+      }
+      
+      // Fallback: Extract post ID from specific post URLs
+      const postRegex = /(?:instagram\.com\/p\/|instagram\.com\/reel\/)([A-Za-z0-9_-]+)/;
+      const postMatch = cleanUrl.match(postRegex);
+      
+      if (postMatch) {
+        const embedUrl = `https://www.instagram.com/p/${postMatch[1]}/embed`;
+        return embedUrl;
+      }
+      
+      return null;
+    };
+
+    // Convert YouTube URL to embed format - memoized to prevent repeated processing
+    const getYoutubeEmbedUrl = useCallback((url: string): string | null => {
+      if (!url) return null;
+      
+      debugLog('Processing YouTube URL:', url);
+      
+      // If it's already an embed URL, ensure parameters are added
+      if (url.includes('/embed/')) {
+        const hasRel = url.includes('rel=0');
+        const hasModestBranding = url.includes('modestbranding=1');
+        
+        if (hasRel && hasModestBranding) {
+          return url;
+        }
+        
+        const missingParams = [];
+        if (!hasRel) missingParams.push('rel=0');
+        if (!hasModestBranding) missingParams.push('modestbranding=1');
+        
+        let cleanUrl = url.replace(/[?&]+$/, '');
+        const separator = cleanUrl.includes('?') ? '&' : '?';
+        return cleanUrl + separator + missingParams.join('&');
+      }
+      
+      const embedParams = 'rel=0&modestbranding=1';
+      
+      const playlistMatch = url.match(/[?&]list=([^&]+)/);
+      if (playlistMatch) {
+        const playlistId = playlistMatch[1];
+        return `https://www.youtube.com/embed/videoseries?list=${playlistId}&${embedParams}`;
+      }
+      
+      const watchMatch = url.match(/youtube\.com\/watch\?v=([^&]+)/);
+      if (watchMatch) {
+        const videoId = watchMatch[1];
+        return `https://www.youtube.com/embed/${videoId}?${embedParams}`;
+      }
+      
+      const shortMatch = url.match(/youtu\.be\/([^?]+)/);
+      if (shortMatch) {
+        const videoId = shortMatch[1];
+        return `https://www.youtube.com/embed/${videoId}?${embedParams}`;
+      }
+      
+      const shortsMatch = url.match(/youtube\.com\/shorts\/([^?]+)/);
+      if (shortsMatch) {
+        const videoId = shortsMatch[1];
+        return `https://www.youtube.com/embed/${videoId}?${embedParams}`;
+      }
+      
+      debugLog('Could not process YouTube URL');
+      return null;
+    }, []);
+
+    // Memoize the YouTube embed URL to prevent repeated processing
+    const youtubeEmbedUrl = useMemo(() => {
+      return league?.youtube_embed_url ? getYoutubeEmbedUrl(league.youtube_embed_url) : null;
+    }, [league?.youtube_embed_url, getYoutubeEmbedUrl]);
+
+    type PlayerAggregate = {
+      name: string;
+      team: string;
+      latestGameTs: string;
+      shirtnumber: string | null;
+      playerIds: Set<string>;
+      games: number;
+      totalPoints: number;
+      totalRebounds: number;
+      totalAssists: number;
+      totalSteals: number;
+      totalBlocks: number;
+      totalTurnovers: number;
+      totalFGM: number;
+      totalFGA: number;
+      total2PM: number;
+      total2PA: number;
+      total3PM: number;
+      total3PA: number;
+      totalFTM: number;
+      totalFTA: number;
+      totalORB: number;
+      totalDRB: number;
+      totalMinutes: number;
+      totalPersonalFouls: number;
+      totalPlusMinus: number;
+      rawStats: any[];
+      leagueIds: Set<string>;
+    };
+
+    // Two players should only ever be merged together if they share at least
+    // one underlying competition/league_id (i.e. the same age group for
+    // parent leagues that aggregate multiple age-group sub-competitions).
+    // If either side has no league_id info (e.g. non-parent leagues where
+    // every stat row shares the same single league_id) we fall back to
+    // allowing the merge, since there is no age-group boundary to enforce.
+    const hasLeagueOverlap = (a: Set<string>, b: Set<string>): boolean => {
+      if (a.size === 0 || b.size === 0) return true;
+      let overlap = false;
+      a.forEach((id: string) => {
+        if (b.has(id)) overlap = true;
+      });
+      return overlap;
+    };
+
+    const parseMinutesPlayed = (stat: any): number => {
+      const minutes = stat.sminutes || stat.minutes_played;
+      if (!minutes) return 0;
+      if (typeof minutes === 'number') return minutes;
+      if (typeof minutes === 'string') {
+        const parts = minutes.split(':');
+        if (parts.length === 2) {
+          return parseInt(parts[0]) + parseInt(parts[1]) / 60;
+        }
+        return parseFloat(minutes) || 0;
+      }
+      return 0;
+    };
+
+    const areSimilarNames = (name1: string, name2: string): boolean => {
+      if (!name1 || !name2) return false;
+      return namesMatch(name1, name2);
+    };
+
+    const aggregatePlayerStats = (playerStats: any[], slugLookup: Map<string, string>, nameLookup: Map<string, string>, playerIdToName?: Map<string, string>, siblingLeagueIds?: Set<string>): any[] => {
+      if (!playerStats || playerStats.length === 0) return [];
+
+      const byPlayerId = new Map<string, PlayerAggregate[]>();
+      const noPlayerId: any[] = [];
+
+      playerStats.forEach(stat => {
+        const playerName = stat.full_name ||
+          `${stat.firstname || ''} ${stat.familyname || ''}`.trim() ||
+          stat.name ||
+          (stat.player_id && playerIdToName?.get(stat.player_id)) ||
+          'Unknown Player';
+        const team = stat.team || stat.team_name || 'Unknown';
+        const minutesPlayed = parseMinutesPlayed(stat);
+        const hasAnyStats = (stat.spoints || 0) > 0 || (stat.sreboundstotal || 0) > 0 || 
+          (stat.sassists || 0) > 0 || (stat.ssteals || 0) > 0 || (stat.sblocks || 0) > 0 || 
+          (stat.sfieldgoalsattempted || 0) > 0 || (stat.sfreethrowsattempted || 0) > 0 ||
+          (stat.sthreepointersattempted || 0) > 0 || (stat.stwopointersattempted || 0) > 0 ||
+          (stat.sturnovers || 0) > 0 || (stat.sfoulspersonal || 0) > 0;
+        const didPlay = minutesPlayed > 0 || hasAnyStats;
+        
+        if (stat.player_id) {
+          // NOTE: `player_id` values are not guaranteed to be globally unique across
+          // different competitions in the source data (the same id has been observed
+          // reused for two completely different real players in different age groups).
+          // To avoid silently merging unrelated players, we only merge a stat row into
+          // an existing aggregate for this player_id if the name is actually similar;
+          // otherwise we start a new aggregate bucket for that id.
+          const bucketsForId = byPlayerId.get(stat.player_id) || [];
+          if (bucketsForId.length === 0) {
+            byPlayerId.set(stat.player_id, bucketsForId);
+          }
+          let agg = bucketsForId.find(b => areSimilarNames(b.name, playerName));
+          if (!agg) {
+            agg = {
+              name: playerName,
+              team: team,
+              latestGameTs: stat.game_date || '',
+              shirtnumber: stat.shirtnumber || null,
+              playerIds: new Set([stat.player_id]),
+              games: 0,
+              totalPoints: 0, totalRebounds: 0, totalAssists: 0,
+              totalSteals: 0, totalBlocks: 0, totalTurnovers: 0,
+              totalFGM: 0, totalFGA: 0, total2PM: 0, total2PA: 0,
+              total3PM: 0, total3PA: 0, totalFTM: 0, totalFTA: 0,
+              totalORB: 0, totalDRB: 0, totalMinutes: 0,
+              totalPersonalFouls: 0, totalPlusMinus: 0, rawStats: [],
+              leagueIds: new Set<string>()
+            };
+            bucketsForId.push(agg);
+          }
+          const gameDate = stat.game_date || '';
+          if (gameDate > agg.latestGameTs) {
+            agg.latestGameTs = gameDate;
+            agg.team = team;
+          }
+          if (stat.league_id) agg.leagueIds.add(stat.league_id);
+          if (didPlay) {
+            agg.games += 1;
+            agg.totalPoints += stat.spoints || 0;
+            agg.totalRebounds += stat.sreboundstotal || 0;
+            agg.totalAssists += stat.sassists || 0;
+            agg.totalSteals += stat.ssteals || 0;
+            agg.totalBlocks += stat.sblocks || 0;
+            agg.totalTurnovers += stat.sturnovers || 0;
+            agg.totalFGM += stat.sfieldgoalsmade || 0;
+            agg.totalFGA += stat.sfieldgoalsattempted || 0;
+            agg.total2PM += stat.stwopointersmade || 0;
+            agg.total2PA += stat.stwopointersattempted || 0;
+            agg.total3PM += stat.sthreepointersmade || 0;
+            agg.total3PA += stat.sthreepointersattempted || 0;
+            agg.totalFTM += stat.sfreethrowsmade || 0;
+            agg.totalFTA += stat.sfreethrowsattempted || 0;
+            agg.totalORB += stat.sreboundsoffensive || 0;
+            agg.totalDRB += stat.sreboundsdefensive || 0;
+            agg.totalPersonalFouls += stat.sfoulspersonal || 0;
+            agg.totalPlusMinus += stat.splusminuspoints || 0;
+            agg.totalMinutes += minutesPlayed;
+            agg.rawStats.push(stat);
+          }
+          if (playerName.length > agg.name.length) {
+            agg.name = playerName;
+          }
+        } else {
+          if (didPlay) {
+            noPlayerId.push(stat);
+          }
+        }
+      });
+
+      // Flatten the per-player_id buckets into unique entries. A single player_id can
+      // now map to multiple distinct aggregates (see note above about id collisions),
+      // so we assign each a synthetic composite key for the dedup/merge bookkeeping below.
+      const flatPlayerEntries: [string, PlayerAggregate][] = [];
+      byPlayerId.forEach((buckets: PlayerAggregate[], playerId: string) => {
+        buckets.forEach((bucket: PlayerAggregate, idx: number) => {
+          flatPlayerEntries.push([`${playerId}::${idx}`, bucket]);
+        });
+      });
+
+      const mergedPlayers: PlayerAggregate[] = [];
+      const processedIds = new Set<string>();
+
+      for (const [playerId, player] of flatPlayerEntries) {
+        if (processedIds.has(playerId)) continue;
+        
+        const playerTeamNormalized = normalizeTeamName(player.team);
+        const similarPlayers: [string, PlayerAggregate][] = [];
+        for (const [otherId, otherPlayer] of flatPlayerEntries) {
+          if (otherId !== playerId && !processedIds.has(otherId)) {
+            const otherTeamNormalized = normalizeTeamName(otherPlayer.team);
+            const sameTeam = playerTeamNormalized === otherTeamNormalized;
+            if (
+              sameTeam &&
+              areSimilarNames(player.name, otherPlayer.name) &&
+              hasLeagueOverlap(player.leagueIds, otherPlayer.leagueIds)
+            ) {
+              similarPlayers.push([otherId, otherPlayer]);
+            }
+          }
+        }
+        
+        if (similarPlayers.length > 0) {
+          for (const [otherId, other] of similarPlayers) {
+            other.playerIds.forEach((id: string) => player.playerIds.add(id));
+            other.leagueIds.forEach((id: string) => player.leagueIds.add(id));
+            player.games += other.games;
+            player.totalPoints += other.totalPoints;
+            player.totalRebounds += other.totalRebounds;
+            player.totalAssists += other.totalAssists;
+            player.totalSteals += other.totalSteals;
+            player.totalBlocks += other.totalBlocks;
+            player.totalTurnovers += other.totalTurnovers;
+            player.totalFGM += other.totalFGM;
+            player.totalFGA += other.totalFGA;
+            player.total2PM += other.total2PM;
+            player.total2PA += other.total2PA;
+            player.total3PM += other.total3PM;
+            player.total3PA += other.total3PA;
+            player.totalFTM += other.totalFTM;
+            player.totalFTA += other.totalFTA;
+            player.totalORB += other.totalORB;
+            player.totalDRB += other.totalDRB;
+            player.totalMinutes += other.totalMinutes;
+            player.totalPersonalFouls += other.totalPersonalFouls;
+            player.totalPlusMinus += other.totalPlusMinus;
+            player.rawStats.push(...other.rawStats);
+            player.name = getMostCompleteName([player.name, other.name]);
+            processedIds.add(otherId);
+          }
+        }
+        
+        processedIds.add(playerId);
+        mergedPlayers.push(player);
+      }
+
+      noPlayerId.forEach(stat => {
+        const playerName = stat.full_name ||
+          `${stat.firstname || ''} ${stat.familyname || ''}`.trim() ||
+          stat.name || 'Unknown Player';
+        const team = stat.team || stat.team_name || 'Unknown';
+        const statLeagueIds = stat.league_id ? new Set<string>([stat.league_id]) : new Set<string>();
+        let existingPlayer = mergedPlayers.find(p => areSimilarNames(p.name, playerName) && hasLeagueOverlap(p.leagueIds, statLeagueIds));
+        
+        if (existingPlayer) {
+          if (stat.league_id) existingPlayer.leagueIds.add(stat.league_id);
+          existingPlayer.games += 1;
+          existingPlayer.totalPoints += stat.spoints || 0;
+          existingPlayer.totalRebounds += stat.sreboundstotal || 0;
+          existingPlayer.totalAssists += stat.sassists || 0;
+          existingPlayer.totalSteals += stat.ssteals || 0;
+          existingPlayer.totalBlocks += stat.sblocks || 0;
+          existingPlayer.totalTurnovers += stat.sturnovers || 0;
+          existingPlayer.totalFGM += stat.sfieldgoalsmade || 0;
+          existingPlayer.totalFGA += stat.sfieldgoalsattempted || 0;
+          existingPlayer.total2PM += stat.stwopointersmade || 0;
+          existingPlayer.total2PA += stat.stwopointersattempted || 0;
+          existingPlayer.total3PM += stat.sthreepointersmade || 0;
+          existingPlayer.total3PA += stat.sthreepointersattempted || 0;
+          existingPlayer.totalFTM += stat.sfreethrowsmade || 0;
+          existingPlayer.totalFTA += stat.sfreethrowsattempted || 0;
+          existingPlayer.totalORB += stat.sreboundsoffensive || 0;
+          existingPlayer.totalDRB += stat.sreboundsdefensive || 0;
+          existingPlayer.totalPersonalFouls += stat.sfoulspersonal || 0;
+          existingPlayer.totalPlusMinus += stat.splusminuspoints || 0;
+          existingPlayer.rawStats.push(stat);
+          const minutesParts = stat.sminutes?.split(':');
+          if (minutesParts && minutesParts.length === 2) {
+            existingPlayer.totalMinutes += parseInt(minutesParts[0]) + parseInt(minutesParts[1]) / 60;
+          }
+          const noIdGameDate = stat.game_date || '';
+          if (noIdGameDate > existingPlayer.latestGameTs) {
+            existingPlayer.latestGameTs = noIdGameDate;
+            existingPlayer.team = team;
+          }
+        } else {
+          const newPlayer: PlayerAggregate = {
+            name: playerName, team: team,
+            latestGameTs: stat.game_date || '',
+            shirtnumber: stat.shirtnumber || null,
+            playerIds: new Set<string>(), games: 1,
+            totalPoints: stat.spoints || 0, totalRebounds: stat.sreboundstotal || 0,
+            totalAssists: stat.sassists || 0, totalSteals: stat.ssteals || 0,
+            totalBlocks: stat.sblocks || 0, totalTurnovers: stat.sturnovers || 0,
+            totalFGM: stat.sfieldgoalsmade || 0, totalFGA: stat.sfieldgoalsattempted || 0,
+            total2PM: stat.stwopointersmade || 0, total2PA: stat.stwopointersattempted || 0,
+            total3PM: stat.sthreepointersmade || 0, total3PA: stat.sthreepointersattempted || 0,
+            totalFTM: stat.sfreethrowsmade || 0, totalFTA: stat.sfreethrowsattempted || 0,
+            totalORB: stat.sreboundsoffensive || 0, totalDRB: stat.sreboundsdefensive || 0,
+            totalMinutes: 0, totalPersonalFouls: stat.sfoulspersonal || 0,
+            totalPlusMinus: stat.splusminuspoints || 0, rawStats: [stat],
+            leagueIds: statLeagueIds
+          };
+          const minutesParts = stat.sminutes?.split(':');
+          if (minutesParts && minutesParts.length === 2) {
+            newPlayer.totalMinutes = parseInt(minutesParts[0]) + parseInt(minutesParts[1]) / 60;
+          }
+          mergedPlayers.push(newPlayer);
+        }
+      });
+
+      const wiggallRaw = playerStats.filter((s: any) => {
+        const n = (s.full_name || `${s.firstname || ''} ${s.familyname || ''}`.trim() || s.name || (s.player_id && playerIdToName?.get(s.player_id)) || '').toLowerCase();
+        return n.includes('wiggall');
+      });
+      if (wiggallRaw.length > 0) {
+        console.log('[DEBUG] raw wiggall rows:', wiggallRaw.map((s: any) => ({ player_id: s.player_id, full_name: s.full_name, firstname: s.firstname, familyname: s.familyname, idToName: s.player_id ? playerIdToName?.get(s.player_id) : null, team: s.team || s.team_name, spoints: s.spoints, sminutes: s.sminutes })));
+      }
+      const wiggallDebug = mergedPlayers.filter(p => p.name.toLowerCase().includes('wiggall'));
+      if (wiggallDebug.length > 0) {
+        console.log('[crossTeamMerge DEBUG] wiggall entries in mergedPlayers:', wiggallDebug.map(p => ({ name: p.name, team: p.team, games: p.games, playerIds: Array.from(p.playerIds) })));
+      }
+
+      const crossTeamMerged: PlayerAggregate[] = [];
+      mergedPlayers.forEach((player) => {
+        let foundMatch = false;
+        for (const existingPlayer of crossTeamMerged) {
+          let overlaps = false;
+          player.playerIds.forEach((id: string) => {
+            if (existingPlayer.playerIds.has(id)) overlaps = true;
+          });
+          if (overlaps) continue;
+          if (!hasLeagueOverlap(player.leagueIds, existingPlayer.leagueIds)) continue;
+
+          if (strictNamesMatch(player.name, existingPlayer.name)) {
+            existingPlayer.games += player.games;
+            existingPlayer.totalPoints += player.totalPoints;
+            existingPlayer.totalRebounds += player.totalRebounds;
+            existingPlayer.totalAssists += player.totalAssists;
+            existingPlayer.totalSteals += player.totalSteals;
+            existingPlayer.totalBlocks += player.totalBlocks;
+            existingPlayer.totalTurnovers += player.totalTurnovers;
+            existingPlayer.totalFGM += player.totalFGM;
+            existingPlayer.totalFGA += player.totalFGA;
+            existingPlayer.total2PM += player.total2PM;
+            existingPlayer.total2PA += player.total2PA;
+            existingPlayer.total3PM += player.total3PM;
+            existingPlayer.total3PA += player.total3PA;
+            existingPlayer.totalFTM += player.totalFTM;
+            existingPlayer.totalFTA += player.totalFTA;
+            existingPlayer.totalORB += player.totalORB;
+            existingPlayer.totalDRB += player.totalDRB;
+            existingPlayer.totalMinutes += player.totalMinutes;
+            existingPlayer.totalPersonalFouls += player.totalPersonalFouls;
+            existingPlayer.totalPlusMinus += player.totalPlusMinus;
+            existingPlayer.rawStats.push(...player.rawStats);
+            player.playerIds.forEach((id: string) => existingPlayer.playerIds.add(id));
+            player.leagueIds.forEach((id: string) => existingPlayer.leagueIds.add(id));
+            if (player.latestGameTs > existingPlayer.latestGameTs) {
+              existingPlayer.latestGameTs = player.latestGameTs;
+              existingPlayer.team = player.team;
+            }
+            existingPlayer.name = getMostCompleteName([existingPlayer.name, player.name]);
+            foundMatch = true;
+            break;
+          }
+        }
+        if (!foundMatch) {
+          crossTeamMerged.push({ ...player, playerIds: new Set(player.playerIds), leagueIds: new Set(player.leagueIds) });
+        }
+      });
+
+      // Final exact-name dedup pass for parent leagues only.
+      // Players who played across multiple stops (child competitions) can end up
+      // with different player_ids per stop, so the existing merge stages (which
+      // guard on league overlap or player_id overlap) leave them as separate
+      // entries. This pass uses EXACT normalized name + exact normalized team
+      // matching — no fuzzy — so "Jayden Wise-Malcolm" cannot match "Jayden Wise".
+      let deduped = crossTeamMerged;
+      if (siblingLeagueIds && siblingLeagueIds.size > 0) {
+        // Extract age-group prefix from a team name, e.g. "15U Team 2" → "15u".
+        // Returns null if no age-group prefix is present.
+        const agePrefix = (team: string): string | null => {
+          const m = team.match(/^(\d+[uU])\b/);
+          return m ? m[1].toLowerCase() : null;
+        };
+        const exactDedup: PlayerAggregate[] = [];
+        for (const player of crossTeamMerged) {
+          const allInFamily = [...player.leagueIds].every(id => siblingLeagueIds!.has(id));
+          if (!allInFamily) { exactDedup.push(player); continue; }
+          const nName = normalizeName(player.name);
+          const pAge = agePrefix(player.team);
+          const match = exactDedup.find(p => {
+            if (![...p.leagueIds].every(id => siblingLeagueIds!.has(id))) return false;
+            if (normalizeName(p.name) !== nName) return false;
+            // If both entries have an age-group prefix they must match (prevents
+            // merging same name across different age groups, e.g. 15U vs 16U).
+            const eAge = agePrefix(p.team);
+            if (pAge && eAge && pAge !== eAge) return false;
+            return true;
+          });
+          if (match) {
+            player.playerIds.forEach((id: string) => match.playerIds.add(id));
+            player.leagueIds.forEach((id: string) => match.leagueIds.add(id));
+            match.games += player.games;
+            match.totalPoints += player.totalPoints;
+            match.totalRebounds += player.totalRebounds;
+            match.totalAssists += player.totalAssists;
+            match.totalSteals += player.totalSteals;
+            match.totalBlocks += player.totalBlocks;
+            match.totalTurnovers += player.totalTurnovers;
+            match.totalFGM += player.totalFGM;
+            match.totalFGA += player.totalFGA;
+            match.total2PM += player.total2PM;
+            match.total2PA += player.total2PA;
+            match.total3PM += player.total3PM;
+            match.total3PA += player.total3PA;
+            match.totalFTM += player.totalFTM;
+            match.totalFTA += player.totalFTA;
+            match.totalORB += player.totalORB;
+            match.totalDRB += player.totalDRB;
+            match.totalMinutes += player.totalMinutes;
+            match.totalPersonalFouls += player.totalPersonalFouls;
+            match.totalPlusMinus += player.totalPlusMinus;
+            match.rawStats.push(...player.rawStats);
+            if (player.latestGameTs > match.latestGameTs) {
+              match.latestGameTs = player.latestGameTs;
+              match.team = player.team;
+            }
+          } else {
+            exactDedup.push(player);
+          }
+        }
+        deduped = exactDedup;
+      }
+
+      const playersWithGames = deduped.filter(player => player.games > 0);
+      
+      return playersWithGames.map((player) => {
+        let playerSlug: string | null = null;
+        for (const pid of player.playerIds) {
+          if (slugLookup.has(pid)) {
+            playerSlug = slugLookup.get(pid)!;
+            break;
+          }
+        }
+        if (!playerSlug) {
+          playerSlug = nameLookup.get(player.name.toLowerCase().trim()) || null;
+        }
+        if (!playerSlug) {
+          for (const [name, s] of nameLookup.entries()) {
+            if (areSimilarNames(player.name, name)) {
+              playerSlug = s;
+              break;
+            }
+          }
+        }
+        // Final fallback: derive a canonical-style slug from the player's
+        // display name. This generates e.g. "jaydon-wise-malcolm" from
+        // "Jaydon Wise-Malcolm", which matches the canonical public.players
+        // slug even when the player_id isn't registered under this league
+        // (e.g. REBA SL players whose public.players record has a different
+        // league_id). Without this, playerSlug stays null → the row isn't
+        // clickable and clicking via another path opens the wrong profile.
+        if (!playerSlug && player.name && player.name !== 'Unknown Player') {
+          playerSlug = player.name
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+        }
+
+        const firstId = player.playerIds.size > 0 
+          ? Array.from(player.playerIds)[0] 
+          : `name_${player.name.toLowerCase().replace(/\s+/g, '_')}`;
+        
+        return {
+          ...player,
+          id: firstId,
+          playerKey: firstId,
+          slug: playerSlug,
+          avgPoints: (player.totalPoints / player.games).toFixed(1),
+          avgRebounds: (player.totalRebounds / player.games).toFixed(1),
+          avgAssists: (player.totalAssists / player.games).toFixed(1),
+          avgSteals: (player.totalSteals / player.games).toFixed(1),
+          avgBlocks: (player.totalBlocks / player.games).toFixed(1),
+          avgTurnovers: (player.totalTurnovers / player.games).toFixed(1),
+          avgMinutes: (player.totalMinutes / player.games).toFixed(1),
+          avgFGM: (player.totalFGM / player.games).toFixed(1),
+          avgFGA: (player.totalFGA / player.games).toFixed(1),
+          avg2PM: (player.total2PM / player.games).toFixed(1),
+          avg2PA: (player.total2PA / player.games).toFixed(1),
+          avg3PM: (player.total3PM / player.games).toFixed(1),
+          avg3PA: (player.total3PA / player.games).toFixed(1),
+          avgFTM: (player.totalFTM / player.games).toFixed(1),
+          avgFTA: (player.totalFTA / player.games).toFixed(1),
+          avgORB: (player.totalORB / player.games).toFixed(1),
+          avgDRB: (player.totalDRB / player.games).toFixed(1),
+          avgPersonalFouls: (player.totalPersonalFouls / player.games).toFixed(1),
+          avgPlusMinus: (player.totalPlusMinus / player.games).toFixed(1),
+          fgPercentage: player.totalFGA > 0 ? ((player.totalFGM / player.totalFGA) * 100).toFixed(1) : '0.0',
+          twoPercentage: player.total2PA > 0 ? ((player.total2PM / player.total2PA) * 100).toFixed(1) : '0.0',
+          threePercentage: player.total3PA > 0 ? ((player.total3PM / player.total3PA) * 100).toFixed(1) : '0.0',
+          ftPercentage: player.totalFTA > 0 ? ((player.totalFTM / player.totalFTA) * 100).toFixed(1) : '0.0'
+        };
+      }).sort((a, b) => parseFloat(b.avgPoints) - parseFloat(a.avgPoints));
+    };
+
+    const fetchAllPlayerAverages = async () => {
+      debugLog("📊 fetchAllPlayerAverages called, league_id:", league?.league_id);
+      if (!league?.league_id) {
+        debugLog("📊 No league_id, returning early");
+        return;
+      }
+
+      if (playerAveragesCancelledRef.current) {
+        return;
+      }
+
+      if (isFetchingStatsRef.current) {
+        return;
+      }
+
+      isFetchingStatsRef.current = true;
+      setIsLoadingStats(true);
+      try {
+        const isCancelled = () => playerAveragesCancelledRef.current;
+
+        const statsLeagueId = getDataLeagueId(slug, league.league_id);
+        const parentChildIds = childCompetitions.map(c => c.league_id);
+        const isParentFetch = parentChildIds.length > 0;
+        const parentChildNameMap = new Map<string, string>();
+        if (isParentFetch) {
+          childCompetitions.forEach(c => {
+            const label = c.age_group || (league?.name ? c.name.replace(league.name, '').trim() || c.name : c.name);
+            parentChildNameMap.set(c.league_id, label);
+          });
+        }
+        debugLog("📊 Step 1: Fetching all player_stats for league_id:", statsLeagueId, "isParent:", isParentFetch);
+
+        let rosterData: any[] | null = null;
+        {
+          const rosterIds = isParentFetch && parentChildIds.length > 0 ? parentChildIds : [statsLeagueId];
+          const rosterQ = rosterIds.length === 1
+            ? supabase.from("players").select("id, full_name, slug, photo_path_bg_removed").eq("league_id", rosterIds[0])
+            : supabase.from("players").select("id, full_name, slug, photo_path_bg_removed").in("league_id", rosterIds);
+          const { data: rosterResult, error: rosterError } = await rosterQ;
+          if (rosterError) console.error("Error fetching roster:", rosterError);
+          rosterData = rosterResult;
+        }
+
+        const slugLookup = new Map<string, string>();
+        const nameLookup = new Map<string, string>();
+        const playerIdToName = new Map<string, string>();
+        const photoLookup = new Map<string, string>();
+        
+        rosterData?.forEach(p => {
+          if (p.full_name) {
+            playerIdToName.set(p.id, p.full_name);
+          }
+          if (p.slug) {
+            slugLookup.set(p.id, p.slug);
+            if (p.full_name) {
+              nameLookup.set(p.full_name.toLowerCase().trim(), p.slug);
+            }
+          }
+          if (p.photo_path_bg_removed) {
+            photoLookup.set(p.id, p.photo_path_bg_removed);
+          }
+        });
+        
+        let allPlayerStats: any[] = [];
+        let page = 0;
+        const pageSize = 500;
+        let hasMore = true;
+        const maxRetries = 2;
+        
+        while (hasMore) {
+          if (isCancelled()) return;
+
+          let pageData: any[] | null = null;
+          let lastError: any = null;
+          
+          for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+              let data: any[] | null = null;
+              let error: any = null;
+
+              {
+                const psIds = isParentFetch && parentChildIds.length > 0 ? parentChildIds : [statsLeagueId];
+                const psQ = psIds.length === 1
+                  ? db.from("player_stats").select("*").eq("league_id", psIds[0])
+                  : db.from("player_stats").select("*").in("league_id", psIds);
+                const result = await psQ
+                  .order("player_id", { ascending: true, nullsFirst: false })
+                  .range(page * pageSize, (page + 1) * pageSize - 1);
+                data = result.data;
+                error = result.error;
+              }
+
+              if (error) {
+                lastError = error;
+                debugLog("📊 Step 1: Retry", attempt, "failed for page", page, ":", error.message);
+                if (attempt < maxRetries) {
+                  await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+                  continue;
+                }
+              } else {
+                pageData = data;
+                lastError = null;
+                break;
+              }
+            } catch (fetchErr: any) {
+              lastError = fetchErr;
+              debugLog("📊 Step 1: Retry", attempt, "fetch error page", page, ":", fetchErr.message);
+              if (attempt < maxRetries) {
+                await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+              }
+            }
+          }
+          
+          if (lastError) {
+            console.error("Error fetching player stats page", page, "after retries:", lastError);
+            break;
+          }
+          
+          if (pageData && pageData.length > 0) {
+            if (isParentFetch) {
+              pageData.forEach((stat: any) => {
+                if (stat.league_id && parentChildNameMap.has(stat.league_id)) {
+                  stat.age_group = parentChildNameMap.get(stat.league_id);
+                }
+              });
+            }
+            allPlayerStats = [...allPlayerStats, ...pageData];
+            debugLog("📊 Step 1: Fetched page", page, "with", pageData.length, "records, total:", allPlayerStats.length);
+            hasMore = pageData.length === pageSize;
+            page++;
+
+            if (!isCancelled()) {
+              const intermediateResults = aggregatePlayerStats(allPlayerStats, slugLookup, nameLookup, playerIdToName, isParentFetch ? new Set(parentChildIds) : undefined);
+              if (intermediateResults.length > 0) {
+                setAllPlayerAverages(intermediateResults);
+                setFilteredPlayerAverages(intermediateResults);
+                setDisplayedPlayerCount(20);
+                if (page === 1) {
+                  setIsLoadingStats(false);
+                }
+                if (hasMore) {
+                  setIsLoadingMoreStats(true);
+                }
+              }
+            }
+          } else {
+            hasMore = false;
+          }
+        }
+        
+        if (isCancelled()) return;
+        
+        debugLog("📊 Step 1: Fetched", allPlayerStats.length, "total stat records");
+
+        if (allPlayerStats.length === 0) {
+          debugLog("📊 No stats found for this league");
+          if (!isCancelled()) {
+            setAllPlayerAverages([]);
+            setFilteredPlayerAverages([]);
+          }
+          return;
+        }
+
+        // Secondary slug enrichment: find any player_ids in the stats that were
+        // not covered by the initial rosterData query (e.g. players whose
+        // players.league_id doesn't match any of the queried child leagues).
+        // The players table is small so fetching a targeted list is fast.
+        {
+          const uncoveredIds = [
+            ...new Set(
+              allPlayerStats
+                .map((s: any) => s.player_id)
+                .filter((id: string | null) => id && !slugLookup.has(id))
+            )
+          ] as string[];
+          if (uncoveredIds.length > 0) {
+            const chunkSize = 200;
+            for (let ci = 0; ci < uncoveredIds.length; ci += chunkSize) {
+              const chunk = uncoveredIds.slice(ci, ci + chunkSize);
+              const { data: extraPlayers } = await supabase
+                .from("players")
+                .select("id, full_name, slug, photo_path_bg_removed")
+                .in("id", chunk);
+              extraPlayers?.forEach((p: any) => {
+                if (p.slug) {
+                  slugLookup.set(p.id, p.slug);
+                  if (p.full_name)
+                    nameLookup.set(p.full_name.toLowerCase().trim(), p.slug);
+                }
+                if (p.full_name && p.id)
+                  playerIdToName.set(p.id, p.full_name);
+                if (p.photo_path_bg_removed && p.id)
+                  photoLookup.set(p.id, p.photo_path_bg_removed);
+              });
+            }
+            debugLog("📊 Secondary slug enrichment: resolved", uncoveredIds.length, "additional player IDs");
+          }
+        }
+
+        const finalResults = aggregatePlayerStats(allPlayerStats, slugLookup, nameLookup, playerIdToName, isParentFetch ? new Set(parentChildIds) : undefined);
+        finalResults.forEach((p: any) => {
+          if (!p.photoPath && p.playerIds instanceof Set) {
+            for (const pid of p.playerIds) {
+              const path = photoLookup.get(pid);
+              if (path) { p.photoPath = path; break; }
+            }
+          }
+        });
+        debugLog("📊 Final player list has", finalResults.length, "players");
+
+        if (isCancelled()) return;
+        setAllPlayerAverages(finalResults);
+        setFilteredPlayerAverages(finalResults);
+        setDisplayedPlayerCount(20);
+      } catch (error) {
+        console.error("Error in fetchAllPlayerAverages:", error);
+      } finally {
+        isFetchingStatsRef.current = false;
+        if (!playerAveragesCancelledRef.current) {
+          setIsLoadingStats(false);
+          setIsLoadingMoreStats(false);
+        }
+      }
+    };
+
+    const calculateStandingsForLeague = async (leagueId: string, parentLeagueId?: string): Promise<{standings: any[], poolAStandings: any[], poolBStandings: any[], hasPools: boolean}> => {
+      try {
+        const { data: allTeams, error: teamsError } = await db
+          .from("teams")
+          .select("team_id, name")
+          .eq("league_id", leagueId);
+        if (teamsError) {
+          console.error("Error fetching teams:", teamsError);
+        }
+
+        const { data: gameResults, error: gameResultsError } = await db
+          .from("v_game_results")
+          .select("home_team, away_team, home_score, away_score, pool")
+          .eq("league_id", leagueId);
+
+        if ((!gameResults || gameResults.length === 0 || gameResultsError) && (!allTeams || allTeams.length === 0)) {
+          return { standings: [], poolAStandings: [], poolBStandings: [], hasPools: false };
+        }
+        if (!gameResults || gameResults.length === 0 || gameResultsError) {
+          return { standings: [], poolAStandings: [], poolBStandings: [], hasPools: false };
+        }
+
+        const extractPoolName = (poolValue: string): string => {
+          const match = poolValue.match(/\(([^)]+)\)/);
+          return match ? match[1] : poolValue;
+        };
+
+        // Build fuzzy alias map from all raw team name strings in this league
+        const rawNamesForFuzzy: string[] = [];
+        const nameFrequency = new Map<string, number>();
+        if (allTeams) {
+          allTeams.forEach(t => { if (t.name) rawNamesForFuzzy.push(t.name); });
+        }
+        if (gameResults) {
+          gameResults.forEach((g: any) => {
+            [g.home_team, g.away_team].filter(Boolean).forEach((n: string) => {
+              rawNamesForFuzzy.push(n);
+              nameFrequency.set(n, (nameFrequency.get(n) ?? 0) + 1);
+            });
+          });
+        }
+        const fuzzyAliasMapForStandings = buildFuzzyTeamAliasMap(rawNamesForFuzzy, nameFrequency);
+
+        // Normalizer: fuzzy alias first, then static map + general normalization
+        const normalizeDynamic = (name: string): string => {
+          if (!name) return '';
+          const trimmed = name.trim();
+          const fuzzyMapped = fuzzyAliasMapForStandings.get(trimmed) ?? trimmed;
+          return normalizeAndMapTeamName(fuzzyMapped);
+        };
+
+        const buildStatsFromGames = (games: any[], teamNames?: Map<string, string>) => {
+          const statsMap: Record<string, { wins: number, losses: number, pointsFor: number, pointsAgainst: number, games: number, originalName: string }> = {};
+
+          const ensureTeam = (normalized: string, original: string) => {
+            if (!statsMap[normalized]) {
+              statsMap[normalized] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0, originalName: original };
+            }
+          };
+
+          if (teamNames) {
+            teamNames.forEach((original, normalized) => ensureTeam(normalized, original));
+          }
+
+          games.forEach((game: any) => {
+            if (game.home_team) ensureTeam(normalizeDynamic(game.home_team), game.home_team);
+            if (game.away_team) ensureTeam(normalizeDynamic(game.away_team), game.away_team);
+          });
+
+          games.forEach((game: any) => {
+            if (game.home_score == null || game.away_score == null) return;
+            const homeName = normalizeDynamic(game.home_team || '');
+            const awayName = normalizeDynamic(game.away_team || '');
+            const homeScore = game.home_score;
+            const awayScore = game.away_score;
+
+            if (statsMap[homeName]) {
+              statsMap[homeName].pointsFor += homeScore;
+              statsMap[homeName].pointsAgainst += awayScore;
+              statsMap[homeName].games += 1;
+              if (homeScore > awayScore) statsMap[homeName].wins += 1;
+              else if (homeScore < awayScore) statsMap[homeName].losses += 1;
+            }
+            if (statsMap[awayName]) {
+              statsMap[awayName].pointsFor += awayScore;
+              statsMap[awayName].pointsAgainst += homeScore;
+              statsMap[awayName].games += 1;
+              if (awayScore > homeScore) statsMap[awayName].wins += 1;
+              else if (awayScore < homeScore) statsMap[awayName].losses += 1;
+            }
+          });
+
+          const arr = Object.entries(statsMap).map(([team, stats]) => ({
+            team,
+            originalName: stats.originalName,
+            wins: stats.wins,
+            losses: stats.losses,
+            winPct: stats.games > 0 ? Math.round((stats.wins / stats.games) * 1000) / 1000 : 0,
+            pointsFor: stats.pointsFor,
+            pointsAgainst: stats.pointsAgainst,
+            pointsDiff: stats.pointsFor - stats.pointsAgainst,
+            games: stats.games,
+            avgPoints: stats.games > 0 ? Math.round((stats.pointsFor / stats.games) * 10) / 10 : 0,
+            record: `${stats.wins}-${stats.losses}`
+          }));
+
+          const merged = new Map<string, typeof arr[0]>();
+          arr.forEach(team => {
+            const teamKey = normalizeDynamic(team.team);
+            if (!merged.has(teamKey)) {
+              merged.set(teamKey, { ...team, team: teamKey });
+            } else {
+              const existing = merged.get(teamKey)!;
+              existing.wins += team.wins;
+              existing.losses += team.losses;
+              existing.games += team.games;
+              existing.pointsFor += team.pointsFor;
+              existing.pointsAgainst += team.pointsAgainst;
+              existing.pointsDiff = existing.pointsFor - existing.pointsAgainst;
+              existing.winPct = existing.games > 0 ? Math.round((existing.wins / existing.games) * 1000) / 1000 : 0;
+              existing.avgPoints = existing.games > 0 ? Math.round((existing.pointsFor / existing.games) * 10) / 10 : 0;
+              existing.record = `${existing.wins}-${existing.losses}`;
+            }
+          });
+
+          return Array.from(merged.values())
+            .filter(t => t.games > 0)
+            .sort((a, b) => {
+              if (b.winPct !== a.winPct) return b.winPct - a.winPct;
+              if (b.pointsDiff !== a.pointsDiff) return b.pointsDiff - a.pointsDiff;
+              return b.avgPoints - a.avgPoints;
+            })
+            .map((team, index) => ({ ...team, rank: index + 1, movement: 'same' }));
+        };
+
+        const teamNameMap = new Map<string, string>();
+        if (allTeams) {
+          allTeams.forEach(team => {
+            teamNameMap.set(normalizeAndMapTeamName(team.name), team.name);
+          });
+        }
+
+        const fullStandings = buildStatsFromGames(gameResults, teamNameMap);
+
+        const normalizePoolLabel = (pool: string): string => {
+          const extracted = extractPoolName(pool).toLowerCase().replace(/\s+/g, ' ').trim();
+          if (extracted === 'a' || extracted === 'pool a' || extracted === 'group a') return 'Pool A';
+          if (extracted === 'b' || extracted === 'pool b' || extracted === 'group b') return 'Pool B';
+          return extracted;
+        };
+
+        const poolAGames = gameResults.filter((g: any) => g.pool && normalizePoolLabel(g.pool) === 'Pool A');
+        const poolBGames = gameResults.filter((g: any) => g.pool && normalizePoolLabel(g.pool) === 'Pool B');
+
+        const poolAStandings = buildStatsFromGames(poolAGames);
+        const poolBStandings = buildStatsFromGames(poolBGames);
+        const anyGameHasPool = gameResults.some((g: any) => g.pool && (normalizePoolLabel(g.pool) === 'Pool A' || normalizePoolLabel(g.pool) === 'Pool B'));
+        const poolsExist = anyGameHasPool;
+
+        return { standings: fullStandings, poolAStandings, poolBStandings, hasPools: poolsExist };
+      } catch (error) {
+        console.error("Error calculating standings for league:", leagueId, error);
+        return { standings: [], poolAStandings: [], poolBStandings: [], hasPools: false };
+      }
+    };
+
+    // Calculate team standings using team_stats table first, fallback to player_stats
+    const calculateStandingsWithTeamStats = async (leagueId: string, playerStats: any[], parentLeagueId?: string) => {
+      try {
+        const { data: allTeams, error: teamsError } = await db
+          .from("teams")
+          .select("team_id, name")
+          .eq("league_id", leagueId);
+
+        if (teamsError || !allTeams || allTeams.length === 0) {
+          console.error("Error fetching teams:", teamsError);
+          setStandings([]);
+          return;
+        }
+
+        const { data: gameResults, error: gameResultsError } = await db
+          .from("v_game_results")
+          .select("home_team, away_team, home_score, away_score")
+          .eq("league_id", leagueId);
+
+        // Build fuzzy alias map from all raw team name strings in this league
+        const rawNamesForFuzzy2: string[] = [];
+        const nameFrequency2 = new Map<string, number>();
+        allTeams.forEach(t => { if (t.name) rawNamesForFuzzy2.push(t.name); });
+        if (gameResults) {
+          gameResults.forEach((g: any) => {
+            [g.home_team, g.away_team].filter(Boolean).forEach((n: string) => {
+              rawNamesForFuzzy2.push(n);
+              nameFrequency2.set(n, (nameFrequency2.get(n) ?? 0) + 1);
+            });
+          });
+        }
+        const fuzzyAliasMap2 = buildFuzzyTeamAliasMap(rawNamesForFuzzy2, nameFrequency2);
+
+        // Normalizer: fuzzy alias first, then static map + general normalization
+        const normalizeDynamic2 = (name: string): string => {
+          if (!name) return '';
+          const trimmed = name.trim();
+          const fuzzyMapped = fuzzyAliasMap2.get(trimmed) ?? trimmed;
+          return normalizeAndMapTeamName(fuzzyMapped);
+        };
+
+        // Initialize standings with all teams (0-0 record by default)
+        const teamStatsMap: { [team: string]: { wins: number, losses: number, pointsFor: number, pointsAgainst: number, games: number } } = {};
+        
+        allTeams.forEach(team => {
+          const normalizedName = normalizeDynamic2(team.name);
+          teamStatsMap[normalizedName] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0 };
+        });
+
+        if (gameResults && gameResults.length > 0 && !gameResultsError) {
+          gameResults.forEach((game: any) => {
+            if (game.home_score == null || game.away_score == null) return;
+            const homeName = normalizeDynamic2(game.home_team || '');
+            const awayName = normalizeDynamic2(game.away_team || '');
+            const homeScore = game.home_score;
+            const awayScore = game.away_score;
+
+            if (teamStatsMap[homeName]) {
+              teamStatsMap[homeName].pointsFor += homeScore;
+              teamStatsMap[homeName].pointsAgainst += awayScore;
+              teamStatsMap[homeName].games += 1;
+              if (homeScore > awayScore) teamStatsMap[homeName].wins += 1;
+              else if (homeScore < awayScore) teamStatsMap[homeName].losses += 1;
+            }
+
+            if (teamStatsMap[awayName]) {
+              teamStatsMap[awayName].pointsFor += awayScore;
+              teamStatsMap[awayName].pointsAgainst += homeScore;
+              teamStatsMap[awayName].games += 1;
+              if (awayScore > homeScore) teamStatsMap[awayName].wins += 1;
+              else if (awayScore < homeScore) teamStatsMap[awayName].losses += 1;
+            }
+          });
+        }
+
+        // Convert to standings format
+        const standingsArray = Object.entries(teamStatsMap).map(([team, stats]) => ({
+          team,
+          wins: stats.wins,
+          losses: stats.losses,
+          winPct: stats.games > 0 ? Math.round((stats.wins / stats.games) * 1000) / 1000 : 0,
+          pointsFor: stats.pointsFor,
+          pointsAgainst: stats.pointsAgainst,
+          pointsDiff: stats.pointsFor - stats.pointsAgainst,
+          games: stats.games,
+          avgPoints: stats.games > 0 ? Math.round((stats.pointsFor / stats.games) * 10) / 10 : 0,
+          record: `${stats.wins}-${stats.losses}`
+        }));
+
+        // Merge duplicate teams and apply fuzzy/static normalization a second time
+        // to catch any remaining variants (e.g. teams whose pre-normalized forms still differ)
+        const mergedStandings = new Map<string, typeof standingsArray[0]>();
+        
+        standingsArray.forEach(team => {
+          const teamKey = normalizeDynamic2(team.team);
+          
+          if (!mergedStandings.has(teamKey)) {
+            mergedStandings.set(teamKey, { ...team, team: teamKey });
+          } else {
+            const existing = mergedStandings.get(teamKey)!;
+            existing.wins += team.wins;
+            existing.losses += team.losses;
+            existing.games += team.games;
+            existing.pointsFor += team.pointsFor;
+            existing.pointsAgainst += team.pointsAgainst;
+            existing.pointsDiff = existing.pointsFor - existing.pointsAgainst;
+            existing.winPct = existing.games > 0 ? Math.round((existing.wins / existing.games) * 1000) / 1000 : 0;
+            existing.avgPoints = existing.games > 0 ? Math.round((existing.pointsFor / existing.games) * 10) / 10 : 0;
+            existing.record = `${existing.wins}-${existing.losses}`;
+          }
+        });
+
+        // Filter out zero-game teams (e.g. D1 ghost teams that leaked in via brand league_id)
+        const finalStandings = Array.from(mergedStandings.values())
+          .filter(t => t.games > 0)
+          .sort((a, b) => {
+            if (b.winPct !== a.winPct) return b.winPct - a.winPct;
+            if (b.pointsDiff !== a.pointsDiff) return b.pointsDiff - a.pointsDiff;
+            return b.avgPoints - a.avgPoints;
+          });
+
+        setStandings(finalStandings);
+      } catch (error) {
+        console.error("Error calculating standings:", error);
+        setStandings([]);
+      }
+    };
+
+    // Calculate team standings from player stats using actual game results
+    const calculateStandings = (playerStats: any[]) => {
+      // Group stats by game_id to get complete game data
+      const gameMap = new Map<string, any>();
+      
+      playerStats.forEach(stat => {
+        if (!gameMap.has(stat.game_id)) {
+          gameMap.set(stat.game_id, {
+            game_id: stat.game_id,
+            game_date: stat.game_date,
+            home_team: stat.home_team,
+            away_team: stat.away_team,
+            players: []
+          });
+        }
+        gameMap.get(stat.game_id).players.push(stat);
+      });
+
+      // Calculate scores for each game and determine winners/losers
+      const teamStats: { [team: string]: { totalPoints: number, games: number, wins: number, losses: number, pointsAgainst: number } } = {};
+      
+      Array.from(gameMap.values()).forEach(game => {
+        // Calculate team scores by summing player points
+        const teamScores = game.players.reduce((acc: Record<string, number>, stat: any) => {
+          const teamName = stat.team;
+          if (!teamName) return acc;
+          if (!acc[teamName]) acc[teamName] = 0;
+          acc[teamName] += stat.points || 0;
+          return acc;
+        }, {});
+
+        const teams = Object.keys(teamScores);
+        if (teams.length !== 2) return; // Skip if not exactly 2 teams
+        
+        const [team1, team2] = teams;
+        const team1Score = teamScores[team1];
+        const team2Score = teamScores[team2];
+        
+        // Initialize team stats if they don't exist
+        [team1, team2].forEach(team => {
+          if (!teamStats[team]) {
+            teamStats[team] = { totalPoints: 0, games: 0, wins: 0, losses: 0, pointsAgainst: 0 };
+          }
+        });
+        
+        // Update team stats
+        teamStats[team1].totalPoints += team1Score;
+        teamStats[team1].pointsAgainst += team2Score;
+        teamStats[team1].games += 1;
+        
+        teamStats[team2].totalPoints += team2Score;
+        teamStats[team2].pointsAgainst += team1Score;
+        teamStats[team2].games += 1;
+        
+        // Determine winner and loser based on actual scores
+        if (team1Score > team2Score) {
+          teamStats[team1].wins += 1;
+          teamStats[team2].losses += 1;
+        } else if (team2Score > team1Score) {
+          teamStats[team2].wins += 1;
+          teamStats[team1].losses += 1;
+        }
+        // Note: Ties are not counted as wins or losses
+      });
+      
+      // Convert to standings format
+      const standingsArray = Object.entries(teamStats).map(([team, stats]) => ({
+        team,
+        wins: stats.wins,
+        losses: stats.losses,
+        winPct: stats.games > 0 ? Math.round((stats.wins / stats.games) * 1000) / 1000 : 0,
+        pointsFor: stats.totalPoints,
+        pointsAgainst: stats.pointsAgainst,
+        pointsDiff: stats.totalPoints - stats.pointsAgainst,
+        games: stats.games,
+        avgPoints: stats.games > 0 ? Math.round((stats.totalPoints / stats.games) * 10) / 10 : 0,
+        record: `${stats.wins}-${stats.losses}`
+      })).sort((a, b) => {
+        // Sort by win percentage first, then by point differential, then by average points
+        if (b.winPct !== a.winPct) return b.winPct - a.winPct;
+        if (b.pointsDiff !== a.pointsDiff) return b.pointsDiff - a.pointsDiff;
+        return b.avgPoints - a.avgPoints;
+      });
+
+      setStandings(standingsArray);
+    };
+
+    // Calculate pool-based standings with movement tracking
+    const calculatePoolStandings = async (leagueId: string, parentLeagueId?: string) => {
+      try {
+        setIsLoadingStandings(true);
+
+        const { data: allTeams, error: teamsError } = await db
+          .from("teams")
+          .select("team_id, name")
+          .eq("league_id", leagueId);
+
+        if (teamsError || !allTeams || allTeams.length === 0) {
+          console.error("Error fetching teams:", teamsError);
+          setPoolAStandings([]);
+          setPoolBStandings([]);
+          setFullLeagueStandings([]);
+          setIsLoadingStandings(false);
+          return;
+        }
+
+        // Fetch game results to get pool information
+        const { data: scheduleData, error: scheduleError } = await db
+          .from("v_game_results")
+          .select("*")
+          .eq("league_id", leagueId);
+
+        // Build team-to-pool mapping from v_game_results
+        const extractPoolName = (poolValue: string): string => {
+          const match = poolValue.match(/\(([^)]+)\)/);
+          return match ? match[1] : poolValue;
+        };
+        
+        const teamPoolMap: Record<string, string> = {};
+        if (scheduleData && !scheduleError) {
+          scheduleData.forEach((game: any) => {
+            if (game.home_team && game.pool) {
+              const poolName = extractPoolName(game.pool);
+              const normalizedHome = normalizeAndMapTeamName(game.home_team);
+              teamPoolMap[normalizedHome] = poolName;
+            }
+            if (game.away_team && game.pool) {
+              const poolName = extractPoolName(game.pool);
+              const normalizedAway = normalizeAndMapTeamName(game.away_team);
+              teamPoolMap[normalizedAway] = poolName;
+            }
+          });
+        }
+
+        // Initialize standings with all teams (0-0 record by default)
+        const teamStatsMap: Record<string, { wins: number, losses: number, pointsFor: number, pointsAgainst: number, games: number, pool?: string, originalName: string }> = {};
+        
+        allTeams.forEach(team => {
+          const normalizedName = normalizeAndMapTeamName(team.name);
+          teamStatsMap[normalizedName] = { 
+            wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0,
+            pool: teamPoolMap[normalizedName] || teamPoolMap[team.name],
+            originalName: team.name  // Store original name for logo lookup
+          };
+        });
+
+        if (scheduleData && scheduleData.length > 0 && !scheduleError) {
+          scheduleData.forEach((game: any) => {
+            const homeName = normalizeAndMapTeamName(game.home_team || '');
+            const awayName = normalizeAndMapTeamName(game.away_team || '');
+
+            if (game.home_team && !teamStatsMap[homeName]) {
+              teamStatsMap[homeName] = {
+                wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0,
+                pool: teamPoolMap[homeName] || teamPoolMap[game.home_team],
+                originalName: game.home_team
+              };
+            }
+            if (game.away_team && !teamStatsMap[awayName]) {
+              teamStatsMap[awayName] = {
+                wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0,
+                pool: teamPoolMap[awayName] || teamPoolMap[game.away_team],
+                originalName: game.away_team
+              };
+            }
+
+            if (game.home_score == null || game.away_score == null) return;
+            const homeScore = game.home_score;
+            const awayScore = game.away_score;
+
+            if (teamStatsMap[homeName]) {
+              teamStatsMap[homeName].pointsFor += homeScore;
+              teamStatsMap[homeName].pointsAgainst += awayScore;
+              teamStatsMap[homeName].games += 1;
+              if (homeScore > awayScore) teamStatsMap[homeName].wins += 1;
+              else if (homeScore < awayScore) teamStatsMap[homeName].losses += 1;
+            }
+
+            if (teamStatsMap[awayName]) {
+              teamStatsMap[awayName].pointsFor += awayScore;
+              teamStatsMap[awayName].pointsAgainst += homeScore;
+              teamStatsMap[awayName].games += 1;
+              if (awayScore > homeScore) teamStatsMap[awayName].wins += 1;
+              else if (awayScore < homeScore) teamStatsMap[awayName].losses += 1;
+            }
+          });
+        }
+
+        // Convert to standings format with movement tracking
+        const formatStandings = (teams: any[], poolFilter?: string) => {
+          const filtered = poolFilter 
+            ? teams.filter(t => t.pool === poolFilter && t.games > 0)
+            : teams.filter(t => t.games > 0);
+          
+          return filtered
+            .sort((a, b) => {
+              if (b.winPct !== a.winPct) return b.winPct - a.winPct;
+              if (b.pointsDiff !== a.pointsDiff) return b.pointsDiff - a.pointsDiff;
+              return b.avgPoints - a.avgPoints;
+            })
+            .map((team, index) => {
+              const currentRank = index + 1;
+              const previousRank = previousRankings[team.team];
+              let movement = 'same';
+              
+              if (previousRank !== undefined) {
+                if (currentRank < previousRank) movement = 'up';
+                else if (currentRank > previousRank) movement = 'down';
+              }
+              
+              return { ...team, rank: currentRank, movement };
+            });
+        };
+
+        const allTeamsArray = Object.entries(teamStatsMap).map(([team, stats]) => ({
+          team,
+          originalName: stats.originalName,  // Include original name for logo lookup
+          wins: stats.wins,
+          losses: stats.losses,
+          winPct: stats.games > 0 ? Math.round((stats.wins / stats.games) * 1000) / 1000 : 0,
+          pointsFor: stats.pointsFor,
+          pointsAgainst: stats.pointsAgainst,
+          pointsDiff: stats.pointsFor - stats.pointsAgainst,
+          games: stats.games,
+          avgPoints: stats.games > 0 ? Math.round((stats.pointsFor / stats.games) * 10) / 10 : 0,
+          record: `${stats.wins}-${stats.losses}`,
+          pool: stats.pool
+        }));
+
+        // Merge duplicate teams (handles data quality issues where same team appears multiple times)
+        // Apply normalization to catch variations like "Essex Rebels (M)" vs "Essex Rebels" or "MK Breakers" vs "Milton Keynes Breakers"
+        const mergedTeams = new Map<string, typeof allTeamsArray[0]>();
+        
+        allTeamsArray.forEach(team => {
+          // Re-normalize the team name to catch any variations
+          const teamKey = normalizeAndMapTeamName(team.team);
+          
+          if (!mergedTeams.has(teamKey)) {
+            // First time seeing this normalized team - add it with normalized name
+            mergedTeams.set(teamKey, { ...team, team: teamKey });
+          } else {
+            // Duplicate team - merge the stats
+            const existing = mergedTeams.get(teamKey)!;
+            existing.wins += team.wins;
+            existing.losses += team.losses;
+            existing.games += team.games;
+            existing.pointsFor += team.pointsFor;
+            existing.pointsAgainst += team.pointsAgainst;
+            existing.pointsDiff = existing.pointsFor - existing.pointsAgainst;
+            existing.winPct = existing.games > 0 ? Math.round((existing.wins / existing.games) * 1000) / 1000 : 0;
+            existing.avgPoints = existing.games > 0 ? Math.round((existing.pointsFor / existing.games) * 10) / 10 : 0;
+            existing.record = `${existing.wins}-${existing.losses}`;
+            // Keep the first originalName and pool we encountered
+          }
+        });
+
+        const mergedTeamsArray = Array.from(mergedTeams.values());
+
+        // Set standings for each view
+        const fullStandings = formatStandings(mergedTeamsArray);
+        const poolAStandings = formatStandings(mergedTeamsArray, 'Pool A');
+        const poolBStandings = formatStandings(mergedTeamsArray, 'Pool B');
+
+        setFullLeagueStandings(fullStandings);
+        setPoolAStandings(poolAStandings);
+        setPoolBStandings(poolBStandings);
+
+        // Check if pools exist (any team has pool data)
+        const poolsExist = poolAStandings.length > 0 || poolBStandings.length > 0;
+        setHasPools(poolsExist);
+
+        // Update previous rankings for next calculation
+        const newRankings: Record<string, number> = {};
+        fullStandings.forEach((team, index) => {
+          newRankings[team.team] = index + 1;
+        });
+        setPreviousRankings(newRankings);
+
+      } catch (error) {
+        console.error("Error calculating pool standings:", error);
+      } finally {
+        setIsLoadingStandings(false);
+      }
+    };
 
     if (!league) {
       return <div className="p-6 text-slate-600">Loading league...</div>;
     }
 
-    return (
-      <div className="min-h-screen bg-[#fffaf1]">
-        <header className="bg-white shadow-sm sticky top-0 z-50 px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img
-              src={SwishLogo}
-              alt="Swish Assistant"
-              className="h-9 cursor-pointer"
-              onClick={() => navigate("/")}
-            />
-          </div>
+  <>
+    <Helmet>
+      {selectedGameKey && inlineGameInfo ? (
+        <>
+          <title>{`${inlineGameInfo.teams[0] || ''} vs ${inlineGameInfo.teams[1] || ''} — ${inlineGameInfo.teamScores[inlineGameInfo.teams[0]] ?? ''}–${inlineGameInfo.teamScores[inlineGameInfo.teams[1]] ?? ''} | ${league?.name || formatTitle(slug)} | Swish Assistant`}</title>
+          <meta name="description" content={`Box score and game recap: ${inlineGameInfo.teams[0]} vs ${inlineGameInfo.teams[1]} in ${league?.name || formatTitle(slug)}.`} />
+          <meta property="og:title" content={`${inlineGameInfo.teams[0]} vs ${inlineGameInfo.teams[1]} — ${inlineGameInfo.teamScores[inlineGameInfo.teams[0]] ?? ''}–${inlineGameInfo.teamScores[inlineGameInfo.teams[1]] ?? ''} | ${league?.name || formatTitle(slug)}`} />
+          <meta property="og:description" content={`Box score and game recap: ${inlineGameInfo.teams[0]} ${inlineGameInfo.teamScores[inlineGameInfo.teams[0]] ?? 0} – ${inlineGameInfo.teamScores[inlineGameInfo.teams[1]] ?? 0} ${inlineGameInfo.teams[1]} on ${new Date(inlineGameInfo.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}.`} />
+          <meta property="og:type" content="website" />
+          <meta property="og:url" content={`https://www.swishassistant.com/competition/${slug}/game/${encodeURIComponent(selectedGameKey)}`} />
+          <meta property="og:image" content="https://www.swishassistant.com/og-image.png" />
+          <link rel="canonical" href={`https://www.swishassistant.com/competition/${slug}/game/${encodeURIComponent(selectedGameKey)}`} />
+        </>
+      ) : (
+        <>
+          <title>{`${league?.name || formatTitle(slug)} | League Stats | Swish Assistant`}</title>
+          <meta
+            name="description"
+            content={
+              league?.description ||
+              `Explore ${league?.name || formatTitle(slug)} league stats, team standings, and player performance on Swish Assistant.`
+            }
+          />
+          <meta
+            property="og:title"
+            content={`${league?.name || formatTitle(slug)} | League Stats | Swish Assistant`}
+          />
+          <meta
+            property="og:description"
+            content={
+              league?.description ||
+              `Explore ${league?.name || formatTitle(slug)} league stats, team standings, and player performance on Swish Assistant.`
+            }
+          />
+          <meta property="og:type" content="website" />
+          <meta
+            property="og:url"
+            content={`https://www.swishassistant.com/competition/${slug}`}
+          />
+          <meta
+            property="og:image"
+            content="https://www.swishassistant.com/og-image.png"
+          />
+          <link rel="canonical" href={`https://www.swishassistant.com/competition/${slug}`} />
+        </>
+      )}
+    </Helmet>
 
-          <div className="relative w-full max-w-md mx-6">
-            <input
-              type="text"
-              placeholder="Search leagues or players..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-              className="w-full px-4 py-2 border border-gray-300 rounded-full text-sm"
+    <div className="min-h-screen bg-[#fffaf1]">
+      {/* rest of your code here */}
+    </div>
+    </>
+  
+ return (
+      
+      <div className="min-h-screen bg-[#fffaf1] dark:bg-neutral-950 transition-colors duration-700 relative">
+        {leagueBrandColors && (
+          <>
+            <div
+              className="absolute inset-0 pointer-events-none transition-opacity duration-1000 ease-in-out dark:hidden"
+              style={{
+                opacity: brandFadedIn ? 1 : 0,
+                background: `linear-gradient(180deg, transparent 20%, rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.08) 60%, rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.18) 100%)`,
+              }}
             />
-            <button
-              onClick={handleSearch}
-              className="absolute right-0 top-0 h-full px-4 bg-orange-500 hover:bg-orange-600 text-white rounded-full text-sm"
-            >
-              Go
-            </button>
+            <div
+              className="absolute inset-0 pointer-events-none transition-opacity duration-1000 ease-in-out hidden dark:block"
+              style={{
+                opacity: brandFadedIn ? 1 : 0,
+                background: `linear-gradient(180deg, transparent 20%, rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.10) 60%, rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.22) 100%)`,
+              }}
+            />
+          </>
+        )}
+        <div className="relative z-10">
+        <header className="bg-white dark:bg-neutral-900 shadow-sm sticky top-0 z-50 px-3 md:px-6 py-1.5 md:py-4">
+          <div className="flex items-center gap-2 md:flex-row md:gap-4">
+            <div className="flex items-center shrink-0">
+              <img
+                src={SwishLogo}
+                alt="Swish Assistant"
+                className="h-6 md:h-9 cursor-pointer"
+                onClick={() => navigate("/")}
+              />
+            </div>
 
-            {suggestions.length > 0 && (
-              <ul className="absolute z-50 mt-2 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                {suggestions.map((item, index) => (
-                  <li
-                    key={index}
-                    onClick={() => {
-                      setSearch("");
-                      setSuggestions([]);
-                      navigate(`/league/${item.slug}`);
-                    }}
-                    className="px-4 py-2 cursor-pointer hover:bg-orange-100 text-left text-slate-800"
-                  >
-                    {item.name}
-                  </li>
-                ))}
-              </ul>
+            <div className="relative flex-1 md:max-w-md md:mx-6">
+              <form onSubmit={handleSubmitSearch} className="flex items-center">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 md:h-4 md:w-4 text-gray-400 pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Search league, team or player"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="w-full pl-8 md:pl-9 pr-3 py-1 md:py-2 border border-gray-300 dark:border-neutral-700 rounded-full text-xs md:text-sm bg-white dark:bg-neutral-800 text-slate-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                  />
+                </div>
+              </form>
+
+              {suggestions.length > 0 && (
+                <ul className="absolute z-50 mt-1 w-full bg-white dark:bg-neutral-900 border border-orange-200 dark:border-neutral-700 rounded-md shadow-lg max-h-72 overflow-y-auto">
+                  {suggestions.map((item: SearchSuggestion, index: number) => (
+                    <li
+                      key={index}
+                      onClick={() => handleSelectSearch(item)}
+                      className="px-4 py-2.5 cursor-pointer hover:bg-orange-50 dark:hover:bg-neutral-800 text-left border-b border-orange-100 dark:border-neutral-800 last:border-b-0 transition-colors duration-200"
+                    >
+                      <div className="flex items-center gap-3">
+                        {item.type === 'league' ? (
+                          <div className="h-7 w-7 rounded-full bg-gradient-to-br from-orange-300 to-orange-400 flex items-center justify-center flex-shrink-0">
+                            <Trophy className="h-3.5 w-3.5 text-white" />
+                          </div>
+                        ) : item.type === 'team' ? (
+                          <div className="h-7 w-7 rounded-full bg-white dark:bg-neutral-800 border border-orange-200 dark:border-neutral-600 flex items-center justify-center overflow-hidden flex-shrink-0">
+                            <TeamLogo teamName={item.name} leagueId={item.league_id} size="sm" />
+                          </div>
+                        ) : (
+                          <PlayerSearchAvatar name={item.name} photoUrl={item.photo_url} />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-orange-900 dark:text-orange-300 text-xs md:text-sm truncate">{item.name}</div>
+                          {item.type === 'player' && item.team && (
+                            <div className="text-xs text-orange-600 dark:text-orange-400 truncate">{item.team}</div>
+                          )}
+                          {item.type === 'team' && (
+                            <div className="text-xs text-orange-600 dark:text-orange-400 truncate">{item.league_name}</div>
+                          )}
+                          {item.type === 'league' && (
+                            <div className="text-xs text-orange-600 dark:text-orange-400">League</div>
+                          )}
+                        </div>
+                        <div className="text-xs text-orange-700 dark:text-orange-300 capitalize bg-orange-100 dark:bg-orange-900/50 px-1.5 py-0.5 rounded-full font-medium flex-shrink-0">
+                          {item.type}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            {currentUser && (
+              <div className="flex items-center gap-1 md:gap-2 shrink-0">
+                <button
+                  onClick={() => navigate("/coaches-hub")}
+                  className="bg-orange-500 hover:bg-orange-600 text-white px-2 py-1 md:px-4 md:py-2 rounded-lg font-medium transition-colors text-[10px] md:text-sm whitespace-nowrap group relative overflow-hidden"
+                >
+                  <span className="group-hover:opacity-0 transition-opacity duration-200">Coaches Hub</span>
+                  <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">Coming Soon</span>
+                </button>
+                <button
+                  onClick={() => navigate("/league-management")}
+                  className="bg-orange-500 hover:bg-orange-600 text-white px-2 py-1 md:px-4 md:py-2 rounded-lg font-medium transition-colors text-[10px] md:text-sm whitespace-nowrap"
+                >
+                  League Admin
+                </button>
+              </div>
             )}
+
+            <ThemeToggle />
           </div>
 
-          <div className="flex gap-6 text-sm font-medium text-slate-600">
-            <a href="#" className="hover:text-orange-500">Overview</a>
-            <a href="#" className="hover:text-orange-500">Stats</a>
-            <a href="#" className="hover:text-orange-500">Schedule</a>
-            <a href="#" className="hover:text-orange-500">Insights</a>
-          </div>
+          {/* Game Results / Live / Upcoming Carousel */}
+          {league?.league_id && (
+            <div className="-mx-3 md:-mx-6">
+              <GameResultsCarousel 
+                leagueId={league.league_id}
+                slug={slug}
+                onGameClick={handleCarouselGameClick}
+                childLeagueIds={isParentLeague ? childCompetitions.map(c => c.league_id) : undefined}
+                childLeagueMap={isParentLeague ? childLeagueMap : undefined}
+                selectedGameKey={selectedGameKey}
+                brandColor={brandColorHex || brandColor}
+              />
+            </div>
+          )}
         </header>
 
-        <section className="mb-10">
+        <section>
           <div
             className="rounded-xl overflow-hidden shadow relative h-52 sm:h-64 md:h-80 bg-gray-200"
             style={{
-              backgroundImage: `url(${league?.banner_url || LeagueDefaultImage})`,
+              backgroundImage: `url(${displayBannerUrl || LeagueDefaultImage})`,
               backgroundSize: "cover",
               backgroundPosition: "center",
             }}
           >
             <div className="absolute inset-0 bg-black/40 flex flex-col justify-end p-6">
-              <h2 className="text-3xl sm:text-4xl font-bold text-white drop-shadow-md">
-                {league?.name || "League Name"}
-              </h2>
-              <p className="text-sm text-white/90 mt-1">
-                Organised by {league?.organiser_name || "BallParkSports"}
-              </p>
+              <div className="flex items-center gap-3 flex-wrap">
+                <h2 className="text-3xl sm:text-4xl font-bold text-white drop-shadow-md">
+                  {(displayLeagueName || "League Name").replace(/\s*FIBA$/i, "")}
+                </h2>
+                {(league as any)?.competition_id && siblingSeasons.length > 1 && (
+                  <select
+                    value={slug}
+                    onChange={(e) => navigate(`/competition/${e.target.value}`)}
+                    className="text-xs font-semibold bg-white/20 hover:bg-white/30 border border-white/40 text-white rounded-full px-3 py-1 cursor-pointer backdrop-blur-sm transition-colors focus:outline-none focus:ring-1 focus:ring-white/60"
+                    style={{ WebkitAppearance: 'none', appearance: 'none', paddingRight: '1.5rem', backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='white'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center' }}
+                  >
+                    {siblingSeasons.map((s) => (
+                      <option key={s.slug} value={s.slug} style={{ background: '#1a1a2e', color: 'white' }}>
+                        {s.division || s.season || s.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+              {(league as any)?.instagram_handle && (
+                <a
+                  href={`https://www.instagram.com/${normalizeInstagramHandle((league as any).instagram_handle)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 self-start inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold text-white bg-white/20 hover:bg-white/30 border border-white/30 transition-colors"
+                >
+                  <Instagram className="h-3 w-3" />
+                  @{normalizeInstagramHandle((league as any).instagram_handle)}
+                </a>
+              )}
             </div>
+            
+            {/* Banner Upload Button for League Owner */}
+            {isOwner && (
+              <div className="absolute top-4 right-4">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleBannerUpload}
+                  className="hidden"
+                  id="banner-upload"
+                  disabled={uploadingBanner}
+                />
+                <label
+                  htmlFor="banner-upload"
+                  className={`inline-flex items-center gap-2 px-4 py-2 bg-white/90 hover:bg-white text-slate-700 text-sm font-medium rounded-lg cursor-pointer transition-colors ${
+                    uploadingBanner ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                >
+                  {uploadingBanner ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                      </svg>
+                      Change Banner
+                    </>
+                  )}
+                </label>
+
+                {/* Logo upload */}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleLogoUpload}
+                  className="hidden"
+                  id="logo-upload"
+                  disabled={uploadingLogo}
+                />
+                <label
+                  htmlFor="logo-upload"
+                  className={`inline-flex items-center gap-2 px-4 py-2 bg-white/90 hover:bg-white text-slate-700 text-sm font-medium rounded-lg cursor-pointer transition-colors ${
+                    uploadingLogo ? 'opacity-50 cursor-not-allowed' : ''
+                  }`}
+                >
+                  {uploadingLogo ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      Change Logo
+                    </>
+                  )}
+                </label>
+
+              </div>
+            )}
+            
+
           </div>
         </section>
 
-        <div className="bg-white rounded-xl shadow p-6">
-          <h2 className="text-lg font-semibold text-slate-800">AI Game Summary</h2>
-          <p className="text-sm text-slate-600 mt-2">
-            {aiSummary || "2023/24 season Gloucester City Kings had a strong showing this season, led by ${scorerData?.name} who averaged ${scorerData?.points} points per game."}
-          </p>
+        {/* Breadcrumb for Sub-Competitions */}
+        {parentLeague && (
+          <div className="bg-white dark:bg-neutral-900 border-b border-gray-100 dark:border-neutral-800">
+            <div className="max-w-7xl mx-auto px-4 md:px-6 py-3">
+              <Link href={`/competition/${parentLeague.slug}`}>
+                <a className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-orange-400 dark:hover:text-orange-300 transition-colors group" data-testid="link-parent-league">
+                  <div className="flex items-center gap-2">
+                    {parentLeague.logo_url && (
+                      <img 
+                        src={parentLeague.logo_url} 
+                        alt={parentLeague.name}
+                        className="w-5 h-5 rounded object-cover"
+                      />
+                    )}
+                    <span className="font-medium group-hover:underline">{parentLeague.name}</span>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-slate-400" />
+                  <span className="text-slate-700 font-medium">{league?.name}</span>
+                </a>
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {/* SEO-Optimized About This League Section */}
+        {league?.description && (
+          <div className="w-full bg-gradient-to-b from-transparent to-[#fffaf5] dark:to-neutral-900 pt-3 pb-5 px-4 animate-fade-in-up">
+            <div className="max-w-4xl mx-auto bg-white dark:bg-neutral-900 rounded-lg shadow-sm p-4 md:p-5 dark:border-neutral-800" style={{ border: `1px solid ${brandBorderLight}` }}>
+              <div className="flex items-center gap-3 mb-3">
+                {displayLogoUrl && (
+                  <img
+                    src={displayLogoUrl}
+                    alt={`${displayLeagueName || league?.name || ''} logo`}
+                    className="h-8 w-auto drop-shadow-sm"
+                  />
+                )}
+                <h2 className="text-base md:text-lg font-semibold text-slate-900 dark:text-white">
+                  About {league?.name}
+                </h2>
+              </div>
+              <div 
+                ref={dividerRef}
+                className={`h-0.5 mb-3 rounded-full transition-all duration-1000 ease-out ${
+                  isDividerVisible ? 'w-20' : 'w-8'
+                }`}
+                style={{ backgroundColor: brandColor }}
+              ></div>
+              <p className="text-slate-600 dark:text-white leading-relaxed text-sm">
+                {league?.description}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Navigation Tabs - Moved below carousel */}
+        <div className="bg-white dark:bg-neutral-900 border-b border-gray-200 dark:border-neutral-800">
+          <div className="max-w-7xl mx-auto px-4 md:px-6">
+            <div className="flex flex-col gap-3 py-3 md:py-4">
+              {/* Navigation Links */}
+              <div className="flex gap-4 md:gap-6 text-sm font-medium text-slate-600 dark:text-slate-400 overflow-x-auto pb-1 md:pb-0">
+                <button 
+                  className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'teams' ? 'font-semibold border-b-2' : ''}`}
+                  style={activeSection === 'teams' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                  onMouseEnter={(e) => { if (activeSection !== 'teams') (e.target as HTMLElement).style.color = brandColor; }}
+                  onMouseLeave={(e) => { if (activeSection !== 'teams') (e.target as HTMLElement).style.color = ''; }}
+                  onClick={() => {
+                    setSelectedPlayerSlug(null);
+                    setSelectedTeamName(null);
+                    setActiveSection('teams');
+                    if (league?.league_id && fullLeagueStandings.length === 0 && standings.length === 0) {
+                      calculatePoolStandings(league.league_id, league.parent_league_id ?? league.league_id);
+                    }
+                  }}
+                >
+                  Teams
+                </button>
+              {slug?.toUpperCase() !== 'REBA-SL' && <button 
+                className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'standings' ? 'font-semibold border-b-2' : ''}`}
+                style={activeSection === 'standings' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                onMouseEnter={(e) => { if (activeSection !== 'standings') (e.target as HTMLElement).style.color = brandColor; }}
+                onMouseLeave={(e) => { if (activeSection !== 'standings') (e.target as HTMLElement).style.color = ''; }}
+                onClick={() => {
+                  setSelectedPlayerSlug(null);
+                  setSelectedTeamName(null);
+                  setActiveSection('standings');
+                  if (league?.league_id && fullLeagueStandings.length === 0) {
+                    calculatePoolStandings(league.league_id, league.parent_league_id ?? league.league_id);
+                  }
+                }}
+              >
+                Standings
+              </button>}
+              <button 
+                className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'stats' ? 'font-semibold border-b-2' : ''}`}
+                style={activeSection === 'stats' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                onMouseEnter={(e) => { if (activeSection !== 'stats') (e.target as HTMLElement).style.color = brandColor; }}
+                onMouseLeave={(e) => { if (activeSection !== 'stats') (e.target as HTMLElement).style.color = ''; }}
+                onClick={() => {
+                  setSelectedPlayerSlug(null);
+                  setSelectedTeamName(null);
+                  setActiveSection('stats');
+                  setDisplayedPlayerCount(20);
+                  setStatsSearch("");
+                  if (allPlayerAverages.length === 0 && !isFetchingStatsRef.current) {
+                    fetchAllPlayerAverages();
+                  }
+                }}
+              >
+                Player Stats
+              </button>
+              <button 
+                className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'teamstats' ? 'font-semibold border-b-2' : ''}`}
+                style={activeSection === 'teamstats' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                onMouseEnter={(e) => { if (activeSection !== 'teamstats') (e.target as HTMLElement).style.color = brandColor; }}
+                onMouseLeave={(e) => { if (activeSection !== 'teamstats') (e.target as HTMLElement).style.color = ''; }}
+                onClick={() => {
+                  setSelectedPlayerSlug(null);
+                  setSelectedTeamName(null);
+                  setActiveSection('teamstats');
+                  if (teamStatsData.length === 0) {
+                    fetchTeamStats();
+                  }
+                }}
+              >
+                Team Stats
+              </button>
+              <button 
+                className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'schedule' ? 'font-semibold border-b-2' : ''}`}
+                style={activeSection === 'schedule' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                onMouseEnter={(e) => { if (activeSection !== 'schedule') (e.target as HTMLElement).style.color = brandColor; }}
+                onMouseLeave={(e) => { if (activeSection !== 'schedule') (e.target as HTMLElement).style.color = ''; }}
+                onClick={() => { setSelectedPlayerSlug(null); setSelectedTeamName(null); setActiveSection('schedule'); }}
+              >
+                Schedule
+              </button>
+              <button 
+                className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'leaders' ? 'font-semibold border-b-2' : ''}`}
+                style={activeSection === 'leaders' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                onMouseEnter={(e) => { if (activeSection !== 'leaders') (e.target as HTMLElement).style.color = brandColor; }}
+                onMouseLeave={(e) => { if (activeSection !== 'leaders') (e.target as HTMLElement).style.color = ''; }}
+                onClick={() => {
+                  setSelectedPlayerSlug(null);
+                  setSelectedTeamName(null);
+                  setActiveSection('leaders');
+                  if (allPlayerAverages.length === 0 && !isFetchingStatsRef.current) {
+                    fetchAllPlayerAverages();
+                  }
+                }}
+              >
+                Leaders
+              </button>
+              <button 
+                className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'comparison' ? 'font-semibold border-b-2' : ''}`}
+                style={activeSection === 'comparison' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                onMouseEnter={(e) => { if (activeSection !== 'comparison') (e.target as HTMLElement).style.color = brandColor; }}
+                onMouseLeave={(e) => { if (activeSection !== 'comparison') (e.target as HTMLElement).style.color = ''; }}
+                onClick={() => {
+                  setSelectedPlayerSlug(null);
+                  setSelectedTeamName(null);
+                  setActiveSection('comparison');
+                  if (allPlayerAverages.length === 0 && !isFetchingStatsRef.current) {
+                    fetchAllPlayerAverages();
+                  }
+                  if (teamStatsData.length === 0) {
+                    fetchTeamStats();
+                  }
+                }}
+              >
+                Compare
+              </button>
+              <button 
+                className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'overview' ? 'font-semibold border-b-2' : ''}`}
+                style={activeSection === 'overview' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                onMouseEnter={(e) => { if (activeSection !== 'overview') (e.target as HTMLElement).style.color = brandColor; }}
+                onMouseLeave={(e) => { if (activeSection !== 'overview') (e.target as HTMLElement).style.color = ''; }}
+                onClick={() => {
+                  setSelectedPlayerSlug(null);
+                  setSelectedTeamName(null);
+                  setActiveSection('overview');
+                  if (teamStatsData.length === 0) {
+                    fetchTeamStats();
+                  }
+                }}
+              >
+                Overview
+              </button>
+              </div>
+
+              {/* Competition filter pills for parent leagues (gender / age-group) */}
+              {isParentLeague && ageGroupLabels.length > 0 && !(activeSection === 'player' && selectedPlayerSlug) && !(activeSection === 'team' && selectedTeamName) && !(activeSection === 'game' && selectedGameKey) && (
+                <div className="flex items-center gap-2 flex-shrink-0 flex-wrap" data-testid="age-group-tabs">
+                  <div className="flex gap-1.5 flex-wrap">
+                    {visibleAgeGroupLabels.map((label) => (
+                      <button
+                        key={label}
+                        onClick={() => { setSelectedAgeGroup(label); setFilterAgeGroup(label); setStandingsView('full'); }}
+                        className={`px-3 py-1.5 text-xs md:text-sm font-semibold rounded-full border-2 transition-colors whitespace-nowrap ${
+                          selectedAgeGroup === label
+                            ? 'text-white'
+                            : 'bg-white dark:bg-neutral-800 text-slate-600 dark:text-slate-300 border-gray-200 dark:border-neutral-600 hover:border-gray-400 dark:hover:border-neutral-400'
+                        }`}
+                        style={selectedAgeGroup === label ? { borderColor: brandColor, backgroundColor: brandColor } : {}}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  {availableStopsForAgeGroup.length > 1 && (
+                    <select
+                      value={selectedStop}
+                      onChange={(e) => setSelectedStop(e.target.value)}
+                      className="px-3 py-1.5 text-xs md:text-sm font-medium rounded-lg border-2 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
+                      style={{ borderColor: selectedStop !== 'all' ? brandColor : '#e5e7eb' }}
+                    >
+                      <option value="all">All Stops</option>
+                      {availableStopsForAgeGroup.map(stop => (
+                        <option key={stop} value={String(stop)}>Stop {stop}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
+
+              
+            </div>
+          </div>
         </div>
 
-        <main className="max-w-7xl mx-auto px-6 py-10 grid grid-cols-1 md:grid-cols-3 gap-8">
-          <section className="md:col-span-2 space-y-6">
-            <div className="bg-white rounded-xl shadow p-6">
-              <h2 className="text-lg font-semibold text-slate-800">Recent Game Summaries</h2>
-              {gameSummaries.length > 0 ? (
-                <ul className="mt-4 space-y-2">
-                  {gameSummaries.map((game, index) => (
-                    <li key={index} className="text-sm text-slate-600">
-                      {game.name} ({game.team_name}) scored {game.points} pts, {game.assists} ast, {game.rebounds_total} reb on {game.game_date}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-slate-600 mt-2">No recent games available.</p>
-              )}
-            </div>
-
-            <section id="stats" className="bg-white rounded-xl shadow p-6">
-              <h2 className="text-lg font-semibold text-slate-800 mb-6">Top Performers</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                {([
-                  { title: "Top Scorers", list: topScorers, label: "PPG", key: "avg" },
-                  { title: "Top Rebounders", list: topRebounders, label: "RPG", key: "avg" },
-                  { title: "Top Playmakers", list: topAssistsList, label: "APG", key: "avg" },
-                ] as const).map(({ title, list, label, key }) => (
-                  <div key={title} className="bg-gray-50 rounded-lg p-4 shadow-inner">
-                    <h3 className="text-sm font-semibold text-slate-700 mb-3 text-center">{title}</h3>
-                    <ul className="space-y-1 text-sm text-slate-800">
-                      {Array.isArray(list) &&
-                        list.map((p, i) => (
-                          <li key={`${title}-${p.name}-${i}`} className="flex justify-between">
-                            <span>{p.name}</span>
-                            <span className="font-medium text-orange-500">
-                              {p[key]} {label}
-                            </span>
-                          </li>
-                        ))}
-                    </ul>
-                    <div className="text-right pt-2">
+        <main className="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-10 grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
+          <section className={`${activeSection === 'overview' ? 'md:col-span-2' : 'md:col-span-3'} space-y-6`}>
+            
+            {/* Standings Section */}
+            {activeSection === 'standings' && slug?.toUpperCase() !== 'REBA-SL' && (
+              <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
+                <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3 mb-4 md:mb-6">
+                  <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">League Standings</h2>
+                  
+                  {/* View Toggle - Only show for BCB Trophy */}
+                  {slug === 'british-championship-basketball' && (
+                    <div className="inline-flex rounded-lg border border-gray-300 dark:border-neutral-600 bg-gray-100 dark:bg-neutral-800 p-1">
                       <button
-                        onClick={() => {
-                          const sortKey = sortMap[title as keyof typeof sortMap];
-                          if (sortKey) {
-                            setSortBy(sortKey);
-                            setSortOrder("desc");
-                            document.getElementById("player-stat-explorer")?.scrollIntoView({ behavior: "smooth" });
-                          }
-                        }}
-                        className="text-sm text-orange-500 hover:underline"
+                        onClick={() => setViewMode('standings')}
+                        className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                          viewMode === 'standings'
+                            ? 'bg-white dark:bg-neutral-700 shadow-sm'
+                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+                        }`}
+                        style={viewMode === 'standings' ? { color: brandColor } : {}}
+                        data-testid="button-standings-view"
                       >
-                        Full List →
+                        Standings
+                      </button>
+                      <button
+                        onClick={() => setViewMode('bracket')}
+                        className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                          viewMode === 'bracket'
+                            ? 'bg-white dark:bg-neutral-700 shadow-sm'
+                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
+                        }`}
+                        style={viewMode === 'bracket' ? { color: brandColor } : {}}
+                        data-testid="button-bracket-view"
+                      >
+                        Bracket
+                      </button>
+                    </div>
+                  )}
+                </div>
+                
+                {viewMode === 'standings' && (
+                  <>
+                    {/* Pool Tabs - shown for non-parent leagues or when a specific age group with pools is selected */}
+                    {(() => {
+                      const parentAgeGroupHasPools = isParentLeague && selectedAgeGroup !== 'all' && parentStandingsGroups.some(g => g.ageGroup === selectedAgeGroup && g.hasPools);
+                      const showPoolSection = !isParentLeague || parentAgeGroupHasPools;
+                      const effectiveHasPools = isParentLeague ? parentAgeGroupHasPools : hasPools;
+                      return showPoolSection ? (
+                    <div className="flex flex-wrap gap-2 mb-4 md:mb-6 border-b border-gray-200 dark:border-neutral-700">
+                  {effectiveHasPools && (
+                    <>
+                      <button
+                        onClick={() => setStandingsView('poolA')}
+                        className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium transition-colors ${
+                          standingsView === 'poolA' 
+                            ? 'border-b-2' 
+                            : 'text-gray-600 dark:text-gray-400'
+                        }`}
+                        style={standingsView === 'poolA' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                        onMouseEnter={(e) => { if (standingsView !== 'poolA') (e.target as HTMLElement).style.color = brandColor; }}
+                        onMouseLeave={(e) => { if (standingsView !== 'poolA') (e.target as HTMLElement).style.color = ''; }}
+                      >
+                        Pool A
+                      </button>
+                      <button
+                        onClick={() => setStandingsView('poolB')}
+                        className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium transition-colors ${
+                          standingsView === 'poolB' 
+                            ? 'border-b-2' 
+                            : 'text-gray-600 dark:text-gray-400'
+                        }`}
+                        style={standingsView === 'poolB' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                        onMouseEnter={(e) => { if (standingsView !== 'poolB') (e.target as HTMLElement).style.color = brandColor; }}
+                        onMouseLeave={(e) => { if (standingsView !== 'poolB') (e.target as HTMLElement).style.color = ''; }}
+                      >
+                        Pool B
+                      </button>
+                    </>
+                  )}
+                  <button
+                    onClick={() => setStandingsView('full')}
+                    className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm font-medium transition-colors ${
+                      standingsView === 'full' 
+                        ? 'border-b-2' 
+                        : 'text-gray-600 dark:text-gray-400'
+                    }`}
+                    style={standingsView === 'full' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                    onMouseEnter={(e) => { if (standingsView !== 'full') (e.target as HTMLElement).style.color = brandColor; }}
+                    onMouseLeave={(e) => { if (standingsView !== 'full') (e.target as HTMLElement).style.color = ''; }}
+                  >
+                    {effectiveHasPools ? 'Full League' : 'League Standings'}
+                  </button>
+                </div>
+                    ) : null;
+                    })()}
+
+                {/* Parent League Standings - grouped by age group */}
+                {isParentLeague && (
+                  <>
+                    {isLoadingStandings ? (
+                      <div className="text-center py-8">
+                        <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                        <p className="text-gray-600 dark:text-gray-400 mt-4">Loading standings...</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-6">
+                        {(selectedAgeGroup === 'all' ? parentStandingsGroups : parentStandingsGroups.filter(g => g.ageGroup === selectedAgeGroup)).map((group) => {
+                          const displayStandings = selectedAgeGroup !== 'all' && group.hasPools
+                            ? (standingsView === 'poolA' ? group.poolAStandings : standingsView === 'poolB' ? group.poolBStandings : group.standings)
+                            : group.standings;
+                          return (
+                          <div key={group.ageGroup}>
+                            {selectedAgeGroup === 'all' && (
+                              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: brandColor }}></span>
+                                {group.ageGroup}
+                              </h3>
+                            )}
+                            <div className="overflow-x-auto -mx-4 md:mx-0 mb-4">
+                              <table className="w-full text-sm min-w-[600px]">
+                                <thead>
+                                  <tr className="border-b-2 border-gray-200 dark:border-neutral-700">
+                                    <th className="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-16 sticky left-0 bg-white dark:bg-neutral-900 z-10">Logo</th>
+                                    <th className="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 min-w-[140px]">Team</th>
+                                    <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-16">W</th>
+                                    <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-16">L</th>
+                                    <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">Win%</th>
+                                    <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">PF</th>
+                                    <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">PA</th>
+                                    <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">Diff</th>
+                                    <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-12"></th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {displayStandings.map((team: any, index: number) => (
+                                    <tr 
+                                      key={`${team.team}-${index}`}
+                                      className="border-b border-gray-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors group"
+                                    >
+                                      <td className="py-3 px-3 sticky left-0 bg-white dark:bg-neutral-900 group-hover:bg-orange-50 dark:group-hover:bg-neutral-800 z-10 transition-colors">
+                                        <div className="flex items-center gap-2">
+                                          <span className="font-medium text-slate-600 dark:text-slate-400 text-xs">{team.rank}</span>
+                                          <TeamLogo 
+                                            teamName={team.originalName || team.team} 
+                                            leagueId={league?.league_id} 
+                                            size="sm"
+                                            logoUrl={getTeamLogoUrl(team.originalName || team.team)}
+                                          />
+                                        </div>
+                                      </td>
+                                      <td className="py-3 px-3 font-medium text-slate-800 dark:text-slate-200">
+                                        <span className="truncate">{team.team}</span>
+                                      </td>
+                                      <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.wins}</td>
+                                      <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.losses}</td>
+                                      <td className="py-3 px-3 text-center font-medium text-slate-600 dark:text-slate-400">{(team.winPct * 100).toFixed(1)}%</td>
+                                      <td className="py-3 px-3 text-right font-medium text-slate-700 dark:text-slate-300">{team.pointsFor}</td>
+                                      <td className="py-3 px-3 text-right font-medium text-slate-700 dark:text-slate-300">{team.pointsAgainst}</td>
+                                      <td className={`py-3 px-3 text-right font-semibold ${team.pointsDiff > 0 ? 'text-green-600 dark:text-green-400' : team.pointsDiff < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-400'}`}>
+                                        {team.pointsDiff > 0 ? `+${team.pointsDiff}` : team.pointsDiff}
+                                      </td>
+                                      <td className="py-3 px-3 text-center">
+                                        {team.movement === 'up' && <span className="text-green-600 font-bold text-sm">▲</span>}
+                                        {team.movement === 'down' && <span className="text-red-600 font-bold text-sm">▼</span>}
+                                        {team.movement === 'same' && <span className="text-gray-400 text-sm">▬</span>}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                              {displayStandings.length === 0 && (
+                                <div className="text-center py-4 text-gray-500 text-sm">No standings data available</div>
+                              )}
+                            </div>
+                          </div>
+                          );
+                        })}
+                        {parentStandingsGroups.length === 0 && (
+                          <div className="text-center py-8 text-gray-500">No standings data available</div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Non-parent League Standings */}
+                {!isParentLeague && (
+                <>
+                {isLoadingStandings ? (
+                  <div className="text-center py-8">
+                    <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                    <p className="text-gray-600 dark:text-gray-400 mt-4">Loading standings...</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto -mx-4 md:mx-0">
+                    <table className="w-full text-sm min-w-[600px]">
+                      <thead>
+                        <tr className="border-b-2 border-gray-200 dark:border-neutral-700">
+                          <th className="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-16 sticky left-0 bg-white dark:bg-neutral-900 z-10">Logo</th>
+                          <th className="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 min-w-[140px]">Team</th>
+                          <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-16">W</th>
+                          <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-16">L</th>
+                          <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">Win%</th>
+                          <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">PF</th>
+                          <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">PA</th>
+                          <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">Diff</th>
+                          <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-12"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(standingsView === 'poolA' ? poolAStandings : 
+                          standingsView === 'poolB' ? poolBStandings : 
+                          fullLeagueStandings).map((team, index) => (
+                          <tr 
+                            key={`${team.team}-${index}`}
+                            className="border-b border-gray-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors group"
+                          >
+                            <td className="py-3 px-3 sticky left-0 bg-white dark:bg-neutral-900 group-hover:bg-orange-50 dark:group-hover:bg-neutral-800 z-10 transition-colors">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-slate-600 dark:text-slate-400 text-xs">{team.rank}</span>
+                                <TeamLogo 
+                                  teamName={team.originalName || team.team} 
+                                  leagueId={league?.league_id} 
+                                  size="sm"
+                                  logoUrl={getTeamLogoUrl(team.originalName || team.team)}
+                                />
+                              </div>
+                            </td>
+                            <td className="py-3 px-3 font-medium text-slate-800 dark:text-slate-200">
+                              <span className="truncate">{team.team}</span>
+                            </td>
+                            <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.wins}</td>
+                            <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.losses}</td>
+                            <td className="py-3 px-3 text-center font-medium text-slate-600 dark:text-slate-400">{(team.winPct * 100).toFixed(1)}%</td>
+                            <td className="py-3 px-3 text-right font-medium text-slate-700 dark:text-slate-300">{team.pointsFor}</td>
+                            <td className="py-3 px-3 text-right font-medium text-slate-700 dark:text-slate-300">{team.pointsAgainst}</td>
+                            <td className={`py-3 px-3 text-right font-semibold ${team.pointsDiff > 0 ? 'text-green-600 dark:text-green-400' : team.pointsDiff < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-400'}`}>
+                              {team.pointsDiff > 0 ? `+${team.pointsDiff}` : team.pointsDiff}
+                            </td>
+                            <td className="py-3 px-3 text-center">
+                              {team.movement === 'up' && (
+                                <span className="text-green-600 font-bold text-sm">▲</span>
+                              )}
+                              {team.movement === 'down' && (
+                                <span className="text-red-600 font-bold text-sm">▼</span>
+                              )}
+                              {team.movement === 'same' && (
+                                <span className="text-gray-400 text-sm">▬</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    
+                    {(standingsView === 'poolA' ? poolAStandings : 
+                      standingsView === 'poolB' ? poolBStandings : 
+                      fullLeagueStandings).length === 0 && (
+                      <div className="text-center py-8 text-gray-500">
+                        No standings data available
+                      </div>
+                    )}
+                  </div>
+                )}
+                </>
+                )}
+                  </>
+              )}
+                
+              {/* Bracket View - Only for BCB Trophy */}
+              {viewMode === 'bracket' && slug === 'british-championship-basketball' && league?.league_id && (
+                <TournamentBracket 
+                  leagueId={league.league_id} 
+                  onGameClick={handleGameClick}
+                />
+              )}
+              </div>
+            )}
+            
+            {/* Stats Section - Comprehensive Player Averages */}
+            {activeSection === 'stats' && (
+              <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
+                <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-2 mb-4 md:mb-6">
+                  <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">Player Statistics - {league?.name}</h2>
+                  <div className="text-xs md:text-sm text-gray-500 dark:text-gray-400">
+                    Showing {Math.min(displayedPlayerCount, filteredPlayerAverages.length)} of {filteredPlayerAverages.length} players
+                    {(statsSearch || filterAgeGroup !== 'all' || filterRound !== 'all') && ` (filtered from ${allPlayerAverages.length})`}
+                    {isLoadingMoreStats && (
+                      <span className="ml-2 inline-flex items-center gap-1 text-orange-500 dark:text-orange-400">
+                        <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        loading more stats...
+                      </span>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Search Bar */}
+                <div className="mb-6">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Search players..."
+                      value={statsSearch}
+                      onChange={(e) => setStatsSearch(e.target.value)}
+                      className="w-full px-4 py-2 pl-10 border border-gray-300 dark:border-neutral-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent bg-white dark:bg-neutral-800 text-slate-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                    />
+                    <svg
+                      className="absolute left-3 top-2.5 h-4 w-4 text-gray-400 dark:text-gray-500"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                      />
+                    </svg>
+                  </div>
+                </div>
+
+                {/* Category Dropdown */}
+                <div className="relative mb-4">
+                  <button
+                    onClick={() => setPlayerCategoryDropdownOpen(!playerCategoryDropdownOpen)}
+                    className="flex items-center justify-between w-full max-w-xs px-4 py-2.5 rounded-xl border bg-white dark:bg-neutral-800 text-left text-base font-semibold text-slate-800 dark:text-white transition-all"
+                    style={{ borderColor: brandBorderLight }}
+                    data-testid="select-player-category"
+                  >
+                    <span>{playerStatsCategory}</span>
+                    <ChevronDown className={`h-5 w-5 text-gray-400 transition-transform ${playerCategoryDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  {playerCategoryDropdownOpen && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setPlayerCategoryDropdownOpen(false)} />
+                      <div className="absolute z-20 mt-1 w-full max-w-xs rounded-xl border bg-white dark:bg-neutral-800 shadow-lg overflow-hidden" style={{ borderColor: brandBorderLight }}>
+                        {(['Traditional', 'Advanced', 'Scoring', 'Misc'] as const).map(cat => (
+                          <button
+                            key={cat}
+                            onClick={() => { setPlayerStatsCategory(cat); setPlayerCategoryDropdownOpen(false); }}
+                            className={`w-full px-4 py-2.5 text-left text-sm font-medium transition-colors ${
+                              playerStatsCategory === cat
+                                ? 'bg-gray-100 dark:bg-neutral-700'
+                                : 'hover:bg-gray-50 dark:hover:bg-neutral-700'
+                            } text-slate-800 dark:text-white`}
+                            data-testid={`option-player-${cat.toLowerCase()}`}
+                          >
+                            {cat}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Age Group Filter Dropdown (non-parent leagues with age groups) */}
+                {!isParentLeague && availableAgeGroups.length > 0 && (
+                  <div className="mb-2">
+                    <select
+                      value={filterAgeGroup}
+                      onChange={(e) => setFilterAgeGroup(e.target.value)}
+                      className="px-3 py-1.5 text-xs md:text-sm font-medium rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
+                      style={filterAgeGroup !== 'all' ? { borderColor: brandColor } : {}}
+                    >
+                      <option value="all">All Ages</option>
+                      {availableAgeGroups.map(ag => (
+                        <option key={ag} value={ag}>{shortenAgeLabel(ag)}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Round Filter Dropdown (non-parent leagues with rounds) — secondary below age group */}
+                {!isParentLeague && availableRounds.length > 0 && (
+                  <div className="mb-4">
+                    <select
+                      value={filterRound}
+                      onChange={(e) => setFilterRound(e.target.value)}
+                      className="px-3 py-1.5 text-xs md:text-sm font-medium rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
+                      style={filterRound !== 'all' ? { borderColor: brandColor } : {}}
+                    >
+                      <option value="all">All Rounds</option>
+                      {availableRounds.map(r => (
+                        <option key={r} value={r}>{r}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Mode Tabs */}
+                <div className="flex items-center gap-2 mb-5">
+                  <div className="inline-flex rounded-lg border dark:border-neutral-700 p-1" style={{ borderColor: brandBorderLight, backgroundColor: brandBg50 }}>
+                    {(['Per Game', 'Total', 'Per 40'] as const).map(mode => (
+                      <button
+                        key={mode}
+                        onClick={() => setPlayerStatsView(mode)}
+                        className={`px-3 md:px-4 py-1.5 text-xs md:text-sm font-medium rounded-md transition-all ${
+                          playerStatsView === mode
+                            ? 'bg-white dark:bg-neutral-700 shadow-sm'
+                            : 'hover:bg-white/50 dark:hover:bg-neutral-800'
+                        }`}
+                        style={{ color: brandColor }}
+                        data-testid={`option-player-${mode.toLowerCase().replace(/\s/g, '-')}`}
+                      >
+                        {mode}
+                      </button>
+                    ))}
+                  </div>
+                  {(filterAgeGroup !== 'all' || filterRound !== 'all') && (
+                    <button
+                      onClick={() => { setFilterAgeGroup('all'); setFilterRound('all'); }}
+                      className="px-3 py-1.5 text-xs md:text-sm rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40"
+                    >
+                      Clear Filters
+                    </button>
+                  )}
+                </div>
+                
+                {isLoadingStats ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200 dark:border-neutral-700">
+                          <th className="text-left py-3 px-2 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-white dark:bg-neutral-900">Player</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">GP</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">MIN</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FGM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FGA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FG%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">2PM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">2PA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">2P%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">3PM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">3PA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">3P%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FTM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FTA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FT%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">ORB</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">DRB</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">TRB</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">AST</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">STL</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">BLK</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">TO</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">PF</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">+/-</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">PTS</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">EFF</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Array.from({ length: 10 }).map((_, index) => (
+                          <PlayerRowSkeleton key={`skeleton-${index}`} />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : filteredPlayerAverages.length > 0 ? (
+                  <div className="overflow-x-auto -mx-4 md:mx-0 dark:border-neutral-700 rounded-lg" style={{ border: `1px solid ${brandBorderLight}` }}>
+                    <table className="w-full text-xs md:text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200 dark:border-neutral-700 dark:bg-neutral-800" style={{ backgroundColor: brandBg50 }}>
+                          <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 dark:bg-neutral-800 z-10 min-w-[100px] md:min-w-[140px]" style={{ backgroundColor: brandBg50 }}>Player</th>
+                          <th className="text-center py-2 md:py-3 px-1 md:px-2 font-semibold text-slate-700 dark:text-slate-200 min-w-[30px]">#</th>
+                          <th 
+                            onClick={() => {
+                              if (statsSortColumn === 'GP') {
+                                setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                              } else {
+                                setStatsSortColumn('GP');
+                                setStatsSortDirection('desc');
+                              }
+                            }}
+                            className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[45px] cursor-pointer dark:hover:bg-neutral-700 transition-colors ${statsSortColumn === 'GP' ? '' : 'text-slate-700 dark:text-slate-200'}`}
+                            style={statsSortColumn === 'GP' ? { color: brandColor } : {}}
+                            data-testid="header-sort-gp"
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              GP
+                              {statsSortColumn === 'GP' && (
+                                <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                              )}
+                            </div>
+                          </th>
+                          {activePlayerStatColumns.map((column) => (
+                            <th
+                              key={column.key}
+                              onClick={() => {
+                                if (statsSortColumn === column.label) {
+                                  setStatsSortDirection(statsSortDirection === 'desc' ? 'asc' : 'desc');
+                                } else {
+                                  setStatsSortColumn(column.label);
+                                  setStatsSortDirection('desc');
+                                }
+                              }}
+                              className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer dark:hover:bg-neutral-700 transition-colors ${
+                                statsSortColumn === column.label ? '' : 'text-slate-700 dark:text-slate-200'
+                              }`}
+                              style={statsSortColumn === column.label ? { color: brandColor } : {}}
+                              data-testid={`header-${column.key.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
+                            >
+                              <div className="flex items-center justify-center gap-1">
+                                {column.label}
+                                {statsSortColumn === column.label && (
+                                  <span className="text-xs">{statsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                                )}
+                              </div>
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredPlayerAverages.slice(0, displayedPlayerCount).map((player, index) => (
+                          <tr 
+                            key={`${player.name}-${index}`}
+                            className={`border-b border-gray-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors ${player.slug ? 'cursor-pointer' : ''}`}
+                            onClick={() => {
+                              if (player.slug) {
+                                handleSelectPlayer(player.slug, activeSection, player.playerIds ? Array.from(player.playerIds as Set<string>) : []);
+                              }
+                            }}
+                            data-testid={`player-row-${player.id}`}
+                          >
+                            <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 dark:text-slate-200 sticky left-0 bg-white dark:bg-neutral-900 hover:bg-orange-50 dark:hover:bg-neutral-800 z-10">
+                              <div className="min-w-0">
+                                <div
+                                  className={`font-medium text-xs md:text-sm truncate ${player.slug ? 'hover:underline cursor-pointer' : 'text-slate-900 dark:text-white'}`}
+                                  style={player.slug ? { color: playerLinkColor } : undefined}
+                                  onMouseEnter={(e) => { if (player.slug) (e.target as HTMLElement).style.color = playerLinkColorHover; }}
+                                  onMouseLeave={(e) => { if (player.slug) (e.target as HTMLElement).style.color = playerLinkColor; }}
+                                >{player.name}</div>
+                                <div className="text-[10px] md:text-xs text-slate-500 dark:text-slate-400 truncate">{player.team}</div>
+                              </div>
+                            </td>
+                            <td className="py-2 md:py-3 px-1 md:px-2 text-center text-slate-500 dark:text-slate-400 text-xs">{player.shirtnumber || '-'}</td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 dark:text-slate-300 font-medium">{player.games}</td>
+                            {activePlayerStatColumns.map((column) => {
+                              const rawStats = player.rawStats || [];
+                              const totalMinutes = player.totalMinutes || 0;
+                              let value: number;
+
+                              if (column.key === 'efficiency') {
+                                value = computeEfficiencyFromRawStats(rawStats, player.games, totalMinutes, playerStatsView);
+                              } else {
+                              // Rate stats should be averaged, not summed
+                              const rateStats = [
+                                'efg_percent', 'ts_percent', 'three_point_rate',
+                                'ast_percent', 'ast_to_ratio',
+                                'oreb_percent', 'dreb_percent', 'reb_percent',
+                                'tov_percent', 'usage_percent', 'pie',
+                                'off_rating', 'def_rating', 'net_rating',
+                                'pts_percent_2pt', 'pts_percent_3pt', 'pts_percent_ft',
+                                'pts_percent_midrange', 'pts_percent_pitp', 'pts_percent_fastbreak',
+                                'pts_percent_second_chance', 'pts_percent_off_turnovers'
+                              ];
+                              
+                              const isRateStat = rateStats.includes(column.key);
+                              
+                              // For rate stats, calculate average; for counting stats, calculate total
+                              const aggregatedValue = rawStats.reduce((acc: number, stat: any) => {
+                                const statValue = stat[column.key];
+                                if (typeof statValue === 'number') {
+                                  return acc + statValue;
+                                } else if (typeof statValue === 'string' && !isNaN(parseFloat(statValue))) {
+                                  return acc + parseFloat(statValue);
+                                }
+                                return acc;
+                              }, 0);
+                              
+                              // For rate stats, convert sum to average before passing to applyPlayerMode
+                              const baseValue = isRateStat && rawStats.length > 0 ? aggregatedValue / rawStats.length : aggregatedValue;
+                              
+                              // Apply the mode transformation
+                              value = applyPlayerMode(
+                                column.key,
+                                baseValue,
+                                player.games,
+                                totalMinutes,
+                                playerStatsView
+                              );
+                              }
+                              
+                              const displayValue = value === 0 ? '0.0' : value.toFixed(1);
+                              
+                              return (
+                                <td 
+                                  key={`${player.id}-${column.key}`}
+                                  className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 dark:text-slate-300"
+                                >
+                                  {displayValue}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    
+                    {/* Scroll hint for mobile */}
+                    <div className="md:hidden dark:bg-neutral-800 text-center py-2 text-xs dark:border-neutral-700" style={{ backgroundColor: brandBg50, color: brandColor, borderTop: `1px solid ${brandBorderLight}` }}>
+                      ← Swipe to see all stats →
+                    </div>
+                    
+                    {/* Expand Button - Show when there are more players to display */}
+                    {displayedPlayerCount < filteredPlayerAverages.length && (
+                      <div className="mt-4 text-center">
+                        <button
+                          onClick={() => setDisplayedPlayerCount(displayedPlayerCount + 20)}
+                          className="text-white px-6 py-3 rounded-lg font-medium transition-colors flex items-center gap-2 mx-auto"
+                          style={{ backgroundColor: brandColor }}
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                          </svg>
+                          Show {Math.min(20, filteredPlayerAverages.length - displayedPlayerCount)} More Players
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Show All/Collapse Button when expanded */}
+                    {displayedPlayerCount > 20 && (
+                      <div className="mt-2 text-center">
+                        <div className="flex gap-3 justify-center">
+                          {displayedPlayerCount < filteredPlayerAverages.length && (
+                            <button
+                              onClick={() => setDisplayedPlayerCount(filteredPlayerAverages.length)}
+                              className="font-medium text-sm hover:underline"
+                              style={{ color: brandColor }}
+                            >
+                              Show All ({filteredPlayerAverages.length} players)
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setDisplayedPlayerCount(20)}
+                            className="text-slate-500 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-medium text-sm hover:underline"
+                          >
+                            Collapse to Top 20
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="mt-6 pt-4 border-t border-gray-200 dark:border-neutral-700">
+                      <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1">
+                        <div className="font-semibold text-slate-600 dark:text-slate-300 mb-2">Legend ({playerStatsCategory}):</div>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                          {PLAYER_STAT_LEGENDS[playerStatsCategory]?.map((legend, index) => (
+                            <span key={`legend-${index}`}>{legend}</span>
+                          ))}
+                        </div>
+                        <div className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+                          Click on any player to view their detailed profile • Swipe horizontally to see all stats
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : statsSearch ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <div className="mb-2">No players found matching "{statsSearch}"</div>
+                    <button
+                      onClick={() => setStatsSearch("")}
+                      className="underline"
+                      style={{ color: brandColor }}
+                    >
+                      Clear search
+                    </button>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <p className="text-sm">No player statistics available</p>
+                    <p className="text-xs mt-1">Stats will appear once games are played and uploaded</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Team Stats Section */}
+            {activeSection === 'teamstats' && (
+              <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
+                <div className="mb-4 md:mb-6">
+                  <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-4">Team Statistics - {league?.name}</h2>
+                </div>
+
+                {/* Category Dropdown */}
+                <div className="relative mb-4">
+                  <button
+                    onClick={() => setTeamCategoryDropdownOpen(!teamCategoryDropdownOpen)}
+                    className="flex items-center justify-between w-full max-w-xs px-4 py-2.5 rounded-xl border bg-white dark:bg-neutral-800 text-left text-base font-semibold text-slate-800 dark:text-white transition-all"
+                    style={{ borderColor: brandBorderLight }}
+                    data-testid="select-category"
+                  >
+                    <span>{teamStatsCategory}</span>
+                    <ChevronDown className={`h-5 w-5 text-gray-400 transition-transform ${teamCategoryDropdownOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  {teamCategoryDropdownOpen && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setTeamCategoryDropdownOpen(false)} />
+                      <div className="absolute z-20 mt-1 w-full max-w-xs rounded-xl border bg-white dark:bg-neutral-800 shadow-lg overflow-hidden" style={{ borderColor: brandBorderLight }}>
+                        {(['Traditional', 'Advanced', 'Four Factors', 'Scoring', 'Misc'] as const).map(cat => (
+                          <button
+                            key={cat}
+                            onClick={() => { setTeamStatsCategory(cat); setTeamCategoryDropdownOpen(false); }}
+                            className={`w-full px-4 py-2.5 text-left text-sm font-medium transition-colors ${
+                              teamStatsCategory === cat
+                                ? 'bg-gray-100 dark:bg-neutral-700'
+                                : 'hover:bg-gray-50 dark:hover:bg-neutral-700'
+                            } text-slate-800 dark:text-white`}
+                            data-testid={`option-${cat.toLowerCase().replace(/\s/g, '-')}`}
+                          >
+                            {cat}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Mode Tabs */}
+                <div className="flex items-center gap-2 mb-5">
+                  <div className="inline-flex rounded-lg border dark:border-neutral-700 p-1" style={{ borderColor: brandBorderLight, backgroundColor: brandBg50 }}>
+                    {(['Per Game', 'Totals', 'Per 100 Possessions'] as const).map(mode => (
+                      <button
+                        key={mode}
+                        onClick={() => setTeamStatsMode(mode)}
+                        className={`px-3 md:px-4 py-1.5 text-xs md:text-sm font-medium rounded-md transition-all ${
+                          teamStatsMode === mode
+                            ? 'bg-white dark:bg-neutral-700 shadow-sm'
+                            : 'hover:bg-white/50 dark:hover:bg-neutral-800'
+                        }`}
+                        style={{ color: brandColor }}
+                        data-testid={`option-${mode.toLowerCase().replace(/\s/g, '-')}`}
+                      >
+                        {mode === 'Per 100 Possessions' ? 'Per 100 Poss' : mode}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {isLoadingTeamStats ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200 dark:border-neutral-700">
+                          <th className="text-left py-3 px-2 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-white dark:bg-neutral-900">Team</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">GP</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FGM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FGA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FG%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">2PM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">2PA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">2P%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">3PM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">3PA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">3P%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FTM</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FTA</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FT%</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">ORB</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">DRB</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">TRB</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">AST</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">STL</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">BLK</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">TO</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">PF</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">+/-</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">PTS</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">PITP</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">FB PTS</th>
+                          <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">2ND CH</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Array.from({ length: 8 }).map((_, index) => (
+                          <tr key={`skeleton-${index}`} className="border-b border-gray-100 dark:border-neutral-700">
+                            <td className="py-3 px-2">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 bg-gray-200 dark:bg-neutral-700 rounded-full animate-pulse"></div>
+                                <div className="h-4 bg-gray-200 dark:bg-neutral-700 rounded w-24 animate-pulse"></div>
+                              </div>
+                            </td>
+                            {Array.from({ length: 26 }).map((_, colIndex) => (
+                              <td key={`skeleton-col-${colIndex}`} className="py-3 px-2">
+                                <div className="h-4 bg-gray-200 dark:bg-neutral-700 rounded w-12 mx-auto animate-pulse"></div>
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : sortedTeamStats.length > 0 ? (
+                  <div className="overflow-x-auto -mx-4 md:mx-0 dark:border-neutral-700 rounded-lg" style={{ border: `1px solid ${brandBorderLight}` }}>
+                    <table className="w-full text-xs md:text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200 dark:border-neutral-700 dark:bg-neutral-800" style={{ backgroundColor: brandBg50 }}>
+                          <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 dark:bg-neutral-800 z-10 w-16" style={{ backgroundColor: brandBg50 }}>Logo</th>
+                          <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 dark:text-slate-200 min-w-[120px]">Team</th>
+                          <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 dark:text-slate-200 min-w-[45px]">
+                            <div className="flex items-center justify-center gap-1">GP</div>
+                          </th>
+                          {activeTeamStatColumns.map((column) => (
+                            <th
+                              key={column.key}
+                              onClick={() => {
+                                if (column.sortable) {
+                                  if (teamStatsSortColumn === column.key) {
+                                    setTeamStatsSortDirection(teamStatsSortDirection === 'desc' ? 'asc' : 'desc');
+                                  } else {
+                                    setTeamStatsSortColumn(column.key);
+                                    setTeamStatsSortDirection('desc');
+                                  }
+                                }
+                              }}
+                              className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] ${
+                                column.sortable ? 'cursor-pointer dark:hover:bg-neutral-700' : ''
+                              } transition-colors ${
+                                teamStatsSortColumn === column.key ? '' : 'text-slate-700 dark:text-slate-200'
+                              }`}
+                              style={teamStatsSortColumn === column.key ? { color: brandColor } : {}}
+                              data-testid={`header-${column.key.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
+                            >
+                              <div className="flex items-center justify-center gap-1">
+                                {column.label}
+                                {teamStatsSortColumn === column.key && column.sortable && (
+                                  <span className="text-xs">{teamStatsSortDirection === 'desc' ? '▼' : '▲'}</span>
+                                )}
+                              </div>
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 dark:divide-neutral-700">
+                        {sortedTeamStats.map((team, index) => (
+                          <tr
+                            key={`team-stats-${team.teamName}-${index}`}
+                            className="hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors cursor-pointer group"
+                            onClick={() => {
+                              setPreviousSection(activeSection);
+                              setSelectedTeamName(team.teamName);
+                              setActiveSection('team');
+                            }}
+                            data-testid={`row-team-${team.teamName}`}
+                          >
+                            <td className="py-2 md:py-3 px-2 md:px-3 sticky left-0 bg-white dark:bg-neutral-900 group-hover:bg-orange-50 dark:group-hover:bg-neutral-800 z-10 transition-colors">
+                              <TeamLogo teamName={team.teamName} leagueId={league?.league_id || ""} size="sm" logoUrl={getTeamLogoUrl(team.teamName)} />
+                            </td>
+                            <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 dark:text-slate-200 text-xs md:text-sm truncate">
+                              {team.teamName}
+                            </td>
+                            <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 dark:text-slate-300 font-medium" data-testid={`text-gp-${team.teamName}`}>
+                              {team.gamesPlayed}
+                            </td>
+                            {activeTeamStatColumns.map((column) => {
+                              const value = column.getValue(team, teamStatsMode);
+                              const displayValue = column.format ? column.format(Number(value)) : value;
+                              return (
+                                <td
+                                  key={`${team.teamName}-${column.key}`}
+                                  className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 dark:text-slate-300"
+                                  data-testid={`text-${column.key.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${team.teamName}`}
+                                >
+                                  {displayValue}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    
+                    {/* Scroll hint for mobile */}
+                    <div className="md:hidden dark:bg-neutral-800 text-center py-2 text-xs dark:border-neutral-700" style={{ backgroundColor: brandBg50, color: brandColor, borderTop: `1px solid ${brandBorderLight}` }}>
+                      ← Swipe to see all stats →
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                    <p className="text-sm">No team statistics available</p>
+                    <p className="text-xs mt-1">Stats will appear once games are played</p>
+                  </div>
+                )}
+                
+                {/* Dynamic Legend based on category */}
+                <div className="mt-6 pt-4 border-t border-gray-200 dark:border-neutral-700">
+                  <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1">
+                    <div className="font-semibold text-slate-600 dark:text-slate-300 mb-2">Legend ({teamStatsCategory}):</div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                      {TEAM_STAT_LEGENDS[teamStatsCategory]?.map((legend, index) => (
+                        <span key={`legend-${index}`}>{legend}</span>
+                      ))}
+                    </div>
+                    <div className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+                      Click on any team to view their detailed profile • Swipe horizontally to see all stats
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Teams Section */}
+            {activeSection === 'teams' && (
+              <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
+                <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-4 md:mb-6">Teams</h2>
+                {standings.length > 0 ? (
+                  <div className="divide-y divide-gray-200 dark:divide-neutral-700">
+                    {standings.map((teamData, index) => (
+                      <div
+                        key={`team-${teamData.team}-${index}`}
+                        className="p-3 md:p-4 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors flex items-center justify-between group cursor-pointer"
+                        onClick={() => {
+                          setPreviousSection(activeSection);
+                          setSelectedTeamName(teamData.team);
+                          setActiveSection('team');
+                        }}
+                      >
+                        <div className="flex items-center gap-2 md:gap-4">
+                          <TeamLogo teamName={teamData.team} leagueId={league?.league_id || ""} size="md" logoUrl={getTeamLogoUrl(teamData.team)} />
+                          <h3 className="font-semibold text-slate-800 dark:text-white text-sm md:text-lg">{teamData.team}</h3>
+                        </div>
+                        <ChevronRight className="w-4 md:w-5 h-4 md:h-5 text-gray-400 dark:text-gray-500 group-hover:text-orange-600 transition-colors" />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                    <p className="text-xs md:text-sm">No teams available</p>
+                    <p className="text-xs mt-1">Teams will appear once games are played</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Schedule Section */}
+            {activeSection === 'schedule' && (
+              <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
+                <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-3 md:mb-4">Game Schedule</h2>
+                
+                {/* Tabs for Upcoming / Results */}
+                <div className="flex gap-2 mb-4 border-b border-gray-200 dark:border-neutral-700">
+                  <button
+                    onClick={() => setScheduleView('upcoming')}
+                    className={`px-3 md:px-4 py-2 text-xs md:text-sm font-semibold transition-all ${
+                      scheduleView === 'upcoming'
+                        ? 'border-b-2 -mb-[2px]'
+                        : 'text-slate-600 dark:text-slate-400'
+                    }`}
+                    style={scheduleView === 'upcoming' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                    onMouseEnter={(e) => { if (scheduleView !== 'upcoming') (e.target as HTMLElement).style.color = brandColor; }}
+                    onMouseLeave={(e) => { if (scheduleView !== 'upcoming') (e.target as HTMLElement).style.color = ''; }}
+                    data-testid="button-upcoming-games"
+                  >
+                    Upcoming Games
+                  </button>
+                  <button
+                    onClick={() => setScheduleView('results')}
+                    className={`px-3 md:px-4 py-2 text-xs md:text-sm font-semibold transition-all ${
+                      scheduleView === 'results'
+                        ? 'border-b-2 -mb-[2px]'
+                        : 'text-slate-600 dark:text-slate-400'
+                    }`}
+                    style={scheduleView === 'results' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                    onMouseEnter={(e) => { if (scheduleView !== 'results') (e.target as HTMLElement).style.color = brandColor; }}
+                    onMouseLeave={(e) => { if (scheduleView !== 'results') (e.target as HTMLElement).style.color = ''; }}
+                    data-testid="button-results"
+                  >
+                    Results
+                  </button>
+                </div>
+
+                {/* Age Group & Round Filters - hidden for parent leagues since dropdown handles it */}
+                {!isParentLeague && (() => {
+                  const ageGroups = [...new Set(schedule.map(g => g.age_group).filter(Boolean))] as string[];
+                  const rounds = [...new Set(schedule.map(g => g.round).filter(Boolean))] as string[];
+                  if (ageGroups.length === 0 && rounds.length === 0) return null;
+                  return (
+                    <div className="flex flex-col gap-2 mb-4">
+                      {ageGroups.length > 0 && (
+                        <div>
+                          <select
+                            value={filterAgeGroup}
+                            onChange={(e) => setFilterAgeGroup(e.target.value)}
+                            className="px-3 py-1.5 text-xs md:text-sm font-medium rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
+                            style={filterAgeGroup !== 'all' ? { borderColor: brandColor } : {}}
+                          >
+                            <option value="all">All Ages</option>
+                            {ageGroups.sort().map(ag => (
+                              <option key={ag} value={ag}>{shortenAgeLabel(ag)}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                      {rounds.length > 0 && (
+                        <div>
+                          <select
+                            value={filterRound}
+                            onChange={(e) => setFilterRound(e.target.value)}
+                            className="px-3 py-1.5 text-xs md:text-sm font-medium rounded-lg border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2"
+                            style={filterRound !== 'all' ? { borderColor: brandColor } : {}}
+                          >
+                            <option value="all">All Rounds</option>
+                            {rounds.sort(naturalSortRounds).map(r => (
+                              <option key={r} value={r}>{r}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {isLoadingSchedule ? (
+                  <div className="space-y-3">
+                    {[...Array(5)].map((_, i) => (
+                      <div key={i} className="animate-pulse">
+                        <div className="flex items-center justify-between py-3">
+                          <div className="flex items-center gap-2 flex-1">
+                            <div className="w-6 h-6 bg-gray-200 dark:bg-neutral-700 rounded-full"></div>
+                            <div className="h-4 bg-gray-200 dark:bg-neutral-700 rounded w-24"></div>
+                          </div>
+                          <div className="h-4 bg-gray-200 dark:bg-neutral-700 rounded w-8 mx-2"></div>
+                          <div className="flex items-center gap-2 flex-1 justify-end">
+                            <div className="h-4 bg-gray-200 dark:bg-neutral-700 rounded w-24"></div>
+                            <div className="w-6 h-6 bg-gray-200 dark:bg-neutral-700 rounded-full"></div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : schedule.length > 0 ? (
+                  <>
+                    {(() => {
+                      const now = new Date();
+                      const filtered = schedule.filter(game => {
+                        if (filterAgeGroup !== 'all') {
+                          if (isParentLeague ? !selectedAgeGroupLeagueIds.includes(game.league_id) : game.age_group !== filterAgeGroup) return false;
+                        }
+                        if (isParentLeague && selectedStop !== 'all' && !selectedAgeGroupLeagueIds.includes(game.league_id)) return false;
+                        if (filterRound !== 'all' && game.round !== filterRound) return false;
+                        return true;
+                      });
+                      const upcomingGames = filtered
+                        .filter(game => new Date(game.game_date) >= now)
+                        .sort((a, b) => new Date(a.game_date).getTime() - new Date(b.game_date).getTime());
+                      const pastGames = filtered
+                        .filter(game => new Date(game.game_date) < now)
+                        .sort((a, b) => new Date(b.game_date).getTime() - new Date(a.game_date).getTime());
+
+                      const gamesToShow = scheduleView === 'upcoming' ? upcomingGames : pastGames;
+
+                      return (
+  
+                        
+                        <>
+                          {gamesToShow.length > 0 ? (
+                            <div className="divide-y divide-gray-200 dark:divide-neutral-700">
+                              {scheduleView === 'upcoming' ? (
+                                /* Upcoming Games View */
+                                gamesToShow.map((game, index) => (
+                                  <div 
+                                    key={`upcoming-${game.game_id}-${index}`} 
+                                    className="py-2 md:py-3 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
+                                    onClick={() => {
+                                      setSelectedPreviewGame(game);
+                                      setIsPreviewModalOpen(true);
+                                    }}
+                                    data-testid={`upcoming-game-${index}`}
+                                  >
+                                    {/* Mobile-optimized compact layout */}
+                                    <div className="flex flex-col gap-2">
+                                      {/* Date and Time Row */}
+                                      <div className="flex items-center justify-between">
+                                        <div className="text-[11px] md:text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                          {new Date(game.game_date).toLocaleDateString('en-US', { 
+                                            month: 'short', 
+                                            day: 'numeric'
+                                          })}
+                                          {game.kickoff_time && ` • ${game.kickoff_time}`}
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                          {game.age_group && (
+                                            <span className="text-[9px] md:text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">{game.age_group}</span>
+                                          )}
+                                          {game.round && (
+                                            <span className="text-[9px] md:text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">{game.round}</span>
+                                          )}
+                                          {game.venue && (
+                                            <span className="text-[10px] md:text-xs text-slate-400 dark:text-slate-500 truncate max-w-[100px] md:max-w-none">
+                                              {game.venue}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                      {/* Teams Row */}
+                                      <div className="flex items-center gap-2 md:gap-3">
+                                        <div className="flex items-center gap-1 md:gap-1.5 flex-1 min-w-0">
+                                          <TeamLogo teamName={game.team1} leagueId={league?.league_id || ""} size="sm" logoUrl={getTeamLogoUrl(game.team1)} />
+                                          <span className="font-medium text-slate-800 dark:text-white text-[11px] md:text-sm truncate">{game.team1}</span>
+                                        </div>
+                                        <span className="text-slate-400 dark:text-slate-500 text-[11px] md:text-xs flex-shrink-0">vs</span>
+                                        <div className="flex items-center gap-1 md:gap-1.5 flex-1 justify-end min-w-0">
+                                          <span className="font-medium text-slate-800 dark:text-white text-[11px] md:text-sm truncate">{game.team2}</span>
+                                          <TeamLogo teamName={game.team2} leagueId={league?.league_id || ""} size="sm" logoUrl={getTeamLogoUrl(game.team2)} />
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))
+                              ) : (
+                                /* Results View */
+                                gamesToShow.map((game, index) => {
+                                  // Use numeric_id for game detail lookup (required for box score modal)
+                                  // Game is clickable only if we have numeric_id (for box score) and scores are matched
+                                  const isClickable = game.numeric_id && game.team1_score !== undefined;
+                                  
+                                  return (
+                                  <div 
+                                    key={`past-${game.game_id}-${index}`} 
+                                    className={`py-2 md:py-3 transition-colors ${isClickable ? 'cursor-pointer hover:bg-orange-50 dark:hover:bg-neutral-800' : 'cursor-default'}`}
+                                    onClick={() => {
+                                      if (isClickable && game.numeric_id) {
+                                        handleGameClick(game.numeric_id);
+                                      }
+                                    }}
+                                    data-testid={`past-game-${index}`}
+                                  >
+                                    {/* Mobile-optimized compact layout */}
+                                    <div className="flex flex-col gap-2">
+                                      {/* Date and Status Row */}
+                                      <div className="flex items-center justify-between">
+                                        <div className="text-[11px] md:text-xs text-slate-600 dark:text-slate-300 font-medium">
+                                          {new Date(game.game_date).toLocaleDateString('en-US', { 
+                                            month: 'short', 
+                                            day: 'numeric'
+                                          })}
+                                          {game.status && (
+                                            <span className="ml-2 text-[10px] md:text-xs text-green-600 dark:text-green-400 font-semibold">
+                                              {game.status}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                          {game.age_group && (
+                                            <span className="text-[9px] md:text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">{game.age_group}</span>
+                                          )}
+                                          {game.round && (
+                                            <span className="text-[9px] md:text-[10px] font-medium px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">{game.round}</span>
+                                          )}
+                                          {game.venue && (
+                                            <span className="text-[10px] md:text-xs text-slate-400 dark:text-slate-500 truncate max-w-[100px] md:max-w-none">
+                                              {game.venue}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                      {/* Teams and Score Row */}
+                                      <div className="flex items-center gap-2 md:gap-3">
+                                        <div className="flex items-center gap-1 md:gap-1.5 flex-1 min-w-0">
+                                          <TeamLogo teamName={game.team1} leagueId={league?.league_id || ""} size="sm" logoUrl={getTeamLogoUrl(game.team1)} />
+                                          <span className="font-medium text-slate-800 dark:text-white text-[11px] md:text-sm truncate">{game.team1}</span>
+                                        </div>
+                                        {game.team1_score !== undefined && game.team2_score !== undefined ? (
+                                          <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0">
+                                            <span className={`text-base md:text-lg font-bold ${game.team1_score > game.team2_score ? 'text-green-600 dark:text-green-400' : 'text-slate-600 dark:text-slate-300'}`}>
+                                              {game.team1_score}
+                                            </span>
+                                            <span className="text-slate-400 dark:text-slate-500 text-[11px] md:text-sm">-</span>
+                                            <span className={`text-base md:text-lg font-bold ${game.team2_score > game.team1_score ? 'text-green-600 dark:text-green-400' : 'text-slate-600 dark:text-slate-300'}`}>
+                                              {game.team2_score}
+                                            </span>
+                                          </div>
+                                        ) : (
+                                          <span className="text-slate-400 dark:text-slate-500 text-[11px] md:text-xs flex-shrink-0">vs</span>
+                                        )}
+                                        <div className="flex items-center gap-1 md:gap-1.5 flex-1 justify-end min-w-0">
+                                          <span className="font-medium text-slate-800 dark:text-white text-[11px] md:text-sm truncate">{game.team2}</span>
+                                          <TeamLogo teamName={game.team2} leagueId={league?.league_id || ""} size="sm" logoUrl={getTeamLogoUrl(game.team2)} />
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                                })
+                              )}
+                            </div>
+                          ) : (
+                            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                              <p className="text-xs md:text-sm">
+                                {scheduleView === 'upcoming' ? 'No upcoming games' : 'No results available'}
+                              </p>
+                              <p className="text-[10px] md:text-xs mt-1">
+                                {scheduleView === 'upcoming' 
+                                  ? 'Check back later for scheduled games' 
+                                  : 'Games will appear here after they are played'}
+                              </p>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </>
+                ) : (
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                    <p className="text-xs md:text-sm">No games scheduled</p>
+                    <p className="text-[10px] md:text-xs mt-1">Games will appear when scheduled</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Comparison Section */}
+            {activeSection === 'comparison' && (
+              <div className="space-y-4 md:space-y-6">
+                {/* Toggle between Player and Team Comparison */}
+                <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-3 md:p-4">
+                  <div className="flex items-center justify-center gap-2">
+                    <button
+                      onClick={() => setComparisonMode('player')}
+                      className={`px-4 md:px-6 py-1.5 md:py-2 rounded-lg text-sm md:text-base font-semibold transition-all ${
+                        comparisonMode === 'player'
+                          ? 'text-white shadow-md'
+                          : 'bg-gray-100 dark:bg-neutral-800 text-slate-600 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-neutral-700'
+                      }`}
+                      style={comparisonMode === 'player' ? { backgroundColor: brandColor } : {}}
+                      data-testid="button-player-comparison"
+                    >
+                      Player Comparison
+                    </button>
+                    <button
+                      onClick={() => setComparisonMode('team')}
+                      className={`px-4 md:px-6 py-1.5 md:py-2 rounded-lg text-sm md:text-base font-semibold transition-all ${
+                        comparisonMode === 'team'
+                          ? 'text-white shadow-md'
+                          : 'bg-gray-100 dark:bg-neutral-800 text-slate-600 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-neutral-700'
+                      }`}
+                      style={comparisonMode === 'team' ? { backgroundColor: brandColor } : {}}
+                      data-testid="button-team-comparison"
+                    >
+                      Team Comparison
+                    </button>
+                  </div>
+                </div>
+
+                {/* Render appropriate comparison component */}
+                {comparisonMode === 'player' ? (
+                  <PlayerComparison 
+                    leagueId={league?.league_id || ""} 
+                    allPlayers={allPlayerAverages}
+                    brandColor={brandColorHex}
+                  />
+                ) : (
+                  <TeamComparison 
+                    leagueId={league?.league_id || ""} 
+                    allTeams={teamStatsData}
+                    brandColor={brandColorHex}
+                    scopedLeagueIds={isParentLeague ? selectedAgeGroupLeagueIds : [getDataLeagueId(slug, league?.league_id || "")]}
+                  />
+                )}
+              </div>
+            )}
+
+            {/* Inline Leaders Section */}
+            {activeSection === 'player' && selectedPlayerSlug && (
+              <div className="md:col-span-3">
+                <InlinePlayerProfile
+                  playerSlug={selectedPlayerSlug}
+                  brandColor={brandColor}
+                  leagueSlug={slug}
+                  onBack={handlePlayerBack}
+                  linkedPlayerIds={selectedPlayerLinkedIds}
+                />
+              </div>
+            )}
+
+            {activeSection === 'team' && selectedTeamName && (
+              <div className="md:col-span-3">
+                <InlineTeamProfile
+                  teamName={selectedTeamName}
+                  brandColor={brandColor}
+                  leagueSlug={slug}
+                  leagueId={league?.league_id || ""}
+                  childLeagueIds={isParentLeague ? childCompetitions.map(c => c.league_id) : undefined}
+                  onBack={() => {
+                    setSelectedTeamName(null);
+                    setActiveSection(previousSection);
+                  }}
+                  onPlayerClick={(playerSlug) => {
+                    handleSelectPlayer(playerSlug, 'team');
+                  }}
+                />
+              </div>
+            )}
+
+            {activeSection === 'game' && selectedGameKey && (
+              <div className="md:col-span-3">
+                <InlineGameDetail
+                  gameKey={selectedGameKey}
+                  brandColor={brandColor}
+                  leagueName={league?.name}
+                  leagueSlug={slug}
+                  onBack={handleGameBack}
+                  onGameInfoLoaded={(info) => setInlineGameInfo(info)}
+                />
+              </div>
+            )}
+
+            {activeSection === 'leaders' && (
+              <div className="space-y-4 md:space-y-6">
+                <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mb-4 md:mb-6">
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">League Leaders</h2>
+                      {isLoadingMoreStats && (
+                        <span className="inline-flex items-center gap-1 text-xs text-orange-500 dark:text-orange-400">
+                          <svg className="w-3 h-3 animate-spin" viewBox="0 0 24 24" fill="none">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          </svg>
+                          refining...
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                      {!isParentLeague && (availableAgeGroups.length > 0 || availableRounds.length > 0) && (
+                        <div className="flex flex-col gap-1.5">
+                          {availableAgeGroups.length > 0 && (
+                            <select
+                              value={filterAgeGroup}
+                              onChange={(e) => setFilterAgeGroup(e.target.value)}
+                              className="px-2 py-1 text-[11px] md:text-xs rounded-md border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300"
+                              style={filterAgeGroup !== 'all' ? { borderColor: brandColor } : {}}
+                            >
+                              <option value="all">All Ages</option>
+                              {availableAgeGroups.map(ag => (
+                                <option key={ag} value={ag}>{shortenAgeLabel(ag)}</option>
+                              ))}
+                            </select>
+                          )}
+                          {availableRounds.length > 0 && (
+                            <select
+                              value={filterRound}
+                              onChange={(e) => setFilterRound(e.target.value)}
+                              className="px-2 py-1 text-[11px] md:text-xs rounded-md border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-slate-700 dark:text-slate-300"
+                              style={filterRound !== 'all' ? { borderColor: brandColor } : {}}
+                            >
+                              <option value="all">All Rounds</option>
+                              {availableRounds.map(r => (
+                                <option key={r} value={r}>{r}</option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                      )}
+                      <div className="inline-flex rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 p-1">
+                        <button
+                          onClick={() => setLeagueLeadersView('averages')}
+                          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                            leagueLeadersView === 'averages'
+                              ? 'bg-white dark:bg-neutral-700 shadow-sm'
+                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                          }`}
+                          style={leagueLeadersView === 'averages' ? { color: brandColor } : {}}
+                        >
+                          Averages
+                        </button>
+                        <button
+                          onClick={() => setLeagueLeadersView('totals')}
+                          className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                            leagueLeadersView === 'totals'
+                              ? 'bg-white dark:bg-neutral-700 shadow-sm'
+                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                          }`}
+                          style={leagueLeadersView === 'totals' ? { color: brandColor } : {}}
+                        >
+                          Totals
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Subject + Category toggles */}
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    <div className="inline-flex rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 p-1">
+                      <button
+                        onClick={() => setLeadersSubject('player')}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                          leadersSubject === 'player'
+                            ? 'bg-white dark:bg-neutral-700 shadow-sm'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                        }`}
+                        style={leadersSubject === 'player' ? { color: brandColor } : {}}
+                        data-testid="button-leaders-subject-player"
+                      >
+                        Player Leaders
+                      </button>
+                      <button
+                        onClick={() => setLeadersSubject('team')}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                          leadersSubject === 'team'
+                            ? 'bg-white dark:bg-neutral-700 shadow-sm'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                        }`}
+                        style={leadersSubject === 'team' ? { color: brandColor } : {}}
+                        data-testid="button-leaders-subject-team"
+                      >
+                        Team Leaders
+                      </button>
+                    </div>
+                    <div className="inline-flex rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800 p-1">
+                      <button
+                        onClick={() => setLeadersCategory('Traditional')}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                          leadersCategory === 'Traditional'
+                            ? 'bg-white dark:bg-neutral-700 shadow-sm'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                        }`}
+                        style={leadersCategory === 'Traditional' ? { color: brandColor } : {}}
+                        data-testid="button-leaders-category-traditional"
+                      >
+                        Traditional
+                      </button>
+                      <button
+                        onClick={() => setLeadersCategory('Advanced')}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                          leadersCategory === 'Advanced'
+                            ? 'bg-white dark:bg-neutral-700 shadow-sm'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                        }`}
+                        style={leadersCategory === 'Advanced' ? { color: brandColor } : {}}
+                        data-testid="button-leaders-category-advanced"
+                      >
+                        Advanced
                       </button>
                     </div>
                   </div>
-                ))}
-              </div>
-            </section>
 
-            <div className="bg-white rounded-xl shadow p-6">
-              <h2 className="text-lg font-semibold text-slate-800">Player Stat Explorer</h2>
+                  {(() => {
+                    const contextParts: string[] = [];
+                    if (filterAgeGroup !== 'all') contextParts.push(shortenAgeLabel(filterAgeGroup));
+                    if (filterRound !== 'all') contextParts.push(`Round ${filterRound}`);
+                    if (isParentLeague && selectedStop !== 'all') contextParts.push(`Stop ${selectedStop}`);
+                    const contextLabel = contextParts.join(' · ');
+                    const baseContextFallback = leagueLeadersView === 'totals' ? 'Season Totals' : 'Season Averages';
 
-              <input
-                type="text"
-                placeholder="Search players..."
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded mb-4"
-                value={playerSearch}
-                onChange={(e) => setPlayerSearch(e.target.value)}
-              />
+                    // Common card renderer used by all 4 (subject × category) variants.
+                    // Minimum attempt thresholds for percentage leaderboards —
+                    // must match the constants in league-leaders/[slug].tsx.
+                    const MIN_FGA_INLINE = 20;
+                    const MIN_3PA_INLINE = 8;
+                    const MIN_FTA_INLINE = 10;
 
-              {playerStats.length > 0 ? (
-                <div>
-                  {/* Sorting Controls */}
-                  <div className="flex gap-4 mb-3 items-center">
-                    <label className="text-sm text-slate-700 font-medium">
-                      Sort by:
-                      <select
-                        className="ml-2 border border-orange-300 text-orange-600 bg-orange-50 px-2 py-1 rounded shadow-sm hover:bg-orange-100 focus:outline-none focus:ring-2 focus:ring-orange-300"
-                        value={sortField}
-                        onChange={(e) => setSortField(e.target.value)}
-                      >
-                        <option value="points">Points</option>
-                        <option value="rebounds_total">Rebounds</option>
-                        <option value="assists">Assists</option>
-                      </select>
-                    </label>
+                    const renderCard = (opts: {
+                      title: string;
+                      items: any[];
+                      displayFn: (p: any) => string;
+                      footnote?: string;
+                      minLabel?: string;
+                      subject: 'player' | 'team';
+                    }) => {
+                      const { title, items, displayFn, footnote, minLabel, subject } = opts;
+                      const shareLeaders = items.map((p: any) => ({
+                        name: subject === 'team' ? (p.teamName || p.name || 'Unknown') : (p.name || 'Unknown'),
+                        team: subject === 'team' ? '' : (p.team || ''),
+                        value: displayFn(p),
+                      }));
+                      return (
+                        <LeagueLeadersShareCard
+                          key={title}
+                          title={title}
+                          leaders={shareLeaders}
+                          leagueName={displayLeagueName || 'League Leaders'}
+                          contextLabel={contextLabel || baseContextFallback}
+                          brandColor={brandColorHex}
+                          leagueLogoUrl={displayLogoUrl}
+                          footnote={footnote}
+                          fileSlug={`league-${slug}-${subject}-${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
+                        >
+                          <div className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4">
+                            <div className="flex items-baseline gap-2 mb-3 px-1 pr-10">
+                              <h3 className="text-sm font-semibold" style={{ color: brandColor }}>{title}</h3>
+                              {minLabel && (
+                                <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-neutral-700 px-1.5 py-0.5 rounded-full whitespace-nowrap">{minLabel}</span>
+                              )}
+                            </div>
+                            <div className="space-y-0">
+                              {items.map((entity, idx) => {
+                                const isTeam = subject === 'team';
+                                const displayName = isTeam ? (entity.teamName || entity.name || 'Unknown') : entity.name;
+                                const subLine = isTeam
+                                  ? (entity.age_group ? shortenAgeLabel(entity.age_group) : `${entity.gamesPlayed || 0} GP`)
+                                  : (entity.team || 'Unknown Team');
+                                const isClickable = isTeam ? !!entity.teamName : !!entity.slug;
+                                const photoUrl = !isTeam ? getPlayerPhotoUrlCached(entity.photoPath) : null;
+                                return (
+                                  <div
+                                    key={`${title}-${entity.slug || entity.teamName || entity.name}-${idx}`}
+                                    className={`flex items-center justify-between py-2 px-2 rounded-md transition-colors ${isClickable ? 'hover:bg-gray-100 dark:hover:bg-neutral-700 cursor-pointer' : ''}`}
+                                    onClick={() => {
+                                      if (isTeam && entity.teamName) {
+                                        setSelectedTeamName(entity.teamName);
+                                        setActiveSection('team');
+                                      } else if (!isTeam && entity.slug) {
+                                        handleSelectPlayer(entity.slug, activeSection);
+                                      }
+                                    }}
+                                  >
+                                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                      <span className="text-xs font-bold w-5 text-center text-slate-400 dark:text-slate-500 shrink-0">{idx + 1}</span>
+                                      {!isTeam && (
+                                        photoUrl ? (
+                                          <img
+                                            src={photoUrl}
+                                            alt={displayName || ''}
+                                            className="w-8 h-8 rounded-full object-cover object-top flex-shrink-0 bg-gray-100 dark:bg-neutral-800"
+                                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                                          />
+                                        ) : (
+                                          <div
+                                            className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                                            style={{ backgroundColor: brandColor + '22', color: brandColor }}
+                                          >
+                                            {displayName?.charAt(0)?.toUpperCase() || '?'}
+                                          </div>
+                                        )
+                                      )}
+                                      <div className="min-w-0 flex-1">
+                                        <p className={`text-sm font-medium truncate ${isClickable ? 'hover:underline' : ''}`} style={{ color: playerLinkColor }}>{displayName}</p>
+                                        <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{subLine}</p>
+                                      </div>
+                                    </div>
+                                    <span className="text-sm font-semibold text-slate-800 dark:text-white whitespace-nowrap ml-2">
+                                      {displayFn(entity)}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                              {items.length === 0 && (
+                                <p className="text-xs text-slate-400 dark:text-slate-500 text-center py-4">No data available</p>
+                              )}
+                            </div>
+                            {footnote && (
+                              <p className="text-[10px] text-slate-400 dark:text-slate-500 text-center pt-2 mt-2 border-t border-gray-100 dark:border-neutral-700/60">
+                                {footnote}
+                              </p>
+                            )}
+                          </div>
+                        </LeagueLeadersShareCard>
+                      );
+                    };
 
-                    <button
-                      className="flex items-center gap-1 text-sm text-slate-600 hover:text-orange-600 transition"
-                      onClick={() =>
-                        setSortOrder((prev) => (prev === "asc" ? "desc" : "asc"))
+                    // ---------- PLAYER LEADERS ----------
+                    if (leadersSubject === 'player') {
+                      if ((isLoadingLeaders || isLoadingStats)) {
+                        return (
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                            {Array.from({ length: 9 }).map((_, i) => (
+                              <LeaderCardSkeleton key={`inline-leader-skeleton-${i}`} />
+                            ))}
+                          </div>
+                        );
                       }
+                      if (filteredByAgeGroupRound.length === 0) {
+                        return (
+                          <div className="text-center py-12">
+                            <p className="text-sm text-slate-500 dark:text-slate-400">No player data available for the selected filters.</p>
+                          </div>
+                        );
+                      }
+
+                      const players = filteredByAgeGroupRound;
+
+                      if (leadersCategory === 'Traditional') {
+                        const statCategories = [
+                          {
+                            title: "Scoring Leaders",
+                            isPerGame: true,
+                            sortFn: (a: any, b: any) => leagueLeadersView === 'averages'
+                              ? parseFloat(b.avgPoints || '0') - parseFloat(a.avgPoints || '0')
+                              : (b.totalPoints || 0) - (a.totalPoints || 0),
+                            displayFn: (p: any) => leagueLeadersView === 'averages'
+                              ? `${p.avgPoints} PPG` : `${Math.round(p.totalPoints)} PTS`,
+                          },
+                          {
+                            title: "Rebounding Leaders",
+                            isPerGame: true,
+                            sortFn: (a: any, b: any) => leagueLeadersView === 'averages'
+                              ? parseFloat(b.avgRebounds || '0') - parseFloat(a.avgRebounds || '0')
+                              : (b.totalRebounds || 0) - (a.totalRebounds || 0),
+                            displayFn: (p: any) => leagueLeadersView === 'averages'
+                              ? `${p.avgRebounds} RPG` : `${Math.round(p.totalRebounds)} REB`,
+                          },
+                          {
+                            title: "Assist Leaders",
+                            isPerGame: true,
+                            sortFn: (a: any, b: any) => leagueLeadersView === 'averages'
+                              ? parseFloat(b.avgAssists || '0') - parseFloat(a.avgAssists || '0')
+                              : (b.totalAssists || 0) - (a.totalAssists || 0),
+                            displayFn: (p: any) => leagueLeadersView === 'averages'
+                              ? `${p.avgAssists} APG` : `${Math.round(p.totalAssists)} AST`,
+                          },
+                          {
+                            title: "Steal Leaders",
+                            isPerGame: true,
+                            sortFn: (a: any, b: any) => leagueLeadersView === 'averages'
+                              ? parseFloat(b.avgSteals || '0') - parseFloat(a.avgSteals || '0')
+                              : (b.totalSteals || 0) - (a.totalSteals || 0),
+                            displayFn: (p: any) => leagueLeadersView === 'averages'
+                              ? `${p.avgSteals} SPG` : `${Math.round(p.totalSteals)} STL`,
+                          },
+                          {
+                            title: "Block Leaders",
+                            isPerGame: true,
+                            sortFn: (a: any, b: any) => leagueLeadersView === 'averages'
+                              ? parseFloat(b.avgBlocks || '0') - parseFloat(a.avgBlocks || '0')
+                              : (b.totalBlocks || 0) - (a.totalBlocks || 0),
+                            displayFn: (p: any) => leagueLeadersView === 'averages'
+                              ? `${p.avgBlocks} BPG` : `${Math.round(p.totalBlocks)} BLK`,
+                          },
+                          {
+                            title: "Field Goal %",
+                            isPercentage: true,
+                            sortFn: (a: any, b: any) => parseFloat(b.fgPercentage || '0') - parseFloat(a.fgPercentage || '0'),
+                            displayFn: (p: any) => `${p.fgPercentage}%`,
+                            filterFn: (p: any) => (p.totalFGA || 0) >= MIN_FGA_INLINE,
+                            minLabel: `Min. ${MIN_FGA_INLINE} FGA`,
+                          },
+                          {
+                            title: "Three Point %",
+                            isPercentage: true,
+                            sortFn: (a: any, b: any) => parseFloat(b.threePercentage || '0') - parseFloat(a.threePercentage || '0'),
+                            displayFn: (p: any) => `${p.threePercentage}%`,
+                            filterFn: (p: any) => (p.total3PA || 0) >= MIN_3PA_INLINE,
+                            minLabel: `Min. ${MIN_3PA_INLINE} 3PA`,
+                          },
+                          {
+                            title: "Free Throw %",
+                            isPercentage: true,
+                            sortFn: (a: any, b: any) => parseFloat(b.ftPercentage || '0') - parseFloat(a.ftPercentage || '0'),
+                            displayFn: (p: any) => `${p.ftPercentage}%`,
+                            filterFn: (p: any) => (p.totalFTA || 0) >= MIN_FTA_INLINE,
+                            minLabel: `Min. ${MIN_FTA_INLINE} FTA`,
+                          },
+                          {
+                            title: "Efficiency Leaders",
+                            isPerGame: true,
+                            sortFn: (a: any, b: any) => {
+                              const effA = leagueLeadersView === 'averages'
+                                ? ((a.totalPoints || 0) + (a.totalRebounds || 0) + (a.totalAssists || 0) + (a.totalSteals || 0) + (a.totalBlocks || 0) - ((a.totalFGA || 0) - (a.totalFGM || 0)) - ((a.totalFTA || 0) - (a.totalFTM || 0)) - (a.totalTurnovers || 0)) / (a.games || 1)
+                                : (a.totalPoints || 0) + (a.totalRebounds || 0) + (a.totalAssists || 0) + (a.totalSteals || 0) + (a.totalBlocks || 0) - ((a.totalFGA || 0) - (a.totalFGM || 0)) - ((a.totalFTA || 0) - (a.totalFTM || 0)) - (a.totalTurnovers || 0);
+                              const effB = leagueLeadersView === 'averages'
+                                ? ((b.totalPoints || 0) + (b.totalRebounds || 0) + (b.totalAssists || 0) + (b.totalSteals || 0) + (b.totalBlocks || 0) - ((b.totalFGA || 0) - (b.totalFGM || 0)) - ((b.totalFTA || 0) - (b.totalFTM || 0)) - (b.totalTurnovers || 0)) / (b.games || 1)
+                                : (b.totalPoints || 0) + (b.totalRebounds || 0) + (b.totalAssists || 0) + (b.totalSteals || 0) + (b.totalBlocks || 0) - ((b.totalFGA || 0) - (b.totalFGM || 0)) - ((b.totalFTA || 0) - (b.totalFTM || 0)) - (b.totalTurnovers || 0);
+                              return effB - effA;
+                            },
+                            displayFn: (p: any) => {
+                              const totalEff = (p.totalPoints || 0) + (p.totalRebounds || 0) + (p.totalAssists || 0) + (p.totalSteals || 0) + (p.totalBlocks || 0) - ((p.totalFGA || 0) - (p.totalFGM || 0)) - ((p.totalFTA || 0) - (p.totalFTM || 0)) - (p.totalTurnovers || 0);
+                              return leagueLeadersView === 'averages'
+                                ? `${(totalEff / (p.games || 1)).toFixed(1)} EFF`
+                                : `${Math.round(totalEff)} EFF`;
+                            },
+                          },
+                        ];
+
+                        return (
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                            {statCategories.map(({ title, sortFn, displayFn, filterFn, isPerGame, isPercentage, minLabel }: any) => {
+                              const baseFiltered = filterFn ? players.filter(filterFn) : players;
+                              const qualifierApplies = isPercentage || (isPerGame && leagueLeadersView === 'averages');
+                              const applyMin = qualifierApplies && leadersMinGames > 1;
+                              const qualified = applyMin
+                                ? baseFiltered.filter((p: any) => (p.games || 0) >= leadersMinGames)
+                                : baseFiltered;
+                              const usedFallback = applyMin && qualified.length === 0 && baseFiltered.length > 0;
+                              const pool = qualified.length > 0 ? qualified : baseFiltered;
+                              const sorted = [...pool].sort(sortFn).slice(0, 10);
+                              const footnote = usedFallback || (qualifierApplies && leadersIsEarlySeason && baseFiltered.length > 0)
+                                ? 'Showing all players — season just started'
+                                : applyMin
+                                  ? `Min ${leadersMinGames} games played`
+                                  : undefined;
+                              return renderCard({ title, items: sorted, displayFn, footnote, minLabel, subject: 'player' });
+                            })}
+                          </div>
+                        );
+                      }
+
+                      // Player / Advanced — aggregate advanced stats per player from rawStats,
+                      // then render the same grouped sections as the standalone leaders page.
+                      const aggregated = players.flatMap((p: any) => {
+                        const rows = (p.rawStats || []) as any[];
+                        if (!rows.length) return [];
+                        const advAgg = makeAdvancedAggregator();
+                        rows.forEach((s) => accumulateAdvancedRow(advAgg, s));
+                        const merged = {
+                          ...advAgg,
+                          name: p.name,
+                          team: p.team,
+                          slug: p.slug,
+                          games_played: p.games || 0,
+                          total_points: p.totalPoints || 0,
+                          total_rebounds: p.totalRebounds || 0,
+                          total_assists: p.totalAssists || 0,
+                          total_steals: p.totalSteals || 0,
+                          total_blocks: p.totalBlocks || 0,
+                          total_turnovers: p.totalTurnovers || 0,
+                          total_field_goals_made: p.totalFGM || 0,
+                          total_field_goals_attempted: p.totalFGA || 0,
+                          total_three_points_made: p.total3PM || 0,
+                          total_three_points_attempted: p.total3PA || 0,
+                          total_free_throws_made: p.totalFTM || 0,
+                          total_free_throws_attempted: p.totalFTA || 0,
+                        };
+                        return [merged];
+                      });
+
+                      const sections = getAdvancedLeaderSections().map((section) => {
+                        const cards = section.defs.map((def: AdvancedLeaderDef) => {
+                          const eligible = aggregated.filter((p: any) => def.qualifies(p));
+                          const computed = eligible.flatMap((p: any) => {
+                            const result = def.compute(p);
+                            if (!result) return [];
+                            return [{ ...p, _adv: { value: result.value, display: result.display } }];
+                          });
+                          computed.sort((a: any, b: any) =>
+                            def.lowerIsBetter ? a._adv.value - b._adv.value : b._adv.value - a._adv.value
+                          );
+                          return {
+                            title: def.title,
+                            minLabel: def.minLabel,
+                            items: computed.slice(0, 10),
+                          };
+                        }).filter((c) => c.items.length > 0);
+                        return { key: section.key, title: section.title, cards };
+                      }).filter((s) => s.cards.length > 0);
+
+                      if (sections.length === 0) {
+                        return (
+                          <div className="text-center py-12">
+                            <p className="text-sm text-slate-500 dark:text-slate-400">No advanced player data available for the selected filters.</p>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="space-y-6">
+                          {sections.map((section) => (
+                            <div key={section.key}>
+                              <h3 className="text-sm md:text-base font-semibold text-slate-700 dark:text-slate-200 mb-3">{section.title}</h3>
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                                {section.cards.map((card) => renderCard({
+                                  title: card.title,
+                                  items: card.items,
+                                  displayFn: (p: any) => p._adv.display,
+                                  minLabel: card.minLabel,
+                                  subject: 'player',
+                                }))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    }
+
+                    // ---------- TEAM LEADERS ----------
+                    if (isLoadingTeamStats) {
+                      return (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                          {Array.from({ length: 9 }).map((_, i) => (
+                            <LeaderCardSkeleton key={`inline-team-leader-skeleton-${i}`} />
+                          ))}
+                        </div>
+                      );
+                    }
+
+                    const teamPool = (isParentLeague && (filterAgeGroup !== 'all' || selectedStop !== 'all'))
+                      ? teamStatsData.filter((t: any) => selectedAgeGroupLeagueIds.includes(t.league_id))
+                      : teamStatsData;
+
+                    if (teamPool.length === 0) {
+                      return (
+                        <div className="text-center py-12">
+                          <p className="text-sm text-slate-500 dark:text-slate-400">No team data available for the selected filters.</p>
+                        </div>
+                      );
+                    }
+
+                    const teamNum = (t: any, key: string) => {
+                      const v = t[key];
+                      if (v == null) return 0;
+                      const n = typeof v === 'number' ? v : parseFloat(v);
+                      return Number.isFinite(n) ? n : 0;
+                    };
+                    const teamFmt = (n: number, digits = 1) => Number.isFinite(n) ? n.toFixed(digits) : '0.0';
+
+                    if (leadersCategory === 'Traditional') {
+                      const teamCategories = [
+                        { title: 'Team Scoring',
+                          sortFn: (a: any, b: any) => leagueLeadersView === 'averages' ? teamNum(b, 'ppg') - teamNum(a, 'ppg') : teamNum(b, 'totalPoints') - teamNum(a, 'totalPoints'),
+                          displayFn: (t: any) => leagueLeadersView === 'averages' ? `${teamFmt(teamNum(t, 'ppg'))} PPG` : `${Math.round(teamNum(t, 'totalPoints'))} PTS` },
+                        { title: 'Team Rebounding',
+                          sortFn: (a: any, b: any) => leagueLeadersView === 'averages' ? teamNum(b, 'rpg') - teamNum(a, 'rpg') : teamNum(b, 'totalRebounds') - teamNum(a, 'totalRebounds'),
+                          displayFn: (t: any) => leagueLeadersView === 'averages' ? `${teamFmt(teamNum(t, 'rpg'))} RPG` : `${Math.round(teamNum(t, 'totalRebounds'))} REB` },
+                        { title: 'Team Assists',
+                          sortFn: (a: any, b: any) => leagueLeadersView === 'averages' ? teamNum(b, 'apg') - teamNum(a, 'apg') : teamNum(b, 'totalAssists') - teamNum(a, 'totalAssists'),
+                          displayFn: (t: any) => leagueLeadersView === 'averages' ? `${teamFmt(teamNum(t, 'apg'))} APG` : `${Math.round(teamNum(t, 'totalAssists'))} AST` },
+                        { title: 'Team Steals',
+                          sortFn: (a: any, b: any) => leagueLeadersView === 'averages' ? teamNum(b, 'spg') - teamNum(a, 'spg') : teamNum(b, 'totalSteals') - teamNum(a, 'totalSteals'),
+                          displayFn: (t: any) => leagueLeadersView === 'averages' ? `${teamFmt(teamNum(t, 'spg'))} SPG` : `${Math.round(teamNum(t, 'totalSteals'))} STL` },
+                        { title: 'Team Blocks',
+                          sortFn: (a: any, b: any) => leagueLeadersView === 'averages' ? teamNum(b, 'bpg') - teamNum(a, 'bpg') : teamNum(b, 'totalBlocks') - teamNum(a, 'totalBlocks'),
+                          displayFn: (t: any) => leagueLeadersView === 'averages' ? `${teamFmt(teamNum(t, 'bpg'))} BPG` : `${Math.round(teamNum(t, 'totalBlocks'))} BLK` },
+                        { title: 'Team Field Goal %',
+                          sortFn: (a: any, b: any) => teamNum(b, 'fgPercentage') - teamNum(a, 'fgPercentage'),
+                          displayFn: (t: any) => `${teamFmt(teamNum(t, 'fgPercentage'))}%`,
+                          filterFn: (t: any) => teamNum(t, 'totalFGA') >= 10 },
+                        { title: 'Team Three Point %',
+                          sortFn: (a: any, b: any) => teamNum(b, 'threePtPercentage') - teamNum(a, 'threePtPercentage'),
+                          displayFn: (t: any) => `${teamFmt(teamNum(t, 'threePtPercentage'))}%`,
+                          filterFn: (t: any) => teamNum(t, 'total3PA') >= 5 },
+                        { title: 'Team Free Throw %',
+                          sortFn: (a: any, b: any) => teamNum(b, 'ftPercentage') - teamNum(a, 'ftPercentage'),
+                          displayFn: (t: any) => `${teamFmt(teamNum(t, 'ftPercentage'))}%`,
+                          filterFn: (t: any) => teamNum(t, 'totalFTA') >= 5 },
+                      ];
+
+                      return (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                          {teamCategories.map(({ title, sortFn, displayFn, filterFn }: any) => {
+                            const eligible = filterFn ? teamPool.filter(filterFn) : teamPool;
+                            const sorted = [...eligible].sort(sortFn).slice(0, 10);
+                            return renderCard({ title, items: sorted, displayFn, subject: 'team' });
+                          })}
+                        </div>
+                      );
+                    }
+
+                    // Team / Advanced — averages of per-game advanced metrics already on teamStatsData.
+                    const teamAdvCategories = [
+                      { title: 'Offensive Rating', field: 'avgOffRating', fmt: (v: number) => teamFmt(v), minGp: 2 },
+                      { title: 'Defensive Rating', field: 'avgDefRating', fmt: (v: number) => teamFmt(v), minGp: 2, lower: true },
+                      { title: 'Net Rating', field: 'avgNetRating', fmt: (v: number) => teamFmt(v), minGp: 2 },
+                      { title: 'Pace', field: 'avgPace', fmt: (v: number) => teamFmt(v), minGp: 2 },
+                      { title: 'Effective FG% (eFG%)', field: 'avgEfgPercent', fmt: (v: number) => `${teamFmt(v)}%`, minGp: 2 },
+                      { title: 'True Shooting % (TS%)', field: 'avgTsPercent', fmt: (v: number) => `${teamFmt(v)}%`, minGp: 2 },
+                      { title: 'Assist % (AST%)', field: 'avgAstPercent', fmt: (v: number) => `${teamFmt(v)}%`, minGp: 2 },
+                      { title: 'Rebound % (REB%)', field: 'avgRebPercent', fmt: (v: number) => `${teamFmt(v)}%`, minGp: 2 },
+                      { title: 'Turnover % (TOV%)', field: 'avgTovPercent', fmt: (v: number) => `${teamFmt(v)}%`, minGp: 2, lower: true },
+                      { title: 'Player Impact Estimate (PIE)', field: 'avgPie', fmt: (v: number) => teamFmt(v, 3), minGp: 2 },
+                    ];
+
+                    const teamAdvCards = teamAdvCategories.flatMap((cat) => {
+                      const eligible = teamPool.filter((t: any) => (t.gamesPlayed || 0) >= cat.minGp && t[cat.field] != null);
+                      // Hide cards where no team has the metric captured.
+                      const hasAnyValue = eligible.some((t: any) => teamNum(t, cat.field) !== 0);
+                      if (eligible.length === 0 || !hasAnyValue) return [];
+                      const sorted = [...eligible].sort((a: any, b: any) =>
+                        cat.lower ? teamNum(a, cat.field) - teamNum(b, cat.field) : teamNum(b, cat.field) - teamNum(a, cat.field)
+                      ).slice(0, 10);
+                      return [{
+                        title: cat.title,
+                        items: sorted,
+                        displayFn: (t: any) => cat.fmt(teamNum(t, cat.field)),
+                      }];
+                    });
+
+                    if (teamAdvCards.length === 0) {
+                      return (
+                        <div className="text-center py-12">
+                          <p className="text-sm text-slate-500 dark:text-slate-400">No advanced team data available for the selected filters.</p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                        {teamAdvCards.map((c) => renderCard({ title: c.title, items: c.items, displayFn: c.displayFn, subject: 'team' }))}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            )}
+
+            {/* Overview Section - Default view */}
+            {activeSection === 'overview' && (
+              <>
+                {/* Top Performances This Week */}
+                {slug && (
+                  <div className="-mx-4 md:-mx-6">
+                    <LeagueTrendingPerformances
+                      leagueSlug={slug}
+                      brandColor={brandColorHex}
+                    />
+                  </div>
+                )}
+
+                {/* League Leaders Quick View */}
+                <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
+                  <div className="flex justify-between items-center mb-4 md:mb-6">
+                    <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">League Leaders</h2>
+                    <button
+                      onClick={() => {
+                        setActiveSection('leaders');
+                        if (allPlayerAverages.length === 0 && !isFetchingStatsRef.current) {
+                          fetchAllPlayerAverages();
+                        }
+                      }}
+                      className="text-xs md:text-sm font-medium hover:underline"
+                      style={{ color: brandColor }}
                     >
-                      {sortOrder === "asc" ? (
-                        <span>
-                          ⬆️ <span className="underline">Ascending</span>
-                        </span>
-                      ) : (
-                        <span>
-                          ⬇️ <span className="underline">Descending</span>
-                        </span>
-                      )}
+                      View All Leaders →
                     </button>
                   </div>
+                  {(() => {
+                    const isLoading = isLoadingLeaders || isLoadingStats;
+                    const quickCategories = [
+                      { title: "Top Scorers", list: topScorers, avgLabel: "PPG", totalLabel: "PTS" },
+                      { title: "Top Rebounders", list: topRebounders, avgLabel: "RPG", totalLabel: "REB" },
+                      { title: "Top Playmakers", list: topAssistsList, avgLabel: "APG", totalLabel: "AST" },
+                    ] as const;
 
+                    const qvContextParts: string[] = [];
+                    if (filterAgeGroup !== 'all') qvContextParts.push(shortenAgeLabel(filterAgeGroup));
+                    if (filterRound !== 'all') qvContextParts.push(`Round ${filterRound}`);
+                    if (isParentLeague && selectedStop !== 'all') qvContextParts.push(`Stop ${selectedStop}`);
+                    qvContextParts.push(leagueLeadersView === 'totals' ? 'Season Totals' : 'Season Averages');
+                    const quickContextLabel = qvContextParts.join(' · ');
 
-                  {/* Stats Table */}
-                  <table className="mt-4 w-full text-sm text-left text-slate-700">
+                    let quickFootnote: string | undefined;
+                    if (leagueLeadersView === 'averages' && filteredByAgeGroupRound.length > 0) {
+                      const qualifiedPool = leadersMinGames > 1
+                        ? filteredByAgeGroupRound.filter((p: any) => (p.games || 0) >= leadersMinGames)
+                        : filteredByAgeGroupRound;
+                      const usedFallback = leadersMinGames > 1 && qualifiedPool.length === 0;
+                      if (leadersIsEarlySeason || usedFallback) {
+                        quickFootnote = 'Showing all players — season just started';
+                      } else if (leadersMinGames > 1) {
+                        quickFootnote = `Min ${leadersMinGames} games played`;
+                      }
+                    }
+
+                    const shareGroups = quickCategories.map(({ title, list, avgLabel, totalLabel }) => {
+                      const unitLabel = leagueLeadersView === 'averages' ? avgLabel : totalLabel;
+                      return {
+                        title,
+                        unitLabel,
+                        leaders: (Array.isArray(list) ? list : []).slice(0, 10).map((p: any) => ({
+                          name: p.name,
+                          team: p.team,
+                          value: String(p.value),
+                        })),
+                      };
+                    });
+
+                    const gridContent = isLoading ? (
+                      <div className="flex flex-col gap-3">
+                        {Array.from({ length: 3 }).map((_, i) => (
+                          <LeaderCardSkeleton key={`leader-skeleton-${i}`} />
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-3">
+                        {quickCategories.map(({ title, list, avgLabel, totalLabel }) => {
+                          const unitLabel = leagueLeadersView === 'averages' ? avgLabel : totalLabel;
+                          return (
+                            <div key={title} className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4">
+                              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">{title}</h3>
+                              <ul className="divide-y divide-gray-100 dark:divide-neutral-700">
+                                {Array.isArray(list) &&
+                                  list.slice(0, 5).map((p, i) => (
+                                    <li
+                                      key={`${title}-${p.name}-${i}`}
+                                      className={`flex items-center justify-between py-2 ${p.slug ? 'cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-700 rounded px-2 -mx-2 transition-colors' : 'px-2 -mx-2'}`}
+                                      onClick={() => {
+                                        if (p.slug) {
+                                          handleSelectPlayer(p.slug, activeSection);
+                                        }
+                                      }}
+                                    >
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <span className="text-xs font-bold tabular-nums text-slate-400 dark:text-slate-500 w-4 shrink-0">{i + 1}</span>
+                                        <span
+                                          className={`text-sm font-medium text-slate-800 dark:text-white truncate ${p.slug ? 'hover:underline' : ''}`}
+                                          style={p.slug ? { color: playerLinkColor } : undefined}
+                                          onMouseEnter={(e) => { if (p.slug) (e.target as HTMLElement).style.color = playerLinkColorHover; }}
+                                          onMouseLeave={(e) => { if (p.slug) (e.target as HTMLElement).style.color = playerLinkColor; }}
+                                        >{p.name}</span>
+                                        {p.team && <span className="text-xs text-slate-400 dark:text-slate-500 truncate hidden sm:block">· {p.team}</span>}
+                                      </div>
+                                      <span className="text-sm font-bold tabular-nums whitespace-nowrap ml-3 shrink-0" style={{ color: playerLinkColor }}>
+                                        {p.value} <span className="text-xs font-medium opacity-70">{unitLabel}</span>
+                                      </span>
+                                    </li>
+                                  ))}
+                              </ul>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+
+                    if (isLoading) return gridContent;
+
+                    const inPageContent = (
+                      <>
+                        {gridContent}
+                        {quickFootnote && (
+                          <p className="text-[10px] text-slate-400 dark:text-slate-500 text-center mt-3">
+                            {quickFootnote}
+                          </p>
+                        )}
+                      </>
+                    );
+
+                    return (
+                      <LeagueLeadersShareCard
+                        title="League Leaders"
+                        groups={shareGroups}
+                        leagueName={displayLeagueName || 'League Leaders'}
+                        contextLabel={quickContextLabel}
+                        brandColor={brandColorHex}
+                        leagueLogoUrl={displayLogoUrl}
+                        footnote={quickFootnote}
+                        fileSlug={`league-${slug}-quick-league-leaders`}
+                      >
+                        {inPageContent}
+                      </LeagueLeadersShareCard>
+                    );
+                  })()}
+                </div>
+
+                {/* Team League Leaders */}
+                <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
+                  <div className="flex justify-between items-center mb-4 md:mb-6">
+                    <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">Team Leaders</h2>
+                    <button
+                      onClick={() => setActiveSection('teamstats')}
+                      className="text-xs md:text-sm font-medium hover:underline"
+                      style={{ color: brandColor }}
+                    >
+                      View All Team Stats →
+                    </button>
+                  </div>
+                  {(() => {
+                    const filteredTeamStats = isParentLeague && filterAgeGroup !== 'all'
+                      ? teamStatsData.filter((t: any) => selectedAgeGroupLeagueIds.includes(t.league_id))
+                      : teamStatsData;
+                    return isLoadingTeamStats || filteredTeamStats.length === 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+                      {Array.from({ length: 3 }).map((_, i) => (
+                        <LeaderCardSkeleton key={`team-leader-skeleton-${i}`} />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+                      {/* Top Scoring Teams */}
+                      <div className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4 shadow-inner">
+                        <h3 className="text-xs md:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 md:mb-3 text-center">Top Scoring</h3>
+                        <ul className="space-y-1 text-xs md:text-sm text-slate-800 dark:text-white">
+                          {filteredTeamStats
+                            .slice()
+                            .sort((a: any, b: any) => parseFloat(b.ppg || '0') - parseFloat(a.ppg || '0'))
+                            .slice(0, 5)
+                            .map((team: any, i: number) => (
+                              <li key={`scoring-${team.teamName}-${i}`} className="flex justify-between items-center gap-2">
+                                <div className="flex items-center gap-1.5 truncate flex-1 min-w-0">
+                                  <TeamLogo teamName={team.teamName} leagueId={league?.league_id} size="xs" logoUrl={getTeamLogoUrl(team.teamName)} />
+                                  <span className="truncate">{team.teamName}</span>
+                                </div>
+                                <span className="font-medium whitespace-nowrap" style={{ color: brandColor }}>
+                                  {team.ppg} PPG
+                                </span>
+                              </li>
+                            ))}
+                        </ul>
+                      </div>
+
+                      {/* Top Rebounding Teams */}
+                      <div className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4 shadow-inner">
+                        <h3 className="text-xs md:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 md:mb-3 text-center">Top Rebounding</h3>
+                        <ul className="space-y-1 text-xs md:text-sm text-slate-800 dark:text-white">
+                          {filteredTeamStats
+                            .slice()
+                            .sort((a: any, b: any) => parseFloat(b.rpg || '0') - parseFloat(a.rpg || '0'))
+                            .slice(0, 5)
+                            .map((team: any, i: number) => (
+                              <li key={`rebounding-${team.teamName}-${i}`} className="flex justify-between items-center gap-2">
+                                <div className="flex items-center gap-1.5 truncate flex-1 min-w-0">
+                                  <TeamLogo teamName={team.teamName} leagueId={league?.league_id} size="xs" logoUrl={getTeamLogoUrl(team.teamName)} />
+                                  <span className="truncate">{team.teamName}</span>
+                                </div>
+                                <span className="font-medium whitespace-nowrap" style={{ color: brandColor }}>
+                                  {team.rpg} RPG
+                                </span>
+                              </li>
+                            ))}
+                        </ul>
+                      </div>
+
+                      {/* Top Assists Teams */}
+                      <div className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4 shadow-inner">
+                        <h3 className="text-xs md:text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 md:mb-3 text-center">Top Playmaking</h3>
+                        <ul className="space-y-1 text-xs md:text-sm text-slate-800 dark:text-white">
+                          {filteredTeamStats
+                            .slice()
+                            .sort((a: any, b: any) => parseFloat(b.apg || '0') - parseFloat(a.apg || '0'))
+                            .slice(0, 5)
+                            .map((team: any, i: number) => (
+                              <li key={`assists-${team.teamName}-${i}`} className="flex justify-between items-center gap-2">
+                                <div className="flex items-center gap-1.5 truncate flex-1 min-w-0">
+                                  <TeamLogo teamName={team.teamName} leagueId={league?.league_id} size="xs" logoUrl={getTeamLogoUrl(team.teamName)} />
+                                  <span className="truncate">{team.teamName}</span>
+                                </div>
+                                <span className="font-medium whitespace-nowrap" style={{ color: brandColor }}>
+                                  {team.apg} APG
+                                </span>
+                              </li>
+                            ))}
+                        </ul>
+                      </div>
+                    </div>
+                  )
+                  })()}
+                </div>
+
+            {/* Tournament Bracket - Only for BCB Trophy */}
+            {slug === 'british-championship-basketball' && league?.league_id && (
+              <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
+                <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-4 md:mb-6">Tournament Bracket</h2>
+                <TournamentBracket 
+                  leagueId={league.league_id} 
+                  onGameClick={handleGameClick}
+                />
+              </div>
+            )}
+
+            {/* League Standings */}
+            <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
+              <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-4">League Standings</h2>
+              {isLoadingStandings ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
                     <thead>
-                      <tr>
-                        <th className="px-2 py-1">Name</th>
-                        <th className="px-2 py-1">PTS</th>
-                        <th className="px-2 py-1">REB</th>
-                        <th className="px-2 py-1">AST</th>
+                      <tr className="border-b border-gray-200 dark:border-neutral-700">
+                        <th className="text-left py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">#</th>
+                        <th className="text-left py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">Team</th>
+                        <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">Record</th>
+                        <th className="text-center py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">Win%</th>
+                        <th className="text-right py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">PF</th>
+                        <th className="text-right py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">PA</th>
+                        <th className="text-right py-3 px-2 font-semibold text-slate-700 dark:text-slate-200">Diff</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {[...playerStats]
-                        .filter((p) =>
-                          p.name.toLowerCase().includes(playerSearch.toLowerCase())
-                        )
-                        .sort((a, b) => {
-                          const aVal = a[sortField] ?? 0;
-                          const bVal = b[sortField] ?? 0;
-                          return sortOrder === "asc" ? aVal - bVal : bVal - aVal;
-                        })
-                        .map((p, i) => {
-                          const uniqueKey = `player-${p.id || p.name}-${p.game_date || 'no-date'}-${i}`;
-                          return (
-                            <React.Fragment key={uniqueKey}>
-                              <tr
-                                className="border-t cursor-pointer hover:bg-orange-50"
-                                onClick={() =>
-                                  setExpandedPlayer(expandedPlayer === i ? null : i)
-                                }
-                              >
-                                <td className="px-2 py-1">{p.name}</td>
-                                <td className="px-2 py-1">{p.points}</td>
-                                <td className="px-2 py-1">{p.rebounds_total}</td>
-                                <td className="px-2 py-1">{p.assists}</td>
-                              </tr>
-
-                              {expandedPlayer === i && (
-                                <tr>
-                                  <td colSpan={4}>
-                                    <GameSummaryRow
-                                      player={{ name: p.name }}
-                                      game={{
-                                        id: p.id,
-                                        game_date: p.game_date,
-                                        team: p.team,
-                                        opponent: p.opponent,
-                                        league_id: league.id,
-                                      }}
-                                    />
-
-                                  </td>
-                                </tr>
-                              )}
-                            </React.Fragment>
-                          );
-                        })}
+                      {Array.from({ length: 6 }).map((_, index) => (
+                        <StandingsRowSkeleton key={`standings-skeleton-${index}`} />
+                      ))}
                     </tbody>
                   </table>
                 </div>
+              ) : (() => {
+                const overviewStandings = (isParentLeague && filterAgeGroup !== 'all'
+                  ? standings.filter((s: any) => s.ageGroup === filterAgeGroup)
+                  : standings).filter((s: any) => s.games > 0);
+                return overviewStandings.length > 0 ? (
+                <div className="overflow-x-auto -mx-4 md:mx-0">
+                  <table className="w-full text-sm min-w-[600px]">
+                    <thead>
+                      <tr className="border-b-2 border-gray-200 dark:border-neutral-700">
+                        <th className="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-12 sticky left-0 bg-white dark:bg-neutral-900 z-10">#</th>
+                        <th className="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 max-w-[180px] sticky left-12 md:static bg-white dark:bg-neutral-900 z-10">Team</th>
+                        <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">W</th>
+                        <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">L</th>
+                        <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">Win%</th>
+                        <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">PF</th>
+                        <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">PA</th>
+                        <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">Diff</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {overviewStandings.map((team: any, index: number) => {
+                        const rowBg = index < 3 
+                          ? 'bg-green-50 dark:bg-green-900/20' 
+                          : index >= standings.length - 2 
+                            ? 'bg-red-50 dark:bg-red-900/20' 
+                            : 'bg-white dark:bg-neutral-900';
+                        const stickyBg = index < 3 
+                          ? 'bg-green-50 dark:bg-[#0d2818]' 
+                          : index >= standings.length - 2 
+                            ? 'bg-red-50 dark:bg-[#2a1215]' 
+                            : 'bg-white dark:bg-neutral-900';
+                        return (
+                        <tr 
+                          key={team.team} 
+                          className={`border-b border-gray-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors ${rowBg}`}
+                        >
+                          <td className={`py-3 px-3 font-medium text-slate-600 dark:text-slate-400 sticky left-0 z-10 ${stickyBg}`}>{index + 1}</td>
+                          <td className={`py-3 px-3 font-medium text-slate-800 dark:text-slate-200 max-w-[180px] sticky left-12 md:static z-10 ${stickyBg}`}>
+                            <div className="flex items-center gap-2">
+                              <TeamLogo teamName={team.team} leagueId={league?.league_id} size="sm" logoUrl={getTeamLogoUrl(team.team)} />
+                              <span className="truncate">{team.team}</span>
+                            </div>
+                          </td>
+                          <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.wins}</td>
+                          <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.losses}</td>
+                          <td className="py-3 px-3 text-center font-medium text-slate-600 dark:text-slate-400">{(team.winPct * 100).toFixed(1)}%</td>
+                          <td className="py-3 px-3 text-right font-medium text-slate-700 dark:text-slate-300">{team.pointsFor}</td>
+                          <td className="py-3 px-3 text-right font-medium text-slate-700 dark:text-slate-300">{team.pointsAgainst}</td>
+                          <td className={`py-3 px-3 text-right font-semibold ${team.pointsDiff > 0 ? 'text-green-600 dark:text-green-400' : team.pointsDiff < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-400'}`}>{team.pointsDiff > 0 ? '+' : ''}{team.pointsDiff}</td>
+                        </tr>
+                      );})}
+                    </tbody>
+                  </table>
+                  <div className="mt-4 pt-3 border-t border-gray-100 dark:border-neutral-700 text-xs text-slate-500 dark:text-slate-400">
+                    <div className="flex gap-4 flex-wrap">
+                      <span><span className="font-semibold">W</span> = Wins</span>
+                      <span><span className="font-semibold">L</span> = Losses</span>
+                      <span><span className="font-semibold">Win%</span> = Win Percentage</span>
+                      <span><span className="font-semibold">PF</span> = Points For</span>
+                      <span><span className="font-semibold">PA</span> = Points Against</span>
+                      <span><span className="font-semibold">Diff</span> = Point Differential</span>
+                    </div>
+                  </div>
+                </div>
               ) : (
-                <p className="text-sm text-slate-600 mt-2">No player data available.</p>
-              )}
-
+                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                  <p className="text-sm">No standings available</p>
+                  <p className="text-xs mt-1">Standings will appear once games are played</p>
+                </div>
+              )
+              })()}
             </div>
-
+              </>
+            )}
           </section>
 
-          <aside className="bg-white rounded-xl shadow p-4 space-y-6">
+          {/* Sidebar */}
+          <aside className={`space-y-6 ${activeSection !== 'overview' ? 'hidden' : ''}`}>
+            {/* League Admin Panel */}
+            {isOwner && league?.league_id && (
+              <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-6 border-l-4 border-blue-500">
+                <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
+                  <svg className="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.5 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  League Admin
+                </h3>
+                
+                <div className="space-y-4">
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                    Manage all aspects of your league from the dedicated admin area.
+                  </p>
+                  
+                  <button
+                    onClick={() => navigate(`/league-admin/${slug}`)}
+                    className="w-full bg-blue-500 hover:bg-blue-600 text-white px-4 py-3 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Open League Admin
+                  </button>
+                  
+                  <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1">
+                    <p>• Team Logo Management</p>
+                    <p>• Banner & Media Settings</p>
+                    <p>• Social Media Integration</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+
+            {activeSection === 'overview' && (<>
             {/* Instagram Embed */}
-            <div>
-              <h3 className="text-sm font-semibold text-slate-700 mb-2">Instagram Feed</h3>
-              <iframe
-                src="https://www.instagram.com/p/EXAMPLE/embed"
-                width="100%"
-                height="400"
-                className="rounded-md"
-                allow="autoplay; clipboard-write; encrypted-media; picture-in-picture"
-              ></iframe>
+            <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4">
+              {isOwner && (
+                <div className="flex justify-end mb-1">
+                  <button
+                    onClick={() => setIsEditingInstagram(!isEditingInstagram)}
+                    className="text-xs font-medium"
+                    style={{ color: brandColor }}
+                    data-testid="edit-instagram-button"
+                  >
+                    {isEditingInstagram ? 'Cancel' : 'Edit'}
+                  </button>
+                </div>
+              )}
+
+              {isEditingInstagram && isOwner ? (
+                <div className="space-y-3">
+                  {/* List of existing URLs */}
+                  {instagramUrls.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-slate-600 dark:text-slate-400">Current Posts ({instagramUrls.length})</p>
+                      {instagramUrls.map((url, index) => (
+                        <div key={index} className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-neutral-800 rounded border border-gray-200 dark:border-neutral-700">
+                          <span className="text-xs text-slate-700 dark:text-slate-300 flex-1 truncate">{url}</span>
+                          <button
+                            onClick={() => handleRemoveInstagramUrl(index)}
+                            className="text-xs text-red-500 hover:text-red-600 font-medium shrink-0"
+                            data-testid={`remove-instagram-url-${index}`}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Add new URL */}
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-slate-600 dark:text-slate-400">Add New Post</p>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Enter Instagram post or profile URL"
+                        value={newInstagramUrl}
+                        onChange={(e) => setNewInstagramUrl(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleAddInstagramUrl()}
+                        className="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-neutral-600 dark:bg-neutral-800 dark:text-white rounded-md"
+                        data-testid="new-instagram-url-input"
+                      />
+                      <button
+                        onClick={handleAddInstagramUrl}
+                        className="px-3 py-2 text-xs font-medium bg-gray-200 dark:bg-neutral-700 text-gray-700 dark:text-gray-200 rounded hover:bg-gray-300 dark:hover:bg-neutral-600 shrink-0"
+                        data-testid="add-instagram-url-button"
+                      >
+                        Add
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      💡 Add profile URLs or specific post/reel URLs. Videos will auto-play in the carousel.
+                    </p>
+                  </div>
+
+                  {/* Save/Cancel buttons */}
+                  <div className="flex gap-2 pt-2 border-t border-gray-200">
+                    <button
+                      onClick={handleInstagramUpdate}
+                      disabled={updatingInstagram}
+                      className={`px-3 py-1 text-xs font-medium rounded ${
+                        updatingInstagram 
+                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                          : 'text-white'
+                      }`}
+                      style={!updatingInstagram ? { backgroundColor: brandColor } : {}}
+                      data-testid="save-instagram-urls-button"
+                    >
+                      {updatingInstagram ? 'Saving...' : 'Save Changes'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsEditingInstagram(false);
+                        setNewInstagramUrl("");
+                        // Reset to league's current URLs
+                        if (league?.instagram_embed_url) {
+                          try {
+                            const parsed = JSON.parse(league.instagram_embed_url);
+                            if (Array.isArray(parsed)) {
+                              setInstagramUrls(parsed.filter(url => url && url.trim()));
+                            } else if (typeof parsed === 'string') {
+                              setInstagramUrls([parsed.trim()]);
+                            } else {
+                              setInstagramUrls([league.instagram_embed_url]);
+                            }
+                          } catch {
+                            setInstagramUrls([league.instagram_embed_url]);
+                          }
+                        } else {
+                          setInstagramUrls([]);
+                        }
+                      }}
+                      className="px-3 py-1 text-xs font-medium bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                      data-testid="cancel-instagram-edit-button"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <InstagramFeedSection
+                  urls={instagramUrls}
+                  handle={(league as any)?.instagram_handle || undefined}
+                  brandColor={brandColorHex}
+                />
+              )}
             </div>
 
             {/* YouTube Embed */}
-            <div>
-              <h3 className="text-sm font-semibold text-slate-700 mb-2">Latest Highlights</h3>
-              <iframe
-                width="100%"
-                height="250"
-                src="https://www.youtube.com/embed/VIDEO_ID"
-                title="YouTube video player"
-                frameBorder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              ></iframe>
+            <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4">
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Latest Highlights</h3>
+                {isOwner && (
+                  <button
+                    onClick={() => setIsEditingYoutube(!isEditingYoutube)}
+                    className="text-xs font-medium"
+                    style={{ color: brandColor }}
+                  >
+                    {isEditingYoutube ? 'Cancel' : 'Edit'}
+                  </button>
+                )}
+              </div>
+
+              {isEditingYoutube && isOwner ? (
+                <div className="space-y-3">
+                  <input
+                    type="text"
+                    placeholder="Enter YouTube video URL (e.g., https://www.youtube.com/watch?v=xyz or https://youtu.be/xyz)"
+                    value={youtubeUrl}
+                    onChange={(e) => setYoutubeUrl(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md"
+                  />
+                  <p className="text-xs text-gray-500">
+                    💡 Paste any YouTube video URL (watch, short link, or shorts)
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleYoutubeUpdate}
+                      disabled={updatingYoutube}
+                      className={`px-3 py-1 text-xs font-medium rounded ${
+                        updatingYoutube 
+                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                          : 'text-white'
+                      }`}
+                      style={!updatingYoutube ? { backgroundColor: brandColor } : {}}
+                    >
+                      {updatingYoutube ? 'Updating...' : 'Save'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsEditingYoutube(false);
+                        setYoutubeUrl(league?.youtube_embed_url || "");
+                      }}
+                      className="px-3 py-1 text-xs font-medium bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  {youtubeEmbedUrl ? (
+                    <iframe
+                      src={youtubeEmbedUrl}
+                      width="100%"
+                      height="250"
+                      className="rounded-md border"
+                      title="YouTube video player"
+                      frameBorder="0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    ></iframe>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      <p className="text-sm">No YouTube video added yet</p>
+                      {isOwner && (
+                        <button
+                          onClick={() => setIsEditingYoutube(true)}
+                          className="mt-2 text-xs underline"
+                          style={{ color: brandColor }}
+                        >
+                          Add YouTube Video
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Comment Section Placeholder */}
-            <div>
+            <div className="bg-white rounded-xl shadow p-4">
               <h3 className="text-sm font-semibold text-slate-700 mb-2">Community Comments</h3>
               <p className="text-xs text-slate-500">💬 Only logged-in users can post.</p>
               <div className="text-xs italic text-slate-400 mt-2">Coming soon...</div>
             </div>
+            </>)}
           </aside>
-
-
         </main>
-      </div>
-    );
-  }
 
+        {/* Game Detail Modal */}
+        {selectedGameId && (
+          <GameDetailModal
+            gameId={selectedGameId}
+            isOpen={isGameModalOpen}
+            onClose={handleCloseGameModal}
+          />
+        )}
+
+        {/* Game Preview Modal */}
+        {selectedPreviewGame && league && (
+          <GamePreviewModal
+            game={selectedPreviewGame}
+            leagueId={league.league_id}
+            isOpen={isPreviewModalOpen}
+            onClose={() => setIsPreviewModalOpen(false)}
+            gameKey={selectedPreviewGame.game_id}
+          />
+        )}
+
+        {/* Floating AI assistant widget — fixed bottom-right, always accessible */}
+        {league?.league_id && (
+          <LeagueChatbot
+            isFloatingWidget
+            leagueId={league.league_id}
+            leagueName={league.name || 'League'}
+            leagueSlug={slug}
+          />
+        )}
+        </div>
+      </div>
+     );
+    }
+  

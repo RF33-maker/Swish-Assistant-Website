@@ -1,0 +1,145 @@
+Swish Assistant – Premium Coaches Hub & Scouting Report Build Brief
+Goal
+Recreate the Coaches Hub + Scouting Report flow to match the attached screenshot:
+
+Left: Coaches Hub analytics dashboard (metrics + trends + insights).
+
+Right: 3-pane Scouting Report editor (Blocks list → Canvas → Inspector panel).
+
+Core Outcomes
+Premium design: modern typography, athletic branding, soft shadows, rounded cards, smooth animations.
+
+3-pane editor:
+
+Blocks/Template list (drag/drop)
+
+Canvas (TipTap editor with sports-specific blocks)
+
+Inspector panel (AI assist, context, branding, export).
+
+Fully integrated with Supabase for documents, templates, stats, and branding.
+
+Export PDF matches the editor’s layout & theme.
+
+Features to Implement
+1. Coaches Hub (left section)
+League selector with logo + status (last sync, record count).
+
+Metric cards: Total Players, Games Tracked, Teams Tracked (with mini sparklines).
+
+Team Performance Trends:
+
+List of teams with avg points, trend %, sparkline.
+
+Inline logos, recent form indicator.
+
+Clickable to open team details or create report.
+
+Insights panel:
+
+Colored chips (Green = improving, Red = declining, Stable = consistent).
+
+One actionable suggestion each (e.g., “Generate Four Factors report”).
+
+2. Scouting Report Editor (right section)
+a) Left Pane – Blocks/Templates
+Tabs: Blocks, Templates.
+
+Blocks list:
+
+Game Header
+
+Four Factors
+
+Player Card
+
+AI Summary
+
+Tendencies
+
+Stat Table
+
+Drag & drop into canvas.
+
+Templates: large thumbnails, description, “Use Template” button.
+
+b) Center – Canvas
+TipTap editor with slash commands (/four factors, /player card).
+
+Draggable blocks with handles.
+
+Inline toolbar (B, I, H2, callout).
+
+Soft page break guides for print layout.
+
+c) Right Pane – Inspector Panel
+Assist tab:
+
+Ask AI → Insert as AI Summary, Stat Table, or Tendencies.
+
+Context tab:
+
+Game info (teams, date, venue).
+
+Brand colors, logo toggle, watermark toggle.
+
+Export:
+
+Theme selector (Classic, Modern, Dark).
+
+PDF export button.
+
+Data & Context
+Supabase tables:
+
+documents (id, owner_id, title, content, context, status, updated_at)
+
+templates (id, name, description, content, thumbnail_url)
+
+assets (for logos/images).
+
+Document context example:
+
+json
+Copy
+Edit
+{
+  "league_id": "uuid",
+  "game_id": "uuid",
+  "home_team": "Bears",
+  "away_team": "Sharks",
+  "date": "2025-09-11",
+  "venue": "City Arena",
+  "colors": { "primary": "#E63946", "secondary": "#1D3557" },
+  "logos": { "home": "url", "away": "url" },
+  "four_factors": { "efg_home": 0.45, "efg_away": 0.52, "tov_home": 0.14, "tov_away": 0.12 }
+}
+Blocks should pull from context or Supabase queries.
+
+Freeze option for data-bound blocks (locks current values before export).
+
+Technical Requirements
+Editor: TipTap + ProseMirror, custom sports blocks.
+
+Styling: Tailwind with CSS variables for brand colors.
+
+State: Zustand or equivalent.
+
+Export: Server-side PDF via Playwright/Chromium with themed print.css.
+
+Animations: 150–200ms transitions, hover lift on cards.
+
+Acceptance Criteria
+ Coaches Hub matches screenshot layout & style.
+
+ 3-pane Scouting Report editor works as shown.
+
+ Slash menu & drag handles functional.
+
+ AI Assist inserts formatted blocks into the canvas.
+
+ Templates resolve smart variables from context.
+
+ PDF export matches on-screen layout and theme.
+
+ Autosave with visible “Saved/Saving…” indicator.

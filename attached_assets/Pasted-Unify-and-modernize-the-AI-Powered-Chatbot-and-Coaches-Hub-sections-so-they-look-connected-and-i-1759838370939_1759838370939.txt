@@ -1,0 +1,67 @@
+Unify and modernize the “AI-Powered Chatbot” and “Coaches Hub” sections so they look connected and interactive.
+
+Tasks:
+
+Unify Backgrounds
+
+Make the backgrounds of both the “AI-Powered Chatbot” and “Coaches Hub” sections use the same subtle gradient:
+bg-gradient-to-b from-orange-50 to-[#fffaf5]
+
+Remove any sharp color breaks or white gaps between the two sections.
+
+Maintain balanced spacing (py-20) between the section contents.
+
+Animated Underlines on Section Headings
+
+Add a clean orange underline animation beneath the titles (AI-Powered Chatbot and Coaches Hub).
+
+The underline should grow from left to right on hover and when scrolled into view.
+
+Use this CSS animation pattern:
+
+.underline-animate::after {
+  content: "";
+  display: block;
+  height: 3px;
+  background: linear-gradient(to right, #ff7b00, #ffa733);
+  width: 0%;
+  transition: width 0.4s ease;
+  margin-top: 6px;
+}
+.underline-animate:hover::after,
+.underline-animate.in-view::after {
+  width: 60%;
+}
+
+
+Add the underline-animate class to each section heading.
+
+Use an IntersectionObserver (or Framer Motion equivalent) to add the in-view class when the section enters the viewport.
+
+“Coming Soon” Badge Enhancements
+
+For all orange “Coming Soon” badges, add a hover animation:
+
+Slight scale-up (hover:scale-110)
+
+Soft orange glow (hover:shadow-[0_0_10px_rgba(255,102,0,0.4)])
+
+Smooth transition: transition-all duration-300 ease-out
+
+Add the same “Coming Soon” badge beside the Coaches Hub heading for visual consistency.
+
+Ensure alignment matches the badge placement used in the AI-Powered Chatbot section.
+
+Spacing & Shadow Polish
+
+Apply equal horizontal padding across both sections (px-8 md:px-16).
+
+Add a subtle inset shadow or gradient fade at the bottom of the unified block to make the next section transition smoother.
+
+Responsiveness
+
+On mobile, trigger the underline animation on scroll rather than hover.
+
+Ensure that hover effects degrade gracefully (no scaling overflow).
+
+Verify both sections retain their visual balance on screens under 768px.

@@ -1,0 +1,62 @@
+You are working inside the Swish Assistant web app, which uses Supabase as its backend and React (with Tailwind) for the frontend.
+
+The database table leagues now includes a parent-child hierarchy:
+
+league_id (uuid, primary key)
+
+parent_league_id (uuid, nullable foreign key referencing leagues.league_id)
+
+name, slug, logo_url, and other league info.
+
+Each main season (e.g., "British Championship Basketball 2025/26") has parent_league_id = NULL.
+Each sub-competition (e.g., "BCB Trophy 2025/26") links to its parent season using parent_league_id.
+
+Your goal:
+
+When building or editing frontend components that show leagues, fetch and display this hierarchy automatically.
+
+On parent league pages (e.g., /league/[slug]), show a “Competitions” section that lists all child competitions:
+
+const { data: competitions } = await supabase
+  .from("leagues")
+  .select("league_id, name, slug, logo_url")
+  .eq("parent_league_id", currentLeague.league_id);
+
+
+Render them as clickable cards under a “Competitions” heading.
+
+On sub-league pages, show a breadcrumb linking back to the parent league:
+
+const { data: parent } = await supabase
+  .from("leagues")
+  .select("league_id, name, slug")
+  .eq("league_id", currentLeague.parent_league_id)
+  .single();
+
+
+Display it as:
+🏀 {parent.name} → {currentLeague.name}
+
+Rendering rules:
+
+If a league has no parent_league_id, treat it as a main season.
+
+If it does have one, display the breadcrumb and link to its parent.
+
+Use Tailwind for styling (rounded-xl, p-4, shadow, hover:bg-orange-50).
+
+Use dynamic routing based on slug (Wouter or React Router).
+
+Example behavior:
+
+Visiting /league/british-championship-basketball-20252026 shows:
+→ “Competitions” → “BCB Trophy 2025/26” card.
+
+Visiting /league/british-championship-basketball-trophy-2526 shows:
+→ Breadcrumb “British Championship Basketball 2025/26 → Trophy 2025/26”.
+
+Bonus:
+
+If multiple child competitions exist (e.g., Cup, Trophy, Playoffs), display all as a grid.
+
+For future expansion, assume this pattern repeats each season — so no hardcoding of slugs.

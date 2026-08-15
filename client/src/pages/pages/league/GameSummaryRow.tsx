@@ -1,9 +1,6 @@
 import React, { useState } from "react";
 import { supabase }      from "@/lib/supabase";
-
-
-
-const BASE = import.meta.env.VITE_BACKEND_URL;
+import { getPythonBackendUrl } from "@/lib/backendUrl";
 
 
 interface Player { name: string; }
@@ -55,7 +52,7 @@ export function GameSummaryRow({
 
     // 2) Send everything into your AI endpoint
     try {
-      const response = await fetch(`${BASE}/api/generate-summary`, {
+      const response = await fetch(`${getPythonBackendUrl()}/api/generate-summary`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -93,8 +90,8 @@ export function GameSummaryRow({
           {/* Extract sections using line breaks or regex */}
           {(() => {
             const titleMatch = summary.match(/Title Headline:\s*"(.*?)"/);
-            const summaryMatch = summary.match(/2\. Summary:\s*(.*?)3\. Coaching Tip:/s);
-            const coachingMatch = summary.match(/3\. Coaching Tip:\s*(.*)/s);
+            const summaryMatch = summary.match(/2\. Summary:\s*([\s\S]*?)3\. Coaching Tip:/);
+            const coachingMatch = summary.match(/3\. Coaching Tip:\s*([\s\S]*)/); 
 
             return (
               <>

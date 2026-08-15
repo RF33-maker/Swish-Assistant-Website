@@ -3,18 +3,49 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Analytics } from '@vercel/analytics/react';
+import { HelmetProvider } from "react-helmet-async";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ThemeProvider } from "@/components/ThemeProvider";
 import NotFound from "@/pages/not-found";
-import HomePage from "@/pages/home-page";
 import AuthPage from "@/pages/auth";
 import LandingPage from "@/pages/landing-page";
 import LeaguePage from "./pages/pages/league/[slug]";
+import CompetitionPage from "./pages/pages/competition/[slug]";
 import LeagueAdminPage from "./pages/pages/league-admin/[slug]";
+import LeagueLeadersPage from "./pages/pages/league-leaders/[slug]";
+import PlayerStatsPage from "./pages/pages/player/[id]";
+import PlayersListPage from "./pages/players-list";
 import PostLoginDashboard from "@/pages/post-login-dashboard"; // new dashboard page
+import CoachesHub from "@/pages/CoachesHub";
+import TeamProfile from "@/pages/TeamProfile";
+import TeamsList from "@/pages/TeamsList";
+import LeagueTeams from "@/pages/LeagueTeams";
+import TeamLogoManager from "@/pages/TeamLogoManager";
+import LeagueAdmin from "@/pages/LeagueAdmin";
+import LeagueManagement from "@/pages/LeagueManagement";
+import SocialToolsPage from "@/pages/social-tools";
+import WidgetBuilder from "@/pages/widget-builder";
+import NewsManager from "@/pages/NewsManager";
+import NewsArticlePage from "@/pages/NewsArticlePage";
+import NewsIndexPage from "@/pages/NewsIndexPage";
+import WidgetPage from "@/pages/widgets/WidgetPage";
+import WidgetDemo from "@/pages/widget-demo";
+import EmbedGuide from "@/pages/embed-guide";
+import GamePage from "@/pages/GamePage";
 import { AuthProvider } from "./hooks/use-auth";
 import { ProtectedRoute } from "./lib/protected-route";
 import ResetPassword from "./pages/reset-password";
-import SettingsPage from "./pages/settings-page";
+import SettingsPage from "@/pages/settings-page";
 import ProfilePage from "./pages/profile-page";
+import ImportPlayersPage from "@/pages/admin/import-players";
+import TestConnections from "./components/test-connections";
+import PaymentPage from "@/pages/payment";
+import ContactSalesPage from "@/pages/contact-sales";
+import PrivacyPolicyPage from "@/pages/privacy";
+import TermsOfServicePage from "@/pages/terms";
+import CookiePolicyPage from "@/pages/cookies";
+
 
 function Router() {
   return (
@@ -22,16 +53,57 @@ function Router() {
       {/* Public */}
       <Route path="/" component={LandingPage} />
       <Route path="/auth" component={AuthPage} />
-      <Route path="/league/:slug" component={LeaguePage} />
+      <Route path="/test" component={TestConnections} />
+      {/* /league/:slug  = league brand page (series hub) */}
+      <Route path="/league/:slug" component={CompetitionPage} />
+      {/* /competition/:slug = individual season/tournament page */}
+      <Route path="/competition/:slug" component={LeaguePage} />
+      <Route path="/competition/:slug/player/:playerSlug" component={LeaguePage} />
+      <Route path="/competition/:slug/teams" component={LeagueTeams} />
+      <Route path="/competition/:slug/team-logos" component={TeamLogoManager} />
+      <Route path="/competition-leaders/:slug" component={LeagueLeadersPage} />
+      {/* Legacy /league-leaders redirect handled by keeping old route */}
+      <Route path="/league-leaders/:slug" component={LeagueLeadersPage} />
+      <Route path="/players" component={PlayersListPage} />
+      <Route path="/player/:slug" component={PlayerStatsPage} />
+      <Route path="/teams" component={TeamsList} />
+      <Route path="/team/:teamName" component={TeamProfile} />
+      <Route path="/competition/:competitionSlug/team/:teamName" component={TeamProfile} />
+      {/* Game detail inline in league page */}
+      <Route path="/competition/:slug/game/:gameKey" component={LeaguePage} />
+      <Route path="/league/:slug/game/:gameKey" component={LeaguePage} />
+      {/* Legacy redirects: old /league/:slug season URLs → /competition/:slug */}
+      <Route path="/league/:slug/player/:playerSlug" component={LeaguePage} />
+      <Route path="/league/:slug/teams" component={LeagueTeams} />
+      <Route path="/league/:slug/team-logos" component={TeamLogoManager} />
+      <Route path="/league/:leagueSlug/team/:teamName" component={TeamProfile} />
       <Route path="/reset-password" component={ResetPassword} />
+      <Route path="/privacy" component={PrivacyPolicyPage} />
+      <Route path="/terms" component={TermsOfServicePage} />
+      <Route path="/cookies" component={CookiePolicyPage} />
+      <Route path="/contact-sales" component={ContactSalesPage} />
+      <Route path="/game/:gameKey" component={GamePage} />
+      <Route path="/widget/:type" component={WidgetPage} />
+      <Route path="/widget-demo" component={WidgetDemo} />
+      <Route path="/embed" component={EmbedGuide} />
+      <Route path="/news" component={NewsIndexPage} />
+      <Route path="/news/:slug" component={NewsArticlePage} />
 
       {/* Protected routes */}
       <ProtectedRoute path="/dashboard" component={PostLoginDashboard} />
-      <ProtectedRoute path="/coaches-hub" component={HomePage} />
-      <ProtectedRoute path="/league-admin" component={LeagueAdminPage} />
+      <ProtectedRoute path="/coaches-hub" component={CoachesHub} />
+      <ProtectedRoute path="/league-management" component={LeagueManagement} />
+      <ProtectedRoute path="/league-admin/:slug" component={LeagueAdmin} />
+      <ProtectedRoute path="/teams/:slug" component={TeamsList} />
+      <ProtectedRoute path="/league-teams/:slug" component={LeagueTeams} />
+      <ProtectedRoute path="/team-logos/:slug" component={TeamLogoManager} />
       <ProtectedRoute path="/profile" component={ProfilePage} />
       <ProtectedRoute path="/settings" component={SettingsPage} />
-
+      <ProtectedRoute path="/payment" component={PaymentPage} />
+      <ProtectedRoute path="/social-tools" component={SocialToolsPage} />
+      <ProtectedRoute path="/api-widgets" component={WidgetBuilder} />
+      <ProtectedRoute path="/news-manager" component={NewsManager} />
+      <ProtectedRoute path="/admin/import-players" component={ImportPlayersPage} />
 
       {/* Fallback */}
       <Route component={NotFound} />
@@ -41,14 +113,21 @@ function Router() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Router />
-        </TooltipProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <HelmetProvider>
+        <ThemeProvider>
+          <QueryClientProvider client={queryClient}>
+            <AuthProvider>
+              <TooltipProvider>
+                <Toaster />
+                <Router />
+                <Analytics />
+              </TooltipProvider>
+            </AuthProvider>
+          </QueryClientProvider>
+        </ThemeProvider>
+      </HelmetProvider>
+    </ErrorBoundary>
   );
 }
 

@@ -1,0 +1,559 @@
+import { useState, useEffect, useMemo, useRef } from "react";
+import { supabase, getSupabaseForLeague, getDataLeagueId } from "@/lib/supabase";
+import { TeamLogo } from "./TeamLogo";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+
+interface GameItem {
+  game_key: string;
+  game_id: string;
+  game_date: string;
+  home_team: string;
+  away_team: string;
+  home_score: number | null;
+  away_score: number | null;
+  status: 'LIVE' | 'FINAL' | 'SCHEDULED';
+  current_period?: number | null;
+  current_clock?: string | null;
+  age_group?: string;
+  round?: string;
+  hasGamePage?: boolean;
+}
+
+interface GameClickData {
+  gameKey: string;
+  status: 'LIVE' | 'FINAL' | 'SCHEDULED';
+  homeTeam: string;
+  awayTeam: string;
+  gameDate: string;
+  homeScore: number | null;
+  awayScore: number | null;
+  hasGamePage?: boolean;
+}
+
+interface GameResultsCarouselProps {
+  leagueId: string;
+  slug?: string;
+  onGameClick: (data: GameClickData) => void;
+  childLeagueIds?: string[];
+  childLeagueMap?: Map<string, string>;
+  selectedGameKey?: string | null;
+  brandColor?: string;
+}
+
+function formatDateUK(dateStr: string): string {
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('en-GB', { 
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC'
+  }).toUpperCase();
+}
+
+function formatRelativeDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = Math.floor(Math.abs(diffMs) / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) {
+    return 'Today';
+  }
+  if (diffDays === 1 && diffMs > 0) {
+    return 'Yesterday';
+  }
+  if (diffDays === 1 && diffMs < 0) {
+    return 'Tomorrow';
+  }
+  return formatDateUK(dateStr);
+}
+
+export default function GameResultsCarousel({ leagueId, slug, onGameClick, childLeagueIds, childLeagueMap, selectedGameKey, brandColor }: GameResultsCarouselProps) {
+  const [allGames, setAllGames] = useState<GameItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const db = useMemo(() => getSupabaseForLeague(slug), [slug]);
+  const effectiveLeagueId = useMemo(() => getDataLeagueId(slug, leagueId), [slug, leagueId]);
+  const isParent = childLeagueIds && childLeagueIds.length > 0;
+  const childIdsKey = childLeagueIds?.join(',') || '';
+
+  const fetchGames = async (isPolling = false) => {
+    if (!isPolling) setLoading(true);
+    
+    try {
+      const now = new Date();
+
+      // Pull the most recent finals for this league, with no time cutoff so
+      // off-season and gap weeks still surface the last games played. We bound
+      // by row count instead of by time window to keep payload small and let
+      // Postgres use the (league_id, match_time DESC) ordering efficiently.
+      // For parent leagues that aggregate child leagues we query each child
+      // separately and merge, otherwise a global limit could starve any
+      // child whose most recent finals are older than its siblings'.
+      const FINALS_PER_LEAGUE = 30;
+
+      // Note: age_group / round are intentionally not selected here. The
+      // public v_game_results view does not currently expose those columns
+      // in production, and the carousel doesn't render them — for parent
+      // leagues the age group is resolved via childLeagueMap below.
+      const fetchFinalsForLeague = async (leagueId: string) => {
+        const { data, error } = await db
+          .from('v_game_results')
+          .select(
+            'game_key, league_id, match_time, home_team, away_team, home_score, away_score'
+          )
+          .eq('league_id', leagueId)
+          .not('home_score', 'is', null)
+          .not('away_score', 'is', null)
+          .order('match_time', { ascending: false })
+          .limit(FINALS_PER_LEAGUE);
+        if (error) {
+          console.error("Error fetching v_game_results:", error);
+          return [];
+        }
+        return data || [];
+      };
+
+      const gameResults = isParent
+        ? (await Promise.all(childLeagueIds!.map(fetchFinalsForLeague))).flat()
+        : await fetchFinalsForLeague(effectiveLeagueId);
+
+      const gamesWithStats: GameItem[] = [];
+      const processedGameKeys = new Set<string>();
+      const viewGameKeys: string[] = [];
+
+      if (gameResults && gameResults.length > 0) {
+        gameResults.forEach((game: any) => {
+          if (!game.home_team || !game.away_team || !game.game_key) return;
+          processedGameKeys.add(game.game_key);
+          viewGameKeys.push(game.game_key);
+
+          const ageGroup = (isParent && childLeagueMap && game.league_id)
+            ? childLeagueMap.get(game.league_id) || game.age_group || undefined
+            : game.age_group || undefined;
+
+          gamesWithStats.push({
+            game_key: game.game_key,
+            game_id: game.game_key,
+            game_date: game.match_time || new Date().toISOString(),
+            home_team: game.home_team,
+            away_team: game.away_team,
+            home_score: game.home_score,
+            away_score: game.away_score,
+            status: 'FINAL',
+            age_group: ageGroup,
+            round: game.round || undefined,
+            hasGamePage: false,
+          });
+        });
+
+        gamesWithStats.sort((a, b) => new Date(b.game_date).getTime() - new Date(a.game_date).getTime());
+      }
+
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const sevenDaysAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+      let scheduleQuery = db
+        .from("game_schedule")
+        .select("game_key, matchtime, hometeam, awayteam, status, league_id");
+      scheduleQuery = isParent
+        ? scheduleQuery.in("league_id", childLeagueIds)
+        : scheduleQuery.eq("league_id", effectiveLeagueId);
+      const { data: scheduleData, error: scheduleError } = await scheduleQuery
+        .gte("matchtime", sevenDaysAgo.toISOString())
+        .lte("matchtime", sevenDaysAhead.toISOString())
+        .order("matchtime", { ascending: true })
+        .limit(200);
+
+      if (scheduleError) {
+        console.error("Error fetching schedule:", scheduleError);
+      }
+
+      const scheduleStatusMap = new Map<string, string>();
+      const upcomingGames: GameItem[] = [];
+      const scheduleLiveGames: GameItem[] = [];
+      
+      if (scheduleData) {
+        scheduleData.forEach(game => {
+          if (!game.game_key) return;
+          if (game.status) {
+            scheduleStatusMap.set(game.game_key, game.status);
+          }
+          if (!game.hometeam || !game.awayteam) return;
+          if (processedGameKeys.has(game.game_key)) return;
+
+          const statusLower = (game.status || '').toLowerCase();
+          const isLive = statusLower === 'live' || statusLower === 'in_progress' || statusLower.includes('live');
+          const isFinal = statusLower === 'final' || statusLower === 'finished';
+          
+          if (isFinal) return;
+          
+          const schedAgeGroup = (isParent && childLeagueMap && game.league_id)
+            ? childLeagueMap.get(game.league_id) || undefined
+            : undefined;
+
+          const gameItem: GameItem = {
+            game_key: game.game_key,
+            game_id: game.game_key,
+            game_date: game.matchtime,
+            home_team: game.hometeam,
+            away_team: game.awayteam,
+            home_score: null,
+            away_score: null,
+            status: isLive ? 'LIVE' : 'SCHEDULED',
+            age_group: schedAgeGroup,
+            hasGamePage: true
+          };
+
+          if (isLive) {
+            scheduleLiveGames.push(gameItem);
+          } else {
+            const gameTime = new Date(game.matchtime);
+            if (gameTime > now) {
+              upcomingGames.push(gameItem);
+            }
+          }
+        });
+      }
+
+      const scheduleByGameKey = new Map<string, { hometeam: string; awayteam: string }>();
+      if (scheduleData) {
+        scheduleData.forEach(game => {
+          if (game.game_key && game.hometeam && game.awayteam) {
+            scheduleByGameKey.set(game.game_key, { hometeam: game.hometeam, awayteam: game.awayteam });
+          }
+        });
+      }
+
+      const missingKeys = viewGameKeys.filter(k => !scheduleByGameKey.has(k));
+      if (missingKeys.length > 0) {
+        let extraQuery = db
+          .from('game_schedule')
+          .select('game_key, hometeam, awayteam')
+          .in('game_key', missingKeys);
+        extraQuery = isParent
+          ? extraQuery.in('league_id', childLeagueIds!)
+          : extraQuery.eq('league_id', effectiveLeagueId);
+        const { data: extraSchedule } = await extraQuery;
+        if (extraSchedule) {
+          extraSchedule.forEach(game => {
+            if (game.game_key && game.hometeam && game.awayteam) {
+              scheduleByGameKey.set(game.game_key, { hometeam: game.hometeam, awayteam: game.awayteam });
+            }
+          });
+        }
+      }
+
+      const slugify = (name: string) =>
+        name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
+      gamesWithStats.forEach(game => {
+        const schedEntry = scheduleByGameKey.get(game.game_key);
+        if (schedEntry) {
+          const homeMatch = slugify(schedEntry.hometeam) === slugify(game.home_team);
+          const awayMatch = slugify(schedEntry.awayteam) === slugify(game.away_team);
+          game.hasGamePage = homeMatch && awayMatch;
+        }
+        const schedStatus = (scheduleStatusMap.get(game.game_key) || '').toLowerCase();
+        if (schedStatus === 'live' || schedStatus === 'in_progress' || schedStatus.includes('live')) {
+          game.status = 'LIVE';
+        }
+      });
+
+      const combined: GameItem[] = [
+        ...gamesWithStats,
+        ...scheduleLiveGames,
+        ...upcomingGames
+      ];
+
+      const allLive = combined.filter(g => g.status === 'LIVE');
+      if (allLive.length > 0) {
+        const liveKeys = allLive.map(g => g.game_key);
+        const { data: liveEventsData } = await supabase
+          .from("live_events")
+          .select("game_key, period, clock, created_at")
+          .in("game_key", liveKeys)
+          .order("created_at", { ascending: false });
+
+        const latestByGame: Record<string, { period: number; clock: string; created_at: string }> = {};
+        if (liveEventsData) {
+          liveEventsData.forEach(ev => {
+            if (!latestByGame[ev.game_key]) {
+              latestByGame[ev.game_key] = { period: ev.period, clock: ev.clock, created_at: ev.created_at };
+            }
+          });
+        }
+
+        const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
+        combined.forEach(game => {
+          if (game.status !== 'LIVE') return;
+          const latest = latestByGame[game.game_key];
+          if (latest) {
+            game.current_period = latest.period;
+            game.current_clock = latest.clock;
+            const timeSinceLastEvent = now.getTime() - new Date(latest.created_at).getTime();
+            if (timeSinceLastEvent >= FOUR_HOURS_MS) {
+              game.status = 'FINAL';
+            }
+          } else {
+            const matchDate = new Date(game.game_date);
+            const timeSinceStart = now.getTime() - matchDate.getTime();
+            if (isNaN(timeSinceStart) || timeSinceStart >= FOUR_HOURS_MS) {
+              game.status = 'FINAL';
+            }
+          }
+        });
+      }
+
+      setAllGames(combined);
+    } catch (error) {
+      console.error("Error fetching games:", error);
+    } finally {
+      if (!isPolling) setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (effectiveLeagueId) {
+      fetchGames();
+    }
+  }, [effectiveLeagueId, childIdsKey]);
+
+  // Polling for live updates: only run when (a) the tab is visible AND
+  // (b) there is currently at least one LIVE game on screen. When neither
+  // condition holds, no polling means no Supabase reads.
+  const hasLiveGames = useMemo(
+    () => allGames.some(g => g.status === 'LIVE'),
+    [allGames]
+  );
+
+  useEffect(() => {
+    if (!effectiveLeagueId) return;
+    if (!hasLiveGames) return;
+
+    const POLL_MS = 60_000;
+    let interval: number | null = null;
+
+    const start = () => {
+      if (interval !== null) return;
+      interval = window.setInterval(() => {
+        fetchGames(true);
+      }, POLL_MS);
+    };
+
+    const stop = () => {
+      if (interval !== null) {
+        window.clearInterval(interval);
+        interval = null;
+      }
+    };
+
+    const onVisibility = () => {
+      if (document.hidden) {
+        stop();
+      } else {
+        // Refresh once on regaining focus, then resume the interval.
+        fetchGames(true);
+        start();
+      }
+    };
+
+    if (typeof document !== 'undefined' && !document.hidden) {
+      start();
+    }
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', onVisibility);
+    }
+
+    return () => {
+      stop();
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', onVisibility);
+      }
+    };
+  }, [effectiveLeagueId, childIdsKey, hasLiveGames]);
+
+  const sortedGames = useMemo(() => {
+    const live = allGames.filter(g => g.status === 'LIVE')
+      .sort((a, b) => new Date(a.game_date).getTime() - new Date(b.game_date).getTime());
+    const upcoming = allGames.filter(g => g.status === 'SCHEDULED')
+      .sort((a, b) => new Date(a.game_date).getTime() - new Date(b.game_date).getTime());
+    const results = allGames.filter(g => g.status === 'FINAL')
+      .sort((a, b) => new Date(b.game_date).getTime() - new Date(a.game_date).getTime());
+    return [...live, ...upcoming, ...results];
+  }, [allGames]);
+
+  const scrollLeft = () => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollBy({ left: -300, behavior: 'smooth' });
+    }
+  };
+
+  const scrollRight = () => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollBy({ left: 300, behavior: 'smooth' });
+    }
+  };
+
+  const formatGameTime = (dateStr: string): string => {
+    const date = new Date(dateStr);
+    return date.toLocaleTimeString('en-GB', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'UTC'
+    }).toUpperCase();
+  };
+
+  if (loading) {
+    return (
+      <div className="w-full border-b border-gray-200 dark:border-white/10 bg-white dark:bg-transparent">
+        <div className="flex items-center gap-0 animate-pulse px-1 py-1.5">
+          {[1,2,3,4,5].map(i => (
+            <div key={i} className="bg-gray-100 dark:bg-white/10 rounded h-[56px] w-[150px] flex-shrink-0 mx-0.5"></div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (allGames.length === 0) {
+    return (
+      <div className="text-center text-slate-500 dark:text-slate-400 py-2.5 text-xs border-b border-gray-200 dark:border-white/10 bg-white dark:bg-transparent">
+        No games available
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full border-b border-gray-200 dark:border-white/10 bg-white dark:bg-transparent">
+      <div className="flex items-center relative">
+        <button
+          onClick={scrollLeft}
+          className="hidden sm:flex items-center justify-center w-7 flex-shrink-0 bg-gradient-to-r from-white/80 dark:from-black/40 to-transparent hover:from-gray-100 dark:hover:from-black/60 transition-colors z-10 absolute left-0 top-0 bottom-0"
+        >
+          <ChevronLeft className="w-4 h-4 text-gray-400 dark:text-white/70" />
+        </button>
+
+        <div
+          ref={scrollRef}
+          className="overflow-x-auto flex-1 sm:px-7 [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:hidden"
+          style={{ scrollbarWidth: 'none' }}
+        >
+          <div className="flex items-stretch min-w-max">
+            {sortedGames.map((game, idx) => {
+              const prevGame = idx > 0 ? sortedGames[idx - 1] : null;
+              const showDivider = prevGame && prevGame.status !== game.status;
+              const isSelected = selectedGameKey === game.game_key;
+
+              return (
+                <div key={game.game_key} className="flex items-stretch">
+                  {showDivider && (
+                    <div className="w-px bg-gray-200 dark:bg-white/20 my-2 flex-shrink-0" />
+                  )}
+                  <div
+                    className={`flex-shrink-0 cursor-pointer transition-all px-3 py-2 border-r border-gray-100 dark:border-white/5 relative ${
+                      isSelected
+                        ? ''
+                        : game.status === 'LIVE'
+                        ? 'bg-red-50 dark:bg-red-500/8 hover:bg-red-100/60 dark:hover:bg-red-500/15'
+                        : 'hover:bg-gray-50 dark:hover:bg-white/10'
+                    }`}
+                    style={isSelected ? {
+                      backgroundColor: brandColor ? `${brandColor}1a` : 'rgba(100,100,100,0.10)',
+                      boxShadow: `inset 0 0 0 2px ${brandColor || 'rgba(100,100,100,0.4)'}`,
+                    } : undefined}
+                    onClick={() => onGameClick({
+                      gameKey: game.game_key,
+                      status: game.status,
+                      homeTeam: game.home_team,
+                      awayTeam: game.away_team,
+                      gameDate: game.game_date,
+                      homeScore: game.home_score,
+                      awayScore: game.away_score,
+                      hasGamePage: game.hasGamePage
+                    })}
+                  >
+                    {game.status === 'LIVE' && (
+                      <div className="absolute top-0 left-0 right-0 h-[2px] bg-red-500 rounded-b" />
+                    )}
+                    {game.status === 'SCHEDULED' && (
+                      <div className="absolute top-0 left-0 right-0 h-[2px] bg-blue-400/50 rounded-b" />
+                    )}
+
+                    <div className="flex items-center gap-2.5">
+                      <div className="text-center flex-shrink-0 w-[38px]">
+                        {game.status === 'LIVE' ? (
+                          <div className="flex flex-col items-center">
+                            <span className="text-[9px] font-bold text-red-500 dark:text-red-400 uppercase leading-tight flex items-center gap-0.5">
+                              <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>
+                              LIVE
+                            </span>
+                            {game.current_period && (
+                              <span className="text-[8px] text-red-400/60 mt-0.5">Q{game.current_period}</span>
+                            )}
+                          </div>
+                        ) : game.status === 'SCHEDULED' ? (
+                          <div className="flex flex-col items-center">
+                            <span className="text-[9px] text-blue-500 dark:text-blue-300/70 font-medium leading-tight">
+                              {formatGameTime(game.game_date)}
+                            </span>
+                            <span className="text-[8px] text-gray-400 dark:text-white/25 mt-0.5">{formatRelativeDate(game.game_date)}</span>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center">
+                            <span className="text-[9px] text-gray-400 dark:text-white/30 font-medium leading-tight uppercase">
+                              {formatRelativeDate(game.game_date)}
+                            </span>
+                            <span className="text-[8px] text-green-600/60 dark:text-green-400/50 mt-0.5">FT</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex flex-col gap-1 min-w-[130px]">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                            <TeamLogo teamName={game.home_team} leagueId={leagueId} size="xs" />
+                            <span className="text-xs font-medium text-gray-800 dark:text-white/90 truncate max-w-[85px]">{game.home_team}</span>
+                          </div>
+                          <span className={`text-xs font-bold tabular-nums min-w-[20px] text-right ${
+                            game.status === 'LIVE' ? 'text-red-500 dark:text-red-400'
+                            : game.status === 'SCHEDULED' ? 'text-gray-300 dark:text-white/20'
+                            : game.home_score !== null && game.away_score !== null && game.home_score > game.away_score ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-white/40'
+                          }`}>
+                            {game.status === 'SCHEDULED' ? '-' : (game.home_score ?? '-')}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                            <TeamLogo teamName={game.away_team} leagueId={leagueId} size="xs" />
+                            <span className="text-xs font-medium text-gray-800 dark:text-white/90 truncate max-w-[85px]">{game.away_team}</span>
+                          </div>
+                          <span className={`text-xs font-bold tabular-nums min-w-[20px] text-right ${
+                            game.status === 'LIVE' ? 'text-red-500 dark:text-red-400'
+                            : game.status === 'SCHEDULED' ? 'text-gray-300 dark:text-white/20'
+                            : game.away_score !== null && game.home_score !== null && game.away_score > game.home_score ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-white/40'
+                          }`}>
+                            {game.status === 'SCHEDULED' ? '-' : (game.away_score ?? '-')}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <button
+          onClick={scrollRight}
+          className="hidden sm:flex items-center justify-center w-7 flex-shrink-0 bg-gradient-to-l from-white/80 dark:from-black/40 to-transparent hover:from-gray-100 dark:hover:from-black/60 transition-colors z-10 absolute right-0 top-0 bottom-0"
+        >
+          <ChevronRight className="w-4 h-4 text-gray-400 dark:text-white/70" />
+        </button>
+      </div>
+    </div>
+  );
+}

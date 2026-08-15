@@ -1,0 +1,204 @@
+I need to update the player profile frontend to use our new clean adjusted on/off impact view.
+
+Context:
+We now have these Supabase views:
+
+1. player_on_off_impact_clean_v1
+- Calculation layer.
+- Uses lineup_stints_context_v1.
+- Based on valid competitive stints only.
+- Excludes garbage-time and short-clock stints.
+- Calculates per-100 possession on/off ratings.
+- Includes:
+  - league_id
+  - team_id
+  - player_id
+  - player_name
+  - games
+  - games_with_on_stints
+  - official_minutes_total
+  - on_minutes
+  - off_minutes
+  - on_possessions_for
+  - on_ortg
+  - off_ortg
+  - diff_ortg
+  - on_drtg
+  - off_drtg
+  - diff_drtg
+  - on_nrtg
+  - off_nrtg
+  - raw_net_swing
+  - adjusted_net_swing
+  - sample_confidence
+  - impact_summary_label
+
+2. player_on_off_impact_profile_v1
+- Public/player-profile display layer.
+- This is the one the frontend should use.
+- It includes everything from the clean view plus:
+  - on_minutes_vs_official_diff
+  - on_minutes_tracking_pct
+  - tracking_quality
+  - sample_size_label
+  - accuracy_label
+  - profile_safe
+  - profile_confidence
+  - confidence_explanation
+
+Goal:
+Update the player profile on/off section to use player_on_off_impact_profile_v1 instead of raw player_on_off.
+
+Important product decision:
+Do NOT hide the metric for most players.
+Show adjusted on/off where available, but clearly show the accuracy/confidence label.
+Only treat "Needs review" or impossible rows as not suitable for a headline number.
+
+Frontend display requirements:
+1. Section title should be:
+   "Team Performance Splits"
+   not "Team On/Off Impact"
+
+2. Main stat should be:
+   adjusted_net_swing
+
+3. Label it:
+   "Adjusted On/Off Swing"
+
+4. Add helper text:
+   "Per 100 possessions · garbage-time filtered"
+
+5. Show:
+   - accuracy_label
+   - sample_size_label
+   - on_possessions_for as "Clean possessions"
+   - tracking_quality
+   - confidence_explanation as tooltip or small expandable/helper text
+
+6. Also show raw_net_swing as a secondary/detail stat, not the headline.
+   Label:
+   "Raw swing"
+
+7. Use colour carefully:
+   - adjusted_net_swing > +3 = positive
+   - between -3 and +3 = neutral
+   - < -3 = negative
+   But do not make the whole card aggressively red/green.
+   Use subtle colours/badges.
+
+8. If accuracy_label = "Needs review":
+   Do not show the adjusted number as a confident headline.
+   Instead show:
+   "On/off tracking needs review"
+   and display the confidence_explanation.
+
+9. If accuracy_label = "Insufficient sample":
+   Show:
+   "Insufficient clean sample"
+   and optionally show the adjusted number in muted style only if it exists.
+
+10. If accuracy_label = "Low accuracy":
+   Show the adjusted number, but include:
+   "Treat as directional"
+
+11. If accuracy_label = "High accuracy" or "Medium accuracy":
+   Show the adjusted number normally.
+
+Data fetching:
+Find the existing player profile data loading logic.
+There should already be a player_id available on the profile page.
+Query Supabase:
+
+from('player_on_off_impact_profile_v1')
+.select('*')
+.eq('player_id', player.id or current player_id)
+
+If the player profile has league_id/team_id context, also filter by:
+.eq('league_id', league_id)
+.eq('team_id', team_id)
+
+If multiple rows are returned because a player has played for multiple teams/leagues:
+- Prefer the row matching the current profile league/team context.
+- If no explicit context exists, pick the row with highest on_possessions_for.
+- Do not crash.
+
+Example query shape:
+
+const { data, error } = await supabase
+  .from('player_on_off_impact_profile_v1')
+  .select('*')
+  .eq('player_id', playerId)
+  .order('on_possessions_for', { ascending: false })
+  .limit(1)
+  .maybeSingle();
+
+If this page currently gets player by slug, use the resolved player.id as playerId.
+
+Expected UI fields:
+- adjusted_net_swing
+- raw_net_swing
+- on_ortg
+- off_ortg
+- on_drtg
+- off_drtg
+- on_nrtg
+- off_nrtg
+- on_minutes
+- off_minutes
+- official_minutes_total
+- on_possessions_for
+- accuracy_label
+- sample_size_label
+- tracking_quality
+- confidence_explanation
+- profile_safe
+
+Formatting:
+- Show plus sign for positive adjusted/raw swings, e.g. +12.4
+- Show one decimal place.
+- Use "N/A" for null.
+- DRTG note: lower defensive rating is better.
+- diff_drtg can be negative and that is good, but for now do not make diff_drtg the main headline.
+
+Suggested component layout:
+
+Card header:
+Team Performance Splits
+Small text: Adjusted per 100 possessions, excluding garbage-time and short-clock stints.
+
+Main row:
+Adjusted On/Off Swing: +12.4
+Badge: Medium accuracy
+Badge: Medium sample
+
+Sub stats:
+On Net Rating: +18.5
+Off Net Rating: +6.1
+Raw Swing: +24.7
+Clean possessions: 386
+Tracking: Moderate coverage
+
+Explanation:
+confidence_explanation
+
+Fallback states:
+- If no row is found:
+  Show "On/off data not available yet"
+- If Supabase error:
+  Log the error server/frontend console as appropriate but show a friendly fallback.
+- If Needs review:
+  Show "On/off tracking needs review" and confidence_explanation.
+
+Do not remove the existing old raw card immediately unless it is clearly replaced.
+If easier, create a new component like:
+PlayerPerformanceSplits.tsx
+or
+PlayerOnOffImpactCard.tsx
+
+Then wire it into the player profile where the current on/off section appears.
+
+Important:
+This is a frontend integration task only.
+Do not change the Supabase SQL views.
+Do not edit the backfill script.
+Do not drop or recreate database objects.

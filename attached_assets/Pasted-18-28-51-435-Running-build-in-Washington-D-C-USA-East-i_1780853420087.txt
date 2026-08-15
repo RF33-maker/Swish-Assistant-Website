@@ -1,0 +1,46 @@
+18:28:51.435 Running build in Washington, D.C., USA (East) – iad1
+18:28:51.436 Build machine configuration: 2 cores, 8 GB
+18:28:51.560 Cloning github.com/RF33-maker/Swish-Assistant-Website (Branch: feature/league-pages, Commit: c377fb3)
+18:28:54.245 Cloning completed: 2.684s
+18:28:54.350 Restored build cache from previous deployment (CLcWny1WbcnS3bhtQdVL7GN3s8pn)
+18:28:54.670 Running "vercel build"
+18:28:54.697 Vercel CLI 54.9.0
+18:28:55.209 Running "install" command: `npm ci`...
+18:29:06.585 npm warn deprecated @esbuild-kit/esm-loader@2.6.5: Merged into tsx: https://tsx.is
+18:29:06.647 npm warn deprecated @esbuild-kit/core-utils@3.3.2: Merged into tsx: https://tsx.is
+18:29:06.692 npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+18:29:22.976 
+18:29:22.976 added 895 packages, and audited 896 packages in 28s
+18:29:22.977 
+18:29:22.977 213 packages are looking for funding
+18:29:22.978   run `npm fund` for details
+18:29:23.092 
+18:29:23.092 42 vulnerabilities (5 low, 22 moderate, 13 high, 2 critical)
+18:29:23.093 
+18:29:23.093 To address issues that do not require attention, run:
+18:29:23.093   npm audit fix
+18:29:23.093 
+18:29:23.093 To address all issues (including breaking changes), run:
+18:29:23.094   npm audit fix --force
+18:29:23.094 
+18:29:23.094 Run `npm audit` for details.
+18:29:23.528 vite v5.4.14 building for production...
+18:29:23.578 transforming...
+18:29:23.828 Browserslist: browsers data (caniuse-lite) is 20 months old. Please run:
+18:29:23.829   npx update-browserslist-db@latest
+18:29:23.829   Why you should do it regularly: https://github.com/browserslist/update-db#readme
+18:29:23.890 ✓ 3 modules transformed.
+18:29:23.891 x Build failed in 340ms
+18:29:23.891 error during build:
+18:29:23.891 [vite:css] [postcss] Cannot read properties of undefined (reading 'blocklist')
+18:29:23.891 file: /vercel/path0/client/src/index.css:undefined:NaN
+18:29:23.892     at createContext (/vercel/path0/node_modules/tailwindcss/lib/lib/setupContextUtils.js:1209:76)
+18:29:23.892     at getContext (/vercel/path0/node_modules/tailwindcss/lib/lib/setupContextUtils.js:1278:19)
+18:29:23.893     at /vercel/path0/node_modules/tailwindcss/lib/lib/setupTrackingContext.js:118:81
+18:29:23.893     at /vercel/path0/node_modules/tailwindcss/lib/processTailwindFeatures.js:46:11
+18:29:23.893     at plugins (/vercel/path0/node_modules/tailwindcss/lib/plugin.js:38:69)
+18:29:23.893     at LazyResult.runOnRoot (/vercel/path0/node_modules/postcss/lib/lazy-result.js:329:16)
+18:29:23.894     at LazyResult.runAsync (/vercel/path0/node_modules/postcss/lib/lazy-result.js:258:26)
+18:29:23.894     at LazyResult.async (/vercel/path0/node_modules/postcss/lib/lazy-result.js:160:30)
+18:29:23.894     at LazyResult.then (/vercel/path0/node_modules/postcss/lib/lazy-result.js:404:17)
+18:29:23.905 Error: Command "vite build && node_modules/.bin/esbuild api/_source.ts --bundle --platform=node --format=esm --packages=external --outfile=api/index.js" exited with 1

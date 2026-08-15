@@ -1,0 +1,61 @@
+You are updating the Swish Assistant frontend.
+
+Goal:
+Add full traditional TEAM box score columns to the Team Statistics table UI so that all raw team totals from Supabase (tot_s* fields) are visible. Maintain the existing design, style, and mobile responsiveness.
+
+Instructions:
+1. Locate the React component that renders the Team Statistics UI.
+   Common filenames:
+   - TeamStatsPage.tsx
+   - TeamStatsTable.tsx
+   - team-columns.ts
+   - columns.ts
+
+2. Add the following columns to the Team Stats table, following the same table styling, formatting, and sorting behavior already used in the component:
+
+   Shooting Totals:
+   - tot_sfieldgoalsmade         → "FGM"
+   - tot_sfieldgoalsattempted    → "FGA"
+   - tot_sfieldgoalspercentage   → "FG%"
+   - tot_sthreepointersmade      → "3PM"
+   - tot_sthreepointersattempted → "3PA"
+   - tot_sthreepointerspercentage→ "3P%"
+   - tot_stwopointersmade        → "2PM"
+   - tot_stwopointersattempted   → "2PA"
+   - tot_stwopointerspercentage  → "2P%"
+   - tot_sfreethrowsmade         → "FTM"
+   - tot_sfreethrowsattempted    → "FTA"
+   - tot_sfreethrowspercentage   → "FT%"
+
+   Rebounds:
+   - tot_sreboundsoffensive → "ORB"
+   - tot_sreboundsdefensive → "DRB"
+   - tot_sreboundstotal     → "TRB"
+
+   Playmaking & Defense:
+   - tot_sassists  → "AST"
+   - tot_ssteals   → "STL"
+   - tot_sblocks   → "BLK"
+
+   Turnovers & Fouls:
+   - tot_sturnovers      → "TO"
+   - tot_sfoulspersonal  → "PF"
+
+   Scoring:
+   - tot_spoints             → "PTS"
+   - tot_splusminuspoints    → "+/-"
+   - tot_spointsinthepaint   → "PITP"
+   - tot_spointsfastbreak    → "FB PTS"
+   - tot_spointssecondchance → "2ND CH"
+
+3. IMPORTANT LAYOUT RULES:
+   - Keep the existing visual style (spacing, borders, fonts, colours).
+   - Maintain full mobile responsiveness.
+   - If the table becomes wide, enable horizontal scrolling for mobile screens.
+   - Do NOT shrink text or break the layout.
+   - Do NOT alter unrelated components or CSS.
+   - Do NOT remove current columns (PPG, FG%, 3P%, etc.). Only add new ones.
+
+4. Do not modify backend logic or Supabase queries.
+5. Return only the code changes needed to implement these UI updates.
+

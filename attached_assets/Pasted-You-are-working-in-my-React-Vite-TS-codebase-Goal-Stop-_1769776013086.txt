@@ -1,0 +1,95 @@
+You are working in my React + Vite + TS codebase.
+
+Goal: Stop repeated console spam + repeated network/storage lookups:
+- TeamLogo/league logos are being fetched many times for the same team.
+- fetchAllPlayerAverages is re-running unnecessarily (sometimes first with league_id undefined, then again).
+- YouTube embed URL processing is repeating every render.
+
+Implement the following fixes:
+
+========================
+A) GLOBAL TEAM LOGO CACHE + IN-FLIGHT DEDUPE
+========================
+1) Create a new utility module:
+   src/utils/teamLogoCache.ts
+
+   This module must export:
+   - normalizeTeamName(name: string): string  (lowercase, trim, collapse whitespace, replace '&' with 'and', remove non-alphanum except spaces and hyphens)
+   - getTeamLogoCached(args): Promise<string | null>
+
+   Where args includes:
+   {
+     supabase: any,
+     leagueId: string,
+     teamName: string,
+     bucket?: string,      // default "team-logos" if used in this project
+     folder?: string | null // if your storage structure uses folders per league
+   }
+
+   Requirements:
+   - Use TWO Maps at module scope (not inside a component):
+     - logoCache: Map<string, string | null>
+     - inFlight: Map<string, Promise<string | null>>
+   - Cache key must be `${leagueId}::${normalizeTeamName(teamName)}`
+   - If logoCache has key, return it immediately.
+   - If inFlight has key, return the existing Promise (no duplicate work).
+   - Otherwise start a Promise that:
+       a) Attempts to locate a logo for the team using the existing logic in TeamLogo (trying multiple filename variants if that’s what we do now).
+       b) When resolved, store the result (string URL or null) in logoCache, delete inFlight key, and return the result.
+   - On error, store null, delete inFlight key, and return null.
+   - IMPORTANT: remove/disable verbose console.logs ("Trying filenames..."). Keep ONE optional debug log guarded behind a DEBUG flag.
+
+2) Update the existing TeamLogo component/hook to use getTeamLogoCached(...)
+   - Identify where TeamLogo currently queries Supabase storage or database.
+   - Replace that internal fetching with a single call to getTeamLogoCached({ supabase, leagueId, teamName, ... }).
+   - Ensure TeamLogo doesn't trigger repeated fetches on re-render:
+     - Only call it inside useEffect with deps [leagueId, teamName]
+     - teamName must be a string, not an object; do not include objects/functions in deps.
+
+3) Ensure storage public URL creation happens once:
+   - If we currently call supabase.storage.from(bucket).getPublicUrl(path), do it inside the cached promise and return the final URL.
+   - Do not compute public URL repeatedly per render.
+
+========================
+B) GUARD & DEDUPE fetchAllPlayerAverages
+========================
+1) Find the useEffect that triggers fetchAllPlayerAverages (logs: "Player averages useEffect triggered, league_id: ...")
+2) Add a guard:
+   - if (!league_id) return;
+3) Add dedupe so it doesn't re-run for the same league_id:
+   - const lastFetchedLeagueRef = useRef<string | null>(null)
+   - if (lastFetchedLeagueRef.current === league_id) return;
+   - set lastFetchedLeagueRef.current = league_id; right before starting fetch
+4) Add cancellation so stale fetches don't set state:
+   - use a local boolean cancelled = false; set cancelled = true in cleanup
+   - check cancelled before setState calls
+
+========================
+C) MEMOIZE YOUTUBE EMBED URL
+========================
+1) Locate the code that logs:
+   "Original URL: https://www.youtube.com/playlist?list=..."
+   "Processed URL: ..."
+2) Replace the processing with:
+   - const embedUrl = useMemo(() => processYoutubeUrl(youtubeUrl), [youtubeUrl])
+3) Remove console.logs or guard them behind DEBUG.
+
+========================
+D) DEBUG FLAG
+========================
+Create a small debug helper in src/utils/debug.ts:
+- export const DEBUG = import.meta.env.DEV && import.meta.env.VITE_DEBUG === "true";
+Use it for any console logging. Default should be quiet.
+
+========================
+E) VERIFY
+========================
+After changes:
+- Load a league page with many teams and confirm team logos are fetched only once per team.
+- Confirm fetchAllPlayerAverages runs only once per league_id.
+- Confirm no repeated YouTube URL logs.
+
+Return:
+- List of files changed
+- The key code snippets added/updated
+- Brief explanation of why the duplicates stopped

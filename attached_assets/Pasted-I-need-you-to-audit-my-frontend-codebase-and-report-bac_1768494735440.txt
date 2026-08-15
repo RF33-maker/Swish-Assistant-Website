@@ -1,0 +1,55 @@
+I need you to audit my frontend codebase and report back the exact context needed to implement:
+1) A new full page route: /game/:game_key (Match Centre page)
+2) Update my existing score carousel to show Upcoming games when games are days out
+3) Keep my existing upcoming-game preview modal, but add a CTA to open the full game page
+
+DO NOT implement anything yet. Only investigate and report.
+
+Please return a structured report with:
+
+A) Routing
+- What routing library am I using (wouter / react-router / next)?
+- Where are routes defined (file paths)?
+- What is the current route pattern for league pages and game-related views (if any)?
+- How to add a new route /game/:game_key in this setup?
+
+B) Data fetching
+- Does the frontend query Supabase directly or call my backend API?
+- Show the exact Supabase client file (path) or API wrapper file (path).
+- Identify any existing queries to game_schedule, games, player_stats, team_stats.
+
+C) Existing UI components (paths + how they work)
+- Score carousel component:
+  - file path
+  - props used
+  - where it’s rendered (league page/home page)
+  - data it consumes (what table/endpoint)
+- Upcoming game preview modal component:
+  - file path
+  - how it receives the selected game
+  - how it currently renders info
+  - how navigation would be added (button/Link)
+- Any existing Game page or Game detail components:
+  - file paths
+  - route params used (if any)
+
+D) Tables/fields available for upcoming games display
+- Confirm which table is used for fixtures (game_schedule)
+- List the fields currently used in the UI
+- Identify if team logos are available and where they come from (teams table mapping? static assets?)
+
+E) Styling constraints
+- Tailwind / CSS module / styled components?
+- Card layout and size constraints for the carousel (height/width)
+- Any design system components used
+
+F) Recommendation
+- Based on the codebase, propose the cleanest approach to:
+  1) Add /game/:game_key page (minimal MVP layout)
+  2) Update the carousel to swap Results vs Upcoming based on matchtime/status
+  3) Add "Open game page" CTA in the modal
+
+Output format:
+- Use bullet points
+- Include file paths
+- Include small code excerpts only where necessary (max 10-15 lines each)

@@ -1,0 +1,68 @@
+We need to update the player profile Team Performance Splits card and data source so we do not lose the old on/off split metrics.
+
+Current issue:
+The new clean on/off view/card only shows ORTG, DRTG, NRTG, adjusted swing, raw swing, clean possessions, and confidence labels.
+The old player_on_off section also showed:
+- OREB%
+- DREB%
+- REB%
+- AST%
+- BLK%
+- STL%
+- TOV%
+
+Goal:
+Add those split metrics back into the new clean adjusted on/off system, using the same clean filtered source:
+player_on_off_impact_profile_v1 / player_on_off_impact_clean_v1
+which is built from lineup_stints_context_v1.
+
+Do not use the old raw player_on_off table/view for the displayed metrics unless absolutely necessary. We want all metrics to come from the same garbage-time filtered competitive stint sample.
+
+Frontend display:
+Update the Team Performance Splits table to show:
+
+Metric | On | Off | Diff
+
+Rows:
+1. ORTG
+2. DRTG
+3. NRTG
+4. OREB%
+5. DREB%
+6. REB%
+7. AST%
+8. TOV%
+9. STL%
+10. BLK%
+
+Keep:
+- adjusted_net_swing as the main public NRTG diff / adjusted swing
+- raw_net_swing as a smaller secondary row or footer
+- accuracy_label
+- sample_size_label
+- tracking_quality
+- clean possessions
+- confidence_explanation
+
+Colour rules:
+- ORTG, NRTG, OREB%, DREB%, REB%, AST%, STL%, BLK%: positive diff is good
+- DRTG and TOV%: negative diff is good
+- neutral range between -3 and +3 should be muted
+- subtle colours only
+
+Database note:
+If player_on_off_impact_profile_v1 does not currently include:
+on_oreb_pct, off_oreb_pct, diff_oreb_pct,
+on_dreb_pct, off_dreb_pct, diff_dreb_pct,
+on_reb_pct, off_reb_pct, diff_reb_pct,
+on_ast_pct, off_ast_pct, diff_ast_pct,
+on_blk_pct, off_blk_pct, diff_blk_pct,
+on_stl_pct, off_stl_pct, diff_stl_pct,
+on_tov_pct, off_tov_pct, diff_tov_pct
+
+then do not fake them on the frontend. Instead, leave placeholders or wait for the SQL view update.
+
+Important:
+This task is frontend only unless the fields already exist in the view.
+If the fields are missing, report clearly which fields are missing and where the frontend expects them.
+Do not change the database unless asked.

@@ -1,0 +1,51 @@
+18:10:20.295 Running build in Washington, D.C., USA (East) – iad1
+18:10:20.295 Build machine configuration: 2 cores, 8 GB
+18:10:20.404 Cloning github.com/RF33-maker/Swish-Assistant-Website (Branch: feature/league-pages, Commit: 5964329)
+18:10:23.347 Cloning completed: 2.943s
+18:10:23.458 Restored build cache from previous deployment (CLcWny1WbcnS3bhtQdVL7GN3s8pn)
+18:10:23.688 Running "vercel build"
+18:10:23.706 Vercel CLI 54.9.0
+18:10:24.220 Running "install" command: `npm ci`...
+18:10:36.404 npm warn deprecated @esbuild-kit/esm-loader@2.6.5: Merged into tsx: https://tsx.is
+18:10:36.405 npm warn deprecated @esbuild-kit/core-utils@3.3.2: Merged into tsx: https://tsx.is
+18:10:36.563 npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+18:10:54.336 
+18:10:54.336 added 895 packages, and audited 896 packages in 30s
+18:10:54.337 
+18:10:54.337 213 packages are looking for funding
+18:10:54.337   run `npm fund` for details
+18:10:54.465 
+18:10:54.467 42 vulnerabilities (5 low, 22 moderate, 13 high, 2 critical)
+18:10:54.467 
+18:10:54.468 To address issues that do not require attention, run:
+18:10:54.468   npm audit fix
+18:10:54.468 
+18:10:54.468 To address all issues (including breaking changes), run:
+18:10:54.468   npm audit fix --force
+18:10:54.468 
+18:10:54.468 Run `npm audit` for details.
+18:10:55.152 vite v5.4.14 building for production...
+18:10:55.205 transforming...
+18:10:55.486 Browserslist: browsers data (caniuse-lite) is 20 months old. Please run:
+18:10:55.487   npx update-browserslist-db@latest
+18:10:55.487   Why you should do it regularly: https://github.com/browserslist/update-db#readme
+18:10:55.535 
+18:10:55.536 warn - The `content` option in your Tailwind CSS configuration is missing or empty.
+18:10:55.536 warn - Configure your content sources or your generated CSS will be missing styles.
+18:10:55.537 warn - https://tailwindcss.com/docs/content-configuration
+18:10:55.679 ✓ 3 modules transformed.
+18:10:55.684 x Build failed in 509ms
+18:10:55.685 error during build:
+18:10:55.685 [vite:css] [postcss] /vercel/path0/client/src/index.css:1:1: The `border-border` class does not exist. If `border-border` is a custom class, make sure it is defined within a `@layer` directive.
+18:10:55.686 file: /vercel/path0/client/src/index.css:1:0
+18:10:55.686     at Input.error (/vercel/path0/node_modules/postcss/lib/input.js:106:16)
+18:10:55.686     at AtRule.error (/vercel/path0/node_modules/postcss/lib/node.js:115:32)
+18:10:55.687     at processApply (/vercel/path0/node_modules/tailwindcss/lib/lib/expandApplyAtRules.js:380:29)
+18:10:55.687     at /vercel/path0/node_modules/tailwindcss/lib/lib/expandApplyAtRules.js:551:9
+18:10:55.687     at /vercel/path0/node_modules/tailwindcss/lib/processTailwindFeatures.js:55:50
+18:10:55.687     at async plugins (/vercel/path0/node_modules/tailwindcss/lib/plugin.js:38:17)
+18:10:55.687     at async LazyResult.runAsync (/vercel/path0/node_modules/postcss/lib/lazy-result.js:261:11)
+18:10:55.688     at async compileCSS (file:///vercel/path0/node_modules/vite/dist/node/chunks/dep-CHZK6zbr.js:36898:21)
+18:10:55.688     at async Object.transform (file:///vercel/path0/node_modules/vite/dist/node/chunks/dep-CHZK6zbr.js:36171:11)
+18:10:55.688     at async transform (file:///vercel/path0/node_modules/rollup/dist/es/shared/node-entry.js:19640:16)
+18:10:55.701 Error: Command "vite build && node_modules/.bin/esbuild api/_source.ts --bundle --platform=node --format=esm --packages=external --outfile=api/index.js" exited with 1
