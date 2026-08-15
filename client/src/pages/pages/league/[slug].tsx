@@ -38,7 +38,7 @@ import {
 import { PlayerComparison } from "@/components/PlayerComparison";
 import { TeamComparison } from "@/components/TeamComparison";
 import { TournamentBracket } from "@/components/TournamentBracket";
-import { normalizeTeamName } from "@/lib/teamUtils";
+import { normalizeTeamName, buildFuzzyTeamAliasMap } from "@/lib/teamUtils";
 import { namesMatch, getMostCompleteName, strictNamesMatch, normalizeName } from "@/lib/fuzzyMatch";
 import { DEBUG, debugLog } from "@/utils/debug";
 import { usePublicLeagueBrandingBySlug } from "@/hooks/usePublicLeagueBranding";
@@ -79,16 +79,13 @@ type GameSchedule = {
 
 // Team name mapping for known variations that aren't covered by normalization
 const teamNameMap: Record<string, string> = {
-  'Essex Rebels (M)': 'Essex Rebels',
+  // Intentional canonical renames — too different for fuzzy distance to infer
   'MK Breakers': 'Milton Keynes Breakers',
-  // Ball Park Summer League D2 team name variants
+  // Abbreviation / shortened forms that fuzzy can't catch
   'Bath': 'Bath Basketball',
-  'Phoenix NextGen Allstars': 'Phoenix NextGen Stars',
-  'Phoenix NextGen All Stars': 'Phoenix NextGen Stars',
-  'Phoenix Nextgen Allstars': 'Phoenix NextGen Stars',
-  'Phoenix Nextgen All Stars': 'Phoenix NextGen Stars',
-  'Phoenix Nextgen Stars': 'Phoenix NextGen Stars',
   'DIAWYSC Tempo': 'DIAWYSC',
+  // Note: Phoenix NextGen variants and "Essex Rebels (M)" were removed here because
+  // buildFuzzyTeamAliasMap now clusters them automatically at render time.
 };
 
 // Build a lowercase → canonical map for case-insensitive lookups
@@ -1429,6 +1426,21 @@ export default function LeaguePage() {
           });
         }
 
+        // Build fuzzy alias map from raw team names in team_stats rows
+        const rawTeamStatNames = rawTeamStats.map((s: any) => s.name).filter(Boolean);
+        const teamStatNameFreq = new Map<string, number>();
+        rawTeamStatNames.forEach((n: string) => {
+          teamStatNameFreq.set(n, (teamStatNameFreq.get(n) ?? 0) + 1);
+        });
+        const fuzzyAliasMapForTeamStats = buildFuzzyTeamAliasMap(rawTeamStatNames, teamStatNameFreq);
+
+        const normalizeTeamStatName = (name: string): string => {
+          if (!name) return '';
+          const trimmed = name.trim();
+          const fuzzyMapped = fuzzyAliasMapForTeamStats.get(trimmed) ?? trimmed;
+          return normalizeAndMapTeamName(fuzzyMapped);
+        };
+
         const teamMap = new Map<string, any>();
 
         console.log('[TeamStats] raw names:', [...new Set(rawTeamStats.map((s: any) => s.name))]);
@@ -1436,7 +1448,7 @@ export default function LeaguePage() {
         rawTeamStats.forEach(stat => {
           if (!stat.name) return;
 
-          const normalizedName = normalizeAndMapTeamName(stat.name);
+          const normalizedName = normalizeTeamStatName(stat.name);
           const ageGroup = isParentTeamStatsFetch ? (parentChildNameMapForTeamStats.get(stat.league_id) || '') : '';
 
           const mapKey = isParentTeamStatsFetch ? `${normalizedName}__${ageGroup}` : normalizedName;
@@ -3095,6 +3107,30 @@ export default function LeaguePage() {
           return match ? match[1] : poolValue;
         };
 
+        // Build fuzzy alias map from all raw team name strings in this league
+        const rawNamesForFuzzy: string[] = [];
+        const nameFrequency = new Map<string, number>();
+        if (allTeams) {
+          allTeams.forEach(t => { if (t.name) rawNamesForFuzzy.push(t.name); });
+        }
+        if (gameResults) {
+          gameResults.forEach((g: any) => {
+            [g.home_team, g.away_team].filter(Boolean).forEach((n: string) => {
+              rawNamesForFuzzy.push(n);
+              nameFrequency.set(n, (nameFrequency.get(n) ?? 0) + 1);
+            });
+          });
+        }
+        const fuzzyAliasMapForStandings = buildFuzzyTeamAliasMap(rawNamesForFuzzy, nameFrequency);
+
+        // Normalizer: fuzzy alias first, then static map + general normalization
+        const normalizeDynamic = (name: string): string => {
+          if (!name) return '';
+          const trimmed = name.trim();
+          const fuzzyMapped = fuzzyAliasMapForStandings.get(trimmed) ?? trimmed;
+          return normalizeAndMapTeamName(fuzzyMapped);
+        };
+
         const buildStatsFromGames = (games: any[], teamNames?: Map<string, string>) => {
           const statsMap: Record<string, { wins: number, losses: number, pointsFor: number, pointsAgainst: number, games: number, originalName: string }> = {};
 
@@ -3109,14 +3145,14 @@ export default function LeaguePage() {
           }
 
           games.forEach((game: any) => {
-            if (game.home_team) ensureTeam(normalizeAndMapTeamName(game.home_team), game.home_team);
-            if (game.away_team) ensureTeam(normalizeAndMapTeamName(game.away_team), game.away_team);
+            if (game.home_team) ensureTeam(normalizeDynamic(game.home_team), game.home_team);
+            if (game.away_team) ensureTeam(normalizeDynamic(game.away_team), game.away_team);
           });
 
           games.forEach((game: any) => {
             if (game.home_score == null || game.away_score == null) return;
-            const homeName = normalizeAndMapTeamName(game.home_team || '');
-            const awayName = normalizeAndMapTeamName(game.away_team || '');
+            const homeName = normalizeDynamic(game.home_team || '');
+            const awayName = normalizeDynamic(game.away_team || '');
             const homeScore = game.home_score;
             const awayScore = game.away_score;
 
@@ -3152,7 +3188,7 @@ export default function LeaguePage() {
 
           const merged = new Map<string, typeof arr[0]>();
           arr.forEach(team => {
-            const teamKey = normalizeAndMapTeamName(team.team);
+            const teamKey = normalizeDynamic(team.team);
             if (!merged.has(teamKey)) {
               merged.set(teamKey, { ...team, team: teamKey });
             } else {
@@ -3224,24 +3260,46 @@ export default function LeaguePage() {
           return;
         }
 
-        // Initialize standings with all teams (0-0 record by default)
-        const teamStatsMap: { [team: string]: { wins: number, losses: number, pointsFor: number, pointsAgainst: number, games: number } } = {};
-        
-        allTeams.forEach(team => {
-          const normalizedName = normalizeAndMapTeamName(team.name);
-          teamStatsMap[normalizedName] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0 };
-        });
-
         const { data: gameResults, error: gameResultsError } = await db
           .from("v_game_results")
           .select("home_team, away_team, home_score, away_score")
           .eq("league_id", leagueId);
 
+        // Build fuzzy alias map from all raw team name strings in this league
+        const rawNamesForFuzzy2: string[] = [];
+        const nameFrequency2 = new Map<string, number>();
+        allTeams.forEach(t => { if (t.name) rawNamesForFuzzy2.push(t.name); });
+        if (gameResults) {
+          gameResults.forEach((g: any) => {
+            [g.home_team, g.away_team].filter(Boolean).forEach((n: string) => {
+              rawNamesForFuzzy2.push(n);
+              nameFrequency2.set(n, (nameFrequency2.get(n) ?? 0) + 1);
+            });
+          });
+        }
+        const fuzzyAliasMap2 = buildFuzzyTeamAliasMap(rawNamesForFuzzy2, nameFrequency2);
+
+        // Normalizer: fuzzy alias first, then static map + general normalization
+        const normalizeDynamic2 = (name: string): string => {
+          if (!name) return '';
+          const trimmed = name.trim();
+          const fuzzyMapped = fuzzyAliasMap2.get(trimmed) ?? trimmed;
+          return normalizeAndMapTeamName(fuzzyMapped);
+        };
+
+        // Initialize standings with all teams (0-0 record by default)
+        const teamStatsMap: { [team: string]: { wins: number, losses: number, pointsFor: number, pointsAgainst: number, games: number } } = {};
+        
+        allTeams.forEach(team => {
+          const normalizedName = normalizeDynamic2(team.name);
+          teamStatsMap[normalizedName] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0 };
+        });
+
         if (gameResults && gameResults.length > 0 && !gameResultsError) {
           gameResults.forEach((game: any) => {
             if (game.home_score == null || game.away_score == null) return;
-            const homeName = normalizeAndMapTeamName(game.home_team || '');
-            const awayName = normalizeAndMapTeamName(game.away_team || '');
+            const homeName = normalizeDynamic2(game.home_team || '');
+            const awayName = normalizeDynamic2(game.away_team || '');
             const homeScore = game.home_score;
             const awayScore = game.away_score;
 
@@ -3263,7 +3321,7 @@ export default function LeaguePage() {
           });
         }
 
-        // Convert to standings format - includes all teams, even those with no games
+        // Convert to standings format
         const standingsArray = Object.entries(teamStatsMap).map(([team, stats]) => ({
           team,
           wins: stats.wins,
@@ -3277,19 +3335,16 @@ export default function LeaguePage() {
           record: `${stats.wins}-${stats.losses}`
         }));
 
-        // Merge duplicate teams (handles data quality issues where same team appears multiple times)
-        // Apply normalization to catch variations like "Essex Rebels (M)" vs "Essex Rebels" or "MK Breakers" vs "Milton Keynes Breakers"
+        // Merge duplicate teams and apply fuzzy/static normalization a second time
+        // to catch any remaining variants (e.g. teams whose pre-normalized forms still differ)
         const mergedStandings = new Map<string, typeof standingsArray[0]>();
         
         standingsArray.forEach(team => {
-          // Re-normalize the team name to catch any variations
-          const teamKey = normalizeAndMapTeamName(team.team);
+          const teamKey = normalizeDynamic2(team.team);
           
           if (!mergedStandings.has(teamKey)) {
-            // First time seeing this normalized team - add it with normalized name
             mergedStandings.set(teamKey, { ...team, team: teamKey });
           } else {
-            // Duplicate team - merge the stats
             const existing = mergedStandings.get(teamKey)!;
             existing.wins += team.wins;
             existing.losses += team.losses;
@@ -3300,16 +3355,17 @@ export default function LeaguePage() {
             existing.winPct = existing.games > 0 ? Math.round((existing.wins / existing.games) * 1000) / 1000 : 0;
             existing.avgPoints = existing.games > 0 ? Math.round((existing.pointsFor / existing.games) * 10) / 10 : 0;
             existing.record = `${existing.wins}-${existing.losses}`;
-            // Keep the first team name we encountered
           }
         });
 
-        const finalStandings = Array.from(mergedStandings.values()).sort((a, b) => {
-          // Sort by win percentage first, then by point differential, then by average points
-          if (b.winPct !== a.winPct) return b.winPct - a.winPct;
-          if (b.pointsDiff !== a.pointsDiff) return b.pointsDiff - a.pointsDiff;
-          return b.avgPoints - a.avgPoints;
-        });
+        // Filter out zero-game teams (e.g. D1 ghost teams that leaked in via brand league_id)
+        const finalStandings = Array.from(mergedStandings.values())
+          .filter(t => t.games > 0)
+          .sort((a, b) => {
+            if (b.winPct !== a.winPct) return b.winPct - a.winPct;
+            if (b.pointsDiff !== a.pointsDiff) return b.pointsDiff - a.pointsDiff;
+            return b.avgPoints - a.avgPoints;
+          });
 
         setStandings(finalStandings);
       } catch (error) {
