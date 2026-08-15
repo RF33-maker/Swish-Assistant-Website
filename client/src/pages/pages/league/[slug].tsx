@@ -93,7 +93,7 @@ const teamNameMapLower = Object.fromEntries(
   Object.entries(teamNameMap).map(([k, v]) => [k.toLowerCase(), v])
 );
 
-// Natural sort comparator for round strings: "Round 10" sorts after "Round 9"
+// Sort rounds numerically so "Round 10" comes after "Round 9", not after "Round 1"
 const naturalSortRounds = (a: string, b: string): number => {
   const numA = parseInt(a.match(/(\d+)$/)?.[1] ?? '', 10);
   const numB = parseInt(b.match(/(\d+)$/)?.[1] ?? '', 10);
@@ -807,7 +807,7 @@ export default function LeaguePage() {
     // also check rawStats (loaded lazily) via league_id -> label map
     allPlayerAverages.forEach(p => {
       (p.rawStats || []).forEach((s: any) => {
-        if (s.round === filterRound && s.league_id) {
+        if (String(s.stop) === filterRound && s.league_id) {
           const label = childLeagueMap.get(s.league_id);
           if (label) labelsWithRound.add(label);
         }
@@ -1211,7 +1211,8 @@ export default function LeaguePage() {
       const rds = new Set<string>();
       allPlayerAverages.forEach(p => {
         (p.rawStats || []).forEach((s: any) => {
-          if (s.round) rds.add(s.round);
+          // round data is stored as the numeric `stop` column in player_stats
+          if (s.stop != null) rds.add(String(s.stop));
         });
       });
       return [...rds].sort(naturalSortRounds);
@@ -1230,7 +1231,7 @@ export default function LeaguePage() {
         .map(player => {
           const matchingStats = (player.rawStats || []).filter((s: any) => {
             if ((agFilter || stopFilter || ageTabFilter) && !selectedAgeGroupLeagueIds.includes(s.league_id)) return false;
-            if (roundFilter && s.round !== filterRound) return false;
+            if (roundFilter && String(s.stop) !== filterRound) return false;
             return true;
           });
           if (matchingStats.length === 0) return null;
@@ -1883,7 +1884,7 @@ export default function LeaguePage() {
             setPlayerStats(allPlayerStats || []);
             
             const { data: gameResults, error: gameResultsError } = await applyLeagueFilter(
-              db.from('v_game_results').select('*')
+              db.from('v_game_results').select('*').limit(2000)
             );
 
             if (gameResults && !gameResultsError) {
