@@ -96,6 +96,14 @@ const teamNameMapLower = Object.fromEntries(
   Object.entries(teamNameMap).map(([k, v]) => [k.toLowerCase(), v])
 );
 
+// Natural sort comparator for round strings: "Round 10" sorts after "Round 9"
+const naturalSortRounds = (a: string, b: string): number => {
+  const numA = parseInt(a.match(/(\d+)$/)?.[1] ?? '', 10);
+  const numB = parseInt(b.match(/(\d+)$/)?.[1] ?? '', 10);
+  if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+  return a.localeCompare(b);
+};
+
 // Apply both normalization and specific mappings
 const normalizeAndMapTeamName = (name: string): string => {
   if (!name) return '';
@@ -1209,7 +1217,7 @@ export default function LeaguePage() {
           if (s.round) rds.add(s.round);
         });
       });
-      return [...rds].sort();
+      return [...rds].sort(naturalSortRounds);
     }, [allPlayerAverages]);
 
     const filteredByAgeGroupRound = useMemo(() => {
@@ -5123,7 +5131,7 @@ export default function LeaguePage() {
                             style={filterRound !== 'all' ? { borderColor: brandColor } : {}}
                           >
                             <option value="all">All Rounds</option>
-                            {rounds.sort().map(r => (
+                            {rounds.sort(naturalSortRounds).map(r => (
                               <option key={r} value={r}>{r}</option>
                             ))}
                           </select>
