@@ -128,7 +128,8 @@ export default function LandingPage() {
             <img src={SwishLogo} alt="Swish Logo" className="h-9 md:h-10" />
           </button>
 
-          <div className="flex-1 relative">
+          <div className="flex-1 flex justify-center relative">
+            <div className="w-full max-w-xl md:max-w-2xl relative">
             <div className="search-bar-animated-border" style={{ background: '#0a0a0f' }}>
               <form
                 onSubmit={handleSubmit}
@@ -202,6 +203,7 @@ export default function LandingPage() {
                 ))}
               </ul>
             )}
+            </div>
           </div>
 
           <Sheet>
