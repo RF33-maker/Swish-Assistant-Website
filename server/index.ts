@@ -6,8 +6,23 @@ import { config } from "dotenv";
 // Load environment variables
 config();
 
-// Set up session secret
-process.env.SESSION_SECRET = process.env.SESSION_SECRET || "keyboard_cat";
+// Validate required secrets at startup (fail loudly rather than silently)
+if (!process.env.SESSION_SECRET) {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "[startup] SESSION_SECRET environment variable is required in production. " +
+      "Set it in your deployment environment."
+    );
+  } else {
+    console.warn(
+      "[startup] WARNING: SESSION_SECRET is not set. " +
+      "A random value will be used for this session only — all sessions will be invalidated on restart. " +
+      "Set SESSION_SECRET in your .env file."
+    );
+    // Use a per-process random value in dev rather than a predictable string
+    process.env.SESSION_SECRET = require("crypto").randomBytes(32).toString("hex");
+  }
+}
 
 const app = express();
 app.use(express.json());

@@ -13,6 +13,10 @@ type LoginData = {
 
 type AuthContextType = {
   user: SelectUser | null;
+  /** True when the Supabase user has app_metadata.role === "admin". */
+  isAdmin: boolean;
+  /** True when the Supabase user has confirmed their email address. */
+  emailConfirmed: boolean;
   isLoading: boolean;
   error: Error | null;
   loginMutation: ReturnType<typeof useMutation>;
@@ -30,21 +34,27 @@ function useAuthProviderValue(): AuthContextType {
     data: user,
     error,
     isLoading,
-  } = useQuery<SelectUser | null, Error>({
+  } = useQuery<any, Error>({
     queryKey: ["user"],
     queryFn: async () => {
       try {
         const { data, error } = await supabase.auth.getUser();
         if (error) {
-          return null; // Return null instead of throwing
+          return null;
         }
         return data?.user ?? null;
       } catch (err) {
-        return null; // Return null instead of throwing
+        return null;
       }
     },
-    retry: false, // Don't retry auth failures
+    retry: false,
   });
+
+  // Derive admin and email-confirmed state from the Supabase user object.
+  // app_metadata is authoritative — it can only be written server-side via the
+  // service-role key, so it cannot be spoofed from the browser.
+  const isAdmin = (user as any)?.app_metadata?.role === "admin";
+  const emailConfirmed = !!(user as any)?.email_confirmed_at;
 
   const loginMutation = useMutation({
     mutationFn: async ({ username, password }: LoginData) => {
@@ -54,7 +64,7 @@ function useAuthProviderValue(): AuthContextType {
       });
 
       if (error) throw new Error(error.message);
-      return data.user as SelectUser;
+      return data.user as unknown as SelectUser;
     },
     onSuccess: (user: SelectUser) => {
       queryClient.setQueryData(["user"], user);
@@ -81,7 +91,7 @@ function useAuthProviderValue(): AuthContextType {
       });
 
       if (error) throw new Error(error.message);
-      return data.user as SelectUser;
+      return data.user as unknown as SelectUser;
     },
     onSuccess: (user: SelectUser) => {
       queryClient.setQueryData(["user"], user);
@@ -123,6 +133,8 @@ function useAuthProviderValue(): AuthContextType {
 
   return {
     user,
+    isAdmin,
+    emailConfirmed,
     isLoading,
     error,
     loginMutation,

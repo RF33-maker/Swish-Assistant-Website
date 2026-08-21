@@ -2816,17 +2816,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ─── Player CSV import endpoint ─────────────────────────────────────────────
   app.post("/api/admin/import-players", upload.single("file"), async (req: Request, res: Response) => {
     try {
-      const userId = await authenticateSupabaseUser(req);
-      if (!userId) return res.status(401).json({ error: "Authentication required" });
-
-      // Verify the caller has the admin role in their Supabase app_metadata.
-      const { data: adminUserData, error: adminUserError } = await supabaseAdmin.auth.admin.getUserById(userId);
-      if (adminUserError || !adminUserData?.user) {
-        return res.status(403).json({ error: "Admin access required" });
-      }
-      if (adminUserData.user.app_metadata?.role !== "admin") {
-        return res.status(403).json({ error: "Admin access required" });
-      }
+      const userId = await requireAdmin(req, res);
+      if (!userId) return;
 
       const file = req.file;
       if (!file) return res.status(400).json({ error: "No CSV file uploaded" });
@@ -3049,6 +3040,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.status(500).send("Failed to generate sitemap");
     }
+  });
+
+  // ─── Admin owner provisioning ────────────────────────────────────────────────
+  // POST /api/admin/provision-owner
+  // Grants the "admin" role to a Supabase user.
+  // Authorization: either a valid ADMIN_BOOTSTRAP_SECRET (initial bootstrap only)
+  // or an existing admin bearer token (ongoing management).
+  app.post("/api/admin/provision-owner", async (req: Request, res: Response) => {
+    const { userId, bootstrapSecret } = req.body || {};
+    if (!userId) return res.status(400).json({ error: "userId is required" });
+
+    let authorized = false;
+
+    if (bootstrapSecret) {
+      const configuredSecret = process.env.ADMIN_BOOTSTRAP_SECRET;
+      if (!configuredSecret) {
+        return res.status(403).json({
+          error: "Bootstrap provisioning is not enabled. Set ADMIN_BOOTSTRAP_SECRET in the environment to allow initial owner setup.",
+        });
+      }
+      if (bootstrapSecret !== configuredSecret) {
+        return res.status(403).json({ error: "Invalid bootstrap secret" });
+      }
+      authorized = true;
+    } else {
+      // Require an existing admin's bearer token
+      const adminId = await requireAdmin(req, res);
+      if (!adminId) return; // requireAdmin already sent 401/403
+      authorized = true;
+    }
+
+    if (!authorized) return res.status(403).json({ error: "Unauthorized" });
+
+    // Fetch the target user to preserve existing app_metadata fields
+    const { data: targetUserData, error: fetchError } = await supabaseAdmin.auth.admin.getUserById(userId);
+    if (fetchError || !targetUserData?.user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+      app_metadata: { ...targetUserData.user.app_metadata, role: "admin" },
+    });
+
+    if (updateError) {
+      console.error("[provision-owner] Failed to grant admin role:", updateError.message);
+      return res.status(500).json({ error: "Failed to provision owner" });
+    }
+
+    console.log(`[provision-owner] Granted admin role to user ${userId}`);
+    return res.json({ success: true, userId, email: targetUserData.user.email });
+  });
+
+  // POST /api/admin/revoke-owner
+  // Removes the "admin" role from a Supabase user.
+  // Requires an existing admin bearer token; an admin cannot revoke their own role.
+  app.post("/api/admin/revoke-owner", async (req: Request, res: Response) => {
+    const adminId = await requireAdmin(req, res);
+    if (!adminId) return;
+
+    const { userId } = req.body || {};
+    if (!userId) return res.status(400).json({ error: "userId is required" });
+    if (userId === adminId) {
+      return res.status(400).json({ error: "An admin cannot revoke their own role" });
+    }
+
+    const { data: targetUserData, error: fetchError } = await supabaseAdmin.auth.admin.getUserById(userId);
+    if (fetchError || !targetUserData?.user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const updatedMeta = { ...targetUserData.user.app_metadata };
+    delete updatedMeta.role;
+
+    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+      app_metadata: updatedMeta,
+    });
+
+    if (updateError) {
+      console.error("[revoke-owner] Failed to revoke admin role:", updateError.message);
+      return res.status(500).json({ error: "Failed to revoke owner role" });
+    }
+
+    console.log(`[revoke-owner] Revoked admin role from user ${userId}`);
+    return res.json({ success: true, userId });
   });
 
   const httpServer = createServer(app);

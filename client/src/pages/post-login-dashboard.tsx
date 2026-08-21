@@ -1,4 +1,5 @@
 import { useLocation } from "wouter"
+import { useAuth } from "@/hooks/use-auth";
 import { Users, TrendingUp, Trophy, Settings, Share2, Code, Newspaper, FilePenLine } from "lucide-react";
 import {
   Card,
@@ -12,6 +13,7 @@ import SwishLogo from "@/assets/Swish Assistant Logo.png"
 
 export default function DashboardLanding() {
   const [, navigate] = useLocation();
+  const { isAdmin } = useAuth();
 
   return (
     <div className="bg-white py-24 sm:py-32">
@@ -41,6 +43,8 @@ export default function DashboardLanding() {
         </p>
 
         <div className="mt-16 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+          {/* League Management — admin only */}
+          {isAdmin && (
             <Card className="bg-white border-orange-200 shadow-lg shadow-orange-500/20 hover:shadow-xl hover:shadow-orange-500/40 transition-all duration-300 cursor-pointer transform hover:scale-105 group" onClick={() => navigate("/league-management")}>
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-3">
@@ -68,91 +72,94 @@ export default function DashboardLanding() {
                 </Button>
               </CardContent>
             </Card>
+          )}
 
-            <Card className="bg-white border-orange-200 shadow-lg shadow-orange-500/20 hover:shadow-xl hover:shadow-orange-500/40 transition-all duration-300 cursor-pointer transform hover:scale-105 group" onClick={() => navigate("/coaches-hub")}>
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-full bg-orange-600 group-hover:bg-orange-700 flex items-center justify-center transition-all duration-300 group-hover:rotate-12 group-hover:scale-110">
-                    <Users className="h-6 w-6 text-white group-hover:animate-pulse" />
-                  </div>
-                  <div className="flex-1">
-                    <CardTitle className="text-orange-900 text-lg group-hover:text-orange-700 transition-colors duration-300">Coaches Hub</CardTitle>
-                    <CardDescription className="group-hover:text-orange-600 transition-colors duration-300">Coaching tools and resources</CardDescription>
-                  </div>
+          <Card className="bg-white border-orange-200 shadow-lg shadow-orange-500/20 hover:shadow-xl hover:shadow-orange-500/40 transition-all duration-300 cursor-pointer transform hover:scale-105 group" onClick={() => navigate("/coaches-hub")}>
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 rounded-full bg-orange-600 group-hover:bg-orange-700 flex items-center justify-center transition-all duration-300 group-hover:rotate-12 group-hover:scale-110">
+                  <Users className="h-6 w-6 text-white group-hover:animate-pulse" />
                 </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-orange-700 text-sm mb-4">Access coaching resources, game analysis tools, and team management features.</p>
-                <Button 
-                  size="sm" 
-                  className="bg-orange-600 hover:bg-orange-700 text-white transform transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    navigate("/coaches-hub");
-                  }}
-                >
-                  <TrendingUp className="h-3 w-3 mr-1 group-hover:animate-bounce" />
-                  Access Hub
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white border-orange-200 shadow-lg shadow-orange-500/20 hover:shadow-xl hover:shadow-orange-500/40 transition-all duration-300 cursor-pointer transform hover:scale-105 group" onClick={() => navigate("/social-tools")}>
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-full bg-orange-600 group-hover:bg-orange-700 flex items-center justify-center transition-all duration-300 group-hover:rotate-12 group-hover:scale-110">
-                    <Share2 className="h-6 w-6 text-white group-hover:animate-pulse" />
-                  </div>
-                  <div className="flex-1">
-                    <CardTitle className="text-orange-900 text-lg group-hover:text-orange-700 transition-colors duration-300">Swish Social Tool</CardTitle>
-                    <CardDescription className="group-hover:text-orange-600 transition-colors duration-300">Generate social media graphics</CardDescription>
-                  </div>
+                <div className="flex-1">
+                  <CardTitle className="text-orange-900 text-lg group-hover:text-orange-700 transition-colors duration-300">Coaches Hub</CardTitle>
+                  <CardDescription className="group-hover:text-orange-600 transition-colors duration-300">Coaching tools and resources</CardDescription>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-orange-700 text-sm mb-4">Create performance cards and shareable graphics from your stats database.</p>
-                <Button 
-                  size="sm" 
-                  className="bg-orange-600 hover:bg-orange-700 text-white transform transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    navigate("/social-tools");
-                  }}
-                >
-                  <Share2 className="h-3 w-3 mr-1 group-hover:animate-bounce" />
-                  Create Graphics
-                </Button>
-              </CardContent>
-            </Card>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-orange-700 text-sm mb-4">Access coaching resources, game analysis tools, and team management features.</p>
+              <Button 
+                size="sm" 
+                className="bg-orange-600 hover:bg-orange-700 text-white transform transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate("/coaches-hub");
+                }}
+              >
+                <TrendingUp className="h-3 w-3 mr-1 group-hover:animate-bounce" />
+                Access Hub
+              </Button>
+            </CardContent>
+          </Card>
 
-            <Card className="bg-white border-orange-200 shadow-lg shadow-orange-500/20 hover:shadow-xl hover:shadow-orange-500/40 transition-all duration-300 cursor-pointer transform hover:scale-105 group" onClick={() => navigate("/api-widgets")}>
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-full bg-orange-600 group-hover:bg-orange-700 flex items-center justify-center transition-all duration-300 group-hover:rotate-12 group-hover:scale-110">
-                    <Code className="h-6 w-6 text-white group-hover:animate-pulse" />
-                  </div>
-                  <div className="flex-1">
-                    <CardTitle className="text-orange-900 text-lg group-hover:text-orange-700 transition-colors duration-300">API / Widgets</CardTitle>
-                    <CardDescription className="group-hover:text-orange-600 transition-colors duration-300">Embed league data anywhere</CardDescription>
-                  </div>
+          <Card className="bg-white border-orange-200 shadow-lg shadow-orange-500/20 hover:shadow-xl hover:shadow-orange-500/40 transition-all duration-300 cursor-pointer transform hover:scale-105 group" onClick={() => navigate("/social-tools")}>
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 rounded-full bg-orange-600 group-hover:bg-orange-700 flex items-center justify-center transition-all duration-300 group-hover:rotate-12 group-hover:scale-110">
+                  <Share2 className="h-6 w-6 text-white group-hover:animate-pulse" />
                 </div>
-              </CardHeader>
-              <CardContent>
-                <p className="text-orange-700 text-sm mb-4">Create embeddable widgets for standings, player stats, scores, and league leaders.</p>
-                <Button 
-                  size="sm" 
-                  className="bg-orange-600 hover:bg-orange-700 text-white transform transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    navigate("/api-widgets");
-                  }}
-                >
-                  <Code className="h-3 w-3 mr-1 group-hover:animate-bounce" />
-                  Build Widgets
-                </Button>
-              </CardContent>
-            </Card>
+                <div className="flex-1">
+                  <CardTitle className="text-orange-900 text-lg group-hover:text-orange-700 transition-colors duration-300">Swish Social Tool</CardTitle>
+                  <CardDescription className="group-hover:text-orange-600 transition-colors duration-300">Generate social media graphics</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-orange-700 text-sm mb-4">Create performance cards and shareable graphics from your stats database.</p>
+              <Button 
+                size="sm" 
+                className="bg-orange-600 hover:bg-orange-700 text-white transform transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate("/social-tools");
+                }}
+              >
+                <Share2 className="h-3 w-3 mr-1 group-hover:animate-bounce" />
+                Create Graphics
+              </Button>
+            </CardContent>
+          </Card>
 
+          <Card className="bg-white border-orange-200 shadow-lg shadow-orange-500/20 hover:shadow-xl hover:shadow-orange-500/40 transition-all duration-300 cursor-pointer transform hover:scale-105 group" onClick={() => navigate("/api-widgets")}>
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 rounded-full bg-orange-600 group-hover:bg-orange-700 flex items-center justify-center transition-all duration-300 group-hover:rotate-12 group-hover:scale-110">
+                  <Code className="h-6 w-6 text-white group-hover:animate-pulse" />
+                </div>
+                <div className="flex-1">
+                  <CardTitle className="text-orange-900 text-lg group-hover:text-orange-700 transition-colors duration-300">API / Widgets</CardTitle>
+                  <CardDescription className="group-hover:text-orange-600 transition-colors duration-300">Embed league data anywhere</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-orange-700 text-sm mb-4">Create embeddable widgets for standings, player stats, scores, and league leaders.</p>
+              <Button 
+                size="sm" 
+                className="bg-orange-600 hover:bg-orange-700 text-white transform transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate("/api-widgets");
+                }}
+              >
+                <Code className="h-3 w-3 mr-1 group-hover:animate-bounce" />
+                Build Widgets
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* News Manager — admin only */}
+          {isAdmin && (
             <Card className="bg-white border-orange-200 shadow-lg shadow-orange-500/20 hover:shadow-xl hover:shadow-orange-500/40 transition-all duration-300 cursor-pointer transform hover:scale-105 group" onClick={() => navigate("/news-manager")} data-testid="card-news-manager">
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-3">
@@ -181,6 +188,7 @@ export default function DashboardLanding() {
                 </Button>
               </CardContent>
             </Card>
+          )}
         </div>
       </div>
     </div>

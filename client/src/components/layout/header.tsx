@@ -11,12 +11,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Layers, Bell, HelpCircle, User, LogOut, Settings } from "lucide-react";
+import { Bell, HelpCircle, User, LogOut, Settings } from "lucide-react";
 import SwishAssistantLogo from "@/assets/Swish Assistant Logo.png";
 
 
 export default function Header() {
-  const { user, logoutMutation } = useAuth();
+  const { user, isAdmin, logoutMutation } = useAuth();
   const [logoSrc, setLogoSrc] = useState<string | null>(null);
   
   // This function would normally be in a context or central state management
@@ -29,7 +29,8 @@ export default function Header() {
     logoutMutation.mutate();
   };
 
-  const userInitial = user?.username?.charAt(0)?.toUpperCase() || "U";
+  const userEmail = (user as any)?.email ?? "";
+  const userInitial = userEmail.charAt(0).toUpperCase() || "U";
 
 
   return (
@@ -59,13 +60,16 @@ export default function Header() {
                     Coaches Hub
                   </Button>
                 </Link>
-                <Link href="/league-management">
-                  <Button
-                    className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1.5 md:px-4 md:py-2 rounded-lg font-medium transition-colors text-xs md:text-sm"
-                  >
-                    League Admin
-                  </Button>
-                </Link>
+                {/* League Admin navigation is only shown to owner accounts */}
+                {isAdmin && (
+                  <Link href="/league-management">
+                    <Button
+                      className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1.5 md:px-4 md:py-2 rounded-lg font-medium transition-colors text-xs md:text-sm"
+                    >
+                      League Admin
+                    </Button>
+                  </Link>
+                )}
               </div>
             )}
           </div>
@@ -81,7 +85,6 @@ export default function Header() {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative rounded-full h-8 w-8 p-0">
                   <Avatar>
-                    <AvatarImage src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" />
                     <AvatarFallback>{userInitial}</AvatarFallback>
                   </Avatar>
                 </Button>
@@ -89,10 +92,10 @@ export default function Header() {
               <DropdownMenuContent className="w-56" align="end" forceMount>
                 <DropdownMenuLabel className="font-normal">
                   <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">{user?.username}</p>
-                    <p className="text-xs leading-none text-muted-foreground">
-                      {user?.username}
-                    </p>
+                    <p className="text-sm font-medium leading-none">{userEmail}</p>
+                    {isAdmin && (
+                      <p className="text-xs leading-none text-orange-600 font-medium">Owner</p>
+                    )}
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />

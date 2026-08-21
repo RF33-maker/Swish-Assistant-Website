@@ -12,11 +12,10 @@ import AuthPage from "@/pages/auth";
 import LandingPage from "@/pages/landing-page";
 import LeaguePage from "./pages/pages/league/[slug]";
 import CompetitionPage from "./pages/pages/competition/[slug]";
-import LeagueAdminPage from "./pages/pages/league-admin/[slug]";
 import LeagueLeadersPage from "./pages/pages/league-leaders/[slug]";
 import PlayerStatsPage from "./pages/pages/player/[id]";
 import PlayersListPage from "./pages/players-list";
-import PostLoginDashboard from "@/pages/post-login-dashboard"; // new dashboard page
+import PostLoginDashboard from "@/pages/post-login-dashboard";
 import CoachesHub from "@/pages/CoachesHub";
 import TeamProfile from "@/pages/TeamProfile";
 import TeamsList from "@/pages/TeamsList";
@@ -34,7 +33,7 @@ import WidgetDemo from "@/pages/widget-demo";
 import EmbedGuide from "@/pages/embed-guide";
 import GamePage from "@/pages/GamePage";
 import { AuthProvider } from "./hooks/use-auth";
-import { ProtectedRoute } from "./lib/protected-route";
+import { AdminRoute, ProtectedRoute } from "./lib/protected-route";
 import ResetPassword from "./pages/reset-password";
 import SettingsPage from "@/pages/settings-page";
 import ProfilePage from "./pages/profile-page";
@@ -89,21 +88,23 @@ function Router() {
       <Route path="/news" component={NewsIndexPage} />
       <Route path="/news/:slug" component={NewsArticlePage} />
 
-      {/* Protected routes */}
+      {/* Member routes — any authenticated user */}
       <ProtectedRoute path="/dashboard" component={PostLoginDashboard} />
       <ProtectedRoute path="/coaches-hub" component={CoachesHub} />
-      <ProtectedRoute path="/league-management" component={LeagueManagement} />
-      <ProtectedRoute path="/league-admin/:slug" component={LeagueAdmin} />
-      <ProtectedRoute path="/teams/:slug" component={TeamsList} />
-      <ProtectedRoute path="/league-teams/:slug" component={LeagueTeams} />
-      <ProtectedRoute path="/team-logos/:slug" component={TeamLogoManager} />
       <ProtectedRoute path="/profile" component={ProfilePage} />
       <ProtectedRoute path="/settings" component={SettingsPage} />
       <ProtectedRoute path="/payment" component={PaymentPage} />
       <ProtectedRoute path="/social-tools" component={SocialToolsPage} />
       <ProtectedRoute path="/api-widgets" component={WidgetBuilder} />
-      <ProtectedRoute path="/news-manager" component={NewsManager} />
-      <ProtectedRoute path="/admin/import-players" component={ImportPlayersPage} />
+
+      {/* Admin-only routes — require app_metadata.role === "admin" */}
+      <AdminRoute path="/league-management" component={LeagueManagement} />
+      <AdminRoute path="/league-admin/:slug" component={LeagueAdmin} />
+      <AdminRoute path="/teams/:slug" component={TeamsList} />
+      <AdminRoute path="/league-teams/:slug" component={LeagueTeams} />
+      <AdminRoute path="/team-logos/:slug" component={TeamLogoManager} />
+      <AdminRoute path="/news-manager" component={NewsManager} />
+      <AdminRoute path="/admin/import-players" component={ImportPlayersPage} />
 
       {/* Fallback */}
       <Route component={NotFound} />

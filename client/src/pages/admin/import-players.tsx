@@ -1,11 +1,13 @@
 import { useState, useRef } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/lib/supabase";
-import { Redirect } from "wouter";
 import { Loader2, Upload, CheckCircle, AlertCircle, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+
+// This page is only reachable through AdminRoute in App.tsx, which already
+// blocks non-admin users. The isAdmin check here is a defence-in-depth guard.
 
 interface ImportSummary {
   updated: number;
@@ -15,7 +17,7 @@ interface ImportSummary {
 }
 
 export default function ImportPlayersPage() {
-  const { user, isLoading } = useAuth();
+  const { user, isAdmin, isLoading } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [summary, setSummary] = useState<ImportSummary | null>(null);
@@ -30,15 +32,14 @@ export default function ImportPlayersPage() {
     );
   }
 
-  if (!user) return <Redirect to="/auth" />;
-
-  const isAdmin = (user as any)?.app_metadata?.role === "admin";
-  if (!isAdmin) {
+  // Defence-in-depth: AdminRoute already prevents non-admins from reaching
+  // this component, but we keep the check here as an extra layer.
+  if (!user || !isAdmin) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center space-y-2">
           <p className="text-lg font-semibold text-slate-800 dark:text-slate-200">Access Denied</p>
-          <p className="text-sm text-slate-500 dark:text-slate-400">This page is restricted to admin users.</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">This page is restricted to owner accounts.</p>
         </div>
       </div>
     );
