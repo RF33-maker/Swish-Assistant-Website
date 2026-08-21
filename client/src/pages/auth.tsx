@@ -77,7 +77,9 @@ export default function AuthPage() {
   const [resendError, setResendError] = useState("");
   const [forgotSent, setForgotSent] = useState(false);
   const [forgotError, setForgotError] = useState("");
-  const [activeTab, setActiveTab] = useState("login");
+  // Pre-select the register tab when ?tab=register is in the URL
+  const initialTab = new URLSearchParams(window.location.search).get("tab") === "register" ? "register" : "login";
+  const [activeTab, setActiveTab] = useState(initialTab);
 
   // Redirect if already authenticated
   useEffect(() => {

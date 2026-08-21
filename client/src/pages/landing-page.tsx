@@ -9,7 +9,7 @@ import SLB from "@/assets/Super-League-Basketball-Logo.png"
 import NBLBE from "@/assets/NBLBE.jpg"
 import { Button } from "@/components/ui/button"
 import { Analytics } from "@vercel/analytics/next"
-import { Search, ChevronDown, Trophy, Menu } from "lucide-react"
+import { Search, ChevronDown, Trophy, Menu, X, UserPlus } from "lucide-react"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import { TeamLogo } from "@/components/TeamLogo"
@@ -20,6 +20,7 @@ import TrendingPerformanceSection from "@/components/home/TrendingPerformanceSec
 import { InstagramFeedSection } from "@/components/InstagramFeedSection"
 import { useGlobalSearch } from "@/hooks/useGlobalSearch"
 import { PlayerSearchAvatar } from "@/components/PlayerSearchAvatar"
+import { useAuth } from "@/hooks/use-auth"
 
 const PLATFORM_INSTAGRAM_HANDLE = "swishassistant"
 
@@ -65,6 +66,23 @@ export default function LandingPage() {
   const [, setLocation] = useLocation()
   const [trendingLeagues, setTrendingLeagues] = useState<any[]>([]);
   const { query, setQuery, suggestions, handleSelect, handleSubmit } = useGlobalSearch();
+  const { user, isLoading: authLoading } = useAuth();
+  const [showPopup, setShowPopup] = useState(false);
+
+  // Show the welcome popup once per session, only to guests
+  useEffect(() => {
+    if (authLoading) return;
+    if (user) return; // already logged in — don't bother them
+    const dismissed = sessionStorage.getItem("sa_welcome_dismissed");
+    if (dismissed) return;
+    const t = setTimeout(() => setShowPopup(true), 2000);
+    return () => clearTimeout(t);
+  }, [user, authLoading]);
+
+  const dismissPopup = () => {
+    sessionStorage.setItem("sa_welcome_dismissed", "1");
+    setShowPopup(false);
+  };
 
   useEffect(() => {
     const fetchTrending = async () => {
@@ -112,6 +130,60 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-white dark:bg-neutral-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors duration-300">
+
+      {/* Welcome popup — shown once per session to guests */}
+      {showPopup && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 sm:p-6"
+          style={{ background: 'rgba(0,0,0,0.45)' }}
+          onClick={dismissPopup}
+        >
+          <div
+            className="relative bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl border border-orange-200 dark:border-neutral-700 max-w-sm w-full p-6 animate-fade-in-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close */}
+            <button
+              onClick={dismissPopup}
+              className="absolute top-3 right-3 p-1.5 rounded-full text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
+              aria-label="Dismiss"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            {/* Icon + heading */}
+            <div className="flex items-center gap-3 mb-3">
+              <div className="h-10 w-10 rounded-full bg-gradient-to-br from-orange-400 to-amber-400 flex items-center justify-center flex-shrink-0">
+                <UserPlus className="h-5 w-5 text-white" />
+              </div>
+              <h2 className="font-bold text-lg text-slate-900 dark:text-white leading-tight">
+                Create your free account
+              </h2>
+            </div>
+
+            <p className="text-sm text-slate-600 dark:text-slate-300 mb-5 leading-relaxed">
+              Track players, download performance cards, and get insights — all for free. No credit card needed.
+            </p>
+
+            <div className="flex flex-col gap-2">
+              <a
+                href="/auth?tab=register"
+                className="block w-full text-center bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-semibold px-4 py-2.5 rounded-xl transition-all duration-200 shadow-sm hover:shadow-md"
+                onClick={dismissPopup}
+              >
+                Register free →
+              </a>
+              <button
+                onClick={dismissPopup}
+                className="block w-full text-center text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 py-1.5 transition-colors"
+              >
+                Maybe later
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Gradient Top Border */}
       <div className="h-[1px] bg-gradient-to-r from-orange-400 to-amber-400"></div>
 
@@ -234,6 +306,15 @@ export default function LandingPage() {
                 >
                   Login
                 </a>
+                {!user && (
+                  <a
+                    href="/auth?tab=register"
+                    className="px-3 py-2 rounded-md text-sm text-orange-400 hover:bg-neutral-900 transition-colors flex items-center gap-2"
+                  >
+                    <UserPlus className="h-3.5 w-3.5" />
+                    Register free
+                  </a>
+                )}
                 <a
                   href="#subscribe"
                   data-testid="sidebar-subscribe"
@@ -310,6 +391,25 @@ export default function LandingPage() {
         <p className="mt-6 md:mt-8 text-slate-600 dark:text-slate-400 text-sm md:text-base font-medium max-w-2xl mx-auto animate-fade-in-up" style={{ animationDelay: '1.1s', opacity: 0, animationFillMode: 'forwards' }}>
           Explore stats, track performance, drive narrative and discover the next MVP.
         </p>
+
+        {/* Registration CTA — only shown to guests */}
+        {!authLoading && !user && (
+          <div className="mt-5 animate-fade-in-up" style={{ animationDelay: '1.15s', opacity: 0, animationFillMode: 'forwards' }}>
+            <a
+              href="/auth?tab=register"
+              className="inline-flex items-center gap-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-semibold px-6 py-2.5 rounded-full shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 text-sm md:text-base"
+            >
+              <UserPlus className="h-4 w-4" />
+              Create free account
+            </a>
+            <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+              Already have one?{" "}
+              <a href="/auth" className="text-orange-500 hover:text-orange-600 underline underline-offset-2">
+                Sign in
+              </a>
+            </p>
+          </div>
+        )}
 
         {/* League Logos Section */}
         <div className="mt-8 md:mt-12 w-full max-w-5xl mx-auto">
