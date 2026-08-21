@@ -11,12 +11,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Bell, HelpCircle, User, LogOut, Settings } from "lucide-react";
+import { Bell, HelpCircle, User, LogOut, Settings, CheckCircle, AlertCircle } from "lucide-react";
 import SwishAssistantLogo from "@/assets/Swish Assistant Logo.png";
 
 
 export default function Header() {
-  const { user, isAdmin, logoutMutation } = useAuth();
+  const { user, isAdmin, emailConfirmed, logoutMutation } = useAuth();
   const [logoSrc, setLogoSrc] = useState<string | null>(null);
   
   // This function would normally be in a context or central state management
@@ -93,8 +93,18 @@ export default function Header() {
                 <DropdownMenuLabel className="font-normal">
                   <div className="flex flex-col space-y-1">
                     <p className="text-sm font-medium leading-none">{userEmail}</p>
-                    {isAdmin && (
+                    {isAdmin ? (
                       <p className="text-xs leading-none text-orange-600 font-medium">Owner</p>
+                    ) : emailConfirmed ? (
+                      <span className="inline-flex items-center gap-1 text-xs leading-none text-emerald-600 font-medium">
+                        <CheckCircle className="h-3 w-3" />
+                        Verified member
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-xs leading-none text-amber-600 font-medium">
+                        <AlertCircle className="h-3 w-3" />
+                        Email not verified
+                      </span>
                     )}
                   </div>
                 </DropdownMenuLabel>

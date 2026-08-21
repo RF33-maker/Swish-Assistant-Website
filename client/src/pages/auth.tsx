@@ -19,7 +19,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation, Link } from "wouter";
 import { useEffect, useState } from "react";
-import { Layers, User, Mail, CheckCircle, AlertCircle } from "lucide-react";
+import { BarChart2, Download, Sparkles, CheckCircle, AlertCircle } from "lucide-react";
 import SwishAssistantLogo from "@/assets/Swish Assistant Logo.png";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { supabase } from "@/lib/supabase";
@@ -512,55 +512,55 @@ export default function AuthPage() {
       <div className="hidden md:block md:w-1/2 bg-white p-8 text-gray-800">
         <div className="h-full flex flex-col justify-center max-w-lg mx-auto">
           <h1 className="text-4xl font-bold mb-6 text-swish-dark">
-            Game insights, simplified
+            Your league, all in one place
           </h1>
-          <p className="text-lg mb-8">
-            Swish Assistant turns your stat sheets into instant coaching value —
-            from shot charts to player summaries, all powered by AI.
+          <p className="text-lg mb-8 text-gray-600">
+            Swish Assistant brings live scores, deep player stats, and
+            shareable performance cards to every league — completely free.
           </p>
 
           <div className="space-y-6">
             <div className="flex items-start space-x-3">
               <div className="mt-1 bg-swish-peach p-2 rounded-full">
-                <Mail size={20} className="text-white" />
+                <BarChart2 size={20} className="text-white" />
               </div>
               <div>
                 <h3 className="font-semibold text-swish-dark">
-                  Ask questions, get answers
+                  Live scores &amp; deep stats
                 </h3>
-                <p className="text-sm text-gray-700">
-                  Want to know how many 3s your top shooter hit last game? Just
-                  ask.
+                <p className="text-sm text-gray-600">
+                  Follow game results, standings, shot charts, and player
+                  leaders across every competition in your league.
                 </p>
               </div>
             </div>
 
             <div className="flex items-start space-x-3">
               <div className="mt-1 bg-swish-peach p-2 rounded-full">
-                <User size={20} className="text-white" />
+                <Download size={20} className="text-white" />
               </div>
               <div>
                 <h3 className="font-semibold text-swish-dark">
-                  Quick Summaries
+                  Download performance cards
                 </h3>
-                <p className="text-sm text-gray-700">
-                  Drop in your FIBA LiveStats PDF and generate visual scouting
-                  reports instantly.
+                <p className="text-sm text-gray-600">
+                  Save and share any player's game highlights as a card built
+                  for Instagram, X, and beyond.
                 </p>
               </div>
             </div>
 
             <div className="flex items-start space-x-3">
               <div className="mt-1 bg-swish-peach p-2 rounded-full">
-                <Layers size={20} className="text-white" />
+                <Sparkles size={20} className="text-white" />
               </div>
               <div>
                 <h3 className="font-semibold text-swish-dark">
-                  Custom team setup
+                  AI chatbot — coming soon
                 </h3>
-                <p className="text-sm text-gray-700">
-                  Upload your logo, add team colors, and personalize the
-                  experience.
+                <p className="text-sm text-gray-600">
+                  Members get first access when the Swish AI assistant launches.
+                  Ask anything about your league's stats and get instant answers.
                 </p>
               </div>
             </div>

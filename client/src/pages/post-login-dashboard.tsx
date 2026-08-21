@@ -1,6 +1,6 @@
 import { useLocation } from "wouter"
 import { useAuth } from "@/hooks/use-auth";
-import { Users, TrendingUp, Trophy, Settings, Share2, Code, Newspaper, FilePenLine } from "lucide-react";
+import { Users, TrendingUp, Trophy, Settings, Share2, Code, Newspaper, FilePenLine, CheckCircle, AlertCircle, Download } from "lucide-react";
 import {
   Card,
   CardHeader,
@@ -13,7 +13,7 @@ import SwishLogo from "@/assets/Swish Assistant Logo.png"
 
 export default function DashboardLanding() {
   const [, navigate] = useLocation();
-  const { isAdmin } = useAuth();
+  const { isAdmin, emailConfirmed, user } = useAuth();
 
   return (
     <div className="bg-white py-24 sm:py-32">
@@ -39,8 +39,29 @@ export default function DashboardLanding() {
           </h2>
         </div>
         <p className="mt-2 text-center text-4xl sm:text-5xl font-extrabold text-slate-900">
-          Choose your mode
+          {isAdmin ? "Choose your mode" : "Your member dashboard"}
         </p>
+
+        {/* Account status banner for non-admin members */}
+        {!isAdmin && user && (
+          <div className={`mt-6 mx-auto max-w-xl rounded-xl border px-4 py-3 flex items-start gap-3 ${emailConfirmed ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"}`}>
+            {emailConfirmed ? (
+              <CheckCircle className="h-5 w-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+            ) : (
+              <AlertCircle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+            )}
+            <div>
+              <p className={`text-sm font-semibold ${emailConfirmed ? "text-emerald-800" : "text-amber-800"}`}>
+                {emailConfirmed ? "Verified member" : "Email not yet verified"}
+              </p>
+              <p className={`text-xs mt-0.5 ${emailConfirmed ? "text-emerald-700" : "text-amber-700"}`}>
+                {emailConfirmed
+                  ? "You can download performance, comparison, leader, and trending share cards from any player or league page."
+                  : "Check your inbox and click the verification link to unlock card downloads and other member features."}
+              </p>
+            </div>
+          </div>
+        )}
 
         <div className="mt-16 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
           {/* League Management — admin only */}

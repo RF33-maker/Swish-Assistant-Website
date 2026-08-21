@@ -2063,8 +2063,11 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
     );
   }
 
-  if (!user) {
-    return (
+  // The chatbot is not yet available in this release. Show a "coming later"
+  // experience for all users (authenticated or not) until the entitlement is
+  // activated server-side.
+  {
+    const comingSoonUi = (
       <div className="bg-white rounded-xl shadow-sm border border-orange-200 p-4">
         <div className="flex items-center gap-2 mb-3">
           <MessageCircle className="w-5 h-5 text-orange-500" />
@@ -2078,13 +2081,13 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
           <MessageCircle className="w-12 h-12 text-orange-400 mx-auto mb-3" />
           <h4 className="font-medium text-slate-800 mb-2">Coming Soon</h4>
           <p className="text-sm text-slate-600 mb-4">
-            Get instant insights about {leagueName} - player stats, game results, and more!
+            Get instant insights about {leagueName ?? "your league"} — player stats, game results, and more!
           </p>
 
           <div className="bg-orange-50 rounded-lg p-3 mb-4">
             <div className="flex items-center gap-2 text-sm text-orange-700 mb-2">
               <BarChart3 className="w-4 h-4" />
-              <span className="font-medium">What you'll be able to ask:</span>
+              <span className="font-medium">What you&apos;ll be able to ask:</span>
             </div>
             <ul className="text-xs text-orange-600 space-y-1">
               <li>• Top scorers and rebounders</li>
@@ -2100,6 +2103,12 @@ export default function LeagueChatbot({ leagueId, leagueName, leagueSlug, onResp
         </div>
       </div>
     );
+    // Return early for all users — chatbot is disabled in this release.
+    if (true as boolean) return comingSoonUi;
+  }
+
+  if (!user) {
+    return null; // unreachable — kept for future entitlement gate
   }
 
   // In panel mode, always show expanded and don't allow overlay

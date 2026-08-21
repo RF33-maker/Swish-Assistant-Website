@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Download, Share2, Loader2, RefreshCw, AlertTriangle } from "lucide-react";
+import { Download, Share2, Loader2, RefreshCw, AlertTriangle, Lock, Bell, Sparkles } from "lucide-react";
 import html2canvas from "html2canvas";
 import {
   Dialog,
@@ -9,6 +9,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
+import { Link } from "wouter";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import {
   normalizeHex,
@@ -180,6 +182,7 @@ export default function ShareableCard({
   generateCardBlob,
 }: ShareableCardProps) {
   const [open, setOpen] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
   const [working, setWorking] = useState(false);
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -188,6 +191,7 @@ export default function ShareableCard({
   const captureRef = useRef<HTMLDivElement>(null);
   const blobRef = useRef<Blob | null>(null);
   const { toast } = useToast();
+  const { user, isMember } = useAuth();
 
   const slug = (fileSlug || title)
     .toLowerCase()
@@ -900,15 +904,103 @@ export default function ShareableCard({
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            setOpen(true);
+            if (isMember) {
+              setOpen(true);
+            } else {
+              setAuthOpen(true);
+            }
           }}
           className="absolute top-2 right-2 md:top-3 md:right-3 z-10 inline-flex items-center justify-center h-8 w-8 rounded-full bg-white/90 dark:bg-neutral-800/90 border border-gray-200 dark:border-neutral-700 text-slate-600 dark:text-slate-300 hover:text-orange-600 hover:border-orange-400 hover:bg-orange-50 dark:hover:bg-neutral-700 transition-all shadow-sm opacity-60 hover:opacity-100 focus:opacity-100"
-          aria-label={`Share ${title}`}
-          title={`Share ${title}`}
+          aria-label={`Download ${title}`}
+          title={isMember ? `Download ${title}` : "Sign in to download"}
           data-testid={`share-${slug}`}
         >
-          <Share2 className="h-4 w-4" />
+          {isMember ? <Share2 className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
         </button>
+
+        {/* Auth gate dialog — shown when a non-member clicks the download button */}
+        <Dialog open={authOpen} onOpenChange={setAuthOpen}>
+          <DialogContent className="max-w-sm p-0 overflow-hidden rounded-2xl border-0 shadow-2xl dark:bg-neutral-900">
+            <DialogTitle className="sr-only">Free membership</DialogTitle>
+            <DialogDescription className="sr-only">
+              Create a free account to unlock card downloads and more.
+            </DialogDescription>
+
+            {/* Header gradient band */}
+            <div className="bg-gradient-to-br from-orange-500 to-orange-600 px-6 pt-6 pb-8 text-white text-center">
+              <img
+                src={SwishLogo}
+                alt="Swish Assistant"
+                className="h-12 w-12 rounded-full mx-auto mb-3 object-cover shadow-md ring-2 ring-white/30"
+              />
+              <div className="inline-flex items-center gap-1.5 bg-white/20 rounded-full px-3 py-1 text-xs font-semibold mb-3 tracking-widest uppercase">
+                ✦ Free membership
+              </div>
+              <h3 className="font-bold text-xl leading-tight">
+                {user ? "Almost there — verify your email" : "Unlock your member benefits"}
+              </h3>
+              <p className="text-orange-100 text-sm mt-2">
+                {user
+                  ? "One quick step to activate your free membership."
+                  : "Join free — no credit card, no catch."}
+              </p>
+            </div>
+
+            {/* Benefits list */}
+            <div className="px-6 pt-5 pb-3 flex flex-col gap-3.5 bg-white dark:bg-neutral-900">
+              <div className="flex items-start gap-3">
+                <div className="h-9 w-9 rounded-xl bg-orange-50 dark:bg-orange-950/40 flex items-center justify-center flex-shrink-0 border border-orange-100 dark:border-orange-900/60">
+                  <Download className="h-4 w-4 text-orange-500" />
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm leading-snug">Download performance cards</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Save and share highlight stats to Instagram, X, and more.</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <div className="h-9 w-9 rounded-xl bg-orange-50 dark:bg-orange-950/40 flex items-center justify-center flex-shrink-0 border border-orange-100 dark:border-orange-900/60">
+                  <Bell className="h-4 w-4 text-orange-500" />
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm leading-snug">Score &amp; stat updates</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Stay on top of the latest game results and player stats.</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <div className="h-9 w-9 rounded-xl bg-orange-50 dark:bg-orange-950/40 flex items-center justify-center flex-shrink-0 border border-orange-100 dark:border-orange-900/60">
+                  <Sparkles className="h-4 w-4 text-orange-500" />
+                </div>
+                <div>
+                  <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm leading-snug">First access to new features</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Be first in line for the AI chatbot and tools coming soon.</p>
+                </div>
+              </div>
+            </div>
+
+            {/* CTA */}
+            <div className="px-6 pb-6 pt-3 flex flex-col gap-2 bg-white dark:bg-neutral-900">
+              {user ? (
+                <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-xl p-4 text-center">
+                  <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">Check your inbox</p>
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 leading-relaxed">
+                    Click the verification link we sent you to activate your free membership and unlock downloads.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <Button asChild className="bg-orange-500 hover:bg-orange-600 text-white w-full font-semibold rounded-xl h-11">
+                    <Link href="/auth?tab=register">Create free account</Link>
+                  </Button>
+                  <Button asChild variant="ghost" className="w-full text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 text-sm">
+                    <Link href="/auth">Already have an account? Sign in</Link>
+                  </Button>
+                </>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogContent

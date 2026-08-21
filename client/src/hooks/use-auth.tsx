@@ -22,6 +22,17 @@ type AuthContextType = {
   isAdmin: boolean;
   /** True when the Supabase user has confirmed their email address. */
   emailConfirmed: boolean;
+  /**
+   * True when the account has free-member privileges: the user is signed in
+   * AND has confirmed their email address (or is an admin).
+   * Admins always satisfy the member check even without separate verification.
+   */
+  isMember: boolean;
+  /**
+   * Always false in this release — the chatbot is not yet available.
+   * A future release will check a server-side entitlement before setting this.
+   */
+  chatbotEnabled: false;
   isLoading: boolean;
   error: Error | null;
   loginMutation: ReturnType<typeof useMutation<any, Error, LoginData>>;
@@ -58,6 +69,10 @@ function useAuthProviderValue(): AuthContextType {
   // service-role key, so it cannot be spoofed from the browser.
   const isAdmin = user?.app_metadata?.role === "admin";
   const emailConfirmed = !!user?.email_confirmed_at;
+  // A member is a verified account: logged in + email confirmed, or admin.
+  const isMember = !!user && (emailConfirmed || isAdmin);
+  // Chatbot is not yet available in this release.
+  const chatbotEnabled = false as const;
 
   const loginMutation = useMutation<any, Error, LoginData>({
     mutationFn: async ({ username, password }) => {
@@ -128,6 +143,8 @@ function useAuthProviderValue(): AuthContextType {
     user,
     isAdmin,
     emailConfirmed,
+    isMember,
+    chatbotEnabled,
     isLoading,
     error,
     loginMutation,

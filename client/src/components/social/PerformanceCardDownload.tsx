@@ -1,7 +1,16 @@
 import { useState, useEffect } from "react";
-import { Download, Loader2 } from "lucide-react";
+import { Download, Loader2, Lock, Bell, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Link } from "wouter";
+import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import { TeamLogo } from "@/components/TeamLogo";
+import { useAuth } from "@/hooks/use-auth";
 import type { TrendingCardOptions } from "@/lib/generateTrendingCard";
 import { generateTrendingCardBlob } from "@/lib/generateTrendingCard";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
@@ -43,9 +52,11 @@ export function PerformanceCardDownload({
   const [teamLogoUrl, setTeamLogoUrl] = useState<string | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
   const [isDark] = useState(
     () => typeof document !== "undefined" && document.documentElement.classList.contains("dark")
   );
+  const { user, isMember } = useAuth();
 
   const teamName = stat.team_name || stat.team || "";
   const opponent = stat.opponent || "";
@@ -81,6 +92,10 @@ export function PerformanceCardDownload({
   }, [playerPhotoPath]);
 
   const handleDownload = async () => {
+    if (!isMember) {
+      setAuthOpen(true);
+      return;
+    }
     setDownloading(true);
     try {
       const opts: TrendingCardOptions = {
@@ -133,6 +148,91 @@ export function PerformanceCardDownload({
   ];
 
   return (
+    <>
+    {/* Free-membership auth gate dialog */}
+    <Dialog open={authOpen} onOpenChange={setAuthOpen}>
+      <DialogContent className="max-w-sm p-0 overflow-hidden rounded-2xl border-0 shadow-2xl">
+        <DialogTitle className="sr-only">Free membership</DialogTitle>
+        <DialogDescription className="sr-only">
+          Create a free account to unlock card downloads and more.
+        </DialogDescription>
+
+        {/* Header gradient band */}
+        <div className="bg-gradient-to-br from-orange-500 to-orange-600 px-6 pt-6 pb-8 text-white text-center">
+          <img
+            src={SwishLogo}
+            alt="Swish Assistant"
+            className="h-12 w-12 rounded-full mx-auto mb-3 object-cover shadow-md ring-2 ring-white/30"
+          />
+          <div className="inline-flex items-center gap-1.5 bg-white/20 rounded-full px-3 py-1 text-xs font-semibold mb-3 tracking-widest uppercase">
+            ✦ Free membership
+          </div>
+          <h3 className="font-bold text-xl leading-tight">
+            {user ? "Almost there — verify your email" : "Unlock your member benefits"}
+          </h3>
+          <p className="text-orange-100 text-sm mt-2">
+            {user
+              ? "One quick step to activate your free membership."
+              : "Join free — no credit card, no catch."}
+          </p>
+        </div>
+
+        {/* Benefits list */}
+        <div className="px-6 pt-5 pb-3 flex flex-col gap-3.5 bg-white dark:bg-neutral-900">
+          <div className="flex items-start gap-3">
+            <div className="h-9 w-9 rounded-xl bg-orange-50 dark:bg-orange-950/40 flex items-center justify-center flex-shrink-0 border border-orange-100 dark:border-orange-900/60">
+              <Download className="h-4 w-4 text-orange-500" />
+            </div>
+            <div>
+              <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm leading-snug">Download performance cards</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Save and share highlight stats to Instagram, X, and more.</p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-3">
+            <div className="h-9 w-9 rounded-xl bg-orange-50 dark:bg-orange-950/40 flex items-center justify-center flex-shrink-0 border border-orange-100 dark:border-orange-900/60">
+              <Bell className="h-4 w-4 text-orange-500" />
+            </div>
+            <div>
+              <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm leading-snug">Score &amp; stat updates</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Stay on top of the latest game results and player stats.</p>
+            </div>
+          </div>
+
+          <div className="flex items-start gap-3">
+            <div className="h-9 w-9 rounded-xl bg-orange-50 dark:bg-orange-950/40 flex items-center justify-center flex-shrink-0 border border-orange-100 dark:border-orange-900/60">
+              <Sparkles className="h-4 w-4 text-orange-500" />
+            </div>
+            <div>
+              <p className="font-semibold text-slate-800 dark:text-slate-100 text-sm leading-snug">First access to new features</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Be first in line for the AI chatbot and tools coming soon.</p>
+            </div>
+          </div>
+        </div>
+
+        {/* CTA */}
+        <div className="px-6 pb-6 pt-3 flex flex-col gap-2 bg-white dark:bg-neutral-900">
+          {user ? (
+            <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-xl p-4 text-center">
+              <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">Check your inbox</p>
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 leading-relaxed">
+                Click the verification link we sent you to activate your free membership and unlock downloads.
+              </p>
+            </div>
+          ) : (
+            <>
+              <Button asChild className="bg-orange-500 hover:bg-orange-600 text-white w-full font-semibold rounded-xl h-11">
+                <Link href="/auth?tab=register">Create free account</Link>
+              </Button>
+              <Button asChild variant="ghost" className="w-full text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 text-sm">
+                <Link href="/auth">Already have an account? Sign in</Link>
+              </Button>
+            </>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+
     <div className="flex flex-col gap-2">
       {label && (
         <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
@@ -187,14 +287,18 @@ export function PerformanceCardDownload({
         onClick={handleDownload}
         disabled={downloading}
         className="w-full bg-orange-500 hover:bg-orange-600 text-white gap-2"
+        title={isMember ? "Download PNG" : user ? "Verify your email to download" : "Sign in to download"}
       >
         {downloading ? (
           <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        ) : (
+        ) : isMember ? (
           <Download className="h-3.5 w-3.5" />
+        ) : (
+          <Lock className="h-3.5 w-3.5" />
         )}
-        {downloading ? "Generating…" : "Download PNG"}
+        {downloading ? "Generating…" : isMember ? "Download PNG" : "Sign in to download"}
       </Button>
     </div>
+    </>
   );
 }
