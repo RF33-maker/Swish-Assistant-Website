@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Analytics } from '@vercel/analytics/react';
+import { useAnalyticsConsent } from "@/hooks/use-analytics-consent";
 import { HelmetProvider } from "react-helmet-async";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -44,6 +45,7 @@ import ContactSalesPage from "@/pages/contact-sales";
 import PrivacyPolicyPage from "@/pages/privacy";
 import TermsOfServicePage from "@/pages/terms";
 import CookiePolicyPage from "@/pages/cookies";
+import { CookieBanner } from "@/components/CookieBanner";
 
 
 function Router() {
@@ -112,6 +114,16 @@ function Router() {
   );
 }
 
+/**
+ * Mounts Vercel Analytics only when the user has explicitly accepted analytics
+ * cookies. This component must live inside the component tree so it can use
+ * the useAnalyticsConsent hook reactively (re-renders when consent changes).
+ */
+function ConditionalAnalytics() {
+  const hasConsent = useAnalyticsConsent();
+  return hasConsent ? <Analytics /> : null;
+}
+
 function App() {
   return (
     <ErrorBoundary>
@@ -122,7 +134,8 @@ function App() {
               <TooltipProvider>
                 <Toaster />
                 <Router />
-                <Analytics />
+                <ConditionalAnalytics />
+                <CookieBanner />
               </TooltipProvider>
             </AuthProvider>
           </QueryClientProvider>

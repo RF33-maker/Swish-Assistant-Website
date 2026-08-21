@@ -1,38 +1,23 @@
-import { useState } from "react";
-import { supabase } from "@/lib/supabase";
+/**
+ * Settings page — redirects to the unified Account Centre (/profile).
+ *
+ * The account centre consolidates profile editing, password management,
+ * consent preferences, data export, and deletion into one place.
+ */
+import { useEffect } from "react";
+import { useLocation } from "wouter";
+import { Loader2 } from "lucide-react";
 
 export default function SettingsPage() {
-  const [currentPassword, setCurrentPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [message, setMessage] = useState("");
+  const [, navigate] = useLocation();
 
-  const handleChangePassword = async () => {
-    const { error } = await supabase.auth.updateUser({
-      password: newPassword,
-    });
-
-    if (error) setMessage(`❌ ${error.message}`);
-    else setMessage("✅ Password updated successfully.");
-  };
+  useEffect(() => {
+    navigate("/profile", { replace: true });
+  }, [navigate]);
 
   return (
-    <div className="p-6 max-w-md mx-auto">
-      <h1 className="text-2xl font-semibold mb-4">Change Password</h1>
-
-      <input
-        type="password"
-        placeholder="New Password"
-        value={newPassword}
-        onChange={(e) => setNewPassword(e.target.value)}
-        className="border p-2 w-full mb-4"
-      />
-      <button
-        onClick={handleChangePassword}
-        className="bg-blue-600 text-white px-4 py-2 rounded w-full"
-      >
-        Update Password
-      </button>
-      {message && <p className="mt-4 text-sm">{message}</p>}
+    <div className="flex items-center justify-center min-h-screen">
+      <Loader2 className="h-8 w-8 animate-spin text-orange-400" />
     </div>
   );
 }

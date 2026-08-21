@@ -3126,6 +3126,394 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return res.json({ success: true, userId });
   });
 
+  // ─── Member account registration & data-rights endpoints ─────────────────
+
+  // POST /api/account/register
+  // Fully server-side registration endpoint.  The client sends credentials,
+  // consent choices, and an explicit termsAccepted flag.
+  //
+  // Flow:
+  //   1. Validate input — refuse if termsAccepted is not exactly true.
+  //   2. Call Supabase's public /auth/v1/signup REST endpoint (same path that
+  //      the JS SDK's signUp() uses) so Supabase sends the normal email
+  //      verification link per project settings.  The Admin createUser API
+  //      does NOT trigger that email, so we use the public endpoint here.
+  //   3. Write member_profiles and member_consents via service-role key.
+  //
+  // By routing registration through this endpoint the server controls every
+  // write: consent records are created only when termsAccepted===true was
+  // received and the Supabase signup succeeded.
+  app.post("/api/account/register", async (req: Request, res: Response) => {
+    const { email, password, termsAccepted, marketingConsent = false } = req.body ?? {};
+
+    // Reject immediately if the caller did not explicitly accept the terms.
+    // This is the server-side gate that prevents fabricated consent records.
+    if (termsAccepted !== true) {
+      return res.status(400).json({
+        error: "You must accept the Terms of Service and Privacy Policy to create an account.",
+      });
+    }
+
+    if (!email || typeof email !== "string") {
+      return res.status(400).json({ error: "email is required" });
+    }
+    if (!password || typeof password !== "string" || password.length < 8) {
+      return res.status(400).json({ error: "password must be at least 8 characters" });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+    const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error("[register] Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY");
+      return res.status(500).json({ error: "Server configuration error" });
+    }
+
+    // Call the same public REST endpoint that supabase.auth.signUp() uses.
+    // This path sends Supabase's email-confirmation message per project settings
+    // and returns an unconfirmed user object (no session).
+    const signUpRes = await fetch(`${supabaseUrl}/auth/v1/signup`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": supabaseAnonKey,
+        "Authorization": `Bearer ${supabaseAnonKey}`,
+      },
+      body: JSON.stringify({ email: normalizedEmail, password }),
+    });
+
+    const signUpBody = await signUpRes.json().catch(() => null);
+    if (!signUpRes.ok || signUpBody?.error) {
+      const msg = signUpBody?.error_description ?? signUpBody?.msg ?? signUpBody?.error ?? "Registration failed";
+      return res.status(signUpRes.status === 422 ? 422 : 400).json({ error: msg });
+    }
+
+    const userId: string | undefined = signUpBody?.id;
+    if (!userId) {
+      return res.status(400).json({ error: "Registration did not return a user ID" });
+    }
+
+    const now = new Date().toISOString();
+
+    // Write member_profiles (display name set later by the member).
+    const { error: profileError } = await supabaseAdmin.from("member_profiles").insert({
+      id: userId,
+      marketing_consent: Boolean(marketingConsent),
+      ...(marketingConsent ? { marketing_consent_at: now } : {}),
+      created_at: now,
+      updated_at: now,
+    });
+    if (profileError) {
+      console.error("[register] profile insert error:", profileError.message);
+    }
+
+    // Write consent records — authoritative audit entries.
+    // Only written here (terms/privacy) and in /api/account/update-marketing-consent (marketing).
+    // termsAccepted was validated as true above, so these rows are always intentional.
+    const consentRows: object[] = [
+      { user_id: userId, consent_type: "terms_v1",   accepted: true, accepted_at: now },
+      { user_id: userId, consent_type: "privacy_v1", accepted: true, accepted_at: now },
+    ];
+    if (marketingConsent) {
+      consentRows.push({ user_id: userId, consent_type: "marketing", accepted: true, accepted_at: now });
+    }
+
+    const { error: consentError } = await supabaseAdmin.from("member_consents").insert(consentRows);
+    if (consentError) {
+      console.error("[register] consent insert error:", consentError.message);
+    }
+
+    console.log(`[register] User ${userId} registered (email=${normalizedEmail}, marketing=${marketingConsent})`);
+    return res.json({ success: true });
+  });
+
+  // POST /api/account/update-profile
+  // Authenticated endpoint to update the member's display name only.
+  // Marketing consent is handled by /api/account/update-marketing-consent.
+  // No direct client UPDATE path exists on member_profiles (RLS has no UPDATE
+  // policy), so server endpoints are the only write path.
+  app.post("/api/account/update-profile", async (req: Request, res: Response) => {
+    const userId = await authenticateSupabaseUser(req);
+    if (!userId) return res.status(401).json({ error: "Authentication required" });
+
+    const { displayName } = req.body ?? {};
+    if (typeof displayName !== "string" && displayName !== null && displayName !== undefined) {
+      return res.status(400).json({ error: "displayName must be a string or null" });
+    }
+
+    const { error } = await supabaseAdmin
+      .from("member_profiles")
+      .update({
+        display_name: displayName?.trim() || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", userId);
+
+    if (error) {
+      console.error("[update-profile] error:", error.message);
+      return res.status(500).json({ error: error.message });
+    }
+
+    return res.json({ success: true });
+  });
+
+  // POST /api/account/update-marketing-consent
+  // Authenticated endpoint for members to update their marketing preference.
+  // Updates member_profiles and appends a consent audit row — the only two
+  // places marketing_consent is intentionally written.
+  app.post("/api/account/update-marketing-consent", async (req: Request, res: Response) => {
+    const userId = await authenticateSupabaseUser(req);
+    if (!userId) return res.status(401).json({ error: "Authentication required" });
+
+    const { accepted } = req.body ?? {};
+    if (typeof accepted !== "boolean") {
+      return res.status(400).json({ error: "accepted (boolean) is required" });
+    }
+
+    const now = new Date().toISOString();
+
+    const { error: profileErr } = await supabaseAdmin
+      .from("member_profiles")
+      .update({
+        marketing_consent: accepted,
+        marketing_consent_at: accepted ? now : null,
+        updated_at: now,
+      })
+      .eq("id", userId);
+
+    if (profileErr) {
+      console.error("[update-marketing-consent] profile error:", profileErr.message);
+      return res.status(500).json({ error: "Failed to update preference" });
+    }
+
+    const { error: consentErr } = await supabaseAdmin.from("member_consents").insert({
+      user_id: userId,
+      consent_type: "marketing",
+      accepted,
+      accepted_at: now,
+    });
+
+    if (consentErr) {
+      console.error("[update-marketing-consent] consent audit error:", consentErr.message);
+      // Still return success — the preference is saved; log the audit failure.
+    }
+
+    console.log(`[update-marketing-consent] User ${userId} set marketing=${accepted}`);
+    return res.json({ success: true });
+  });
+
+  // POST /api/account/export-request
+  // Creates a data_export_requests row for the authenticated user.
+  // The actual data assembly is performed by the admin fulfilment endpoint below.
+  app.post("/api/account/export-request", async (req: Request, res: Response) => {
+    const userId = await authenticateSupabaseUser(req);
+    if (!userId) return res.status(401).json({ error: "Authentication required" });
+
+    // Check for an already-pending request to avoid duplicates.
+    const { data: existing } = await supabaseAdmin
+      .from("data_export_requests")
+      .select("id, status")
+      .eq("user_id", userId)
+      .in("status", ["pending", "processing", "ready"])
+      .limit(1);
+
+    if (existing && existing.length > 0) {
+      return res.status(409).json({
+        error: "You already have an export request in progress.",
+        status: existing[0].status,
+      });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("data_export_requests")
+      .insert({ user_id: userId, status: "pending" })
+      .select()
+      .single();
+
+    if (error) {
+      console.error("[export-request] DB error:", error.message);
+      return res.status(500).json({ error: "Failed to record export request" });
+    }
+
+    console.log(`[export-request] User ${userId} requested data export (id=${data.id})`);
+    return res.json({ success: true, requestId: data.id, status: "pending" });
+  });
+
+  // POST /api/account/deletion-request
+  // Schedules account deletion for 30 days from now and signs the user out
+  // on the server side. The client should call supabase.auth.signOut() too.
+  app.post("/api/account/deletion-request", async (req: Request, res: Response) => {
+    const userId = await authenticateSupabaseUser(req);
+    if (!userId) return res.status(401).json({ error: "Authentication required" });
+
+    // Check for duplicate pending request.
+    const { data: existing } = await supabaseAdmin
+      .from("deletion_requests")
+      .select("id, status, scheduled_for")
+      .eq("user_id", userId)
+      .in("status", ["pending", "confirmed"])
+      .limit(1);
+
+    if (existing && existing.length > 0) {
+      return res.status(409).json({
+        error: "You already have a deletion request in progress.",
+        scheduledFor: existing[0].scheduled_for,
+      });
+    }
+
+    const scheduledFor = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    const { data, error } = await supabaseAdmin
+      .from("deletion_requests")
+      .insert({ user_id: userId, status: "pending", scheduled_for: scheduledFor })
+      .select()
+      .single();
+
+    if (error) {
+      console.error("[deletion-request] DB error:", error.message);
+      return res.status(500).json({ error: "Failed to record deletion request" });
+    }
+
+    // Revoke the user's sessions immediately so they cannot continue using
+    // the service after requesting deletion.
+    const { error: signOutError } = await supabaseAdmin.auth.admin.signOut(userId);
+    if (signOutError) {
+      console.warn(`[deletion-request] Could not revoke sessions for ${userId}:`, signOutError.message);
+    }
+
+    console.log(`[deletion-request] User ${userId} requested deletion — scheduled for ${scheduledFor}`);
+    return res.json({ success: true, requestId: data.id, scheduledFor });
+  });
+
+  // ─── Admin data-rights fulfilment endpoints ──────────────────────────────
+  //
+  // These endpoints let the operations team manually fulfil export and deletion
+  // requests. They require an admin bearer token and are not exposed in the UI.
+  //
+  // POST /api/admin/account/fulfil-export/:requestId
+  // Compiles the user's account data and marks the export as ready.
+  // The compiled JSON is returned in the response for the admin to email to the user.
+  app.post("/api/admin/account/fulfil-export/:requestId", async (req: Request, res: Response) => {
+    const adminId = await requireAdmin(req, res);
+    if (!adminId) return;
+
+    const { requestId } = req.params;
+
+    // Fetch the export request.
+    const { data: exportReq, error: reqErr } = await supabaseAdmin
+      .from("data_export_requests")
+      .select("id, user_id, status")
+      .eq("id", requestId)
+      .single();
+
+    if (reqErr || !exportReq) return res.status(404).json({ error: "Export request not found" });
+    if (exportReq.status === "delivered") return res.status(409).json({ error: "Already delivered" });
+
+    const userId = exportReq.user_id;
+
+    // Gather account data using service-role key.
+    const [profileRes, consentsRes, exportsRes] = await Promise.all([
+      supabaseAdmin.from("member_profiles").select("*").eq("id", userId).single(),
+      supabaseAdmin.from("member_consents").select("*").eq("user_id", userId),
+      supabaseAdmin.from("data_export_requests").select("id, status, requested_at").eq("user_id", userId),
+    ]);
+
+    const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(userId);
+
+    const exportPayload = {
+      exported_at: new Date().toISOString(),
+      account: {
+        id: userId,
+        email: authUser?.user?.email ?? null,
+        email_confirmed_at: authUser?.user?.email_confirmed_at ?? null,
+        created_at: authUser?.user?.created_at ?? null,
+      },
+      profile: profileRes.data ?? null,
+      consent_records: consentsRes.data ?? [],
+      export_requests: exportsRes.data ?? [],
+    };
+
+    // Mark export as ready (download_url stores a note about delivery method).
+    await supabaseAdmin
+      .from("data_export_requests")
+      .update({ status: "ready", ready_at: new Date().toISOString(), download_url: "delivered_by_email" })
+      .eq("id", requestId);
+
+    console.log(`[fulfil-export] Admin ${adminId} fulfilled export ${requestId} for user ${userId}`);
+    return res.json({ success: true, exportPayload });
+  });
+
+  // POST /api/admin/account/process-deletion/:requestId
+  // Executes a scheduled deletion.  Irreversible.
+  //
+  // Deletion order:
+  //   1. Enforce scheduled_for — refuse to process before the stated date so
+  //      the privacy policy's 30-day grace period is honoured.
+  //   2. Nullify member_consents.user_id (SET NULL via FK + ON DELETE SET NULL
+  //      in the migration) BEFORE deleting the auth user so the audit rows are
+  //      retained as an anonymised compliance record.
+  //   3. Delete member_profiles (personal data).
+  //   4. Delete data_export_requests.
+  //   5. Delete the auth user — this also cascades deletion_requests (ON DELETE CASCADE).
+  app.post("/api/admin/account/process-deletion/:requestId", async (req: Request, res: Response) => {
+    const adminId = await requireAdmin(req, res);
+    if (!adminId) return;
+
+    const { requestId } = req.params;
+    const force = req.query.force === "true"; // admin escape-hatch: ?force=true
+
+    const { data: delReq, error: reqErr } = await supabaseAdmin
+      .from("deletion_requests")
+      .select("id, user_id, status, scheduled_for")
+      .eq("id", requestId)
+      .single();
+
+    if (reqErr || !delReq) return res.status(404).json({ error: "Deletion request not found" });
+    if (delReq.status === "processed") return res.status(409).json({ error: "Already processed" });
+    if (delReq.status === "cancelled") return res.status(409).json({ error: "Request was cancelled" });
+
+    // Enforce the scheduled date unless the admin overrides with ?force=true.
+    const scheduledFor = new Date(delReq.scheduled_for);
+    if (!force && scheduledFor > new Date()) {
+      return res.status(409).json({
+        error: `Deletion is scheduled for ${scheduledFor.toISOString()}. Pass ?force=true to process early.`,
+        scheduledFor: delReq.scheduled_for,
+      });
+    }
+
+    const userId = delReq.user_id;
+    const now = new Date().toISOString();
+
+    // Step 1: Nullify member_consents.user_id BEFORE deleting the auth user.
+    // Because the FK is ON DELETE SET NULL, deleting auth.users would also NULL
+    // the column automatically — but doing it explicitly here is more reliable
+    // and makes the intent clear in the audit log.
+    const { error: nullifyErr } = await supabaseAdmin
+      .from("member_consents")
+      .update({ user_id: null })
+      .eq("user_id", userId);
+    if (nullifyErr) {
+      console.warn(`[process-deletion] Could not nullify consent user_id for ${userId}:`, nullifyErr.message);
+    }
+
+    // Step 2: Delete member_profiles (personal data).
+    await supabaseAdmin.from("member_profiles").delete().eq("id", userId);
+
+    // Step 3: Delete export requests.
+    await supabaseAdmin.from("data_export_requests").delete().eq("user_id", userId);
+
+    // Step 4: Delete the auth user (cascades deletion_requests via ON DELETE CASCADE).
+    const { error: authDelError } = await supabaseAdmin.auth.admin.deleteUser(userId);
+    if (authDelError) {
+      console.error(`[process-deletion] Failed to delete auth user ${userId}:`, authDelError.message);
+      return res.status(500).json({ error: "Failed to delete auth user: " + authDelError.message });
+    }
+
+    console.log(`[process-deletion] Admin ${adminId} processed deletion ${requestId} for user ${userId} (forced=${force})`);
+    return res.json({ success: true, deletedUserId: userId, processedAt: now });
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
