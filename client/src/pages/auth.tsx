@@ -19,7 +19,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "@/hooks/use-auth";
 import { useLocation, Link } from "wouter";
 import { useEffect, useState } from "react";
-import { BarChart2, Download, Sparkles, CheckCircle, AlertCircle } from "lucide-react";
+import { BarChart2, Download, Sparkles, CheckCircle, AlertCircle, RefreshCw } from "lucide-react";
 import SwishAssistantLogo from "@/assets/Swish Assistant Logo.png";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { supabase } from "@/lib/supabase";
@@ -72,6 +72,9 @@ export default function AuthPage() {
   const { user, loginMutation, registerMutation } = useAuth();
   const [_, setLocation] = useLocation();
   const [registrationSent, setRegistrationSent] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(false);
+  const [resendError, setResendError] = useState("");
   const [forgotSent, setForgotSent] = useState(false);
   const [forgotError, setForgotError] = useState("");
   const [activeTab, setActiveTab] = useState("login");
@@ -118,6 +121,32 @@ export default function AuthPage() {
         },
       }
     );
+  };
+
+  const handleResendVerification = async () => {
+    if (resendLoading || resendCooldown) return;
+    const email = registerForm.getValues("username");
+    if (!email) return;
+    setResendLoading(true);
+    setResendError("");
+    try {
+      const res = await fetch("/api/account/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setResendError((json as any).error ?? "Could not resend. Please try again.");
+      } else {
+        setResendCooldown(true);
+        setTimeout(() => setResendCooldown(false), 60_000);
+      }
+    } catch {
+      setResendError("A network error occurred. Please try again.");
+    } finally {
+      setResendLoading(false);
+    }
   };
 
   // ── Forgot-password form ────────────────────────────────────────────────
@@ -258,14 +287,38 @@ export default function AuthPage() {
               {/* ── Create account ── */}
               <TabsContent value="register">
                 {registrationSent ? (
-                  <Alert className="border-green-200 bg-green-50">
-                    <CheckCircle className="h-4 w-4 text-green-600" />
-                    <AlertDescription className="text-green-800">
-                      <strong>Check your inbox.</strong> We've sent a
-                      verification link to your email address. Click it to
-                      activate your account, then sign in.
-                    </AlertDescription>
-                  </Alert>
+                  <div className="space-y-3">
+                    <Alert className="border-green-200 bg-green-50">
+                      <CheckCircle className="h-4 w-4 text-green-600" />
+                      <AlertDescription className="text-green-800">
+                        <strong>Check your inbox.</strong> We've sent a
+                        verification link to your email address. Click it to
+                        activate your account, then sign in.
+                      </AlertDescription>
+                    </Alert>
+                    <div className="text-center space-y-1">
+                      <p className="text-sm text-slate-500">
+                        Didn't receive it? Check your spam folder or resend.
+                      </p>
+                      {resendError && (
+                        <p className="text-xs text-red-600">{resendError}</p>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleResendVerification}
+                        disabled={resendLoading || resendCooldown}
+                        className="border-orange-200 text-orange-700 hover:bg-orange-50 disabled:opacity-50"
+                      >
+                        <RefreshCw className={`h-3 w-3 mr-1.5 ${resendLoading ? "animate-spin" : ""}`} />
+                        {resendCooldown
+                          ? "Email sent — check your inbox"
+                          : resendLoading
+                          ? "Sending…"
+                          : "Resend verification email"}
+                      </Button>
+                    </div>
+                  </div>
                 ) : (
                   <Form {...registerForm}>
                     <form

@@ -111,16 +111,44 @@ function VerifyEmailGate({ email }: { email: string }) {
   const [, navigate] = useLocation();
   const [sent, setSent] = useState(false);
   const [sending, setSending] = useState(false);
+  const [cooldown, setCooldown] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [resendError, setResendError] = useState("");
 
   const resend = async () => {
+    if (sending || cooldown) return;
     setSending(true);
     setResendError("");
-    const { error } = await supabase.auth.resend({ type: "signup", email });
-    setSending(false);
-    if (error) setResendError(error.message);
-    else setSent(true);
+    try {
+      // Try to attach the session token (may not exist for new registrants);
+      // the server will fall back to the email in the body if no token is present.
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const res = await fetch("/api/account/resend-verification", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ email }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setResendError((json as any).error ?? "Failed to resend. Please try again.");
+      } else {
+        setSent(true);
+        // Disable for 60 s to match the server-side rate limit
+        setCooldown(true);
+        setTimeout(() => {
+          setCooldown(false);
+          setSent(false);
+        }, 60_000);
+      }
+    } catch {
+      setResendError("A network error occurred. Please try again.");
+    } finally {
+      setSending(false);
+    }
   };
 
   const handleSignOut = async () => {
@@ -150,17 +178,16 @@ function VerifyEmailGate({ email }: { email: string }) {
           <p className="text-green-600 text-sm font-medium">
             Verification email sent — check your inbox (and spam folder).
           </p>
-        ) : (
-          <Button
-            variant="outline"
-            onClick={resend}
-            disabled={sending}
-            className="border-orange-200 text-orange-700 hover:bg-orange-50"
-          >
-            {sending ? "Sending…" : "Resend verification email"}
-          </Button>
-        )}
+        ) : null}
         {resendError && <p className="text-red-500 text-sm">{resendError}</p>}
+        <Button
+          variant="outline"
+          onClick={resend}
+          disabled={sending || cooldown}
+          className="border-orange-200 text-orange-700 hover:bg-orange-50 disabled:opacity-50"
+        >
+          {sending ? "Sending…" : cooldown ? "Email sent — check your inbox" : "Resend verification email"}
+        </Button>
         <div className="pt-2">
           <Button
             variant="ghost"

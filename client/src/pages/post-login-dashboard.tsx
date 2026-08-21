@@ -1,6 +1,7 @@
+import { useState } from "react"
 import { useLocation } from "wouter"
 import { useAuth } from "@/hooks/use-auth";
-import { Users, TrendingUp, Trophy, Settings, Share2, Code, Newspaper, FilePenLine, CheckCircle, AlertCircle, Download } from "lucide-react";
+import { Users, TrendingUp, Trophy, Settings, Share2, Code, Newspaper, FilePenLine, CheckCircle, AlertCircle, Download, RefreshCw } from "lucide-react";
 import {
   Card,
   CardHeader,
@@ -9,11 +10,58 @@ import {
   CardContent,
 } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { useToast } from "@/hooks/use-toast"
+import { supabase } from "@/lib/supabase"
 import SwishLogo from "@/assets/Swish Assistant Logo.png"
 
 export default function DashboardLanding() {
   const [, navigate] = useLocation();
   const { isAdmin, emailConfirmed, user } = useAuth();
+  const { toast } = useToast();
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(false);
+
+  async function handleResendVerification() {
+    if (resendLoading || resendCooldown) return;
+    setResendLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const res = await fetch("/api/account/resend-verification", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ email: (user as any)?.email ?? "" }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast({
+          title: "Could not resend email",
+          description: json.error ?? "An unexpected error occurred.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Verification email sent",
+          description: "Check your inbox and click the link to verify your account.",
+          duration: 8000,
+        });
+        // Disable button for 60 seconds to match server-side rate limit
+        setResendCooldown(true);
+        setTimeout(() => setResendCooldown(false), 60_000);
+      }
+    } catch {
+      toast({
+        title: "Could not resend email",
+        description: "A network error occurred. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setResendLoading(false);
+    }
+  }
 
   return (
     <div className="bg-white py-24 sm:py-32">
@@ -50,7 +98,7 @@ export default function DashboardLanding() {
             ) : (
               <AlertCircle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
             )}
-            <div>
+            <div className="flex-1">
               <p className={`text-sm font-semibold ${emailConfirmed ? "text-emerald-800" : "text-amber-800"}`}>
                 {emailConfirmed ? "Verified member" : "Email not yet verified"}
               </p>
@@ -59,6 +107,18 @@ export default function DashboardLanding() {
                   ? "You can download performance, comparison, leader, and trending share cards from any player or league page."
                   : "Check your inbox and click the verification link to unlock card downloads and other member features."}
               </p>
+              {!emailConfirmed && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mt-2 h-7 text-xs border-amber-300 text-amber-800 hover:bg-amber-100 hover:border-amber-400 disabled:opacity-50"
+                  onClick={handleResendVerification}
+                  disabled={resendLoading || resendCooldown}
+                >
+                  <RefreshCw className={`h-3 w-3 mr-1 ${resendLoading ? "animate-spin" : ""}`} />
+                  {resendCooldown ? "Email sent — check your inbox" : resendLoading ? "Sending…" : "Resend verification email"}
+                </Button>
+              )}
             </div>
           </div>
         )}

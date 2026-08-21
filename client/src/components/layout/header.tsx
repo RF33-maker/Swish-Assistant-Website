@@ -11,13 +11,59 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Bell, HelpCircle, User, LogOut, Settings, CheckCircle, AlertCircle } from "lucide-react";
+import { Bell, HelpCircle, User, LogOut, Settings, CheckCircle, AlertCircle, RefreshCw } from "lucide-react";
 import SwishAssistantLogo from "@/assets/Swish Assistant Logo.png";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabase";
 
 
 export default function Header() {
   const { user, isAdmin, emailConfirmed, logoutMutation } = useAuth();
+  const { toast } = useToast();
   const [logoSrc, setLogoSrc] = useState<string | null>(null);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(false);
+
+  async function handleResendVerification() {
+    if (resendLoading || resendCooldown) return;
+    setResendLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      const res = await fetch("/api/account/resend-verification", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ email: userEmail }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast({
+          title: "Could not resend email",
+          description: json.error ?? "An unexpected error occurred.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Verification email sent",
+          description: "Check your inbox and click the link to verify your account.",
+          duration: 8000,
+        });
+        setResendCooldown(true);
+        setTimeout(() => setResendCooldown(false), 60_000);
+      }
+    } catch {
+      toast({
+        title: "Could not resend email",
+        description: "A network error occurred. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setResendLoading(false);
+    }
+  }
   
   // This function would normally be in a context or central state management
   // For demo purposes, we're exposing it here to be accessed by CustomizationSection
@@ -109,6 +155,16 @@ export default function Header() {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                {!isAdmin && !emailConfirmed && (
+                  <DropdownMenuItem
+                    onClick={handleResendVerification}
+                    disabled={resendLoading || resendCooldown}
+                    className="text-amber-700 focus:text-amber-800 focus:bg-amber-50"
+                  >
+                    <RefreshCw className={`mr-2 h-4 w-4 ${resendLoading ? "animate-spin" : ""}`} />
+                    <span>{resendCooldown ? "Email sent ✓" : resendLoading ? "Sending…" : "Resend verification email"}</span>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem asChild>
                   <Link href="/profile">
                     <User className="mr-2 h-4 w-4" />

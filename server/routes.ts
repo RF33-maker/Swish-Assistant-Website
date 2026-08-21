@@ -3164,6 +3164,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return res.json({ success: true });
   });
 
+  // POST /api/account/resend-verification
+  // Resends the email-confirmation link for an unverified account.
+  // Works for both authenticated users (token in Authorization header) and
+  // unauthenticated callers (new registrants who have no session yet) by
+  // accepting the email address directly in the request body.
+  //
+  // Rate-limited to one resend per email per 60 seconds (in-memory map).
+  // Supabase's own public resend endpoint also enforces its own limits.
+  const resendVerificationCooldowns = new Map<string, number>();
+
+  app.post("/api/account/resend-verification", async (req: Request, res: Response) => {
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+    const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error("[resend-verification] Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY");
+      return res.status(500).json({ error: "Server configuration error" });
+    }
+
+    let email: string | undefined;
+
+    // Prefer the authenticated path: derive email from the bearer token so
+    // the caller cannot specify an arbitrary address.
+    const userId = await authenticateSupabaseUser(req);
+    if (userId) {
+      const { data: userData, error: userError } = await supabaseAdmin.auth.admin.getUserById(userId);
+      if (!userError && userData?.user) {
+        if (userData.user.email_confirmed_at) {
+          return res.status(400).json({ error: "Email is already verified" });
+        }
+        email = userData.user.email;
+      }
+    }
+
+    // Fall back to the email supplied in the request body (unauthenticated
+    // callers such as new registrants who cannot sign in yet).
+    if (!email) {
+      const bodyEmail = req.body?.email;
+      if (!bodyEmail || typeof bodyEmail !== "string") {
+        return res.status(400).json({
+          error: "email is required when no authenticated session is present",
+        });
+      }
+      email = bodyEmail.trim().toLowerCase();
+    }
+
+    // Enforce 60-second cooldown per email address
+    const now = Date.now();
+    const lastSent = resendVerificationCooldowns.get(email);
+    if (lastSent && now - lastSent < 60_000) {
+      const secondsLeft = Math.ceil((60_000 - (now - lastSent)) / 1000);
+      return res.status(429).json({ error: `Please wait ${secondsLeft} seconds before resending.` });
+    }
+
+    const resendRes = await fetch(`${supabaseUrl}/auth/v1/resend`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "apikey": supabaseAnonKey,
+        "Authorization": `Bearer ${supabaseAnonKey}`,
+      },
+      body: JSON.stringify({ type: "signup", email }),
+    });
+
+    if (!resendRes.ok) {
+      const body = await resendRes.json().catch(() => null);
+      const msg =
+        (body as any)?.error_description ??
+        (body as any)?.msg ??
+        (body as any)?.error ??
+        "Failed to resend verification email";
+      console.error("[resend-verification] Supabase error:", msg);
+      return res.status(500).json({ error: msg });
+    }
+
+    resendVerificationCooldowns.set(email, now);
+    console.log(`[resend-verification] Sent to ${email} (userId=${userId ?? "unauthenticated"})`);
+    return res.json({ success: true });
+  });
+
   // POST /api/account/update-profile
   // Authenticated endpoint to update the member's display name only.
   // Marketing consent is handled by /api/account/update-marketing-consent.

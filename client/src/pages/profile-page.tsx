@@ -58,6 +58,7 @@ export default function AccountCentre() {
   // Resend verification
   const [resendMsg, setResendMsg] = useState<Message | null>(null);
   const [resendLoading, setResendLoading] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(false);
 
   // Export request
   const [exportMsg, setExportMsg] = useState<Message | null>(null);
@@ -197,15 +198,33 @@ export default function AccountCentre() {
 
   // ── Resend verification email ──────────────────────────────────────────────
   const handleResendVerification = async () => {
+    if (resendLoading || resendCooldown) return;
     setResendLoading(true);
     setResendMsg(null);
-    const { error } = await supabase.auth.resend({ type: "signup", email });
-    if (error) {
-      setResendMsg({ type: "error", text: error.message });
-    } else {
-      setResendMsg({ type: "success", text: "Verification email sent. Check your inbox." });
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      const res = await fetch("/api/account/resend-verification", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ email }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setResendMsg({ type: "error", text: (json as any).error ?? "Failed to resend. Please try again." });
+      } else {
+        setResendMsg({ type: "success", text: "Verification email sent. Check your inbox." });
+        setResendCooldown(true);
+        setTimeout(() => setResendCooldown(false), 60_000);
+      }
+    } catch {
+      setResendMsg({ type: "error", text: "A network error occurred. Please try again." });
+    } finally {
+      setResendLoading(false);
     }
-    setResendLoading(false);
   };
 
   // ── Request data export ────────────────────────────────────────────────────
@@ -342,10 +361,10 @@ export default function AccountCentre() {
               until you verify your address.{" "}
               <button
                 onClick={handleResendVerification}
-                disabled={resendLoading}
-                className="underline font-medium hover:text-amber-900"
+                disabled={resendLoading || resendCooldown}
+                className="underline font-medium hover:text-amber-900 disabled:opacity-50 disabled:cursor-default disabled:no-underline"
               >
-                {resendLoading ? "Sending…" : "Resend verification email"}
+                {resendLoading ? "Sending…" : resendCooldown ? "Email sent — check your inbox" : "Resend verification email"}
               </button>
               {resendMsg && (
                 <span
