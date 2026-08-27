@@ -15,6 +15,7 @@ import { ThemeToggle } from "@/components/ThemeToggle"
 import { TeamLogo } from "@/components/TeamLogo"
 import LatestScoresSection from "@/components/home/LatestScoresSection"
 import LatestNewsSection from "@/components/home/LatestNewsSection"
+import PodcastSection from "@/components/home/PodcastSection"
 import TopPlayersSection from "@/components/home/TopPlayersSection"
 import TrendingPerformanceSection from "@/components/home/TrendingPerformanceSection"
 import { InstagramFeedSection } from "@/components/InstagramFeedSection"
@@ -444,8 +445,9 @@ export default function LandingPage() {
         </main>
       </div>
 
-      {/* News & top players sections (scores ticker is rendered above the hero) */}
+      {/* News, podcast & top players sections (scores ticker is rendered above the hero) */}
       <LatestNewsSection />
+      <PodcastSection />
       <TopPlayersSection />
 
       {/* Stay Connected — Instagram feed */}

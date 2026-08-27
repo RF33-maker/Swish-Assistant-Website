@@ -7,6 +7,7 @@ import { supabaseAdmin } from "./supabaseServiceClient";
 import { detectDuplicates } from "./playerMergeUtils";
 import multer from 'multer';
 import OpenAI from 'openai';
+import { XMLParser } from 'fast-xml-parser';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -197,10 +198,146 @@ function proxyToRender(req: Request, res: Response, urlPath: string): void {
   proxyReq.end();
 }
 
+const PODCAST_RSS_URL = "https://anchor.fm/s/116813140/podcast/rss";
+const PODCAST_CACHE_TTL_MS = 15 * 60 * 1000;
+const PODCAST_FETCH_TIMEOUT_MS = 8_000;
+// The RSS feed provides Spotify's episode URL. These optional public URLs can
+// be set when official YouTube and Apple Podcasts destinations are available.
+const PODCAST_PLATFORM_LINKS = {
+  youtube: process.env.PODCAST_YOUTUBE_URL?.trim() || null,
+  apple: process.env.PODCAST_APPLE_URL?.trim() || null,
+};
+
+type PodcastEpisode = {
+  title: string;
+  description: string;
+  publishedAt: string | null;
+  duration: string | null;
+  artworkUrl: string | null;
+  episodeUrl: string | null;
+  audioUrl: string | null;
+};
+
+type PodcastResponse = {
+  episode: PodcastEpisode | null;
+  platforms: {
+    youtube: string | null;
+    spotify: string | null;
+    apple: string | null;
+  };
+};
+
+let podcastCache: { data: PodcastResponse; at: number } | null = null;
+
+function rssValue(value: unknown): string {
+  if (typeof value === "string" || typeof value === "number") return String(value).trim();
+  if (value && typeof value === "object" && "#text" in value) {
+    return String((value as { "#text": unknown })["#text"] ?? "").trim();
+  }
+  return "";
+}
+
+function stripRssHtml(value: unknown): string {
+  return rssValue(value)
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function rssItems(value: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(value)) return value && typeof value === "object" ? [value as Record<string, unknown>] : [];
+  return value.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"));
+}
+
+function parseRssEpisode(item: Record<string, unknown>, channel: Record<string, unknown>): PodcastEpisode {
+  const enclosure = item.enclosure && typeof item.enclosure === "object"
+    ? item.enclosure as Record<string, unknown>
+    : {};
+  const itemImage = item["itunes:image"] && typeof item["itunes:image"] === "object"
+    ? item["itunes:image"] as Record<string, unknown>
+    : {};
+  const channelImage = channel["itunes:image"] && typeof channel["itunes:image"] === "object"
+    ? channel["itunes:image"] as Record<string, unknown>
+    : {};
+  const publishedAt = rssValue(item.pubDate);
+  const parsedDate = publishedAt ? new Date(publishedAt) : null;
+
+  return {
+    title: stripRssHtml(item.title) || "The Swish Roundup",
+    description: stripRssHtml(item.description || item["itunes:summary"]),
+    publishedAt: parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate.toISOString() : null,
+    duration: rssValue(item["itunes:duration"]) || null,
+    artworkUrl: rssValue(itemImage["@_href"]) || rssValue(channelImage["@_href"]) || null,
+    episodeUrl: rssValue(item.link) || null,
+    audioUrl: rssValue(enclosure["@_url"]) || null,
+  };
+}
+
+async function fetchLatestPodcast(): Promise<PodcastResponse> {
+  const response = await fetch(PODCAST_RSS_URL, {
+    headers: { "User-Agent": "Swish Assistant podcast feed reader" },
+    signal: AbortSignal.timeout(PODCAST_FETCH_TIMEOUT_MS),
+  });
+  if (!response.ok) throw new Error(`Podcast feed returned ${response.status}`);
+
+  const xml = await response.text();
+  const parser = new XMLParser({ ignoreAttributes: false, trimValues: true });
+  const parsed = parser.parse(xml) as { rss?: { channel?: Record<string, unknown> } };
+  const channel = parsed.rss?.channel;
+  if (!channel) throw new Error("Podcast feed did not contain a channel");
+
+  const items = rssItems(channel.item)
+    .map((item) => ({ item, date: new Date(rssValue(item.pubDate)).getTime() }))
+    .filter(({ date }) => Number.isFinite(date))
+    .sort((a, b) => b.date - a.date);
+  const episode = items.length > 0 ? parseRssEpisode(items[0].item, channel) : null;
+  const channelLink = rssValue(channel.link) || null;
+
+  return {
+    episode,
+    platforms: {
+      youtube: PODCAST_PLATFORM_LINKS.youtube,
+      spotify: episode?.episodeUrl || channelLink,
+      apple: PODCAST_PLATFORM_LINKS.apple,
+    },
+  };
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Test endpoint to verify routes are working
   app.get("/api/test", (req, res) => {
     res.json({ message: "API routes are working!", timestamp: new Date().toISOString() });
+  });
+
+  // Public, server-side RSS proxy for the latest Swish Roundup episode.
+  // Keeping the feed fetch here avoids browser CORS issues and protects the
+  // upstream feed from one request per landing-page visitor.
+  app.get("/api/public/podcast/latest", async (_req: Request, res: Response) => {
+    const now = Date.now();
+    if (podcastCache && now - podcastCache.at < PODCAST_CACHE_TTL_MS) {
+      res.setHeader("Cache-Control", "public, max-age=900");
+      return res.json({ ...podcastCache.data, cached: true });
+    }
+
+    try {
+      const data = await fetchLatestPodcast();
+      podcastCache = { data, at: now };
+      res.setHeader("Cache-Control", "public, max-age=900");
+      return res.json({ ...data, cached: false });
+    } catch (error) {
+      console.error("[podcast] RSS fetch failed:", error);
+      if (podcastCache) {
+        res.setHeader("Cache-Control", "public, max-age=300");
+        return res.json({ ...podcastCache.data, cached: true, stale: true });
+      }
+      return res.status(502).json({ error: "The latest podcast episode is temporarily unavailable." });
+    }
   });
 
   // Proxy PDF/Excel parse to Render backend (server-side avoids CORS)
