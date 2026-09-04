@@ -45,17 +45,24 @@ function Stat({ label, value }: { label: string; value: string | number }) {
 
 let textMeasureCanvas: HTMLCanvasElement | null = null;
 
-function measureTextWidth(text: string, fontSize: number, fontWeight: number): number {
-  if (typeof document === "undefined") return text.length * fontSize * 0.7;
+function measureTextWidth(text: string, fontSize: number, fontWeight: number, letterSpacing = 0): number {
+  const spacingWidth = Math.max(0, text.length - 1) * letterSpacing;
+  if (typeof document === "undefined") return text.length * fontSize * 0.7 + spacingWidth;
   textMeasureCanvas ||= document.createElement("canvas");
   const context = textMeasureCanvas.getContext("2d");
-  if (!context) return text.length * fontSize * 0.7;
+  if (!context) return text.length * fontSize * 0.7 + spacingWidth;
   context.font = `${fontWeight} ${fontSize}px Arial, Helvetica, sans-serif`;
-  return context.measureText(text).width;
+  return context.measureText(text).width + spacingWidth;
 }
 
-function truncateTextToWidth(text: string, maxWidth: number, fontSize: number, fontWeight: number): string {
-  if (measureTextWidth(text, fontSize, fontWeight) <= maxWidth) return text;
+function truncateTextToWidth(
+  text: string,
+  maxWidth: number,
+  fontSize: number,
+  fontWeight: number,
+  letterSpacing = 0,
+): string {
+  if (measureTextWidth(text, fontSize, fontWeight, letterSpacing) <= maxWidth) return text;
 
   const ellipsis = "…";
   let low = 0;
@@ -63,7 +70,7 @@ function truncateTextToWidth(text: string, maxWidth: number, fontSize: number, f
   while (low < high) {
     const midpoint = Math.ceil((low + high) / 2);
     const candidate = `${text.slice(0, midpoint).trimEnd()}${ellipsis}`;
-    if (measureTextWidth(candidate, fontSize, fontWeight) <= maxWidth) low = midpoint;
+    if (measureTextWidth(candidate, fontSize, fontWeight, letterSpacing) <= maxWidth) low = midpoint;
     else high = midpoint - 1;
   }
   return `${text.slice(0, low).trimEnd()}${ellipsis}`;
@@ -71,26 +78,53 @@ function truncateTextToWidth(text: string, maxWidth: number, fontSize: number, f
 
 function fitPlayerName(name: string): { fontSize: number; text: string } {
   const text = name.toUpperCase();
-  const maxWidth = 508;
+  const maxWidth = 470;
   for (let fontSize = 39; fontSize >= 20; fontSize -= 1) {
     if (measureTextWidth(text, fontSize, 900) <= maxWidth) return { fontSize, text };
   }
   return { fontSize: 20, text: truncateTextToWidth(text, maxWidth, 20, 900) };
 }
 
+function StatsThreadMark() {
+  return (
+    <svg
+      aria-label="StatsThread"
+      role="img"
+      viewBox="0 0 100 100"
+      style={{ display: "block", height: "100%", width: "100%" }}
+    >
+      <g fill="none" stroke="#62D4E8" strokeWidth="2.4" opacity=".65">
+        <path d="M50 16 L20 38 L20 70 L50 88 L80 70 L80 38 Z" />
+        <path d="M50 16 L50 52 M20 38 L50 52 M80 38 L50 52 M20 70 L50 52 M80 70 L50 52 M50 88 L50 52" />
+        <path d="M20 38 L80 38 M20 70 L80 70 M50 16 L20 70 M50 16 L80 70 M50 88 L20 38 M50 88 L80 38" />
+      </g>
+      <g fill="#62D4E8">
+        <circle cx="50" cy="16" r="6" />
+        <circle cx="20" cy="38" r="6" />
+        <circle cx="80" cy="38" r="6" />
+        <circle cx="20" cy="70" r="6" />
+        <circle cx="80" cy="70" r="6" />
+        <circle cx="50" cy="88" r="6" />
+        <circle cx="50" cy="52" r="7" />
+      </g>
+    </svg>
+  );
+}
+
 function LogoRow({ data }: { data: PhotoOverlayData }) {
-  const logos = [
+  const logos: Array<{ src?: string; alt: string; kind: string }> = [
+    { src: swishAssistantLogo, alt: "Swish Assistant", kind: "brand" },
+    { alt: "StatsThread", kind: "stats-thread" },
     { src: data.home_logo_url, alt: data.team_name, kind: "team" },
     { src: data.league_logo_url, alt: data.league_name || "Competition", kind: "league" },
     ...(data.sponsor_logo_urls || [])
       .filter(Boolean)
       .map((src, index) => ({ src, alt: `Sponsor ${index + 1}`, kind: "sponsor" })),
-  ].filter((logo): logo is { src: string; alt: string; kind: string } => Boolean(logo.src));
-  const totalLogoCount = logos.length + 1;
-  const logoGap = totalLogoCount <= 3 ? 46 : totalLogoCount <= 5 ? 30 : 18;
-  const logoMaxWidth = totalLogoCount <= 3 ? 148 : totalLogoCount <= 5 ? 118 : 88;
-  const logoHeight = totalLogoCount <= 3 ? 52 : totalLogoCount <= 5 ? 46 : 38;
-  const swishMarkSize = totalLogoCount <= 5 ? 48 : 40;
+  ].filter((logo) => logo.kind === "stats-thread" || Boolean(logo.src));
+  const totalLogoCount = logos.length;
+  const logoGap = totalLogoCount <= 4 ? 52 : totalLogoCount <= 6 ? 32 : 20;
+  const logoMaxWidth = totalLogoCount <= 4 ? 150 : totalLogoCount <= 6 ? 120 : 94;
+  const logoHeight = totalLogoCount <= 4 ? 68 : totalLogoCount <= 6 ? 58 : 50;
 
   return (
     <div
@@ -99,57 +133,34 @@ function LogoRow({ data }: { data: PhotoOverlayData }) {
         alignItems: "center",
         display: "flex",
         gap: logoGap,
-        height: 58,
+        height: 72,
         justifyContent: "center",
-        padding: "0 24px",
+        padding: "0 16px",
         width: "100%",
       }}
     >
-      <div
-        style={{
-          alignItems: "center",
-          display: "flex",
-          height: logoHeight,
-          justifyContent: "center",
-          minWidth: totalLogoCount <= 5 ? 112 : 92,
-        }}
-      >
-        <img
-          src={swishAssistantLogo}
-          alt="Swish Assistant"
-          style={{ height: swishMarkSize, objectFit: "contain", width: swishMarkSize }}
-        />
-        <span
-          style={{
-            color: "#fff",
-            fontFamily: "Arial, Helvetica, sans-serif",
-            fontSize: totalLogoCount <= 5 ? 17 : 14,
-            fontWeight: 900,
-            letterSpacing: ".01em",
-            marginLeft: 7,
-          }}
-        >
-          SWISH
-        </span>
-      </div>
       {logos.map((logo, index) => (
         <div
           key={`${logo.src}-${index}`}
           style={{
             alignItems: "center",
             display: "flex",
-            height: logo.kind === "sponsor" ? Math.max(32, logoHeight - 7) : logoHeight,
+            height: logo.kind === "sponsor" ? Math.max(40, logoHeight - 6) : logoHeight,
             justifyContent: "center",
-            maxWidth: logo.kind === "sponsor" ? logoMaxWidth - 6 : logoMaxWidth,
+            maxWidth: logo.kind === "sponsor" ? logoMaxWidth - 4 : logoMaxWidth,
             minWidth: 0,
           }}
         >
-          <img
-            src={logo.src}
-            alt={logo.alt}
-            style={{ display: "block", height: "100%", maxWidth: "100%", objectFit: "contain", width: "auto" }}
-            data-testid={`img-overlay-logo-${index}`}
-          />
+          {logo.kind === "stats-thread" ? (
+            <StatsThreadMark />
+          ) : (
+            <img
+              src={logo.src}
+              alt={logo.alt}
+              style={{ display: "block", height: "100%", maxWidth: "100%", objectFit: "contain", width: "auto" }}
+              data-testid={`img-overlay-logo-${index}`}
+            />
+          )}
         </div>
       ))}
     </div>
@@ -176,6 +187,13 @@ export function PhotoOverlayPlayerPerformanceCardV1({ data }: Props) {
   const opponentWidth = matchupLabelWidth - teamWidth;
   const teamName = truncateTextToWidth(data.team_name, teamWidth, 16, 700);
   const opponentName = truncateTextToWidth(data.opponent_name, opponentWidth, 16, 400);
+  const leagueLabel = truncateTextToWidth(
+    overlayData.league_name?.toUpperCase() || "GAME NIGHT PERFORMANCE",
+    820,
+    14,
+    700,
+    1.4,
+  );
 
   return (
     <div
@@ -263,7 +281,7 @@ export function PhotoOverlayPlayerPerformanceCardV1({ data }: Props) {
             alignItems: "end",
             display: "grid",
             gap: 18,
-            gridTemplateColumns: "minmax(0, 1fr) 112px",
+            gridTemplateColumns: "minmax(0, 1fr) 150px",
           }}
         >
           <div style={{ minWidth: 0 }}>
@@ -288,16 +306,20 @@ export function PhotoOverlayPlayerPerformanceCardV1({ data }: Props) {
           </div>
           <div
             style={{
+              alignItems: "baseline",
               color: ORANGE,
+              display: "flex",
               fontFamily: "Arial, Helvetica, sans-serif",
-              fontSize: 25,
               fontWeight: 900,
+              gap: 7,
+              justifyContent: "flex-end",
               letterSpacing: 0,
               textAlign: "right",
               whiteSpace: "nowrap",
             }}
           >
-            {data.points} PTS
+            <span style={{ fontSize: 46, lineHeight: .86 }}>{data.points}</span>
+            <span style={{ fontSize: 19, lineHeight: 1 }}>PTS</span>
           </div>
         </div>
 
@@ -362,23 +384,24 @@ export function PhotoOverlayPlayerPerformanceCardV1({ data }: Props) {
         </div>
       </section>
 
-      <div style={{ bottom: 40, left: 130, position: "absolute", width: 820 }}>
+      <div style={{ bottom: 28, left: 90, position: "absolute", width: 900 }}>
         <LogoRow data={overlayData} />
         <div
           style={{
             color: "rgba(255,255,255,.48)",
-            fontSize: 13,
+            fontFamily: "Arial, Helvetica, sans-serif",
+            fontSize: 14,
+            fontWeight: 700,
             letterSpacing: ".1em",
-            marginTop: 9,
-            overflow: "hidden",
-            padding: "0 24px",
+            lineHeight: 1.45,
+            marginTop: 7,
+            minHeight: 22,
+            padding: "0 16px 2px",
             textAlign: "center",
-            textOverflow: "ellipsis",
-            textTransform: "uppercase",
             whiteSpace: "nowrap",
           }}
         >
-          {overlayData.league_name || "Game night performance"}
+          {leagueLabel}
         </div>
       </div>
     </div>
