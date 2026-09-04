@@ -81,3 +81,8 @@ integrations = ["javascript_supabase:1.0.0", "javascript_openai:1.0.0"]
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 120000
+
+[userenv]
+
+[userenv.shared]
+PODCAST_YOUTUBE_URL = "https://www.youtube.com/@SwishAssistant"

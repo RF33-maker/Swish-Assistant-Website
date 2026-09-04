@@ -204,7 +204,7 @@ const PODCAST_FETCH_TIMEOUT_MS = 8_000;
 // The RSS feed provides Spotify's episode URL. These optional public URLs can
 // be set when official YouTube and Apple Podcasts destinations are available.
 const PODCAST_PLATFORM_LINKS = {
-  youtube: process.env.PODCAST_YOUTUBE_URL?.trim() || null,
+  youtube: process.env.PODCAST_YOUTUBE_URL?.trim() || "https://www.youtube.com/@SwishAssistant",
   apple: process.env.PODCAST_APPLE_URL?.trim() || null,
 };
 
