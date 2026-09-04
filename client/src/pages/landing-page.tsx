@@ -7,9 +7,10 @@ import UL from "@/assets/uploadimage.png"
 import BCB from "@/assets/BCB Logo.jpg"
 import SLB from "@/assets/Super-League-Basketball-Logo.png"
 import NBLBE from "@/assets/NBLBE.jpg"
+import StatsThreadLogo from "@/assets/statsthread-logo.svg"
 import { Button } from "@/components/ui/button"
 import { Analytics } from "@vercel/analytics/next"
-import { Search, ChevronDown, Trophy, Menu, X, UserPlus, ExternalLink, BarChart3, Clock3 } from "lucide-react"
+import { Search, ChevronDown, Trophy, Menu, X, UserPlus, ExternalLink, Clock3 } from "lucide-react"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import { TeamLogo } from "@/components/TeamLogo"
@@ -325,11 +326,13 @@ export default function LandingPage() {
                     target="_blank"
                     rel="noopener noreferrer"
                     data-testid="sidebar-statsthread"
-                    className="flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-neutral-900 transition-colors"
+                    className="group flex items-center gap-2.5 rounded-lg border border-[#62D4E8]/35 bg-[#62D4E8]/10 px-3 py-2.5 text-sm font-semibold text-[#E6ECF2] transition-colors hover:border-[#62D4E8] hover:bg-[#62D4E8] hover:text-[#04222A] focus:outline-none focus:ring-2 focus:ring-[#62D4E8]"
                   >
-                    <BarChart3 className="h-4 w-4 text-orange-400" aria-hidden="true" />
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-[#62D4E8]/30 bg-[#0A0E15] p-1">
+                      <img src={StatsThreadLogo} alt="" className="h-full w-full" aria-hidden="true" />
+                    </span>
                     <span className="flex-1">StatsThread</span>
-                    <ExternalLink className="h-3.5 w-3.5 text-neutral-500" aria-hidden="true" />
+                    <ExternalLink className="h-3.5 w-3.5 text-[#62D4E8] transition-colors group-hover:text-[#04222A]" aria-hidden="true" />
                   </a>
                   <div
                     aria-disabled="true"
