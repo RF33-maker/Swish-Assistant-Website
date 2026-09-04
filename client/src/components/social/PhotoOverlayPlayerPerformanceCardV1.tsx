@@ -315,6 +315,7 @@ export function PhotoOverlayPlayerPerformanceCardV1({ data }: Props) {
               justifyContent: "flex-end",
               letterSpacing: 0,
               textAlign: "right",
+              transform: "translateY(-10px)",
               whiteSpace: "nowrap",
             }}
           >
