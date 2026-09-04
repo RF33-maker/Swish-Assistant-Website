@@ -9,7 +9,7 @@ import SLB from "@/assets/Super-League-Basketball-Logo.png"
 import NBLBE from "@/assets/NBLBE.jpg"
 import { Button } from "@/components/ui/button"
 import { Analytics } from "@vercel/analytics/next"
-import { Search, ChevronDown, Trophy, Menu, X, UserPlus } from "lucide-react"
+import { Search, ChevronDown, Trophy, Menu, X, UserPlus, ExternalLink, BarChart3, Clock3 } from "lucide-react"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import { TeamLogo } from "@/components/TeamLogo"
@@ -316,6 +316,34 @@ export default function LandingPage() {
                     Register free
                   </a>
                 )}
+                <div className="mt-2 border-t border-neutral-800 pt-2">
+                  <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-neutral-500">
+                    More from Swish
+                  </p>
+                  <a
+                    href="https://www.statsthread.co.uk"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    data-testid="sidebar-statsthread"
+                    className="flex items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-neutral-900 transition-colors"
+                  >
+                    <BarChart3 className="h-4 w-4 text-orange-400" aria-hidden="true" />
+                    <span className="flex-1">StatsThread</span>
+                    <ExternalLink className="h-3.5 w-3.5 text-neutral-500" aria-hidden="true" />
+                  </a>
+                  <div
+                    aria-disabled="true"
+                    title="SwishStats is coming soon"
+                    data-testid="sidebar-swishstats-coming-soon"
+                    className="flex cursor-not-allowed items-center gap-2 rounded-md px-3 py-2 text-sm text-neutral-500"
+                  >
+                    <Clock3 className="h-4 w-4" aria-hidden="true" />
+                    <span className="flex-1">SwishStats</span>
+                    <span className="rounded-full bg-neutral-800 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-400">
+                      Coming soon
+                    </span>
+                  </div>
+                </div>
                 <a
                   href="#subscribe"
                   data-testid="sidebar-subscribe"
