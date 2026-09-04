@@ -24,7 +24,11 @@ export type PlayerPerformanceV1Data = {
   home_logo_url?: string;
   away_logo_url?: string;
   photo_url?: string;
+  background_photo_url?: string;
   photo_focus_y?: number;
+  league_name?: string;
+  league_logo_url?: string;
+  sponsor_logo_urls?: string[];
 };
 
 export type SocialCardBase<T = unknown> = {

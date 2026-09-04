@@ -1,4 +1,5 @@
 import type { PlayerPerformanceV1Data } from "@/types/socialCards";
+import { PhotoOverlayPlayerPerformanceCardV1 } from "./PhotoOverlayPlayerPerformanceCardV1";
 
 type Props = { data: PlayerPerformanceV1Data; template?: string };
 
@@ -18,6 +19,10 @@ const TEMPLATES: Record<string, string> = {
 };
 
 export function PlayerPerformanceCardV1({ data, template = "default" }: Props) {
+  if (template === "photo-overlay") {
+    return <PhotoOverlayPlayerPerformanceCardV1 data={data} />;
+  }
+
   const nameFontSize = getNameFontSize(data.player_name);
   const bgImage = TEMPLATES[template] || TEMPLATES["default"];
   

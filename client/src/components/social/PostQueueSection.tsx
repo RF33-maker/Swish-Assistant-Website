@@ -1,24 +1,25 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { ChevronLeft, ChevronRight, Calendar, Download, Loader2, X, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { PlayerPerformanceCardV1 } from "./PlayerPerformanceCardV1";
 import type { PlayerPerformanceV1Data } from "@/types/socialCards";
 import useEmblaCarousel from "embla-carousel-react";
-import html2canvas from "html2canvas";
+import { renderSocialCardToBlob } from "@/lib/socialCardCapture";
 
 type Props = {
   cards: PlayerPerformanceV1Data[];
   loading?: boolean;
   onRemove?: (index: number) => void;
   onClear?: () => void;
+  template?: string;
 };
 
-export function PostQueueSection({ cards, loading = false, onRemove, onClear }: Props) {
+export function PostQueueSection({ cards, loading = false, onRemove, onClear, template = "default" }: Props) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
-  const renderContainerRef = useRef<HTMLDivElement>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
   
   const [emblaRef, emblaApi] = useEmblaCarousel({
     loop: true,
@@ -32,34 +33,28 @@ export function PostQueueSection({ cards, loading = false, onRemove, onClear }: 
     
     setIsDownloading(true);
     setDownloadProgress(0);
+    setDownloadError(null);
     
     try {
       for (let i = 0; i < cards.length; i++) {
         const card = cards[i];
         setDownloadProgress(i + 1);
         
-        const cardElement = document.getElementById(`download-card-${i}`);
-        if (!cardElement) continue;
-        
-        const canvas = await html2canvas(cardElement, {
-          scale: 1,
-          useCORS: true,
-          allowTaint: true,
-          backgroundColor: null,
-          width: 1080,
-          height: 1350,
-        });
+        const blob = await renderSocialCardToBlob(card, template);
+        if (!blob) continue;
         
         const link = document.createElement("a");
         const safeName = card.player_name.replace(/[^a-zA-Z0-9]/g, "_");
         link.download = `${safeName}_${card.points}pts_${i + 1}.png`;
-        link.href = canvas.toDataURL("image/png");
+        link.href = URL.createObjectURL(blob);
         link.click();
+        window.setTimeout(() => URL.revokeObjectURL(link.href), 10_000);
         
         await new Promise(resolve => setTimeout(resolve, 500));
       }
     } catch (error) {
       console.error("Error downloading cards:", error);
+      setDownloadError("A card asset did not finish loading. Please try the download again.");
     } finally {
       setIsDownloading(false);
       setDownloadProgress(0);
@@ -219,7 +214,7 @@ export function PostQueueSection({ cards, loading = false, onRemove, onClear }: 
                               transformOrigin: "top left",
                             }}
                           >
-                            <PlayerPerformanceCardV1 data={card} />
+                            <PlayerPerformanceCardV1 data={card} template={template} />
                           </div>
                         </div>
                       </div>
@@ -265,6 +260,12 @@ export function PostQueueSection({ cards, loading = false, onRemove, onClear }: 
                 <span>{currentCard.points} PTS, {currentCard.rebounds} REB, {currentCard.assists} AST</span>
               </div>
             )}
+
+            {downloadError && (
+              <p className="mt-3 text-center text-sm text-red-600 dark:text-red-400" role="alert">
+                {downloadError}
+              </p>
+            )}
             
             {/* Mobile swipe hint */}
             <p className="text-center text-xs text-gray-400 dark:text-gray-500 mt-2 sm:hidden">
@@ -273,23 +274,6 @@ export function PostQueueSection({ cards, loading = false, onRemove, onClear }: 
           </div>
         )}
       </CardContent>
-      
-      {/* Hidden container for full-size card rendering (for download) */}
-      <div
-        ref={renderContainerRef}
-        className="fixed left-[-9999px] top-0"
-        style={{ zIndex: -1 }}
-      >
-        {cards.map((card, index) => (
-          <div
-            key={index}
-            id={`download-card-${index}`}
-            style={{ width: 1080, height: 1350 }}
-          >
-            <PlayerPerformanceCardV1 data={card} />
-          </div>
-        ))}
-      </div>
     </Card>
   );
 }

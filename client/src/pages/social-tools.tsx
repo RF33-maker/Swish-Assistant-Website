@@ -1,19 +1,18 @@
 import { useLocation } from "wouter";
-import { ArrowLeft, Download, Trophy, Loader2, Filter, Search, ChevronDown, ChevronUp, RefreshCw, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Download, Trophy, Loader2, Filter, Search, ChevronDown, ChevronUp, RefreshCw, AlertTriangle, ImagePlus, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { PlayerPerformanceCardV1 } from "@/components/social/PlayerPerformanceCardV1";
 import { PlayerPhotoUploader } from "@/components/social/PlayerPhotoUploader";
 import { PlayerIdentityManager } from "@/components/social/PlayerIdentityManager";
 import { PostQueueSection } from "@/components/social/PostQueueSection";
 import type { PlayerPerformanceV1Data } from "@/types/socialCards";
 import { useRef, useState, useEffect, useMemo, useCallback } from "react";
-import html2canvas from "html2canvas";
 import { supabase } from "@/lib/supabase";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { normalizeTeamName, normalizeTeamNameForFile } from "@/lib/teamUtils";
 import { generateMaskedPhoto } from "@/lib/photoMasking";
+import { renderSocialCardToBlob } from "@/lib/socialCardCapture";
 import {
   Select,
   SelectContent,
@@ -26,7 +25,15 @@ interface League {
   league_id: string;
   name: string;
   slug: string;
+  logo_url?: string | null;
+  parent_league_id?: string | null;
 }
+
+type SponsorLogo = {
+  id: string;
+  name: string;
+  url: string;
+};
 
 async function getTeamLogoUrl(teamName: string, leagueId: string): Promise<string> {
   const extensions = ['png', 'jpg', 'jpeg'];
@@ -135,6 +142,28 @@ async function buildPlayerPerformanceCardData(perf: TopPerformance): Promise<Pla
     getTeamLogoUrl(perf.opponent, leagueId),
   ]);
 
+  let leagueName = "";
+  let leagueLogoUrl = "";
+  if (leagueId) {
+    const { data: leagueData } = await supabase
+      .from("competitions")
+      .select("name, logo_url, parent_league_id")
+      .eq("league_id", leagueId)
+      .maybeSingle();
+
+    leagueName = leagueData?.name || "";
+    leagueLogoUrl = leagueData?.logo_url || "";
+
+    if (!leagueLogoUrl && leagueData?.parent_league_id) {
+      const { data: parentData } = await supabase
+        .from("competitions")
+        .select("logo_url")
+        .eq("league_id", leagueData.parent_league_id)
+        .maybeSingle();
+      leagueLogoUrl = parentData?.logo_url || "";
+    }
+  }
+
   let playerPhotoUrl = "";
   let photoFocusY = 50;
   
@@ -198,75 +227,11 @@ async function buildPlayerPerformanceCardData(perf: TopPerformance): Promise<Pla
     home_logo_url: playerTeamLogo,
     away_logo_url: opponentLogo,
     photo_url: maskedPhotoUrl,
+    background_photo_url: playerPhotoUrl,
     photo_focus_y: photoFocusY,
+    league_name: leagueName,
+    league_logo_url: leagueLogoUrl,
   };
-}
-
-/** Renders a PlayerPerformanceCardV1 off-screen and captures it as a PNG blob. */
-async function renderCardToBlob(
-  data: PlayerPerformanceV1Data,
-  template: string,
-): Promise<Blob | null> {
-  const hiddenContainer = document.createElement("div");
-  hiddenContainer.style.cssText = `
-    position: fixed;
-    left: -9999px;
-    top: 0;
-    width: 1080px;
-    height: 1350px;
-    z-index: -9999;
-    pointer-events: none;
-  `;
-  document.body.appendChild(hiddenContainer);
-
-  const cardWrapper = document.createElement("div");
-  cardWrapper.style.cssText = "width: 1080px; height: 1350px;";
-  hiddenContainer.appendChild(cardWrapper);
-
-  const { createRoot } = await import("react-dom/client");
-  const root = createRoot(cardWrapper);
-
-  try {
-    await new Promise<void>((resolve) => {
-      root.render(<PlayerPerformanceCardV1 data={data} template={template} />);
-      setTimeout(resolve, 200);
-    });
-
-    const images = cardWrapper.querySelectorAll("img");
-    await Promise.all(
-      Array.from(images).map(
-        (img) =>
-          new Promise((resolve) => {
-            if (img.complete) {
-              resolve(true);
-            } else {
-              img.onload = () => resolve(true);
-              img.onerror = () => resolve(false);
-            }
-          })
-      )
-    );
-
-    await new Promise((resolve) => setTimeout(resolve, 100));
-
-    const canvas = await html2canvas(cardWrapper.firstElementChild as HTMLElement, {
-      scale: 1,
-      useCORS: true,
-      allowTaint: true,
-      backgroundColor: null,
-      width: 1080,
-      height: 1350,
-    });
-
-    return await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob((b) => resolve(b), "image/png")
-    );
-  } finally {
-    root.unmount();
-    if (document.body.contains(hiddenContainer)) {
-      document.body.removeChild(hiddenContainer);
-    }
-  }
 }
 
 export default function SocialToolsPage() {
@@ -287,6 +252,7 @@ export default function SocialToolsPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [performanceOffset, setPerformanceOffset] = useState(0);
   const [selectedTemplate, setSelectedTemplate] = useState<string>("default");
+  const [sponsorLogos, setSponsorLogos] = useState<SponsorLogo[]>([]);
 
   // Preview state — generated once when a performance is selected.
   const [previewImgUrl, setPreviewImgUrl] = useState<string | null>(null);
@@ -329,7 +295,7 @@ export default function SocialToolsPage() {
   const fetchLeagues = async () => {
     const { data, error } = await supabase
       .from("competitions")
-      .select("league_id, name, slug")
+      .select("league_id, name, slug, logo_url, parent_league_id")
       .order("name");
     
     if (!error && data) {
@@ -505,7 +471,7 @@ export default function SocialToolsPage() {
     setPreviewGenerating(true);
     setPreviewError(false);
     try {
-      const blob = await renderCardToBlob(data, template);
+      const blob = await renderSocialCardToBlob(data, template);
       // Discard result if a newer request has started since we began.
       if (generationTokenRef.current !== token) return;
       if (!blob) {
@@ -529,6 +495,67 @@ export default function SocialToolsPage() {
     }
   }, []);
 
+  const applySponsorLogos = useCallback((nextLogos: SponsorLogo[]) => {
+    const urls = nextLogos.map((logo) => logo.url);
+    setSponsorLogos(nextLogos);
+    setQueueCardCache((previous) =>
+      Object.fromEntries(
+        Object.entries(previous).map(([id, card]) => [
+          id,
+          { ...card, sponsor_logo_urls: urls },
+        ]),
+      ),
+    );
+
+    if (selectedId && selectedData !== defaultData) {
+      const nextData = { ...selectedData, sponsor_logo_urls: urls };
+      setSelectedData(nextData);
+      setQueueCardCache((previous) => ({
+        ...previous,
+        [selectedId]: nextData,
+      }));
+      generatePreview(nextData, selectedTemplate);
+    }
+  }, [generatePreview, selectedData, selectedId, selectedTemplate]);
+
+  const handleSponsorFiles = async (files: FileList | null) => {
+    if (!files) return;
+    const remainingSlots = Math.max(0, 4 - sponsorLogos.length);
+    const selectedFiles = Array.from(files)
+      .filter((file) => file.type.startsWith("image/"))
+      .slice(0, remainingSlots);
+
+    const additions = await Promise.all(
+      selectedFiles.map(
+        (file) =>
+          new Promise<SponsorLogo>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve({
+              id: `${file.name}-${file.lastModified}-${file.size}`,
+              name: file.name,
+              url: String(reader.result),
+            });
+            reader.onerror = () => reject(reader.error);
+            reader.readAsDataURL(file);
+          }),
+      ),
+    );
+
+    applySponsorLogos([...sponsorLogos, ...additions]);
+  };
+
+  const moveSponsorLogo = (index: number, direction: -1 | 1) => {
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= sponsorLogos.length) return;
+    const next = [...sponsorLogos];
+    [next[index], next[targetIndex]] = [next[targetIndex], next[index]];
+    applySponsorLogos(next);
+  };
+
+  const removeSponsorLogo = (id: string) => {
+    applySponsorLogos(sponsorLogos.filter((logo) => logo.id !== id));
+  };
+
   // Regenerate preview when template changes (if a performance is already selected).
   useEffect(() => {
     if (!selectedId || selectedData === defaultData) return;
@@ -540,6 +567,7 @@ export default function SocialToolsPage() {
   const handleSelectPerformance = async (perf: TopPerformance) => {
     setSelectedId(perf.id);
     const cardData = await buildPlayerPerformanceCardData(perf);
+    cardData.sponsor_logo_urls = sponsorLogos.map((logo) => logo.url);
     setSelectedData(cardData);
     
     if (!queueIds.includes(perf.id)) {
@@ -564,7 +592,7 @@ export default function SocialToolsPage() {
     
     try {
       // Reuse the already-generated blob; regenerate only if unavailable.
-      const blob = socialBlobRef.current ?? await renderCardToBlob(selectedData, selectedTemplate);
+      const blob = socialBlobRef.current ?? await renderSocialCardToBlob(selectedData, selectedTemplate);
       if (!blob) {
         console.error("[SocialTools] download: failed to generate blob");
         return;
@@ -576,6 +604,7 @@ export default function SocialToolsPage() {
       setTimeout(() => URL.revokeObjectURL(link.href), 10000);
     } catch (error) {
       console.error("Failed to generate image:", error);
+      setPreviewError(true);
     }
   };
 
@@ -770,11 +799,84 @@ export default function SocialToolsPage() {
                     <SelectContent>
                       <SelectItem value="default">Swish Default</SelectItem>
                       <SelectItem value="reba-sl">REBA SL</SelectItem>
+                        <SelectItem value="photo-overlay">Photo Overlay</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </CardHeader>
               <CardContent>
+                {selectedTemplate === "photo-overlay" && (
+                  <div className="mb-4 rounded-lg border border-orange-200 bg-orange-50/60 p-3 dark:border-orange-800 dark:bg-orange-950/20">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white">Sponsor logos</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Optional · up to 4 · included in preview and PNG</p>
+                      </div>
+                      {sponsorLogos.length < 4 && (
+                        <label className="inline-flex cursor-pointer items-center rounded-md border border-orange-300 bg-white px-3 py-2 text-xs font-medium text-orange-700 shadow-sm hover:bg-orange-50 dark:border-orange-700 dark:bg-gray-900 dark:text-orange-300">
+                          <ImagePlus className="mr-1.5 h-4 w-4" />
+                          Add logo
+                          <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                            multiple
+                            className="sr-only"
+                            onChange={(event) => {
+                              handleSponsorFiles(event.target.files);
+                              event.target.value = "";
+                            }}
+                            data-testid="input-sponsor-logos"
+                          />
+                        </label>
+                      )}
+                    </div>
+
+                    {sponsorLogos.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        {sponsorLogos.map((logo, index) => (
+                          <div key={logo.id} className="flex items-center gap-2 rounded-md border border-gray-200 bg-white p-2 dark:border-gray-700 dark:bg-gray-900">
+                            <div className="flex h-10 w-16 items-center justify-center rounded bg-gray-100 p-1 dark:bg-gray-800">
+                              <img src={logo.url} alt="" className="max-h-full max-w-full object-contain" />
+                            </div>
+                            <span className="min-w-0 flex-1 truncate text-xs text-gray-700 dark:text-gray-300">{logo.name}</span>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              disabled={index === 0}
+                              onClick={() => moveSponsorLogo(index, -1)}
+                              title="Move sponsor left"
+                            >
+                              <ChevronLeft className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              disabled={index === sponsorLogos.length - 1}
+                              onClick={() => moveSponsorLogo(index, 1)}
+                              title="Move sponsor right"
+                            >
+                              <ChevronRight className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-red-500 hover:text-red-600"
+                              onClick={() => removeSponsorLogo(logo.id)}
+                              title="Remove sponsor"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div className="mb-4 flex gap-2">
                   <Button
                     onClick={handleDownload}
@@ -847,6 +949,7 @@ export default function SocialToolsPage() {
         
         <PostQueueSection 
           cards={queueCards} 
+          template={selectedTemplate}
           loading={queueLoading} 
           onRemove={handleRemoveFromQueue}
           onClear={handleClearQueue}
