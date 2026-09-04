@@ -18,36 +18,64 @@ const ORANGE = "#f58220";
 const statLabelStyle: CSSProperties = {
   color: "rgba(255,255,255,.48)",
   fontFamily: "Arial, sans-serif",
-  fontSize: 17,
+  fontSize: 13,
   fontWeight: 700,
-  letterSpacing: "0.12em",
+  letterSpacing: "0.1em",
   lineHeight: 1,
   textTransform: "uppercase",
 };
 
 const statValueStyle: CSSProperties = {
   color: "#fff",
-  fontFamily: "Arial Black, Arial, sans-serif",
-  fontSize: 38,
+  fontFamily: "Arial, Helvetica, sans-serif",
+  fontSize: 29,
   fontWeight: 900,
-  letterSpacing: "-0.045em",
+  letterSpacing: 0,
   lineHeight: 1,
 };
 
 function Stat({ label, value }: { label: string; value: string | number }) {
   return (
-    <div style={{ minWidth: 0, textAlign: "left" }}>
+    <div style={{ minWidth: 0, textAlign: "center" }}>
       <div style={statValueStyle}>{value}</div>
-      <div style={{ ...statLabelStyle, marginTop: 9 }}>{label}</div>
+      <div style={{ ...statLabelStyle, marginTop: 7 }}>{label}</div>
     </div>
   );
 }
 
-function getOverlayNameFontSize(name: string): number {
-  if (name.length <= 18) return 52;
-  if (name.length <= 25) return 44;
-  if (name.length <= 34) return 37;
-  return 31;
+let textMeasureCanvas: HTMLCanvasElement | null = null;
+
+function measureTextWidth(text: string, fontSize: number, fontWeight: number): number {
+  if (typeof document === "undefined") return text.length * fontSize * 0.7;
+  textMeasureCanvas ||= document.createElement("canvas");
+  const context = textMeasureCanvas.getContext("2d");
+  if (!context) return text.length * fontSize * 0.7;
+  context.font = `${fontWeight} ${fontSize}px Arial, Helvetica, sans-serif`;
+  return context.measureText(text).width;
+}
+
+function truncateTextToWidth(text: string, maxWidth: number, fontSize: number, fontWeight: number): string {
+  if (measureTextWidth(text, fontSize, fontWeight) <= maxWidth) return text;
+
+  const ellipsis = "…";
+  let low = 0;
+  let high = text.length;
+  while (low < high) {
+    const midpoint = Math.ceil((low + high) / 2);
+    const candidate = `${text.slice(0, midpoint).trimEnd()}${ellipsis}`;
+    if (measureTextWidth(candidate, fontSize, fontWeight) <= maxWidth) low = midpoint;
+    else high = midpoint - 1;
+  }
+  return `${text.slice(0, low).trimEnd()}${ellipsis}`;
+}
+
+function fitPlayerName(name: string): { fontSize: number; text: string } {
+  const text = name.toUpperCase();
+  const maxWidth = 508;
+  for (let fontSize = 39; fontSize >= 20; fontSize -= 1) {
+    if (measureTextWidth(text, fontSize, 900) <= maxWidth) return { fontSize, text };
+  }
+  return { fontSize: 20, text: truncateTextToWidth(text, maxWidth, 20, 900) };
 }
 
 function LogoRow({ data }: { data: PhotoOverlayData }) {
@@ -58,6 +86,11 @@ function LogoRow({ data }: { data: PhotoOverlayData }) {
       .filter(Boolean)
       .map((src, index) => ({ src, alt: `Sponsor ${index + 1}`, kind: "sponsor" })),
   ].filter((logo): logo is { src: string; alt: string; kind: string } => Boolean(logo.src));
+  const totalLogoCount = logos.length + 1;
+  const logoGap = totalLogoCount <= 3 ? 46 : totalLogoCount <= 5 ? 30 : 18;
+  const logoMaxWidth = totalLogoCount <= 3 ? 148 : totalLogoCount <= 5 ? 118 : 88;
+  const logoHeight = totalLogoCount <= 3 ? 52 : totalLogoCount <= 5 ? 46 : 38;
+  const swishMarkSize = totalLogoCount <= 5 ? 48 : 40;
 
   return (
     <div
@@ -65,10 +98,10 @@ function LogoRow({ data }: { data: PhotoOverlayData }) {
       style={{
         alignItems: "center",
         display: "flex",
-        gap: logos.length > 3 ? 27 : 40,
-        height: 70,
+        gap: logoGap,
+        height: 58,
         justifyContent: "center",
-        padding: "0 48px",
+        padding: "0 24px",
         width: "100%",
       }}
     >
@@ -76,23 +109,24 @@ function LogoRow({ data }: { data: PhotoOverlayData }) {
         style={{
           alignItems: "center",
           display: "flex",
-          height: 48,
+          height: logoHeight,
           justifyContent: "center",
-          minWidth: 116,
+          minWidth: totalLogoCount <= 5 ? 112 : 92,
         }}
       >
         <img
           src={swishAssistantLogo}
           alt="Swish Assistant"
-          style={{ height: 52, objectFit: "contain", width: 52 }}
+          style={{ height: swishMarkSize, objectFit: "contain", width: swishMarkSize }}
         />
         <span
           style={{
             color: "#fff",
-            fontFamily: "Arial Black, Arial, sans-serif",
-            fontSize: 18,
-            letterSpacing: "-.04em",
-            marginLeft: 8,
+            fontFamily: "Arial, Helvetica, sans-serif",
+            fontSize: totalLogoCount <= 5 ? 17 : 14,
+            fontWeight: 900,
+            letterSpacing: ".01em",
+            marginLeft: 7,
           }}
         >
           SWISH
@@ -104,9 +138,9 @@ function LogoRow({ data }: { data: PhotoOverlayData }) {
           style={{
             alignItems: "center",
             display: "flex",
-            height: logo.kind === "sponsor" ? 40 : 54,
+            height: logo.kind === "sponsor" ? Math.max(32, logoHeight - 7) : logoHeight,
             justifyContent: "center",
-            maxWidth: logos.length >= 5 ? 112 : logo.kind === "sponsor" ? 132 : 150,
+            maxWidth: logo.kind === "sponsor" ? logoMaxWidth - 6 : logoMaxWidth,
             minWidth: 0,
           }}
         >
@@ -132,6 +166,16 @@ export function PhotoOverlayPlayerPerformanceCardV1({ data }: Props) {
   const won = Boolean(data.didWin);
   const focusY = Math.max(0, Math.min(100, Number(data.photo_focus_y ?? 50)));
   const hasScore = data.home_score > 0 || data.away_score > 0;
+  const scoreText = hasScore ? `${data.home_score} — ${data.away_score} ${won ? "WIN" : "LOSS"}` : "";
+  const nameFit = fitPlayerName(data.player_name);
+  const scoreWidth = hasScore ? Math.ceil(measureTextWidth(scoreText, 15, 800)) : 0;
+  const matchupWidth = 644 - (hasScore ? scoreWidth + 14 : 0);
+  const vsWidth = Math.ceil(measureTextWidth("vs", 16, 400)) + 16;
+  const matchupLabelWidth = Math.max(0, matchupWidth - vsWidth);
+  const teamWidth = Math.floor(matchupLabelWidth * 0.46);
+  const opponentWidth = matchupLabelWidth - teamWidth;
+  const teamName = truncateTextToWidth(data.team_name, teamWidth, 16, 700);
+  const opponentName = truncateTextToWidth(data.opponent_name, opponentWidth, 16, 400);
 
   return (
     <div
@@ -202,55 +246,109 @@ export function PhotoOverlayPlayerPerformanceCardV1({ data }: Props) {
         style={{
           background: "rgba(15,15,15,.96)",
           border: "1px solid rgba(255,255,255,.13)",
-          borderRadius: 22,
-          bottom: 186,
+          borderRadius: 18,
+          bottom: 226,
+          boxSizing: "border-box",
           boxShadow: "0 24px 70px rgba(0,0,0,.4)",
-          left: 58,
-          padding: "34px 40px 30px",
+          height: 350,
+          left: 190,
+          overflow: "hidden",
+          padding: "26px 28px 24px",
           position: "absolute",
-          width: 964,
+          width: 700,
         }}
       >
-        <div style={{ alignItems: "flex-end", display: "flex", justifyContent: "space-between" }}>
-          <div>
-            <div style={{ ...statLabelStyle, color: ORANGE, fontSize: 16, letterSpacing: ".16em" }}>
-              PLAYER OF THE GAME
+        <div
+          style={{
+            alignItems: "end",
+            display: "grid",
+            gap: 18,
+            gridTemplateColumns: "minmax(0, 1fr) 112px",
+          }}
+        >
+          <div style={{ minWidth: 0 }}>
+            <div style={{ ...statLabelStyle, color: ORANGE, fontSize: 13, letterSpacing: ".14em" }}>
+              TRENDING PERFORMANCE
             </div>
             <div
               data-testid="text-overlay-player-name"
               style={{
-                fontFamily: "Arial Black, Arial, sans-serif",
-                fontSize: getOverlayNameFontSize(data.player_name),
-                letterSpacing: "-.055em",
-                lineHeight: .98,
-                marginTop: 12,
-                maxWidth: 650,
-                overflow: "hidden",
-                textTransform: "uppercase",
+                fontFamily: "Arial, Helvetica, sans-serif",
+                fontSize: nameFit.fontSize,
+                fontWeight: 900,
+                letterSpacing: 0,
+                lineHeight: 1.08,
+                marginTop: 9,
+                width: "100%",
                 whiteSpace: "nowrap",
               }}
             >
-              {data.player_name}
+              {nameFit.text}
             </div>
           </div>
-          <div style={{ color: ORANGE, fontFamily: "Arial Black, Arial, sans-serif", fontSize: 27, letterSpacing: "-.03em" }}>
+          <div
+            style={{
+              color: ORANGE,
+              fontFamily: "Arial, Helvetica, sans-serif",
+              fontSize: 25,
+              fontWeight: 900,
+              letterSpacing: 0,
+              textAlign: "right",
+              whiteSpace: "nowrap",
+            }}
+          >
             {data.points} PTS
           </div>
         </div>
 
-        <div style={{ alignItems: "center", display: "flex", gap: 12, marginTop: 17 }}>
-          <span style={{ color: "#fff", fontSize: 20, fontWeight: 700 }}>{data.team_name}</span>
-          <span style={{ color: "rgba(255,255,255,.38)", fontSize: 18 }}>vs</span>
-          <span style={{ color: "rgba(255,255,255,.62)", fontSize: 18 }}>{data.opponent_name}</span>
+        <div
+          style={{
+            alignItems: "center",
+            display: "grid",
+            gap: 14,
+            gridTemplateColumns: "minmax(0, 1fr) auto",
+            marginTop: 14,
+          }}
+        >
+          <div
+            style={{
+              alignItems: "center",
+              display: "flex",
+              fontFamily: "Arial, Helvetica, sans-serif",
+              fontSize: 16,
+              minWidth: 0,
+            }}
+          >
+            <span
+              style={{
+                color: "#fff",
+                fontWeight: 700,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {teamName}
+            </span>
+            <span style={{ color: "rgba(255,255,255,.38)", flex: "0 0 auto", margin: "0 8px" }}>vs</span>
+            <span
+              style={{
+                color: "rgba(255,255,255,.62)",
+                flex: "1 1 auto",
+                minWidth: 0,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {opponentName}
+            </span>
+          </div>
           {hasScore && (
-            <span style={{ color: won ? "#8ddc74" : "#ff786b", fontSize: 18, fontWeight: 800, marginLeft: 5 }}>
-              {data.home_score} — {data.away_score} {won ? "WIN" : "LOSS"}
+            <span style={{ color: won ? "#8ddc74" : "#ff786b", fontSize: 15, fontWeight: 800, whiteSpace: "nowrap" }}>
+              {scoreText}
             </span>
           )}
         </div>
 
-        <div style={{ background: "rgba(255,255,255,.13)", height: 1, margin: "27px 0 25px", width: "100%" }} />
-        <div style={{ display: "grid", gap: "27px 16px", gridTemplateColumns: "repeat(5, 1fr)" }}>
+        <div style={{ background: "rgba(255,255,255,.13)", height: 1, margin: "20px 0 19px", width: "100%" }} />
+        <div style={{ display: "grid", gap: "20px 12px", gridTemplateColumns: "repeat(5, minmax(0, 1fr))" }}>
           <Stat label="MIN" value={data.minutes} />
           <Stat label="REB" value={data.rebounds} />
           <Stat label="AST" value={data.assists} />
@@ -264,9 +362,22 @@ export function PhotoOverlayPlayerPerformanceCardV1({ data }: Props) {
         </div>
       </section>
 
-      <div style={{ bottom: 44, left: 0, position: "absolute", width: "100%" }}>
+      <div style={{ bottom: 40, left: 130, position: "absolute", width: 820 }}>
         <LogoRow data={overlayData} />
-        <div style={{ color: "rgba(255,255,255,.4)", fontSize: 14, letterSpacing: ".12em", marginTop: 10, textAlign: "center", textTransform: "uppercase" }}>
+        <div
+          style={{
+            color: "rgba(255,255,255,.48)",
+            fontSize: 13,
+            letterSpacing: ".1em",
+            marginTop: 9,
+            overflow: "hidden",
+            padding: "0 24px",
+            textAlign: "center",
+            textOverflow: "ellipsis",
+            textTransform: "uppercase",
+            whiteSpace: "nowrap",
+          }}
+        >
           {overlayData.league_name || "Game night performance"}
         </div>
       </div>
