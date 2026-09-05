@@ -4,6 +4,8 @@ import { supabase } from "@/lib/supabase";
 import { Trophy, ArrowLeft, Users } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
+import BCBLogo from "@/assets/BCB Logo.jpg";
+import LeagueDefaultImage from "@/assets/league-default.png";
 
 interface League {
   id: string;
@@ -142,6 +144,20 @@ export default function CompetitionPage() {
     [seasons, selectedSeason],
   );
 
+  const brandingCompetition =
+    visibleCompetitions.find((competition) => getCompetitionLabel(competition) === "Regular Season") ||
+    visibleCompetitions[0] ||
+    genderGroups[0]?.mostRecent ||
+    seasons[0];
+  const isBritishChampionship = slug === "british-championship-basketball";
+  const displayLogoUrl =
+    league?.logo_url ||
+    brandingCompetition?.logo_url ||
+    (isBritishChampionship ? BCBLogo : null);
+  const displayBannerUrl =
+    brandingCompetition?.banner_url ||
+    (isBritishChampionship ? LeagueDefaultImage : null);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-white dark:bg-neutral-950 flex items-center justify-center">
@@ -181,28 +197,36 @@ export default function CompetitionPage() {
       </header>
 
       {/* Hero */}
-      <div className="bg-gradient-to-b from-orange-50 dark:from-neutral-900 to-white dark:to-neutral-950 px-6 pt-10 pb-8 flex flex-col items-center text-center">
-        {(league.logo_url || genderGroups[0]?.mostRecent.logo_url || seasons[0]?.logo_url) ? (
+      <div
+        className="relative overflow-hidden bg-gradient-to-b from-orange-50 dark:from-neutral-900 to-white dark:to-neutral-950 px-6 pt-10 pb-8 flex flex-col items-center text-center"
+        style={displayBannerUrl ? {
+          backgroundImage: `url(${displayBannerUrl})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        } : undefined}
+      >
+        {displayBannerUrl && <div className="absolute inset-0 bg-slate-950/65" />}
+        {displayLogoUrl ? (
           <img
-            src={league.logo_url || genderGroups[0]?.mostRecent.logo_url || seasons[0]?.logo_url || ""}
+            src={displayLogoUrl}
             alt={league.name}
-            className="w-20 h-20 object-contain mb-4 rounded-xl shadow-md bg-white dark:bg-white p-1"
+            className="relative w-20 h-20 object-contain mb-4 rounded-xl shadow-md bg-white p-1"
           />
         ) : (
-          <div className="w-20 h-20 rounded-xl bg-orange-100 dark:bg-neutral-800 flex items-center justify-center mb-4">
+          <div className="relative w-20 h-20 rounded-xl bg-orange-100 dark:bg-neutral-800 flex items-center justify-center mb-4">
             <Trophy className="w-10 h-10 text-orange-500" />
           </div>
         )}
-        <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+        <h1 className={`relative text-3xl sm:text-4xl font-extrabold tracking-tight ${displayBannerUrl ? "text-white drop-shadow-md" : "text-slate-900 dark:text-white"}`}>
           {league.name}
         </h1>
         {league.description && (
-          <p className="mt-3 text-slate-500 dark:text-slate-400 text-sm max-w-lg">
+          <p className={`relative mt-3 text-sm max-w-lg ${displayBannerUrl ? "text-white/85 drop-shadow-sm" : "text-slate-500 dark:text-slate-400"}`}>
             {league.description}
           </p>
         )}
         {(genderGroups.length > 0 || seasons.length > 0) && (
-          <p className="mt-2 text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wider font-medium">
+          <p className={`relative mt-2 text-xs uppercase tracking-wider font-medium ${displayBannerUrl ? "text-white/70" : "text-slate-400 dark:text-slate-500"}`}>
             Choose a competition
           </p>
         )}
@@ -273,9 +297,9 @@ export default function CompetitionPage() {
                 className="relative overflow-hidden rounded-2xl min-h-[150px] hover:scale-[1.02] hover:shadow-xl transition-all duration-200 text-left group w-full"
                 style={{ backgroundColor: "#1a1a1a" }}
               >
-                {competition.banner_url && (
+                {(competition.banner_url || displayBannerUrl) && (
                   <img
-                    src={competition.banner_url}
+                    src={competition.banner_url || displayBannerUrl || ""}
                     alt=""
                     className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:opacity-50 transition-opacity"
                   />
