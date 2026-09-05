@@ -152,20 +152,22 @@ export function InlineGameDetail({
 
     (async () => {
       try {
-        const { data: detail } = await supabase
-          .from("v_game_detail")
-          .select("*")
-          .eq("game_key", gameKey)
-          .limit(1)
-          .maybeSingle();
-
-        if (!detail) {
-          const { data: scheduled } = await supabase
+        const [{ data: detail }, { data: scheduled }] = await Promise.all([
+          supabase
+            .from("v_game_detail")
+            .select("*")
+            .eq("game_key", gameKey)
+            .limit(1)
+            .maybeSingle(),
+          supabase
             .from("game_schedule")
             .select("game_key,league_id,matchtime,hometeam,awayteam,status,competitionname,home_team_id,away_team_id")
             .eq("game_key", gameKey)
             .limit(1)
-            .maybeSingle();
+            .maybeSingle(),
+        ]);
+
+        if (!detail) {
           if (scheduled) {
             setScheduledGame(scheduled as PreviewGame);
           }
@@ -229,7 +231,10 @@ export function InlineGameDetail({
 
         const info: GameInfo = {
           date: d.match_time || new Date().toISOString(),
-          status: d.game_status || null,
+          // The schedule poller owns the official lifecycle state. The detail
+          // view can contain stats while a game is still in progress and may
+          // incorrectly infer "Final" from their presence.
+          status: scheduled?.status || d.game_status || null,
           hometeam: homeName,
           awayteam: awayName,
           homeScore,
