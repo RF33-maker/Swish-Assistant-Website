@@ -92,12 +92,12 @@ function Router() {
 
       {/* Member routes — any authenticated user */}
       <ProtectedRoute path="/dashboard" component={PostLoginDashboard} />
-      <ProtectedRoute path="/coaches-hub" component={CoachesHub} />
+      <AdminRoute path="/coaches-hub" component={CoachesHub} />
       <ProtectedRoute path="/profile" component={ProfilePage} />
       <ProtectedRoute path="/settings" component={SettingsPage} />
       <ProtectedRoute path="/payment" component={PaymentPage} />
-      <ProtectedRoute path="/social-tools" component={SocialToolsPage} />
-      <ProtectedRoute path="/api-widgets" component={WidgetBuilder} />
+      <AdminRoute path="/social-tools" component={SocialToolsPage} />
+      <AdminRoute path="/api-widgets" component={WidgetBuilder} />
 
       {/* Admin-only routes — require app_metadata.role === "admin" */}
       <AdminRoute path="/league-management" component={LeagueManagement} />

@@ -97,7 +97,7 @@ export default function Header() {
 
               <span className="ml-2 text-base md:text-lg font-semibold text-neutral-800"></span>
             </div>
-            {user && (
+            {user && isAdmin && (
               <div className="flex items-center gap-2 ml-3">
                 <Link href="/coaches-hub">
                   <Button
@@ -106,16 +106,13 @@ export default function Header() {
                     Coaches Hub
                   </Button>
                 </Link>
-                {/* League Admin navigation is only shown to owner accounts */}
-                {isAdmin && (
-                  <Link href="/league-management">
-                    <Button
-                      className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1.5 md:px-4 md:py-2 rounded-lg font-medium transition-colors text-xs md:text-sm"
-                    >
-                      League Admin
-                    </Button>
-                  </Link>
-                )}
+                <Link href="/league-management">
+                  <Button
+                    className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1.5 md:px-4 md:py-2 rounded-lg font-medium transition-colors text-xs md:text-sm"
+                  >
+                    League Admin
+                  </Button>
+                </Link>
               </div>
             )}
           </div>
