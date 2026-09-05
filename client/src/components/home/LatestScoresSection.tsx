@@ -400,7 +400,7 @@ export default function LatestScoresSection() {
     if ((g.kind === "result" || g.kind === "live") && g.league_slug) {
       setLocation(`/competition/${g.league_slug}/game/${g.game_key}`);
     } else if (g.kind === "upcoming" && g.league_slug) {
-      setLocation(`/competition/${g.league_slug}`);
+      setLocation(`/competition/${g.league_slug}/game/${encodeURIComponent(g.game_key)}`);
     } else if (g.league_slug) {
       setLocation(`/competition/${g.league_slug}`);
     }

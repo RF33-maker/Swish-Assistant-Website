@@ -538,53 +538,86 @@ export default function TeamProfile() {
           }
         }
         
-        // Fetch all stats with team names that match when normalized
-        let statsQuery = supabase
-          .from("player_stats")
-          .select("*, players:player_id(slug)")
-          .ilike("team_name", `%${normalizedTeamName}%`);
-        
-        // Filter by league_id if available
-        if (leagueId) {
-          statsQuery = statsQuery.eq("league_id", leagueId);
-        }
-        
-        const { data: allTeamStats, error: allStatsError } = await statsQuery;
-        
-        // Filter to exact normalized match
-        const allStats = (allTeamStats || []).filter(stat => 
-          normalizeTeamName(stat.team_name || stat.team || '') === normalizedTeamName
-        );
-        
-        // Build teams query with optional league filter
-        let teamsQuery = supabase
-          .from("teams")
-          .select("description, league_id, social_instagram")
-          .eq("name", normalizedTeamName);
-        
-        if (leagueId) {
-          teamsQuery = teamsQuery.eq("league_id", leagueId);
-        }
-        
-        // Build game schedule query with optional league filter
+        // Load this competition's schedule first. Its home/away IDs are the
+        // stable identity link used to find the same club in prior seasons.
         let scheduleQuery = supabase
           .from("game_schedule")
           .select("*")
-          .gte("matchtime", new Date().toISOString())
           .order("matchtime", { ascending: true });
         
         if (leagueId) {
           scheduleQuery = scheduleQuery.eq("league_id", leagueId);
         }
-        
-        // Fetch all data in parallel
+
+        const { data: scheduleData, error: scheduleError } = await scheduleQuery;
+        const identityGame = (scheduleData || []).find((game: any) => {
+          const homeMatches = normalizeTeamName(game.hometeam || "") === normalizedTeamName;
+          const awayMatches = normalizeTeamName(game.awayteam || "") === normalizedTeamName;
+          return (homeMatches && game.home_team_id) || (awayMatches && game.away_team_id);
+        });
+        let linkedTeamId = identityGame
+          ? normalizeTeamName(identityGame.hometeam || "") === normalizedTeamName
+            ? identityGame.home_team_id
+            : identityGame.away_team_id
+          : null;
+        if (!linkedTeamId && leagueId) {
+          const { data: linkedStats } = await supabase
+            .from("player_stats")
+            .select("team_id, team_name")
+            .eq("league_id", leagueId)
+            .not("team_id", "is", null)
+            .ilike("team_name", `%${normalizedTeamName}%`);
+          linkedTeamId = (linkedStats || []).find((stat: any) =>
+            normalizeTeamName(stat.team_name || "") === normalizedTeamName
+          )?.team_id || null;
+        }
+        if (!linkedTeamId && leagueId) {
+          const { data: currentTeams } = await supabase
+            .from("teams")
+            .select("team_id, name")
+            .eq("league_id", leagueId);
+          linkedTeamId = (currentTeams || []).find((team: any) =>
+            normalizeTeamName(team.name || "") === normalizedTeamName
+          )?.team_id || null;
+        }
+
+        let statsQuery = supabase
+          .from("player_stats")
+          .select("*, players:player_id(slug)");
+        if (linkedTeamId) {
+          statsQuery = statsQuery.eq("team_id", linkedTeamId);
+        } else {
+          statsQuery = statsQuery.ilike("team_name", `%${normalizedTeamName}%`);
+          if (leagueId) statsQuery = statsQuery.eq("league_id", leagueId);
+        }
+
+        let teamsQuery = supabase
+          .from("teams")
+          .select("description, league_id");
+        if (linkedTeamId) {
+          teamsQuery = teamsQuery.eq("team_id", linkedTeamId);
+        } else {
+          teamsQuery = teamsQuery.eq("name", normalizedTeamName);
+          if (leagueId) teamsQuery = teamsQuery.eq("league_id", leagueId);
+        }
+
         const [
+          { data: allTeamStats, error: allStatsError },
           { data: teamData },
-          { data: upcomingGamesData, error: scheduleError }
+          { data: teamSocialData },
         ] = await Promise.all([
-          teamsQuery.single(),
-          scheduleQuery
+          statsQuery,
+          teamsQuery.maybeSingle(),
+          linkedTeamId
+            ? supabase.from("teams").select("social_instagram").eq("team_id", linkedTeamId).maybeSingle()
+            : supabase.from("teams").select("social_instagram").eq("name", normalizedTeamName).maybeSingle(),
         ]);
+
+        const allStats = linkedTeamId
+          ? (allTeamStats || [])
+          : (allTeamStats || []).filter(stat =>
+              normalizeTeamName(stat.team_name || stat.team || "") === normalizedTeamName
+            );
 
         if (allStatsError) {
           console.error("Error fetching player stats:", allStatsError);
@@ -597,13 +630,16 @@ export default function TeamProfile() {
         if (teamData?.description) {
           setTeamDescription(teamData.description);
         }
-        if (teamData?.social_instagram) {
-          setTeamInstagramUrl(teamData.social_instagram);
+        if (teamSocialData?.social_instagram) {
+          setTeamInstagramUrl(teamSocialData.social_instagram);
         }
-
-        if (!scheduleError && upcomingGamesData) {
-          // Filter upcoming games to those involving this team (normalized match)
-          const teamGames = upcomingGamesData.filter((game: any) => {
+        if (!scheduleError && scheduleData) {
+          const now = new Date().getTime();
+          const teamGames = scheduleData.filter((game: any) => {
+            if (new Date(game.matchtime).getTime() < now) return false;
+            if (linkedTeamId) {
+              return game.home_team_id === linkedTeamId || game.away_team_id === linkedTeamId;
+            }
             const normalizedHome = normalizeTeamName(game.hometeam || '');
             const normalizedAway = normalizeTeamName(game.awayteam || '');
             return normalizedHome === normalizedTeamName || normalizedAway === normalizedTeamName;

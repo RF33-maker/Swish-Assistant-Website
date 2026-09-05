@@ -5,25 +5,32 @@ import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
+type AmbiguousTeam = {
+  leagueId: string;
+  teamName: string;
+  candidates: Array<{ teamId: string; name: string; score: number }>;
+};
+
 const UploadSectionLA = ({ leagues }: any) => {
   const { user } = useAuth();
   const [isUploading, setIsUploading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [lastFilePath, setLastFilePath] = useState<string | null>(null);
   const [selectedLeagueId, setSelectedLeagueId] = useState<string>("");
+  const [ambiguousTeams, setAmbiguousTeams] = useState<AmbiguousTeam[]>([]);
 
   const backfillParentLeagueId = async (
     parentLeagueId: string,
     snapshot: { ok: true; ids: Set<string> } | { ok: false },
     explicitChildIds?: string[],
-  ) => {
-    if (!user?.id) return;
+  ): Promise<string[]> => {
+    if (!user?.id) return [];
 
     try {
       // Preferred path: an explicit list of newly-created child league IDs.
       if (explicitChildIds && explicitChildIds.length > 0) {
         const targets = explicitChildIds.filter((id) => id && id !== parentLeagueId);
-        if (targets.length === 0) return;
+        if (targets.length === 0) return [];
         const { error } = await supabase
           .from("competitions")
           .update({ parent_league_id: parentLeagueId })
@@ -33,7 +40,7 @@ const UploadSectionLA = ({ leagues }: any) => {
         if (error) {
           console.error("❌ parent_league_id backfill (explicit) failed:", error.message);
         }
-        return;
+        return targets;
       }
 
       // Fallback path: snapshot diff. Only safe if the pre-parse snapshot succeeded.
@@ -45,7 +52,7 @@ const UploadSectionLA = ({ leagues }: any) => {
         setStatusMessage(
           "✅ Parsing complete! ⚠️ Could not auto-link new child leagues to this parent — please set parent_league_id manually if needed.",
         );
-        return;
+        return [];
       }
 
       const preExistingLeagueIds = snapshot.ids;
@@ -57,14 +64,14 @@ const UploadSectionLA = ({ leagues }: any) => {
 
       if (fetchErr) {
         console.error("❌ parent_league_id backfill query failed:", fetchErr.message);
-        return;
+        return [];
       }
 
       const newChildIds = (candidates || [])
         .map((row: any) => row.league_id as string)
         .filter((id) => id && id !== parentLeagueId && !preExistingLeagueIds.has(id));
 
-      if (newChildIds.length === 0) return;
+      if (newChildIds.length === 0) return [];
 
       const { error: updateErr } = await supabase
         .from("competitions")
@@ -76,9 +83,63 @@ const UploadSectionLA = ({ leagues }: any) => {
       if (updateErr) {
         console.error("❌ parent_league_id backfill update failed:", updateErr.message);
       }
+      return newChildIds;
     } catch (err) {
       console.error("❌ parent_league_id backfill threw:", err);
+      return [];
     }
+  };
+
+  const syncTeamIdentities = async (leagueIds: string[]) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token || leagueIds.length === 0) return;
+    const response = await fetch("/api/team-identities/sync", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ leagueIds }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Team matching failed");
+    const results = data.results || [];
+    const ambiguous = results.flatMap((result: any) =>
+      (result.decisions || [])
+        .filter((decision: any) => decision.kind === "ambiguous")
+        .map((decision: any) => ({ ...decision, leagueId: result.leagueId })),
+    );
+    setAmbiguousTeams(ambiguous);
+    const linked = results.reduce((sum: number, result: any) => sum + (result.linkedGames || 0), 0);
+    const created = results.reduce((sum: number, result: any) => sum + (result.createdTeams || 0), 0);
+    setStatusMessage((current) =>
+      `${current || "✅ Parsing complete!"} Team matching assigned ${linked} schedule sides and created ${created} new team ${created === 1 ? "identity" : "identities"}.${ambiguous.length ? ` ${ambiguous.length} name${ambiguous.length === 1 ? " needs" : "s need"} review.` : ""}`,
+    );
+  };
+
+  const resolveAmbiguous = async (item: AmbiguousTeam, sourceTeamId?: string) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return;
+    const response = await fetch("/api/team-identities/resolve", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ leagueId: item.leagueId, teamName: item.teamName, sourceTeamId }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Could not resolve team");
+    const result = data.result;
+    const remainsAmbiguous = (result?.decisions || []).some(
+      (decision: any) => decision.teamName === item.teamName && decision.kind === "ambiguous",
+    );
+    if ((result?.conflicts || []).length > 0 || remainsAmbiguous) {
+      throw new Error((result?.conflicts || []).join(". ") || "This team still needs review");
+    }
+    setAmbiguousTeams((current) => current.filter(
+      (team) => team.leagueId !== item.leagueId || team.teamName !== item.teamName,
+    ));
   };
 
   const triggerParse = async (filePath: string | null) => {
@@ -154,7 +215,9 @@ const UploadSectionLA = ({ leagues }: any) => {
             ? `✅ Parsing complete! ${rowsWritten} player stat ${rowLabel} written to database.`
             : "✅ Parsing complete! (0 records written — check that the file has recognisable player data)"
         );
-        await backfillParentLeagueId(selectedLeagueId, snapshot, explicitIds);
+        const linkedChildIds = await backfillParentLeagueId(selectedLeagueId, snapshot, explicitIds);
+        const targetIds = Array.from(new Set([selectedLeagueId, ...(explicitIds || []), ...linkedChildIds]));
+        await syncTeamIdentities(targetIds);
       } else {
         setStatusMessage(`❌ Parsing failed: ${data.error || "Unknown error"}`);
       }
@@ -277,6 +340,32 @@ const UploadSectionLA = ({ leagues }: any) => {
           </Button>
         )}
       </CardContent>
+      {ambiguousTeams.length > 0 && (
+        <CardContent className="px-6 pb-6 space-y-3">
+          <h3 className="font-semibold">Teams needing review</h3>
+          {ambiguousTeams.map((team) => (
+            <div key={`${team.leagueId}:${team.teamName}`} className="rounded-md border p-3 space-y-2">
+              <div className="font-medium">{team.teamName}</div>
+              <div className="flex flex-wrap gap-2">
+                {team.candidates.map((candidate) => (
+                  <Button
+                    key={candidate.teamId}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => resolveAmbiguous(team, candidate.teamId)}
+                  >
+                    Link to {candidate.name} ({Math.round(candidate.score * 100)}%)
+                  </Button>
+                ))}
+                <Button type="button" size="sm" onClick={() => resolveAmbiguous(team)}>
+                  This is a new team
+                </Button>
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      )}
     </Card>
   );
 };

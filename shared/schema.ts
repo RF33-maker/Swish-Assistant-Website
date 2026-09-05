@@ -50,11 +50,11 @@ export const teamLogos = pgTable("team_logos", {
 // Teams table for storing team information
 export const teams = pgTable("teams", {
   team_id: uuid("team_id").primaryKey().defaultRandom(),
-  league_id: varchar("league_id", { length: 255 }).notNull(),
+  league_id: uuid("league_id").references(() => leagues.league_id),
   name: varchar("name", { length: 255 }).notNull(),
-  logo_id: integer("logo_id").references(() => teamLogos.id),
+  description: text("description"),
+  logo_url: text("logo_url"),
   created_at: timestamp("created_at").defaultNow(),
-  updated_at: timestamp("updated_at").defaultNow(),
 });
 
 // Players table for storing player information
@@ -80,8 +80,10 @@ export const playerStats = pgTable("player_stats", {
   id: uuid("id").primaryKey().defaultRandom(),
   league_id: varchar("league_id", { length: 255 }).notNull(),
   player_id: uuid("player_id").notNull(), // References players.id
+  team_id: uuid("team_id").references(() => teams.team_id),
   user_id: varchar("user_id", { length: 255 }),
   game_id: varchar("game_id", { length: 255 }),
+  game_key: varchar("game_key", { length: 255 }),
   game_date: timestamp("game_date"),
   team: varchar("team", { length: 255 }),
   team_name: varchar("team_name", { length: 255 }),
@@ -200,7 +202,7 @@ export const insertTeamLogoSchema = createInsertSchema(teamLogos).pick({
 export const insertTeamSchema = createInsertSchema(teams).pick({
   league_id: true,
   name: true,
-  logo_id: true,
+  logo_url: true,
 });
 
 export const insertPlayersSchema = createInsertSchema(players).pick({

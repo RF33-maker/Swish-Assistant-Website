@@ -13,7 +13,6 @@ import React from "react";
 import { GameSummaryRow } from "./GameSummaryRow";
 import GameResultsCarousel from "@/components/GameResultsCarousel";
 import GameDetailModal from "@/components/GameDetailModal";
-import GamePreviewModal from "@/components/GamePreviewModal";
 
 import LeagueChatbot from "@/components/LeagueChatbot";
 import { TeamLogo } from "@/components/TeamLogo";
@@ -563,8 +562,6 @@ export default function LeaguePage() {
     const [sortBy, setSortBy] = useState("points");
     const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
     const [isGameModalOpen, setIsGameModalOpen] = useState(false);
-    const [selectedPreviewGame, setSelectedPreviewGame] = useState<GameSchedule | null>(null);
-    const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -5415,8 +5412,7 @@ export default function LeaguePage() {
                                     key={`upcoming-${game.game_id}-${index}`} 
                                     className="py-2 md:py-3 hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
                                     onClick={() => {
-                                      setSelectedPreviewGame(game);
-                                      setIsPreviewModalOpen(true);
+                                       handleSelectGame(game.game_id, 'schedule');
                                     }}
                                     data-testid={`upcoming-game-${index}`}
                                   >
@@ -6841,17 +6837,6 @@ export default function LeaguePage() {
             gameId={selectedGameId}
             isOpen={isGameModalOpen}
             onClose={handleCloseGameModal}
-          />
-        )}
-
-        {/* Game Preview Modal */}
-        {selectedPreviewGame && league && (
-          <GamePreviewModal
-            game={selectedPreviewGame}
-            leagueId={league.league_id}
-            isOpen={isPreviewModalOpen}
-            onClose={() => setIsPreviewModalOpen(false)}
-            gameKey={selectedPreviewGame.game_id}
           />
         )}
 

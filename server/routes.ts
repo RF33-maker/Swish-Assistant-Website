@@ -5,6 +5,7 @@ import * as http from "http";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { supabaseAdmin } from "./supabaseServiceClient";
 import { detectDuplicates } from "./playerMergeUtils";
+import { resolveAmbiguousTeam, syncTeamIdentitiesForLeague } from "./teamIdentityService";
 import multer from 'multer';
 import OpenAI from 'openai';
 import { XMLParser } from 'fast-xml-parser';
@@ -368,6 +369,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/team-identities/sync", async (req: Request, res: Response) => {
+    try {
+      const userId = await authenticateSupabaseUser(req);
+      if (!userId) return res.status(401).json({ error: "Authentication required" });
+      const { leagueIds, dryRun = false } = req.body || {};
+      if (!Array.isArray(leagueIds) || leagueIds.length === 0) {
+        return res.status(400).json({ error: "leagueIds is required" });
+      }
+      const uniqueIds = Array.from(new Set(leagueIds.filter((id): id is string => typeof id === "string" && id.length > 0)));
+      for (const leagueId of uniqueIds) {
+        if (!(await verifyLeagueOwnership(userId, leagueId)) && !(await requireAdmin(req, res))) return;
+      }
+      const results = [];
+      for (const leagueId of uniqueIds) {
+        results.push(await syncTeamIdentitiesForLeague(leagueId, { dryRun: Boolean(dryRun) }));
+      }
+      res.json({ results });
+    } catch (error: any) {
+      console.error("Team identity sync failed:", error);
+      res.status(500).json({ error: error.message || "Team identity sync failed" });
+    }
+  });
+
+  app.post("/api/team-identities/resolve", async (req: Request, res: Response) => {
+    try {
+      const userId = await authenticateSupabaseUser(req);
+      if (!userId) return res.status(401).json({ error: "Authentication required" });
+      const { leagueId, teamName, sourceTeamId } = req.body || {};
+      if (!leagueId || !teamName) return res.status(400).json({ error: "leagueId and teamName are required" });
+      if (!(await verifyLeagueOwnership(userId, leagueId)) && !(await requireAdmin(req, res))) return;
+      const result = await resolveAmbiguousTeam(leagueId, teamName, sourceTeamId);
+      res.json({ result });
+    } catch (error: any) {
+      console.error("Team identity resolution failed:", error);
+      res.status(500).json({ error: error.message || "Team identity resolution failed" });
+    }
+  });
+
   // Team logo save endpoint - Save logo association after upload
   app.post("/api/team-logos", async (req, res) => {
     try {
@@ -419,14 +458,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .upsert({
             league_id: leagueId,
             name: teamName,
-            logo_id: logoData.id,
-            updated_at: new Date().toISOString(),
+            logo_url: logoPath,
           }, {
             onConflict: 'league_id,name',
           });
 
         if (teamError) {
-          console.error("Error updating team with logo_id:", teamError);
+          console.error("Error updating team with logo_url:", teamError);
         }
       }
 
@@ -588,6 +626,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/leagues/:leagueId/team-logos", async (req, res) => {
     try {
       const { leagueId } = req.params;
+      const teamLogos: Record<string, string> = {};
+
+      // Prefer database-backed logos. Schedule team IDs may deliberately point
+      // at a stable team row created in an earlier season.
+      const { data: scheduleRows } = await supabaseAdmin
+        .from("game_schedule")
+        .select("hometeam, awayteam, home_team_id, away_team_id")
+        .eq("league_id", leagueId);
+      const linkedIds = Array.from(new Set(
+        (scheduleRows || []).flatMap((game: any) => [game.home_team_id, game.away_team_id]).filter(Boolean),
+      ));
+      if (linkedIds.length > 0) {
+        const { data: linkedTeams } = await supabaseAdmin
+          .from("teams")
+          .select("team_id, logo_url")
+          .in("team_id", linkedIds)
+          .not("logo_url", "is", null);
+        const logoById = new Map((linkedTeams || []).map((team: any) => [team.team_id, team.logo_url]));
+        for (const game of scheduleRows || []) {
+          const homeLogo = logoById.get(game.home_team_id);
+          const awayLogo = logoById.get(game.away_team_id);
+          if (game.hometeam && homeLogo) teamLogos[game.hometeam] = homeLogo;
+          if (game.awayteam && awayLogo) teamLogos[game.awayteam] = awayLogo;
+        }
+      }
+
+      const { data: currentTeams } = await supabaseAdmin
+        .from("teams")
+        .select("name, logo_url")
+        .eq("league_id", leagueId)
+        .not("logo_url", "is", null);
+      for (const team of currentTeams || []) {
+        if (team.name && team.logo_url) teamLogos[team.name] = team.logo_url;
+      }
 
       // List all files in the bucket whose name starts with this league's ID.
       // This is a single API call rather than N*5 HEAD requests — much faster.
@@ -598,19 +670,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (listError) {
         console.error("Error listing team-logos bucket:", listError);
-        return res.json({});
+        return res.json(teamLogos);
       }
 
       // Filter to only files that belong to this exact league ID
       const leagueFiles = (storageFiles || []).filter(f => f.name.startsWith(prefix));
 
       if (leagueFiles.length === 0) {
-        return res.json({});
+        res.set('Cache-Control', 'public, max-age=300');
+        return res.json(teamLogos);
       }
 
       // Build a normalised-name → public-URL map from the storage listing.
       // File names look like: <leagueId>_<Team_Name_With_Underscores>.<ext>
-      const teamLogos: Record<string, string> = {};
       for (const file of leagueFiles) {
         const withoutLeaguePrefix = file.name.slice(prefix.length);
         // Strip extension

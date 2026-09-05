@@ -6,3 +6,4 @@
 - [player_id collisions across competitions](player-id-collisions.md) — same player_id can belong to 2 different real people in different age groups; never merge stats by id alone, verify name similarity too.
 - [html2canvas text clipping](html2canvas-text-clipping.md) — CSS overflow/ellipsis can corrupt exported card lettering; fit and truncate critical text before capture.
 - [Portable npm lockfiles](portable-npm-lockfiles.md) — Replit-internal tarball URLs break Vercel installs; keep committed resolved URLs on the public npm registry.
+- [BCB season and stage navigation](bcb-season-stage-navigation.md) — BCB stores stage and year together in season; normalize them into year dropdown plus Regular Season/Trophy tabs.

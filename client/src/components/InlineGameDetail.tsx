@@ -6,6 +6,7 @@ import { TeamLogo } from "./TeamLogo";
 import { generatePlayCaption } from "@/utils/generatePlayCaption";
 import ShotChart, { type ShotData } from "./ShotChart";
 import { useReadableTeamColor } from "@/hooks/useReadableColor";
+import UpcomingGamePreview, { type PreviewGame } from "./UpcomingGamePreview";
 
 export interface GameInfo {
   date: string;
@@ -124,6 +125,7 @@ export function InlineGameDetail({
 }: InlineGameDetailProps) {
   const [loading, setLoading] = useState(true);
   const [gameInfo, setGameInfo] = useState<GameInfo | null>(null);
+  const [scheduledGame, setScheduledGame] = useState<PreviewGame | null>(null);
   const [leagueId, setLeagueId] = useState<string | null>(null);
   const [competitionName, setCompetitionName] = useState<string | null>(null);
   const [homeTeamStats, setHomeTeamStats] = useState<TeamStatRow | null>(null);
@@ -142,6 +144,7 @@ export function InlineGameDetail({
   useEffect(() => {
     if (!gameKey) return;
     setLoading(true);
+    setScheduledGame(null);
     setActiveTab("game");
     setEventsLoaded(false);
     setLiveEvents([]);
@@ -156,7 +159,19 @@ export function InlineGameDetail({
           .limit(1)
           .maybeSingle();
 
-        if (!detail) { setLoading(false); return; }
+        if (!detail) {
+          const { data: scheduled } = await supabase
+            .from("game_schedule")
+            .select("game_key,league_id,matchtime,hometeam,awayteam,status,competitionname,home_team_id,away_team_id")
+            .eq("game_key", gameKey)
+            .limit(1)
+            .maybeSingle();
+          if (scheduled) {
+            setScheduledGame(scheduled as PreviewGame);
+          }
+          setLoading(false);
+          return;
+        }
 
         const d = detail as any;
         if (d.league_id) setLeagueId(d.league_id);
@@ -459,6 +474,17 @@ export function InlineGameDetail({
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="w-8 h-8 animate-spin text-orange-500" style={{ color: brandColor }} />
+      </div>
+    );
+  }
+
+  if (!gameInfo && scheduledGame) {
+    return (
+      <div className="space-y-3">
+        <button onClick={onBack} className="inline-flex items-center gap-2 text-sm font-medium text-orange-500">
+          <ArrowLeft className="w-4 h-4" /> Back to league
+        </button>
+        <UpcomingGamePreview game={scheduledGame} embedded />
       </div>
     );
   }

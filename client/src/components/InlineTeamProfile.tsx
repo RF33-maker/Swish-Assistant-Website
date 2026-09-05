@@ -105,40 +105,83 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
   const { data: teamData, isLoading } = useQuery({
     queryKey: ['inline-team-profile', normalizedTeamName, leagueId, childLeagueIds?.join(',')],
     queryFn: async () => {
-      const { data: allTeamStats, error } = await supabase
-        .from("player_stats")
-        .select("*, players:player_id(slug)")
-        .in("league_id", effectiveLeagueIds)
-        .ilike("team_name", `%${normalizedTeamName}%`);
-
-      if (error) throw error;
-
-      const allStats = (allTeamStats || []).filter((stat: any) =>
-        normalizeTeamName(stat.team_name || stat.team || '') === normalizedTeamName
-      );
-
-      // Pre-season fallback: if no player_stats exist yet, pull roster from the players table
-      if (allStats.length === 0) {
-        // Step 1: resolve team_id from the teams table
-        let resolvedTeamId: string | null = null;
+      const { data: identityGames } = await supabase
+        .from("game_schedule")
+        .select("hometeam, awayteam, home_team_id, away_team_id")
+        .in("league_id", effectiveLeagueIds);
+      const identityGame = (identityGames || []).find((game: any) => {
+        const homeMatches = normalizeTeamName(game.hometeam || "") === normalizedTeamName;
+        const awayMatches = normalizeTeamName(game.awayteam || "") === normalizedTeamName;
+        return (homeMatches && game.home_team_id) || (awayMatches && game.away_team_id);
+      });
+      let resolvedTeamId = identityGame
+        ? normalizeTeamName(identityGame.hometeam || "") === normalizedTeamName
+          ? identityGame.home_team_id
+          : identityGame.away_team_id
+        : null;
+      if (!resolvedTeamId) {
+        const { data: linkedStats } = await supabase
+          .from("player_stats")
+          .select("team_id, team_name")
+          .in("league_id", effectiveLeagueIds)
+          .not("team_id", "is", null)
+          .ilike("team_name", `%${normalizedTeamName}%`);
+        resolvedTeamId = (linkedStats || []).find((stat: any) =>
+          normalizeTeamName(stat.team_name || "") === normalizedTeamName
+        )?.team_id || null;
+      }
+      if (!resolvedTeamId) {
         const { data: teamsRows } = await supabase
           .from("teams")
           .select("team_id, name")
           .in("league_id", effectiveLeagueIds);
-        if (teamsRows) {
-          const match = teamsRows.find(
+        resolvedTeamId = (teamsRows || []).find((team: any) =>
+          normalizeTeamName(team.name || "") === normalizedTeamName
+        )?.team_id || null;
+      }
+
+      let statsQuery = supabase
+        .from("player_stats")
+        .select("*, players:player_id(slug)");
+      if (resolvedTeamId) {
+        statsQuery = statsQuery.eq("team_id", resolvedTeamId);
+      } else {
+        statsQuery = statsQuery
+          .in("league_id", effectiveLeagueIds)
+          .ilike("team_name", `%${normalizedTeamName}%`);
+      }
+      const { data: allTeamStats, error } = await statsQuery;
+
+      if (error) throw error;
+
+      const allStats = resolvedTeamId
+        ? (allTeamStats || [])
+        : (allTeamStats || []).filter((stat: any) =>
+            normalizeTeamName(stat.team_name || stat.team || '') === normalizedTeamName
+          );
+
+      // Pre-season fallback: if no player_stats exist yet, pull roster from the players table
+      if (allStats.length === 0) {
+        // Step 1: resolve team_id from the teams table
+        let rosterTeamId: string | null = resolvedTeamId;
+        if (!rosterTeamId) {
+          const { data: teamsRows } = await supabase
+            .from("teams")
+            .select("team_id, name")
+            .in("league_id", effectiveLeagueIds);
+          const match = (teamsRows || []).find(
             (t: any) => normalizeTeamName(t.name || '') === normalizedTeamName
           );
-          resolvedTeamId = match?.team_id ?? null;
+          rosterTeamId = match?.team_id ?? null;
         }
 
         // Step 2: query players by team_id (direct), or fall back to league+team_name match
         let preSeasonPlayers: any[] = [];
-        if (resolvedTeamId) {
+        if (rosterTeamId) {
           const { data: playersById } = await supabase
             .from("players")
             .select("id, full_name, slug, photo_path_bg_removed, position, team_id")
-            .eq("team_id", resolvedTeamId);
+            .eq("team_id", rosterTeamId);
           preSeasonPlayers = playersById || [];
         } else {
           const { data: playersByName } = await supabase

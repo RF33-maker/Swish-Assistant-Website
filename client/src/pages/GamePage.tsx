@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import LeagueChatbot from "@/components/LeagueChatbot";
 import ShotChart, { type ShotData } from "@/components/ShotChart";
+import UpcomingGamePreview from "@/components/UpcomingGamePreview";
 
 interface GameSchedule {
   game_key: string;
@@ -20,6 +21,9 @@ interface GameSchedule {
   awayteam: string;
   status: string | null;
   competitionname: string | null;
+  venue?: string | null;
+  home_team_id?: string | null;
+  away_team_id?: string | null;
 }
 
 interface PlayerStat {
@@ -129,6 +133,29 @@ function calculateTimeLeft(matchtime: string): TimeLeft | null {
   };
 }
 
+function normalizeGameStatus(status?: string | null) {
+  return (status || "").toLowerCase().trim().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
+}
+
+function isFinalGameStatus(status?: string | null) {
+  const value = normalizeGameStatus(status);
+  return ["final", "finished", "completed", "complete", "ft", "full time", "ended"].includes(value);
+}
+
+function isLiveGameStatus(status?: string | null) {
+  const value = normalizeGameStatus(status);
+  return value === "live"
+    || value === "playing"
+    || value === "in progress"
+    || value === "halftime"
+    || value === "half time"
+    || value === "ot"
+    || value === "overtime"
+    || /\bq[1-4]\b/.test(value)
+    || /\bquarter [1-4]\b/.test(value)
+    || /\bperiod [1-9]\b/.test(value);
+}
+
 function formatMatchTime(matchtime: string): string {
   const date = new Date(matchtime);
   return date.toLocaleDateString('en-GB', {
@@ -163,14 +190,14 @@ function formatTime(matchtime: string): string {
 }
 
 function getStatusBadge(status: string | null, matchtime: string) {
-  const normalizedStatus = status?.toLowerCase() || '';
+  const normalizedStatus = normalizeGameStatus(status);
   const now = new Date();
   const gameTime = new Date(matchtime);
   
-  if (normalizedStatus === 'final' || normalizedStatus === 'finished') {
+  if (isFinalGameStatus(normalizedStatus)) {
     return <span className="px-3 py-1 bg-green-600 text-white text-sm font-semibold rounded-full">FINAL</span>;
   }
-  if (normalizedStatus === 'live' || normalizedStatus === 'in_progress') {
+  if (isLiveGameStatus(normalizedStatus)) {
     return <span className="px-3 py-1 bg-red-500 text-white text-sm font-semibold rounded-full animate-pulse">LIVE</span>;
   }
   if (gameTime > now) {
@@ -293,7 +320,7 @@ export default function GamePage() {
     queryFn: async () => {
       const { data, error } = await db
         .from('game_schedule')
-        .select('game_key, league_id, matchtime, hometeam, awayteam, status, competitionname')
+        .select('game_key, league_id, matchtime, hometeam, awayteam, status, competitionname, home_team_id, away_team_id')
         .eq('game_key', gameKey)
         .single();
       
@@ -434,18 +461,20 @@ export default function GamePage() {
   }, [gameData?.matchtime]);
 
   // Check if game is scheduled (for preview mode features)
-  const isScheduled = gameData ? (
-    new Date(gameData.matchtime) > new Date() && 
-    gameData.status?.toLowerCase() !== 'live' && 
-    gameData.status?.toLowerCase() !== 'final' &&
-    gameData.status?.toLowerCase() !== 'finished'
-  ) : false;
+  const hasOfficialGameData = (playerStats?.length || 0) > 0 || (teamStats?.length || 0) > 0;
+  const isScheduled = !!gameData
+    && !isLiveGameStatus(gameData.status)
+    && !isFinalGameStatus(gameData.status)
+    && !hasOfficialGameData;
 
   // Fetch home team ID
   const { data: homeTeamData } = useQuery({
-    queryKey: ['team-lookup-game', gameData?.league_id, gameData?.hometeam, isTestMode],
+    queryKey: ['team-lookup-game', gameData?.league_id, gameData?.home_team_id, gameData?.hometeam, isTestMode],
     queryFn: async () => {
       if (!gameData) return null;
+      if (gameData.home_team_id) {
+        return { team_id: gameData.home_team_id, name: gameData.hometeam };
+      }
       let { data, error } = await db
         .from('teams')
         .select('team_id, name')
@@ -471,9 +500,12 @@ export default function GamePage() {
 
   // Fetch away team ID
   const { data: awayTeamData } = useQuery({
-    queryKey: ['team-lookup-game', gameData?.league_id, gameData?.awayteam, isTestMode],
+    queryKey: ['team-lookup-game', gameData?.league_id, gameData?.away_team_id, gameData?.awayteam, isTestMode],
     queryFn: async () => {
       if (!gameData) return null;
+      if (gameData.away_team_id) {
+        return { team_id: gameData.away_team_id, name: gameData.awayteam };
+      }
       let { data, error } = await db
         .from('teams')
         .select('team_id, name')
@@ -859,9 +891,20 @@ export default function GamePage() {
     );
   }
 
-  const statusLower = gameData.status?.toLowerCase() || '';
-  let isLive = statusLower === 'live' || statusLower === 'in_progress' || statusLower.includes('live');
-  let isFinal = statusLower === 'final' || statusLower === 'finished' || statusLower === 'completed';
+  // Scheduled rows are complete records even when no result/stat rows exist yet.
+  // Keep this branch ahead of the recap UI so an upcoming game never looks missing.
+  if (isScheduled) {
+    return (
+      <UpcomingGamePreview
+        game={gameData}
+        onRefresh={() => window.location.reload()}
+      />
+    );
+  }
+
+  const statusLower = normalizeGameStatus(gameData.status);
+  let isLive = isLiveGameStatus(statusLower);
+  let isFinal = isFinalGameStatus(statusLower);
 
   const latestEvent = liveEvents && liveEvents.length > 0 ? liveEvents[0] : null;
   const currentPeriod = latestEvent?.period || null;
@@ -869,7 +912,7 @@ export default function GamePage() {
 
   // Only auto-expire to FINAL if the DB status is ambiguous (not explicitly live/in_progress).
   // If the status field explicitly says live, trust it — don't override with the time check.
-  const statusIsExplicitlyLive = statusLower === 'live' || statusLower === 'in_progress';
+  const statusIsExplicitlyLive = isLiveGameStatus(statusLower);
   if (isLive && !statusIsExplicitlyLive) {
     const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
     const now = new Date();
