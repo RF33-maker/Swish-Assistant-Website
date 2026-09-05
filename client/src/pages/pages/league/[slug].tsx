@@ -65,6 +65,7 @@ function shortenAgeLabel(label: string): string {
 type GameSchedule = {
   game_id: string;
   game_date: string;
+  league_id?: string;
   team1: string;
   team2: string;
   kickoff_time?: string;
@@ -1972,14 +1973,31 @@ export default function LeaguePage() {
             setGameSummaries(processedRecentGames);
             setPlayerStats(allPlayerStats || []);
             
-            const { data: gameResults, error: gameResultsError } = await applyLeagueFilter(
-              db.from('v_game_results').select('*').limit(2000)
-            );
+            const [
+              { data: gameResults, error: gameResultsError },
+              { data: scheduledFixtures, error: scheduledFixturesError },
+            ] = await Promise.all([
+              applyLeagueFilter(db.from('v_game_results').select('*').limit(2000)),
+              applyLeagueFilter(
+                db
+                  .from('game_schedule')
+                  .select('game_key, matchtime, hometeam, awayteam, status, league_id')
+                  .limit(2000)
+              ),
+            ]);
 
-            if (gameResults && !gameResultsError) {
-              const games: GameSchedule[] = gameResults.map((game: any) => ({
+            if (gameResultsError) {
+              console.error("Error fetching from v_game_results:", gameResultsError);
+            }
+            if (scheduledFixturesError) {
+              console.error("Error fetching from game_schedule:", scheduledFixturesError);
+            }
+
+            if (!gameResultsError || !scheduledFixturesError) {
+              const resultGames: GameSchedule[] = (gameResults || []).map((game: any) => ({
                 game_id: game.game_key,
                 game_date: game.match_time,
+                league_id: game.league_id,
                 team1: game.home_team,
                 team2: game.away_team,
                 kickoff_time: game.match_time ? new Date(game.match_time).toLocaleTimeString('en-US', {
@@ -1997,7 +2015,31 @@ export default function LeaguePage() {
                 numeric_id: game.game_key
               })).filter((game: GameSchedule) => game.team1 && game.team2);
 
-              const sortedGames = games.sort((a, b) => {
+              const fixtureGames: GameSchedule[] = (scheduledFixtures || []).map((game: any) => ({
+                game_id: game.game_key,
+                game_date: game.matchtime,
+                league_id: game.league_id,
+                team1: game.hometeam,
+                team2: game.awayteam,
+                kickoff_time: game.matchtime ? new Date(game.matchtime).toLocaleTimeString('en-US', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: true,
+                  timeZone: 'UTC'
+                }) : undefined,
+                status: game.status || 'SCHEDULED',
+                age_group: isParent && game.league_id ? childNameMap.get(game.league_id) : undefined,
+                numeric_id: game.game_key,
+              })).filter((game: GameSchedule) => game.game_id && game.team1 && game.team2 && game.game_date);
+
+              const gamesByKey = new Map<string, GameSchedule>();
+              fixtureGames.forEach((game) => gamesByKey.set(game.game_id, game));
+              resultGames.forEach((game) => {
+                const scheduled = gamesByKey.get(game.game_id);
+                gamesByKey.set(game.game_id, { ...scheduled, ...game });
+              });
+
+              const sortedGames = Array.from(gamesByKey.values()).sort((a, b) => {
                 if (!a.game_date || !b.game_date) return 0;
                 const dateA = new Date(a.game_date).getTime();
                 const dateB = new Date(b.game_date).getTime();
@@ -2005,8 +2047,7 @@ export default function LeaguePage() {
               });
 
               setSchedule(sortedGames);
-            } else if (gameResultsError) {
-              console.error("Error fetching from v_game_results:", gameResultsError);
+            } else {
               setSchedule([]);
             }
             
