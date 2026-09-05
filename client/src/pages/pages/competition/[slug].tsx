@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRoute, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { Trophy, ArrowLeft, Users } from "lucide-react";
@@ -29,6 +29,19 @@ interface GenderGroup {
 
 const GENDER_ORDER = ["Men's", "Men", "Male", "Women's", "Women", "Female"];
 
+function getSeasonLabel(competition: SeasonCompetition): string {
+  const raw = `${competition.season || ""} ${competition.name}`;
+  const match = raw.match(/\b(20\d{2})\s*[-/]\s*(20)?(\d{2})\b/);
+  return match ? `${match[1]}/${match[3]}` : competition.season || competition.name;
+}
+
+function getCompetitionLabel(competition: SeasonCompetition): string {
+  const identity = `${competition.season || ""} ${competition.name}`.toLowerCase();
+  if (identity.includes("trophy")) return "Trophy";
+  if (identity.includes("regular") || identity.includes("season")) return "Regular Season";
+  return competition.name;
+}
+
 export default function CompetitionPage() {
   const [, params] = useRoute("/league/:slug");
   const [, setLocation] = useLocation();
@@ -37,6 +50,7 @@ export default function CompetitionPage() {
   const [league, setLeague] = useState<League | null>(null);
   const [seasons, setSeasons] = useState<SeasonCompetition[]>([]);
   const [genderGroups, setGenderGroups] = useState<GenderGroup[]>([]);
+  const [selectedSeason, setSelectedSeason] = useState("");
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -101,17 +115,32 @@ export default function CompetitionPage() {
         setGenderGroups(groups);
         setSeasons([]);
         setLoading(false);
-      } else if (seasonList.length > 0) {
-        // Year-over-year seasons — redirect straight to the most recent
-        setLocation(`/competition/${seasonList[0].slug}`, { replace: true });
       } else {
         setSeasons(seasonList);
+        setSelectedSeason(seasonList[0] ? getSeasonLabel(seasonList[0]) : "");
         setLoading(false);
       }
     };
 
     fetchData();
   }, [slug]);
+
+  const seasonLabels = useMemo(
+    () => Array.from(new Set(seasons.map(getSeasonLabel))),
+    [seasons],
+  );
+
+  const visibleCompetitions = useMemo(
+    () => seasons
+      .filter((competition) => getSeasonLabel(competition) === selectedSeason)
+      .sort((a, b) => {
+        const order = ["Regular Season", "Trophy"];
+        const aIndex = order.indexOf(getCompetitionLabel(a));
+        const bIndex = order.indexOf(getCompetitionLabel(b));
+        return (aIndex === -1 ? order.length : aIndex) - (bIndex === -1 ? order.length : bIndex);
+      }),
+    [seasons, selectedSeason],
+  );
 
   if (loading) {
     return (
@@ -172,7 +201,7 @@ export default function CompetitionPage() {
             {league.description}
           </p>
         )}
-        {genderGroups.length > 0 && (
+        {(genderGroups.length > 0 || seasons.length > 0) && (
           <p className="mt-2 text-xs text-slate-400 dark:text-slate-500 uppercase tracking-wider font-medium">
             Choose a competition
           </p>
@@ -215,22 +244,38 @@ export default function CompetitionPage() {
           </div>
         )}
 
-        {/* Year-over-year season list (non-gender leagues — shown when no auto-redirect happened) */}
+        {/* Season and competition picker for non-gender league brands */}
         {seasons.length > 0 && (
-          <div className="flex flex-col gap-3">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1">
-              Seasons
-            </h2>
-            {seasons.map((s) => (
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                Season
+              </h2>
+              {seasonLabels.length > 1 && (
+                <select
+                  value={selectedSeason}
+                  onChange={(event) => setSelectedSeason(event.target.value)}
+                  aria-label="Select season"
+                  className="w-full sm:w-44 rounded-xl border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 px-4 py-2.5 text-sm font-semibold text-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-400"
+                >
+                  {seasonLabels.map((season) => (
+                    <option key={season} value={season}>{season}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {visibleCompetitions.map((competition) => (
               <button
-                key={s.slug}
-                onClick={() => setLocation(`/competition/${s.slug}`)}
-                className="relative overflow-hidden rounded-2xl h-24 hover:scale-[1.02] hover:shadow-lg transition-all duration-200 text-left group w-full"
+                key={competition.slug}
+                onClick={() => setLocation(`/competition/${competition.slug}`)}
+                className="relative overflow-hidden rounded-2xl min-h-[150px] hover:scale-[1.02] hover:shadow-xl transition-all duration-200 text-left group w-full"
                 style={{ backgroundColor: "#1a1a1a" }}
               >
-                {s.banner_url && (
+                {competition.banner_url && (
                   <img
-                    src={s.banner_url}
+                    src={competition.banner_url}
                     alt=""
                     className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:opacity-50 transition-opacity"
                   />
@@ -238,19 +283,18 @@ export default function CompetitionPage() {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
                 <div className="absolute bottom-0 left-0 right-0 p-4 flex items-end justify-between">
                   <div>
-                    <span className="font-semibold text-sm text-white drop-shadow-sm block">
-                      {s.season || s.name}
+                    <span className="font-extrabold text-xl text-white drop-shadow-sm block">
+                      {getCompetitionLabel(competition)}
                     </span>
-                    {s.season && s.name !== s.season && (
-                      <span className="text-xs text-white/60">{s.name}</span>
-                    )}
+                    <span className="mt-1 text-xs text-white/60 block">{competition.name}</span>
                   </div>
-                  {s.logo_url && (
-                    <img src={s.logo_url} alt="" className="h-9 w-9 object-contain" />
+                  {competition.logo_url && (
+                    <img src={competition.logo_url} alt="" className="h-9 w-9 object-contain" />
                   )}
                 </div>
               </button>
             ))}
+            </div>
           </div>
         )}
 
