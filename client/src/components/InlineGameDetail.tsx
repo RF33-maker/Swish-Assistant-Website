@@ -85,6 +85,11 @@ interface LiveEvent {
   points: number | null;
 }
 
+interface LiveClock {
+  period: number | null;
+  clock: string | null;
+}
+
 function parseMinutes(s: string | null | undefined): string {
   if (!s) return "0:00";
   if (s.includes(":")) return s;
@@ -110,6 +115,15 @@ function getStatusBadge(status: string | null | undefined) {
   return <span className="px-3 py-1 bg-slate-500 text-white text-sm font-semibold rounded-full">UPCOMING</span>;
 }
 
+function formatLiveClock(clock: string | null | undefined): string | null {
+  if (!clock) return null;
+  const [minutes, seconds] = clock.split(":");
+  const minuteValue = Number.parseInt(minutes, 10);
+  const secondValue = Number.parseInt(seconds, 10);
+  if (!Number.isFinite(minuteValue) || !Number.isFinite(secondValue)) return clock;
+  return `${minuteValue}:${secondValue.toString().padStart(2, "0")}`;
+}
+
 function formatDate(s: string): string {
   return new Date(s).toLocaleDateString("en-GB", {
     weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC",
@@ -133,6 +147,7 @@ export function InlineGameDetail({
   const [homePlayerStats, setHomePlayerStats] = useState<PlayerStat[]>([]);
   const [awayPlayerStats, setAwayPlayerStats] = useState<PlayerStat[]>([]);
   const [liveEvents, setLiveEvents] = useState<LiveEvent[]>([]);
+  const [liveClock, setLiveClock] = useState<LiveClock | null>(null);
   const [eventsLoaded, setEventsLoaded] = useState(false);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [shotData, setShotData] = useState<ShotData[]>([]);
@@ -148,6 +163,7 @@ export function InlineGameDetail({
     setActiveTab("game");
     setEventsLoaded(false);
     setLiveEvents([]);
+    setLiveClock(null);
     setShotData([]);
 
     (async () => {
@@ -441,6 +457,36 @@ export function InlineGameDetail({
     }
   }, [activeTab, eventsLoaded, fetchEventsAndShots]);
 
+  useEffect(() => {
+    const status = (gameInfo?.status || "").toLowerCase();
+    const gameIsLive = status === "live" || status === "in_progress" || status.includes("live");
+    if (!gameIsLive) {
+      setLiveClock(null);
+      return;
+    }
+
+    let active = true;
+    const fetchLiveClock = async () => {
+      const { data } = await supabase
+        .from("live_events")
+        .select("period,clock")
+        .eq("game_key", gameKey)
+        .order("action_number", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (active && data) {
+        setLiveClock({ period: data.period ?? null, clock: data.clock ?? null });
+      }
+    };
+
+    fetchLiveClock();
+    const interval = window.setInterval(fetchLiveClock, 15_000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, [gameKey, gameInfo?.status]);
+
   const handleCopyLink = useCallback(() => {
     navigator.clipboard.writeText(window.location.href).then(() => {
       setCopied(true);
@@ -597,8 +643,14 @@ export function InlineGameDetail({
       <div className="bg-white dark:bg-neutral-900 rounded-xl overflow-hidden shadow-lg border border-orange-100 dark:border-neutral-800">
         {/* Hero header — matches GamePage */}
         <div className="bg-gradient-to-r from-orange-100 via-orange-50 to-orange-100 dark:from-neutral-800 dark:via-neutral-850 dark:to-neutral-800 p-6 md:p-8 border-b border-orange-200 dark:border-neutral-700">
-          <div className="flex justify-center mb-4">
+          <div className="flex flex-col items-center justify-center gap-1 mb-4">
             {getStatusBadge(status)}
+            {isLive && liveClock && (
+              <span className="text-sm font-semibold tabular-nums text-slate-700 dark:text-slate-200">
+                {liveClock.period ? `Q${liveClock.period} · ` : ""}
+                {formatLiveClock(liveClock.clock)}
+              </span>
+            )}
           </div>
 
           <div className="flex items-center justify-between gap-2 md:gap-8">
