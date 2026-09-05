@@ -655,7 +655,14 @@ export default function LeaguePage() {
   const [selectedAgeGroup, setSelectedAgeGroup] = useState<string>('all');
   const [selectedStop, setSelectedStop] = useState<string>('all');
   const [parentStandingsGroups, setParentStandingsGroups] = useState<{ageGroup: string, standings: any[], poolAStandings: any[], poolBStandings: any[], hasPools: boolean}[]>([]);
-  const [siblingSeasons, setSiblingSeasons] = useState<{ name: string; slug: string; season: string | null; division?: string | null }[]>([]);
+  type SeasonCompetitionOption = {
+    name: string;
+    slug: string;
+    season: string | null;
+    gender?: string | null;
+    division?: string | null;
+  };
+  const [siblingSeasons, setSiblingSeasons] = useState<SeasonCompetitionOption[]>([]);
 
   const getTeamLogoUrl = (teamName: string): string | undefined => {
     if (!teamName) return undefined;
@@ -729,6 +736,78 @@ export default function LeaguePage() {
     : 'rgba(100, 100, 100, 0.05)';
 
   const isParentLeague = childCompetitions.length > 0;
+  const isBritishChampionship = useMemo(() => {
+    const identity = `${league?.name || ''} ${slug}`.toLowerCase();
+    return identity.includes('british championship');
+  }, [league?.name, slug]);
+
+  const getBritishChampionshipStageLabel = (competition: SeasonCompetitionOption) => {
+    const stage = `${competition.division || ''} ${competition.season || ''} ${competition.name}`.toLowerCase();
+    if (stage.includes('trophy')) return 'Trophy';
+    if (stage.includes('regular')) return 'Regular Season';
+    if (stage.includes('season')) return 'Regular Season';
+    return competition.division || competition.name;
+  };
+
+  const getBritishChampionshipSeasonLabel = (competition: SeasonCompetitionOption) => {
+    const raw = `${competition.season || ''} ${competition.name}`;
+    const seasonMatch = raw.match(/\b(20\d{2})\s*[-/]\s*(20)?(\d{2})\b/);
+    if (!seasonMatch) return competition.season || competition.name;
+    return `${seasonMatch[1]}/${seasonMatch[3]}`;
+  };
+
+  const britishChampionshipSeasons = useMemo(
+    () => Array.from(
+      new Set(
+        siblingSeasons
+          .map((competition) => getBritishChampionshipSeasonLabel(competition))
+          .filter((season): season is string => !!season),
+      ),
+    ),
+    [siblingSeasons],
+  );
+
+  const currentBritishChampionshipSeason = getBritishChampionshipSeasonLabel({
+    name: league?.name || '',
+    slug,
+    season: (league as any)?.season || null,
+    division: (league as any)?.division || null,
+  }) || britishChampionshipSeasons[0] || '';
+  const britishChampionshipStages = useMemo(() => {
+    if (!isBritishChampionship || !currentBritishChampionshipSeason) return [];
+
+    const seen = new Set<string>();
+    return siblingSeasons
+      .filter((competition) => getBritishChampionshipSeasonLabel(competition) === currentBritishChampionshipSeason)
+      .filter((competition) => {
+        const label = getBritishChampionshipStageLabel(competition);
+        if (seen.has(label)) return false;
+        seen.add(label);
+        return true;
+      })
+      .sort((a, b) => {
+        const order = ['Regular Season', 'Trophy'];
+        return order.indexOf(getBritishChampionshipStageLabel(a)) - order.indexOf(getBritishChampionshipStageLabel(b));
+      });
+  }, [isBritishChampionship, currentBritishChampionshipSeason, siblingSeasons]);
+
+  const navigateToBritishChampionshipSeason = (season: string) => {
+    const currentStage = getBritishChampionshipStageLabel({
+      name: league?.name || '',
+      slug,
+      season: (league as any)?.season || null,
+      division: (league as any)?.division || null,
+    });
+    const candidates = siblingSeasons.filter(
+      (competition) => getBritishChampionshipSeasonLabel(competition) === season,
+    );
+    const destination =
+      candidates.find((competition) => getBritishChampionshipStageLabel(competition) === currentStage) ||
+      candidates.find((competition) => getBritishChampionshipStageLabel(competition) === 'Regular Season') ||
+      candidates[0];
+
+    if (destination) navigate(`/competition/${destination.slug}`);
+  };
 
   // Preferred sort order for gender labels so Men's always precedes Women's
   const GENDER_ORDER = ["Men's", "Women's", "Men", "Women", "Male", "Female", "Mixed"];
@@ -1787,7 +1866,7 @@ export default function LeaguePage() {
             try {
               const res = await fetch(`/api/league/${(data as any).competition_id}/competitions`);
               if (res.ok) {
-                const allSeasons: { name: string; slug: string; season: string | null; gender?: string | null }[] = await res.json();
+                const allSeasons: SeasonCompetitionOption[] = await res.json();
                 const currentGender = (data as any).gender ?? null;
                 const filtered = currentGender
                   ? allSeasons.filter(s => (s.gender ?? null) === currentGender)
@@ -3867,7 +3946,21 @@ export default function LeaguePage() {
                 <h2 className="text-3xl sm:text-4xl font-bold text-white drop-shadow-md">
                   {(displayLeagueName || "League Name").replace(/\s*FIBA$/i, "")}
                 </h2>
-                {(league as any)?.competition_id && siblingSeasons.length > 1 && (
+                {isBritishChampionship && britishChampionshipSeasons.length > 1 ? (
+                  <select
+                    value={currentBritishChampionshipSeason}
+                    onChange={(e) => navigateToBritishChampionshipSeason(e.target.value)}
+                    aria-label="Select British Championship Basketball season"
+                    className="text-xs font-semibold bg-white/20 hover:bg-white/30 border border-white/40 text-white rounded-full px-3 py-1 cursor-pointer backdrop-blur-sm transition-colors focus:outline-none focus:ring-1 focus:ring-white/60"
+                    style={{ WebkitAppearance: 'none', appearance: 'none', paddingRight: '1.5rem', backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='white'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 0.5rem center' }}
+                  >
+                    {britishChampionshipSeasons.map((season) => (
+                      <option key={season} value={season} style={{ background: '#1a1a2e', color: 'white' }}>
+                        {season}
+                      </option>
+                    ))}
+                  </select>
+                ) : (league as any)?.competition_id && siblingSeasons.length > 1 ? (
                   <select
                     value={slug}
                     onChange={(e) => navigate(`/competition/${e.target.value}`)}
@@ -3880,6 +3973,27 @@ export default function LeaguePage() {
                       </option>
                     ))}
                   </select>
+                ) : null}
+                {isBritishChampionship && britishChampionshipStages.length > 1 && (
+                  <div className="flex items-center gap-1.5" data-testid="british-championship-stage-tabs">
+                    {britishChampionshipStages.map((competition) => {
+                      const label = getBritishChampionshipStageLabel(competition);
+                      const isSelected = competition.slug === slug;
+                      return (
+                        <button
+                          key={competition.slug}
+                          onClick={() => navigate(`/competition/${competition.slug}`)}
+                          className={`rounded-full border px-3 py-1 text-xs font-semibold backdrop-blur-sm transition-colors ${
+                            isSelected
+                              ? 'border-white bg-white text-slate-900'
+                              : 'border-white/40 bg-white/20 text-white hover:bg-white/30'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
               {(league as any)?.instagram_handle && (
