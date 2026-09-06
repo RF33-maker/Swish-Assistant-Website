@@ -26,6 +26,9 @@ export type PlayerPerformanceV1Data = {
   photo_url?: string;
   background_photo_url?: string;
   photo_focus_y?: number;
+  photo_zoom?: number;
+  photo_position_x?: number;
+  photo_position_y?: number;
   league_name?: string;
   league_logo_url?: string;
   sponsor_logo_urls?: string[];

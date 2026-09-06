@@ -1217,6 +1217,132 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Fixed-shape performance feed for Swish Social. This uses the service-role
+  // client only after every requested competition has been validated as public
+  // or as a direct child of a public competition.
+  const SOCIAL_PERFORMANCE_COLUMNS = [
+    "id",
+    "league_id",
+    "player_id",
+    "numeric_id",
+    "game_key",
+    "firstname",
+    "familyname",
+    "team_name",
+    "sminutes",
+    "spoints",
+    "sreboundstotal",
+    "sassists",
+    "ssteals",
+    "sblocks",
+    "sfieldgoalsmade",
+    "sfieldgoalsattempted",
+    "sthreepointersmade",
+    "sthreepointersattempted",
+    "sfreethrowsmade",
+    "sfreethrowsattempted",
+    "sturnovers",
+    "splusminuspoints",
+    "players:player_id(id, full_name, photo_path)",
+  ].join(", ");
+
+  app.post("/api/public/social-performances", async (req: Request, res: Response) => {
+    try {
+      const { leagueIds, offset = 0, limit = 50, createdAfter } = req.body as {
+        leagueIds?: string[];
+        offset?: number;
+        limit?: number;
+        createdAfter?: string;
+      };
+      if (!Array.isArray(leagueIds) || leagueIds.length === 0) {
+        return res.status(400).json({ error: "leagueIds must be a non-empty array" });
+      }
+
+      const requestedIds = Array.from(
+        new Set(leagueIds.filter((value): value is string => typeof value === "string" && value.length > 0)),
+      ).slice(0, 200);
+      const allowedIds = await filterLeagueIdsForPublicScope(requestedIds);
+      if (allowedIds.length === 0) {
+        return res.json({ rows: [], teamStats: [] });
+      }
+
+      const safeOffset = Math.max(0, Math.floor(Number(offset) || 0));
+      const safeLimit = Math.min(100, Math.max(1, Math.floor(Number(limit) || 50)));
+      let statsQuery = supabaseAdmin
+        .from("player_stats")
+        .select(SOCIAL_PERFORMANCE_COLUMNS)
+        .in("league_id", allowedIds)
+        .gt("spoints", 0)
+        .order("spoints", { ascending: false });
+
+      if (createdAfter) {
+        const timestamp = Date.parse(createdAfter);
+        if (!Number.isFinite(timestamp)) {
+          return res.status(400).json({ error: "createdAfter must be a valid timestamp" });
+        }
+        statsQuery = statsQuery.gte("created_at", new Date(timestamp).toISOString());
+      }
+
+      const { data: rows, error: statsError } = await statsQuery.range(
+        safeOffset,
+        safeOffset + safeLimit - 1,
+      );
+      if (statsError) {
+        console.error("Error fetching Social performances:", statsError.message);
+        return res.status(500).json({ error: "Failed to fetch performances" });
+      }
+
+      const numericIds = Array.from(
+        new Set((rows || []).map((row: any) => row.numeric_id).filter(Boolean)),
+      );
+      const gameKeys = Array.from(
+        new Set((rows || []).map((row: any) => row.game_key).filter(Boolean)),
+      );
+      const teamQueries: PromiseLike<{ data: any[] | null; error: any }>[] = [];
+      const teamStatsProjection = "numeric_id, game_key, name, tot_spoints, league_id";
+
+      if (numericIds.length > 0) {
+        teamQueries.push(
+          supabaseAdmin
+            .from("team_stats")
+            .select(teamStatsProjection)
+            .in("league_id", allowedIds)
+            .in("numeric_id", numericIds),
+        );
+      }
+      if (gameKeys.length > 0) {
+        teamQueries.push(
+          supabaseAdmin
+            .from("team_stats")
+            .select(teamStatsProjection)
+            .in("league_id", allowedIds)
+            .in("game_key", gameKeys),
+        );
+      }
+
+      const teamResults = await Promise.all(teamQueries);
+      const teamStatsByKey = new Map<string, any>();
+      for (const result of teamResults) {
+        if (result.error) {
+          console.error("Error fetching Social team scores:", result.error.message);
+          return res.status(500).json({ error: "Failed to fetch performance scores" });
+        }
+        for (const row of result.data || []) {
+          const key = `${row.league_id}:${row.numeric_id || ""}:${row.game_key || ""}:${row.name || ""}`;
+          teamStatsByKey.set(key, row);
+        }
+      }
+
+      return res.json({
+        rows: rows || [],
+        teamStats: Array.from(teamStatsByKey.values()),
+      });
+    } catch (err: any) {
+      console.error("Error in /api/public/social-performances:", err.message);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // Batch league info lookup using service role — bypasses RLS so private
   // child leagues (e.g. REBA SL age groups) resolve names/parents correctly.
   // Body: { ids: string[] }

@@ -175,7 +175,11 @@ export function PhotoOverlayPlayerPerformanceCardV1({ data }: Props) {
   const overlayData = data as PhotoOverlayData;
   const photo = overlayData.background_photo_url || overlayData.photo_url;
   const won = Boolean(data.didWin);
-  const focusY = Math.max(0, Math.min(100, Number(data.photo_focus_y ?? 50)));
+  const photoZoom = Math.max(0.6, Math.min(2.5, Number(data.photo_zoom ?? 1)));
+  const photoPositionX = Math.max(0, Math.min(100, Number(data.photo_position_x ?? 50)));
+  const photoPositionY = Math.max(0, Math.min(100, Number(data.photo_position_y ?? data.photo_focus_y ?? 50)));
+  const translateX = (photoPositionX - 50) * 0.7;
+  const translateY = (photoPositionY - 50) * 0.7;
   const hasScore = data.home_score > 0 || data.away_score > 0;
   const scoreText = hasScore ? `${data.home_score} — ${data.away_score} ${won ? "WIN" : "LOSS"}` : "";
   const nameFit = fitPlayerName(data.player_name);
@@ -188,7 +192,7 @@ export function PhotoOverlayPlayerPerformanceCardV1({ data }: Props) {
   const teamName = truncateTextToWidth(data.team_name, teamWidth, 16, 700);
   const opponentName = truncateTextToWidth(data.opponent_name, opponentWidth, 16, 400);
   const leagueLabel = truncateTextToWidth(
-    overlayData.league_name?.toUpperCase() || "GAME NIGHT PERFORMANCE",
+    overlayData.league_name?.trim().toUpperCase() || "COMPETITION",
     820,
     14,
     700,
@@ -209,22 +213,59 @@ export function PhotoOverlayPlayerPerformanceCardV1({ data }: Props) {
       }}
     >
       {photo ? (
-        <img
-          src={photo}
-          alt={data.player_name}
-          data-testid="img-overlay-player-photo"
+        <>
+          <img
+            src={photo}
+            alt=""
+            aria-hidden="true"
+            style={{
+              filter: "blur(28px)",
+              height: "calc(100% + 64px)",
+              inset: -32,
+              objectFit: "cover",
+              objectPosition: "center",
+              opacity: 0.72,
+              position: "absolute",
+              transform: "scale(1.06)",
+              width: "calc(100% + 64px)",
+            }}
+          />
+          <img
+            src={photo}
+            alt={data.player_name}
+            data-testid="img-overlay-player-photo"
+            aria-hidden="true"
+            style={{
+              height: 1,
+              opacity: 0,
+              position: "absolute",
+              width: 1,
+            }}
+          />
+          <div
+            role="img"
+            aria-label={data.player_name}
+            data-testid="photo-overlay-player-layer"
+            style={{
+              backgroundImage: `url("${photo}")`,
+              backgroundPosition: "center",
+              backgroundRepeat: "no-repeat",
+              backgroundSize: "contain",
+              inset: 0,
+              position: "absolute",
+              transform: `translate(${translateX}%, ${translateY}%) scale(${photoZoom})`,
+              transformOrigin: "center",
+            }}
+          />
+        </>
+      ) : (
+        <div
           style={{
+            background: "linear-gradient(145deg,#34302a,#171717)",
             height: "100%",
-            left: 0,
-            objectFit: "cover",
-            objectPosition: `50% ${focusY}%`,
-            position: "absolute",
-            top: 0,
             width: "100%",
           }}
         />
-      ) : (
-        <div style={{ background: "linear-gradient(145deg,#34302a,#171717)", height: "100%", width: "100%" }} />
       )}
 
       <div

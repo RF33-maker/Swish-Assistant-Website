@@ -1,9 +1,10 @@
 - [Trending Performance backend caching](trending-perf-backend.md) — vw_player_game_scores times out from browser; must query server-side with in-memory cache.
 - [Auth and admin access model](auth-admin-model.md) — Supabase app_metadata.role="admin" is the single source of truth; AdminRoute + requireAdmin() enforce it client and server; docs/admin-bootstrap.md covers owner provisioning.
-- [Leagues↔Competitions rename](leagues-competitions-rename.md) — "league" = brand, "competition" = season; DB migration still needed; two intentional .from("leagues") calls must stay.
+- [League and competition hierarchy](leagues-competitions-rename.md) — `leagues` stores brands; `competitions` stores seasons and links to brands through `competition_id`.
 - [Parse proxy pattern](parse-proxy-pattern.md) — /api/parse must use relative URL in frontend and be proxied server-side via Express to avoid CORS; VITE_BACKEND_URL is the Python backend (a separate Replit project, not Render).
 - [Vercel serverless bundling](vercel-bundle.md) — Vercel can't resolve local server/ imports at runtime; esbuild bundles api/_source.ts into api/index.js at deploy time.
 - [player_id collisions across competitions](player-id-collisions.md) — same player_id can belong to 2 different real people in different age groups; never merge stats by id alone, verify name similarity too.
 - [html2canvas text clipping](html2canvas-text-clipping.md) — CSS overflow/ellipsis can corrupt exported card lettering; fit and truncate critical text before capture.
 - [Portable npm lockfiles](portable-npm-lockfiles.md) — Replit-internal tarball URLs break Vercel installs; keep committed resolved URLs on the public npm registry.
 - [BCB season and stage navigation](bcb-season-stage-navigation.md) — BCB stores stage and year together in season; normalize them into year dropdown plus Regular Season/Trophy tabs.
+- [BCB live-feed league alias](bcb-live-feed-league-alias.md) — live parser names Trophy as “BCB Trophy 2027”; keep it hidden beneath the intended 2026/27 Trophy league.

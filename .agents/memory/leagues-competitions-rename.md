@@ -1,6 +1,6 @@
 ---
-name: Leagues↔Competitions rename
-description: Rules and intentional exceptions for the Task #190 table/URL rename — league=brand, competition=season.
+name: League and competition hierarchy
+description: Durable database meaning and compatibility rules for league brands and competition seasons.
 ---
 
 ## The Rule
@@ -8,21 +8,14 @@ description: Rules and intentional exceptions for the Task #190 table/URL rename
 - `competitions` table (DB) = season instance (e.g. "Hoopsfix Pro Am 2026") → URL `/competition/:slug`
 - Column `competition_id` on `competitions` row = FK pointing to `leagues.id` (brand). No column rename.
 
-**Why:** Previously the table names were reversed (confusing). Task #190 swapped them to match plain English.
+**Why:** The table names were previously reversed; the live Supabase database now uses the plain-English model.
 
-## Intentional .from("leagues") calls that must NOT be changed
-1. `client/src/pages/pages/competition/[slug].tsx` — the brand hub page; it correctly queries the `leagues` (brand) table.
-2. `client/src/hooks/useGlobalSearch.ts` line ~86 — the brand-league search suggestion query; results navigate to `/league/:slug`.
+**How to apply:** Query `leagues` for brand pickers and brand metadata. Query `competitions` when stats, games, teams, or season pages provide a competition `league_id`.
 
-All other `.from("leagues")` calls in the codebase are bugs and should be `.from("competitions")`.
-
-## DB Migration
-Script: `scripts/rename-leagues-competitions.sql`
-Must be run manually in the Supabase SQL editor by the user.
-PostgreSQL updates view OIDs automatically on table rename, so `v_game_results`, `v_game_detail`, `v_box_score`, `vw_player_game_scores` don't need manual updates.
-Until the migration runs, the app will show `column competitions.league_id does not exist` errors.
+## Migration status
+The live database migration is complete: `leagues.id` and `competitions.league_id` both exist. Some historical competition rows still have no valid `competition_id`; preserve a legacy/unassigned fallback instead of hiding them.
 
 ## Client-side league name lookups — use the server endpoint
-The anon Supabase client's `leagues` table uses `id` (not `league_id`) as its primary key. Any client-side query like `.from('leagues').select('league_id, name').in('league_id', ids)` fails with "column leagues.league_id does not exist".
+The anon Supabase client's `leagues` table uses `id` (not `league_id`) as its primary key. A stats row’s `league_id` points to `competitions.league_id`, not directly to a brand.
 
-**Solution:** Use `POST /api/public/league-info` with body `{ ids: string[] }` — it uses the service-role key on the `competitions` table and returns `{ [leagueId]: { name, parent_league_id, age_group, stop } }`. This is the correct path for any frontend code that needs to resolve league IDs → names.
+**How to apply:** Resolve competition IDs from `competitions`, then use `competitions.competition_id` to resolve the owning `leagues.id`. Use the existing public league-info endpoint when only competition display metadata is needed.
