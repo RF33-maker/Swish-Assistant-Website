@@ -22,6 +22,9 @@ export function PlayerPerformanceCardV1({ data, template = "default" }: Props) {
   if (template === "photo-overlay") {
     return <PhotoOverlayPlayerPerformanceCardV1 data={data} />;
   }
+  if (template === "photo-overlay-reel") {
+    return <PhotoOverlayPlayerPerformanceCardV1 data={data} reel />;
+  }
 
   const nameFontSize = getNameFontSize(data.player_name);
   const bgImage = TEMPLATES[template] || TEMPLATES["default"];

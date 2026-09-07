@@ -8,3 +8,4 @@
 - [Portable npm lockfiles](portable-npm-lockfiles.md) — Replit-internal tarball URLs break Vercel installs; keep committed resolved URLs on the public npm registry.
 - [BCB season and stage navigation](bcb-season-stage-navigation.md) — BCB stores stage and year together in season; normalize them into year dropdown plus Regular Season/Trophy tabs.
 - [BCB live-feed league alias](bcb-live-feed-league-alias.md) — live parser names Trophy as “BCB Trophy 2027”; keep it hidden beneath the intended 2026/27 Trophy league.
+- [Home feed live status](home-feed-live-status.md) — schedule rows can remain marked live long after games finish; validate status against tip-off time before prioritizing them.

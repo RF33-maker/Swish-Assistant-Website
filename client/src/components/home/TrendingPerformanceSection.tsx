@@ -102,8 +102,10 @@ export default function TrendingPerformanceSection() {
   );
 
   const { data, isLoading } = useQuery<TrendingData>({
-    queryKey: ["home", "trending-performance", "v14-opponent"],
-    staleTime: 5 * 60 * 1000,
+    queryKey: ["home", "trending-performance", "v15-current-competition"],
+    staleTime: 15 * 1000,
+    refetchInterval: 30 * 1000,
+    refetchOnWindowFocus: true,
     queryFn: async () => {
       const empty: TrendingData = { perfs: [], leagueNames: {}, playerMeta: {} };
       try {

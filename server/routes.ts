@@ -2382,6 +2382,237 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return xml;
   }
 
+  // ── Home competition activity scope ─────────────────────────────────────────
+  // Parser-managed feeds can write games and performances to private child
+  // competitions. Home feeds must include those rows while displaying and
+  // linking to their nearest public ancestor.
+  interface HomeCompetitionRow {
+    league_id: string;
+    name: string | null;
+    slug: string | null;
+    trending_position: number | null;
+    is_public: boolean | null;
+    parent_league_id: string | null;
+  }
+
+  interface HomeCompetitionScope {
+    sourceIds: string[];
+    displayRows: Array<{
+      league_id: string;
+      name: string;
+      slug: string;
+      trending_position: number | null;
+    }>;
+    sourceToDisplay: Map<string, HomeCompetitionRow>;
+  }
+
+  const HOME_FINAL_STATUSES = new Set([
+    "final", "finished", "complete", "completed", "ft", "full time", "full-time",
+  ]);
+  const HOME_LIVE_STATUS_KEYWORDS = [
+    "live", "in_progress", "in progress", "playing",
+  ];
+  const HOME_LIVE_STATUS_FILTER = [
+    "status.ilike.live%",
+    "status.ilike.%in_progress%",
+    "status.ilike.%in progress%",
+    "status.ilike.%playing%",
+    "status.ilike.q1%",
+    "status.ilike.q2%",
+    "status.ilike.q3%",
+    "status.ilike.q4%",
+    "status.ilike.ot%",
+    "status.ilike.halftime%",
+    "status.ilike.half time%",
+  ].join(",");
+
+  function isHomeFinalStatus(status: string | null | undefined): boolean {
+    return !!status && HOME_FINAL_STATUSES.has(status.toLowerCase().trim());
+  }
+
+  function isHomeLiveStatus(status: string | null | undefined): boolean {
+    if (!status) return false;
+    const normalized = status.toLowerCase().trim();
+    if (HOME_FINAL_STATUSES.has(normalized)) return false;
+    if (HOME_LIVE_STATUS_KEYWORDS.some((keyword) => normalized.includes(keyword))) return true;
+    return /^(q[1-4]|ot\d*|halftime|half time)(?:\b|$)/.test(normalized);
+  }
+
+  function isHomeCurrentLive(
+    status: string | null | undefined,
+    matchtime: string | null | undefined,
+  ): boolean {
+    if (!isHomeLiveStatus(status) || !matchtime) return false;
+    const tipoff = Date.parse(matchtime);
+    if (!Number.isFinite(tipoff)) return false;
+    const now = Date.now();
+    return tipoff >= now - 12 * 60 * 60 * 1000 && tipoff <= now + 6 * 60 * 60 * 1000;
+  }
+
+  const HOME_SCOPE_TTL_MS = 60 * 1000;
+  let homeScopeCache: { data: HomeCompetitionScope; at: number } | null = null;
+
+  async function fetchHomeCompetitionScope(): Promise<HomeCompetitionScope> {
+    if (homeScopeCache && Date.now() - homeScopeCache.at < HOME_SCOPE_TTL_MS) {
+      return homeScopeCache.data;
+    }
+    const { data, error } = await supabaseAdmin
+      .from("competitions")
+      .select("league_id,name,slug,trending_position,is_public,parent_league_id");
+
+    if (error || !data) {
+      throw new Error(`Home competition lookup failed: ${error?.message || "No data"}`);
+    }
+
+    const rows = data as HomeCompetitionRow[];
+    const byId = new Map(rows.map((row) => [row.league_id, row]));
+    const sourceToDisplay = new Map<string, HomeCompetitionRow>();
+    const displayById = new Map<string, HomeCompetitionRow>();
+
+    const findPublicDisplay = (source: HomeCompetitionRow): HomeCompetitionRow | null => {
+      if (source.is_public) return source;
+      const visited = new Set<string>([source.league_id]);
+      let parentId = source.parent_league_id;
+      while (parentId && !visited.has(parentId)) {
+        visited.add(parentId);
+        const parent = byId.get(parentId);
+        if (!parent) return null;
+        if (parent.is_public) return parent;
+        parentId = parent.parent_league_id;
+      }
+      return null;
+    };
+
+    for (const source of rows) {
+      const display = findPublicDisplay(source);
+      if (!display?.name || !display.slug) continue;
+      if (display.name.toLowerCase().includes("reba")) continue;
+      sourceToDisplay.set(source.league_id, display);
+      displayById.set(display.league_id, display);
+    }
+
+    const displayRows = Array.from(displayById.values())
+      .map((row) => ({
+        league_id: row.league_id,
+        name: row.name!,
+        slug: row.slug!,
+        trending_position: row.trending_position,
+      }))
+      .sort((a, b) => {
+        const ap = a.trending_position ?? Number.MAX_SAFE_INTEGER;
+        const bp = b.trending_position ?? Number.MAX_SAFE_INTEGER;
+        return ap - bp;
+      });
+
+    const scope = {
+      sourceIds: Array.from(sourceToDisplay.keys()),
+      displayRows,
+      sourceToDisplay,
+    };
+    homeScopeCache = { data: scope, at: Date.now() };
+    return scope;
+  }
+
+  interface HomeLatestGamesPayload {
+    leagues: HomeCompetitionScope["displayRows"];
+    games: any[];
+    schedule: any[];
+  }
+
+  const HOME_GAMES_TTL_MS = 30 * 1000;
+  let homeGamesCache: { data: HomeLatestGamesPayload; at: number } | null = null;
+  let homeGamesInFlight: Promise<HomeLatestGamesPayload> | null = null;
+
+  async function fetchHomeLatestGames(): Promise<HomeLatestGamesPayload> {
+    const scope = await fetchHomeCompetitionScope();
+    if (scope.sourceIds.length === 0) {
+      return { leagues: [], games: [], schedule: [] };
+    }
+
+    const now = Date.now();
+    const scheduleStart = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const scheduleEnd = new Date(now + 2 * 24 * 60 * 60 * 1000).toISOString();
+    const liveWindowStart = new Date(now - 12 * 60 * 60 * 1000).toISOString();
+    const liveWindowEnd = new Date(now + 6 * 60 * 60 * 1000).toISOString();
+    const [resultsRes, scheduleRes, liveScheduleRes] = await Promise.all([
+      supabaseAdmin
+        .from("v_game_results")
+        .select("game_key,league_id,match_time,home_team,away_team,home_score,away_score,game_status")
+        .in("league_id", scope.sourceIds)
+        .not("home_score", "is", null)
+        .not("away_score", "is", null)
+        .order("match_time", { ascending: false, nullsFirst: false })
+        .limit(300),
+      supabaseAdmin
+        .from("game_schedule")
+        .select("game_key,league_id,matchtime,hometeam,awayteam,status")
+        .in("league_id", scope.sourceIds)
+        .gte("matchtime", scheduleStart)
+        .lte("matchtime", scheduleEnd)
+        .order("matchtime", { ascending: false })
+        .limit(500),
+      supabaseAdmin
+        .from("game_schedule")
+        .select("game_key,league_id,matchtime,hometeam,awayteam,status")
+        .in("league_id", scope.sourceIds)
+        .or(HOME_LIVE_STATUS_FILTER)
+        .gte("matchtime", liveWindowStart)
+        .lte("matchtime", liveWindowEnd)
+        .order("matchtime", { ascending: false })
+        .limit(100),
+    ]);
+
+    if (resultsRes.error) {
+      throw new Error(`Home results lookup failed: ${resultsRes.error.message}`);
+    }
+    if (scheduleRes.error) {
+      throw new Error(`Home schedule lookup failed: ${scheduleRes.error.message}`);
+    }
+    if (liveScheduleRes.error) {
+      throw new Error(`Home live schedule lookup failed: ${liveScheduleRes.error.message}`);
+    }
+
+    const remapLeague = (row: any) => {
+      const display = scope.sourceToDisplay.get(row.league_id);
+      return display ? { ...row, league_id: display.league_id } : null;
+    };
+
+    const scheduleByKey = new Map<string, any>();
+    for (const row of scheduleRes.data || []) {
+      if (row.game_key) scheduleByKey.set(row.game_key, row);
+    }
+    for (const row of liveScheduleRes.data || []) {
+      if (row.game_key && isHomeCurrentLive(row.status, row.matchtime)) scheduleByKey.set(row.game_key, row);
+    }
+
+    return {
+      leagues: scope.displayRows,
+      games: (resultsRes.data || []).map(remapLeague).filter(Boolean),
+      schedule: Array.from(scheduleByKey.values()).map(remapLeague).filter(Boolean),
+    };
+  }
+
+  app.get("/api/home/latest-games", async (_req: Request, res: Response) => {
+    const now = Date.now();
+    if (homeGamesCache && now - homeGamesCache.at < HOME_GAMES_TTL_MS) {
+      return res.json(homeGamesCache.data);
+    }
+    if (!homeGamesInFlight) {
+      homeGamesInFlight = fetchHomeLatestGames().finally(() => {
+        homeGamesInFlight = null;
+      });
+    }
+    try {
+      const data = await homeGamesInFlight;
+      homeGamesCache = { data, at: Date.now() };
+      return res.json(data);
+    } catch (err: any) {
+      console.error("[HomeLatestGames] fetch error", err.message);
+      if (homeGamesCache) return res.json(homeGamesCache.data);
+      return res.status(500).json({ leagues: [], games: [], schedule: [] });
+    }
+  });
+
   // ── Trending Performances (home page card) ──────────────────────────────────
   // Queries vw_player_game_scores server-side so we can cache the result in
   // memory and avoid hammering Supabase with one query per user per page load.
@@ -2409,96 +2640,129 @@ export async function registerRoutes(app: Express): Promise<Server> {
     leagueNames: Record<string, string>;
     playerMeta: Record<string, { slug: string | null; photo_path_bg_removed: string | null }>;
   }
-  const TRENDING_TTL_MS = 5 * 60 * 1000;
+  const TRENDING_TTL_MS = 60 * 1000;
   let trendingCache: { data: TrendingApiPayload; at: number } | null = null;
   let trendingInFlight: Promise<TrendingApiPayload> | null = null;
 
   async function fetchTrendingPerformances(): Promise<TrendingApiPayload> {
     const empty: TrendingApiPayload = { perfs: [], leagueNames: {}, playerMeta: {} };
-
-    const { data: leagueRows, error: lErr } = await supabaseAdmin
-      .from("competitions")
-      .select("league_id, name, trending_position")
-      .eq("is_public", true)
-      .not("trending_position", "is", null)
-      .order("trending_position", { ascending: true, nullsFirst: false })
-      .limit(8);
-
-    if (lErr || !leagueRows || leagueRows.length === 0) {
-      console.error("[TrendingPerf] leagues error", lErr?.message);
-      return empty;
-    }
-
-    // Exclude REBA SL and child leagues (same rule as the scores carousel)
-    const filteredRows = (leagueRows as { league_id: string; name: string | null; trending_position: number | null }[])
-      .filter((l) => !l.name?.toLowerCase().includes("reba"));
-
-    if (filteredRows.length === 0) return empty;
-
+    const scope = await fetchHomeCompetitionScope();
+    if (scope.sourceIds.length === 0) return empty;
     const leagueNames: Record<string, string> = {};
-    for (const l of filteredRows) {
-      if (l.name) leagueNames[l.league_id] = l.name;
+    for (const [sourceId, display] of scope.sourceToDisplay.entries()) {
+      if (display.name) leagueNames[sourceId] = display.name;
+    }
+    const recentStart = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+    const nearFuture = new Date(Date.now() + 6 * 60 * 60 * 1000).toISOString();
+    const liveWindowStart = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
+    const [activityRes, liveActivityRes] = await Promise.all([
+      supabaseAdmin
+        .from("game_schedule")
+        .select("game_key,league_id,matchtime,status")
+        .in("league_id", scope.sourceIds)
+        .gte("matchtime", recentStart)
+        .lte("matchtime", nearFuture)
+        .order("matchtime", { ascending: false })
+        .limit(500),
+      supabaseAdmin
+        .from("game_schedule")
+        .select("game_key,league_id,matchtime,status")
+        .in("league_id", scope.sourceIds)
+        .or(HOME_LIVE_STATUS_FILTER)
+        .gte("matchtime", liveWindowStart)
+        .lte("matchtime", nearFuture)
+        .order("matchtime", { ascending: false })
+        .limit(100),
+    ]);
+
+    if (activityRes.error) {
+      console.error("[TrendingPerf] schedule lookup error", activityRes.error.message);
+    }
+    if (liveActivityRes.error) {
+      console.error("[TrendingPerf] live schedule lookup error", liveActivityRes.error.message);
     }
 
-    const leagueIds = filteredRows.map((l) => l.league_id);
-    console.log("[TrendingPerf] querying leagues:", leagueRows.map((l: any) => `${l.name} (pos ${l.trending_position})`));
-    const perfs: TrendingPerfRow[] = [];
+    const activityByKey = new Map<string, {
+      game_key: string | null;
+      league_id: string;
+      matchtime: string | null;
+      status: string | null;
+    }>();
+    for (const row of activityRes.data || []) {
+      if (row.game_key) activityByKey.set(row.game_key, row);
+    }
+    for (const row of liveActivityRes.data || []) {
+      if (row.game_key && isHomeCurrentLive(row.status, row.matchtime)) activityByKey.set(row.game_key, row);
+    }
+    const activity = Array.from(activityByKey.values())
+      .sort((a, b) => String(b.matchtime || "").localeCompare(String(a.matchtime || "")));
+    const liveRows = activity.filter((row) => isHomeCurrentLive(row.status, row.matchtime));
+    const completedRows = activity.filter((row) => isHomeFinalStatus(row.status));
+    const perfColumns = "league_id,game_date,game_key,player_id,full_name,team_id,team_name,pts,reb,ast,stl,blk,tov,fga,fta,game_score,ts_pct";
 
-    // Query vw_player_game_scores (per-game view). For each league, first find the
-    // most recent game_date, then fetch the top 2 performers scoped to that date.
-    // This prevents leakage from older game dates when fewer than 2 rows exist
-    // on the newest date. ts_pct is pre-computed in the view.
-    const perLeague = await Promise.allSettled(
-      leagueIds.map(async (lid) => {
-        const name = leagueNames[lid] || lid;
-
-        const { data: latestGame } = await supabaseAdmin
-          .from("vw_player_game_scores")
-          .select("game_date")
-          .eq("league_id", lid)
-          .order("game_date", { ascending: false, nullsFirst: false })
-          .limit(1)
-          .returns<{ game_date: string | null }[]>();
-
-        const mostRecentGameDate = latestGame?.[0]?.game_date ?? null;
-
-        let query = supabaseAdmin
-          .from("vw_player_game_scores")
-          .select("league_id,game_date,game_key,player_id,full_name,team_id,team_name,pts,reb,ast,stl,blk,tov,fga,fta,game_score,ts_pct")
-          .eq("league_id", lid)
-          .order("game_score", { ascending: false });
-
-        if (mostRecentGameDate) {
-          query = query.eq("game_date", mostRecentGameDate);
-        }
-
-        const { data: rows, error } = await query
-          .limit(2)
-          .returns<TrendingPerfRow[]>();
-
-        if (error) {
-          console.error("[TrendingPerf] league query error", name, error.message);
-          return [] as TrendingPerfRow[];
-        }
-        console.log(`[TrendingPerf] ${name}: ${rows?.length ?? 0} rows (most recent game_date: ${mostRecentGameDate ?? "none"})`);
-        return rows || [];
-      })
-    );
-
-    for (const result of perLeague) {
-      if (result.status === "fulfilled") {
-        for (const r of result.value) {
-          if (r?.league_id) perfs.push(r);
-        }
+    let perfs: TrendingPerfRow[] = [];
+    if (liveRows.length > 0) {
+      const liveGameKeys = Array.from(new Set(liveRows.map((row) => row.game_key).filter(Boolean))) as string[];
+      const { data: livePerfs, error: liveError } = await supabaseAdmin
+        .from("vw_player_game_scores")
+        .select(perfColumns)
+        .in("game_key", liveGameKeys)
+        .order("game_score", { ascending: false })
+        .limit(8)
+        .returns<TrendingPerfRow[]>();
+      if (liveError) {
+        console.error("[TrendingPerf] live query error", liveError.message);
+      } else {
+        perfs = livePerfs || [];
       }
     }
 
-    perfs.sort((a, b) => {
-      const aw = a.game_date || "";
-      const bw = b.game_date || "";
-      if (aw !== bw) return aw < bw ? 1 : -1;
-      return (b.game_score ?? 0) - (a.game_score ?? 0);
-    });
+    // Live games with no player rows yet fall back to the newest completed
+    // competition instead of leaving the home card empty.
+    if (perfs.length === 0 && completedRows.length > 0) {
+      const latest = completedRows[0];
+      const latestDate = latest.matchtime?.slice(0, 10) || null;
+      let latestQuery = supabaseAdmin
+        .from("vw_player_game_scores")
+        .select(perfColumns)
+        .eq("league_id", latest.league_id)
+        .order("game_score", { ascending: false });
+      if (latestDate) latestQuery = latestQuery.eq("game_date", latestDate);
+      const { data: latestPerfs, error: latestError } = await latestQuery
+        .limit(8)
+        .returns<TrendingPerfRow[]>();
+      if (latestError) {
+        console.error("[TrendingPerf] latest competition query error", latestError.message);
+      } else {
+        perfs = latestPerfs || [];
+      }
+    }
+
+    // Fallback for competitions that have performance rows but no schedule rows.
+    if (perfs.length === 0) {
+      const { data: fallbackPerfs, error: fallbackError } = await supabaseAdmin
+        .from("vw_player_game_scores")
+        .select(perfColumns)
+        .in("league_id", scope.sourceIds)
+        .order("game_date", { ascending: false, nullsFirst: false })
+        .order("game_score", { ascending: false })
+        .limit(8)
+        .returns<TrendingPerfRow[]>();
+      if (fallbackError) {
+        console.error("[TrendingPerf] fallback query error", fallbackError.message);
+      } else {
+        perfs = fallbackPerfs || [];
+      }
+    }
+
+    for (const perf of perfs) {
+      const display = scope.sourceToDisplay.get(perf.league_id);
+      if (display) {
+        perf.league_id = display.league_id;
+        if (display.name) leagueNames[display.league_id] = display.name;
+      }
+    }
+    console.log("[TrendingPerf] selected:", perfs.map((p) => `${leagueNames[p.league_id] || p.league_id} ${p.game_date || ""}`));
 
     const playerMeta: Record<string, { slug: string | null; photo_path_bg_removed: string | null }> = {};
     const playerIds = [...new Set(perfs.map((p) => p.player_id))];

@@ -5,6 +5,7 @@ import type { PlayerPerformanceV1Data } from "@/types/socialCards";
 
 const CARD_WIDTH = 1080;
 const CARD_HEIGHT = 1350;
+const REEL_CARD_HEIGHT = 1920;
 const ASSET_TIMEOUT_MS = 12_000;
 
 type TimedResult<T> =
@@ -69,6 +70,7 @@ export async function renderSocialCardToBlob(
   data: PlayerPerformanceV1Data,
   template: string,
 ): Promise<Blob | null> {
+  const height = template === "photo-overlay-reel" ? REEL_CARD_HEIGHT : CARD_HEIGHT;
   const hiddenContainer = document.createElement("div");
   hiddenContainer.setAttribute("aria-hidden", "true");
   hiddenContainer.style.cssText = [
@@ -76,7 +78,7 @@ export async function renderSocialCardToBlob(
     "left: -12000px",
     "top: 0",
     `width: ${CARD_WIDTH}px`,
-    `height: ${CARD_HEIGHT}px`,
+    `height: ${height}px`,
     "overflow: hidden",
     "pointer-events: none",
     "z-index: -9999",
@@ -103,9 +105,9 @@ export async function renderSocialCardToBlob(
       allowTaint: false,
       backgroundColor: "#090a0c",
       width: CARD_WIDTH,
-      height: CARD_HEIGHT,
+      height,
       windowWidth: CARD_WIDTH,
-      windowHeight: CARD_HEIGHT,
+      windowHeight: height,
       scrollX: 0,
       scrollY: 0,
       logging: false,

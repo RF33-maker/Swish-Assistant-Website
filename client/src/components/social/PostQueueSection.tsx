@@ -16,6 +16,7 @@ type Props = {
 };
 
 export function PostQueueSection({ cards, loading = false, onRemove, onClear, template = "default" }: Props) {
+  const isReel = template === "photo-overlay-reel";
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
@@ -193,7 +194,7 @@ export function PostQueueSection({ cards, loading = false, onRemove, onClear, te
                       >
                         <div 
                           className="bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden shadow-lg relative group"
-                          style={{ width: "302px", height: "378px" }}
+                          style={{ width: isReel ? "216px" : "302px", height: isReel ? "384px" : "378px" }}
                         >
                           {onRemove && (
                             <button
@@ -210,7 +211,7 @@ export function PostQueueSection({ cards, loading = false, onRemove, onClear, te
                           <div 
                             className="origin-top-left"
                             style={{ 
-                              transform: "scale(0.28)",
+                              transform: `scale(${isReel ? 0.2 : 0.28})`,
                               transformOrigin: "top left",
                             }}
                           >

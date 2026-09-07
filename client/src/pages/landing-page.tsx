@@ -90,40 +90,22 @@ export default function LandingPage() {
     const fetchTrending = async () => {
       const { data, error } = await supabase
         .from("competitions")
-        .select("name, slug, logo_url, banner_url, trending_position, competition_id, leagues:competition_id(name, slug, logo_url)")
+        .select("name, slug, logo_url, banner_url, trending_position")
         .eq("is_public", true)
         .not("trending_position", "is", null)
         .order("trending_position", { ascending: true })
-        .limit(8);
+        .limit(4);
 
       if (!error && data) {
-        // Deduplicate: if a competition belongs to a league brand, show the league brand instead (once)
         const seen = new Set<string>();
-        const deduped: any[] = [];
+        const competitions: any[] = [];
         for (const comp of data) {
-          const leagueBrand = Array.isArray((comp as any).leagues)
-            ? (comp as any).leagues[0]
-            : (comp as any).leagues;
-          if (leagueBrand?.slug) {
-            if (!seen.has(`league:${leagueBrand.slug}`)) {
-              seen.add(`league:${leagueBrand.slug}`);
-              deduped.push({
-                name: leagueBrand.name,
-                slug: leagueBrand.slug,
-                logo_url: leagueBrand.logo_url || comp.logo_url,
-                banner_url: comp.banner_url,
-                _type: "league",
-              });
-            }
-          } else {
-            if (!seen.has(`competition:${comp.slug}`)) {
-              seen.add(`competition:${comp.slug}`);
-              deduped.push({ ...comp, _type: "competition" });
-            }
+          if (!seen.has(comp.slug)) {
+            seen.add(comp.slug);
+            competitions.push({ ...comp, _type: "competition" });
           }
-          if (deduped.length >= 4) break;
         }
-        setTrendingLeagues(deduped);
+        setTrendingLeagues(competitions);
       }
     };
 
@@ -380,7 +362,7 @@ export default function LandingPage() {
               ? trendingLeagues
               : [
                   { name: "SLB Championship 25/26", slug: "super-league-basketball-20252026", logo_url: null, banner_url: null, _type: "competition" },
-                  { name: "British Championship Basketball", slug: "british-championship-basketball-20252026", logo_url: null, banner_url: null, _type: "competition" },
+                  { name: "BCB Trophy 2026-2027", slug: "bcb-trophy-2026-2027", logo_url: null, banner_url: null, _type: "competition" },
                   { name: "NBL Division One 25/26", slug: "national-basketball-league-d1-mens-20252026", logo_url: null, banner_url: null, _type: "competition" },
                   { name: "WNBL Division One 25/26", slug: "national-basketball-league-d1-womens-20252026", logo_url: null, banner_url: null, _type: "competition" },
                 ]

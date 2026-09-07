@@ -5795,9 +5795,9 @@ export default function LeaguePage() {
                     // Common card renderer used by all 4 (subject × category) variants.
                     // Minimum attempt thresholds for percentage leaderboards —
                     // must match the constants in league-leaders/[slug].tsx.
-                    const MIN_FGA_INLINE = 20;
-                    const MIN_3PA_INLINE = 8;
-                    const MIN_FTA_INLINE = 10;
+                    const MIN_FGA_INLINE = 12;
+                    const MIN_3PA_INLINE = 6;
+                    const MIN_FTA_INLINE = 8;
 
                     const renderCard = (opts: {
                       title: string;
@@ -6162,15 +6162,15 @@ export default function LeaguePage() {
                         { title: 'Team Field Goal %',
                           sortFn: (a: any, b: any) => teamNum(b, 'fgPercentage') - teamNum(a, 'fgPercentage'),
                           displayFn: (t: any) => `${teamFmt(teamNum(t, 'fgPercentage'))}%`,
-                          filterFn: (t: any) => teamNum(t, 'totalFGA') >= 10 },
+                          filterFn: (t: any) => teamNum(t, 'totalFGA') >= MIN_FGA_INLINE },
                         { title: 'Team Three Point %',
                           sortFn: (a: any, b: any) => teamNum(b, 'threePtPercentage') - teamNum(a, 'threePtPercentage'),
                           displayFn: (t: any) => `${teamFmt(teamNum(t, 'threePtPercentage'))}%`,
-                          filterFn: (t: any) => teamNum(t, 'total3PA') >= 5 },
+                          filterFn: (t: any) => teamNum(t, 'total3PA') >= MIN_3PA_INLINE },
                         { title: 'Team Free Throw %',
                           sortFn: (a: any, b: any) => teamNum(b, 'ftPercentage') - teamNum(a, 'ftPercentage'),
                           displayFn: (t: any) => `${teamFmt(teamNum(t, 'ftPercentage'))}%`,
-                          filterFn: (t: any) => teamNum(t, 'totalFTA') >= 5 },
+                          filterFn: (t: any) => teamNum(t, 'totalFTA') >= MIN_FTA_INLINE },
                       ];
 
                       return (

@@ -11,6 +11,7 @@ type PhotoOverlayData = PlayerPerformanceV1Data & {
 
 type Props = {
   data: PlayerPerformanceV1Data;
+  reel?: boolean;
 };
 
 const ORANGE = "#f58220";
@@ -169,9 +170,9 @@ function LogoRow({ data }: { data: PhotoOverlayData }) {
 
 /**
  * Share-ready, photographic performance card. The fixed canvas is intentional:
- * social-tools captures this component at its native 1080 × 1350 dimensions.
+ * social-tools captures each variant at its native export dimensions.
  */
-export function PhotoOverlayPlayerPerformanceCardV1({ data }: Props) {
+export function PhotoOverlayPlayerPerformanceCardV1({ data, reel = false }: Props) {
   const overlayData = data as PhotoOverlayData;
   const photo = overlayData.background_photo_url || overlayData.photo_url;
   const won = Boolean(data.didWin);
@@ -198,6 +199,16 @@ export function PhotoOverlayPlayerPerformanceCardV1({ data }: Props) {
     700,
     1.4,
   );
+  // The reel cover keeps the same visual system, but gives the image more
+  // breathing room and moves every decision-critical element into the center
+  // safe area used by social apps when they crop previews.
+  const canvasHeight = reel ? 1920 : 1350;
+  const panelBottom = reel ? 450 : 226;
+  const panelHeight = reel ? 390 : 350;
+  const panelLeft = reel ? 80 : 190;
+  const panelWidth = reel ? 920 : 700;
+  const logoLeft = reel ? 70 : 90;
+  const logoWidth = reel ? 940 : 900;
 
   return (
     <div
@@ -206,7 +217,7 @@ export function PhotoOverlayPlayerPerformanceCardV1({ data }: Props) {
         background: "#242321",
         color: "#fff",
         fontFamily: "Arial, sans-serif",
-        height: 1350,
+        height: canvasHeight,
         overflow: "hidden",
         position: "relative",
         width: 1080,
@@ -306,15 +317,15 @@ export function PhotoOverlayPlayerPerformanceCardV1({ data }: Props) {
           background: "rgba(15,15,15,.96)",
           border: "1px solid rgba(255,255,255,.13)",
           borderRadius: 18,
-          bottom: 226,
+          bottom: panelBottom,
           boxSizing: "border-box",
           boxShadow: "0 24px 70px rgba(0,0,0,.4)",
-          height: 350,
-          left: 190,
+          height: panelHeight,
+          left: panelLeft,
           overflow: "hidden",
           padding: "26px 28px 24px",
           position: "absolute",
-          width: 700,
+          width: panelWidth,
         }}
       >
         <div
@@ -360,8 +371,8 @@ export function PhotoOverlayPlayerPerformanceCardV1({ data }: Props) {
               whiteSpace: "nowrap",
             }}
           >
-            <span style={{ fontSize: 46, lineHeight: .86 }}>{data.points}</span>
-            <span style={{ fontSize: 19, lineHeight: 1 }}>PTS</span>
+            <span style={{ fontSize: 46, lineHeight: .86 }}>{data.minutes}</span>
+            <span style={{ fontSize: 19, lineHeight: 1 }}>MIN</span>
           </div>
         </div>
 
@@ -413,7 +424,7 @@ export function PhotoOverlayPlayerPerformanceCardV1({ data }: Props) {
 
         <div style={{ background: "rgba(255,255,255,.13)", height: 1, margin: "20px 0 19px", width: "100%" }} />
         <div style={{ display: "grid", gap: "20px 12px", gridTemplateColumns: "repeat(5, minmax(0, 1fr))" }}>
-          <Stat label="MIN" value={data.minutes} />
+          <Stat label="PTS" value={data.points} />
           <Stat label="REB" value={data.rebounds} />
           <Stat label="AST" value={data.assists} />
           <Stat label="STL" value={data.steals} />
@@ -426,7 +437,7 @@ export function PhotoOverlayPlayerPerformanceCardV1({ data }: Props) {
         </div>
       </section>
 
-      <div style={{ bottom: 28, left: 90, position: "absolute", width: 900 }}>
+      <div style={{ bottom: reel ? 92 : 28, left: logoLeft, position: "absolute", width: logoWidth }}>
         <LogoRow data={overlayData} />
         <div
           style={{

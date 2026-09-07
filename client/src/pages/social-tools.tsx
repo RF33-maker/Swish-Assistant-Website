@@ -1210,12 +1210,13 @@ export default function SocialToolsPage() {
                       <SelectItem value="default">Swish Default</SelectItem>
                       <SelectItem value="reba-sl">REBA SL</SelectItem>
                         <SelectItem value="photo-overlay">Photo Overlay</SelectItem>
+                        <SelectItem value="photo-overlay-reel">Photo Overlay · Reel Cover</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </CardHeader>
               <CardContent>
-                {selectedTemplate === "photo-overlay" && (
+                {(selectedTemplate === "photo-overlay" || selectedTemplate === "photo-overlay-reel") && (
                   <div className="mb-4 space-y-4 rounded-lg border border-orange-200 bg-orange-50/60 p-3 dark:border-orange-800 dark:bg-orange-950/20">
                     <div>
                       <div className="mb-3 flex items-center justify-between gap-3">
@@ -1418,7 +1419,7 @@ export default function SocialToolsPage() {
                 </div>
                 
                 <p className="mt-3 text-xs text-gray-500 dark:text-gray-400 text-center">
-                  Card size: 1080×1350px (Instagram portrait)
+                  Card size: {selectedTemplate === "photo-overlay-reel" ? "1080×1920px (9:16 Reel cover)" : "1080×1350px (Instagram portrait)"}
                 </p>
               </CardContent>
             </Card>

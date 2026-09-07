@@ -1,7 +1,6 @@
 import { useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { supabase } from "@/lib/supabase";
 import { TeamLogo } from "@/components/TeamLogo";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -82,18 +81,27 @@ const FINAL_STATUSES = new Set([
   "final", "finished", "complete", "completed", "ft", "full time", "full-time",
 ]);
 
-const LIVE_STATUS_KEYWORDS = ["live", "in_progress", "in progress", "playing", "q1", "q2", "q3", "q4", "ot", "halftime", "half time"];
+const LIVE_STATUS_KEYWORDS = ["live", "in_progress", "in progress", "playing"];
 
 function isFinal(s: string | null | undefined) {
   if (!s) return false; // unknown status — don't assume final
   return FINAL_STATUSES.has(s.toLowerCase().trim());
 }
 
-function isLiveStatus(s: string | null | undefined): boolean {
+function isLiveStatus(
+  s: string | null | undefined,
+  matchTime: string | null | undefined,
+): boolean {
   if (!s) return false;
   const lower = s.toLowerCase().trim();
   if (FINAL_STATUSES.has(lower)) return false;
-  return LIVE_STATUS_KEYWORDS.some((k) => lower.includes(k));
+  const hasLiveStatus = LIVE_STATUS_KEYWORDS.some((k) => lower.includes(k))
+    || /^(q[1-4]|ot\d*|halftime|half time)(?:\b|$)/.test(lower);
+  if (!hasLiveStatus || !matchTime) return false;
+  const tipoff = Date.parse(matchTime);
+  if (!Number.isFinite(tipoff)) return false;
+  const now = Date.now();
+  return tipoff >= now - 12 * 60 * 60 * 1000 && tipoff <= now + 6 * 60 * 60 * 1000;
 }
 
 function shortTeam(name: string): string {
@@ -177,23 +185,26 @@ function ScoreCardSkeleton() {
   );
 }
 
-const LATEST_SCORES_LIMIT = 80;
 const SLOTS_PER_LEAGUE = 4;
-const UPCOMING_WINDOW_MS = 2 * 24 * 60 * 60 * 1000;
 
 export default function LatestScoresSection() {
   const [, setLocation] = useLocation();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { data: groups = [], isLoading: loading } = useQuery<LeagueGroup[]>({
-    queryKey: ["supabase", "home", "latest-scores", LATEST_SCORES_LIMIT],
+    queryKey: ["home", "latest-scores", "v2-competition-families"],
+    staleTime: 15 * 1000,
+    refetchInterval: 30 * 1000,
+    refetchOnWindowFocus: true,
     queryFn: async () => {
-      const { data: leagues } = await supabase
-        .from("competitions")
-        .select("league_id, name, slug, trending_position")
-        .eq("is_public", true)
-        .order("trending_position", { ascending: true, nullsFirst: false })
-        .returns<LeagueRow[]>();
+      const response = await fetch("/api/home/latest-games");
+      if (!response.ok) throw new Error("Failed to fetch latest games");
+      const payload = await response.json() as {
+        leagues?: LeagueRow[];
+        games?: GameRow[];
+        schedule?: ScheduleRow[];
+      };
+      const leagues = payload.leagues || [];
 
       if (!leagues || leagues.length === 0) return [];
 
@@ -203,39 +214,12 @@ export default function LatestScoresSection() {
       );
       if (filteredLeagues.length === 0) return [];
 
-      const leagueIds = filteredLeagues.map((l) => l.league_id);
       const slugById: Record<string, string> = {};
       filteredLeagues.forEach((l) => { slugById[l.league_id] = l.slug; });
 
       const now = new Date();
-      const windowEnd = new Date(now.getTime() + UPCOMING_WINDOW_MS);
-
-      // Look back 6 hours so in-progress games that started earlier are included
-      const windowStart = new Date(now.getTime() - 6 * 60 * 60 * 1000);
-
-      const [resultsRes, scheduleRes] = await Promise.all([
-        supabase
-          .from("v_game_results")
-          .select("game_key, league_id, match_time, home_team, away_team, home_score, away_score, game_status")
-          .in("league_id", leagueIds)
-          .not("home_score", "is", null)
-          .not("away_score", "is", null)
-          .order("match_time", { ascending: false })
-          .limit(LATEST_SCORES_LIMIT)
-          .returns<GameRow[]>(),
-        supabase
-          .from("game_schedule")
-          .select("game_key, league_id, matchtime, hometeam, awayteam, status")
-          .in("league_id", leagueIds)
-          .gte("matchtime", windowStart.toISOString())
-          .lte("matchtime", windowEnd.toISOString())
-          .order("matchtime", { ascending: true })
-          .limit(200)
-          .returns<ScheduleRow[]>(),
-      ]);
-
-      const games = resultsRes.data;
-      const schedule = scheduleRes.data;
+      const games = payload.games || [];
+      const schedule = payload.schedule || [];
 
       // Build a status lookup from game_schedule — it's the authoritative source
       // for live/in-progress status (v_game_results may have stale or null status)
@@ -256,7 +240,7 @@ export default function LatestScoresSection() {
         // Use game_schedule status as override — it's more reliable than v_game_results
         const effectiveStatus = (g.game_key && scheduleStatusByKey[g.game_key]) || g.game_status;
         // Live: explicit live status in either source
-        if (isLiveStatus(effectiveStatus)) {
+        if (isLiveStatus(effectiveStatus, g.match_time)) {
           if (g.game_key) liveKeys.add(g.game_key);
           if (!liveByLeague[g.league_id]) liveByLeague[g.league_id] = [];
           liveByLeague[g.league_id].push({
@@ -287,7 +271,7 @@ export default function LatestScoresSection() {
         if (FINAL_STATUSES.has(statusLower)) return;
 
         // Live game found only in schedule (no scores yet)
-        if (isLiveStatus(s.status)) {
+        if (isLiveStatus(s.status, s.matchtime)) {
           liveKeys.add(s.game_key);
           if (!liveByLeague[s.league_id]) liveByLeague[s.league_id] = [];
           liveByLeague[s.league_id].push({
@@ -318,10 +302,13 @@ export default function LatestScoresSection() {
       });
 
       const groups: LeagueGroup[] = [];
-      leagues.forEach((l) => {
-        const live = liveByLeague[l.league_id] || [];
-        const upcoming = upcomingByLeague[l.league_id] || [];
-        const ls = resultsByLeague[l.league_id] || [];
+      filteredLeagues.forEach((l) => {
+        const live = (liveByLeague[l.league_id] || [])
+          .sort((a, b) => new Date(b.match_time || 0).getTime() - new Date(a.match_time || 0).getTime());
+        const upcoming = (upcomingByLeague[l.league_id] || [])
+          .sort((a, b) => new Date(a.match_time).getTime() - new Date(b.match_time).getTime());
+        const ls = (resultsByLeague[l.league_id] || [])
+          .sort((a, b) => new Date(b.match_time || 0).getTime() - new Date(a.match_time || 0).getTime());
         if (live.length === 0 && upcoming.length === 0 && ls.length === 0) return;
 
         const records = buildRecords(ls);
@@ -341,12 +328,13 @@ export default function LatestScoresSection() {
 
         const liveSlice = live.slice(0, SLOTS_PER_LEAGUE);
         let remaining = Math.max(0, SLOTS_PER_LEAGUE - liveSlice.length);
+        const resultSlice = resultItems.slice(0, remaining);
+        remaining = Math.max(0, remaining - resultSlice.length);
         const upcomingSlice = upcoming.slice(0, remaining);
-        remaining = Math.max(0, remaining - upcomingSlice.length);
         const items: CardItem[] = [
           ...liveSlice,
+          ...resultSlice,
           ...upcomingSlice,
-          ...resultItems.slice(0, remaining),
         ];
 
         groups.push({
@@ -357,10 +345,8 @@ export default function LatestScoresSection() {
         });
       });
 
-      // Smart league ordering: leagues with LIVE games first, then leagues
-      // with UPCOMING (within 2 days), then by trending_position. Within
-      // upcoming-tier, sort by soonest tip-off so the most imminent matchup
-      // surfaces leftmost.
+      // Live competitions always lead. Otherwise, the competition with the
+      // newest completed game leads, followed by imminent upcoming games.
       const trendingPos: Record<string, number> = {};
       leagues.forEach((l, idx) => {
         trendingPos[l.league_id] = l.trending_position ?? idx + 10000;
@@ -371,11 +357,24 @@ export default function LatestScoresSection() {
         const min = list.reduce((acc, u) => Math.min(acc, new Date(u.match_time).getTime()), Infinity);
         soonestUpcoming[lid] = min;
       });
+      const latestResult: Record<string, number> = {};
+      Object.entries(resultsByLeague).forEach(([lid, list]) => {
+        latestResult[lid] = list.reduce(
+          (latest, game) => Math.max(latest, new Date(game.match_time || 0).getTime()),
+          0,
+        );
+      });
 
       groups.sort((a, b) => {
         const aLive = (liveByLeague[a.league_id] || []).length > 0;
         const bLive = (liveByLeague[b.league_id] || []).length > 0;
         if (aLive !== bLive) return aLive ? -1 : 1;
+
+        const aLatest = latestResult[a.league_id];
+        const bLatest = latestResult[b.league_id];
+        if (aLatest !== undefined && bLatest !== undefined && aLatest !== bLatest) return bLatest - aLatest;
+        if (aLatest !== undefined) return -1;
+        if (bLatest !== undefined) return 1;
 
         const aUp = soonestUpcoming[a.league_id];
         const bUp = soonestUpcoming[b.league_id];
