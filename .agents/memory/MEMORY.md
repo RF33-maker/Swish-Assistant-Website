@@ -9,3 +9,4 @@
 - [BCB season and stage navigation](bcb-season-stage-navigation.md) — BCB stores stage and year together in season; normalize them into year dropdown plus Regular Season/Trophy tabs.
 - [BCB live-feed league alias](bcb-live-feed-league-alias.md) — live parser names Trophy as “BCB Trophy 2027”; keep it hidden beneath the intended 2026/27 Trophy league.
 - [Home feed live status](home-feed-live-status.md) — schedule rows can remain marked live long after games finish; validate status against tip-off time before prioritizing them.
+- [GitHub and Vercel publishing](github-vercel-publishing.md) — remote main may advance beyond local origin; publish atop the live GitHub ref and let the linked Vercel project auto-deploy.
