@@ -8,11 +8,14 @@ import { slugToName } from "@/lib/fuzzyMatch";
 import { PlayerProfileContent } from "@/components/PlayerProfileContent";
 
 export default function PlayerStatsPage() {
-  const [match, params] = useRoute("/player/:slug");
+  const [, params] = useRoute("/player/:slug");
+  const [, pagedParams] = useRoute("/player/:slug/games/page/:page");
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  const playerSlugOrId = params?.slug;
+  const canonicalPlayerSegment = pagedParams?.slug || params?.slug;
+  const generatedIdMatch = canonicalPlayerSegment?.match(/--([0-9a-f]{8}-[0-9a-f-]{27,})$/i);
+  const playerSlugOrId = generatedIdMatch?.[1] || canonicalPlayerSegment;
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchSuggestions, setSearchSuggestions] = useState<any[]>([]);
@@ -79,7 +82,7 @@ export default function PlayerStatsPage() {
 
   if (!playerSlugOrId) return null;
 
-  const playerDisplayName = slugToName(playerSlugOrId);
+  const playerDisplayName = slugToName(canonicalPlayerSegment || playerSlugOrId);
 
   return (
     <>
@@ -89,12 +92,12 @@ export default function PlayerStatsPage() {
         <meta property="og:title" content={playerDisplayName ? `${playerDisplayName} | Player Stats | Swish Assistant` : "Player Profile | Swish Assistant"} />
         <meta property="og:description" content={playerDisplayName ? `View ${playerDisplayName}'s basketball stats on Swish Assistant.` : "Explore player stats and basketball performance data on Swish Assistant."} />
         <meta property="og:type" content="profile" />
-        <meta property="og:url" content={`https://www.swishassistant.com/player/${playerSlugOrId}`} />
+        <meta property="og:url" content={`https://www.swishassistant.com/player/${canonicalPlayerSegment}`} />
         <meta property="og:image" content="https://www.swishassistant.com/og-image.png" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={playerDisplayName ? `${playerDisplayName} | Player Stats | Swish Assistant` : "Player Profile | Swish Assistant"} />
         <meta name="twitter:description" content={playerDisplayName ? `${playerDisplayName}'s basketball stats on Swish Assistant.` : "Explore player stats on Swish Assistant."} />
-        <link rel="canonical" href={`https://www.swishassistant.com/player/${playerSlugOrId}`} />
+        <link rel="canonical" href={`https://www.swishassistant.com/player/${canonicalPlayerSegment}`} />
       </Helmet>
 
       <div className="min-h-screen bg-gray-50 dark:bg-neutral-950">

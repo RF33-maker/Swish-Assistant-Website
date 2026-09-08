@@ -1,6 +1,5 @@
 import { useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useLocation } from "wouter";
 import { TeamLogo } from "@/components/TeamLogo";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -188,7 +187,6 @@ function ScoreCardSkeleton() {
 const SLOTS_PER_LEAGUE = 4;
 
 export default function LatestScoresSection() {
-  const [, setLocation] = useLocation();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { data: groups = [], isLoading: loading } = useQuery<LeagueGroup[]>({
@@ -395,16 +393,6 @@ export default function LatestScoresSection() {
     el.scrollBy({ left: dir * 320, behavior: "smooth" });
   };
 
-  const handleCardClick = (g: CardItem) => {
-    if ((g.kind === "result" || g.kind === "live") && g.league_slug) {
-      setLocation(`/competition/${g.league_slug}/game/${g.game_key}`);
-    } else if (g.kind === "upcoming" && g.league_slug) {
-      setLocation(`/competition/${g.league_slug}/game/${encodeURIComponent(g.game_key)}`);
-    } else if (g.league_slug) {
-      setLocation(`/competition/${g.league_slug}`);
-    }
-  };
-
   return (
     <section className="bg-[#0a0a0f] text-white border-b border-neutral-800">
       <div className="max-w-7xl mx-auto px-4 md:px-6 py-3 md:py-4 relative">
@@ -446,9 +434,9 @@ export default function LatestScoresSection() {
                       if (g.kind === "live") {
                         const homeWon = (g.home_score ?? 0) > (g.away_score ?? 0);
                         return (
-                          <button
+                          <a
                             key={g.game_key}
-                            onClick={() => handleCardClick(g)}
+                            href={`/competition/${g.league_slug}/game/${encodeURIComponent(g.game_key)}`}
                             className="snap-start text-left flex-shrink-0 w-[152px] sm:w-[200px] rounded-md bg-neutral-900 hover:bg-neutral-800 border border-red-500/60 hover:border-red-500/90 transition-colors duration-200 p-2.5"
                             data-testid={`live-card-${g.game_key}`}
                           >
@@ -488,14 +476,14 @@ export default function LatestScoresSection() {
                                 {g.away_score ?? "—"}
                               </span>
                             </div>
-                          </button>
+                          </a>
                         );
                       }
                       if (g.kind === "upcoming") {
                         return (
-                          <button
+                          <a
                             key={g.game_key}
-                            onClick={() => handleCardClick(g)}
+                            href={`/competition/${g.league_slug}/game/${encodeURIComponent(g.game_key)}`}
                             className="snap-start text-left flex-shrink-0 w-[152px] sm:w-[200px] rounded-md bg-neutral-900 hover:bg-neutral-800 border border-orange-500/40 hover:border-orange-500/70 transition-colors duration-200 p-2.5"
                             data-testid={`upcoming-card-${g.game_key}`}
                           >
@@ -524,15 +512,15 @@ export default function LatestScoresSection() {
                                 {shortTeam(g.away_team)}
                               </span>
                             </div>
-                          </button>
+                          </a>
                         );
                       }
 
                       const homeWon = g.home_score > g.away_score;
                       return (
-                        <button
+                        <a
                           key={g.game_key}
-                          onClick={() => handleCardClick(g)}
+                          href={`/competition/${g.league_slug}/game/${encodeURIComponent(g.game_key)}`}
                           className="snap-start text-left flex-shrink-0 w-[152px] sm:w-[200px] rounded-md bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 transition-colors duration-200 p-2.5"
                           data-testid={`score-card-${g.game_key}`}
                         >
@@ -586,7 +574,7 @@ export default function LatestScoresSection() {
                               {!homeWon && <ChevronLeft className="h-3 w-3 text-white" />}
                             </div>
                           </div>
-                        </button>
+                        </a>
                       );
                     })}
                   </div>

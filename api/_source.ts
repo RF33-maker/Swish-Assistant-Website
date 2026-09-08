@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import type { IncomingMessage, ServerResponse } from "http";
 import { registerRoutes } from "../server/routes";
 import { config } from "dotenv";
+import { servePublicSeo } from "../server/publicSeo";
 
 config();
 
@@ -30,6 +31,7 @@ let initPromise: Promise<void> | null = null;
 function ensureInitialized(): Promise<void> {
   if (!initPromise) {
     initPromise = (async () => {
+      app.use(servePublicSeo);
       await registerRoutes(app);
       app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
         const status = err.status || err.statusCode || 500;

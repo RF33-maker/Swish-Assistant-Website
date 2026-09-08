@@ -1,3 +1,5 @@
+import { getTeamLogoCached, normalizeTeamName } from '@/utils/teamLogoCache';
+
 export interface TeamColors {
   primary: string;
   secondary: string;
@@ -129,11 +131,16 @@ export function adjustOpacity(rgb: { r: number; g: number; b: number }, opacity:
 
 export async function extractTeamColors(teamName: string, leagueId: string): Promise<TeamColors | null> {
   const CACHE_KEY = 'team_colors_cache';
-  const CACHE_VERSION = '3';
+  const CACHE_VERSION = '4';
   const CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+  // Resolve the exact same logo URL that TeamLogo renders. This includes logos
+  // stored outside teams.logo_url plus parent/child competition fallbacks.
+  const logoUrl = await getTeamLogoCached({ teamName, leagueId });
+  if (!logoUrl) return null;
   
   // Try to load from cache
-  let cache: Record<string, { colors: TeamColors; timestamp: number; version: string }> = {};
+  let cache: Record<string, { colors: TeamColors; logoUrl: string; timestamp: number; version: string }> = {};
   try {
     const cached = localStorage.getItem(CACHE_KEY);
     if (cached) {
@@ -143,43 +150,22 @@ export async function extractTeamColors(teamName: string, leagueId: string): Pro
     console.warn("Failed to load color cache:", err);
   }
   
-  const cacheKey = `${leagueId}_${teamName}`;
+  const cacheKey = `${leagueId}_${normalizeTeamName(teamName)}`;
   const cachedEntry = cache[cacheKey];
   
   // Return cached color if valid
   if (cachedEntry && 
-      cachedEntry.version === CACHE_VERSION && 
+      cachedEntry.version === CACHE_VERSION &&
+      cachedEntry.logoUrl === logoUrl &&
       Date.now() - cachedEntry.timestamp < CACHE_DURATION) {
     return cachedEntry.colors;
   }
-  
-  // Fetch the logo URL directly from the teams table
-  let logoUrl: string | null = null;
-  try {
-    const { supabase } = await import('@/lib/supabase');
-    const lower = teamName.toLowerCase();
-    const { data } = await supabase
-      .from('teams')
-      .select('name, logo_url')
-      .eq('league_id', leagueId)
-      .not('logo_url', 'is', null);
-    if (data) {
-      const match = data.find(
-        (r: { name: string; logo_url: string }) =>
-          r.name === teamName || r.name.toLowerCase() === lower
-      );
-      logoUrl = match?.logo_url || null;
-    }
-  } catch {
-    // network error — return null
-  }
-
-  if (!logoUrl) return null;
 
   const extractedColors = await extractColorsFromImage(logoUrl);
   if (extractedColors) {
     cache[cacheKey] = {
       colors: extractedColors,
+      logoUrl,
       timestamp: Date.now(),
       version: CACHE_VERSION,
     };

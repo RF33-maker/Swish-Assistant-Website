@@ -51,6 +51,28 @@ import {
   type AdvancedLeaderDef,
 } from "@/lib/advancedStats";
 import LeagueTrendingPerformances from "@/components/league/LeagueTrendingPerformances";
+import { getImportedPlayerName, resolvePlayerDisplayName } from "@/lib/playerName";
+
+type CanonicalPlayerName = {
+  name: string;
+  leagueId: string | null;
+};
+
+function getCanonicalPlayerForStat(
+  stat: any,
+  playerNames?: Map<string, CanonicalPlayerName>,
+): CanonicalPlayerName | undefined {
+  if (!stat?.player_id || !playerNames) return undefined;
+  const canonical = playerNames.get(stat.player_id);
+  if (!canonical?.name) return undefined;
+
+  const sourceName = getImportedPlayerName(stat);
+  const sameLeague = !!stat.league_id && canonical.leagueId === stat.league_id;
+  if (sameLeague || (sourceName && namesMatch(sourceName, canonical.name))) {
+    return canonical;
+  }
+  return undefined;
+}
 
 // Compact label for age group filter UI ("Under 18 Boys" -> "U18 Boys").
 function shortenAgeLabel(label: string): string {
@@ -1929,35 +1951,54 @@ export default function LeaguePage() {
           const fetchTopStats = async () => {
             setIsLoadingSchedule(true);
             const { data: scorerRows } = await applyLeagueFilter(
-              db.from("player_stats").select("firstname, familyname, spoints")
+              db.from("player_stats").select("player_id, league_id, full_name, firstname, familyname, spoints")
             ).order("spoints", { ascending: false }).limit(1);
             const scorerData = scorerRows?.[0] || null;
 
             const { data: reboundRows } = await applyLeagueFilter(
-              db.from("player_stats").select("firstname, familyname, sreboundstotal")
+              db.from("player_stats").select("player_id, league_id, full_name, firstname, familyname, sreboundstotal")
             ).order("sreboundstotal", { ascending: false }).limit(1);
             const reboundData = reboundRows?.[0] || null;
 
             const { data: assistRows } = await applyLeagueFilter(
-              db.from("player_stats").select("firstname, familyname, sassists")
+              db.from("player_stats").select("player_id, league_id, full_name, firstname, familyname, sassists")
             ).order("sassists", { ascending: false }).limit(1);
             const assistData = assistRows?.[0] || null;
 
             const { data: recentGames } = await applyLeagueFilter(
-              db.from("player_stats").select("firstname, familyname, created_at, spoints, sassists, sreboundstotal")
+              db.from("player_stats").select("player_id, league_id, full_name, firstname, familyname, created_at, spoints, sassists, sreboundstotal")
             ).order("created_at", { ascending: false }).limit(5);
 
             const { data: allPlayerStats, error: allStatsError } = await applyLeagueFilter(
               db.from("player_stats").select("*")
             );
 
+            const featuredRows = [scorerData, reboundData, assistData, ...(recentGames || [])].filter(Boolean);
+            const featuredPlayerIds = [...new Set(featuredRows.map((row: any) => row.player_id).filter(Boolean))] as string[];
+            const featuredPlayerNames = new Map<string, CanonicalPlayerName>();
+            if (featuredPlayerIds.length > 0) {
+              const { data: featuredPlayers } = await supabase
+                .from("players")
+                .select("id, full_name, league_id")
+                .in("id", featuredPlayerIds);
+              featuredPlayers?.forEach((player: any) => {
+                if (player.id && player.full_name) {
+                  featuredPlayerNames.set(player.id, {
+                    name: player.full_name,
+                    leagueId: player.league_id || null,
+                  });
+                }
+              });
+            }
+
             const processPlayerData = (player: any) => {
               if (!player) return null;
               return {
                 ...player,
-                name: player.firstname && player.familyname ? 
-                  `${player.firstname} ${player.familyname}` : 
-                  player.firstname || player.familyname || 'Unknown Player',
+                name: resolvePlayerDisplayName(
+                  player,
+                  getCanonicalPlayerForStat(player, featuredPlayerNames)?.name,
+                ),
                 team: 'Team Not Available'
               };
             };
@@ -2504,6 +2545,7 @@ export default function LeaguePage() {
 
     type PlayerAggregate = {
       name: string;
+      hasCanonicalName: boolean;
       team: string;
       latestGameTs: string;
       shirtnumber: string | null;
@@ -2566,18 +2608,15 @@ export default function LeaguePage() {
       return namesMatch(name1, name2);
     };
 
-    const aggregatePlayerStats = (playerStats: any[], slugLookup: Map<string, string>, nameLookup: Map<string, string>, playerIdToName?: Map<string, string>, siblingLeagueIds?: Set<string>): any[] => {
+    const aggregatePlayerStats = (playerStats: any[], slugLookup: Map<string, string>, nameLookup: Map<string, string>, playerIdToName?: Map<string, CanonicalPlayerName>, siblingLeagueIds?: Set<string>): any[] => {
       if (!playerStats || playerStats.length === 0) return [];
 
       const byPlayerId = new Map<string, PlayerAggregate[]>();
       const noPlayerId: any[] = [];
 
       playerStats.forEach(stat => {
-        const playerName = stat.full_name ||
-          `${stat.firstname || ''} ${stat.familyname || ''}`.trim() ||
-          stat.name ||
-          (stat.player_id && playerIdToName?.get(stat.player_id)) ||
-          'Unknown Player';
+        const canonicalPlayer = getCanonicalPlayerForStat(stat, playerIdToName);
+        const playerName = resolvePlayerDisplayName(stat, canonicalPlayer?.name);
         const team = stat.team || stat.team_name || 'Unknown';
         const minutesPlayed = parseMinutesPlayed(stat);
         const hasAnyStats = (stat.spoints || 0) > 0 || (stat.sreboundstotal || 0) > 0 || 
@@ -2602,6 +2641,7 @@ export default function LeaguePage() {
           if (!agg) {
             agg = {
               name: playerName,
+              hasCanonicalName: !!canonicalPlayer,
               team: team,
               latestGameTs: stat.game_date || '',
               shirtnumber: stat.shirtnumber || null,
@@ -2678,8 +2718,13 @@ export default function LeaguePage() {
           if (otherId !== playerId && !processedIds.has(otherId)) {
             const otherTeamNormalized = normalizeTeamName(otherPlayer.team);
             const sameTeam = playerTeamNormalized === otherTeamNormalized;
+            const conflictingCanonicalNames =
+              player.hasCanonicalName &&
+              otherPlayer.hasCanonicalName &&
+              normalizeName(player.name) !== normalizeName(otherPlayer.name);
             if (
               sameTeam &&
+              !conflictingCanonicalNames &&
               areSimilarNames(player.name, otherPlayer.name) &&
               hasLeagueOverlap(player.leagueIds, otherPlayer.leagueIds)
             ) {
@@ -2713,7 +2758,12 @@ export default function LeaguePage() {
             player.totalPersonalFouls += other.totalPersonalFouls;
             player.totalPlusMinus += other.totalPlusMinus;
             player.rawStats.push(...other.rawStats);
-            player.name = getMostCompleteName([player.name, other.name]);
+            if (!player.hasCanonicalName && other.hasCanonicalName) {
+              player.name = other.name;
+              player.hasCanonicalName = true;
+            } else if (!player.hasCanonicalName && !other.hasCanonicalName) {
+              player.name = getMostCompleteName([player.name, other.name]);
+            }
             processedIds.add(otherId);
           }
         }
@@ -2723,9 +2773,7 @@ export default function LeaguePage() {
       }
 
       noPlayerId.forEach(stat => {
-        const playerName = stat.full_name ||
-          `${stat.firstname || ''} ${stat.familyname || ''}`.trim() ||
-          stat.name || 'Unknown Player';
+        const playerName = resolvePlayerDisplayName(stat);
         const team = stat.team || stat.team_name || 'Unknown';
         const statLeagueIds = stat.league_id ? new Set<string>([stat.league_id]) : new Set<string>();
         let existingPlayer = mergedPlayers.find(p => areSimilarNames(p.name, playerName) && hasLeagueOverlap(p.leagueIds, statLeagueIds));
@@ -2763,7 +2811,7 @@ export default function LeaguePage() {
           }
         } else {
           const newPlayer: PlayerAggregate = {
-            name: playerName, team: team,
+            name: playerName, hasCanonicalName: false, team: team,
             latestGameTs: stat.game_date || '',
             shirtnumber: stat.shirtnumber || null,
             playerIds: new Set<string>(), games: 1,
@@ -2787,18 +2835,6 @@ export default function LeaguePage() {
         }
       });
 
-      const wiggallRaw = playerStats.filter((s: any) => {
-        const n = (s.full_name || `${s.firstname || ''} ${s.familyname || ''}`.trim() || s.name || (s.player_id && playerIdToName?.get(s.player_id)) || '').toLowerCase();
-        return n.includes('wiggall');
-      });
-      if (wiggallRaw.length > 0) {
-        console.log('[DEBUG] raw wiggall rows:', wiggallRaw.map((s: any) => ({ player_id: s.player_id, full_name: s.full_name, firstname: s.firstname, familyname: s.familyname, idToName: s.player_id ? playerIdToName?.get(s.player_id) : null, team: s.team || s.team_name, spoints: s.spoints, sminutes: s.sminutes })));
-      }
-      const wiggallDebug = mergedPlayers.filter(p => p.name.toLowerCase().includes('wiggall'));
-      if (wiggallDebug.length > 0) {
-        console.log('[crossTeamMerge DEBUG] wiggall entries in mergedPlayers:', wiggallDebug.map(p => ({ name: p.name, team: p.team, games: p.games, playerIds: Array.from(p.playerIds) })));
-      }
-
       const crossTeamMerged: PlayerAggregate[] = [];
       mergedPlayers.forEach((player) => {
         let foundMatch = false;
@@ -2809,6 +2845,11 @@ export default function LeaguePage() {
           });
           if (overlaps) continue;
           if (!hasLeagueOverlap(player.leagueIds, existingPlayer.leagueIds)) continue;
+          const conflictingCanonicalNames =
+            player.hasCanonicalName &&
+            existingPlayer.hasCanonicalName &&
+            normalizeName(player.name) !== normalizeName(existingPlayer.name);
+          if (conflictingCanonicalNames) continue;
 
           if (strictNamesMatch(player.name, existingPlayer.name)) {
             existingPlayer.games += player.games;
@@ -2838,7 +2879,12 @@ export default function LeaguePage() {
               existingPlayer.latestGameTs = player.latestGameTs;
               existingPlayer.team = player.team;
             }
-            existingPlayer.name = getMostCompleteName([existingPlayer.name, player.name]);
+            if (!existingPlayer.hasCanonicalName && player.hasCanonicalName) {
+              existingPlayer.name = player.name;
+              existingPlayer.hasCanonicalName = true;
+            } else if (!existingPlayer.hasCanonicalName && !player.hasCanonicalName) {
+              existingPlayer.name = getMostCompleteName([existingPlayer.name, player.name]);
+            }
             foundMatch = true;
             break;
           }
@@ -3019,8 +3065,8 @@ export default function LeaguePage() {
         {
           const rosterIds = isParentFetch && parentChildIds.length > 0 ? parentChildIds : [statsLeagueId];
           const rosterQ = rosterIds.length === 1
-            ? supabase.from("players").select("id, full_name, slug, photo_path_bg_removed").eq("league_id", rosterIds[0])
-            : supabase.from("players").select("id, full_name, slug, photo_path_bg_removed").in("league_id", rosterIds);
+            ? supabase.from("players").select("id, full_name, slug, league_id, photo_path_bg_removed").eq("league_id", rosterIds[0])
+            : supabase.from("players").select("id, full_name, slug, league_id, photo_path_bg_removed").in("league_id", rosterIds);
           const { data: rosterResult, error: rosterError } = await rosterQ;
           if (rosterError) console.error("Error fetching roster:", rosterError);
           rosterData = rosterResult;
@@ -3028,12 +3074,15 @@ export default function LeaguePage() {
 
         const slugLookup = new Map<string, string>();
         const nameLookup = new Map<string, string>();
-        const playerIdToName = new Map<string, string>();
+        const playerIdToName = new Map<string, CanonicalPlayerName>();
         const photoLookup = new Map<string, string>();
         
         rosterData?.forEach(p => {
           if (p.full_name) {
-            playerIdToName.set(p.id, p.full_name);
+            playerIdToName.set(p.id, {
+              name: p.full_name,
+              leagueId: p.league_id || null,
+            });
           }
           if (p.slug) {
             slugLookup.set(p.id, p.slug);
@@ -3164,7 +3213,7 @@ export default function LeaguePage() {
               const chunk = uncoveredIds.slice(ci, ci + chunkSize);
               const { data: extraPlayers } = await supabase
                 .from("players")
-                .select("id, full_name, slug, photo_path_bg_removed")
+                .select("id, full_name, slug, league_id, photo_path_bg_removed")
                 .in("id", chunk);
               extraPlayers?.forEach((p: any) => {
                 if (p.slug) {
@@ -3173,7 +3222,10 @@ export default function LeaguePage() {
                     nameLookup.set(p.full_name.toLowerCase().trim(), p.slug);
                 }
                 if (p.full_name && p.id)
-                  playerIdToName.set(p.id, p.full_name);
+                  playerIdToName.set(p.id, {
+                    name: p.full_name,
+                    leagueId: p.league_id || null,
+                  });
                 if (p.photo_path_bg_removed && p.id)
                   photoLookup.set(p.id, p.photo_path_bg_removed);
               });
@@ -4874,12 +4926,19 @@ export default function LeaguePage() {
                           >
                             <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 dark:text-slate-200 sticky left-0 bg-white dark:bg-neutral-900 hover:bg-orange-50 dark:hover:bg-neutral-800 z-10">
                               <div className="min-w-0">
-                                <div
-                                  className={`font-medium text-xs md:text-sm truncate ${player.slug ? 'hover:underline cursor-pointer' : 'text-slate-900 dark:text-white'}`}
-                                  style={player.slug ? { color: playerLinkColor } : undefined}
-                                  onMouseEnter={(e) => { if (player.slug) (e.target as HTMLElement).style.color = playerLinkColorHover; }}
-                                  onMouseLeave={(e) => { if (player.slug) (e.target as HTMLElement).style.color = playerLinkColor; }}
-                                >{player.name}</div>
+                                {player.slug ? (
+                                  <Link
+                                    href={`/competition/${slug}/player/${encodeURIComponent(player.slug)}`}
+                                    className="font-medium text-xs md:text-sm truncate hover:underline cursor-pointer"
+                                    style={{ color: playerLinkColor }}
+                                    onMouseEnter={(e) => { (e.target as HTMLElement).style.color = playerLinkColorHover; }}
+                                    onMouseLeave={(e) => { (e.target as HTMLElement).style.color = playerLinkColor; }}
+                                  >
+                                    {player.name}
+                                  </Link>
+                                ) : (
+                                  <div className="font-medium text-xs md:text-sm truncate text-slate-900 dark:text-white">{player.name}</div>
+                                )}
                                 <div className="text-[10px] md:text-xs text-slate-500 dark:text-slate-400 truncate">{player.team}</div>
                               </div>
                             </td>
@@ -5197,7 +5256,12 @@ export default function LeaguePage() {
                               <TeamLogo teamName={team.teamName} leagueId={league?.league_id || ""} size="sm" logoUrl={getTeamLogoUrl(team.teamName)} />
                             </td>
                             <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 dark:text-slate-200 text-xs md:text-sm truncate">
-                              {team.teamName}
+                              <Link
+                                href={`/competition/${slug}/team/${encodeURIComponent(team.teamName)}`}
+                                className="hover:underline"
+                              >
+                                {team.teamName}
+                              </Link>
                             </td>
                             <td className="text-center py-2 md:py-3 px-2 md:px-3 text-slate-600 dark:text-slate-300 font-medium" data-testid={`text-gp-${team.teamName}`}>
                               {team.gamesPlayed}
@@ -5267,7 +5331,12 @@ export default function LeaguePage() {
                       >
                         <div className="flex items-center gap-2 md:gap-4">
                           <TeamLogo teamName={teamData.team} leagueId={league?.league_id || ""} size="md" logoUrl={getTeamLogoUrl(teamData.team)} />
-                          <h3 className="font-semibold text-slate-800 dark:text-white text-sm md:text-lg">{teamData.team}</h3>
+                          <Link
+                            href={`/competition/${slug}/team/${encodeURIComponent(teamData.team)}`}
+                            className="font-semibold text-slate-800 dark:text-white text-sm md:text-lg hover:underline"
+                          >
+                            {teamData.team}
+                          </Link>
                         </div>
                         <ChevronRight className="w-4 md:w-5 h-4 md:h-5 text-gray-400 dark:text-gray-500 group-hover:text-orange-600 transition-colors" />
                       </div>
@@ -5421,10 +5490,15 @@ export default function LeaguePage() {
                                       {/* Date and Time Row */}
                                       <div className="flex items-center justify-between">
                                         <div className="text-[11px] md:text-xs text-slate-600 dark:text-slate-300 font-medium">
-                                          {new Date(game.game_date).toLocaleDateString('en-US', { 
-                                            month: 'short', 
-                                            day: 'numeric'
-                                          })}
+                                          <Link
+                                            href={`/competition/${slug}/game/${encodeURIComponent(game.game_id)}`}
+                                            className="hover:underline"
+                                          >
+                                            {new Date(game.game_date).toLocaleDateString('en-US', {
+                                              month: 'short',
+                                              day: 'numeric'
+                                            })}
+                                          </Link>
                                           {game.kickoff_time && ` • ${game.kickoff_time}`}
                                         </div>
                                         <div className="flex items-center gap-1.5">
@@ -5479,10 +5553,16 @@ export default function LeaguePage() {
                                       {/* Date and Status Row */}
                                       <div className="flex items-center justify-between">
                                         <div className="text-[11px] md:text-xs text-slate-600 dark:text-slate-300 font-medium">
-                                          {new Date(game.game_date).toLocaleDateString('en-US', { 
-                                            month: 'short', 
-                                            day: 'numeric'
-                                          })}
+                                          <Link
+                                            href={`/competition/${slug}/game/${encodeURIComponent(game.game_id)}`}
+                                            className="hover:underline"
+                                            onClick={(e) => e.stopPropagation()}
+                                          >
+                                            {new Date(game.game_date).toLocaleDateString('en-US', {
+                                              month: 'short',
+                                              day: 'numeric'
+                                            })}
+                                          </Link>
                                           {game.status && (
                                             <span className="ml-2 text-[10px] md:text-xs text-green-600 dark:text-green-400 font-semibold">
                                               {game.status}
@@ -5630,6 +5710,7 @@ export default function LeaguePage() {
                   leagueSlug={slug}
                   leagueId={league?.league_id || ""}
                   childLeagueIds={isParentLeague ? childCompetitions.map(c => c.league_id) : undefined}
+                  seasonCompetitions={isParentLeague ? childCompetitions : undefined}
                   onBack={() => {
                     setSelectedTeamName(null);
                     setActiveSection(previousSection);
@@ -5874,7 +5955,25 @@ export default function LeaguePage() {
                                         )
                                       )}
                                       <div className="min-w-0 flex-1">
-                                        <p className={`text-sm font-medium truncate ${isClickable ? 'hover:underline' : ''}`} style={{ color: playerLinkColor }}>{displayName}</p>
+                                        {isTeam && entity.teamName ? (
+                                          <Link
+                                            href={`/competition/${slug}/team/${encodeURIComponent(entity.teamName)}`}
+                                            className="block text-sm font-medium truncate hover:underline"
+                                            style={{ color: playerLinkColor }}
+                                          >
+                                            {displayName}
+                                          </Link>
+                                        ) : !isTeam && entity.slug ? (
+                                          <Link
+                                            href={`/competition/${slug}/player/${encodeURIComponent(entity.slug)}`}
+                                            className="block text-sm font-medium truncate hover:underline"
+                                            style={{ color: playerLinkColor }}
+                                          >
+                                            {displayName}
+                                          </Link>
+                                        ) : (
+                                          <p className="text-sm font-medium truncate" style={{ color: playerLinkColor }}>{displayName}</p>
+                                        )}
                                         <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{subLine}</p>
                                       </div>
                                     </div>
@@ -6329,12 +6428,19 @@ export default function LeaguePage() {
                                     >
                                       <div className="flex items-center gap-2 min-w-0">
                                         <span className="text-xs font-bold tabular-nums text-slate-400 dark:text-slate-500 w-4 shrink-0">{i + 1}</span>
-                                        <span
-                                          className={`text-sm font-medium text-slate-800 dark:text-white truncate ${p.slug ? 'hover:underline' : ''}`}
-                                          style={p.slug ? { color: playerLinkColor } : undefined}
-                                          onMouseEnter={(e) => { if (p.slug) (e.target as HTMLElement).style.color = playerLinkColorHover; }}
-                                          onMouseLeave={(e) => { if (p.slug) (e.target as HTMLElement).style.color = playerLinkColor; }}
-                                        >{p.name}</span>
+                                        {p.slug ? (
+                                          <Link
+                                            href={`/competition/${slug}/player/${encodeURIComponent(p.slug)}`}
+                                            className="text-sm font-medium truncate hover:underline"
+                                            style={{ color: playerLinkColor }}
+                                            onMouseEnter={(e) => { (e.target as HTMLElement).style.color = playerLinkColorHover; }}
+                                            onMouseLeave={(e) => { (e.target as HTMLElement).style.color = playerLinkColor; }}
+                                          >
+                                            {p.name}
+                                          </Link>
+                                        ) : (
+                                          <span className="text-sm font-medium text-slate-800 dark:text-white truncate">{p.name}</span>
+                                        )}
                                         {p.team && <span className="text-xs text-slate-400 dark:text-slate-500 truncate hidden sm:block">· {p.team}</span>}
                                       </div>
                                       <span className="text-sm font-bold tabular-nums whitespace-nowrap ml-3 shrink-0" style={{ color: playerLinkColor }}>

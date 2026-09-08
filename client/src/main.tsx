@@ -3,7 +3,10 @@ import App from "./App";
 import "./index.css";
 import { ThemeProvider } from "next-themes";
 
-createRoot(document.getElementById("root")!).render(
+const rootElement = document.getElementById("root")!;
+rootElement.replaceChildren();
+
+createRoot(rootElement).render(
   <ThemeProvider attribute="class">
     <App />
   </ThemeProvider>

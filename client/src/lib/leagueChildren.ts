@@ -12,6 +12,7 @@ export type LeagueChild = {
   age_group: string | null;
   stop: number | null;
   gender: string | null;
+  season: string | null;
 };
 
 const cache = new Map<string, Promise<LeagueChild[]>>();

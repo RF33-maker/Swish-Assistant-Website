@@ -1,5 +1,14 @@
 User-agent: *
 Allow: /
+Allow: /assets/
+Allow: /team-logos/
+Allow: /news/
+Allow: /players
+Allow: /player/
+Allow: /teams
+Allow: /team/
+Allow: /competition/
+Allow: /competition-leaders/
 Disallow: /api/
 Disallow: /admin/
 Disallow: /dashboard/
@@ -9,6 +18,13 @@ Disallow: /reset-password
 Disallow: /profile
 Disallow: /settings
 Disallow: /payment
+Disallow: /account/
+Disallow: /coaches-hub
+Disallow: /social-tools
+Disallow: /api-widgets
+Disallow: /league-management
+Disallow: /league-admin/
+Disallow: /league-teams/
 
 # Crawl-delay: Prevent aggressive crawling (1 second between requests)
 Crawl-delay: 1

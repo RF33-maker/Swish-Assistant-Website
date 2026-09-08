@@ -167,6 +167,7 @@ export function useTeamBranding({
 
     const extractColors = async () => {
       setIsLoading(true);
+      setColors(null);
       try {
         const extracted = await extractTeamColors(teamName, leagueId);
         if (cancelled) return;

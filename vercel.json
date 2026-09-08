@@ -8,6 +8,17 @@
     }
   },
   "rewrites": [
+    { "source": "/sitemap.xml", "destination": "/api/index" },
+    { "source": "/sitemap/:path*", "destination": "/api/index" },
+    { "source": "/player/:slug", "destination": "/api/index" },
+    { "source": "/player/:slug/games/page/:page", "destination": "/api/index" },
+    { "source": "/competition/:slug", "destination": "/api/index" },
+    { "source": "/competition/:slug/game/:gameKey", "destination": "/api/index" },
+    { "source": "/competition/:slug/team/:team", "destination": "/api/index" },
+    { "source": "/competition/:slug/player/:playerSlug", "destination": "/api/index" },
+    { "source": "/competition-leaders/:slug", "destination": "/api/index" },
+    { "source": "/team/:team", "destination": "/api/index" },
+    { "source": "/game/:gameKey", "destination": "/api/index" },
     { "source": "/api/:path*", "destination": "/api/index" },
     { "source": "/team-logos/:path*", "destination": "/api/index" },
     { "source": "/chat", "destination": "/api/index" },

@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useLocation, useParams } from "wouter";
+import { Link, useLocation, useParams } from "wouter";
 import { supabase } from "@/lib/supabase";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import { TeamLogo } from "@/components/TeamLogo";
@@ -11,6 +11,14 @@ import { Helmet } from "react-helmet-async";
 import { normalizeTeamName } from "@/lib/teamUtils";
 import { useTeamBranding } from "@/hooks/useTeamBranding";
 import { adjustOpacity } from "@/lib/colorExtractor";
+import { namesMatch } from "@/lib/fuzzyMatch";
+import {
+  buildUnambiguousFullNameAliases,
+  expandUnambiguousPlayerName,
+  getImportedPlayerName,
+  resolvePlayerDisplayName,
+} from "@/lib/playerName";
+import { buildTeamSeasonOptions, type TeamSeasonCompetition } from "@/lib/teamSeasons";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import GameDetailModal from "@/components/GameDetailModal";
 import {
@@ -80,6 +88,18 @@ interface Team {
 interface Suggestion {
   name: string;
   slug: string;
+}
+
+function getTeamRosterPlayerName(stat: any): string {
+  if (stat._resolvedPlayerName) return stat._resolvedPlayerName;
+  const canonicalName = stat.players?.full_name || null;
+  const canonicalLeagueId = stat.players?.league_id || null;
+  const importedName = getImportedPlayerName(stat);
+  const canUseCanonical =
+    !!canonicalName &&
+    (canonicalLeagueId === stat.league_id || (!!importedName && namesMatch(importedName, canonicalName)));
+
+  return resolvePlayerDisplayName(stat, canUseCanonical ? canonicalName : null);
 }
 
 const PLAYER_STAT_COLUMNS: Record<string, { key: string; label: string }[]> = {
@@ -284,7 +304,12 @@ function TeamShotChartSection({
 }
 
 export default function TeamProfile() {
-  const { teamName, leagueSlug } = useParams();
+  const {
+    teamName,
+    leagueSlug: legacyLeagueSlug,
+    competitionSlug,
+  } = useParams();
+  const leagueSlug = competitionSlug || legacyLeagueSlug;
   const [location, navigate] = useLocation();
   const [team, setTeam] = useState<Team | null>(null);
   const [playerStats, setPlayerStats] = useState<any[]>([]);
@@ -306,6 +331,14 @@ export default function TeamProfile() {
   const [statsSearch, setStatsSearch] = useState('');
   const [statsSortColumn, setStatsSortColumn] = useState<string>('PTS');
   const [statsSortDirection, setStatsSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [seasonCompetitions, setSeasonCompetitions] = useState<TeamSeasonCompetition[]>([]);
+  const [selectedSeason, setSelectedSeason] = useState("");
+  const seasonOptions = useMemo(
+    () => buildTeamSeasonOptions(seasonCompetitions),
+    [seasonCompetitions],
+  );
+  const activeSeason = seasonOptions.find(option => option.key === selectedSeason) || seasonOptions[0];
+  const selectedLeagueIds = activeSeason?.leagueIds || [];
 
   // Extract team branding colors
   const { colors: teamBranding, primaryColor, secondaryColor } = useTeamBranding({
@@ -357,7 +390,7 @@ export default function TeamProfile() {
     const byPlayerId = new Map<string, any>();
 
     playerStats.forEach((stat: any) => {
-      const playerName = stat.full_name || stat.name || 'Unknown Player';
+      const playerName = getTeamRosterPlayerName(stat);
       const minutesPlayed = parseMinutesPlayed(stat);
       const didPlay = minutesPlayed > 0;
 
@@ -515,28 +548,49 @@ export default function TeamProfile() {
   };
 
   useEffect(() => {
+    let cancelled = false;
+    const loadSeasonOptions = async () => {
+      if (!leagueSlug) {
+        setSeasonCompetitions([]);
+        return;
+      }
+
+      const { data: current } = await supabase
+        .from("competitions")
+        .select("league_id, competition_id, name, slug, season")
+        .eq("slug", leagueSlug)
+        .maybeSingle();
+      if (!current || cancelled) return;
+
+      let competitions: TeamSeasonCompetition[] = [current];
+      if (current.competition_id) {
+        try {
+          const response = await fetch(`/api/league/${current.competition_id}/competitions`);
+          if (response.ok) competitions = await response.json();
+        } catch (error) {
+          console.error("Failed to load team seasons:", error);
+        }
+      }
+      if (!cancelled) setSeasonCompetitions(competitions);
+    };
+
+    loadSeasonOptions();
+    return () => {
+      cancelled = true;
+    };
+  }, [leagueSlug]);
+
+  useEffect(() => {
     const fetchTeamData = async () => {
-      if (!teamName) return;
+      if (!teamName || (leagueSlug && selectedLeagueIds.length === 0)) return;
       
       setLoading(true);
       try {
         const decodedTeamName = decodeURIComponent(teamName);
         const normalizedTeamName = normalizeTeamName(decodedTeamName);
         
-        // If leagueSlug is provided, fetch the league_id first
-        let leagueId: string | null = null;
-        if (leagueSlug) {
-          const { data: leagueData } = await supabase
-            .from("competitions")
-            .select("league_id")
-            .eq("slug", leagueSlug)
-            .single();
-          
-          if (leagueData) {
-            leagueId = leagueData.league_id;
-            setCurrentLeagueId(leagueId);
-          }
-        }
+        let leagueId: string | null = selectedLeagueIds[0] || null;
+        if (leagueId) setCurrentLeagueId(leagueId);
         
         // Load this competition's schedule first. Its home/away IDs are the
         // stable identity link used to find the same club in prior seasons.
@@ -545,8 +599,8 @@ export default function TeamProfile() {
           .select("*")
           .order("matchtime", { ascending: true });
         
-        if (leagueId) {
-          scheduleQuery = scheduleQuery.eq("league_id", leagueId);
+        if (selectedLeagueIds.length > 0) {
+          scheduleQuery = scheduleQuery.in("league_id", selectedLeagueIds);
         }
 
         const { data: scheduleData, error: scheduleError } = await scheduleQuery;
@@ -583,12 +637,18 @@ export default function TeamProfile() {
 
         let statsQuery = supabase
           .from("player_stats")
-          .select("*, players:player_id(slug)");
-        if (linkedTeamId) {
+          .select("*, players:player_id(slug, full_name, league_id)");
+        if (linkedTeamId && selectedLeagueIds.length <= 1) {
           statsQuery = statsQuery.eq("team_id", linkedTeamId);
+          if (selectedLeagueIds.length === 1) {
+            statsQuery = statsQuery.in("league_id", selectedLeagueIds);
+          }
         } else {
-          statsQuery = statsQuery.ilike("team_name", `%${normalizedTeamName}%`);
-          if (leagueId) statsQuery = statsQuery.eq("league_id", leagueId);
+          statsQuery = statsQuery
+            .ilike("team_name", `%${normalizedTeamName}%`);
+          if (selectedLeagueIds.length > 0) {
+            statsQuery = statsQuery.in("league_id", selectedLeagueIds);
+          }
         }
 
         let teamsQuery = supabase
@@ -613,7 +673,7 @@ export default function TeamProfile() {
             : supabase.from("teams").select("social_instagram").eq("name", normalizedTeamName).maybeSingle(),
         ]);
 
-        const allStats = linkedTeamId
+        const rawStats = linkedTeamId && selectedLeagueIds.length <= 1
           ? (allTeamStats || [])
           : (allTeamStats || []).filter(stat =>
               normalizeTeamName(stat.team_name || stat.team || "") === normalizedTeamName
@@ -625,7 +685,21 @@ export default function TeamProfile() {
           return;
         }
 
-        setPlayerStats(allStats || []);
+        const { data: rosterNameRows } = await supabase
+          .from("players")
+          .select("full_name, team_name")
+          .ilike("team_name", `%${normalizedTeamName}%`);
+        const rosterNameAliases = buildUnambiguousFullNameAliases(
+          (rosterNameRows || [])
+            .filter((player: any) => normalizeTeamName(player.team_name || "") === normalizedTeamName)
+            .map((player: any) => player.full_name),
+        );
+        const allStats = rawStats.map((stat: any) => {
+          const baseName = getTeamRosterPlayerName(stat);
+          return { ...stat, _resolvedPlayerName: expandUnambiguousPlayerName(baseName, rosterNameAliases) };
+        });
+
+        setPlayerStats(allStats);
         
         if (teamData?.description) {
           setTeamDescription(teamData.description);
@@ -637,9 +711,6 @@ export default function TeamProfile() {
           const now = new Date().getTime();
           const teamGames = scheduleData.filter((game: any) => {
             if (new Date(game.matchtime).getTime() < now) return false;
-            if (linkedTeamId) {
-              return game.home_team_id === linkedTeamId || game.away_team_id === linkedTeamId;
-            }
             const normalizedHome = normalizeTeamName(game.hometeam || '');
             const normalizedAway = normalizeTeamName(game.awayteam || '');
             return normalizedHome === normalizedTeamName || normalizedAway === normalizedTeamName;
@@ -784,7 +855,7 @@ export default function TeamProfile() {
               return;
             }
             
-            const playerName = stat.full_name || stat.name || 'Unknown Player';
+            const playerName = getTeamRosterPlayerName(stat);
             const playerSlug = stat.players?.slug || null;
             
             if (!playerStatsMap.has(playerId)) {
@@ -978,7 +1049,7 @@ export default function TeamProfile() {
     };
 
     fetchTeamData();
-  }, [teamName, leagueSlug]);
+  }, [teamName, leagueSlug, activeSeason?.key, selectedLeagueIds.join(",")]);
 
   if (loading) {
     return (
@@ -1167,6 +1238,23 @@ export default function TeamProfile() {
                   </a>
                 )}
               </div>
+              {seasonOptions.length > 1 && (
+                <div className="mt-4 w-full max-w-[220px] mx-auto md:mx-0 text-slate-900">
+                  <label className="mb-1 block text-left text-xs font-semibold uppercase tracking-wide text-white/90">
+                    Season
+                  </label>
+                  <Select value={activeSeason?.key} onValueChange={setSelectedSeason}>
+                    <SelectTrigger className="bg-white/95 border-white/40">
+                      <SelectValue placeholder="Select season" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {seasonOptions.map(option => (
+                        <SelectItem key={option.key} value={option.key}>{option.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1362,7 +1450,16 @@ export default function TeamProfile() {
                       {team.topPlayer.name.charAt(0)}
                     </div>
                     <div className="flex-1 text-center md:text-left">
-                      <h3 className="text-lg md:text-xl font-bold text-slate-800 dark:text-white">{team.topPlayer.name}</h3>
+                      {(() => {
+                        const identifier = team.topPlayer.player_slug || team.topPlayer.player_id;
+                        return identifier ? (
+                          <Link href={`/player/${encodeURIComponent(identifier)}`} className="text-lg md:text-xl font-bold text-slate-800 dark:text-white hover:underline">
+                            {team.topPlayer.name}
+                          </Link>
+                        ) : (
+                          <h3 className="text-lg md:text-xl font-bold text-slate-800 dark:text-white">{team.topPlayer.name}</h3>
+                        );
+                      })()}
                       <p className="text-slate-600 dark:text-slate-300 text-sm md:text-base">{team.topPlayer.position}</p>
                       <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400">{team.topPlayer.gamesPlayed} games played</p>
                     </div>
@@ -1430,7 +1527,16 @@ export default function TeamProfile() {
                             >
                               {player.name.charAt(0)}
                             </div>
-                            <span className="font-medium text-slate-800 dark:text-white">{player.name}</span>
+                            {(() => {
+                              const identifier = player.player_slug || player.player_id;
+                              return identifier ? (
+                                <Link href={`/player/${encodeURIComponent(identifier)}`} className="font-medium text-slate-800 dark:text-white hover:underline">
+                                  {player.name}
+                                </Link>
+                              ) : (
+                                <span className="font-medium text-slate-800 dark:text-white">{player.name}</span>
+                              );
+                            })()}
                           </div>
                         </td>
                         <td className="hidden md:table-cell py-3 px-2 text-center text-slate-600 dark:text-slate-400">{player.gamesPlayed}</td>
@@ -1634,7 +1740,13 @@ export default function TeamProfile() {
                       >
                         <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 dark:text-slate-200 sticky left-0 bg-white dark:bg-neutral-900 hover:bg-orange-50 dark:hover:bg-neutral-800 z-10">
                           <div className="min-w-0">
-                            <div className="font-medium text-slate-900 dark:text-white text-xs md:text-sm truncate">{player.name}</div>
+                            {player.slug ? (
+                              <Link href={`/player/${encodeURIComponent(player.slug)}`} className="font-medium text-slate-900 dark:text-white text-xs md:text-sm truncate hover:underline">
+                                {player.name}
+                              </Link>
+                            ) : (
+                              <div className="font-medium text-slate-900 dark:text-white text-xs md:text-sm truncate">{player.name}</div>
+                            )}
                           </div>
                         </td>
                         <td className="py-2 md:py-3 px-2 md:px-3 text-center text-slate-600 dark:text-slate-300 font-medium">{player.games}</td>

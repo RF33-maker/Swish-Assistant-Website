@@ -32,6 +32,14 @@ function normalisePlayerName(name: string): string {
   return name.toLowerCase().trim().replace(/\s+/g, ' ').replace(/[^a-z\s]/g, '');
 }
 
+function formatCanonicalPlayerName(name: string): string {
+  const parts = name.replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
+  if (parts.length > 1 && /^[A-Za-z]$/.test(parts[0])) {
+    parts[0] = `${parts[0].toUpperCase()}.`;
+  }
+  return parts.join(" ");
+}
+
 const PHOTO_FALLBACK_TTL_MS = 5 * 60 * 1000;
 let photoFallbackCache: { map: Map<string, string>; at: number } | null = null;
 
@@ -824,7 +832,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { data, error } = await supabaseAdmin
         .from("competitions")
-        .select("name, slug, season, gender, division")
+        .select("league_id, competition_id, name, slug, season, gender, division")
         .eq("competition_id", leagueId)
         .order("season", { ascending: false });
 
@@ -915,7 +923,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { data, error } = await supabaseAdmin
         .from("competitions")
-        .select("league_id, name, slug, logo_url, age_group, stop, gender")
+        .select("league_id, name, slug, logo_url, age_group, stop, gender, season")
         .eq("parent_league_id", parentId);
 
       if (error) {
@@ -1672,6 +1680,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Correct the canonical player name used throughout league-facing displays.
+  // Source names on player_stats remain untouched so imported data is auditable.
+  app.patch("/api/leagues/:leagueId/players/:playerId/name", async (req, res) => {
+    try {
+      const userId = await authenticateSupabaseUser(req);
+      if (!userId) return res.status(401).json({ error: "Authentication required" });
+
+      const { leagueId, playerId } = req.params;
+      const isOwner = await verifyLeagueOwnership(userId, leagueId);
+      if (!isOwner) return res.status(403).json({ error: "Only league owners can edit player names" });
+
+      const fullName = String(req.body?.fullName || "").replace(/\s+/g, " ").trim();
+      if (!fullName || fullName.length > 120) {
+        return res.status(400).json({ error: "Enter a player name between 1 and 120 characters" });
+      }
+      if (/[\u0000-\u001F\u007F]/.test(fullName)) {
+        return res.status(400).json({ error: "Player name contains invalid characters" });
+      }
+
+      const nameParts = fullName.split(" ").filter(Boolean);
+      if (nameParts.length < 2 || nameParts[nameParts.length - 1].replace(/[.'’-]/g, "").length < 2) {
+        return res.status(400).json({
+          error: "Enter a first name or initial followed by a surname, for example J. Smith",
+        });
+      }
+
+      const allIds = await getScopedLeagueIds(leagueId);
+      const { data: player, error: playerError } = await supabaseAdmin
+        .from("players")
+        .select("id, league_id")
+        .eq("id", playerId)
+        .maybeSingle();
+
+      if (playerError) return res.status(500).json({ error: playerError.message });
+      if (!player || !allIds.includes(player.league_id)) {
+        return res.status(404).json({ error: "Player not found in this league" });
+      }
+
+      const formattedName = formatCanonicalPlayerName(fullName);
+
+      const { data: updated, error: updateError } = await supabaseAdmin
+        .from("players")
+        .update({ full_name: formattedName })
+        .eq("id", playerId)
+        .select("id, full_name, slug, league_id")
+        .single();
+
+      if (updateError) return res.status(500).json({ error: updateError.message });
+      res.json({ player: updated });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Detect duplicate player pairs for a league + its children
   app.get("/api/leagues/:leagueId/duplicate-players", async (req, res) => {
     try {
@@ -2268,7 +2330,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // DB on every bot request.
   const SITEMAP_TTL_MS = 60 * 60 * 1000;
   const SITE_BASE = "https://www.swishassistant.com";
-  let sitemapCache: { xml: string; at: number } | null = null;
+  const SITEMAP_URL_LIMIT = 40_000; // Below the protocol's 50,000 URL limit.
+  const SITEMAP_BATCH_SIZE = 1_000;
+  let sitemapCache: { documents: string[]; at: number } | null = null;
+  let sitemapBuildInFlight: Promise<string[]> | null = null;
 
   function xmlEscape(s: string): string {
     return s
@@ -2283,38 +2348,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return `  <url>\n    <loc>${xmlEscape(loc)}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>${changefreq}</changefreq>\n    <priority>${priority}</priority>\n  </url>\n`;
   }
 
-  async function buildSitemap(): Promise<string> {
-    const today = new Date().toISOString().split("T")[0];
+  function sitemapDate(value: unknown, fallback: string): string {
+    if (!value) return fallback;
+    const date = new Date(String(value));
+    return Number.isNaN(date.getTime()) ? fallback : date.toISOString().split("T")[0];
+  }
+
+  function sitemapSegment(value: unknown): string | null {
+    const segment = String(value || "").trim();
+    return segment ? encodeURIComponent(segment) : null;
+  }
+
+  function teamSitemapSegment(name: unknown): string | null {
+    const normalized = String(name || "").trim();
+    return normalized ? encodeURIComponent(normalized) : null;
+  }
+
+  function sitemapIndex(documentCount: number, lastmod: string): string {
     let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
-    xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
+    xml += '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
+    for (let i = 0; i < documentCount; i++) {
+      xml += `  <sitemap>\n    <loc>${SITE_BASE}/sitemap/${i + 1}.xml</loc>\n    <lastmod>${lastmod}</lastmod>\n  </sitemap>\n`;
+    }
+    return `${xml}</sitemapindex>`;
+  }
+
+  async function buildSitemap(): Promise<string[]> {
+    const today = new Date().toISOString().split("T")[0];
+    const entries: Array<{ loc: string; lastmod: string; changefreq: string; priority: string }> = [];
+    const seenUrls = new Set<string>();
+    const publicCompetitionSlugs = new Map<string, string>();
+    const addUrl = (path: string, lastmod: string, changefreq: string, priority: string) => {
+      const loc = `${SITE_BASE}${path}`;
+      if (seenUrls.has(loc)) return;
+      seenUrls.add(loc);
+      entries.push({ loc, lastmod, changefreq, priority });
+    };
 
     // Static pages
-    xml += sitemapUrl(`${SITE_BASE}/`, today, "daily", "1.0");
-    xml += sitemapUrl(`${SITE_BASE}/news`, today, "daily", "0.9");
+    addUrl("/", today, "daily", "1.0");
+    addUrl("/news", today, "daily", "0.9");
     for (const p of [
-      { path: "/coaches-hub", freq: "weekly", pri: "0.8" },
       { path: "/teams", freq: "weekly", pri: "0.7" },
       { path: "/players", freq: "weekly", pri: "0.7" },
       { path: "/privacy", freq: "monthly", pri: "0.3" },
       { path: "/terms", freq: "monthly", pri: "0.3" },
       { path: "/cookies", freq: "monthly", pri: "0.3" },
     ]) {
-      xml += sitemapUrl(`${SITE_BASE}${p.path}`, today, p.freq, p.pri);
+      addUrl(p.path, today, p.freq, p.pri);
     }
 
     // Published news articles (slug-based URLs)
     try {
-      const { data: articles } = await supabaseAdmin
-        .from("news_articles")
-        .select("id, slug, published_at")
-        .eq("is_published", true)
-        .order("published_at", { ascending: false });
-      for (const a of articles || []) {
-        const articleSlug = a.slug || a.id;
-        const lastmod = a.published_at
-          ? new Date(a.published_at).toISOString().split("T")[0]
-          : today;
-        xml += sitemapUrl(`${SITE_BASE}/news/${xmlEscape(articleSlug)}`, lastmod, "weekly", "0.8");
+      for (let offset = 0; ; offset += SITEMAP_BATCH_SIZE) {
+        const { data: articles, error } = await supabaseAdmin
+          .from("news_articles")
+          .select("id, slug, published_at")
+          .eq("is_published", true)
+          .order("id")
+          .range(offset, offset + SITEMAP_BATCH_SIZE - 1);
+        if (error) throw error;
+        for (const article of articles || []) {
+          const slug = sitemapSegment(article.slug || article.id);
+          if (slug) addUrl(`/news/${slug}`, sitemapDate(article.published_at, today), "weekly", "0.8");
+        }
+        if (!articles || articles.length < SITEMAP_BATCH_SIZE) break;
       }
     } catch (err: any) {
       console.error("Sitemap: error fetching articles:", err.message);
@@ -2322,64 +2420,108 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     // Public leagues
     try {
-      const { data: leagues } = await supabaseAdmin
+      const { data: leagues, error } = await supabaseAdmin
         .from("competitions")
-        .select("slug, updated_at")
-        .eq("is_public", true);
+        .select("league_id, slug, is_public, parent_league_id");
+      if (error) throw error;
+      const directPublic = new Map<string, string>();
       for (const l of leagues || []) {
-        const lastmod = l.updated_at
-          ? new Date(l.updated_at).toISOString().split("T")[0]
-          : today;
-        xml += sitemapUrl(`${SITE_BASE}/competition/${xmlEscape(l.slug)}`, lastmod, "daily", "0.9");
-        xml += sitemapUrl(`${SITE_BASE}/competition-leaders/${xmlEscape(l.slug)}`, lastmod, "daily", "0.8");
-        xml += sitemapUrl(`${SITE_BASE}/competition/${xmlEscape(l.slug)}/teams`, lastmod, "weekly", "0.7");
+        const slug = sitemapSegment(l.slug);
+        if (!slug || !l.league_id || !l.is_public) continue;
+        directPublic.set(l.league_id, slug);
+        publicCompetitionSlugs.set(l.league_id, slug);
+        addUrl(`/competition/${slug}`, today, "daily", "0.9");
+      }
+      for (const l of leagues || []) {
+        if (!l.league_id || !l.parent_league_id || publicCompetitionSlugs.has(l.league_id)) continue;
+        const parentSlug = directPublic.get(l.parent_league_id);
+        if (parentSlug) publicCompetitionSlugs.set(l.league_id, parentSlug);
       }
     } catch (err: any) {
       console.error("Sitemap: error fetching leagues:", err.message);
     }
 
-    // Team detail pages
+    // Team detail pages are scoped to a public competition. The unscoped
+    // /team/:name route is an alias, so it is deliberately not indexed.
     try {
-      const { data: teams } = await supabaseAdmin
-        .from("teams")
-        .select("name");
-      const seenTeams = new Set<string>();
-      for (const t of teams || []) {
-        if (!t.name) continue;
-        const encoded = encodeURIComponent(t.name.toLowerCase().replace(/\s+/g, "-"));
-        if (seenTeams.has(encoded)) continue;
-        seenTeams.add(encoded);
-        xml += sitemapUrl(`${SITE_BASE}/team/${encoded}`, today, "weekly", "0.6");
+      for (let offset = 0; ; offset += SITEMAP_BATCH_SIZE) {
+        const { data: teams, error } = await supabaseAdmin
+          .from("teams")
+          .select("name, league_id, created_at")
+          .order("team_id")
+          .range(offset, offset + SITEMAP_BATCH_SIZE - 1);
+        if (error) throw error;
+        for (const team of teams || []) {
+          const competitionSlug = publicCompetitionSlugs.get(team.league_id);
+          const teamSlug = teamSitemapSegment(team.name);
+          if (competitionSlug && teamSlug) {
+            addUrl(`/competition/${competitionSlug}/team/${teamSlug}`, sitemapDate(team.created_at, today), "weekly", "0.6");
+          }
+        }
+        if (!teams || teams.length < SITEMAP_BATCH_SIZE) break;
       }
     } catch (err: any) {
       console.error("Sitemap: error fetching teams:", err.message);
     }
 
-    // Players with slugs (batched)
+    // Every public player gets a stable canonical URL. Prefer an imported slug,
+    // then an exact-name canonical slug, and finally a descriptive ID-backed URL.
     try {
-      const BATCH = 1000;
-      let offset = 0;
-      while (true) {
-        const { data: players } = await supabaseAdmin
+      const allPlayers: any[] = [];
+      for (let offset = 0; ; offset += SITEMAP_BATCH_SIZE) {
+        const { data: players, error } = await supabaseAdmin
           .from("players")
-          .select("slug")
-          .not("slug", "is", null)
-          .range(offset, offset + BATCH - 1);
-        if (!players || players.length === 0) break;
-        for (const p of players) {
-          if (p.slug) {
-            xml += sitemapUrl(`${SITE_BASE}/player/${xmlEscape(p.slug)}`, today, "weekly", "0.5");
-          }
-        }
-        if (players.length < BATCH) break;
-        offset += BATCH;
+          .select("id, slug, full_name, league_id, created_at")
+          .order("id")
+          .range(offset, offset + SITEMAP_BATCH_SIZE - 1);
+        if (error) throw error;
+        allPlayers.push(...(players || []));
+        if (!players || players.length < SITEMAP_BATCH_SIZE) break;
+      }
+      for (const player of allPlayers) {
+        if (!player.id || !publicCompetitionSlugs.has(player.league_id)) continue;
+        const generatedName = String(player.full_name || "player").trim().toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "player";
+        const canonicalSegment = player.slug
+          || `${generatedName}--${player.id}`;
+        const slug = sitemapSegment(canonicalSegment);
+        if (slug) addUrl(`/player/${slug}`, sitemapDate(player.created_at, today), "weekly", "0.5");
       }
     } catch (err: any) {
       console.error("Sitemap: error fetching players:", err.message);
     }
 
-    xml += "</urlset>";
-    return xml;
+    // game_schedule is the canonical source for both completed and upcoming
+    // public game pages. Legacy /game and /league game paths are aliases.
+    try {
+      for (let offset = 0; ; offset += SITEMAP_BATCH_SIZE) {
+        const { data: games, error } = await supabaseAdmin
+          .from("game_schedule")
+          .select("game_key, league_id, matchtime")
+          .order("game_key")
+          .range(offset, offset + SITEMAP_BATCH_SIZE - 1);
+        if (error) throw error;
+        for (const game of games || []) {
+          const competitionSlug = publicCompetitionSlugs.get(game.league_id);
+          const gameKey = sitemapSegment(game.game_key);
+          if (competitionSlug && gameKey) {
+            addUrl(`/competition/${competitionSlug}/game/${gameKey}`, sitemapDate(game.matchtime, today), "weekly", "0.7");
+          }
+        }
+        if (!games || games.length < SITEMAP_BATCH_SIZE) break;
+      }
+    } catch (err: any) {
+      console.error("Sitemap: error fetching games:", err.message);
+    }
+
+    const documents: string[] = [];
+    for (let start = 0; start < entries.length; start += SITEMAP_URL_LIMIT) {
+      const urls = entries.slice(start, start + SITEMAP_URL_LIMIT)
+        .map((entry) => sitemapUrl(entry.loc, entry.lastmod, entry.changefreq, entry.priority))
+        .join("");
+      documents.push(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}</urlset>`);
+    }
+    return documents;
   }
 
   // ── Home competition activity scope ─────────────────────────────────────────
@@ -2769,11 +2911,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (playerIds.length > 0) {
       const { data: metaRows, error: pErr } = await supabaseAdmin
         .from("players")
-        .select("id, slug, photo_path_bg_removed")
+        .select("id, full_name, league_id, slug, photo_path_bg_removed")
         .in("id", playerIds);
       if (!pErr) {
-        for (const p of (metaRows || []) as { id: string; slug: string | null; photo_path_bg_removed: string | null }[]) {
+        for (const p of (metaRows || []) as { id: string; full_name: string | null; league_id: string | null; slug: string | null; photo_path_bg_removed: string | null }[]) {
           playerMeta[p.id] = { slug: p.slug, photo_path_bg_removed: p.photo_path_bg_removed };
+          if (p.full_name) {
+            for (const perf of perfs) {
+              if (perf.player_id === p.id && (!p.league_id || p.league_id === perf.league_id)) {
+                perf.full_name = formatCanonicalPlayerName(p.full_name);
+              }
+            }
+          }
         }
       }
       // Fallback: fill missing photos by normalised name across all leagues
@@ -3184,13 +3333,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     const { league_id, name } = leagueRow as { league_id: string; name: string | null; is_public: boolean };
     const leagueNames: Record<string, string> = { [league_id]: name || slug };
+    const { data: childRows, error: childError } = await supabaseAdmin
+      .from("competitions")
+      .select("league_id, name")
+      .eq("parent_league_id", league_id);
 
-    // First find the most recent game_date for this league so we only show
-    // performances from the latest game date, not spill from prior dates.
+    if (childError) {
+      console.error("[LeagueTrendingPerf] child competition lookup error", slug, childError.message);
+    }
+
+    const leagueIds = [league_id];
+    for (const child of childRows || []) {
+      if (!child.league_id || leagueIds.includes(child.league_id)) continue;
+      leagueIds.push(child.league_id);
+      leagueNames[child.league_id] = child.name || name || slug;
+    }
+
+    // First find the most recent game_date across the parent and its child
+    // competitions so parent competition pages include their actual stats.
     const { data: latestGame } = await supabaseAdmin
       .from("vw_player_game_scores")
       .select("game_date")
-      .eq("league_id", league_id)
+      .in("league_id", leagueIds)
       .order("game_date", { ascending: false, nullsFirst: false })
       .limit(1)
       .returns<{ game_date: string | null }[]>();
@@ -3200,7 +3364,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     let query = supabaseAdmin
       .from("vw_player_game_scores")
       .select("league_id,game_date,game_key,player_id,full_name,team_id,team_name,pts,reb,ast,stl,blk,tov,fga,fta,game_score,ts_pct")
-      .eq("league_id", league_id)
+      .in("league_id", leagueIds)
       .order("game_score", { ascending: false });
 
     if (mostRecentGameDate) {
@@ -3224,11 +3388,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (playerIds.length > 0) {
       const { data: metaRows, error: pErr } = await supabaseAdmin
         .from("players")
-        .select("id, slug, photo_path_bg_removed")
+        .select("id, full_name, league_id, slug, photo_path_bg_removed")
         .in("id", playerIds);
       if (!pErr) {
-        for (const p of (metaRows || []) as { id: string; slug: string | null; photo_path_bg_removed: string | null }[]) {
+        for (const p of (metaRows || []) as { id: string; full_name: string | null; league_id: string | null; slug: string | null; photo_path_bg_removed: string | null }[]) {
           playerMeta[p.id] = { slug: p.slug, photo_path_bg_removed: p.photo_path_bg_removed };
+          if (p.full_name) {
+            for (const perf of perfs) {
+              if (perf.player_id === p.id && (!p.league_id || p.league_id === perf.league_id)) {
+                perf.full_name = formatCanonicalPlayerName(p.full_name);
+              }
+            }
+          }
         }
       }
       // Fallback: fill missing photos by normalised name across all leagues
@@ -3559,21 +3730,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!forceRefresh && sitemapCache && now - sitemapCache.at < SITEMAP_TTL_MS) {
       res.setHeader("Content-Type", "application/xml; charset=utf-8");
       res.setHeader("Cache-Control", "public, max-age=3600");
-      return res.send(sitemapCache.xml);
+      return res.send(sitemapCache.documents.length === 1
+        ? sitemapCache.documents[0]
+        : sitemapIndex(sitemapCache.documents.length, sitemapDate(sitemapCache.at, new Date().toISOString().split("T")[0])));
     }
     try {
-      const xml = await buildSitemap();
-      sitemapCache = { xml, at: now };
+      if (!sitemapBuildInFlight) {
+        sitemapBuildInFlight = buildSitemap().finally(() => {
+          sitemapBuildInFlight = null;
+        });
+      }
+      const documents = await sitemapBuildInFlight;
+      sitemapCache = { documents, at: now };
       res.setHeader("Content-Type", "application/xml; charset=utf-8");
       res.setHeader("Cache-Control", "public, max-age=3600");
-      res.send(xml);
+      res.send(documents.length === 1 ? documents[0] : sitemapIndex(documents.length, sitemapDate(now, new Date().toISOString().split("T")[0])));
     } catch (err: any) {
       console.error("Sitemap generation error:", err.message);
       if (sitemapCache) {
         res.setHeader("Content-Type", "application/xml; charset=utf-8");
-        return res.send(sitemapCache.xml);
+        return res.send(sitemapCache.documents.length === 1
+          ? sitemapCache.documents[0]
+          : sitemapIndex(sitemapCache.documents.length, sitemapDate(sitemapCache.at, new Date().toISOString().split("T")[0])));
       }
       res.status(500).send("Failed to generate sitemap");
+    }
+  });
+
+  app.get(/^\/sitemap\/(\d+)\.xml$/, async (req: Request, res: Response) => {
+    const now = Date.now();
+    try {
+      if (!sitemapCache || now - sitemapCache.at >= SITEMAP_TTL_MS) {
+        if (!sitemapBuildInFlight) {
+          sitemapBuildInFlight = buildSitemap().finally(() => {
+            sitemapBuildInFlight = null;
+          });
+        }
+        sitemapCache = { documents: await sitemapBuildInFlight, at: now };
+      }
+      const page = Number(req.params[0]);
+      const document = sitemapCache.documents[page - 1];
+      if (!Number.isInteger(page) || page < 1 || !document) return res.status(404).send("Sitemap not found");
+      res.setHeader("Content-Type", "application/xml; charset=utf-8");
+      res.setHeader("Cache-Control", "public, max-age=3600");
+      return res.send(document);
+    } catch (err: any) {
+      console.error("Sitemap page generation error:", err.message);
+      return res.status(500).send("Failed to generate sitemap");
     }
   });
 

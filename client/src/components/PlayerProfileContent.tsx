@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
-import { useLocation } from "wouter";
+import { Link } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Trophy, Filter, Instagram } from "lucide-react";
@@ -14,6 +14,7 @@ import { PlayerBanner } from "@/components/PlayerBanner";
 import { useTeamBranding } from "@/hooks/useTeamBranding";
 import { useReadableTeamColor } from "@/hooks/useReadableColor";
 import { namesMatch, getMostCompleteName, slugToName, type PlayerMatch } from "@/lib/fuzzyMatch";
+import { formatPlayerDisplayName } from "@/lib/playerName";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import ShotChart, { type ShotData } from "@/components/ShotChart";
 import ShareableCard from "@/components/ShareableCard";
@@ -227,7 +228,6 @@ function LeagueDropdown({ leagues, selectedLeagueIds, onToggle, onClear, label, 
 }
 
 export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, linkedPlayerIds }: PlayerProfileContentProps) {
-  const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -400,19 +400,22 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
     return playerInfo?.team || "";
   }, [selectedLeagueIds, playerMatches, expandedCompIds, playerInfo?.team]);
 
-  // Allow team-branding extraction when a specific league is selected, even
-  // when a brandColorOverride is present (inline profile case). The selected
-  // league's team logo colour should win over the fixed parent-league colour.
+  // Always try the displayed team's logo, including inline profiles that pass
+  // the parent league colour as an override. That override is only a fallback.
   const hasLeagueFilter = selectedLeagueIds.size === 1;
-  const { primaryColor: brandedPrimary } = useTeamBranding({
+  const { colors: teamBrandingColors, primaryColor: brandedPrimary } = useTeamBranding({
     teamName: teamNameForBranding,
     leagueId: teamBrandingLeagueId,
-    enabled: !singleLeagueBrandColor && !!teamNameForBranding && !!teamBrandingLeagueId && (!brandColorOverride || hasLeagueFilter),
+    enabled: !!teamNameForBranding && !!teamBrandingLeagueId,
   });
 
-  // Priority: league's own brand colour > (if filter active: team logo colour
-  // in that league, else: parent override colour) > team logo colour fallback.
-  const primaryColor = singleLeagueBrandColor || (hasLeagueFilter ? brandedPrimary : brandColorOverride) || brandedPrimary;
+  // A colour extracted from the displayed team's logo takes priority. League
+  // colours remain the fallback when the team has no usable logo.
+  const primaryColor =
+    teamBrandingColors?.primary ||
+    (hasLeagueFilter ? singleLeagueBrandColor : brandColorOverride) ||
+    singleLeagueBrandColor ||
+    brandedPrimary;
   const readablePrimary = useReadableTeamColor(primaryColor);
 
   // ── Re-run rankings and AI analysis when the league filter changes ────────
@@ -1064,7 +1067,9 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         const variations = Array.from(new Set(matches.map(m => m.full_name)));
         setNameVariations(variations);
 
-        const canonicalName = getMostCompleteName(variations);
+        const canonicalName =
+          formatPlayerDisplayName(initialPlayer.full_name) ||
+          formatPlayerDisplayName(getMostCompleteName(variations));
 
         // In parent leagues (e.g. REBA SL) the same physical player has one
         // row per age-group competition. Only one row typically has
@@ -1285,9 +1290,9 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
           const currentTeamNorm = normalizeTeam(currentTeam);
           const previousTeams = Array.from(teamMap.values()).filter(t => normalizeTeam(t) !== currentTeamNorm);
 
-          const resolvedName = mostRecentStat.full_name
+          const resolvedName = pInfo.name
+            || mostRecentStat.full_name
             || `${mostRecentStat.firstname || ''} ${mostRecentStat.familyname || ''}`.trim()
-            || pInfo.name
             || 'Unknown Player';
 
           pInfo = {
@@ -2010,7 +2015,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
             photoUploading={photoUploading}
             fileInputRef={fileInputRef}
             isAuthenticated={!!user}
-            brandColorOverride={hasLeagueFilter ? primaryColor || undefined : brandColorOverride || singleLeagueBrandColor || undefined}
+            brandColorOverride={primaryColor || undefined}
           />
         </div>
       )}
@@ -2500,7 +2505,16 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
                       <td className="px-2 py-1.5 text-xs whitespace-nowrap">
                         <div className="flex items-center gap-1">
                           <TeamLogo teamName={row.team} leagueId={row.leagueId} size="xs" className="flex-shrink-0" />
-                          <span className="truncate max-w-[50px]">{getTeamAbbreviation(row.team)}</span>
+                           {leagueSlugs.get(row.leagueId) ? (
+                             <Link
+                               href={`/competition/${leagueSlugs.get(row.leagueId)}/team/${encodeURIComponent(row.team)}`}
+                               className="truncate max-w-[50px] hover:underline"
+                             >
+                               {getTeamAbbreviation(row.team)}
+                             </Link>
+                           ) : (
+                             <span className="truncate max-w-[50px]">{getTeamAbbreviation(row.team)}</span>
+                           )}
                           {row.previousTeams && row.previousTeams.length > 0 && (
                             <span
                               className="text-[10px] text-slate-400 dark:text-slate-500 truncate max-w-[120px]"
@@ -2532,14 +2546,14 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3 block">Active Leagues</span>
             <div className="flex flex-wrap gap-2">
               {playerLeagues.map((league) => (
-                <button
+                <Link
                   key={league.id}
-                  onClick={() => setLocation(`/competition/${league.slug}`)}
+                  href={`/competition/${league.slug}`}
                   className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-neutral-700 hover:border-orange-300 dark:hover:border-orange-500/50 bg-white dark:bg-neutral-800 hover:bg-orange-50 dark:hover:bg-neutral-700 transition-colors text-sm font-medium text-slate-700 dark:text-slate-300"
                 >
                   <Trophy className="h-4 w-4 text-orange-500" />
                   {league.name}
-                </button>
+                </Link>
               ))}
             </div>
           </div>
@@ -2685,7 +2699,17 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
                         className={`border-b border-gray-50 dark:border-neutral-800/50 text-slate-700 dark:text-slate-300 cursor-pointer hover:bg-orange-50/60 dark:hover:bg-orange-900/10 transition-colors ${index % 2 === 1 ? 'bg-gray-50/50 dark:bg-neutral-800/30' : ''}`}
                         data-testid={`game-row-${game.id}`}
                       >
-                        <td className="px-2 py-1.5 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">{formatDate(game.game_date || game.created_at)}</td>
+                        <td className="px-2 py-1.5 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                          {game.game_key ? (
+                            <a
+                              href={`/game/${encodeURIComponent(game.game_key)}`}
+                              className="hover:underline"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {formatDate(game.game_date || game.created_at)}
+                            </a>
+                          ) : formatDate(game.game_date || game.created_at)}
+                        </td>
                         <td className="px-2 py-1.5 text-xs font-medium whitespace-nowrap">{opponentName}</td>
                         <td className="px-2 py-1.5 text-xs text-center whitespace-nowrap">{game.sminutes || '—'}</td>
                         <td className="px-2 py-1.5 text-xs text-center whitespace-nowrap">{game.sfieldgoalsmade || 0}-{game.sfieldgoalsattempted || 0}</td>

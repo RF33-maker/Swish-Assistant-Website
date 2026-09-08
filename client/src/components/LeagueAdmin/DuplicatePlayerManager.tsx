@@ -150,6 +150,10 @@ export default function DuplicatePlayerManager({ leagueId }: Props) {
   const [showDropdown2, setShowDropdown2] = useState(false);
   const [confirmManual, setConfirmManual] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [nameSearch, setNameSearch] = useState("");
+  const [namePlayer, setNamePlayer] = useState<Player | null>(null);
+  const [correctedName, setCorrectedName] = useState("");
+  const [savingName, setSavingName] = useState(false);
 
   const dropdown1Ref = useRef<HTMLDivElement>(null);
   const dropdown2Ref = useRef<HTMLDivElement>(null);
@@ -167,6 +171,11 @@ export default function DuplicatePlayerManager({ leagueId }: Props) {
       manualSearch2.length >= 2 &&
       getDisplayName(p).toLowerCase().includes(manualSearch2.toLowerCase()) &&
       p.id !== manualPlayer1?.id
+  );
+  const filteredNamePlayers = players.filter(
+    (p) =>
+      nameSearch.length >= 2 &&
+      getDisplayName(p).toLowerCase().includes(nameSearch.toLowerCase())
   );
 
   useEffect(() => {
@@ -329,6 +338,43 @@ export default function DuplicatePlayerManager({ leagueId }: Props) {
     }
   };
 
+  const saveCorrectedName = async () => {
+    if (!namePlayer || !correctedName.trim()) return;
+    setSavingName(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    try {
+      const token = await getToken();
+      if (!token) { setErrorMsg("Not authenticated"); return; }
+      const res = await fetch(`/api/leagues/${leagueId}/players/${namePlayer.id}/name`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ fullName: correctedName.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErrorMsg(data.error || "Failed to update player name"); return; }
+
+      const updatedPlayer = data.player as Player;
+      setPlayers((prev) => prev.map((p) => p.id === updatedPlayer.id ? { ...p, ...updatedPlayer } : p));
+      setPairs((prev) => prev.map((pair) => ({
+        ...pair,
+        canonicalName: pair.canonicalId === updatedPlayer.id ? updatedPlayer.full_name : pair.canonicalName,
+        duplicateName: pair.duplicateId === updatedPlayer.id ? updatedPlayer.full_name : pair.duplicateName,
+      })));
+      setNamePlayer(updatedPlayer);
+      setCorrectedName(updatedPlayer.full_name);
+      setNameSearch("");
+      setSuccessMsg(`Player name updated to "${updatedPlayer.full_name}". The league page will now use this name.`);
+    } catch (e: any) {
+      setErrorMsg(e.message);
+    } finally {
+      setSavingName(false);
+    }
+  };
+
   const loadingPlaceholder: PlayerStatPreview = { gp: 0, ppg: 0, rpg: 0, apg: 0, loading: true, error: false };
 
   return (
@@ -344,8 +390,8 @@ export default function DuplicatePlayerManager({ leagueId }: Props) {
             </svg>
           </div>
           <div>
-            <h2 className="text-lg md:text-xl font-semibold text-gray-800">Duplicate Players</h2>
-            <p className="text-xs md:text-sm text-gray-600">Find and merge duplicate player records in your league</p>
+            <h2 className="text-lg md:text-xl font-semibold text-gray-800">Player Names & Duplicates</h2>
+            <p className="text-xs md:text-sm text-gray-600">Correct displayed names and merge duplicate player records</p>
           </div>
         </div>
         <svg
@@ -377,8 +423,72 @@ export default function DuplicatePlayerManager({ leagueId }: Props) {
             </div>
           )}
 
-          {/* Auto-detected duplicates */}
           <div>
+            <h3 className="font-semibold text-gray-800 mb-1">Correct a Player Name</h3>
+            <p className="text-xs text-gray-500 mb-4">
+              This is the one place to correct the name shown across the league page. A first initial is allowed, for example J. Smith.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] gap-3 items-end">
+              <div className="relative">
+                <label className="block text-xs font-medium text-gray-600 mb-1">Find player</label>
+                <input
+                  type="text"
+                  placeholder="Search current name…"
+                  value={namePlayer ? getDisplayName(namePlayer) : nameSearch}
+                  onChange={(e) => {
+                    setNamePlayer(null);
+                    setCorrectedName("");
+                    setNameSearch(e.target.value);
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+                {!namePlayer && filteredNamePlayers.length > 0 && (
+                  <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    {filteredNamePlayers.slice(0, 20).map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onMouseDown={() => {
+                          setNamePlayer(p);
+                          setCorrectedName(getDisplayName(p));
+                          setNameSearch("");
+                        }}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-purple-50 text-gray-800"
+                      >
+                        {getDisplayName(p)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Correct display name</label>
+                <input
+                  type="text"
+                  placeholder="First name or initial + surname"
+                  value={correctedName}
+                  onChange={(e) => setCorrectedName(e.target.value)}
+                  disabled={!namePlayer}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:bg-gray-100"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={saveCorrectedName}
+                disabled={!namePlayer || !correctedName.trim() || savingName}
+                className="w-full sm:w-auto px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {savingName && <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                Save Name
+              </button>
+            </div>
+          </div>
+
+          {/* Auto-detected duplicates */}
+          <div className="border-t pt-6">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-gray-800">Auto-detected Duplicates</h3>
               <button

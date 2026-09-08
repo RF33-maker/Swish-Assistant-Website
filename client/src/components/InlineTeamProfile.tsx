@@ -4,9 +4,17 @@ import { supabase } from "@/lib/supabase";
 import { TeamLogo } from "@/components/TeamLogo";
 import { normalizeTeamName } from "@/lib/teamUtils";
 import { ArrowLeft, Loader2 } from "lucide-react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import ShotChart, { type ShotData } from "@/components/ShotChart";
 import { useReadableTeamColor } from "@/hooks/useReadableColor";
+import { namesMatch } from "@/lib/fuzzyMatch";
+import {
+  buildUnambiguousFullNameAliases,
+  expandUnambiguousPlayerName,
+  getImportedPlayerName,
+  resolvePlayerDisplayName,
+} from "@/lib/playerName";
+import { buildTeamSeasonOptions, type TeamSeasonCompetition } from "@/lib/teamSeasons";
 import {
   Select,
   SelectContent,
@@ -21,8 +29,21 @@ interface InlineTeamProfileProps {
   leagueSlug: string;
   leagueId: string;
   childLeagueIds?: string[];
+  seasonCompetitions?: TeamSeasonCompetition[];
   onBack: () => void;
   onPlayerClick?: (slug: string) => void;
+}
+
+function getTeamRosterPlayerName(stat: any): string {
+  if (stat._resolvedPlayerName) return stat._resolvedPlayerName;
+  const canonicalName = stat.players?.full_name || null;
+  const canonicalLeagueId = stat.players?.league_id || null;
+  const importedName = getImportedPlayerName(stat);
+  const canUseCanonical =
+    !!canonicalName &&
+    (canonicalLeagueId === stat.league_id || (!!importedName && namesMatch(importedName, canonicalName)));
+
+  return resolvePlayerDisplayName(stat, canUseCanonical ? canonicalName : null);
 }
 
 const PLAYER_STAT_COLUMNS: Record<string, { key: string; label: string }[]> = {
@@ -88,7 +109,7 @@ const applyPlayerMode = (
   return value;
 };
 
-export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, childLeagueIds, onBack, onPlayerClick }: InlineTeamProfileProps) {
+export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, childLeagueIds, seasonCompetitions, onBack, onPlayerClick }: InlineTeamProfileProps) {
   const [, navigate] = useLocation();
   const readableBrand = useReadableTeamColor(brandColor);
   const [activeTab, setActiveTab] = useState<'overview' | 'playerStats' | 'shotChart'>('overview');
@@ -97,13 +118,24 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
   const [statsSortColumn, setStatsSortColumn] = useState<string>('PTS');
   const [statsSortDirection, setStatsSortDirection] = useState<'asc' | 'desc'>('desc');
   const [shotChartRange, setShotChartRange] = useState<string>("season");
+  const [selectedSeason, setSelectedSeason] = useState("");
 
   const normalizedTeamName = useMemo(() => normalizeTeamName(decodeURIComponent(teamName)), [teamName]);
 
-  const effectiveLeagueIds = childLeagueIds && childLeagueIds.length > 0 ? childLeagueIds : [leagueId];
+  const allLeagueIds = childLeagueIds && childLeagueIds.length > 0 ? childLeagueIds : [leagueId];
+  const seasonOptions = useMemo(
+    () => buildTeamSeasonOptions(
+      seasonCompetitions && seasonCompetitions.length > 0
+        ? seasonCompetitions
+        : allLeagueIds.map(id => ({ league_id: id, name: leagueSlug })),
+    ),
+    [seasonCompetitions, allLeagueIds.join(","), leagueSlug],
+  );
+  const activeSeason = seasonOptions.find(option => option.key === selectedSeason) || seasonOptions[0];
+  const effectiveLeagueIds = activeSeason?.leagueIds || allLeagueIds;
 
   const { data: teamData, isLoading } = useQuery({
-    queryKey: ['inline-team-profile', normalizedTeamName, leagueId, childLeagueIds?.join(',')],
+    queryKey: ['inline-team-profile', normalizedTeamName, activeSeason?.key, effectiveLeagueIds.join(',')],
     queryFn: async () => {
       const { data: identityGames } = await supabase
         .from("game_schedule")
@@ -142,9 +174,9 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
 
       let statsQuery = supabase
         .from("player_stats")
-        .select("*, players:player_id(slug)");
-      if (resolvedTeamId) {
-        statsQuery = statsQuery.eq("team_id", resolvedTeamId);
+        .select("*, players:player_id(slug, full_name, league_id)");
+      if (resolvedTeamId && effectiveLeagueIds.length === 1) {
+        statsQuery = statsQuery.eq("team_id", resolvedTeamId).in("league_id", effectiveLeagueIds);
       } else {
         statsQuery = statsQuery
           .in("league_id", effectiveLeagueIds)
@@ -154,11 +186,25 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
 
       if (error) throw error;
 
-      const allStats = resolvedTeamId
+      const rawStats = resolvedTeamId && effectiveLeagueIds.length === 1
         ? (allTeamStats || [])
         : (allTeamStats || []).filter((stat: any) =>
             normalizeTeamName(stat.team_name || stat.team || '') === normalizedTeamName
           );
+
+      const { data: rosterNameRows } = await supabase
+        .from("players")
+        .select("full_name, team_name")
+        .ilike("team_name", `%${normalizedTeamName}%`);
+      const rosterNameAliases = buildUnambiguousFullNameAliases(
+        (rosterNameRows || [])
+          .filter((player: any) => normalizeTeamName(player.team_name || '') === normalizedTeamName)
+          .map((player: any) => player.full_name),
+      );
+      const allStats = rawStats.map((stat: any) => {
+        const baseName = getTeamRosterPlayerName(stat);
+        return { ...stat, _resolvedPlayerName: expandUnambiguousPlayerName(baseName, rosterNameAliases) };
+      });
 
       // Pre-season fallback: if no player_stats exist yet, pull roster from the players table
       if (allStats.length === 0) {
@@ -177,7 +223,7 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
 
         // Step 2: query players by team_id (direct), or fall back to league+team_name match
         let preSeasonPlayers: any[] = [];
-        if (rosterTeamId) {
+        if (rosterTeamId && effectiveLeagueIds.length === 1) {
           const { data: playersById } = await supabase
             .from("players")
             .select("id, full_name, slug, photo_path_bg_removed, position, team_id")
@@ -280,7 +326,7 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
       allStats.forEach((stat: any) => {
         const playerId = stat.player_id || stat.id;
         if (!playerId) return;
-        const playerName = stat.full_name || stat.name || 'Unknown';
+        const playerName = getTeamRosterPlayerName(stat);
         const playerSlug = stat.players?.slug || null;
         if (!playerStatsMap.has(playerId)) {
           playerStatsMap.set(playerId, {
@@ -504,6 +550,23 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
                 </div>
               </div>
             </div>
+            {seasonOptions.length > 1 && (
+              <div className="w-full max-w-[220px]">
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">
+                  Season
+                </label>
+                <Select value={activeSeason?.key} onValueChange={setSelectedSeason}>
+                  <SelectTrigger className="bg-white/90 dark:bg-neutral-900/90">
+                    <SelectValue placeholder="Select season" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {seasonOptions.map(option => (
+                      <SelectItem key={option.key} value={option.key}>{option.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -640,7 +703,16 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
                         else if (player.slug) navigate(`/player/${player.slug}`);
                       }}
                     >
-                      <td className="px-2 py-1.5 text-xs font-medium whitespace-nowrap sticky left-0 bg-white dark:bg-neutral-900 z-10">{player.name}</td>
+                      <td className="px-2 py-1.5 text-xs font-medium whitespace-nowrap sticky left-0 bg-white dark:bg-neutral-900 z-10">
+                        {player.slug ? (
+                          <Link
+                            href={`/competition/${leagueSlug}/player/${encodeURIComponent(player.slug)}`}
+                            className="hover:underline"
+                          >
+                            {player.name}
+                          </Link>
+                        ) : player.name}
+                      </td>
                       <td className={cTd}>{player.games}</td>
                       <td className={cTd}>{(player.totalPoints / player.games).toFixed(1)}</td>
                       <td className={cTd}>{(player.totalRebounds / player.games).toFixed(1)}</td>
@@ -763,7 +835,16 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
                       else if (player.slug) navigate(`/player/${player.slug}`);
                     }}
                   >
-                    <td className="px-2 py-1.5 text-xs font-medium whitespace-nowrap sticky left-0 bg-white dark:bg-neutral-900 z-10">{player.name}</td>
+                    <td className="px-2 py-1.5 text-xs font-medium whitespace-nowrap sticky left-0 bg-white dark:bg-neutral-900 z-10">
+                      {player.slug ? (
+                        <Link
+                          href={`/competition/${leagueSlug}/player/${encodeURIComponent(player.slug)}`}
+                          className="hover:underline"
+                        >
+                          {player.name}
+                        </Link>
+                      ) : player.name}
+                    </td>
                     <td className={cTd}>{player.games}</td>
                     {activePlayerStatColumns.map((column) => {
                       const isRateStat = RATE_STATS.includes(column.key);
