@@ -2,7 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import type { IncomingMessage, ServerResponse } from "http";
 import { registerRoutes } from "../server/routes";
 import { config } from "dotenv";
-import { servePublicSeo } from "../server/publicSeo";
+import { servePublicSeo, serveSpaShellFallback } from "../server/publicSeo";
 
 config();
 
@@ -33,6 +33,13 @@ function ensureInitialized(): Promise<void> {
     initPromise = (async () => {
       app.use(servePublicSeo);
       await registerRoutes(app);
+      // Unlike the full dev/prod server (server/index.ts -> vite.ts), this
+      // serverless entry point has no static-file or catch-all handler of
+      // its own. Without this, any page-shaped GET request that neither an
+      // API route nor servePublicSeo claims falls through to Express's bare
+      // "Cannot GET" response instead of the React app — which is exactly
+      // what happened for a game page whose SEO render hit an exception.
+      app.use(serveSpaShellFallback);
       app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
         const status = err.status || err.statusCode || 500;
         const message = err.message || "Internal Server Error";

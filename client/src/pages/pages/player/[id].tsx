@@ -92,12 +92,12 @@ export default function PlayerStatsPage() {
         <meta property="og:title" content={playerDisplayName ? `${playerDisplayName} | Player Stats | Swish Assistant` : "Player Profile | Swish Assistant"} />
         <meta property="og:description" content={playerDisplayName ? `View ${playerDisplayName}'s basketball stats on Swish Assistant.` : "Explore player stats and basketball performance data on Swish Assistant."} />
         <meta property="og:type" content="profile" />
-        <meta property="og:url" content={`https://www.swishassistant.com/player/${canonicalPlayerSegment}`} />
-        <meta property="og:image" content="https://www.swishassistant.com/og-image.png" />
+        <meta property="og:url" content={`https://swishassistant.com/player/${canonicalPlayerSegment}`} />
+        <meta property="og:image" content="https://swishassistant.com/og-image.png" />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={playerDisplayName ? `${playerDisplayName} | Player Stats | Swish Assistant` : "Player Profile | Swish Assistant"} />
         <meta name="twitter:description" content={playerDisplayName ? `${playerDisplayName}'s basketball stats on Swish Assistant.` : "Explore player stats on Swish Assistant."} />
-        <link rel="canonical" href={`https://www.swishassistant.com/player/${canonicalPlayerSegment}`} />
+        <link rel="canonical" href={`https://swishassistant.com/player/${canonicalPlayerSegment}`} />
       </Helmet>
 
       <div className="min-h-screen bg-gray-50 dark:bg-neutral-950">

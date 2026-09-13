@@ -310,15 +310,15 @@ export default function UnifiedScoutingEditor({
   if (!editor) return null;
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
+    <div className="h-screen flex flex-col bg-gray-50 dark:bg-neutral-950">
       {/* Header */}
-      <header className="bg-white border-b px-4 py-3 flex items-center justify-between">
+      <header className="bg-white dark:bg-neutral-900 border-b dark:border-neutral-800 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <FileText className="w-6 h-6 text-orange-600" />
+          <FileText className="w-6 h-6 text-orange-600 dark:text-orange-400" />
           <Input
             value={documentTitle}
             onChange={(e) => setDocumentTitle(e.target.value)}
-            className="text-lg font-semibold border-none bg-transparent p-0 h-auto focus-visible:ring-0"
+            className="text-lg font-semibold border-none bg-transparent p-0 h-auto focus-visible:ring-0 text-slate-900 dark:text-white"
           />
           <Badge variant="secondary" className="text-xs">
             {isSaving ? 'Saving...' : 'Saved'}
@@ -346,10 +346,10 @@ export default function UnifiedScoutingEditor({
         <PanelGroup direction="horizontal">
           {/* Desktop Sidebar */}
           <Panel defaultSize={30} minSize={20} maxSize={50} className="hidden md:flex">
-            <aside className="w-full bg-gray-50 border-r border-gray-200 flex flex-col">
+            <aside className="w-full bg-gray-50 dark:bg-neutral-950 border-r border-gray-200 dark:border-neutral-800 flex flex-col">
               <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-                <div className="p-4 border-b border-gray-200 bg-white">
-                  <TabsList className="grid w-full grid-cols-3 h-12 bg-gray-100 p-1 rounded-lg">
+                <div className="p-4 border-b border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
+                  <TabsList className="grid w-full grid-cols-3 h-12 bg-gray-100 dark:bg-neutral-800 p-1 rounded-lg">
                     <TabsTrigger 
                       value="blocks" 
                       className="text-sm font-medium data-[state=active]:bg-orange-500 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
@@ -494,12 +494,20 @@ export default function UnifiedScoutingEditor({
                               {parseError}
                             </div>
                           )}
+
+                          {/* Live preview + PNG/PDF export, once the League Assistant has produced report data */}
+                          {reportData && (
+                            <ReportPreview
+                              data={reportData}
+                              templateId={selectedTemplateId}
+                            />
+                          )}
                         </div>
 
-                       
+
                       </div>
                     </div>
-                    
+
                   </TabsContent>
 
                   <TabsContent value="assistant" className="mt-0">
@@ -550,12 +558,13 @@ export default function UnifiedScoutingEditor({
 
           {/* Editor Area */}
           <Panel defaultSize={70} minSize={50}>
-            <main className="flex-1 flex flex-col bg-white h-full">
+            <main className="flex-1 flex flex-col bg-white dark:bg-neutral-950 h-full">
               <div className="flex-1 overflow-y-auto">
                 <div className="max-w-4xl mx-auto">
+                  {/* The A4 page itself stays literal white in both themes — it's the print/export surface */}
                   <div className="a4-page p-8 my-6">
-                    <EditorContent 
-                      editor={editor} 
+                    <EditorContent
+                      editor={editor}
                       className="prose prose-slate max-w-none focus:outline-none"
                     />
                   </div>
@@ -569,18 +578,18 @@ export default function UnifiedScoutingEditor({
         {showMobileMenu && (
           <div className="fixed inset-0 z-50 md:hidden">
             <div className="absolute inset-0 bg-black/50" onClick={() => setShowMobileMenu(false)} />
-            <div className="absolute left-0 top-0 bottom-0 w-80 bg-white shadow-xl">
-              <div className="p-4 border-b">
+            <div className="absolute left-0 top-0 bottom-0 w-80 bg-white dark:bg-neutral-900 shadow-xl">
+              <div className="p-4 border-b dark:border-neutral-800">
                 <div className="flex items-center justify-between">
-                  <h2 className="font-semibold">Editor Tools</h2>
+                  <h2 className="font-semibold text-slate-900 dark:text-white">Editor Tools</h2>
                   <Button onClick={() => setShowMobileMenu(false)} variant="ghost" size="sm">
                     <X className="w-4 h-4" />
                   </Button>
                 </div>
               </div>
-              
+
               <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1">
-                <TabsList className="grid w-full grid-cols-3 m-4 h-12 bg-gray-100 p-1 rounded-lg">
+                <TabsList className="grid w-full grid-cols-3 m-4 h-12 bg-gray-100 dark:bg-neutral-800 p-1 rounded-lg">
                   <TabsTrigger 
                     value="blocks"
                     className="text-sm font-medium data-[state=active]:bg-orange-500 data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"

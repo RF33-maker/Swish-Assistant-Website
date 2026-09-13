@@ -6,6 +6,7 @@ import {
   CarouselItem,
   type CarouselApi,
 } from "@/components/ui/carousel";
+import { useReadableTeamColor } from "@/hooks/useReadableColor";
 
 // Converts any instagram.com URL to its /embed variant.
 export function getInstagramEmbedUrl(url: string): string | null {
@@ -148,6 +149,7 @@ export function InstagramFeedSection({
   // Hooks must be called unconditionally — keep these above any early return.
   const scrollPrev = useCallback(() => api?.scrollPrev(), [api]);
   const scrollNext = useCallback(() => api?.scrollNext(), [api]);
+  const readableBrand = useReadableTeamColor(brandColor || "#f97316");
 
   // Nothing to render.
   if (!hasPostUrls && !hasHandle) return null;
@@ -172,7 +174,7 @@ export function InstagramFeedSection({
         <div className="text-center mb-4">
           <span
             className="text-xs font-extrabold uppercase tracking-[0.22em]"
-            style={{ color: brandColor ? accentColor + "bb" : undefined }}
+            style={{ color: brandColor ? readableBrand.body + "bb" : undefined }}
             // Falls back to muted text colour via Tailwind when no brandColor.
             data-brand-accent={!!brandColor}
           >

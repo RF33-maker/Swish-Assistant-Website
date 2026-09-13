@@ -296,7 +296,7 @@ export async function generateTrendingCardBlob(opts: TrendingCardOptions): Promi
   y += STATS_ROW_H + WM_PRE;
 
   const WM_LOGO_H  = 13;
-  const wmText     = "www.swishassistant.com";
+  const wmText     = "swishassistant.com";
   ctx.font         = `600 11px system-ui,-apple-system,sans-serif`;
   ctx.textBaseline = "alphabetic";
   ctx.textAlign    = "right";

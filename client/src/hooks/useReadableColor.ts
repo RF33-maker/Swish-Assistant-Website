@@ -11,7 +11,7 @@ import {
  * recalculates when the user toggles the theme. Works regardless of which
  * theme provider (next-themes, the in-app ThemeProvider, etc.) is in scope.
  */
-function useIsDarkMode(): boolean {
+export function useIsDarkMode(): boolean {
   const [isDark, setIsDark] = useState(() => {
     if (typeof document === "undefined") return false;
     return document.documentElement.classList.contains("dark");

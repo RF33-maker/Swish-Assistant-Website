@@ -27,6 +27,8 @@ interface SharePlayer {
   name: string;
   team: string;
   photoUrl?: string | null;
+  /** Vertical crop anchor (0-100, matches PlayerBanner's focus slider). Defaults to 100 (bottom-anchored). */
+  photoFocusY?: number | null;
   primaryColor?: string;
   /** Optional resolved team-logo URL shown in the share-card header band. */
   teamLogoUrl?: string | null;
@@ -213,8 +215,6 @@ export default function ShareableCard({
   const bandTextSubtle = withAlpha(bandTextColor, 0.85);
   const bandTextMuted = withAlpha(bandTextColor, 0.7);
 
-  const accentStripStart = bandBase;
-  const accentStripEnd = shadeHex(bandBase, 0.25);
   const bodyTint = tintHex(bandBase, 0.94);
 
   /**
@@ -331,6 +331,59 @@ export default function ShareableCard({
       ? captureEl.scrollWidth
       : wide ? SHARE_WIDTH_WIDE : captureEl.scrollWidth;
     const naturalHeight = captureEl.scrollHeight;
+
+    // The header's height comes from `minHeight` + auto-sized text content,
+    // and html2canvas turns out to compute TWO DIFFERENT heights for that
+    // same content-sized box: one (a bit shorter) for where it clips
+    // overflow:hidden children like the photo, and a different, taller one
+    // for where it actually paints the header's own background — an
+    // internal html2canvas inconsistency, confirmed by forcing an explicit
+    // height here and watching both numbers converge. So: measure the
+    // header's real natural height on the live DOM, then stamp that as an
+    // explicit fixed `height` (with buffer) instead of leaving it as
+    // `minHeight`-driven auto content sizing — with no ambiguous auto-height
+    // left for html2canvas to compute two different ways, its clip and its
+    // paint agree. The photo wrapper then just matches that same fixed
+    // height, so it's guaranteed to reach the header's real bottom edge.
+    // The photo itself is painted via CSS background-image (not an <img>
+    // tag — see the JSX comment on the wrapper for why), so swap in the
+    // pre-fetched CORS-safe data-URL here too, same as the <img src> swap
+    // that happens for other images.
+    const headerEl = captureEl.querySelector<HTMLElement>('[data-share-header="true"]');
+    const photoWrapEl = captureEl.querySelector<HTMLElement>('[data-share-photo-wrap="true"]');
+    const photoFillEl = captureEl.querySelector<HTMLElement>('[data-share-photo-fill="true"]');
+    if (headerEl && photoWrapEl) {
+      const HEADER_HEIGHT_BUFFER_PX = 24;
+      const naturalHeaderHeight = headerEl.getBoundingClientRect().height;
+      const boxH = naturalHeaderHeight + HEADER_HEIGHT_BUFFER_PX;
+      const boxW = photoWrapEl.getBoundingClientRect().width;
+      headerEl.style.height = `${boxH}px`;
+      photoWrapEl.style.height = `${boxH}px`;
+
+      if (photoFillEl && player.photoUrl) {
+        const dataUrl = dataUrlMap.get(player.photoUrl);
+        if (dataUrl) {
+          photoFillEl.style.backgroundImage = `url(${dataUrl})`;
+          const naturalDims = await new Promise<{ w: number; h: number } | null>((resolve) => {
+            const probe = new Image();
+            probe.onload = () => resolve({ w: probe.naturalWidth, h: probe.naturalHeight });
+            probe.onerror = () => resolve(null);
+            probe.src = dataUrl;
+          });
+          if (naturalDims && naturalDims.w && naturalDims.h) {
+            const scale = Math.max(boxW / naturalDims.w, boxH / naturalDims.h);
+            const dispW = naturalDims.w * scale;
+            const dispH = naturalDims.h * scale;
+            const focusY = player.photoFocusY ?? 100;
+            photoFillEl.style.width = `${dispW}px`;
+            photoFillEl.style.height = `${dispH}px`;
+            photoFillEl.style.left = `${(boxW - dispW) / 2}px`;
+            photoFillEl.style.top = `${-(dispH - boxH) * (focusY / 100)}px`;
+          }
+        }
+      }
+    }
+
     const canvas = await html2canvas(captureEl, {
       backgroundColor: isCompactCapture ? null : "#ffffff",
       scale: isCompactCapture ? 3 : 2,
@@ -506,13 +559,14 @@ export default function ShareableCard({
   const cardMarkup = (
     <div
       ref={captureRef}
-      className="bg-white"
+      className="bg-white relative"
       data-share-card="true"
       style={wide ? { width: SHARE_WIDTH_WIDE } : undefined}
     >
       {/* Header band */}
       <div
         className="relative overflow-hidden"
+        data-share-header="true"
         style={{
           ...bandStyle,
           minHeight: wide ? 260 : 170,
@@ -644,11 +698,16 @@ export default function ShareableCard({
             aria-hidden="true"
             className="absolute pointer-events-none z-[1]"
             style={{
+              // Deliberately smaller than the header band (not just centred
+              // edge-to-edge) so there's real margin above and below —
+              // html2canvas capture timing can shift layout by a few px, and
+              // a tightly-fitted watermark clipped against the band's
+              // overflow-hidden on any variance. This gives it room to move.
               right: wide ? 36 : 18,
               top: "50%",
-              width: wide ? 270 : 148,
-              height: wide ? 270 : 148,
-              marginTop: wide ? -135 : -74,
+              width: wide ? 210 : 116,
+              height: wide ? 210 : 116,
+              marginTop: wide ? -105 : -58,
               opacity: 0.22,
               display: "flex",
               alignItems: "center",
@@ -672,49 +731,6 @@ export default function ShareableCard({
             />
           </div>
         )}
-
-        {player.photoUrl ? (
-          <div
-            className="absolute bottom-0 pointer-events-none z-[2]"
-            style={{
-              left: wide ? 32 : 16,
-              width: wide ? 220 : 128,
-              height: wide ? 280 : 168,
-              overflow: "hidden",
-            }}
-          >
-            <div
-              aria-hidden="true"
-              className="absolute rounded-full"
-              style={{
-                width: wide ? 180 : 104,
-                height: wide ? 180 : 104,
-                left: wide ? 20 : 12,
-                top: wide ? 40 : 22,
-                background:
-                  "radial-gradient(circle, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 70%)",
-              }}
-            />
-            <img
-              src={player.photoUrl}
-              alt={player.name}
-              crossOrigin="anonymous"
-              style={{
-                position: "absolute",
-                bottom: 0,
-                left: "50%",
-                transform: "translateX(-50%)",
-                height: "100%",
-                width: "auto",
-                maxWidth: "none",
-                display: "block",
-              }}
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).style.display = "none";
-              }}
-            />
-          </div>
-        ) : null}
 
         <div
           className="relative flex items-center h-full"
@@ -785,14 +801,72 @@ export default function ShareableCard({
         )}
       </div>
 
-      {/* Accent strip */}
-      <div
-        aria-hidden="true"
-        style={{
-          height: wide ? 8 : 5,
-          background: `linear-gradient(90deg, ${accentStripStart} 0%, ${accentStripEnd} 100%)`,
-        }}
-      />
+      {/* Player photo — deliberately a SIBLING of the header, not nested
+          inside it. html2canvas's overflow:hidden clip turned out to sit a
+          small, fixed amount short of its declared height on a NESTED
+          clipping element specifically (confirmed by isolating it with a
+          plain background-color test — the header's own overflow:hidden,
+          one level up, was independently verified pixel-accurate against
+          its declared height, but this element's overflow:hidden — a
+          second, nested clip context — was not, regardless of what height
+          or overflow-x/y combination it was given). Making it a sibling
+          positioned absolutely against the card root, instead of a child
+          clipped by two nested overflow:hidden contexts, avoids that
+          nesting entirely — it's clipped only once, by its own single
+          overflow:hidden, the same setup that worked reliably for the
+          header. */}
+      {(!teamLogos || teamLogos.length < 2) && player.photoUrl ? (
+        <div
+          className="absolute pointer-events-none z-[2]"
+          data-share-photo-wrap="true"
+          style={{
+            left: wide ? 32 : 16,
+            top: 0,
+            width: wide ? 220 : 128,
+            // The capture code measures the header's real height right
+            // before calling html2canvas and stamps an explicit pixel
+            // height here to match it — this live value is just a
+            // reasonable fallback.
+            height: wide ? 260 : 170,
+            overflow: "hidden",
+          }}
+        >
+          <div
+            data-share-photo-fill="true"
+            aria-hidden="true"
+            style={{
+              // Plain absolutely-positioned, explicitly-sized div with a
+              // background-image, not an <img> tag — html2canvas silently
+              // ignored all <img> sizing (confirmed via its own onclone
+              // callback showing fully correct computed styles that still
+              // didn't show up in the rasterized output). The "cover crop
+              // with focus point" math is done manually and stamped as
+              // plain pixel geometry right before capture; backgroundSize
+              // 100% 100% because this div's own box IS the exact image
+              // bounds already.
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: wide ? 220 : 128,
+              backgroundImage: `url(${player.photoUrl})`,
+              backgroundSize: "100% 100%",
+              backgroundRepeat: "no-repeat",
+            }}
+          />
+          <div
+            aria-hidden="true"
+            className="absolute rounded-full"
+            style={{
+              width: wide ? 180 : 104,
+              height: wide ? 180 : 104,
+              left: wide ? 20 : 12,
+              top: wide ? 40 : 22,
+              background:
+                "radial-gradient(circle, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0) 70%)",
+            }}
+          />
+        </div>
+      ) : null}
 
       {/* Card content */}
       <div
@@ -839,10 +913,15 @@ export default function ShareableCard({
               flexShrink: 0,
             }}
           />
+          {/* Matched to the logo's own pixel height (not just the row's
+              align-items:center) — html2canvas centers text against font
+              metrics rather than the browser's flex algorithm, so relying on
+              the parent row alone left this sitting visibly below the logo. */}
           <div
             style={{
               display: "flex",
               alignItems: "center",
+              height: wide ? 56 : 36,
               color: bandTextColor,
               lineHeight: 1,
               fontSize: wide ? 24 : 16,
@@ -859,6 +938,7 @@ export default function ShareableCard({
           style={{
             display: "flex",
             alignItems: "center",
+            height: wide ? 56 : 36,
             color: bandTextMuted,
             lineHeight: 1,
             fontSize: wide ? 16 : 11,

@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { supabaseAdmin } from "./supabaseServiceClient";
 
-const SITE_BASE = "https://www.swishassistant.com";
+const SITE_BASE = "https://swishassistant.com";
 const GAME_PAGE_SIZE = 25;
 const MAX_GAME_LOG_PAGES = 10;
 
@@ -560,7 +560,39 @@ export async function servePublicSeo(req: Request, res: Response, next: NextFunc
     const html = injectSeo(await loadShell(), page);
     res.status(200).type("html").set("Cache-Control", "public, max-age=300, stale-while-revalidate=3600").send(html);
   } catch (error) {
-    console.error("Public SEO rendering failed:", error);
+    // This path matched a real client-side page (game/player/team/competition),
+    // so a failure here should still show the working React app rather than
+    // fall through with no SEO enrichment at all — this is what avoided
+    // Vercel's serverless function serving a bare Express 404 ("Cannot GET")
+    // for a game whose SEO render happened to throw (e.g. a data-shape
+    // surprise for one record) instead of resolving to undefined normally.
+    console.error("Public SEO rendering failed, falling back to plain shell:", error);
+    try {
+      const shell = await loadShell();
+      return res.status(200).type("html").send(shell);
+    } catch (shellError) {
+      console.error("Falling back to the client shell also failed:", shellError);
+      next();
+    }
+  }
+}
+
+// Last-resort fallback for any GET/HEAD page request that isn't an API call
+// and wasn't handled above (either it didn't match one of the SEO patterns,
+// or SEO rendering AND the plain-shell fallback both failed). Without this,
+// a request that reaches here in the Vercel serverless function — which,
+// unlike the full dev/prod server, has no static-file or catch-all handler
+// of its own — falls through to Express's bare "Cannot GET" response
+// instead of the actual app. Register this last, after API routes, so it
+// only ever catches page-shaped requests nothing else claimed.
+export async function serveSpaShellFallback(req: Request, res: Response, next: NextFunction) {
+  if (req.method !== "GET" && req.method !== "HEAD") return next();
+  if (req.path.startsWith("/api/")) return next();
+  try {
+    const shell = await loadShell();
+    res.status(200).type("html").send(shell);
+  } catch (error) {
+    console.error("SPA shell fallback failed:", error);
     next();
   }
 }

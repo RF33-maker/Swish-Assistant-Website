@@ -46,7 +46,7 @@ interface LeagueMetaRow {
 interface TrendingData {
   perfs: PerfRow[];
   leagueNames: Record<string, string>;
-  playerMeta: Record<string, { slug: string | null; photoUrl: string | null }>;
+  playerMeta: Record<string, { slug: string | null; photoUrl: string | null; profileAvailable: boolean }>;
 }
 
 const ROTATE_MS = 6000;
@@ -114,13 +114,14 @@ export default function TrendingPerformanceSection() {
         const json = await res.json() as {
           perfs: PerfRow[];
           leagueNames: Record<string, string>;
-          playerMeta: Record<string, { slug: string | null; photo_path_bg_removed: string | null }>;
+          playerMeta: Record<string, { slug: string | null; photo_path_bg_removed: string | null; profileAvailable: boolean }>;
         };
-        const playerMeta: Record<string, { slug: string | null; photoUrl: string | null }> = {};
+        const playerMeta: TrendingData["playerMeta"] = {};
         for (const [id, meta] of Object.entries(json.playerMeta || {})) {
           playerMeta[id] = {
             slug: meta.slug,
             photoUrl: getPlayerPhotoUrlCached(meta.photo_path_bg_removed),
+            profileAvailable: meta.profileAvailable,
           };
         }
         return { perfs: json.perfs || [], leagueNames: json.leagueNames || {}, playerMeta };
@@ -194,8 +195,12 @@ export default function TrendingPerformanceSection() {
       : "—";
   }, [perf]);
 
+  // Fall back to the raw player_id only when we know the player's own league is
+  // public — RLS hides the row (and the profile page 404s) otherwise.
+  const canViewProfile = !!perf && (!!playerSlug || (!!perf.player_id && !!meta?.profileAvailable));
+
   const goToPerformance = () => {
-    if (!perf) return;
+    if (!perf || !canViewProfile) return;
     if (playerSlug) setLocation(`/player/${playerSlug}`);
     else if (perf.player_id) setLocation(`/player/${perf.player_id}`);
   };
@@ -268,23 +273,23 @@ export default function TrendingPerformanceSection() {
         generateCardBlob={generateCardBlob}
       >
         <div
-          role="button"
-          tabIndex={0}
-          onClick={goToPerformance}
-          onKeyDown={(e) => {
+          role={canViewProfile ? "button" : undefined}
+          tabIndex={canViewProfile ? 0 : undefined}
+          onClick={canViewProfile ? goToPerformance : undefined}
+          onKeyDown={canViewProfile ? (e) => {
             if (e.key === "Enter" || e.key === " ") { e.preventDefault(); goToPerformance(); }
-          }}
-          className="group block w-full text-left rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 shadow-sm hover:shadow-md hover:border-orange-300 dark:hover:border-orange-500/50 transition-all p-4 md:p-5 cursor-pointer focus:outline-none focus:ring-2 focus:ring-orange-400"
+          } : undefined}
+          className={`group block w-full text-left rounded-2xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 shadow-sm transition-all p-4 md:p-5 focus:outline-none focus:ring-2 focus:ring-orange-400 ${canViewProfile ? "hover:shadow-md hover:border-orange-300 dark:hover:border-orange-500/50 cursor-pointer" : ""}`}
           data-testid="trending-performance-card"
         >
           {/* Header */}
           <div className="flex items-center justify-between mb-3 pr-10">
-            <div className="flex items-baseline gap-2 min-w-0">
-              <h3 className="text-base md:text-lg font-bold text-slate-900 dark:text-white">
+            <div className="flex items-center gap-2 min-w-0">
+              <h3 className="text-base md:text-lg font-bold text-slate-900 dark:text-white whitespace-nowrap flex-shrink-0">
                 Trending Performance
               </h3>
               {leagueName && (
-                <span className="text-[10px] md:text-xs uppercase tracking-wide text-orange-600 dark:text-orange-400 font-semibold truncate">
+                <span className="text-[10px] md:text-xs uppercase tracking-wide text-orange-600 dark:text-orange-400 font-semibold truncate min-w-0">
                   {leagueName}
                 </span>
               )}

@@ -8,6 +8,7 @@ import { ArrowLeft } from "lucide-react";
 import { namesMatch, strictNamesMatch, getMostCompleteName } from "@/lib/fuzzyMatch";
 import { normalizeTeamName } from "@/lib/teamUtils";
 import { usePublicLeagueBrandingBySlug } from "@/hooks/usePublicLeagueBranding";
+import { useReadableTeamColor } from "@/hooks/useReadableColor";
 import LeagueDefaultImage from "@/assets/league-default.png";
 import {
   accumulateAdvancedRow,
@@ -94,9 +95,11 @@ export default function LeagueLeadersPage() {
   const brandBg50 = leagueBrandColors
     ? `rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.05)`
     : 'rgba(249, 115, 22, 0.05)';
-  const brandTextLight = leagueBrandColors
-    ? `rgb(${Math.min(255, leagueBrandColors.primaryRgb.r + 60)}, ${Math.min(255, leagueBrandColors.primaryRgb.g + 60)}, ${Math.min(255, leagueBrandColors.primaryRgb.b + 60)})`
-    : 'rgb(251, 146, 60)';
+  // Theme-aware, contrast-safe brand colour — replaces a crude "+60 per
+  // channel" lighten that could still be too dark to read (e.g. a navy team
+  // colour only lightens to a still-dark blue) against the dark-mode surface.
+  const readableBrand = useReadableTeamColor(brandColor);
+  const brandTextLight = readableBrand.body;
 
   const [brandFadedIn, setBrandFadedIn] = useState(false);
   useEffect(() => {
@@ -644,7 +647,7 @@ export default function LeagueLeadersPage() {
                       : index === 2
                       ? `linear-gradient(to bottom right, ${brandColor}, ${brandColorHover})`
                       : brandBg10,
-                    color: index >= 3 ? brandColor : '#ffffff',
+                    color: index >= 3 ? readableBrand.body : '#ffffff',
                   }}
                 >
                   {player.name?.charAt(0)?.toUpperCase() || '?'}
@@ -655,7 +658,7 @@ export default function LeagueLeadersPage() {
                 </div>
               </div>
               <div className="text-right">
-                <p className="brand-value text-lg font-bold" style={{ color: brandColor }}>{player._computed.display}</p>
+                <p className="brand-value text-lg font-bold" style={{ color: readableBrand.body }}>{player._computed.display}</p>
               </div>
             </div>
           ))}
@@ -673,7 +676,7 @@ export default function LeagueLeadersPage() {
         <main className="flex-grow flex items-center justify-center">
           <div className="text-center space-y-4">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 mx-auto" style={{ borderColor: brandColor }}></div>
-            <p style={{ color: brandColor }}>Loading league leaders...</p>
+            <p style={{ color: readableBrand.body }}>Loading league leaders...</p>
           </div>
         </main>
         <Footer />
@@ -770,7 +773,7 @@ export default function LeagueLeadersPage() {
         <button
           onClick={() => navigate(`/competition/${slug}`)}
           className="flex items-center gap-2 font-medium transition-colors opacity-90 hover:opacity-100"
-          style={{ color: brandColor }}
+          style={{ color: readableBrand.body }}
         >
           <ArrowLeft className="h-5 w-5" />
           <span>Back to League</span>
@@ -792,7 +795,7 @@ export default function LeagueLeadersPage() {
                     ? 'bg-white dark:bg-neutral-700 shadow-sm'
                     : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                 }`}
-                style={active ? { color: brandColor } : {}}
+                style={active ? { color: readableBrand.body } : {}}
               >
                 {cat}
               </button>
@@ -845,7 +848,7 @@ export default function LeagueLeadersPage() {
                   ? 'font-bold'
                   : 'text-gray-500 dark:text-gray-400'
               }`}
-              style={selectedMonth === 'season' ? { color: brandColor, borderBottom: `2px solid ${brandColor}` } : {}}
+              style={selectedMonth === 'season' ? { color: readableBrand.body, borderBottom: `2px solid ${brandColor}` } : {}}
             >
               Season
             </button>
@@ -861,7 +864,7 @@ export default function LeagueLeadersPage() {
                       ? 'font-bold'
                       : 'text-gray-500 dark:text-gray-400'
                   }`}
-                  style={selectedMonth === monthKey ? { color: brandColor, borderBottom: `2px solid ${brandColor}` } : {}}
+                  style={selectedMonth === monthKey ? { color: readableBrand.body, borderBottom: `2px solid ${brandColor}` } : {}}
                 >
                   {monthLabel}
                 </button>
@@ -880,7 +883,7 @@ export default function LeagueLeadersPage() {
                   ? 'bg-white dark:bg-neutral-700 shadow-sm'
                   : 'hover:bg-white/50 dark:hover:bg-neutral-800'
               }`}
-              style={{ color: brandColor }}
+              style={{ color: readableBrand.body }}
             >
               Averages
             </button>
@@ -891,7 +894,7 @@ export default function LeagueLeadersPage() {
                   ? 'bg-white dark:bg-neutral-700 shadow-sm'
                   : 'hover:bg-white/50 dark:hover:bg-neutral-800'
               }`}
-              style={{ color: brandColor }}
+              style={{ color: readableBrand.body }}
             >
               Totals
             </button>
@@ -907,7 +910,7 @@ export default function LeagueLeadersPage() {
         </div>
 
         {isLoadingMoreStats && (
-          <div className="flex items-center justify-center gap-2 py-3 px-4 mb-4 rounded-lg text-sm" style={{ backgroundColor: brandBg50, color: brandColor }}>
+          <div className="flex items-center justify-center gap-2 py-3 px-4 mb-4 rounded-lg text-sm" style={{ backgroundColor: brandBg50, color: readableBrand.body }}>
             <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
@@ -924,7 +927,7 @@ export default function LeagueLeadersPage() {
                 {section.title && (
                   <h3
                     className="text-xs font-bold uppercase tracking-wider mt-6 mb-3 pb-2 border-b"
-                    style={{ color: brandColor, borderColor: brandBorderLight }}
+                    style={{ color: readableBrand.body, borderColor: brandBorderLight }}
                   >
                     {section.title}
                   </h3>
@@ -942,7 +945,7 @@ export default function LeagueLeadersPage() {
         )}
 
         <div className="dark:bg-neutral-800 border dark:border-neutral-700 rounded-lg p-3 md:p-4 text-center" style={{ backgroundColor: brandBg50, borderColor: brandBorderLight }}>
-          <p className="text-xs md:text-sm" style={{ color: brandColor }}>
+          <p className="text-xs md:text-sm" style={{ color: readableBrand.body }}>
             * Shooting percentages require minimum attempts: FG% ({MIN_FGA}+ FGA), 3P% ({MIN_3PA}+ 3PA), FT% ({MIN_FTA}+ FTA). Advanced: eFG% &amp; TS% ({MIN_FGA}+ FGA).
           </p>
         </div>
