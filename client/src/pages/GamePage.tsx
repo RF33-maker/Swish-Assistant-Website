@@ -7,6 +7,7 @@ import { GameSwitcherBar } from "@/components/GameSwitcherBar";
 import { isGameSlug, parseGameSlug } from "@/lib/gameSlug";
 import { ArrowLeft, Clock, MapPin, Calendar, Users, TrendingUp } from "lucide-react";
 import { usePublicLeagueBrandingById } from "@/hooks/usePublicLeagueBranding";
+import { useReadableTeamColor } from "@/hooks/useReadableColor";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import LeagueChatbot from "@/components/LeagueChatbot";
@@ -358,9 +359,10 @@ export default function GamePage() {
   const leagueSlug = leagueData?.slug || publicBrandingData?.slug;
 
   const brandColor = leagueBrandColors?.primary || 'rgb(249, 115, 22)';
-  const brandColorHover = leagueBrandColors
-    ? `rgb(${Math.max(0, leagueBrandColors.primaryRgb.r - 20)}, ${Math.max(0, leagueBrandColors.primaryRgb.g - 20)}, ${Math.max(0, leagueBrandColors.primaryRgb.b - 20)})`
-    : 'rgb(234, 88, 12)';
+  // Contrast-safe hover colour — a manually-darkened shade of the raw brand
+  // colour would only get harder to see in dark mode when the brand colour
+  // is already dark (e.g. navy), so this needs to stay theme-aware instead.
+  const brandColorHover = useReadableTeamColor(brandColor).body;
 
   const { data: playerStats, isLoading: statsLoading } = useQuery({
     queryKey: ['game-player-stats', gameKey, isTestMode],

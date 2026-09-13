@@ -19,7 +19,7 @@ const UUID_REGEX =
 
 // Matches a game URL in any of its forms:
 //   https://swishassistant.com/game/{slug}
-//   https://www.swishassistant.com/game/{slug}
+//   https://swishassistant.com/game/{slug}
 //   /game/{slug}
 const GAME_URL_SOURCE =
   "(?:https?:\\/\\/(?:www\\.)?swishassistant\\.com)?\\/game\\/([\\w-]+)";
@@ -97,7 +97,7 @@ function parseArticleBody(body: string): React.ReactNode[] {
   return nodes;
 }
 
-const SITE_URL = "https://www.swishassistant.com";
+const SITE_URL = "https://swishassistant.com";
 const PUBLISHER_LOGO = `${SITE_URL}/icon-192.png`;
 
 function formatDate(value: string | Date | null | undefined) {

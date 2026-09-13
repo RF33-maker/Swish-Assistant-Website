@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { TeamLogo } from "@/components/TeamLogo";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -434,7 +435,7 @@ export default function LatestScoresSection() {
                       if (g.kind === "live") {
                         const homeWon = (g.home_score ?? 0) > (g.away_score ?? 0);
                         return (
-                          <a
+                          <Link
                             key={g.game_key}
                             href={`/competition/${g.league_slug}/game/${encodeURIComponent(g.game_key)}`}
                             className="snap-start text-left flex-shrink-0 w-[152px] sm:w-[200px] rounded-md bg-neutral-900 hover:bg-neutral-800 border border-red-500/60 hover:border-red-500/90 transition-colors duration-200 p-2.5"
@@ -476,12 +477,12 @@ export default function LatestScoresSection() {
                                 {g.away_score ?? "—"}
                               </span>
                             </div>
-                          </a>
+                          </Link>
                         );
                       }
                       if (g.kind === "upcoming") {
                         return (
-                          <a
+                          <Link
                             key={g.game_key}
                             href={`/competition/${g.league_slug}/game/${encodeURIComponent(g.game_key)}`}
                             className="snap-start text-left flex-shrink-0 w-[152px] sm:w-[200px] rounded-md bg-neutral-900 hover:bg-neutral-800 border border-orange-500/40 hover:border-orange-500/70 transition-colors duration-200 p-2.5"
@@ -512,13 +513,13 @@ export default function LatestScoresSection() {
                                 {shortTeam(g.away_team)}
                               </span>
                             </div>
-                          </a>
+                          </Link>
                         );
                       }
 
                       const homeWon = g.home_score > g.away_score;
                       return (
-                        <a
+                        <Link
                           key={g.game_key}
                           href={`/competition/${g.league_slug}/game/${encodeURIComponent(g.game_key)}`}
                           className="snap-start text-left flex-shrink-0 w-[152px] sm:w-[200px] rounded-md bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 transition-colors duration-200 p-2.5"
@@ -574,7 +575,7 @@ export default function LatestScoresSection() {
                               {!homeWon && <ChevronLeft className="h-3 w-3 text-white" />}
                             </div>
                           </div>
-                        </a>
+                        </Link>
                       );
                     })}
                   </div>

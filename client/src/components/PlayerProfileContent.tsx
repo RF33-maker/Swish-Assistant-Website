@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Trophy, Filter, Instagram } from "lucide-react";
@@ -11,6 +11,7 @@ import { generatePlayerAnalysis, type PlayerAnalysisData } from "@/lib/ai-analys
 import { normalizeInstagramHandle } from "@/lib/instagram";
 import { TeamLogo } from "@/components/TeamLogo";
 import { PlayerBanner } from "@/components/PlayerBanner";
+import { PillTabBar } from "@/components/PillTabBar";
 import { useTeamBranding } from "@/hooks/useTeamBranding";
 import { useReadableTeamColor } from "@/hooks/useReadableColor";
 import { namesMatch, getMostCompleteName, slugToName, type PlayerMatch } from "@/lib/fuzzyMatch";
@@ -25,6 +26,11 @@ import { getTeamLogoCached } from "@/utils/teamLogoCache";
 import { PlayerPerformanceSplits } from "@/components/PlayerPerformanceSplits";
 import { PerformanceCardDownload } from "@/components/social/PerformanceCardDownload";
 import { computeGmSc } from "@/lib/performanceCardUtils";
+import { AccoladeBadges } from "@/components/AccoladeBadges";
+import { computePlayerAccolades, topAccolades } from "@/lib/accolades";
+import { fetchPlayerRecordMaxes, type RecordMaxes } from "@/lib/recordMaxes";
+
+const EMPTY_RECORD_MAXES: RecordMaxes = { pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, tpm: 0 };
 
 // Only the columns actually consumed by this profile view, so we never
 // pull every column of the (wide) players table on a cold load.
@@ -230,6 +236,7 @@ function LeagueDropdown({ leagues, selectedLeagueIds, onToggle, onClear, label, 
 export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, linkedPlayerIds }: PlayerProfileContentProps) {
   const { toast } = useToast();
   const { user } = useAuth();
+  const [, setLocation] = useLocation();
 
   const [playerStats, setPlayerStats] = useState<PlayerStat[]>([]);
   const [seasonAverages, setSeasonAverages] = useState<SeasonAverages | null>(null);
@@ -248,6 +255,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
   const [competitionParentMap, setCompetitionParentMap] = useState<Map<string, string>>(new Map());
   const [playerShotChartRange, setPlayerShotChartRange] = useState<string>("season");
   const [careerStatsTab, setCareerStatsTab] = useState<string>("averages");
+  const [activeTab, setActiveTab] = useState<'overview' | 'stats' | 'games' | 'splits' | 'accolades'>('overview');
   const [photoUploading, setPhotoUploading] = useState(false);
   // Cache-buster appended to photo URLs so the browser/CDN doesn't serve a
   // stale (cached) version of the same storage path. Initialized to 0 so a
@@ -399,6 +407,27 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
     }
     return playerInfo?.team || "";
   }, [selectedLeagueIds, playerMatches, expandedCompIds, playerInfo?.team]);
+
+  // Clickable league/team chips shown on the banner, for cross-navigation to
+  // the currently-displayed league and team (mirrors teamBrandingLeagueId /
+  // teamNameForBranding so the chips always match what the banner shows).
+  const bannerLeagueChip = useMemo(() => {
+    if (!teamBrandingLeagueId) return undefined;
+    const slug = leagueSlugs.get(teamBrandingLeagueId);
+    const name = leagueNames.get(teamBrandingLeagueId);
+    if (!slug || !name) return undefined;
+    return { label: name, onClick: () => setLocation(`/competition/${slug}`) };
+  }, [teamBrandingLeagueId, leagueSlugs, leagueNames, setLocation]);
+
+  const bannerTeamChip = useMemo(() => {
+    if (!teamBrandingLeagueId || !teamNameForBranding) return undefined;
+    const slug = leagueSlugs.get(teamBrandingLeagueId);
+    if (!slug) return undefined;
+    return {
+      label: teamNameForBranding,
+      onClick: () => setLocation(`/competition/${slug}/team/${encodeURIComponent(teamNameForBranding)}`),
+    };
+  }, [teamBrandingLeagueId, teamNameForBranding, leagueSlugs, setLocation]);
 
   // Always try the displayed team's logo, including inline profiles that pass
   // the parent league colour as an override. That override is only a fallback.
@@ -1905,6 +1934,111 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
     };
   }, [careerStats]);
 
+  type StatHigh = { label: string; value: number; opponent: string; date: string; gameKey: string | null };
+  const computeHighs = (games: any[]): StatHigh[] => {
+    if (games.length === 0) return [];
+    const pick = (label: string, getter: (g: any) => number): StatHigh => {
+      const best = games.reduce((a, b) => (getter(b) > getter(a) ? b : a));
+      return {
+        label,
+        value: getter(best),
+        opponent: (best.opponent && best.opponent.trim()) || 'TBD',
+        date: best.game_date || best.created_at || '',
+        gameKey: best.game_key || null,
+      };
+    };
+    return [
+      pick('PTS', g => g.spoints ?? g.points ?? 0),
+      pick('REB', g => g.sreboundstotal ?? g.rebounds_total ?? 0),
+      pick('AST', g => g.sassists ?? g.assists ?? 0),
+      pick('STL', g => g.ssteals ?? g.steals ?? 0),
+      pick('BLK', g => g.sblocks ?? g.blocks ?? 0),
+      pick('3PM', g => g.sthreepointersmade ?? g.three_pointers_made ?? 0),
+    ];
+  };
+
+  // Career highs always cover every game regardless of the league filter —
+  // "career" means career. Season highs auto-detect the most recently played
+  // league/season (the same one the "Most Recent" pinned game comes from).
+  const playedCareerGames = useMemo(
+    () => (playerStats as any[]).filter(s => parseMinutesPlayed(s) > 0),
+    [playerStats]
+  );
+  const careerHighs = useMemo(() => computeHighs(playedCareerGames), [playedCareerGames]);
+
+  const currentSeason = useMemo(() => {
+    if (playedCareerGames.length === 0) return null;
+    const sorted = [...playedCareerGames].sort((a, b) => {
+      const da = new Date(a.game_date || a.created_at || '').getTime();
+      const db = new Date(b.game_date || b.created_at || '').getTime();
+      return db - da;
+    });
+    const key = sorted[0]._groupKey || sorted[0].league_id || 'unknown';
+    const label = sorted[0]._groupLabel || leagueNames.get(sorted[0].league_id) || 'Current Season';
+    const games = playedCareerGames.filter(g => (g._groupKey || g.league_id || 'unknown') === key);
+    return { label, leagueId: sorted[0].league_id as string | undefined, games };
+  }, [playedCareerGames, leagueNames]);
+
+  const seasonHighs = useMemo(
+    () => currentSeason ? computeHighs(currentSeason.games) : [],
+    [currentSeason]
+  );
+
+  // Every league_id that collapses to the same parent brand as the current
+  // season — the same grouping `filterableLeagues` already uses to combine
+  // e.g. "Hoopsfix Pro-Am 2024-25" + "2025-26" into one filter entry. Reused
+  // here to scope the "all-time" record-holder check to the whole
+  // competition's history, not just this one season.
+  const allTimeLeagueIds = useMemo(() => {
+    const currentLeagueId = currentSeason?.leagueId;
+    if (!currentLeagueId) return [];
+    const parentId = competitionParentMap.get(currentLeagueId) || currentLeagueId;
+    const ids = new Set<string>([currentLeagueId, parentId]);
+    for (const [compId, pId] of competitionParentMap) {
+      if (pId === parentId) ids.add(compId);
+    }
+    return Array.from(ids);
+  }, [currentSeason?.leagueId, competitionParentMap]);
+
+  const [seasonRecordMaxes, setSeasonRecordMaxes] = useState<RecordMaxes>(EMPTY_RECORD_MAXES);
+  const [allTimeRecordMaxes, setAllTimeRecordMaxes] = useState<RecordMaxes>(EMPTY_RECORD_MAXES);
+
+  useEffect(() => {
+    let cancelled = false;
+    const currentLeagueId = currentSeason?.leagueId;
+    if (!currentLeagueId) {
+      setSeasonRecordMaxes(EMPTY_RECORD_MAXES);
+      setAllTimeRecordMaxes(EMPTY_RECORD_MAXES);
+      return;
+    }
+    fetchPlayerRecordMaxes([currentLeagueId]).then(m => { if (!cancelled) setSeasonRecordMaxes(m); });
+    fetchPlayerRecordMaxes(allTimeLeagueIds.length > 0 ? allTimeLeagueIds : [currentLeagueId])
+      .then(m => { if (!cancelled) setAllTimeRecordMaxes(m); });
+    return () => { cancelled = true; };
+  }, [currentSeason?.leagueId, allTimeLeagueIds]);
+
+  // Best single-game marks scoped to the SAME league_id set as
+  // allTimeRecordMaxes — must not use the unscoped `careerHighs`, which can
+  // come from a totally different competition and would false-positive a
+  // Diamond/Platinum medal against this competition's record.
+  const competitionHighs = useMemo(() => {
+    if (allTimeLeagueIds.length === 0) return [];
+    const idSet = new Set(allTimeLeagueIds);
+    const games = playedCareerGames.filter(g => idSet.has(g.league_id));
+    return computeHighs(games);
+  }, [playedCareerGames, allTimeLeagueIds]);
+
+  const playerAccolades = useMemo(() => computePlayerAccolades(
+    seasonHighs,
+    competitionHighs,
+    careerStats,
+    currentSeason?.leagueId ?? null,
+    currentSeason?.label ?? '',
+    playerRankings,
+    seasonRecordMaxes,
+    allTimeRecordMaxes,
+  ), [seasonHighs, competitionHighs, careerStats, currentSeason, playerRankings, seasonRecordMaxes, allTimeRecordMaxes]);
+
   const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   const formatMinutes = (min: number) => min.toFixed(1);
   const formatPercentage = (value: number) => `${value.toFixed(1)}%`;
@@ -1999,7 +2133,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
       )}
 
       {playerInfo && (
-        <div className="w-screen relative" style={{ marginLeft: 'calc(-50vw + 50%)', marginRight: 'calc(-50vw + 50%)' }}>
+        <div className="relative mt-2">
           <PlayerBanner
             playerInfo={hasLeagueFilter && teamNameForBranding && teamBrandingLeagueId
               ? { ...playerInfo, team: teamNameForBranding, leagueId: teamBrandingLeagueId }
@@ -2016,6 +2150,8 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
             fileInputRef={fileInputRef}
             isAuthenticated={!!user}
             brandColorOverride={primaryColor || undefined}
+            leagueChip={bannerLeagueChip}
+            teamChip={bannerTeamChip}
           />
         </div>
       )}
@@ -2045,7 +2181,22 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         );
       })()}
 
-      {playerInfo && (playerInfo.instagramHandle || playerInfo.dbCurrentTeam || (playerInfo.dbPreviousTeams && playerInfo.dbPreviousTeams.length > 0)) && (
+      <div className="mt-4 md:mt-5">
+        <PillTabBar
+          tabs={[
+            { key: 'overview', label: 'Overview' },
+            { key: 'stats', label: 'Stats' },
+            { key: 'games', label: 'Games' },
+            { key: 'splits', label: 'Splits' },
+            { key: 'accolades', label: 'Accolades' },
+          ]}
+          active={activeTab}
+          onChange={(key) => setActiveTab(key as typeof activeTab)}
+          accentColor={readablePrimary.onWhite}
+        />
+      </div>
+
+      {activeTab === 'overview' && playerInfo && (playerInfo.instagramHandle || playerInfo.dbCurrentTeam || (playerInfo.dbPreviousTeams && playerInfo.dbPreviousTeams.length > 0)) && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-1 py-2 mt-1">
           {playerInfo.dbCurrentTeam && (
             <span className="inline-flex items-center gap-1.5 text-sm text-slate-700 dark:text-slate-300">
@@ -2075,7 +2226,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         </div>
       )}
 
-      {pinnedGames.length > 0 && playerInfo && (
+      {activeTab === 'overview' && pinnedGames.length > 0 && playerInfo && (
         <div className="mt-4 md:mt-5 bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
           <div className="flex items-center gap-2 mb-3">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Performances</span>
@@ -2096,6 +2247,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
       )}
 
       <div className="space-y-4 md:space-y-5 mt-4 md:mt-5">
+        {activeTab === 'overview' && <>
         {filteredSeasonAverages && (() => {
           type StatTile = { value: number; label: string; rank?: number };
           const seasonStats: StatTile[] = [
@@ -2119,14 +2271,12 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
 
           const shareBlock = (
             <div className="flex flex-col" style={{ gap: 20 }}>
-              <div className="flex items-center justify-between">
-                <span
-                  className="font-bold uppercase text-slate-500"
-                  style={{ fontSize: 18, letterSpacing: "0.18em" }}
-                >
-                  Season Averages
-                </span>
-                {filterLabel && (
+              {/* No repeated "Season Averages" label here — the card's
+                  header band already shows that as the title, right above
+                  the player's name. Only the league-filter pill (when
+                  present) needs a home in the body. */}
+              {filterLabel && (
+                <div className="flex items-center justify-end">
                   <span
                     className="font-bold uppercase rounded-full"
                     style={{
@@ -2139,8 +2289,8 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
                   >
                     {filterLabel}
                   </span>
-                )}
-              </div>
+                </div>
+              )}
               <div className="grid grid-cols-3" style={{ gap: 18 }}>
                 {seasonStats.map((stat, i) => (
                   <div
@@ -2166,17 +2316,15 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
                     </div>
                     <div
                       className="flex items-center"
-                      style={{ marginTop: 16, height: 32 }}
+                      style={{ marginTop: 16, height: 40 }}
                     >
                       {stat.rank ? (
                         <span
-                          className="rounded-full font-bold tabular-nums"
+                          className="font-bold tabular-nums"
                           style={{
-                            backgroundColor: sharePillBg,
                             color: shareAccent,
-                            fontSize: 14,
+                            fontSize: 18,
                             letterSpacing: "0.06em",
-                            padding: "5px 12px",
                           }}
                         >
                           {getOrdinalSuffix(stat.rank)}
@@ -2197,6 +2345,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
                 name: playerInfo?.name || "Player",
                 team: playerInfo?.team || "",
                 photoUrl: playerPhotoUrl,
+                photoFocusY: playerInfo?.photoFocusY,
                 primaryColor,
                 teamLogoUrl: shareTeamLogoUrl,
               }}
@@ -2267,20 +2416,14 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
           ];
           // Derive accents from the contrast-safe `onWhite` variant so light
           // team colours (white / pale yellow) still produce a visible
-          // border, rank pill and progress track on the white tile.
+          // border on the white tile.
           const shareAccent = readablePrimary.onWhite;
           const shareTileBorder = withAlpha(shareAccent, 0.18);
-          const sharePillBg = withAlpha(shareAccent, 0.12);
-          const shareTrackBg = withAlpha(shareAccent, 0.15);
 
           const shareBlock = (
+            // No repeated "Shooting" label — the card's header band already
+            // shows "Shooting Splits" as the title above the player's name.
             <div className="flex flex-col" style={{ gap: 24 }}>
-              <span
-                className="font-bold uppercase text-slate-500 block"
-                style={{ fontSize: 18, letterSpacing: "0.18em" }}
-              >
-                Shooting
-              </span>
               <div className="grid grid-cols-3" style={{ gap: 22 }}>
                 {shootingStats.map((stat, i) => (
                   <div
@@ -2306,31 +2449,20 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
                     </div>
                     <div
                       className="flex items-center"
-                      style={{ marginTop: 18, height: 32 }}
+                      style={{ marginTop: 18, height: 40 }}
                     >
                       {stat.rank ? (
                         <span
-                          className="rounded-full font-bold tabular-nums"
+                          className="font-bold tabular-nums"
                           style={{
-                            backgroundColor: sharePillBg,
                             color: shareAccent,
-                            fontSize: 14,
+                            fontSize: 18,
                             letterSpacing: "0.06em",
-                            padding: "5px 12px",
                           }}
                         >
                           {getOrdinalSuffix(stat.rank)}
                         </span>
                       ) : null}
-                    </div>
-                    <div
-                      className="w-full rounded-full overflow-hidden"
-                      style={{ backgroundColor: shareTrackBg, marginTop: 22, height: 8 }}
-                    >
-                      <div
-                        className="h-full rounded-full"
-                        style={{ width: `${Math.min(stat.value, 100)}%`, backgroundColor: shareAccent }}
-                      />
                     </div>
                   </div>
                 ))}
@@ -2346,6 +2478,7 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
                 name: playerInfo?.name || "Player",
                 team: playerInfo?.team || "",
                 photoUrl: playerPhotoUrl,
+                photoFocusY: playerInfo?.photoFocusY,
                 primaryColor,
                 teamLogoUrl: shareTeamLogoUrl,
               }}
@@ -2407,7 +2540,15 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
           );
         })()}
 
-        {playerInfo?.playerId && (
+        {playerAccolades.length > 0 && (
+          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2 block">Top Accolades</span>
+            <AccoladeBadges accolades={topAccolades(playerAccolades)} accentColor={readablePrimary.body} />
+          </div>
+        )}
+        </>}
+
+        {activeTab === 'splits' && playerInfo?.playerId && (
           selectedLeagueIds.size > 1 ? (
             <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-5 text-center text-sm text-slate-500 dark:text-neutral-400">
               Select a single league to view shooting splits and on/off impact.
@@ -2424,6 +2565,70 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
             />
           )
         )}
+
+        {activeTab === 'stats' && <>
+        {(careerHighs.length > 0 || seasonHighs.length > 0) && (() => {
+          const highsAccent = readablePrimary.body;
+          const highsTileBorder = withAlpha(readablePrimary.accent, 0.22);
+          const HighsGrid = ({ highs }: { highs: StatHigh[] }) => (
+            <div className="grid grid-cols-3 md:grid-cols-6 gap-2 md:gap-2.5">
+              {highs.map((stat, i) => (
+                <div
+                  key={i}
+                  className="rounded-xl px-2 py-3 flex flex-col items-center text-center bg-white dark:bg-neutral-800/40"
+                  style={{ border: `1px solid ${highsTileBorder}`, boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)" }}
+                >
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+                    {stat.label}
+                  </div>
+                  <div className="text-2xl md:text-3xl font-black tabular-nums leading-none" style={{ color: highsAccent }}>
+                    {stat.value}
+                  </div>
+                  <div className="mt-2 text-[10px] text-slate-400 dark:text-slate-500 leading-tight">
+                    vs {stat.opponent}
+                    <br />
+                    {stat.date ? formatDate(stat.date) : ''}
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+          // A player with only one season on record has identical season/career
+          // highs — showing both blocks would just be the same numbers twice.
+          const isSingleSeason = !!currentSeason && currentSeason.games.length === playedCareerGames.length;
+          return (
+            <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4 space-y-5">
+              {seasonHighs.length > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                      {isSingleSeason ? 'Season / Career High' : 'Season High'}
+                    </span>
+                    {currentSeason && (
+                      <span
+                        className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
+                        style={{ backgroundColor: withAlpha(readablePrimary.accent, 0.14), color: highsAccent }}
+                      >
+                        {currentSeason.label}
+                      </span>
+                    )}
+                  </div>
+                  <HighsGrid highs={seasonHighs} />
+                </div>
+              )}
+              {careerHighs.length > 0 && !isSingleSeason && (
+                <div>
+                  <div className="mb-3">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                      Career High
+                    </span>
+                  </div>
+                  <HighsGrid highs={careerHighs} />
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {careerStats.length > 0 && (
           <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 overflow-hidden">
@@ -2573,14 +2778,16 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
             </a>
           </div>
         )}
+        </>}
 
-        <ShareableCard
+        {activeTab === 'splits' && <ShareableCard
           title="Shot Chart"
           fileSlug="shot-chart"
           player={{
             name: playerInfo?.name || "Player",
             team: playerInfo?.team || "",
             photoUrl: playerPhotoUrl,
+            photoFocusY: playerInfo?.photoFocusY,
             primaryColor,
             teamLogoUrl: shareTeamLogoUrl,
           }}
@@ -2648,9 +2855,9 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
             filters={{ showQuarterFilter: true, showResultFilter: true }}
           />
         </div>
-        </ShareableCard>
+        </ShareableCard>}
 
-        <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 overflow-hidden">
+        {activeTab === 'games' && <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-100 dark:border-neutral-800 flex items-center justify-between">
             <span className="text-base md:text-lg font-bold text-slate-800 dark:text-white">Game Log</span>
             <div className="flex items-center gap-2">
@@ -2728,7 +2935,18 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
               </table>
             </div>
           )}
-        </div>
+        </div>}
+
+        {activeTab === 'accolades' && (
+          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-4">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2 block">Accolades</span>
+            {playerAccolades.length > 0 ? (
+              <AccoladeBadges accolades={playerAccolades} accentColor={readablePrimary.body} />
+            ) : (
+              <div className="text-center py-6 text-sm text-slate-500 dark:text-slate-400">No accolades yet this season</div>
+            )}
+          </div>
+        )}
       </div>
 
       {selectedGameForCard && playerInfo && createPortal(

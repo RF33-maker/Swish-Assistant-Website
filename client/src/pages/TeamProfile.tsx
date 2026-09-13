@@ -10,6 +10,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Helmet } from "react-helmet-async";
 import { normalizeTeamName } from "@/lib/teamUtils";
 import { useTeamBranding } from "@/hooks/useTeamBranding";
+import { useReadableTeamColor } from "@/hooks/useReadableColor";
 import { adjustOpacity } from "@/lib/colorExtractor";
 import { namesMatch } from "@/lib/fuzzyMatch";
 import {
@@ -30,6 +31,13 @@ import {
 } from "@/components/ui/select";
 import ShotChart, { type ShotData } from "@/components/ShotChart";
 import { Instagram } from "lucide-react";
+import { AccoladeBadges } from "@/components/AccoladeBadges";
+import { ProfileChip } from "@/components/ProfileChip";
+import { PillTabBar } from "@/components/PillTabBar";
+import { computeTeamAccolades, topAccolades } from "@/lib/accolades";
+import { fetchTeamRecordMaxes, type RecordMaxes } from "@/lib/recordMaxes";
+
+const EMPTY_RECORD_MAXES: RecordMaxes = { pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, tpm: 0 };
 
 interface League {
   league_id: string;
@@ -57,6 +65,11 @@ interface PlayerStat {
 
 interface Game {
   totalPoints: number;
+  reb?: number;
+  ast?: number;
+  stl?: number;
+  blk?: number;
+  tpm?: number;
   date: string;
   opponent: string;
   opponentScore?: number;
@@ -78,6 +91,7 @@ interface Team {
   roster: PlayerStat[];
   topPlayer: PlayerStat;
   recentGames: Game[];
+  games: Game[];
   totalGames: number;
   avgTeamPoints: number;
   league: League | null;
@@ -324,7 +338,7 @@ export default function TeamProfile() {
   const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
   const [isGameModalOpen, setIsGameModalOpen] = useState(false);
   const [currentLeagueId, setCurrentLeagueId] = useState<string | null>(null);
-  const [activeStatsTab, setActiveStatsTab] = useState<'overview' | 'playerStats' | 'teamStats' | 'shotChart'>('overview');
+  const [activeStatsTab, setActiveStatsTab] = useState<'overview' | 'playerStats' | 'teamStats' | 'shotChart' | 'accolades'>('overview');
   const [shotChartRange, setShotChartRange] = useState<string>("season");
   const [playerStatsCategory, setPlayerStatsCategory] = useState<'Traditional' | 'Advanced' | 'Scoring' | 'Misc'>('Traditional');
   const [playerStatsView, setPlayerStatsView] = useState<'Total' | 'Per Game' | 'Per 40'>('Per Game');
@@ -339,34 +353,69 @@ export default function TeamProfile() {
   );
   const activeSeason = seasonOptions.find(option => option.key === selectedSeason) || seasonOptions[0];
   const selectedLeagueIds = activeSeason?.leagueIds || [];
+  // Sibling seasons of this same team/competition — used as a branding/logo
+  // fallback when the current season's own `teams` row hasn't been populated
+  // yet (common for newly-created seasons before data import catches up).
+  const siblingLeagueIds = useMemo(
+    () => seasonCompetitions.map(c => c.league_id).filter(Boolean),
+    [seasonCompetitions],
+  );
 
   // Extract team branding colors
   const { colors: teamBranding, primaryColor, secondaryColor } = useTeamBranding({
     teamName: team?.name || '',
     leagueId: team?.league?.league_id || '',
+    extraLeagueIds: siblingLeagueIds,
     enabled: !!team?.name && !!team?.league?.league_id,
   });
 
-  // Compute color for text on white backgrounds (needs good contrast)
+  // Compute color for text on white backgrounds (needs good contrast) — still
+  // used for the pill tab bar's active-tab fill, which always sits under
+  // white text regardless of theme, so it must stay dark enough for that
+  // (contrast is symmetric, so "readable as text on white" == "readable as
+  // a fill under white text").
   const textOnWhiteColor = React.useMemo(() => {
     if (!teamBranding) return 'rgb(251, 146, 60)'; // orange default
-    
+
     // Check brightness of primary color
     const { r, g, b } = teamBranding.primaryRgb;
     const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-    
+
     // If primary is too bright for white backgrounds, use secondary or orange
     if (brightness > 180) {
       // Check if secondary has better contrast
-      const secBrightness = (teamBranding.secondaryRgb.r * 299 + 
-                            teamBranding.secondaryRgb.g * 587 + 
+      const secBrightness = (teamBranding.secondaryRgb.r * 299 +
+                            teamBranding.secondaryRgb.g * 587 +
                             teamBranding.secondaryRgb.b * 114) / 1000;
-      
+
       return secBrightness < 180 ? secondaryColor : 'rgb(251, 146, 60)';
     }
-    
+
     return primaryColor;
   }, [teamBranding, primaryColor, secondaryColor]);
+
+  // Theme-aware readable variant of the team colour, for all the general
+  // stat/label text and icons scattered through this page — `textOnWhiteColor`
+  // above is tuned for a white background specifically and stays dark even
+  // in dark mode, which is invisible against a near-black card surface.
+  const readablePrimary = useReadableTeamColor(primaryColor);
+
+  const [teamRecordMaxes, setTeamRecordMaxes] = useState<RecordMaxes>(EMPTY_RECORD_MAXES);
+  useEffect(() => {
+    let cancelled = false;
+    const leagueId = team?.league?.league_id;
+    if (!leagueId) {
+      setTeamRecordMaxes(EMPTY_RECORD_MAXES);
+      return;
+    }
+    fetchTeamRecordMaxes([leagueId]).then(m => { if (!cancelled) setTeamRecordMaxes(m); });
+    return () => { cancelled = true; };
+  }, [team?.league?.league_id]);
+
+  const teamAccolades = useMemo(
+    () => team ? computeTeamAccolades(team.games, teamRecordMaxes, activeSeason?.label) : [],
+    [team, teamRecordMaxes, activeSeason?.label]
+  );
 
   const activePlayerStatColumns = useMemo(() => {
     return PLAYER_STAT_COLUMNS[playerStatsCategory] || PLAYER_STAT_COLUMNS['Traditional'];
@@ -604,6 +653,18 @@ export default function TeamProfile() {
         }
 
         const { data: scheduleData, error: scheduleError } = await scheduleQuery;
+        // Fallback opponent names keyed by game_key, sourced from the schedule
+        // (hometeam/awayteam) — used when team_stats is missing the opposing
+        // team's row (common for newly-created seasons before both sides'
+        // stats are imported), so we don't have to show "Unknown Opponent"
+        // when the schedule already knows who was actually played.
+        const scheduleOpponentByGameKey = new Map<string, string>();
+        (scheduleData || []).forEach((game: any) => {
+          if (!game.game_key) return;
+          const normalizedHome = normalizeTeamName(game.hometeam || '');
+          const opponentName = normalizedHome === normalizedTeamName ? game.awayteam : game.hometeam;
+          if (opponentName) scheduleOpponentByGameKey.set(game.game_key, opponentName);
+        });
         const identityGame = (scheduleData || []).find((game: any) => {
           const homeMatches = normalizeTeamName(game.hometeam || "") === normalizedTeamName;
           const awayMatches = normalizeTeamName(game.awayteam || "") === normalizedTeamName;
@@ -803,24 +864,38 @@ export default function TeamProfile() {
           
           const games = Object.values(gamesByGameKey).map((gameData: any) => {
             const ourScore = gameData.playerStats.reduce((sum: number, stat: any) => sum + (stat.spoints || 0), 0);
-            
-            // Get opponent and home status from team_stats data
-            const opponent = gameData.opponent_name || 'Unknown Opponent';
+            const ourReb = gameData.playerStats.reduce((sum: number, stat: any) => sum + (stat.sreboundstotal || 0), 0);
+            const ourAst = gameData.playerStats.reduce((sum: number, stat: any) => sum + (stat.sassists || 0), 0);
+            const ourStl = gameData.playerStats.reduce((sum: number, stat: any) => sum + (stat.ssteals || 0), 0);
+            const ourBlk = gameData.playerStats.reduce((sum: number, stat: any) => sum + (stat.sblocks || 0), 0);
+            const ourTpm = gameData.playerStats.reduce((sum: number, stat: any) => sum + (stat.sthreepointersmade || 0), 0);
+
+            // Get opponent and home status from team_stats data, falling back
+            // to the schedule (hometeam/awayteam) when the opposing team's
+            // team_stats row hasn't been imported yet.
+            const opponent = gameData.opponent_name
+              || scheduleOpponentByGameKey.get(gameData.game_key)
+              || 'Unknown Opponent';
             const isHome = gameData.is_home_game || false;
-            
+
             const opponentStats = opponentStatsByGame[gameData.game_key] || [];
             const opponentScore = opponentStats.reduce((sum: number, stat: any) => sum + (stat.spoints || 0), 0);
-            
+
             const isWin = ourScore > opponentScore;
-            
+
             if (isWin) {
               wins++;
             } else {
               losses++;
             }
-            
+
             return {
               totalPoints: ourScore,
+              reb: ourReb,
+              ast: ourAst,
+              stl: ourStl,
+              blk: ourBlk,
+              tpm: ourTpm,
               date: gameData.created_at,
               opponent: opponent,
               opponentScore: opponentScore,
@@ -829,7 +904,7 @@ export default function TeamProfile() {
               game_key: gameData.game_key
             };
           });
-          
+
           const recentGames = games.slice(-10);
 
           // Calculate player averages
@@ -1013,18 +1088,34 @@ export default function TeamProfile() {
           rosterWithStats.sort((a: PlayerStat, b: PlayerStat) => b.avgPoints - a.avgPoints);
           const topPlayer = rosterWithStats[0];
           
-          // Get league info and check ownership in parallel with other operations
+          // Get league info and check ownership. Prefer the competition that
+          // actually matches the URL's slug (already fetched into
+          // seasonCompetitions) over re-deriving from allStats[0].league_id —
+          // when a team's "season" bucket merges multiple sibling league_ids
+          // (see buildTeamSeasonOptions), allStats[0] can belong to a private
+          // sibling league that anon can't re-query, leaving league stuck
+          // null even though the public, URL-intended competition is known.
           let league: League | null = null;
-          if (allStats[0]?.league_id) {
+          const matchedCompetition = leagueSlug
+            ? seasonCompetitions.find(c => c.slug === leagueSlug)
+            : null;
+          if (matchedCompetition) {
+            league = {
+              league_id: matchedCompetition.league_id,
+              name: matchedCompetition.name || '',
+              slug: matchedCompetition.slug || leagueSlug || '',
+            };
+          }
+          const leagueIdForOwnership = matchedCompetition?.league_id || allStats[0]?.league_id;
+          if (leagueIdForOwnership) {
             const { data: leagueData } = await supabase
               .from("competitions")
               .select("*")
-              .eq("league_id", allStats[0].league_id)
+              .eq("league_id", leagueIdForOwnership)
               .single();
-            league = leagueData as League;
-            
-            if (user && leagueData) {
-              setIsOwner(user.id === leagueData.user_id || user.id === leagueData.created_by);
+            if (leagueData) {
+              if (!league) league = leagueData as League;
+              if (user) setIsOwner(user.id === leagueData.user_id || user.id === leagueData.created_by);
             }
           }
 
@@ -1033,6 +1124,7 @@ export default function TeamProfile() {
             roster: rosterWithStats,
             topPlayer,
             recentGames,
+            games,
             totalGames: games.length,
             avgTeamPoints: games.length > 0 ? 
               Math.round((games.reduce((sum, game) => sum + game.totalPoints, 0) / games.length) * 10) / 10 : 0,
@@ -1105,12 +1197,12 @@ export default function TeamProfile() {
         <meta
           property="og:url"
           content={leagueSlug 
-            ? `https://www.swishassistant.com/competition/${leagueSlug}/team/${encodeURIComponent(team.name.toLowerCase().replace(/\s+/g, '-'))}`
-            : `https://www.swishassistant.com/team/${encodeURIComponent(team.name.toLowerCase().replace(/\s+/g, '-'))}`}
+            ? `https://swishassistant.com/competition/${leagueSlug}/team/${encodeURIComponent(team.name.toLowerCase().replace(/\s+/g, '-'))}`
+            : `https://swishassistant.com/team/${encodeURIComponent(team.name.toLowerCase().replace(/\s+/g, '-'))}`}
         />
         <meta
           property="og:image"
-          content="https://www.swishassistant.com/og-image.png"
+          content="https://swishassistant.com/og-image.png"
         />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={`${team.name} | Team Profile | Swish Assistant`} />
@@ -1122,8 +1214,8 @@ export default function TeamProfile() {
           }
         />
         <link rel="canonical" href={leagueSlug 
-          ? `https://www.swishassistant.com/competition/${leagueSlug}/team/${encodeURIComponent(team.name.toLowerCase().replace(/\s+/g, '-'))}`
-          : `https://www.swishassistant.com/team/${encodeURIComponent(team.name.toLowerCase().replace(/\s+/g, '-'))}`} />
+          ? `https://swishassistant.com/competition/${leagueSlug}/team/${encodeURIComponent(team.name.toLowerCase().replace(/\s+/g, '-'))}`
+          : `https://swishassistant.com/team/${encodeURIComponent(team.name.toLowerCase().replace(/\s+/g, '-'))}`} />
       </Helmet>
       
       <div className="min-h-screen bg-[#fffaf1] dark:bg-neutral-950">
@@ -1204,11 +1296,12 @@ export default function TeamProfile() {
         >
           <div className="flex flex-col md:flex-row items-center md:items-start gap-4 md:gap-6">
             {/* Team Logo Placeholder */}
-            <TeamLogo 
-              teamName={team.name} 
-              leagueId={team.league?.league_id || ''} 
-              size="xl" 
-              className="border-2 border-white/30" 
+            <TeamLogo
+              teamName={team.name}
+              leagueId={team.league?.league_id || ''}
+              extraLeagueIds={siblingLeagueIds}
+              size="xl"
+              className="border-2 border-white/30"
             />
             
             {/* Team Info */}
@@ -1222,9 +1315,10 @@ export default function TeamProfile() {
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 {team.league && (
-                  <span className="bg-white/20 px-3 py-1 rounded-full text-xs md:text-sm">
-                    {team.league.name}
-                  </span>
+                  <ProfileChip
+                    label={team.league.name}
+                    onClick={() => navigate(`/competition/${team.league?.slug}`)}
+                  />
                 )}
                 {teamInstagramUrl && (
                   <a
@@ -1259,54 +1353,19 @@ export default function TeamProfile() {
           </div>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="bg-white dark:bg-neutral-900 rounded-xl shadow mb-6 overflow-hidden">
-          <div className="flex border-b border-gray-200 dark:border-neutral-700">
-            <button
-              onClick={() => setActiveStatsTab('overview')}
-              className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
-                activeStatsTab === 'overview'
-                  ? 'border-b-2 text-orange-600 dark:text-orange-400'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-orange-500'
-              }`}
-              style={activeStatsTab === 'overview' ? { borderBottomColor: textOnWhiteColor, color: textOnWhiteColor } : {}}
-            >
-              Overview
-            </button>
-            <button
-              onClick={() => setActiveStatsTab('playerStats')}
-              className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
-                activeStatsTab === 'playerStats'
-                  ? 'border-b-2 text-orange-600 dark:text-orange-400'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-orange-500'
-              }`}
-              style={activeStatsTab === 'playerStats' ? { borderBottomColor: textOnWhiteColor, color: textOnWhiteColor } : {}}
-            >
-              Player Stats
-            </button>
-            <button
-              onClick={() => setActiveStatsTab('teamStats')}
-              className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
-                activeStatsTab === 'teamStats'
-                  ? 'border-b-2 text-orange-600 dark:text-orange-400'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-orange-500'
-              }`}
-              style={activeStatsTab === 'teamStats' ? { borderBottomColor: textOnWhiteColor, color: textOnWhiteColor } : {}}
-            >
-              Team Stats
-            </button>
-            <button
-              onClick={() => setActiveStatsTab('shotChart')}
-              className={`flex-1 py-3 px-4 text-sm font-medium transition-colors ${
-                activeStatsTab === 'shotChart'
-                  ? 'border-b-2 text-orange-600 dark:text-orange-400'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-orange-500'
-              }`}
-              style={activeStatsTab === 'shotChart' ? { borderBottomColor: textOnWhiteColor, color: textOnWhiteColor } : {}}
-            >
-              Shot Chart
-            </button>
-          </div>
+        <div className="mb-6">
+          <PillTabBar
+            tabs={[
+              { key: 'overview', label: 'Overview' },
+              { key: 'playerStats', label: 'Player Stats' },
+              { key: 'teamStats', label: 'Team Stats' },
+              { key: 'shotChart', label: 'Shot Chart' },
+              { key: 'accolades', label: 'Accolades' },
+            ]}
+            active={activeStatsTab}
+            onChange={(key) => setActiveStatsTab(key as typeof activeStatsTab)}
+            accentColor={textOnWhiteColor}
+          />
         </div>
 
         {/* Overview Tab */}
@@ -1366,7 +1425,7 @@ export default function TeamProfile() {
                   fill="none" 
                   stroke="currentColor" 
                   viewBox="0 0 24 24"
-                  style={{ color: textOnWhiteColor }}
+                  style={{ color: readablePrimary.body }}
                 >
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                 </svg>
@@ -1376,36 +1435,45 @@ export default function TeamProfile() {
                 <div className="bg-white dark:bg-neutral-800 rounded-lg p-3 md:p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: textOnWhiteColor }}>
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: readablePrimary.body }}>
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                       <span className="text-slate-600 dark:text-slate-300 font-medium">W-L Record</span>
                     </div>
-                    <span className="text-2xl md:text-3xl font-bold" data-testid="team-record" style={{ color: textOnWhiteColor }}>
+                    <span className="text-2xl md:text-3xl font-bold" data-testid="team-record" style={{ color: readablePrimary.body }}>
                       {team.wins}-{team.losses}
                     </span>
                   </div>
                 </div>
                 <div className="flex justify-between text-sm md:text-base">
                   <span className="text-slate-600 dark:text-slate-300">Games Played</span>
-                  <span className="font-semibold" style={{ color: textOnWhiteColor }}>{team.totalGames}</span>
+                  <span className="font-semibold" style={{ color: readablePrimary.body }}>{team.totalGames}</span>
                 </div>
                 <div className="flex justify-between text-sm md:text-base">
                   <span className="text-slate-600 dark:text-slate-300">Avg Points Per Game</span>
-                  <span className="font-semibold" style={{ color: textOnWhiteColor }}>{team.avgTeamPoints} PPG</span>
+                  <span className="font-semibold" style={{ color: readablePrimary.body }}>{team.avgTeamPoints} PPG</span>
                 </div>
                 <div className="flex justify-between text-sm md:text-base">
                   <span className="text-slate-600 dark:text-slate-300">Roster Size</span>
-                  <span className="font-semibold" style={{ color: textOnWhiteColor }}>{team.roster.length} Players</span>
+                  <span className="font-semibold" style={{ color: readablePrimary.body }}>{team.roster.length} Players</span>
                 </div>
                 {team.topPlayer && (
                   <div className="flex justify-between text-sm md:text-base">
                     <span className="text-slate-600 dark:text-slate-300">Top Scorer</span>
-                    <span className="font-semibold" style={{ color: textOnWhiteColor }}>{team.topPlayer.name}</span>
+                    <span className="font-semibold" style={{ color: readablePrimary.body }}>{team.topPlayer.name}</span>
                   </div>
                 )}
               </div>
             </div>
+
+            {teamAccolades.length > 0 && (
+              <div className="bg-white dark:bg-neutral-900 rounded-xl shadow dark:shadow-neutral-800/50 p-4 md:p-6">
+                <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-3 md:mb-4">
+                  Top Accolades
+                </h2>
+                <AccoladeBadges accolades={topAccolades(teamAccolades)} accentColor={readablePrimary.body} />
+              </div>
+            )}
           </div>
 
           {/* Right Column - Roster and Games */}
@@ -1426,7 +1494,7 @@ export default function TeamProfile() {
                 }}
               >
                 <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-3 md:mb-4 flex items-center gap-2">
-                  <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: textOnWhiteColor }}>
+                  <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: readablePrimary.body }}>
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
                   </svg>
                   Star Player
@@ -1465,19 +1533,19 @@ export default function TeamProfile() {
                     </div>
                     <div className="grid grid-cols-2 gap-3 md:gap-4 text-center w-full md:w-auto">
                       <div>
-                        <div className="text-xl md:text-2xl font-bold" style={{ color: textOnWhiteColor }}>{team.topPlayer.avgPoints}</div>
+                        <div className="text-xl md:text-2xl font-bold" style={{ color: readablePrimary.body }}>{team.topPlayer.avgPoints}</div>
                         <div className="text-xs text-slate-500 dark:text-slate-400">PPG</div>
                       </div>
                       <div>
-                        <div className="text-xl md:text-2xl font-bold" style={{ color: textOnWhiteColor }}>{team.topPlayer.avgRebounds}</div>
+                        <div className="text-xl md:text-2xl font-bold" style={{ color: readablePrimary.body }}>{team.topPlayer.avgRebounds}</div>
                         <div className="text-xs text-slate-500 dark:text-slate-400">RPG</div>
                       </div>
                       <div>
-                        <div className="text-xl md:text-2xl font-bold" style={{ color: textOnWhiteColor }}>{team.topPlayer.avgAssists}</div>
+                        <div className="text-xl md:text-2xl font-bold" style={{ color: readablePrimary.body }}>{team.topPlayer.avgAssists}</div>
                         <div className="text-xs text-slate-500 dark:text-slate-400">APG</div>
                       </div>
                       <div>
-                        <div className="text-xl md:text-2xl font-bold" style={{ color: textOnWhiteColor }}>{team.topPlayer.totalPoints}</div>
+                        <div className="text-xl md:text-2xl font-bold" style={{ color: readablePrimary.body }}>{team.topPlayer.totalPoints}</div>
                         <div className="text-xs text-slate-500 dark:text-slate-400">Total PTS</div>
                       </div>
                     </div>
@@ -1489,7 +1557,7 @@ export default function TeamProfile() {
             {/* Team Roster */}
             <div className="bg-white dark:bg-neutral-900 rounded-xl shadow dark:shadow-neutral-800/50 p-4 md:p-6">
               <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-3 md:mb-4 flex items-center gap-2">
-                <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: textOnWhiteColor }}>
+                <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: readablePrimary.body }}>
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
                 </svg>
                 Team Roster ({team.roster.length} Players)
@@ -1540,7 +1608,7 @@ export default function TeamProfile() {
                           </div>
                         </td>
                         <td className="hidden md:table-cell py-3 px-2 text-center text-slate-600 dark:text-slate-400">{player.gamesPlayed}</td>
-                        <td className="py-2 md:py-3 px-2 text-right font-medium" style={{ color: textOnWhiteColor }}>{player.avgPoints}</td>
+                        <td className="py-2 md:py-3 px-2 text-right font-medium" style={{ color: readablePrimary.body }}>{player.avgPoints}</td>
                         <td className="py-2 md:py-3 px-2 text-right text-slate-600 dark:text-slate-400">{player.avgRebounds}</td>
                         <td className="hidden md:table-cell py-3 px-2 text-right text-slate-600 dark:text-slate-400">{player.avgAssists}</td>
                       </tr>
@@ -1553,7 +1621,7 @@ export default function TeamProfile() {
             {/* Recent Games */}
             <div className="bg-white dark:bg-neutral-900 rounded-xl shadow dark:shadow-neutral-800/50 p-4 md:p-6">
               <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-3 md:mb-4 flex items-center gap-2">
-                <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: textOnWhiteColor }}>
+                <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: readablePrimary.body }}>
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 Recent Games ({team.recentGames.length})
@@ -1851,7 +1919,7 @@ export default function TeamProfile() {
                     ].map((stat) => (
                       <div key={stat.label} className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 text-center">
                         <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">{stat.label}</div>
-                        <div className="text-lg font-bold" style={{ color: textOnWhiteColor }}>{stat.value}</div>
+                        <div className="text-lg font-bold" style={{ color: readablePrimary.body }}>{stat.value}</div>
                       </div>
                     ))}
                   </div>
@@ -1859,6 +1927,17 @@ export default function TeamProfile() {
               </div>
             ) : (
               <div className="text-center py-8 text-gray-500 dark:text-gray-400">No team statistics available</div>
+            )}
+          </div>
+        )}
+
+        {activeStatsTab === 'accolades' && (
+          <div className="bg-white dark:bg-neutral-900 rounded-xl shadow p-4 md:p-6">
+            <h2 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white mb-4">Accolades - {team.name}</h2>
+            {teamAccolades.length > 0 ? (
+              <AccoladeBadges accolades={teamAccolades} accentColor={readablePrimary.body} />
+            ) : (
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400">No accolades yet this season</div>
             )}
           </div>
         )}

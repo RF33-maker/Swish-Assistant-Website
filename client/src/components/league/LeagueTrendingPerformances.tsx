@@ -35,7 +35,7 @@ interface PerfRow {
 interface TrendingData {
   perfs: PerfRow[];
   leagueNames: Record<string, string>;
-  playerMeta: Record<string, { slug: string | null; photoUrl: string | null }>;
+  playerMeta: Record<string, { slug: string | null; photoUrl: string | null; profileAvailable: boolean }>;
 }
 
 function formatDate(s: string | null) {
@@ -71,6 +71,9 @@ function PerfCard({
   const meta = playerMeta[perf.player_id];
   const photoUrl = meta?.photoUrl || null;
   const playerSlug = meta?.slug || null;
+  // Fall back to the raw player_id only when we know the player's own league is
+  // public — RLS hides the row (and the profile page 404s) otherwise.
+  const canViewProfile = !!playerSlug || (!!perf.player_id && !!meta?.profileAvailable);
 
   const { primaryColor } = useTeamBranding({
     teamName: perf.team_name || "",
@@ -108,6 +111,7 @@ function PerfCard({
   }, [perf.ts_pct]);
 
   const goToPlayer = () => {
+    if (!canViewProfile) return;
     if (playerSlug) setLocation(`/player/${playerSlug}`);
     else if (perf.player_id) setLocation(`/player/${perf.player_id}`);
   };
@@ -152,13 +156,13 @@ function PerfCard({
       generateCardBlob={generateCardBlob}
     >
       <div
-        role="button"
-        tabIndex={0}
-        onClick={goToPlayer}
-        onKeyDown={(e) => {
+        role={canViewProfile ? "button" : undefined}
+        tabIndex={canViewProfile ? 0 : undefined}
+        onClick={canViewProfile ? goToPlayer : undefined}
+        onKeyDown={canViewProfile ? (e) => {
           if (e.key === "Enter" || e.key === " ") { e.preventDefault(); goToPlayer(); }
-        }}
-        className="group w-full text-left rounded-xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 shadow-sm hover:shadow-md hover:border-orange-300 dark:hover:border-orange-500/50 transition-all px-3 pt-2.5 pb-2 cursor-pointer focus:outline-none focus:ring-2 focus:ring-orange-400"
+        } : undefined}
+        className={`group w-full text-left rounded-xl bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 shadow-sm transition-all px-3 pt-2.5 pb-2 focus:outline-none focus:ring-2 focus:ring-orange-400 ${canViewProfile ? "hover:shadow-md hover:border-orange-300 dark:hover:border-orange-500/50 cursor-pointer" : ""}`}
         data-testid="league-trending-perf-card"
       >
         {/* Top row: avatar + name + team — pr-9 leaves room for the share button */}
@@ -235,13 +239,14 @@ export default function LeagueTrendingPerformances({ leagueSlug, brandColor }: P
         const json = await res.json() as {
           perfs: PerfRow[];
           leagueNames: Record<string, string>;
-          playerMeta: Record<string, { slug: string | null; photo_path_bg_removed: string | null }>;
+          playerMeta: Record<string, { slug: string | null; photo_path_bg_removed: string | null; profileAvailable: boolean }>;
         };
         const playerMeta: TrendingData["playerMeta"] = {};
         for (const [id, meta] of Object.entries(json.playerMeta || {})) {
           playerMeta[id] = {
             slug: meta.slug,
             photoUrl: getPlayerPhotoUrlCached(meta.photo_path_bg_removed),
+            profileAvailable: meta.profileAvailable,
           };
         }
         return { perfs: json.perfs || [], leagueNames: json.leagueNames || {}, playerMeta };
@@ -296,9 +301,9 @@ export default function LeagueTrendingPerformances({ leagueSlug, brandColor }: P
         />
       </div>
       <div className="flex flex-col gap-2">
-        {perfs.map((perf) => (
+        {perfs.map((perf, index) => (
           <PerfCard
-            key={`${perf.player_id}-${perf.game_date}`}
+            key={`${perf.player_id}-${perf.game_key ?? perf.game_date}-${index}`}
             perf={perf}
             playerMeta={playerMeta}
             leagueName={leagueNames[perf.league_id]}

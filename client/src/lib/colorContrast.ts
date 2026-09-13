@@ -95,3 +95,10 @@ export function ensureContrast(
   }
   return result;
 }
+
+// Convenience wrapper for computing a readable text colour inside loops
+// (.map() callbacks etc.) where a hook like useReadableTeamColor can't be
+// called. Pass the current theme via useIsDarkMode() from useReadableColor.ts.
+export function readableTextColor(color: string, isDark: boolean, minRatio = 4.5): string {
+  return ensureContrast(color, isDark ? DARK_SURFACE : LIGHT_SURFACE, minRatio);
+}

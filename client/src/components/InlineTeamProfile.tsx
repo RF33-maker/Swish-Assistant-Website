@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { TeamLogo } from "@/components/TeamLogo";
@@ -15,6 +15,9 @@ import {
   resolvePlayerDisplayName,
 } from "@/lib/playerName";
 import { buildTeamSeasonOptions, type TeamSeasonCompetition } from "@/lib/teamSeasons";
+import { AccoladeBadges } from "@/components/AccoladeBadges";
+import { computeTeamAccolades } from "@/lib/accolades";
+import { fetchTeamRecordMaxes, type RecordMaxes } from "@/lib/recordMaxes";
 import {
   Select,
   SelectContent,
@@ -94,6 +97,8 @@ const RATE_STATS = [
   'pts_percent_second_chance', 'pts_percent_off_turnovers'
 ];
 
+const EMPTY_RECORD_MAXES: RecordMaxes = { pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, tpm: 0 };
+
 const applyPlayerMode = (
   statKey: string, value: number, gamesPlayed: number, totalMinutes: number,
   playerMode: 'Total' | 'Per Game' | 'Per 40'
@@ -133,6 +138,17 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
   );
   const activeSeason = seasonOptions.find(option => option.key === selectedSeason) || seasonOptions[0];
   const effectiveLeagueIds = activeSeason?.leagueIds || allLeagueIds;
+
+  const [teamRecordMaxes, setTeamRecordMaxes] = useState<RecordMaxes>(EMPTY_RECORD_MAXES);
+  useEffect(() => {
+    let cancelled = false;
+    if (effectiveLeagueIds.length === 0) {
+      setTeamRecordMaxes(EMPTY_RECORD_MAXES);
+      return;
+    }
+    fetchTeamRecordMaxes(effectiveLeagueIds).then(m => { if (!cancelled) setTeamRecordMaxes(m); });
+    return () => { cancelled = true; };
+  }, [effectiveLeagueIds.join(",")]);
 
   const { data: teamData, isLoading } = useQuery({
     queryKey: ['inline-team-profile', normalizedTeamName, activeSeason?.key, effectiveLeagueIds.join(',')],
@@ -313,13 +329,21 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
       let wins = 0, losses = 0;
       const games = Object.values(gamesByGameKey).map((gameData: any) => {
         const ourScore = gameData.playerStats.reduce((sum: number, stat: any) => sum + (stat.spoints || 0), 0);
+        const ourReb = gameData.playerStats.reduce((sum: number, stat: any) => sum + (stat.sreboundstotal || 0), 0);
+        const ourAst = gameData.playerStats.reduce((sum: number, stat: any) => sum + (stat.sassists || 0), 0);
+        const ourStl = gameData.playerStats.reduce((sum: number, stat: any) => sum + (stat.ssteals || 0), 0);
+        const ourBlk = gameData.playerStats.reduce((sum: number, stat: any) => sum + (stat.sblocks || 0), 0);
+        const ourTpm = gameData.playerStats.reduce((sum: number, stat: any) => sum + (stat.sthreepointersmade || 0), 0);
         const opponent = gameData.opponent_name || 'Unknown';
         const isHome = gameData.is_home_game || false;
         const opponentStats = opponentStatsByGame[gameData.game_key] || [];
         const opponentScore = opponentStats.reduce((sum: number, stat: any) => sum + (stat.spoints || 0), 0);
         const isWin = ourScore > opponentScore;
         if (isWin) wins++; else losses++;
-        return { totalPoints: ourScore, date: gameData.created_at, opponent, opponentScore, isWin, isHome, game_key: gameData.game_key };
+        return {
+          totalPoints: ourScore, reb: ourReb, ast: ourAst, stl: ourStl, blk: ourBlk, tpm: ourTpm,
+          date: gameData.created_at, opponent, opponentScore, isWin, isHome, game_key: gameData.game_key,
+        };
       }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
       const playerStatsMap = new Map<string, any>();
@@ -481,6 +505,11 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
     enabled: gameKeys.length > 0 && activeTab === 'shotChart',
   });
 
+  const teamAccolades = useMemo(
+    () => teamData?.games ? computeTeamAccolades(teamData.games, teamRecordMaxes, activeSeason?.label) : [],
+    [teamData?.games, teamRecordMaxes, activeSeason?.label]
+  );
+
   const cTd = "px-2 py-1.5 text-center text-xs whitespace-nowrap";
   const isPreSeason = !!(teamData?.preSeasonRoster && teamData.preSeasonRoster.length > 0 && teamData.roster.length === 0);
 
@@ -548,6 +577,7 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
                     </>
                   )}
                 </div>
+                <AccoladeBadges accolades={teamAccolades} accentColor={readableBrand.body} />
               </div>
             </div>
             {seasonOptions.length > 1 && (

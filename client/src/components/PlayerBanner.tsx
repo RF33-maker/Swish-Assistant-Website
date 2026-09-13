@@ -1,10 +1,12 @@
-import { User, Upload, Loader2, Move, Check, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Upload, Loader2, Move, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { TeamLogo } from "@/components/TeamLogo";
+import { ProfileChip } from "@/components/ProfileChip";
 import { useTeamBranding } from "@/hooks/useTeamBranding";
 import { getContrastColor } from "@/lib/colorExtractor";
-import bannerTexture from "@assets/banner-texture.png";
+import { shadeHex } from "@/lib/colorContrast";
+import { getTeamLogoCached } from "@/utils/teamLogoCache";
 
 interface PlayerBannerProps {
   playerInfo: {
@@ -34,6 +36,9 @@ interface PlayerBannerProps {
   isAuthenticated: boolean;
   brandColorOverride?: string;
   className?: string;
+  leagueChip?: { label: string; onClick: () => void };
+  teamChip?: { label: string; onClick: () => void };
+  extraLeagueIds?: string[];
 }
 
 function calculateAge(dateOfBirth: string): number | null {
@@ -52,15 +57,11 @@ function calculateAge(dateOfBirth: string): number | null {
   }
 }
 
-function splitName(fullName: string): { firstName: string; lastName: string } {
-  const parts = fullName.trim().split(/\s+/);
-  if (parts.length <= 1) {
-    return { firstName: "", lastName: parts[0] || "" };
-  }
-  return {
-    firstName: parts.slice(0, -1).join(" "),
-    lastName: parts[parts.length - 1],
-  };
+function getInitials(fullName: string): string {
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 export function PlayerBanner({
@@ -78,116 +79,180 @@ export function PlayerBanner({
   isAuthenticated,
   brandColorOverride,
   className,
+  leagueChip,
+  teamChip,
+  extraLeagueIds,
 }: PlayerBannerProps) {
   const { primaryColor, colors } = useTeamBranding({
     teamName: playerInfo.team || "",
     leagueId: playerInfo.leagueId || "",
+    extraLeagueIds,
     enabled: !brandColorOverride && !!playerInfo.team && !!playerInfo.leagueId,
   });
 
   const bgColor = brandColorOverride || primaryColor;
   const textColor = colors?.textContrast || (brandColorOverride ? getContrastColor(hexToRgb(brandColorOverride)) : "#ffffff");
+  const gradientEnd = shadeHex(bgColor, 0.35);
 
-  const textRgb = hexToRgb(textColor);
-  const textIsLight = (textRgb.r * 299 + textRgb.g * 587 + textRgb.b * 114) / 1000 > 128;
-  const textShadowColor = textIsLight ? 'rgba(0,0,0,0.7)' : 'rgba(255,255,255,0.7)';
+  const [teamLogoUrl, setTeamLogoUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    if (!playerInfo.team || !playerInfo.leagueId) {
+      setTeamLogoUrl(null);
+      return;
+    }
+    getTeamLogoCached({ teamName: playerInfo.team, leagueId: playerInfo.leagueId, extraLeagueIds })
+      .then((url) => { if (!cancelled) setTeamLogoUrl(url); })
+      .catch(() => { if (!cancelled) setTeamLogoUrl(null); });
+    return () => { cancelled = true; };
+  }, [playerInfo.team, playerInfo.leagueId, extraLeagueIds?.join(",")]);
 
-  const { firstName, lastName } = splitName(playerInfo.name);
   const age = playerInfo.dateOfBirth ? calculateAge(playerInfo.dateOfBirth) : null;
-
-  const statItems: { label: string; value: string }[] = [];
-  if (age !== null) statItems.push({ label: "Age", value: String(age) });
   const heightDisplay = playerInfo.heightCm
     ? `${Math.floor(playerInfo.heightCm / 30.48)}'${Math.round((playerInfo.heightCm / 2.54) % 12)}"`
     : playerInfo.height || null;
-  if (heightDisplay) statItems.push({ label: "Height", value: heightDisplay });
-  if (playerInfo.position) statItems.push({ label: "Position", value: playerInfo.position });
-  if (playerInfo.number !== undefined && playerInfo.number !== null) statItems.push({ label: "Number", value: `#${playerInfo.number}` });
+
+  const detailItems: { label: string; value: string }[] = [];
+  if (age !== null) detailItems.push({ label: "Age", value: String(age) });
+  if (heightDisplay) detailItems.push({ label: "Height", value: heightDisplay });
+
+  const subtitle = [playerInfo.position, playerInfo.number != null ? `#${playerInfo.number}` : null]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
-    <div className={`relative w-full overflow-hidden ${className || ''}`} style={{ backgroundColor: bgColor }}>
-      <img
-        src={bannerTexture}
-        alt=""
-        aria-hidden="true"
-        className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-        style={{ mixBlendMode: "multiply" }}
-      />
+    <div
+      className={`relative rounded-2xl overflow-hidden ${className || ''}`}
+      style={{ background: `linear-gradient(135deg, ${bgColor}, ${gradientEnd})` }}
+    >
+      {teamLogoUrl && (
+        <img
+          src={teamLogoUrl}
+          alt=""
+          aria-hidden="true"
+          className="absolute left-0 top-1/2 h-[170%] max-w-none object-contain opacity-15 pointer-events-none select-none"
+          style={{ transform: 'translate(-20%, -50%)' }}
+        />
+      )}
 
-      <div className="relative" style={{ minHeight: 'clamp(180px, 28vw, 320px)' }}>
-        {playerInfo.team && playerInfo.leagueId && (
-          <div className="absolute top-3 left-3 md:top-5 md:left-6 z-20">
-            <TeamLogo
-              teamName={playerInfo.team}
-              leagueId={playerInfo.leagueId}
-              size="xl"
-              className="flex-shrink-0 drop-shadow-lg"
-            />
+      <div className="relative p-5 md:p-8" style={{ minHeight: 'clamp(180px, 26vw, 300px)' }}>
+        {(leagueChip || teamChip) && (
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            {leagueChip && <ProfileChip label={leagueChip.label} onClick={leagueChip.onClick} />}
+            {teamChip && <ProfileChip label={teamChip.label} onClick={teamChip.onClick} />}
           </div>
         )}
 
-        {playerInfo.playerId && playerPhotoUrl ? (
-          <img
-            src={playerPhotoUrl}
-            alt={playerInfo.name}
-            className="absolute bottom-0 right-0 w-auto object-contain object-bottom z-[5] pointer-events-none"
-            style={{
-              height: 'clamp(160px, 45vw, 480px)',
-              maxHeight: '100%',
-              maxWidth: 'clamp(40%, 40vw, 55%)',
-              objectPosition: `center ${showFocusAdjuster ? tempFocusY : (playerInfo.photoFocusY ?? 100)}%`,
-            }}
-            onError={(e) => {
-              (e.target as HTMLImageElement).style.display = "none";
-            }}
-          />
-        ) : (
-          <div className="absolute right-8 bottom-8 opacity-10 z-[1]">
-            <User className="w-32 h-32" style={{ color: textColor }} />
+        {/* Text column is capped to roughly half width so the large bottom-anchored
+            photo below always has clear room on the right, at any card height. */}
+        <div className="max-w-[60%] md:max-w-[55%]">
+          <div
+            className="font-black leading-tight"
+            style={{ color: textColor, fontSize: 'clamp(1.5rem, 4vw, 2.5rem)' }}
+            data-testid="text-player-name"
+          >
+            {playerInfo.name}
           </div>
-        )}
-
-        <div className="absolute inset-0 z-10 pointer-events-none" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div className="text-center pointer-events-none px-4">
-            {firstName && (
-              <div
-                className="font-medium leading-tight"
-                style={{
-                  color: textColor,
-                  fontSize: 'clamp(1.25rem, 4vw, 3.75rem)',
-                  textShadow: `0 2px 8px ${textShadowColor}`,
-                }}
-              >
-                {firstName}
-              </div>
-            )}
-            <div
-              className="font-black leading-none uppercase tracking-tight"
-              style={{
-                color: textColor,
-                fontSize: 'clamp(1.75rem, 5.5vw, 4.5rem)',
-                textShadow: `0 2px 8px ${textShadowColor}`,
-              }}
-              data-testid="text-player-name"
-            >
-              {lastName}
+          {subtitle && (
+            <div className="text-sm md:text-base mt-1" style={{ color: textColor, opacity: 0.85 }}>
+              {subtitle}
             </div>
-          </div>
-        </div>
-
-        {playerInfo.previousTeams && playerInfo.previousTeams.length > 0 && (
-          <div className="absolute bottom-3 left-0 z-10 px-4 md:px-8" style={{ maxWidth: '60%' }}>
-            <p
-              className="text-[10px] md:text-xs italic"
-              style={{ color: textColor, opacity: 0.7, textShadow: `0 1px 4px ${textShadowColor}` }}
-            >
+          )}
+          {playerInfo.previousTeams && playerInfo.previousTeams.length > 0 && (
+            <p className="text-xs italic mt-2" style={{ color: textColor, opacity: 0.7 }}>
               Previously: {playerInfo.previousTeams.join(", ")}
             </p>
+          )}
+        </div>
+
+        {/* Player photo — large cutout anchored to the bottom-right corner of
+            the banner, matching the site's original hero treatment. Falls
+            back to a small initials circle when no photo is set.
+            The outer box has a FIXED width+height (not just a max-height on
+            an auto-width img) so `object-cover` always fills it completely —
+            headshots come in in all sorts of aspect ratios, and a `contain`
+            fit left a gap under the photo whenever one was wider/shorter
+            than the box. Cover crops instead of leaving that gap; the focus
+            slider still lets you choose which part of a tall photo shows. */}
+        {playerInfo.playerId && playerPhotoUrl ? (
+          <div
+            className="absolute bottom-0 right-0 md:right-4 overflow-hidden pointer-events-none select-none"
+            style={{
+              height: 'clamp(140px, 40vw, 420px)',
+              // Capped well under 100% (rather than bleeding above the card)
+              // so the top of the photo always clears the chip row above it,
+              // regardless of how tall a given photo's crop needs to be.
+              maxHeight: '82%',
+              width: 'clamp(38%, 38vw, 50%)',
+            }}
+          >
+            <img
+              src={playerPhotoUrl}
+              alt={playerInfo.name}
+              className="w-full h-full object-cover"
+              style={{
+                objectPosition: `center ${showFocusAdjuster ? tempFocusY : (playerInfo.photoFocusY ?? 100)}%`,
+              }}
+              onError={(e) => {
+                (e.target as HTMLImageElement).style.display = "none";
+              }}
+            />
+          </div>
+        ) : (
+          <div
+            className="absolute bottom-4 right-4 md:right-8 w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center border-2"
+            style={{ borderColor: 'rgba(255,255,255,0.35)', backgroundColor: 'rgba(255,255,255,0.15)' }}
+          >
+            <span className="font-bold text-lg md:text-xl" style={{ color: textColor }}>
+              {getInitials(playerInfo.name)}
+            </span>
+          </div>
+        )}
+
+        {isAuthenticated && playerInfo.playerId && !showFocusAdjuster && (
+          <div className="absolute bottom-3 right-3 z-10 flex gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handlePhotoUpload}
+              className="hidden"
+              data-testid="input-player-photo"
+            />
+            {playerInfo.photoPath && (
+              <Button
+                onClick={() => {
+                  setTempFocusY(playerInfo.photoFocusY ?? 50);
+                  setShowFocusAdjuster(true);
+                }}
+                size="sm"
+                variant="outline"
+                className="bg-white/90 dark:bg-neutral-800/90 shadow-lg h-7 text-xs"
+                data-testid="button-adjust-photo-focus"
+              >
+                <Move className="w-3 h-3 mr-1" /> Adjust
+              </Button>
+            )}
+            <Button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={photoUploading}
+              size="sm"
+              className="shadow-lg h-7 text-xs"
+              style={{ backgroundColor: 'rgba(0,0,0,0.7)', color: '#ffffff' }}
+              data-testid="button-upload-player-photo"
+            >
+              {photoUploading ? (
+                <Loader2 className="w-3 h-3 animate-spin mr-1" />
+              ) : (
+                <Upload className="w-3 h-3 mr-1" />
+              )}
+              {photoUploading ? "Uploading..." : playerInfo.photoPath ? "Change" : "Add Photo"}
+            </Button>
           </div>
         )}
 
         {showFocusAdjuster && playerInfo.photoPath && (
-          <div className="absolute bottom-12 right-4 left-4 md:left-auto md:w-72 z-20 bg-white/95 dark:bg-neutral-800/95 rounded-lg p-3 shadow-lg">
+          <div className="mt-4 bg-white/95 dark:bg-neutral-800/95 rounded-lg p-3 shadow-lg">
             <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
               Adjust vertical focus
             </div>
@@ -227,79 +292,23 @@ export function PlayerBanner({
             </div>
           </div>
         )}
-
-        {isAuthenticated && playerInfo.playerId && !showFocusAdjuster && (
-          <>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handlePhotoUpload}
-              className="hidden"
-              data-testid="input-player-photo"
-            />
-            <div className="absolute bottom-3 right-3 z-10 flex gap-2">
-              {playerInfo.photoPath && (
-                <Button
-                  onClick={() => {
-                    setTempFocusY(playerInfo.photoFocusY ?? 50);
-                    setShowFocusAdjuster(true);
-                  }}
-                  size="sm"
-                  variant="outline"
-                  className="bg-white/90 dark:bg-neutral-800/90 shadow-lg h-7 text-xs"
-                  data-testid="button-adjust-photo-focus"
-                >
-                  <Move className="w-3 h-3 mr-1" /> Adjust
-                </Button>
-              )}
-              <Button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={photoUploading}
-                size="sm"
-                className="shadow-lg h-7 text-xs"
-                style={{
-                  backgroundColor: textColor === "#ffffff" ? "rgba(0,0,0,0.7)" : "rgba(255,255,255,0.9)",
-                  color: textColor === "#ffffff" ? "#ffffff" : "#000000",
-                }}
-                data-testid="button-upload-player-photo"
-              >
-                {photoUploading ? (
-                  <Loader2 className="w-3 h-3 animate-spin mr-1" />
-                ) : (
-                  <Upload className="w-3 h-3 mr-1" />
-                )}
-                {photoUploading ? "Uploading..." : playerInfo.photoPath ? "Change" : "Add Photo"}
-              </Button>
-            </div>
-          </>
-        )}
       </div>
 
-      {statItems.length > 0 && (
+      {detailItems.length > 0 && (
         <div
-          className="relative z-10 flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 md:px-8 md:py-3"
-          style={{ backgroundColor: bgColor }}
+          className="relative flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-2 md:px-8 md:py-3 border-t"
+          style={{ borderColor: 'rgba(255,255,255,0.15)' }}
         >
-          {statItems.map((item, idx) => (
+          {detailItems.map((item, idx) => (
             <div key={item.label} className="flex items-center gap-1.5">
-              <span
-                className="font-black tracking-wide"
-                style={{ color: textColor, fontSize: 'clamp(0.7rem, 1.8vw, 1rem)' }}
-              >
+              <span className="text-xs font-bold tracking-wide" style={{ color: textColor, opacity: 0.7 }}>
                 {item.label}
               </span>
-              <span
-                className="font-black"
-                style={{ color: textColor, fontSize: 'clamp(0.7rem, 1.8vw, 1rem)' }}
-              >
+              <span className="text-xs font-bold" style={{ color: textColor }}>
                 {item.value}
               </span>
-              {idx < statItems.length - 1 && (
-                <span
-                  className="font-black ml-2"
-                  style={{ color: textColor, opacity: 0.4, fontSize: 'clamp(0.7rem, 1.8vw, 1rem)' }}
-                >
+              {idx < detailItems.length - 1 && (
+                <span className="text-xs font-bold ml-2" style={{ color: textColor, opacity: 0.4 }}>
                   |
                 </span>
               )}

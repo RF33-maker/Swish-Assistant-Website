@@ -4,6 +4,8 @@ import { supabase, getSupabaseForLeague } from "@/lib/supabase";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { TeamLogo } from "./TeamLogo";
 import { extractColorsFromImage, TeamColors, adjustOpacity } from "@/lib/colorExtractor";
+import { useReadableTeamColor, useIsDarkMode } from "@/hooks/useReadableColor";
+import { readableTextColor } from "@/lib/colorContrast";
 import { generatePlayCaption } from "@/utils/generatePlayCaption";
 import ShotChart, { type ShotData } from "./ShotChart";
 
@@ -646,10 +648,16 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
   const selectedTeamStats = teamStats?.find(team => team.name === selectedTeam);
   
   // Compute team colors for stat bars (before JSX)
-  const team1Color = teamStats && teamStats.length >= 1 && teamStats[0]?.name ? 
+  const team1Color = teamStats && teamStats.length >= 1 && teamStats[0]?.name ?
     (teamColors[teamStats[0].name]?.primary || 'rgb(251, 146, 60)') : 'rgb(251, 146, 60)';
   const team2Color = teamStats && teamStats.length >= 2 && teamStats[1]?.name ?
     (teamColors[teamStats[1].name]?.primary || 'rgb(59, 130, 246)') : 'rgb(59, 130, 246)';
+  // Text-safe variants — the raw team colours above are also used for
+  // gradient bar fills (kept as-is), but as literal text colour they can be
+  // invisible in dark mode when a team's brand colour is itself dark.
+  const readableTeam1 = useReadableTeamColor(team1Color).body;
+  const readableTeam2 = useReadableTeamColor(team2Color).body;
+  const isDarkMode = useIsDarkMode();
   const selectedTeamPlayers = selectedTeamStats?.players || [];
 
   return (
@@ -833,7 +841,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                     <div 
                                       className="text-lg font-bold"
                                       style={playerTeamColor ? {
-                                        color: playerTeamColor.primary
+                                        color: readableTextColor(playerTeamColor.primary, isDarkMode)
                                       } : {
                                         color: 'rgb(251, 146, 60)'
                                       }}
@@ -846,7 +854,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                     <div 
                                       className="text-lg font-bold"
                                       style={playerTeamColor ? {
-                                        color: playerTeamColor.primary
+                                        color: readableTextColor(playerTeamColor.primary, isDarkMode)
                                       } : {
                                         color: 'rgb(251, 146, 60)'
                                       }}
@@ -859,7 +867,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                     <div 
                                       className="text-lg font-bold"
                                       style={playerTeamColor ? {
-                                        color: playerTeamColor.primary
+                                        color: readableTextColor(playerTeamColor.primary, isDarkMode)
                                       } : {
                                         color: 'rgb(251, 146, 60)'
                                       }}
@@ -872,7 +880,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                     <div 
                                       className="text-lg font-bold"
                                       style={playerTeamColor ? {
-                                        color: playerTeamColor.primary
+                                        color: readableTextColor(playerTeamColor.primary, isDarkMode)
                                       } : {
                                         color: 'rgb(251, 146, 60)'
                                       }}
@@ -902,7 +910,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                             <span className="text-sm font-medium text-slate-600 dark:text-slate-300">{teamStats[1].name}</span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold w-12 text-right" style={{ color: team1Color }}>
+                            <span className="text-sm font-semibold w-12 text-right" style={{ color: readableTeam1 }}>
                               {teamStats[0].totalFgAttempted > 0 ? ((teamStats[0].totalFgMade / teamStats[0].totalFgAttempted) * 100).toFixed(1) : 0}%
                             </span>
                             <div className="flex-1 h-2 bg-gray-200 dark:bg-neutral-700 rounded-full overflow-hidden">
@@ -923,7 +931,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                 }}
                               />
                             </div>
-                            <span className="text-sm font-semibold w-12" style={{ color: team2Color }}>
+                            <span className="text-sm font-semibold w-12" style={{ color: readableTeam2 }}>
                               {teamStats[1].totalFgAttempted > 0 ? ((teamStats[1].totalFgMade / teamStats[1].totalFgAttempted) * 100).toFixed(1) : 0}%
                             </span>
                           </div>
@@ -937,7 +945,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                             <span className="text-sm font-medium text-slate-600 dark:text-slate-300">{teamStats[1].name}</span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold w-12 text-right" style={{ color: team1Color }}>
+                            <span className="text-sm font-semibold w-12 text-right" style={{ color: readableTeam1 }}>
                               {teamStats[0].totalThreeAttempted > 0 ? ((teamStats[0].totalThreeMade / teamStats[0].totalThreeAttempted) * 100).toFixed(1) : 0}%
                             </span>
                             <div className="flex-1 h-2 bg-gray-200 dark:bg-neutral-700 rounded-full overflow-hidden">
@@ -958,7 +966,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                 }}
                               />
                             </div>
-                            <span className="text-sm font-semibold w-12" style={{ color: team2Color }}>
+                            <span className="text-sm font-semibold w-12" style={{ color: readableTeam2 }}>
                               {teamStats[1].totalThreeAttempted > 0 ? ((teamStats[1].totalThreeMade / teamStats[1].totalThreeAttempted) * 100).toFixed(1) : 0}%
                             </span>
                           </div>
@@ -972,7 +980,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                             <span className="text-sm font-medium text-slate-600 dark:text-slate-300">{teamStats[1].name}</span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold w-12 text-right" style={{ color: team1Color }}>
+                            <span className="text-sm font-semibold w-12 text-right" style={{ color: readableTeam1 }}>
                               {teamStats[0].totalFtAttempted > 0 ? ((teamStats[0].totalFtMade / teamStats[0].totalFtAttempted) * 100).toFixed(1) : 0}%
                             </span>
                             <div className="flex-1 h-2 bg-gray-200 dark:bg-neutral-700 rounded-full overflow-hidden">
@@ -993,7 +1001,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                 }}
                               />
                             </div>
-                            <span className="text-sm font-semibold w-12" style={{ color: team2Color }}>
+                            <span className="text-sm font-semibold w-12" style={{ color: readableTeam2 }}>
                               {teamStats[1].totalFtAttempted > 0 ? ((teamStats[1].totalFtMade / teamStats[1].totalFtAttempted) * 100).toFixed(1) : 0}%
                             </span>
                           </div>
@@ -1007,7 +1015,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                             <span className="text-sm font-medium text-slate-600 dark:text-slate-300">{teamStats[1].name}</span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold w-12 text-right" style={{ color: team1Color }}>{teamStats[0].totalRebounds}</span>
+                            <span className="text-sm font-semibold w-12 text-right" style={{ color: readableTeam1 }}>{teamStats[0].totalRebounds}</span>
                             <div className="flex-1 h-2 bg-gray-200 dark:bg-neutral-700 rounded-full overflow-hidden">
                               <div 
                                 className="h-full"
@@ -1026,7 +1034,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                 }}
                               />
                             </div>
-                            <span className="text-sm font-semibold w-12" style={{ color: team2Color }}>{teamStats[1].totalRebounds}</span>
+                            <span className="text-sm font-semibold w-12" style={{ color: readableTeam2 }}>{teamStats[1].totalRebounds}</span>
                           </div>
                         </div>
 
@@ -1038,7 +1046,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                             <span className="text-sm font-medium text-slate-600 dark:text-slate-300">{teamStats[1].name}</span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold w-12 text-right" style={{ color: team1Color }}>{teamStats[0].totalAssists}</span>
+                            <span className="text-sm font-semibold w-12 text-right" style={{ color: readableTeam1 }}>{teamStats[0].totalAssists}</span>
                             <div className="flex-1 h-2 bg-gray-200 dark:bg-neutral-700 rounded-full overflow-hidden">
                               <div 
                                 className="h-full"
@@ -1057,7 +1065,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                 }}
                               />
                             </div>
-                            <span className="text-sm font-semibold w-12" style={{ color: team2Color }}>{teamStats[1].totalAssists}</span>
+                            <span className="text-sm font-semibold w-12" style={{ color: readableTeam2 }}>{teamStats[1].totalAssists}</span>
                           </div>
                         </div>
                       </div>
@@ -1133,7 +1141,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                         <div 
                           className="text-2xl md:text-3xl font-bold shrink-0"
                           style={teamColors[selectedTeamStats.name] ? {
-                            color: teamColors[selectedTeamStats.name].primary
+                            color: readableTextColor(teamColors[selectedTeamStats.name].primary, isDarkMode)
                           } : {
                             color: 'rgb(249, 115, 22)'
                           }}
@@ -1550,7 +1558,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                         className="px-2 py-0.5 text-xs font-medium rounded"
                                         style={eventTeamColor ? {
                                           backgroundColor: adjustOpacity(eventTeamColor.primaryRgb, 0.15),
-                                          color: eventTeamColor.primary
+                                          color: readableTextColor(eventTeamColor.primary, isDarkMode)
                                         } : {
                                           backgroundColor: 'rgba(251, 146, 60, 0.15)',
                                           color: 'rgb(249, 115, 22)'
@@ -1571,7 +1579,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                     <div 
                                       className="text-sm font-bold mt-1"
                                       style={eventTeamColor ? {
-                                        color: eventTeamColor.primary
+                                        color: readableTextColor(eventTeamColor.primary, isDarkMode)
                                       } : {
                                         color: 'rgb(194, 65, 12)'
                                       }}
@@ -1584,7 +1592,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                                       <div 
                                         className="text-lg font-bold"
                                         style={eventTeamColor ? {
-                                          color: eventTeamColor.primary
+                                          color: readableTextColor(eventTeamColor.primary, isDarkMode)
                                         } : {
                                           color: 'rgb(249, 115, 22)'
                                         }}

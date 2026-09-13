@@ -85,7 +85,7 @@ const styleParams = [
 ];
 
 export default function EmbedGuide() {
-  const [origin, setOrigin] = useState('https://www.swishassistant.com');
+  const [origin, setOrigin] = useState('https://swishassistant.com');
   useEffect(() => {
     if (typeof window !== 'undefined') setOrigin(window.location.origin);
   }, []);

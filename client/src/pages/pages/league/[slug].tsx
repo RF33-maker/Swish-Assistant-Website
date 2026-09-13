@@ -41,6 +41,7 @@ import { normalizeTeamName, buildFuzzyTeamAliasMap } from "@/lib/teamUtils";
 import { namesMatch, getMostCompleteName, strictNamesMatch, normalizeName } from "@/lib/fuzzyMatch";
 import { DEBUG, debugLog } from "@/utils/debug";
 import { usePublicLeagueBrandingBySlug } from "@/hooks/usePublicLeagueBranding";
+import { useReadableTeamColor } from "@/hooks/useReadableColor";
 import { InlinePlayerProfile } from "@/components/InlinePlayerProfile";
 import { InlineTeamProfile } from "@/components/InlineTeamProfile";
 import { InlineGameDetail, type GameInfo as InlineGameInfo } from "@/components/InlineGameDetail";
@@ -711,41 +712,14 @@ export default function LeaguePage() {
         leagueBrandColors.primaryRgb.b,
       ].map((n) => Math.max(0, Math.min(255, n)).toString(16).padStart(2, '0')).join('')}`
     : '#646464';
-  const brandColorHover = leagueBrandColors 
-    ? `rgb(${Math.max(0, leagueBrandColors.primaryRgb.r - 20)}, ${Math.max(0, leagueBrandColors.primaryRgb.g - 20)}, ${Math.max(0, leagueBrandColors.primaryRgb.b - 20)})`
-    : 'rgb(70, 70, 70)';
-
-  const [isDarkMode, setIsDarkMode] = useState(() =>
-    typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
-  );
-  useEffect(() => {
-    const observer = new MutationObserver(() => {
-      setIsDarkMode(document.documentElement.classList.contains('dark'));
-    });
-    observer.observe(document.documentElement, { attributeFilter: ['class'] });
-    return () => observer.disconnect();
-  }, []);
-
-  const _brandRgb = leagueBrandColors?.primaryRgb;
-  const _isColorDark = _brandRgb
-    ? (_brandRgb.r * 0.299 + _brandRgb.g * 0.587 + _brandRgb.b * 0.114) < 140
-    : true;
-  const _DARK_MODE_FALLBACK = 'rgb(255, 255, 255)';
-  const _DARK_MODE_FALLBACK_HOVER = 'rgb(203, 213, 225)';
-  const _lightenedBrand = _brandRgb
-    ? `rgb(${Math.round(_brandRgb.r + (255 - _brandRgb.r) * 0.55)}, ${Math.round(_brandRgb.g + (255 - _brandRgb.g) * 0.55)}, ${Math.round(_brandRgb.b + (255 - _brandRgb.b) * 0.55)})`
-    : _DARK_MODE_FALLBACK;
-  const _lightenedBrandHover = _brandRgb
-    ? `rgb(${Math.round(_brandRgb.r + (255 - _brandRgb.r) * 0.4)}, ${Math.round(_brandRgb.g + (255 - _brandRgb.g) * 0.4)}, ${Math.round(_brandRgb.b + (255 - _brandRgb.b) * 0.4)})`
-    : _DARK_MODE_FALLBACK_HOVER;
-
-  const playerLinkColor = isDarkMode
-    ? (_isColorDark ? _DARK_MODE_FALLBACK : _lightenedBrand)
-    : brandColor;
-  const playerLinkColorHover = isDarkMode
-    ? (_isColorDark ? _DARK_MODE_FALLBACK_HOVER : _lightenedBrandHover)
-    : brandColorHover;
-  const brandBorderLight = leagueBrandColors 
+  // Theme-aware, contrast-safe brand colour — replaces a hand-rolled
+  // brightness-check + MutationObserver that only ever covered
+  // playerLinkColor/Hover, leaving every other `color: brandColor` spot in
+  // this file dark-on-dark whenever the league's own brand colour is dark.
+  const readableBrand = useReadableTeamColor(brandColor);
+  const playerLinkColor = readableBrand.body;
+  const playerLinkColorHover = readableBrand.accent;
+  const brandBorderLight = leagueBrandColors
     ? `rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.2)` 
     : 'rgba(100, 100, 100, 0.2)';
   const brandBg10 = leagueBrandColors
@@ -3852,9 +3826,9 @@ export default function LeaguePage() {
           <meta property="og:title" content={`${inlineGameInfo.teams[0]} vs ${inlineGameInfo.teams[1]} — ${inlineGameInfo.teamScores[inlineGameInfo.teams[0]] ?? ''}–${inlineGameInfo.teamScores[inlineGameInfo.teams[1]] ?? ''} | ${league?.name || formatTitle(slug)}`} />
           <meta property="og:description" content={`Box score and game recap: ${inlineGameInfo.teams[0]} ${inlineGameInfo.teamScores[inlineGameInfo.teams[0]] ?? 0} – ${inlineGameInfo.teamScores[inlineGameInfo.teams[1]] ?? 0} ${inlineGameInfo.teams[1]} on ${new Date(inlineGameInfo.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}.`} />
           <meta property="og:type" content="website" />
-          <meta property="og:url" content={`https://www.swishassistant.com/competition/${slug}/game/${encodeURIComponent(selectedGameKey)}`} />
-          <meta property="og:image" content="https://www.swishassistant.com/og-image.png" />
-          <link rel="canonical" href={`https://www.swishassistant.com/competition/${slug}/game/${encodeURIComponent(selectedGameKey)}`} />
+          <meta property="og:url" content={`https://swishassistant.com/competition/${slug}/game/${encodeURIComponent(selectedGameKey)}`} />
+          <meta property="og:image" content="https://swishassistant.com/og-image.png" />
+          <link rel="canonical" href={`https://swishassistant.com/competition/${slug}/game/${encodeURIComponent(selectedGameKey)}`} />
         </>
       ) : (
         <>
@@ -3880,13 +3854,13 @@ export default function LeaguePage() {
           <meta property="og:type" content="website" />
           <meta
             property="og:url"
-            content={`https://www.swishassistant.com/competition/${slug}`}
+            content={`https://swishassistant.com/competition/${slug}`}
           />
           <meta
             property="og:image"
-            content="https://www.swishassistant.com/og-image.png"
+            content="https://swishassistant.com/og-image.png"
           />
-          <link rel="canonical" href={`https://www.swishassistant.com/competition/${slug}`} />
+          <link rel="canonical" href={`https://swishassistant.com/competition/${slug}`} />
         </>
       )}
     </Helmet>
@@ -3989,10 +3963,9 @@ export default function LeaguePage() {
               <div className="flex items-center gap-1 md:gap-2 shrink-0">
                 <button
                   onClick={() => navigate("/coaches-hub")}
-                  className="bg-orange-500 hover:bg-orange-600 text-white px-2 py-1 md:px-4 md:py-2 rounded-lg font-medium transition-colors text-[10px] md:text-sm whitespace-nowrap group relative overflow-hidden"
+                  className="bg-orange-500 hover:bg-orange-600 text-white px-2 py-1 md:px-4 md:py-2 rounded-lg font-medium transition-colors text-[10px] md:text-sm whitespace-nowrap"
                 >
-                  <span className="group-hover:opacity-0 transition-opacity duration-200">Coaches Hub</span>
-                  <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">Coming Soon</span>
+                  Coaches Hub
                 </button>
                 <button
                   onClick={() => navigate("/league-management")}
@@ -4172,21 +4145,19 @@ export default function LeaguePage() {
         {parentLeague && (
           <div className="bg-white dark:bg-neutral-900 border-b border-gray-100 dark:border-neutral-800">
             <div className="max-w-7xl mx-auto px-4 md:px-6 py-3">
-              <Link href={`/competition/${parentLeague.slug}`}>
-                <a className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-orange-400 dark:hover:text-orange-300 transition-colors group" data-testid="link-parent-league">
-                  <div className="flex items-center gap-2">
-                    {parentLeague.logo_url && (
-                      <img 
-                        src={parentLeague.logo_url} 
-                        alt={parentLeague.name}
-                        className="w-5 h-5 rounded object-cover"
-                      />
-                    )}
-                    <span className="font-medium group-hover:underline">{parentLeague.name}</span>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-slate-400" />
-                  <span className="text-slate-700 font-medium">{league?.name}</span>
-                </a>
+              <Link href={`/competition/${parentLeague.slug}`} className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-orange-400 dark:hover:text-orange-300 transition-colors group" data-testid="link-parent-league">
+                <div className="flex items-center gap-2">
+                  {parentLeague.logo_url && (
+                    <img
+                      src={parentLeague.logo_url}
+                      alt={parentLeague.name}
+                      className="w-5 h-5 rounded object-cover"
+                    />
+                  )}
+                  <span className="font-medium group-hover:underline">{parentLeague.name}</span>
+                </div>
+                <ChevronRight className="w-4 h-4 text-slate-400" />
+                <span className="text-slate-700 font-medium">{league?.name}</span>
               </Link>
             </div>
           </div>
@@ -4230,7 +4201,7 @@ export default function LeaguePage() {
               <div className="flex gap-4 md:gap-6 text-sm font-medium text-slate-600 dark:text-slate-400 overflow-x-auto pb-1 md:pb-0">
                 <button 
                   className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'teams' ? 'font-semibold border-b-2' : ''}`}
-                  style={activeSection === 'teams' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                  style={activeSection === 'teams' ? { color: readableBrand.body, borderBottomColor: brandColor } : {}}
                   onMouseEnter={(e) => { if (activeSection !== 'teams') (e.target as HTMLElement).style.color = brandColor; }}
                   onMouseLeave={(e) => { if (activeSection !== 'teams') (e.target as HTMLElement).style.color = ''; }}
                   onClick={() => {
@@ -4246,7 +4217,7 @@ export default function LeaguePage() {
                 </button>
               {slug?.toUpperCase() !== 'REBA-SL' && <button 
                 className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'standings' ? 'font-semibold border-b-2' : ''}`}
-                style={activeSection === 'standings' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                style={activeSection === 'standings' ? { color: readableBrand.body, borderBottomColor: brandColor } : {}}
                 onMouseEnter={(e) => { if (activeSection !== 'standings') (e.target as HTMLElement).style.color = brandColor; }}
                 onMouseLeave={(e) => { if (activeSection !== 'standings') (e.target as HTMLElement).style.color = ''; }}
                 onClick={() => {
@@ -4262,7 +4233,7 @@ export default function LeaguePage() {
               </button>}
               <button 
                 className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'stats' ? 'font-semibold border-b-2' : ''}`}
-                style={activeSection === 'stats' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                style={activeSection === 'stats' ? { color: readableBrand.body, borderBottomColor: brandColor } : {}}
                 onMouseEnter={(e) => { if (activeSection !== 'stats') (e.target as HTMLElement).style.color = brandColor; }}
                 onMouseLeave={(e) => { if (activeSection !== 'stats') (e.target as HTMLElement).style.color = ''; }}
                 onClick={() => {
@@ -4280,7 +4251,7 @@ export default function LeaguePage() {
               </button>
               <button 
                 className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'teamstats' ? 'font-semibold border-b-2' : ''}`}
-                style={activeSection === 'teamstats' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                style={activeSection === 'teamstats' ? { color: readableBrand.body, borderBottomColor: brandColor } : {}}
                 onMouseEnter={(e) => { if (activeSection !== 'teamstats') (e.target as HTMLElement).style.color = brandColor; }}
                 onMouseLeave={(e) => { if (activeSection !== 'teamstats') (e.target as HTMLElement).style.color = ''; }}
                 onClick={() => {
@@ -4296,7 +4267,7 @@ export default function LeaguePage() {
               </button>
               <button 
                 className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'schedule' ? 'font-semibold border-b-2' : ''}`}
-                style={activeSection === 'schedule' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                style={activeSection === 'schedule' ? { color: readableBrand.body, borderBottomColor: brandColor } : {}}
                 onMouseEnter={(e) => { if (activeSection !== 'schedule') (e.target as HTMLElement).style.color = brandColor; }}
                 onMouseLeave={(e) => { if (activeSection !== 'schedule') (e.target as HTMLElement).style.color = ''; }}
                 onClick={() => { setSelectedPlayerSlug(null); setSelectedTeamName(null); setActiveSection('schedule'); }}
@@ -4305,7 +4276,7 @@ export default function LeaguePage() {
               </button>
               <button 
                 className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'leaders' ? 'font-semibold border-b-2' : ''}`}
-                style={activeSection === 'leaders' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                style={activeSection === 'leaders' ? { color: readableBrand.body, borderBottomColor: brandColor } : {}}
                 onMouseEnter={(e) => { if (activeSection !== 'leaders') (e.target as HTMLElement).style.color = brandColor; }}
                 onMouseLeave={(e) => { if (activeSection !== 'leaders') (e.target as HTMLElement).style.color = ''; }}
                 onClick={() => {
@@ -4321,7 +4292,7 @@ export default function LeaguePage() {
               </button>
               <button 
                 className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'comparison' ? 'font-semibold border-b-2' : ''}`}
-                style={activeSection === 'comparison' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                style={activeSection === 'comparison' ? { color: readableBrand.body, borderBottomColor: brandColor } : {}}
                 onMouseEnter={(e) => { if (activeSection !== 'comparison') (e.target as HTMLElement).style.color = brandColor; }}
                 onMouseLeave={(e) => { if (activeSection !== 'comparison') (e.target as HTMLElement).style.color = ''; }}
                 onClick={() => {
@@ -4340,7 +4311,7 @@ export default function LeaguePage() {
               </button>
               <button 
                 className={`cursor-pointer whitespace-nowrap pb-1 bg-transparent border-0 ${activeSection === 'overview' ? 'font-semibold border-b-2' : ''}`}
-                style={activeSection === 'overview' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                style={activeSection === 'overview' ? { color: readableBrand.body, borderBottomColor: brandColor } : {}}
                 onMouseEnter={(e) => { if (activeSection !== 'overview') (e.target as HTMLElement).style.color = brandColor; }}
                 onMouseLeave={(e) => { if (activeSection !== 'overview') (e.target as HTMLElement).style.color = ''; }}
                 onClick={() => {
@@ -4415,7 +4386,7 @@ export default function LeaguePage() {
                             ? 'bg-white dark:bg-neutral-700 shadow-sm'
                             : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
                         }`}
-                        style={viewMode === 'standings' ? { color: brandColor } : {}}
+                        style={viewMode === 'standings' ? { color: readableBrand.body } : {}}
                         data-testid="button-standings-view"
                       >
                         Standings
@@ -4427,7 +4398,7 @@ export default function LeaguePage() {
                             ? 'bg-white dark:bg-neutral-700 shadow-sm'
                             : 'text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'
                         }`}
-                        style={viewMode === 'bracket' ? { color: brandColor } : {}}
+                        style={viewMode === 'bracket' ? { color: readableBrand.body } : {}}
                         data-testid="button-bracket-view"
                       >
                         Bracket
@@ -4454,7 +4425,7 @@ export default function LeaguePage() {
                             ? 'border-b-2' 
                             : 'text-gray-600 dark:text-gray-400'
                         }`}
-                        style={standingsView === 'poolA' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                        style={standingsView === 'poolA' ? { color: readableBrand.body, borderBottomColor: brandColor } : {}}
                         onMouseEnter={(e) => { if (standingsView !== 'poolA') (e.target as HTMLElement).style.color = brandColor; }}
                         onMouseLeave={(e) => { if (standingsView !== 'poolA') (e.target as HTMLElement).style.color = ''; }}
                       >
@@ -4467,7 +4438,7 @@ export default function LeaguePage() {
                             ? 'border-b-2' 
                             : 'text-gray-600 dark:text-gray-400'
                         }`}
-                        style={standingsView === 'poolB' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                        style={standingsView === 'poolB' ? { color: readableBrand.body, borderBottomColor: brandColor } : {}}
                         onMouseEnter={(e) => { if (standingsView !== 'poolB') (e.target as HTMLElement).style.color = brandColor; }}
                         onMouseLeave={(e) => { if (standingsView !== 'poolB') (e.target as HTMLElement).style.color = ''; }}
                       >
@@ -4482,7 +4453,7 @@ export default function LeaguePage() {
                         ? 'border-b-2' 
                         : 'text-gray-600 dark:text-gray-400'
                     }`}
-                    style={standingsView === 'full' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                    style={standingsView === 'full' ? { color: readableBrand.body, borderBottomColor: brandColor } : {}}
                     onMouseEnter={(e) => { if (standingsView !== 'full') (e.target as HTMLElement).style.color = brandColor; }}
                     onMouseLeave={(e) => { if (standingsView !== 'full') (e.target as HTMLElement).style.color = ''; }}
                   >
@@ -4801,7 +4772,7 @@ export default function LeaguePage() {
                             ? 'bg-white dark:bg-neutral-700 shadow-sm'
                             : 'hover:bg-white/50 dark:hover:bg-neutral-800'
                         }`}
-                        style={{ color: brandColor }}
+                        style={{ color: readableBrand.body }}
                         data-testid={`option-player-${mode.toLowerCase().replace(/\s/g, '-')}`}
                       >
                         {mode}
@@ -4875,7 +4846,7 @@ export default function LeaguePage() {
                               }
                             }}
                             className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[45px] cursor-pointer dark:hover:bg-neutral-700 transition-colors ${statsSortColumn === 'GP' ? '' : 'text-slate-700 dark:text-slate-200'}`}
-                            style={statsSortColumn === 'GP' ? { color: brandColor } : {}}
+                            style={statsSortColumn === 'GP' ? { color: readableBrand.body } : {}}
                             data-testid="header-sort-gp"
                           >
                             <div className="flex items-center justify-center gap-1">
@@ -4899,7 +4870,7 @@ export default function LeaguePage() {
                               className={`text-center py-2 md:py-3 px-2 md:px-3 font-semibold min-w-[50px] cursor-pointer dark:hover:bg-neutral-700 transition-colors ${
                                 statsSortColumn === column.label ? '' : 'text-slate-700 dark:text-slate-200'
                               }`}
-                              style={statsSortColumn === column.label ? { color: brandColor } : {}}
+                              style={statsSortColumn === column.label ? { color: readableBrand.body } : {}}
                               data-testid={`header-${column.key.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
                             >
                               <div className="flex items-center justify-center gap-1">
@@ -5007,7 +4978,7 @@ export default function LeaguePage() {
                     </table>
                     
                     {/* Scroll hint for mobile */}
-                    <div className="md:hidden dark:bg-neutral-800 text-center py-2 text-xs dark:border-neutral-700" style={{ backgroundColor: brandBg50, color: brandColor, borderTop: `1px solid ${brandBorderLight}` }}>
+                    <div className="md:hidden dark:bg-neutral-800 text-center py-2 text-xs dark:border-neutral-700" style={{ backgroundColor: brandBg50, color: readableBrand.body, borderTop: `1px solid ${brandBorderLight}` }}>
                       ← Swipe to see all stats →
                     </div>
                     
@@ -5035,7 +5006,7 @@ export default function LeaguePage() {
                             <button
                               onClick={() => setDisplayedPlayerCount(filteredPlayerAverages.length)}
                               className="font-medium text-sm hover:underline"
-                              style={{ color: brandColor }}
+                              style={{ color: readableBrand.body }}
                             >
                               Show All ({filteredPlayerAverages.length} players)
                             </button>
@@ -5070,7 +5041,7 @@ export default function LeaguePage() {
                     <button
                       onClick={() => setStatsSearch("")}
                       className="underline"
-                      style={{ color: brandColor }}
+                      style={{ color: readableBrand.body }}
                     >
                       Clear search
                     </button>
@@ -5137,7 +5108,7 @@ export default function LeaguePage() {
                             ? 'bg-white dark:bg-neutral-700 shadow-sm'
                             : 'hover:bg-white/50 dark:hover:bg-neutral-800'
                         }`}
-                        style={{ color: brandColor }}
+                        style={{ color: readableBrand.body }}
                         data-testid={`option-${mode.toLowerCase().replace(/\s/g, '-')}`}
                       >
                         {mode === 'Per 100 Possessions' ? 'Per 100 Poss' : mode}
@@ -5227,7 +5198,7 @@ export default function LeaguePage() {
                               } transition-colors ${
                                 teamStatsSortColumn === column.key ? '' : 'text-slate-700 dark:text-slate-200'
                               }`}
-                              style={teamStatsSortColumn === column.key ? { color: brandColor } : {}}
+                              style={teamStatsSortColumn === column.key ? { color: readableBrand.body } : {}}
                               data-testid={`header-${column.key.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
                             >
                               <div className="flex items-center justify-center gap-1">
@@ -5285,7 +5256,7 @@ export default function LeaguePage() {
                     </table>
                     
                     {/* Scroll hint for mobile */}
-                    <div className="md:hidden dark:bg-neutral-800 text-center py-2 text-xs dark:border-neutral-700" style={{ backgroundColor: brandBg50, color: brandColor, borderTop: `1px solid ${brandBorderLight}` }}>
+                    <div className="md:hidden dark:bg-neutral-800 text-center py-2 text-xs dark:border-neutral-700" style={{ backgroundColor: brandBg50, color: readableBrand.body, borderTop: `1px solid ${brandBorderLight}` }}>
                       ← Swipe to see all stats →
                     </div>
                   </div>
@@ -5365,7 +5336,7 @@ export default function LeaguePage() {
                         ? 'border-b-2 -mb-[2px]'
                         : 'text-slate-600 dark:text-slate-400'
                     }`}
-                    style={scheduleView === 'upcoming' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                    style={scheduleView === 'upcoming' ? { color: readableBrand.body, borderBottomColor: brandColor } : {}}
                     onMouseEnter={(e) => { if (scheduleView !== 'upcoming') (e.target as HTMLElement).style.color = brandColor; }}
                     onMouseLeave={(e) => { if (scheduleView !== 'upcoming') (e.target as HTMLElement).style.color = ''; }}
                     data-testid="button-upcoming-games"
@@ -5379,7 +5350,7 @@ export default function LeaguePage() {
                         ? 'border-b-2 -mb-[2px]'
                         : 'text-slate-600 dark:text-slate-400'
                     }`}
-                    style={scheduleView === 'results' ? { color: brandColor, borderBottomColor: brandColor } : {}}
+                    style={scheduleView === 'results' ? { color: readableBrand.body, borderBottomColor: brandColor } : {}}
                     onMouseEnter={(e) => { if (scheduleView !== 'results') (e.target as HTMLElement).style.color = brandColor; }}
                     onMouseLeave={(e) => { if (scheduleView !== 'results') (e.target as HTMLElement).style.color = ''; }}
                     data-testid="button-results"
@@ -5790,7 +5761,7 @@ export default function LeaguePage() {
                               ? 'bg-white dark:bg-neutral-700 shadow-sm'
                               : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
                           }`}
-                          style={leagueLeadersView === 'averages' ? { color: brandColor } : {}}
+                          style={leagueLeadersView === 'averages' ? { color: readableBrand.body } : {}}
                         >
                           Averages
                         </button>
@@ -5801,7 +5772,7 @@ export default function LeaguePage() {
                               ? 'bg-white dark:bg-neutral-700 shadow-sm'
                               : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
                           }`}
-                          style={leagueLeadersView === 'totals' ? { color: brandColor } : {}}
+                          style={leagueLeadersView === 'totals' ? { color: readableBrand.body } : {}}
                         >
                           Totals
                         </button>
@@ -5819,7 +5790,7 @@ export default function LeaguePage() {
                             ? 'bg-white dark:bg-neutral-700 shadow-sm'
                             : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
                         }`}
-                        style={leadersSubject === 'player' ? { color: brandColor } : {}}
+                        style={leadersSubject === 'player' ? { color: readableBrand.body } : {}}
                         data-testid="button-leaders-subject-player"
                       >
                         Player Leaders
@@ -5831,7 +5802,7 @@ export default function LeaguePage() {
                             ? 'bg-white dark:bg-neutral-700 shadow-sm'
                             : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
                         }`}
-                        style={leadersSubject === 'team' ? { color: brandColor } : {}}
+                        style={leadersSubject === 'team' ? { color: readableBrand.body } : {}}
                         data-testid="button-leaders-subject-team"
                       >
                         Team Leaders
@@ -5845,7 +5816,7 @@ export default function LeaguePage() {
                             ? 'bg-white dark:bg-neutral-700 shadow-sm'
                             : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
                         }`}
-                        style={leadersCategory === 'Traditional' ? { color: brandColor } : {}}
+                        style={leadersCategory === 'Traditional' ? { color: readableBrand.body } : {}}
                         data-testid="button-leaders-category-traditional"
                       >
                         Traditional
@@ -5857,7 +5828,7 @@ export default function LeaguePage() {
                             ? 'bg-white dark:bg-neutral-700 shadow-sm'
                             : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
                         }`}
-                        style={leadersCategory === 'Advanced' ? { color: brandColor } : {}}
+                        style={leadersCategory === 'Advanced' ? { color: readableBrand.body } : {}}
                         data-testid="button-leaders-category-advanced"
                       >
                         Advanced
@@ -5908,7 +5879,7 @@ export default function LeaguePage() {
                         >
                           <div className="bg-gray-50 dark:bg-neutral-800 rounded-lg p-3 md:p-4">
                             <div className="flex items-baseline gap-2 mb-3 px-1 pr-10">
-                              <h3 className="text-sm font-semibold" style={{ color: brandColor }}>{title}</h3>
+                              <h3 className="text-sm font-semibold" style={{ color: readableBrand.body }}>{title}</h3>
                               {minLabel && (
                                 <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-neutral-700 px-1.5 py-0.5 rounded-full whitespace-nowrap">{minLabel}</span>
                               )}
@@ -5948,7 +5919,7 @@ export default function LeaguePage() {
                                         ) : (
                                           <div
                                             className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                                            style={{ backgroundColor: brandColor + '22', color: brandColor }}
+                                            style={{ backgroundColor: brandColor + '22', color: readableBrand.body }}
                                           >
                                             {displayName?.charAt(0)?.toUpperCase() || '?'}
                                           </div>
@@ -6355,7 +6326,7 @@ export default function LeaguePage() {
                         }
                       }}
                       className="text-xs md:text-sm font-medium hover:underline"
-                      style={{ color: brandColor }}
+                      style={{ color: readableBrand.body }}
                     >
                       View All Leaders →
                     </button>
@@ -6492,7 +6463,7 @@ export default function LeaguePage() {
                     <button
                       onClick={() => setActiveSection('teamstats')}
                       className="text-xs md:text-sm font-medium hover:underline"
-                      style={{ color: brandColor }}
+                      style={{ color: readableBrand.body }}
                     >
                       View All Team Stats →
                     </button>
@@ -6523,7 +6494,7 @@ export default function LeaguePage() {
                                   <TeamLogo teamName={team.teamName} leagueId={league?.league_id} size="xs" logoUrl={getTeamLogoUrl(team.teamName)} />
                                   <span className="truncate">{team.teamName}</span>
                                 </div>
-                                <span className="font-medium whitespace-nowrap" style={{ color: brandColor }}>
+                                <span className="font-medium whitespace-nowrap" style={{ color: readableBrand.body }}>
                                   {team.ppg} PPG
                                 </span>
                               </li>
@@ -6545,7 +6516,7 @@ export default function LeaguePage() {
                                   <TeamLogo teamName={team.teamName} leagueId={league?.league_id} size="xs" logoUrl={getTeamLogoUrl(team.teamName)} />
                                   <span className="truncate">{team.teamName}</span>
                                 </div>
-                                <span className="font-medium whitespace-nowrap" style={{ color: brandColor }}>
+                                <span className="font-medium whitespace-nowrap" style={{ color: readableBrand.body }}>
                                   {team.rpg} RPG
                                 </span>
                               </li>
@@ -6567,7 +6538,7 @@ export default function LeaguePage() {
                                   <TeamLogo teamName={team.teamName} leagueId={league?.league_id} size="xs" logoUrl={getTeamLogoUrl(team.teamName)} />
                                   <span className="truncate">{team.teamName}</span>
                                 </div>
-                                <span className="font-medium whitespace-nowrap" style={{ color: brandColor }}>
+                                <span className="font-medium whitespace-nowrap" style={{ color: readableBrand.body }}>
                                   {team.apg} APG
                                 </span>
                               </li>
@@ -6737,7 +6708,7 @@ export default function LeaguePage() {
                   <button
                     onClick={() => setIsEditingInstagram(!isEditingInstagram)}
                     className="text-xs font-medium"
-                    style={{ color: brandColor }}
+                    style={{ color: readableBrand.body }}
                     data-testid="edit-instagram-button"
                   >
                     {isEditingInstagram ? 'Cancel' : 'Edit'}
@@ -6853,7 +6824,7 @@ export default function LeaguePage() {
                   <button
                     onClick={() => setIsEditingYoutube(!isEditingYoutube)}
                     className="text-xs font-medium"
-                    style={{ color: brandColor }}
+                    style={{ color: readableBrand.body }}
                   >
                     {isEditingYoutube ? 'Cancel' : 'Edit'}
                   </button>
@@ -6916,7 +6887,7 @@ export default function LeaguePage() {
                         <button
                           onClick={() => setIsEditingYoutube(true)}
                           className="mt-2 text-xs underline"
-                          style={{ color: brandColor }}
+                          style={{ color: readableBrand.body }}
                         >
                           Add YouTube Video
                         </button>

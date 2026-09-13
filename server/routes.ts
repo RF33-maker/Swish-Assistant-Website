@@ -2329,7 +2329,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // any manual script run. Cached in memory for 1 hour to avoid hitting the
   // DB on every bot request.
   const SITEMAP_TTL_MS = 60 * 60 * 1000;
-  const SITE_BASE = "https://www.swishassistant.com";
+  const SITE_BASE = "https://swishassistant.com";
   const SITEMAP_URL_LIMIT = 40_000; // Below the protocol's 50,000 URL limit.
   const SITEMAP_BATCH_SIZE = 1_000;
   let sitemapCache: { documents: string[]; at: number } | null = null;
@@ -2780,7 +2780,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   interface TrendingApiPayload {
     perfs: TrendingPerfRow[];
     leagueNames: Record<string, string>;
-    playerMeta: Record<string, { slug: string | null; photo_path_bg_removed: string | null }>;
+    // `profileAvailable` mirrors the `players` RLS policy: a row is publicly
+    // readable when its own league (or any ancestor via parent_league_id) is
+    // public. `scope.sourceToDisplay` already only contains leagues with a
+    // resolvable public ancestor, so membership there is the same check.
+    playerMeta: Record<string, { slug: string | null; photo_path_bg_removed: string | null; profileAvailable: boolean }>;
   }
   const TRENDING_TTL_MS = 60 * 1000;
   let trendingCache: { data: TrendingApiPayload; at: number } | null = null;
@@ -2906,7 +2910,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     console.log("[TrendingPerf] selected:", perfs.map((p) => `${leagueNames[p.league_id] || p.league_id} ${p.game_date || ""}`));
 
-    const playerMeta: Record<string, { slug: string | null; photo_path_bg_removed: string | null }> = {};
+    const playerMeta: TrendingApiPayload["playerMeta"] = {};
     const playerIds = [...new Set(perfs.map((p) => p.player_id))];
     if (playerIds.length > 0) {
       const { data: metaRows, error: pErr } = await supabaseAdmin
@@ -2915,10 +2919,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .in("id", playerIds);
       if (!pErr) {
         for (const p of (metaRows || []) as { id: string; full_name: string | null; league_id: string | null; slug: string | null; photo_path_bg_removed: string | null }[]) {
-          playerMeta[p.id] = { slug: p.slug, photo_path_bg_removed: p.photo_path_bg_removed };
+          // A player's own league_id is public exactly when it maps to itself as
+          // its display target (findPublicDisplay returns the source unchanged).
+          const profileAvailable = !!p.league_id && scope.sourceToDisplay.has(p.league_id);
+          playerMeta[p.id] = { slug: p.slug, photo_path_bg_removed: p.photo_path_bg_removed, profileAvailable };
+          // `perf.league_id` was already remapped to the display league above, so
+          // match on player id alone (globally unique) rather than re-checking
+          // league_id equality against the now-remapped value.
           if (p.full_name) {
             for (const perf of perfs) {
-              if (perf.player_id === p.id && (!p.league_id || p.league_id === perf.league_id)) {
+              if (perf.player_id === p.id) {
                 perf.full_name = formatCanonicalPlayerName(p.full_name);
               }
             }
@@ -2933,7 +2943,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const key = normalisePlayerName(perf.full_name);
           const fallback = fallbackMap.get(key);
           if (fallback) {
-            playerMeta[perf.player_id] = { slug: meta?.slug ?? null, photo_path_bg_removed: fallback };
+            playerMeta[perf.player_id] = { slug: meta?.slug ?? null, photo_path_bg_removed: fallback, profileAvailable: meta?.profileAvailable ?? false };
           }
         }
       }
@@ -3383,7 +3393,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // ts_pct is pre-computed in vw_player_game_scores, no calculation needed.
     const perfs: TrendingPerfRow[] = rows || [];
 
-    const playerMeta: Record<string, { slug: string | null; photo_path_bg_removed: string | null }> = {};
+    const playerMeta: TrendingApiPayload["playerMeta"] = {};
     const playerIds = [...new Set(perfs.map((p) => p.player_id))];
     if (playerIds.length > 0) {
       const { data: metaRows, error: pErr } = await supabaseAdmin
@@ -3392,10 +3402,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .in("id", playerIds);
       if (!pErr) {
         for (const p of (metaRows || []) as { id: string; full_name: string | null; league_id: string | null; slug: string | null; photo_path_bg_removed: string | null }[]) {
-          playerMeta[p.id] = { slug: p.slug, photo_path_bg_removed: p.photo_path_bg_removed };
+          // `league_id` is the requested league (always public) plus its direct
+          // children — the `players` RLS policy allows reads through that same
+          // parent chain, so any player found here is publicly viewable.
+          const profileAvailable = !!p.league_id && leagueIds.includes(p.league_id);
+          playerMeta[p.id] = { slug: p.slug, photo_path_bg_removed: p.photo_path_bg_removed, profileAvailable };
           if (p.full_name) {
             for (const perf of perfs) {
-              if (perf.player_id === p.id && (!p.league_id || p.league_id === perf.league_id)) {
+              if (perf.player_id === p.id) {
                 perf.full_name = formatCanonicalPlayerName(p.full_name);
               }
             }
@@ -3410,7 +3424,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const key = normalisePlayerName(perf.full_name);
           const fallback = fallbackMap.get(key);
           if (fallback) {
-            playerMeta[perf.player_id] = { slug: meta?.slug ?? null, photo_path_bg_removed: fallback };
+            playerMeta[perf.player_id] = { slug: meta?.slug ?? null, photo_path_bg_removed: fallback, profileAvailable: meta?.profileAvailable ?? false };
           }
         }
       }
@@ -3678,8 +3692,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const ogDescription = matchDate
         ? `${status} score from ${competitionName} on ${matchDate}. ${awayTeam} vs ${homeTeam}.`
         : `${status} score: ${awayTeam} ${awayScore} \u2013 ${homeScore} ${homeTeam}. ${competitionName}.`;
-      const ogUrl = `https://www.swishassistant.com/competition/${encodeURIComponent(slug)}/game/${encodeURIComponent(gameKey)}`;
-      const ogImage = "https://www.swishassistant.com/og-image.png";
+      const ogUrl = `https://swishassistant.com/competition/${encodeURIComponent(slug)}/game/${encodeURIComponent(gameKey)}`;
+      const ogImage = "https://swishassistant.com/og-image.png";
 
       const safeTitle = escapeHtml(ogTitle);
       const safeDescription = escapeHtml(ogDescription);

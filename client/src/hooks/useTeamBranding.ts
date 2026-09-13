@@ -32,6 +32,7 @@ interface UseTeamBrandingOptions {
   teamName: string;
   leagueId: string;
   enabled?: boolean;
+  extraLeagueIds?: string[];
 }
 
 interface UseTeamBrandingResult {
@@ -149,13 +150,15 @@ function buildColorsFromBrandColour(brandColour: string): TeamColors | null {
   };
 }
 
-export function useTeamBranding({ 
-  teamName, 
-  leagueId, 
-  enabled = true 
+export function useTeamBranding({
+  teamName,
+  leagueId,
+  enabled = true,
+  extraLeagueIds,
 }: UseTeamBrandingOptions): UseTeamBrandingResult {
   const [colors, setColors] = useState<TeamColors | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const extraLeagueIdsKey = extraLeagueIds?.join(',') || '';
 
   useEffect(() => {
     if (!enabled || !teamName || !leagueId) {
@@ -169,7 +172,7 @@ export function useTeamBranding({
       setIsLoading(true);
       setColors(null);
       try {
-        const extracted = await extractTeamColors(teamName, leagueId);
+        const extracted = await extractTeamColors(teamName, leagueId, extraLeagueIds);
         if (cancelled) return;
 
         if (extracted) {
@@ -214,7 +217,7 @@ export function useTeamBranding({
 
     extractColors();
     return () => { cancelled = true; };
-  }, [teamName, leagueId, enabled]);
+  }, [teamName, leagueId, enabled, extraLeagueIdsKey]);
 
   return {
     colors,

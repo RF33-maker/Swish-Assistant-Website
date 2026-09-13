@@ -21,12 +21,22 @@ interface TeamTrend {
   logoUrl?: string;
 }
 
+// One row per team per game, from the `v_team_game_log` Supabase view.
+export interface TeamGameLogRow {
+  team_name: string;
+  game_date: string | null;
+  pts: number | null;
+  reb: number | null;
+  ast: number | null;
+  fg_pct: number | null;
+}
+
 interface TeamPerformanceTrendsProps {
-  playerStats: any[];
+  teamGameLog: TeamGameLogRow[];
   leagueId: string;
 }
 
-export default function TeamPerformanceTrends({ playerStats, leagueId }: TeamPerformanceTrendsProps) {
+export default function TeamPerformanceTrends({ teamGameLog, leagueId }: TeamPerformanceTrendsProps) {
   const [teamTrends, setTeamTrends] = useState<TeamTrend[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
   const [animationPhase, setAnimationPhase] = useState(0);
@@ -39,7 +49,7 @@ export default function TeamPerformanceTrends({ playerStats, leagueId }: TeamPer
     // Start animation sequence
     const timer = setTimeout(() => setIsVisible(true), 100);
     return () => clearTimeout(timer);
-  }, [playerStats, leagueId]);
+  }, [teamGameLog, leagueId]);
 
   useEffect(() => {
     if (isVisible && teamTrends.length > 0) {
@@ -57,43 +67,34 @@ export default function TeamPerformanceTrends({ playerStats, leagueId }: TeamPer
   }, [isVisible, teamTrends.length]);
 
   const calculateTeamTrends = () => {
-    if (!playerStats || playerStats.length === 0) return;
+    if (!teamGameLog || teamGameLog.length === 0) return;
 
-    // Group stats by team and game_id to properly separate games
-    const teamGameStats: { [team: string]: { [gameId: string]: GamePerformance & { gameId: string } } } = {};
-    
-    playerStats.forEach(stat => {
-      const team = stat.team;
-      const gameId = stat.game_id;
-      const date = stat.game_date;
-      
-      if (!team || !gameId || !date) return;
-      
-      if (!teamGameStats[team]) {
-        teamGameStats[team] = {};
+    // v_team_game_log already has one row per team per game, so no manual
+    // group-by-game aggregation is needed — just group by team.
+    const teamGames: { [team: string]: GamePerformance[] } = {};
+
+    teamGameLog.forEach(row => {
+      const team = row.team_name;
+      const date = row.game_date;
+
+      if (!team || !date) return;
+
+      if (!teamGames[team]) {
+        teamGames[team] = [];
       }
-      
-      if (!teamGameStats[team][gameId]) {
-        teamGameStats[team][gameId] = {
-          date,
-          gameId,
-          points: 0,
-          rebounds: 0,
-          assists: 0,
-          fieldGoalPercent: 0
-        };
-      }
-      
-      // Aggregate team stats for this game
-      teamGameStats[team][gameId].points += stat.points || 0;
-      teamGameStats[team][gameId].rebounds += stat.rebounds_total || 0;
-      teamGameStats[team][gameId].assists += stat.assists || 0;
-      teamGameStats[team][gameId].fieldGoalPercent += stat.field_goal_percent || 0;
+
+      teamGames[team].push({
+        date,
+        points: row.pts ?? 0,
+        rebounds: row.reb ?? 0,
+        assists: row.ast ?? 0,
+        fieldGoalPercent: row.fg_pct ?? 0,
+      });
     });
 
     // Calculate trends for each team
-    const trends: TeamTrend[] = Object.entries(teamGameStats).map(([team, gameStats]) => {
-      const games = Object.values(gameStats).sort((a, b) => 
+    const trends: TeamTrend[] = Object.entries(teamGames).map(([team, gamesForTeam]) => {
+      const games = [...gamesForTeam].sort((a, b) =>
         new Date(a.date).getTime() - new Date(b.date).getTime()
       );
       
@@ -135,11 +136,11 @@ export default function TeamPerformanceTrends({ playerStats, leagueId }: TeamPer
   };
 
   const loadTeamLogos = async () => {
-    if (!leagueId || !playerStats || playerStats.length === 0) {
+    if (!leagueId || !teamGameLog || teamGameLog.length === 0) {
       return;
     }
 
-    const uniqueTeams = Array.from(new Set(playerStats.map(stat => stat.team).filter(Boolean))) as string[];
+    const uniqueTeams = Array.from(new Set(teamGameLog.map(row => row.team_name).filter(Boolean))) as string[];
 
     // Use the shared logo cache so we don't repeat per-extension HEAD fetches
     // for teams whose logo was already resolved elsewhere on the page.
@@ -167,9 +168,9 @@ export default function TeamPerformanceTrends({ playerStats, leagueId }: TeamPer
 
   const getTrendColor = (trend: 'up' | 'down' | 'stable') => {
     switch (trend) {
-      case 'up': return 'text-green-600 bg-green-50 border-green-200';
-      case 'down': return 'text-red-600 bg-red-50 border-red-200';
-      default: return 'text-gray-600 bg-gray-50 border-gray-200';
+      case 'up': return 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-800';
+      case 'down': return 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800';
+      default: return 'text-gray-600 dark:text-neutral-400 bg-gray-50 dark:bg-neutral-800 border-gray-200 dark:border-neutral-700';
     }
   };
 
@@ -204,22 +205,22 @@ export default function TeamPerformanceTrends({ playerStats, leagueId }: TeamPer
 
   if (!teamTrends || teamTrends.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow-sm border border-orange-200 p-6">
+      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-orange-200 dark:border-neutral-800 p-6">
         <div className="flex items-center gap-2 mb-4">
-          <Activity className="w-5 h-5 text-orange-600" />
-          <h3 className="text-lg font-semibold text-slate-800">Team Performance Trends</h3>
+          <Activity className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+          <h3 className="text-lg font-semibold text-slate-800 dark:text-white">Team Performance Trends</h3>
         </div>
-        <p className="text-slate-500">No team performance data available yet.</p>
+        <p className="text-slate-500 dark:text-slate-400">No team performance data available yet.</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-orange-200 p-6">
+    <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-orange-200 dark:border-neutral-800 p-6">
       <div className="flex items-center gap-2 mb-6">
-        <Activity className="w-5 h-5 text-orange-600" />
-        <h3 className="text-lg font-semibold text-slate-800">Team Performance Trends</h3>
-        <div className="ml-auto flex items-center gap-2 text-sm text-slate-500">
+        <Activity className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+        <h3 className="text-lg font-semibold text-slate-800 dark:text-white">Team Performance Trends</h3>
+        <div className="ml-auto flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
           <BarChart3 className="w-4 h-4" />
           <span>Analyzing {teamTrends.length} teams</span>
         </div>
@@ -241,9 +242,9 @@ export default function TeamPerformanceTrends({ playerStats, leagueId }: TeamPer
                 delay: index * 0.1
               }}
               className={`border rounded-lg p-4 cursor-pointer transition-all duration-300 hover:shadow-md relative overflow-hidden ${
-                selectedTeam === teamTrend.team 
-                  ? 'border-orange-300 bg-orange-50 shadow-md' 
-                  : 'border-gray-200 hover:border-orange-200 hover:bg-orange-25'
+                selectedTeam === teamTrend.team
+                  ? 'border-orange-300 dark:border-orange-700 bg-orange-50 dark:bg-orange-900/20 shadow-md'
+                  : 'border-gray-200 dark:border-neutral-700 hover:border-orange-200 dark:hover:border-orange-800 hover:bg-orange-25 dark:hover:bg-neutral-800/60'
               }`}
               onClick={() => setSelectedTeam(
                 selectedTeam === teamTrend.team ? null : teamTrend.team
@@ -261,12 +262,12 @@ export default function TeamPerformanceTrends({ playerStats, leagueId }: TeamPer
               )}
               <div className="flex items-start justify-between mb-3 relative z-10">
                 <div>
-                  <h4 className="font-medium text-slate-800 mb-1">{teamTrend.team}</h4>
+                  <h4 className="font-medium text-slate-800 dark:text-white mb-1">{teamTrend.team}</h4>
                   <div className="flex items-center gap-2">
-                    <span className="text-2xl font-bold text-orange-600">
+                    <span className="text-2xl font-bold text-orange-600 dark:text-orange-400">
                       {teamTrend.averagePoints}
                     </span>
-                    <span className="text-sm text-slate-500">avg pts</span>
+                    <span className="text-sm text-slate-500 dark:text-slate-400">avg pts</span>
                   </div>
                 </div>
                 <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${getTrendColor(teamTrend.trend)}`}>
@@ -279,8 +280,8 @@ export default function TeamPerformanceTrends({ playerStats, leagueId }: TeamPer
 
               <div className="mb-3 relative z-10">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-slate-500">Recent Form</span>
-                  <span className="text-xs text-slate-400">{teamTrend.games.length} games</span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400">Recent Form</span>
+                  <span className="text-xs text-slate-400 dark:text-neutral-500">{teamTrend.games.length} games</span>
                 </div>
                 <MiniSparkline 
                   data={teamTrend.recentForm} 
@@ -295,28 +296,28 @@ export default function TeamPerformanceTrends({ playerStats, leagueId }: TeamPer
                     animate={{ opacity: 1, height: 'auto' }}
                     exit={{ opacity: 0, height: 0 }}
                     transition={{ duration: 0.3 }}
-                    className="border-t border-orange-200 pt-3 mt-3"
+                    className="border-t border-orange-200 dark:border-neutral-700 pt-3 mt-3"
                   >
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
-                        <span className="text-slate-500">Games Played</span>
-                        <div className="font-medium text-slate-800">{teamTrend.games.length}</div>
+                        <span className="text-slate-500 dark:text-slate-400">Games Played</span>
+                        <div className="font-medium text-slate-800 dark:text-white">{teamTrend.games.length}</div>
                       </div>
                       <div>
-                        <span className="text-slate-500">Total Points</span>
-                        <div className="font-medium text-slate-800">
+                        <span className="text-slate-500 dark:text-slate-400">Total Points</span>
+                        <div className="font-medium text-slate-800 dark:text-white">
                           {teamTrend.games.reduce((sum, game) => sum + game.points, 0)}
                         </div>
                       </div>
                       <div>
-                        <span className="text-slate-500">Best Game</span>
-                        <div className="font-medium text-slate-800">
+                        <span className="text-slate-500 dark:text-slate-400">Best Game</span>
+                        <div className="font-medium text-slate-800 dark:text-white">
                           {Math.max(...teamTrend.games.map(g => g.points))} pts
                         </div>
                       </div>
                       <div>
-                        <span className="text-slate-500">Consistency</span>
-                        <div className="font-medium text-slate-800">
+                        <span className="text-slate-500 dark:text-slate-400">Consistency</span>
+                        <div className="font-medium text-slate-800 dark:text-white">
                           {teamTrend.trend === 'stable' ? 'High' : teamTrend.trend === 'up' ? 'Improving' : 'Variable'}
                         </div>
                       </div>
@@ -333,14 +334,14 @@ export default function TeamPerformanceTrends({ playerStats, leagueId }: TeamPer
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: teamTrends.length * 0.1 + 0.5 }}
-        className="mt-6 p-4 bg-orange-50 border border-orange-200 rounded-lg"
+        className="mt-6 p-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-900/40 rounded-lg"
       >
         <div className="flex items-start gap-3">
-          <BarChart3 className="w-5 h-5 text-orange-600 mt-0.5" />
+          <BarChart3 className="w-5 h-5 text-orange-600 dark:text-orange-400 mt-0.5" />
           <div>
-            <h4 className="font-medium text-slate-800 mb-1">Performance Insights</h4>
-            <p className="text-sm text-slate-600">
-              Click on any team card to see detailed performance metrics. Trends are calculated by comparing 
+            <h4 className="font-medium text-slate-800 dark:text-white mb-1">Performance Insights</h4>
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              Click on any team card to see detailed performance metrics. Trends are calculated by comparing
               the first and second half of games played. Green trends indicate improvement, red indicates decline.
             </p>
           </div>

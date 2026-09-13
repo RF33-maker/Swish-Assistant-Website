@@ -129,16 +129,18 @@ export function adjustOpacity(rgb: { r: number; g: number; b: number }, opacity:
   return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${opacity})`;
 }
 
-export async function extractTeamColors(teamName: string, leagueId: string): Promise<TeamColors | null> {
+export async function extractTeamColors(teamName: string, leagueId: string, extraLeagueIds?: string[]): Promise<TeamColors | null> {
   const CACHE_KEY = 'team_colors_cache';
   const CACHE_VERSION = '4';
   const CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days
 
   // Resolve the exact same logo URL that TeamLogo renders. This includes logos
-  // stored outside teams.logo_url plus parent/child competition fallbacks.
-  const logoUrl = await getTeamLogoCached({ teamName, leagueId });
+  // stored outside teams.logo_url plus parent/child competition fallbacks, and
+  // (via extraLeagueIds) sibling seasons of the same team when the current
+  // season's own teams row hasn't been populated yet.
+  const logoUrl = await getTeamLogoCached({ teamName, leagueId, extraLeagueIds });
   if (!logoUrl) return null;
-  
+
   // Try to load from cache
   let cache: Record<string, { colors: TeamColors; logoUrl: string; timestamp: number; version: string }> = {};
   try {
@@ -149,7 +151,7 @@ export async function extractTeamColors(teamName: string, leagueId: string): Pro
   } catch (err) {
     console.warn("Failed to load color cache:", err);
   }
-  
+
   const cacheKey = `${leagueId}_${normalizeTeamName(teamName)}`;
   const cachedEntry = cache[cacheKey];
   

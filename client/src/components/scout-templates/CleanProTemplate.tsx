@@ -24,7 +24,7 @@ export default function CleanProTemplate({ data }: { data: ScoutingReport }) {
 
       <div className="grid grid-cols-[96px_1fr_auto] gap-4 p-6">
         <div className="h-24 w-24 rounded-full bg-slate-100 overflow-hidden">
-          {meta.photoUrl ? <img src={meta.photoUrl} className="h-full w-full object-cover" /> : null}
+          {meta.photoUrl ? <img src={meta.photoUrl} alt={meta.player ?? "Player photo"} className="h-full w-full object-cover" /> : null}
         </div>
 
         <div>

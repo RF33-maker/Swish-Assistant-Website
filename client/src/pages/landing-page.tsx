@@ -352,6 +352,7 @@ export default function LandingPage() {
       {/* Hero Section with Gradient Background */}
       <div className="bg-gradient-to-b from-[#fffaf5] to-white dark:from-neutral-950 dark:to-neutral-900 pt-4 md:pt-6 lg:pt-8 pb-12 md:pb-16 lg:pb-20">
         <main className="flex flex-col items-center justify-center px-6 text-center">
+        <h1 className="sr-only">Swish Assistant — Basketball Stats, League Insights &amp; AI-Powered Scouting</h1>
         {/* Trending Performance */}
         <TrendingPerformanceSection />
         {/* Suggestions */}
