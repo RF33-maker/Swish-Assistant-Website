@@ -365,6 +365,50 @@ async function renderCompetition(slug: string): Promise<SeoPage | undefined> {
   };
 }
 
+async function renderHome(): Promise<SeoPage> {
+  // Top-level public competitions only (no parent_league_id) — child
+  // age-group/division competitions are reachable through their parent's
+  // own page, same as the rest of the site's navigation.
+  const { data: competitions } = await supabaseAdmin
+    .from("competitions")
+    .select("name, slug")
+    .eq("is_public", true)
+    .is("parent_league_id", null)
+    .order("name")
+    .limit(100);
+
+  const competitionLinks = (competitions || [])
+    .filter((c: any) => !!c.slug)
+    .map((c: any) => `<li><a href="/competition/${encodeURIComponent(c.slug)}">${escapeHtml(c.name)}</a></li>`)
+    .join("");
+
+  const description = "Swish Assistant is a basketball stats and scouting platform for players, coaches, and leagues, covering NBL, WNBL, BCB, SLB Championship and more.";
+
+  return {
+    title: "Swish Assistant | The Home of Basketball Stats, Advanced Metrics & League Insights",
+    description,
+    canonicalPath: "/",
+    body: `<nav><a href="/players">Players</a> · <a href="/teams">Teams</a> · <a href="/news">News</a></nav>
+      <main>
+        <h1>Swish Assistant — Basketball Stats, League Insights &amp; AI-Powered Scouting</h1>
+        <p>${escapeHtml(description)}</p>
+        <section><h2>Leagues and competitions</h2><ul>${competitionLinks || "<li>No public competitions available yet.</li>"}</ul></section>
+        <section><h2>Explore</h2><ul>
+          <li><a href="/players">All players</a></li>
+          <li><a href="/teams">All teams</a></li>
+          <li><a href="/news">Latest news</a></li>
+        </ul></section>
+      </main>`,
+    jsonLd: {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      name: "Swish Assistant",
+      url: canonicalUrl("/"),
+      description,
+    },
+  };
+}
+
 async function renderTeam(teamSegment: string, competitionSlug?: string): Promise<SeoPage | undefined> {
   const decoded = decodeURIComponent(teamSegment).replace(/-/g, " ").trim();
   let leagueIds: string[] = [];
@@ -515,6 +559,7 @@ async function renderGame(gameKey: string, competitionSlug?: string): Promise<Se
 export async function servePublicSeo(req: Request, res: Response, next: NextFunction) {
   if (req.method !== "GET" && req.method !== "HEAD") return next();
   const pathname = req.path.replace(/\/+$/, "") || "/";
+  const homeMatch = pathname === "/";
   const playerMatch = pathname.match(/^\/player\/([^/]+)(?:\/games\/page\/(\d+))?$/i);
   const competitionGameMatch = pathname.match(/^\/competition\/([^/]+)\/game\/([^/]+)$/i);
   const competitionPlayerMatch = pathname.match(/^\/competition\/([^/]+)\/player\/([^/]+)$/i);
@@ -523,7 +568,7 @@ export async function servePublicSeo(req: Request, res: Response, next: NextFunc
   const competitionTeamMatch = pathname.match(/^\/competition\/([^/]+)\/team\/([^/]+)$/i);
   const teamMatch = pathname.match(/^\/team\/([^/]+)$/i);
   const competitionMatch = pathname.match(/^\/competition\/([^/]+)$/i);
-  if (!playerMatch && !competitionGameMatch && !competitionPlayerMatch && !competitionLeadersMatch && !directGameMatch && !competitionTeamMatch && !teamMatch && !competitionMatch) return next();
+  if (!homeMatch && !playerMatch && !competitionGameMatch && !competitionPlayerMatch && !competitionLeadersMatch && !directGameMatch && !competitionTeamMatch && !teamMatch && !competitionMatch) return next();
 
   try {
     if (req.path.length > 1 && req.path.endsWith("/")) {
@@ -535,7 +580,9 @@ export async function servePublicSeo(req: Request, res: Response, next: NextFunc
       return res.redirect(301, `/competition/${encodeURIComponent(slug)}`);
     }
     let page: SeoPage | undefined;
-    if (playerMatch) {
+    if (homeMatch) {
+      page = await renderHome();
+    } else if (playerMatch) {
       const requestedPage = Number(playerMatch[2] || 1);
       if (playerMatch[2] && requestedPage === 1) return res.redirect(301, `/player/${encodeURIComponent(decodeURIComponent(playerMatch[1]))}`);
       if (!Number.isInteger(requestedPage) || requestedPage < 1 || requestedPage > MAX_GAME_LOG_PAGES) return res.status(404).send("Player game-log page not found");
