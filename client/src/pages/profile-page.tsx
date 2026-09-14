@@ -35,6 +35,7 @@ import {
   Shield,
 } from "lucide-react";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
+import { PASSWORD_REQUIREMENTS, validatePassword } from "@shared/passwordPolicy";
 
 type Message = { type: "success" | "error"; text: string };
 
@@ -165,8 +166,9 @@ export default function AccountCentre() {
       setPasswordMsg({ type: "error", text: "Please enter a new password." });
       return;
     }
-    if (newPassword.length < 8) {
-      setPasswordMsg({ type: "error", text: "Password must be at least 8 characters." });
+    const policyError = validatePassword(newPassword);
+    if (policyError) {
+      setPasswordMsg({ type: "error", text: policyError });
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -497,6 +499,20 @@ export default function AccountCentre() {
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
               />
+              <ul className="text-xs text-gray-500 mt-1 space-y-0.5">
+                {PASSWORD_REQUIREMENTS.map((req) => {
+                  const met = req.test(newPassword);
+                  return (
+                    <li
+                      key={req.label}
+                      className={met ? "text-green-600 flex items-center gap-1" : "flex items-center gap-1"}
+                    >
+                      <CheckCircle className={`h-3 w-3 ${met ? "opacity-100" : "opacity-30"}`} />
+                      {req.label}
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
