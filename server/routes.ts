@@ -11,6 +11,7 @@ import OpenAI from 'openai';
 import { XMLParser } from 'fast-xml-parser';
 import * as fs from 'fs';
 import * as path from 'path';
+import { validatePassword } from "@shared/passwordPolicy";
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
@@ -3909,8 +3910,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (!email || typeof email !== "string") {
       return res.status(400).json({ error: "email is required" });
     }
-    if (!password || typeof password !== "string" || password.length < 8) {
-      return res.status(400).json({ error: "password must be at least 8 characters" });
+    if (!password || typeof password !== "string") {
+      return res.status(400).json({ error: "password is required" });
+    }
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      return res.status(400).json({ error: passwordError });
     }
 
     const normalizedEmail = email.trim().toLowerCase();
@@ -3925,6 +3930,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Call the same public REST endpoint that supabase.auth.signUp() uses.
     // This path sends Supabase's email-confirmation message per project settings
     // and returns an unconfirmed user object (no session).
+    //
+    // email_redirect_to is set explicitly rather than left to the Supabase
+    // dashboard's "Site URL" default — that default was still pointing at a
+    // now-dead Replit preview URL from before this app moved to Vercel, so
+    // every confirmation email sent users to a dead end after verifying.
+    // Setting it here means confirmation links always land somewhere real
+    // regardless of what the dashboard setting happens to be.
     const signUpRes = await fetch(`${supabaseUrl}/auth/v1/signup`, {
       method: "POST",
       headers: {
@@ -3932,7 +3944,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         "apikey": supabaseAnonKey,
         "Authorization": `Bearer ${supabaseAnonKey}`,
       },
-      body: JSON.stringify({ email: normalizedEmail, password }),
+      body: JSON.stringify({
+        email: normalizedEmail,
+        password,
+        options: { email_redirect_to: `${SITE_BASE}/dashboard` },
+      }),
     });
 
     const signUpBody = await signUpRes.json().catch(() => null);
@@ -4034,6 +4050,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(429).json({ error: `Please wait ${secondsLeft} seconds before resending.` });
     }
 
+    // See the matching comment in /api/account/register — email_redirect_to
+    // is set explicitly so a resent confirmation link doesn't fall back to
+    // the dashboard's stale Site URL either.
     const resendRes = await fetch(`${supabaseUrl}/auth/v1/resend`, {
       method: "POST",
       headers: {
@@ -4041,7 +4060,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         "apikey": supabaseAnonKey,
         "Authorization": `Bearer ${supabaseAnonKey}`,
       },
-      body: JSON.stringify({ type: "signup", email }),
+      body: JSON.stringify({
+        type: "signup",
+        email,
+        options: { email_redirect_to: `${SITE_BASE}/dashboard` },
+      }),
     });
 
     if (!resendRes.ok) {

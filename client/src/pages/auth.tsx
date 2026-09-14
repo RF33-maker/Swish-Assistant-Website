@@ -23,6 +23,7 @@ import { BarChart2, Download, Sparkles, CheckCircle, AlertCircle, RefreshCw } fr
 import SwishAssistantLogo from "@/assets/Swish Assistant Logo.png";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { supabase } from "@/lib/supabase";
+import { PASSWORD_REQUIREMENTS, validatePassword } from "@shared/passwordPolicy";
 
 // ── Schemas ────────────────────────────────────────────────────────────────
 
@@ -43,7 +44,10 @@ const registerSchema = z
       .email({ message: "Invalid email address" }),
     password: z
       .string()
-      .min(8, { message: "Password must be at least 8 characters" }),
+      .min(1, { message: "Password is required" })
+      .refine((val) => validatePassword(val) === null, (val) => ({
+        message: validatePassword(val) ?? "",
+      })),
     confirmPassword: z
       .string()
       .min(1, { message: "Please confirm your password" }),
@@ -362,6 +366,20 @@ export default function AuthPage() {
                                 data-testid="input-register-password"
                               />
                             </FormControl>
+                            <ul className="text-xs text-gray-500 mt-1 space-y-0.5">
+                              {PASSWORD_REQUIREMENTS.map((req) => {
+                                const met = req.test(field.value ?? "");
+                                return (
+                                  <li
+                                    key={req.label}
+                                    className={met ? "text-green-600 flex items-center gap-1" : "flex items-center gap-1"}
+                                  >
+                                    <CheckCircle className={`h-3 w-3 ${met ? "opacity-100" : "opacity-30"}`} />
+                                    {req.label}
+                                  </li>
+                                );
+                              })}
+                            </ul>
                             <FormMessage />
                           </FormItem>
                         )}
