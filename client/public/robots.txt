@@ -1,4 +1,24 @@
+# Explicitly naming known AI crawlers (alongside the wildcard) rather than
+# relying on "User-agent: *" alone — some AI-crawler checks only look for a
+# named allow-rule and treat its absence as "blocked" even when the wildcard
+# already permits it. Listing them here puts them in the SAME rule group as
+# "*", so they get the exact same allow/disallow paths below, not broader
+# access — a named group would otherwise ignore the wildcard's rules entirely.
 User-agent: *
+User-agent: GPTBot
+User-agent: ChatGPT-User
+User-agent: OAI-SearchBot
+User-agent: ClaudeBot
+User-agent: Claude-Web
+User-agent: Claude-SearchBot
+User-agent: anthropic-ai
+User-agent: PerplexityBot
+User-agent: Google-Extended
+User-agent: Applebot-Extended
+User-agent: CCBot
+User-agent: Bytespider
+User-agent: Amazonbot
+User-agent: Meta-ExternalAgent
 Allow: /
 Allow: /assets/
 Allow: /team-logos/
