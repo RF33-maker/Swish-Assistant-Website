@@ -173,7 +173,16 @@ export function PlayerBanner({
             headshots come in in all sorts of aspect ratios, and a `contain`
             fit left a gap under the photo whenever one was wider/shorter
             than the box. Cover crops instead of leaving that gap; the focus
-            slider still lets you choose which part of a tall photo shows. */}
+            slider still lets you choose which part of a tall photo shows.
+            height is the ONLY sized dimension — width is `auto` and derived
+            from aspectRatio, and maxHeight can freely reduce the used height
+            without ever decoupling the two. Width used to be its own
+            independent clamp() with a DIFFERENT reference unit (vw vs % of
+            the parent) than height's — the two tracked completely unrelated
+            values above the ~896px layout breakpoint where the card's width
+            stops growing with the viewport but height (driven by vw) kept
+            climbing, badly distorting the box's aspect ratio on desktop and
+            forcing object-cover to crop off the top of every photo. */}
         {playerInfo.playerId && playerPhotoUrl ? (
           <div
             className="absolute bottom-0 right-0 md:right-4 overflow-hidden pointer-events-none select-none"
@@ -183,7 +192,8 @@ export function PlayerBanner({
               // so the top of the photo always clears the chip row above it,
               // regardless of how tall a given photo's crop needs to be.
               maxHeight: '82%',
-              width: 'clamp(38%, 38vw, 50%)',
+              width: 'auto',
+              aspectRatio: '0.96',
             }}
           >
             <img
