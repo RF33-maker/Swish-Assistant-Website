@@ -24,12 +24,13 @@ interface SeasonCompetition {
   gender: string | null;
 }
 
-interface GenderGroup {
-  gender: string;
-  mostRecent: SeasonCompetition;
-}
-
 const GENDER_ORDER = ["Men's", "Men", "Male", "Women's", "Women", "Female"];
+
+function genderSortIndex(gender: string): number {
+  const normalized = gender.toLowerCase().replace("'s", "").trim();
+  const index = GENDER_ORDER.findIndex((g) => normalized.startsWith(g.toLowerCase().replace("'s", "").trim()));
+  return index === -1 ? 99 : index;
+}
 
 function getSeasonLabel(competition: SeasonCompetition): string {
   const raw = `${competition.season || ""} ${competition.name}`;
@@ -51,7 +52,7 @@ export default function CompetitionPage() {
 
   const [league, setLeague] = useState<League | null>(null);
   const [seasons, setSeasons] = useState<SeasonCompetition[]>([]);
-  const [genderGroups, setGenderGroups] = useState<GenderGroup[]>([]);
+  const [selectedGender, setSelectedGender] = useState("");
   const [selectedSeason, setSelectedSeason] = useState("");
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -96,44 +97,48 @@ export default function CompetitionPage() {
         .order("season", { ascending: false });
 
       const seasonList = (competitionsData as SeasonCompetition[] | null) || [];
+      setSeasons(seasonList);
 
-      // Detect gender-based league: at least one competition has gender set
-      const isGenderLeague = seasonList.some(c => !!c.gender);
+      // Gender-based brands (e.g. Super League Basketball, NBL Division One)
+      // show a Men's/Women's split first; the season + competition-type
+      // picker below it is then scoped to whichever gender is selected.
+      // Brands with no gender set anywhere (e.g. BCB) skip straight to the
+      // season picker, same as before.
+      const genders = Array.from(new Set(seasonList.map((c) => c.gender).filter((g): g is string => !!g)))
+        .sort((a, b) => genderSortIndex(a) - genderSortIndex(b));
+      const initialGender = genders[0] || "";
+      setSelectedGender(initialGender);
 
-      if (isGenderLeague) {
-        // Group by gender, pick the most recent competition per gender group
-        const grouped = new Map<string, SeasonCompetition>();
-        for (const comp of seasonList) {
-          const g = comp.gender || "Other";
-          if (!grouped.has(g)) grouped.set(g, comp);
-        }
-        const groups: GenderGroup[] = Array.from(grouped.entries())
-          .sort(([a], [b]) => {
-            const ai = GENDER_ORDER.findIndex(g => a.toLowerCase().startsWith(g.toLowerCase().replace("'s", "").trim()));
-            const bi = GENDER_ORDER.findIndex(g => b.toLowerCase().startsWith(g.toLowerCase().replace("'s", "").trim()));
-            return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
-          })
-          .map(([gender, mostRecent]) => ({ gender, mostRecent }));
-        setGenderGroups(groups);
-        setSeasons([]);
-        setLoading(false);
-      } else {
-        setSeasons(seasonList);
-        setSelectedSeason(seasonList[0] ? getSeasonLabel(seasonList[0]) : "");
-        setLoading(false);
-      }
+      const initialScope = initialGender
+        ? seasonList.filter((c) => c.gender === initialGender)
+        : seasonList;
+      setSelectedSeason(initialScope[0] ? getSeasonLabel(initialScope[0]) : "");
+      setLoading(false);
     };
 
     fetchData();
   }, [slug]);
 
-  const seasonLabels = useMemo(
-    () => Array.from(new Set(seasons.map(getSeasonLabel))),
+  const availableGenders = useMemo(
+    () => Array.from(new Set(seasons.map((c) => c.gender).filter((g): g is string => !!g)))
+      .sort((a, b) => genderSortIndex(a) - genderSortIndex(b)),
     [seasons],
   );
 
+  // Scoped to the selected gender when this is a gender-split brand;
+  // otherwise every competition is in scope, unchanged from before.
+  const genderScopedSeasons = useMemo(
+    () => (availableGenders.length > 0 ? seasons.filter((c) => c.gender === selectedGender) : seasons),
+    [seasons, availableGenders, selectedGender],
+  );
+
+  const seasonLabels = useMemo(
+    () => Array.from(new Set(genderScopedSeasons.map(getSeasonLabel))),
+    [genderScopedSeasons],
+  );
+
   const visibleCompetitions = useMemo(
-    () => seasons
+    () => genderScopedSeasons
       .filter((competition) => getSeasonLabel(competition) === selectedSeason)
       .sort((a, b) => {
         const order = ["Regular Season", "Trophy"];
@@ -141,13 +146,18 @@ export default function CompetitionPage() {
         const bIndex = order.indexOf(getCompetitionLabel(b));
         return (aIndex === -1 ? order.length : aIndex) - (bIndex === -1 ? order.length : bIndex);
       }),
-    [seasons, selectedSeason],
+    [genderScopedSeasons, selectedSeason],
   );
+
+  const handleSelectGender = (gender: string) => {
+    setSelectedGender(gender);
+    const scope = seasons.filter((c) => c.gender === gender);
+    setSelectedSeason(scope[0] ? getSeasonLabel(scope[0]) : "");
+  };
 
   const brandingCompetition =
     visibleCompetitions.find((competition) => getCompetitionLabel(competition) === "Regular Season") ||
     visibleCompetitions[0] ||
-    genderGroups[0]?.mostRecent ||
     seasons[0];
   const isBritishChampionship = slug === "british-championship-basketball";
   const displayLogoUrl =
@@ -225,7 +235,7 @@ export default function CompetitionPage() {
             {league.description}
           </p>
         )}
-        {(genderGroups.length > 0 || seasons.length > 0) && (
+        {seasons.length > 0 && (
           <p className={`relative mt-2 text-xs uppercase tracking-wider font-medium ${displayBannerUrl ? "text-white/70" : "text-slate-400 dark:text-slate-500"}`}>
             Choose a competition
           </p>
@@ -233,43 +243,30 @@ export default function CompetitionPage() {
       </div>
 
       <main className="max-w-2xl mx-auto px-6 pb-16">
-        {/* Gender-based competition picker */}
-        {genderGroups.length > 0 && (
-          <div className="flex flex-col sm:flex-row gap-4">
-            {genderGroups.map(({ gender, mostRecent }) => (
+        {/* Gender split — sits above the season picker; selecting a gender
+            scopes everything below it (season dropdown + competition-type
+            buttons) to that gender, rather than jumping straight to a
+            single competition. */}
+        {availableGenders.length > 0 && (
+          <div className="flex items-center gap-1 rounded-xl border border-slate-200 dark:border-neutral-700 p-1 w-full sm:w-fit mb-6">
+            {availableGenders.map((gender) => (
               <button
                 key={gender}
-                onClick={() => setLocation(`/competition/${mostRecent.slug}`)}
-                className="relative flex-1 overflow-hidden rounded-2xl min-h-[160px] hover:scale-[1.02] hover:shadow-xl transition-all duration-200 text-left group"
-                style={{ backgroundColor: "#111" }}
+                onClick={() => handleSelectGender(gender)}
+                className={`flex-1 sm:flex-initial px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                  selectedGender === gender
+                    ? "bg-orange-500 text-white"
+                    : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-neutral-800"
+                }`}
               >
-                {mostRecent.banner_url && (
-                  <img
-                    src={mostRecent.banner_url}
-                    alt=""
-                    className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:opacity-55 transition-opacity"
-                  />
-                )}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
-                <div className="absolute bottom-0 left-0 right-0 p-5 flex items-end justify-between">
-                  <div>
-                    <span className="text-xl font-extrabold text-white drop-shadow-md tracking-tight block">
-                      {gender}
-                    </span>
-                    {mostRecent.season && (
-                      <span className="text-xs font-medium text-white/60">
-                        {mostRecent.season}
-                      </span>
-                    )}
-                  </div>
-                </div>
+                {gender}
               </button>
             ))}
           </div>
         )}
 
-        {/* Season and competition picker for non-gender league brands */}
-        {seasons.length > 0 && (
+        {/* Season and competition-type picker */}
+        {genderScopedSeasons.length > 0 && (
           <div className="flex flex-col gap-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
@@ -322,7 +319,7 @@ export default function CompetitionPage() {
           </div>
         )}
 
-        {genderGroups.length === 0 && seasons.length === 0 && (
+        {seasons.length === 0 && (
           <div className="text-center py-16 text-slate-400 dark:text-slate-500">
             <p className="text-sm">No competitions available yet.</p>
           </div>
