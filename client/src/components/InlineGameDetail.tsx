@@ -165,6 +165,13 @@ export function InlineGameDetail({
     setLiveEvents([]);
     setLiveClock(null);
     setShotData([]);
+    setGameInfo(null);
+    setLeagueId(null);
+    setCompetitionName(null);
+    setHomeTeamStats(null);
+    setAwayTeamStats(null);
+    setHomePlayerStats([]);
+    setAwayPlayerStats([]);
 
     (async () => {
       try {
