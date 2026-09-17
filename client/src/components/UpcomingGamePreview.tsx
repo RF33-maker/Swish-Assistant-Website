@@ -350,10 +350,9 @@ export default function UpcomingGamePreview({ game, onRefresh, embedded = false 
         <section className="relative overflow-hidden rounded-[2rem] border border-orange-200/70 bg-[#172536] text-white shadow-2xl shadow-orange-950/10">
           {heroBackgroundStyle && <div className="absolute inset-0" style={heroBackgroundStyle} />}
           <div className="relative p-5 sm:p-10">
-            <div className="absolute -right-16 -top-20 h-64 w-64 rounded-full border-[28px] border-orange-500/15" />
             <div className="relative flex flex-wrap items-center justify-between gap-3 text-sm text-slate-300">
-              <span className="inline-flex items-center gap-2"><CalendarDays className="h-4 w-4 text-orange-400" />{fmtDate}</span>
-              <span className="inline-flex items-center gap-2"><Clock3 className="h-4 w-4 text-orange-400" />{fmtTime}</span>
+              <span className="inline-flex items-center gap-2"><CalendarDays className="h-4 w-4 text-slate-300" />{fmtDate}</span>
+              <span className="inline-flex items-center gap-2"><Clock3 className="h-4 w-4 text-slate-300" />{fmtTime}</span>
             </div>
             <div className="relative mt-8 grid grid-cols-2 items-start gap-5 sm:mt-10 sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-8">
               <Team name={game.hometeam} league={game.league_id} summary={summaries.home} streak={homeStreak} />
