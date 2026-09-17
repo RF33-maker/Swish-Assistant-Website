@@ -5703,6 +5703,7 @@ export default function LeaguePage() {
                   leagueSlug={slug}
                   onBack={handleGameBack}
                   onGameInfoLoaded={(info) => setInlineGameInfo(info)}
+                  onSelectPlayer={(playerSlug) => handleSelectPlayer(playerSlug, 'game')}
                 />
               </div>
             )}

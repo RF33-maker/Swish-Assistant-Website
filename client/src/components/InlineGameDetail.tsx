@@ -26,6 +26,7 @@ interface InlineGameDetailProps {
   leagueSlug?: string;
   onBack: () => void;
   onGameInfoLoaded?: (info: GameInfo) => void;
+  onSelectPlayer?: (playerSlug: string) => void;
 }
 
 interface PlayerStat {
@@ -135,7 +136,7 @@ function formatTime(s: string): string {
 }
 
 export function InlineGameDetail({
-  gameKey, brandColor, leagueName, leagueSlug, onBack, onGameInfoLoaded,
+  gameKey, brandColor, leagueName, leagueSlug, onBack, onGameInfoLoaded, onSelectPlayer,
 }: InlineGameDetailProps) {
   const [loading, setLoading] = useState(true);
   const [gameInfo, setGameInfo] = useState<GameInfo | null>(null);
@@ -542,7 +543,7 @@ export function InlineGameDetail({
         <button onClick={onBack} className="inline-flex items-center gap-2 text-sm font-medium text-orange-500">
           <ArrowLeft className="w-4 h-4" /> Back to league
         </button>
-        <UpcomingGamePreview game={scheduledGame} embedded />
+        <UpcomingGamePreview game={scheduledGame} embedded leagueSlug={leagueSlug} onSelectPlayer={onSelectPlayer} />
       </div>
     );
   }

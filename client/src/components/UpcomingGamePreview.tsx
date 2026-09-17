@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, Clock3, MapPin, RefreshCw } from "lucide-react";
 import { supabase } from "@/lib/supabase";
@@ -84,7 +85,14 @@ function computeStreak(form: FormResult[]): { count: number; type: "W" | "L" } |
   return { count, type: first ? "W" : "L" };
 }
 
-export default function UpcomingGamePreview({ game, onRefresh, embedded = false }: { game: PreviewGame; onRefresh?: () => void; embedded?: boolean }) {
+export default function UpcomingGamePreview({ game, onRefresh, embedded = false, leagueSlug, onSelectPlayer }: { game: PreviewGame; onRefresh?: () => void; embedded?: boolean; leagueSlug?: string; onSelectPlayer?: (playerSlug: string) => void }) {
+  const teamHref = (teamName: string) => leagueSlug
+    ? `/competition/${leagueSlug}/team/${encodeURIComponent(teamName)}`
+    : `/team/${encodeURIComponent(teamName)}`;
+  const playerHref = (slug: string) => leagueSlug
+    ? `/competition/${leagueSlug}/player/${encodeURIComponent(slug)}`
+    : `/player/${encodeURIComponent(slug)}`;
+
   const [left, setLeft] = useState(() => countdown(game.matchtime));
   const arrived = left.days + left.hours + left.minutes + left.seconds === 0;
 
@@ -219,24 +227,42 @@ export default function UpcomingGamePreview({ game, onRefresh, embedded = false 
       if (!context?.leagueId || !contextTeamIds.length) return { home: [], away: [] };
       const { data } = await supabase
         .from("player_stats")
-        .select("team_id,full_name,firstname,familyname,spoints")
+        .select("team_id,player_id,full_name,firstname,familyname,spoints")
         .eq("league_id", context.leagueId)
         .in("team_id", contextTeamIds);
-      const totals = new Map<string, { name: string; team: string; points: number; games: number }>();
+      const totals = new Map<string, { name: string; team: string; points: number; games: number; playerId: string | null }>();
       (data || []).forEach((row: any) => {
         const name = row.full_name || `${row.firstname || ""} ${row.familyname || ""}`.trim();
         if (!name) return;
         const key = `${row.team_id}:${name}`;
-        const item = totals.get(key) || { name, team: row.team_id, points: 0, games: 0 };
+        const item = totals.get(key) || { name, team: row.team_id, points: 0, games: 0, playerId: row.player_id || null };
         item.points += Number(row.spoints || 0);
         item.games += 1;
         totals.set(key, item);
       });
       const sorted = Array.from(totals.values()).sort((a, b) => b.points / b.games - a.points / a.games);
-      return {
-        home: sorted.filter((p) => p.team === context?.homeId).slice(0, 3),
-        away: sorted.filter((p) => p.team === context?.awayId).slice(0, 3),
-      };
+      const home = sorted.filter((p) => p.team === context?.homeId).slice(0, 3);
+      const away = sorted.filter((p) => p.team === context?.awayId).slice(0, 3);
+
+      const playerIds = [...home, ...away].map((p) => p.playerId).filter(Boolean) as string[];
+      const slugById = new Map<string, string>();
+      if (playerIds.length) {
+        const { data: playerRows } = await supabase
+          .from("players")
+          .select("id,slug")
+          .in("id", playerIds);
+        (playerRows || []).forEach((row: any) => {
+          if (row.slug) slugById.set(row.id, row.slug);
+        });
+      }
+      // Fall back to the player's raw id when public.players has no slug yet —
+      // PlayerProfileContent resolves a UUID directly, so this stays reliable
+      // for newly-parsed players instead of guessing a name-derived slug.
+      const withSlug = (p: typeof home[number]) => ({
+        ...p,
+        slug: (p.playerId ? slugById.get(p.playerId) : null) || p.playerId,
+      });
+      return { home: home.map(withSlug), away: away.map(withSlug) };
     },
     enabled: !!context?.leagueId && (!!context?.homeId || !!context?.awayId),
   });
@@ -355,12 +381,12 @@ export default function UpcomingGamePreview({ game, onRefresh, embedded = false 
               <span className="inline-flex items-center gap-2"><Clock3 className="h-4 w-4 text-slate-300" />{fmtTime}</span>
             </div>
             <div className="relative mt-8 grid grid-cols-2 items-start gap-5 sm:mt-10 sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-8">
-              <Team name={game.hometeam} league={game.league_id} summary={summaries.home} streak={homeStreak} />
+              <Team name={game.hometeam} league={game.league_id} summary={summaries.home} streak={homeStreak} href={teamHref(game.hometeam)} />
               <div className="col-span-2 row-start-2 text-center sm:col-span-1 sm:row-start-auto">
                 <div className="text-xs font-bold tracking-[.3em] text-orange-300">{arrived ? "TIP-OFF TIME" : "TIP-OFF IN"}</div>
                 <div className="mt-3 flex justify-center gap-1.5">{unit(left.days, "days")}{unit(left.hours, "hrs")}{unit(left.minutes, "min")}{unit(left.seconds, "sec")}</div>
               </div>
-              <Team name={game.awayteam} league={game.league_id} summary={summaries.away} streak={awayStreak} />
+              <Team name={game.awayteam} league={game.league_id} summary={summaries.away} streak={awayStreak} href={teamHref(game.awayteam)} />
             </div>
             <div className="relative mt-8 flex flex-wrap items-center justify-center gap-3 border-t border-white/10 pt-5 text-sm text-slate-300">
               {game.venue
@@ -394,8 +420,8 @@ export default function UpcomingGamePreview({ game, onRefresh, embedded = false 
             <div className="mt-5 border-t border-slate-200 pt-4 dark:border-slate-800">
               <h3 className="text-xs font-semibold uppercase tracking-[.16em] text-slate-500">Team leaders · {contextLabel}</h3>
               <div className="mt-3 grid grid-cols-2 gap-4">
-                <LeaderColumn teamName={game.hometeam} players={leaders.home} />
-                <LeaderColumn teamName={game.awayteam} players={leaders.away} />
+                <LeaderColumn teamName={game.hometeam} teamHref={teamHref(game.hometeam)} players={leaders.home} playerHref={playerHref} onSelectPlayer={onSelectPlayer} />
+                <LeaderColumn teamName={game.awayteam} teamHref={teamHref(game.awayteam)} players={leaders.away} playerHref={playerHref} onSelectPlayer={onSelectPlayer} />
               </div>
             </div>
           )}
@@ -466,14 +492,44 @@ export default function UpcomingGamePreview({ game, onRefresh, embedded = false 
   );
 }
 
-function LeaderColumn({ teamName, players }: { teamName: string; players: Array<{ name: string; points: number; games: number }> }) {
+function LeaderColumn({
+  teamName,
+  teamHref,
+  players,
+  playerHref,
+  onSelectPlayer,
+}: {
+  teamName: string;
+  teamHref: string;
+  players: Array<{ name: string; points: number; games: number; slug?: string | null }>;
+  playerHref: (slug: string) => string;
+  onSelectPlayer?: (playerSlug: string) => void;
+}) {
   return (
     <div>
-      <div className="truncate text-xs font-semibold text-slate-500 dark:text-slate-400">{teamName}</div>
+      <Link href={teamHref} className="block truncate text-xs font-semibold text-slate-500 hover:underline dark:text-slate-400">
+        {teamName}
+      </Link>
       <div className="mt-2 space-y-1.5">
         {players.length ? players.map((player) => (
           <div key={player.name} className="rounded-lg bg-slate-100 px-3 py-2 dark:bg-slate-800">
-            <div className="truncate text-sm font-semibold">{player.name}</div>
+            {player.slug ? (
+              onSelectPlayer ? (
+                <button
+                  type="button"
+                  onClick={() => onSelectPlayer(player.slug as string)}
+                  className="truncate text-sm font-semibold hover:underline text-left"
+                >
+                  {player.name}
+                </button>
+              ) : (
+                <Link href={playerHref(player.slug)} className="truncate text-sm font-semibold hover:underline">
+                  {player.name}
+                </Link>
+              )
+            ) : (
+              <div className="truncate text-sm font-semibold">{player.name}</div>
+            )}
             <div className="mt-0.5 text-xs text-orange-600">{(player.points / player.games).toFixed(1)} PPG</div>
           </div>
         )) : <div className="text-xs italic text-slate-400">No data yet</div>}
@@ -487,18 +543,22 @@ function Team({
   league,
   summary,
   streak,
+  href,
 }: {
   name: string;
   league: string;
   summary: { form: FormResult[]; wins: number; losses: number };
   streak: { count: number; type: "W" | "L" } | null;
+  href: string;
 }) {
   return (
     <div className="text-center">
-      <div className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-white/10 p-2 sm:h-24 sm:w-24">
+      <Link href={href} className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-white/10 p-2 transition-opacity hover:opacity-80 sm:h-24 sm:w-24">
         <TeamLogo teamName={name} leagueId={league} size="lg" />
-      </div>
-      <h1 className="text-base font-bold sm:text-xl">{name}</h1>
+      </Link>
+      <Link href={href}>
+        <h1 className="text-base font-bold hover:underline sm:text-xl">{name}</h1>
+      </Link>
       {summary.wins + summary.losses > 0 && (
         <div className="mt-1 flex items-center justify-center gap-1.5 text-xs text-slate-400">
           <span>{summary.wins}-{summary.losses}</span>
