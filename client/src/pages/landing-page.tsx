@@ -88,25 +88,43 @@ export default function LandingPage() {
 
   useEffect(() => {
     const fetchTrending = async () => {
-      const { data, error } = await supabase
-        .from("competitions")
-        .select("name, slug, logo_url, banner_url, trending_position")
-        .eq("is_public", true)
-        .not("trending_position", "is", null)
-        .order("trending_position", { ascending: true })
-        .limit(4);
+      // Trending items can be pinned two ways: a single competition/season
+      // (routes to /competition/:slug), or a league brand that groups
+      // several seasons and competition types under one season-picker page
+      // (routes to /league/:slug — see pages/competition/[slug].tsx, the
+      // actual component behind that route despite the file layout).
+      // Both tables carry their own trending_position, so pinning a league
+      // brand — e.g. BCB or SLB — surfaces its season/competition picker
+      // from the homepage instead of jumping straight to one specific season.
+      const [competitionsResult, leaguesResult] = await Promise.all([
+        supabase
+          .from("competitions")
+          .select("name, slug, logo_url, banner_url, trending_position")
+          .eq("is_public", true)
+          .not("trending_position", "is", null)
+          .order("trending_position", { ascending: true }),
+        supabase
+          .from("leagues")
+          .select("name, slug, logo_url, banner_url, trending_position")
+          .not("trending_position", "is", null)
+          .order("trending_position", { ascending: true }),
+      ]);
 
-      if (!error && data) {
-        const seen = new Set<string>();
-        const competitions: any[] = [];
-        for (const comp of data) {
-          if (!seen.has(comp.slug)) {
-            seen.add(comp.slug);
-            competitions.push({ ...comp, _type: "competition" });
-          }
+      const combined = [
+        ...(competitionsResult.data || []).map((row: any) => ({ ...row, _type: "competition" as const })),
+        ...(leaguesResult.data || []).map((row: any) => ({ ...row, _type: "league" as const })),
+      ].sort((a, b) => a.trending_position - b.trending_position);
+
+      const seen = new Set<string>();
+      const deduped: any[] = [];
+      for (const item of combined) {
+        const key = `${item._type}:${item.slug}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          deduped.push(item);
         }
-        setTrendingLeagues(competitions);
       }
+      setTrendingLeagues(deduped.slice(0, 4));
     };
 
     fetchTrending();
