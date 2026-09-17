@@ -8,6 +8,7 @@ import { parseScheduleTime } from "@/lib/scheduleTime";
 import { aggregateTeamStats } from "@/lib/teamStatsAggregate";
 import { useTeamBranding } from "@/hooks/useTeamBranding";
 import { adjustOpacity } from "@/lib/colorExtractor";
+import { useTheme } from "@/components/ThemeProvider";
 
 export type PreviewGame = {
   league_id: string;
@@ -107,13 +108,20 @@ export default function UpcomingGamePreview({ game, onRefresh, embedded = false,
     [game.home_team_id, game.away_team_id],
   );
 
+  const { theme } = useTheme();
   const homeBranding = useTeamBranding({ teamName: game.hometeam, leagueId: game.league_id });
   const awayBranding = useTeamBranding({ teamName: game.awayteam, leagueId: game.league_id });
   const homeRgb = homeBranding.colors?.primaryRgb;
   const awayRgb = awayBranding.colors?.primaryRgb;
+  // Team-colour wash sits on a white (light) / near-black (dark) card rather
+  // than a saturated fill, so it stays a subtle tint instead of dominating —
+  // dark mode can afford a touch more opacity since colours read more muted
+  // against a near-black base.
+  const edgeOpacity = theme === "dark" ? 0.32 : 0.14;
+  const midOpacity = theme === "dark" ? 0.12 : 0.05;
   const heroBackgroundStyle = homeRgb && awayRgb
     ? {
-        backgroundImage: `linear-gradient(90deg, ${adjustOpacity(homeRgb, 0.5)} 0%, ${adjustOpacity(homeRgb, 0.16)} 38%, ${adjustOpacity(awayRgb, 0.16)} 62%, ${adjustOpacity(awayRgb, 0.5)} 100%)`,
+        backgroundImage: `linear-gradient(90deg, ${adjustOpacity(homeRgb, edgeOpacity)} 0%, ${adjustOpacity(homeRgb, midOpacity)} 38%, ${adjustOpacity(awayRgb, midOpacity)} 62%, ${adjustOpacity(awayRgb, edgeOpacity)} 100%)`,
       }
     : undefined;
 
@@ -342,9 +350,9 @@ export default function UpcomingGamePreview({ game, onRefresh, embedded = false,
   const fmtDate = date.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
   const fmtTime = date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", timeZoneName: "short" });
   const unit = (value: number, label: string) => (
-    <div className="min-w-[50px] rounded-lg bg-slate-950/70 px-2 py-2 text-center sm:min-w-[58px]">
-      <strong className="block text-lg tabular-nums text-white sm:text-xl">{String(value).padStart(2, "0")}</strong>
-      <span className="text-[9px] uppercase tracking-[.18em] text-slate-400">{label}</span>
+    <div className="min-w-[50px] rounded-lg bg-slate-100 px-2 py-2 text-center dark:bg-black/40 sm:min-w-[58px]">
+      <strong className="block text-lg tabular-nums text-slate-800 dark:text-white sm:text-xl">{String(value).padStart(2, "0")}</strong>
+      <span className="text-[9px] uppercase tracking-[.18em] text-slate-500 dark:text-slate-400">{label}</span>
     </div>
   );
 
@@ -367,30 +375,30 @@ export default function UpcomingGamePreview({ game, onRefresh, embedded = false,
   ] : [];
 
   return (
-    <main className={`${embedded ? "bg-transparent px-1 py-2" : "min-h-[100dvh] bg-[#f7f3eb] px-4 py-8 dark:bg-[#10141c] sm:px-6"} text-slate-900 dark:text-white`}>
+    <main className={`${embedded ? "bg-transparent px-1 py-2" : "min-h-[100dvh] bg-[#f7f3eb] px-4 py-8 dark:bg-neutral-950 sm:px-6"} text-slate-900 dark:text-white`}>
       <div className="mx-auto max-w-5xl">
         <div className="mb-6 flex items-center gap-2 text-xs font-semibold uppercase tracking-[.2em] text-orange-600">
           <span className="h-2 w-2 animate-pulse rounded-full bg-orange-500" />
           Game preview
         </div>
-        <section className="relative overflow-hidden rounded-[2rem] border border-orange-200/70 bg-[#172536] text-white shadow-2xl shadow-orange-950/10">
+        <section className="relative overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-lg dark:border-neutral-800 dark:bg-neutral-900">
           {heroBackgroundStyle && <div className="absolute inset-0" style={heroBackgroundStyle} />}
           <div className="relative p-5 sm:p-10">
-            <div className="relative flex flex-wrap items-center justify-between gap-3 text-sm text-slate-300">
-              <span className="inline-flex items-center gap-2"><CalendarDays className="h-4 w-4 text-slate-300" />{fmtDate}</span>
-              <span className="inline-flex items-center gap-2"><Clock3 className="h-4 w-4 text-slate-300" />{fmtTime}</span>
+            <div className="relative flex flex-wrap items-center justify-between gap-3 text-sm text-slate-500 dark:text-slate-400">
+              <span className="inline-flex items-center gap-2"><CalendarDays className="h-4 w-4" />{fmtDate}</span>
+              <span className="inline-flex items-center gap-2"><Clock3 className="h-4 w-4" />{fmtTime}</span>
             </div>
             <div className="relative mt-8 grid grid-cols-2 items-start gap-5 sm:mt-10 sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-8">
               <Team name={game.hometeam} league={game.league_id} summary={summaries.home} streak={homeStreak} href={teamHref(game.hometeam)} />
               <div className="col-span-2 row-start-2 text-center sm:col-span-1 sm:row-start-auto">
-                <div className="text-xs font-bold tracking-[.3em] text-orange-300">{arrived ? "TIP-OFF TIME" : "TIP-OFF IN"}</div>
+                <div className="text-xs font-bold tracking-[.3em] text-orange-600 dark:text-orange-400">{arrived ? "TIP-OFF TIME" : "TIP-OFF IN"}</div>
                 <div className="mt-3 flex justify-center gap-1.5">{unit(left.days, "days")}{unit(left.hours, "hrs")}{unit(left.minutes, "min")}{unit(left.seconds, "sec")}</div>
               </div>
               <Team name={game.awayteam} league={game.league_id} summary={summaries.away} streak={awayStreak} href={teamHref(game.awayteam)} />
             </div>
-            <div className="relative mt-8 flex flex-wrap items-center justify-center gap-3 border-t border-white/10 pt-5 text-sm text-slate-300">
+            <div className="relative mt-8 flex flex-wrap items-center justify-center gap-3 border-t border-slate-100 pt-5 text-sm text-slate-500 dark:border-white/10 dark:text-slate-400">
               {game.venue
-                ? <span className="inline-flex items-center gap-2"><MapPin className="h-4 w-4 text-orange-400" />{game.venue}</span>
+                ? <span className="inline-flex items-center gap-2"><MapPin className="h-4 w-4 text-orange-500 dark:text-orange-400" />{game.venue}</span>
                 : <span>Venue details will be added when available</span>}
             </div>
           </div>
@@ -403,7 +411,7 @@ export default function UpcomingGamePreview({ game, onRefresh, embedded = false,
           </div>
         )}
 
-        <section className="mt-5 rounded-2xl border border-slate-200 bg-white/80 p-5 dark:border-slate-800 dark:bg-slate-900/60">
+        <section className="mt-5 rounded-2xl border border-slate-200 bg-white/80 p-5 dark:border-neutral-800 dark:bg-neutral-900/60">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="font-semibold">Matchup context</h2>
             {!contextLoading && context?.rows.length ? <span className="text-xs font-medium text-orange-700 dark:text-orange-300">{contextLabel}</span> : null}
@@ -417,7 +425,7 @@ export default function UpcomingGamePreview({ game, onRefresh, embedded = false,
           </p>
 
           {(leaders.home.length > 0 || leaders.away.length > 0) && (
-            <div className="mt-5 border-t border-slate-200 pt-4 dark:border-slate-800">
+            <div className="mt-5 border-t border-slate-200 pt-4 dark:border-neutral-800">
               <h3 className="text-xs font-semibold uppercase tracking-[.16em] text-slate-500">Team leaders · {contextLabel}</h3>
               <div className="mt-3 grid grid-cols-2 gap-4">
                 <LeaderColumn teamName={game.hometeam} teamHref={teamHref(game.hometeam)} players={leaders.home} playerHref={playerHref} onSelectPlayer={onSelectPlayer} />
@@ -428,7 +436,7 @@ export default function UpcomingGamePreview({ game, onRefresh, embedded = false,
         </section>
 
         {snapshotRows.length > 0 && (
-          <section className="mt-4 rounded-2xl border border-slate-200 bg-white/80 p-5 dark:border-slate-800 dark:bg-slate-900/60">
+          <section className="mt-4 rounded-2xl border border-slate-200 bg-white/80 p-5 dark:border-neutral-800 dark:bg-neutral-900/60">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h2 className="font-semibold">Season snapshot</h2>
               <span className="text-xs font-medium text-orange-700 dark:text-orange-300">{contextLabel}</span>
@@ -462,7 +470,7 @@ export default function UpcomingGamePreview({ game, onRefresh, embedded = false,
         )}
 
         {!contextLoading && (
-          <section className="mt-4 rounded-2xl border border-slate-200 bg-white/80 p-5 dark:border-slate-800 dark:bg-slate-900/60">
+          <section className="mt-4 rounded-2xl border border-slate-200 bg-white/80 p-5 dark:border-neutral-800 dark:bg-neutral-900/60">
             <h2 className="font-semibold">Head-to-head</h2>
             {headToHead.meetings.length > 0 ? (
               <div className="mt-3">
@@ -473,7 +481,7 @@ export default function UpcomingGamePreview({ game, onRefresh, embedded = false,
                 </div>
                 <div className="mt-3 space-y-1.5 text-sm">
                   {headToHead.meetings.slice(0, 5).map((meeting) => (
-                    <div key={meeting.gameKey} className="flex items-center justify-between rounded-lg bg-slate-100 px-3 py-1.5 dark:bg-slate-800">
+                    <div key={meeting.gameKey} className="flex items-center justify-between rounded-lg bg-slate-100 px-3 py-1.5 dark:bg-neutral-800">
                       <span className="text-slate-500 dark:text-slate-400">Meeting</span>
                       <span className="font-semibold text-slate-800 dark:text-white">
                         {game.hometeam} {meeting.homeScore} – {meeting.awayScore} {game.awayteam}
@@ -512,7 +520,7 @@ function LeaderColumn({
       </Link>
       <div className="mt-2 space-y-1.5">
         {players.length ? players.map((player) => (
-          <div key={player.name} className="rounded-lg bg-slate-100 px-3 py-2 dark:bg-slate-800">
+          <div key={player.name} className="rounded-lg bg-slate-100 px-3 py-2 dark:bg-neutral-800">
             {player.slug ? (
               onSelectPlayer ? (
                 <button
@@ -532,7 +540,7 @@ function LeaderColumn({
             )}
             <div className="mt-0.5 text-xs text-orange-600">{(player.points / player.games).toFixed(1)} PPG</div>
           </div>
-        )) : <div className="text-xs italic text-slate-400">No data yet</div>}
+        )) : <div className="text-xs italic text-slate-500 dark:text-slate-400">No data yet</div>}
       </div>
     </div>
   );
@@ -553,14 +561,14 @@ function Team({
 }) {
   return (
     <div className="text-center">
-      <Link href={href} className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-white/10 p-2 transition-opacity hover:opacity-80 sm:h-24 sm:w-24">
+      <Link href={href} className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 p-2 transition-opacity hover:opacity-80 dark:bg-white/10 sm:h-24 sm:w-24">
         <TeamLogo teamName={name} leagueId={league} size="lg" />
       </Link>
       <Link href={href}>
-        <h1 className="text-base font-bold hover:underline sm:text-xl">{name}</h1>
+        <h1 className="text-base font-bold text-slate-800 hover:underline dark:text-white sm:text-xl">{name}</h1>
       </Link>
       {summary.wins + summary.losses > 0 && (
-        <div className="mt-1 flex items-center justify-center gap-1.5 text-xs text-slate-400">
+        <div className="mt-1 flex items-center justify-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
           <span>{summary.wins}-{summary.losses}</span>
           {streak && (
             <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold text-white ${streak.type === "W" ? "bg-emerald-500" : "bg-rose-500"}`}>
@@ -580,7 +588,7 @@ function Team({
                 {result.won ? "W" : "L"}
               </span>
             ))
-          : <span className="text-xs text-slate-400">No recent form</span>}
+          : <span className="text-xs text-slate-500 dark:text-slate-400">No recent form</span>}
       </div>
     </div>
   );
