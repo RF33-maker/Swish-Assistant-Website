@@ -3880,14 +3880,14 @@ export default function LeaguePage() {
               className="absolute inset-0 pointer-events-none transition-opacity duration-1000 ease-in-out dark:hidden"
               style={{
                 opacity: brandFadedIn ? 1 : 0,
-                background: `linear-gradient(180deg, transparent 20%, rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.08) 60%, rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.18) 100%)`,
+                background: `linear-gradient(180deg, transparent 20%, rgba(0, 0, 0, 0.05) 60%, rgba(0, 0, 0, 0.1) 100%)`,
               }}
             />
             <div
               className="absolute inset-0 pointer-events-none transition-opacity duration-1000 ease-in-out hidden dark:block"
               style={{
                 opacity: brandFadedIn ? 1 : 0,
-                background: `linear-gradient(180deg, transparent 20%, rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.10) 60%, rgba(${leagueBrandColors.primaryRgb.r}, ${leagueBrandColors.primaryRgb.g}, ${leagueBrandColors.primaryRgb.b}, 0.22) 100%)`,
+                background: `linear-gradient(180deg, transparent 20%, rgba(0, 0, 0, 0.35) 60%, rgba(0, 0, 0, 0.7) 100%)`,
               }}
             />
           </>
@@ -5703,6 +5703,7 @@ export default function LeaguePage() {
                   leagueSlug={slug}
                   onBack={handleGameBack}
                   onGameInfoLoaded={(info) => setInlineGameInfo(info)}
+                  onSelectPlayer={(playerSlug) => handleSelectPlayer(playerSlug, 'game')}
                 />
               </div>
             )}

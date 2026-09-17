@@ -900,6 +900,7 @@ export default function GamePage() {
       <UpcomingGamePreview
         game={gameData}
         onRefresh={() => window.location.reload()}
+        leagueSlug={leagueSlug}
       />
     );
   }
