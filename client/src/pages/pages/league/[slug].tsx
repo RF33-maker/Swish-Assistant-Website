@@ -1540,6 +1540,7 @@ export default function LeaguePage() {
           if (!teamMap.has(mapKey)) {
             teamMap.set(mapKey, {
               teamName: normalizedName,
+              league_id: stat.league_id,
               age_group: ageGroup,
               gamesPlayed: 0,
               totalMinutes: 0,
