@@ -149,13 +149,13 @@ export function GameSwitcherBar({ leagueId, currentGameKey, isTestMode }: GameSw
     }
   }, [activeTab]);
 
-  const getTeamAbbr = (teamName: string): string => {
-    const words = teamName.replace(/Senior Men|Senior Women|I+$/gi, '').trim().split(' ');
-    if (words.length >= 2) {
-      return (words[0].substring(0, 3) + words[1].substring(0, 1)).toUpperCase();
-    }
-    return teamName.substring(0, 4).toUpperCase();
-  };
+  // Full club name (the "Senior Men/Women" and trailing "I" suffix is dropped so more of the name fits).
+  const getTeamLabel = (teamName: string): string =>
+    (teamName || '')
+      .replace(/\s+Senior\s+(Men|Women)\b/gi, '')
+      .replace(/\s+I\s*$/, '')
+      .replace(/\s+/g, ' ')
+      .trim();
 
   const formatGameDate = (matchtime: string): string => {
     const date = new Date(matchtime);
@@ -264,7 +264,7 @@ export function GameSwitcherBar({ leagueId, currentGameKey, isTestMode }: GameSw
                 <button
                   key={game.game_key}
                   onClick={() => handleGameClick(game)}
-                  className={`flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-all min-w-[100px] sm:min-w-[120px] ${
+                  className={`flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-all min-w-[200px] sm:min-w-[250px] ${
                     isCurrent
                       ? 'bg-orange-500 text-white ring-1 ring-orange-400'
                       : 'bg-white/5 hover:bg-white/15 text-white/90'
@@ -276,7 +276,7 @@ export function GameSwitcherBar({ leagueId, currentGameKey, isTestMode }: GameSw
 
                   <div className="flex items-center gap-1.5 w-full justify-center">
                     <div className="flex items-center gap-1 flex-1 justify-end">
-                      <span className="text-[11px] sm:text-xs font-medium truncate max-w-[40px] sm:max-w-[50px]">{getTeamAbbr(game.hometeam)}</span>
+                      <span className="text-[11px] sm:text-xs font-medium truncate max-w-[80px] sm:max-w-[100px]">{getTeamLabel(game.hometeam)}</span>
                       <TeamLogo teamName={game.hometeam} leagueId={leagueId} size="xs" />
                     </div>
 
@@ -292,7 +292,7 @@ export function GameSwitcherBar({ leagueId, currentGameKey, isTestMode }: GameSw
 
                     <div className="flex items-center gap-1 flex-1 justify-start">
                       <TeamLogo teamName={game.awayteam} leagueId={leagueId} size="xs" />
-                      <span className="text-[11px] sm:text-xs font-medium truncate max-w-[40px] sm:max-w-[50px]">{getTeamAbbr(game.awayteam)}</span>
+                      <span className="text-[11px] sm:text-xs font-medium truncate max-w-[80px] sm:max-w-[100px]">{getTeamLabel(game.awayteam)}</span>
                     </div>
                   </div>
 

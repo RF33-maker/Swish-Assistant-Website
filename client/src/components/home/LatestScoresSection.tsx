@@ -104,13 +104,14 @@ function isLiveStatus(
   return tipoff >= now - 12 * 60 * 60 * 1000 && tipoff <= now + 6 * 60 * 60 * 1000;
 }
 
-function shortTeam(name: string): string {
-  const cleaned = name.replace(/[^A-Za-z\s]/g, "").trim();
-  if (!cleaned) return name.slice(0, 4).toUpperCase();
-  const parts = cleaned.split(/\s+/);
-  if (parts.length === 1) return parts[0].slice(0, 4).toUpperCase();
-  const initials = parts.map((p) => p[0]).join("").toUpperCase();
-  return initials.slice(0, 4);
+// Full club name for the score cards; the "Senior Men/Women" and trailing "I"
+// suffix is dropped so more of the actual name fits (II/III are kept).
+function teamLabel(name: string): string {
+  return (name || "")
+    .replace(/\s+Senior\s+(Men|Women)\b/gi, "")
+    .replace(/\s+I\s*$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function formatDate(s: string | null) {
@@ -438,7 +439,7 @@ export default function LatestScoresSection() {
                           <Link
                             key={g.game_key}
                             href={`/competition/${g.league_slug}/game/${encodeURIComponent(g.game_key)}`}
-                            className="snap-start text-left flex-shrink-0 w-[152px] sm:w-[200px] rounded-md bg-neutral-900 hover:bg-neutral-800 border border-red-500/60 hover:border-red-500/90 transition-colors duration-200 p-2.5"
+                            className="snap-start text-left flex-shrink-0 w-[216px] sm:w-[240px] rounded-md bg-neutral-900 hover:bg-neutral-800 border border-red-500/60 hover:border-red-500/90 transition-colors duration-200 p-2.5"
                             data-testid={`live-card-${g.game_key}`}
                           >
                             <div className="flex items-center justify-between mb-1.5">
@@ -451,26 +452,26 @@ export default function LatestScoresSection() {
                               </span>
                             </div>
 
-                            <div className="flex items-center justify-between py-0.5">
-                              <div className="flex items-center gap-1.5 min-w-0">
+                            <div className="flex items-center justify-between gap-2 py-0.5">
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
                                 <div className="h-5 w-5 flex-shrink-0 rounded-full bg-neutral-800 overflow-hidden flex items-center justify-center">
                                   <TeamLogo teamName={g.home_team} leagueId={g.league_id} size="xs" />
                                 </div>
-                                <span className={`text-xs ${homeWon ? "font-bold text-white" : "text-neutral-300"}`}>
-                                  {shortTeam(g.home_team)}
+                                <span className={`text-xs truncate ${homeWon ? "font-bold text-white" : "text-neutral-300"}`}>
+                                  {teamLabel(g.home_team)}
                                 </span>
                               </div>
                               <span className={`text-sm tabular-nums ${homeWon ? "font-bold text-white" : "text-neutral-300"}`}>
                                 {g.home_score ?? "—"}
                               </span>
                             </div>
-                            <div className="flex items-center justify-between py-0.5">
-                              <div className="flex items-center gap-1.5 min-w-0">
+                            <div className="flex items-center justify-between gap-2 py-0.5">
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
                                 <div className="h-5 w-5 flex-shrink-0 rounded-full bg-neutral-800 overflow-hidden flex items-center justify-center">
                                   <TeamLogo teamName={g.away_team} leagueId={g.league_id} size="xs" />
                                 </div>
-                                <span className={`text-xs ${!homeWon ? "font-bold text-white" : "text-neutral-300"}`}>
-                                  {shortTeam(g.away_team)}
+                                <span className={`text-xs truncate ${!homeWon ? "font-bold text-white" : "text-neutral-300"}`}>
+                                  {teamLabel(g.away_team)}
                                 </span>
                               </div>
                               <span className={`text-sm tabular-nums ${!homeWon ? "font-bold text-white" : "text-neutral-300"}`}>
@@ -485,7 +486,7 @@ export default function LatestScoresSection() {
                           <Link
                             key={g.game_key}
                             href={`/competition/${g.league_slug}/game/${encodeURIComponent(g.game_key)}`}
-                            className="snap-start text-left flex-shrink-0 w-[152px] sm:w-[200px] rounded-md bg-neutral-900 hover:bg-neutral-800 border border-orange-500/40 hover:border-orange-500/70 transition-colors duration-200 p-2.5"
+                            className="snap-start text-left flex-shrink-0 w-[216px] sm:w-[240px] rounded-md bg-neutral-900 hover:bg-neutral-800 border border-orange-500/40 hover:border-orange-500/70 transition-colors duration-200 p-2.5"
                             data-testid={`upcoming-card-${g.game_key}`}
                           >
                             <div className="flex items-center justify-between mb-1.5">
@@ -502,7 +503,7 @@ export default function LatestScoresSection() {
                                 <TeamLogo teamName={g.home_team} leagueId={g.league_id} size="xs" />
                               </div>
                               <span className="text-xs text-neutral-200 truncate">
-                                {shortTeam(g.home_team)}
+                                {teamLabel(g.home_team)}
                               </span>
                             </div>
                             <div className="flex items-center gap-1.5 py-0.5 min-w-0">
@@ -510,7 +511,7 @@ export default function LatestScoresSection() {
                                 <TeamLogo teamName={g.away_team} leagueId={g.league_id} size="xs" />
                               </div>
                               <span className="text-xs text-neutral-200 truncate">
-                                {shortTeam(g.away_team)}
+                                {teamLabel(g.away_team)}
                               </span>
                             </div>
                           </Link>
@@ -522,7 +523,7 @@ export default function LatestScoresSection() {
                         <Link
                           key={g.game_key}
                           href={`/competition/${g.league_slug}/game/${encodeURIComponent(g.game_key)}`}
-                          className="snap-start text-left flex-shrink-0 w-[152px] sm:w-[200px] rounded-md bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 transition-colors duration-200 p-2.5"
+                          className="snap-start text-left flex-shrink-0 w-[216px] sm:w-[240px] rounded-md bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 hover:border-neutral-700 transition-colors duration-200 p-2.5"
                           data-testid={`score-card-${g.game_key}`}
                         >
                           <div className="flex items-center justify-between mb-1.5">
@@ -535,19 +536,16 @@ export default function LatestScoresSection() {
                           </div>
 
                           {/* Home row */}
-                          <div className="flex items-center justify-between py-0.5">
-                            <div className="flex items-center gap-1.5 min-w-0">
+                          <div className="flex items-center justify-between gap-2 py-0.5">
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
                               <div className="h-5 w-5 flex-shrink-0 rounded-full bg-neutral-800 overflow-hidden flex items-center justify-center">
                                 <TeamLogo teamName={g.home_team} leagueId={g.league_id} size="xs" />
                               </div>
-                              <span className={`text-xs ${homeWon ? "font-bold text-white" : "text-neutral-300"}`}>
-                                {shortTeam(g.home_team)}
+                              <span className={`text-xs truncate ${homeWon ? "font-bold text-white" : "text-neutral-300"}`}>
+                                {teamLabel(g.home_team)}
                               </span>
-                              {g.home_record && (
-                                <span className="text-[10px] text-neutral-500">({g.home_record})</span>
-                              )}
                             </div>
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center justify-end gap-1 w-[46px] flex-shrink-0">
                               <span className={`text-sm tabular-nums ${homeWon ? "font-bold text-white" : "text-neutral-300"}`}>
                                 {g.home_score}
                               </span>
@@ -556,19 +554,16 @@ export default function LatestScoresSection() {
                           </div>
 
                           {/* Away row */}
-                          <div className="flex items-center justify-between py-0.5">
-                            <div className="flex items-center gap-1.5 min-w-0">
+                          <div className="flex items-center justify-between gap-2 py-0.5">
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
                               <div className="h-5 w-5 flex-shrink-0 rounded-full bg-neutral-800 overflow-hidden flex items-center justify-center">
                                 <TeamLogo teamName={g.away_team} leagueId={g.league_id} size="xs" />
                               </div>
-                              <span className={`text-xs ${!homeWon ? "font-bold text-white" : "text-neutral-300"}`}>
-                                {shortTeam(g.away_team)}
+                              <span className={`text-xs truncate ${!homeWon ? "font-bold text-white" : "text-neutral-300"}`}>
+                                {teamLabel(g.away_team)}
                               </span>
-                              {g.away_record && (
-                                <span className="text-[10px] text-neutral-500">({g.away_record})</span>
-                              )}
                             </div>
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center justify-end gap-1 w-[46px] flex-shrink-0">
                               <span className={`text-sm tabular-nums ${!homeWon ? "font-bold text-white" : "text-neutral-300"}`}>
                                 {g.away_score}
                               </span>
