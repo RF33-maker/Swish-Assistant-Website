@@ -567,6 +567,128 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Strips a trailing season/year off a competition name to get its brand
+  // name, e.g. "NBL Division One 2026-27" -> "NBL Division One". Mirrors
+  // SAB's app/utils/json_parser.py _strip_season so the auto-created
+  // `leagues` brand name matches what the backend's own fuzzy matching
+  // would derive.
+  function stripSeasonSuffix(name: string): string {
+    const stripped = (name || "").replace(/\s*(?:\d{2,4}\s*[/–-]\s*\d{2,4}|\d{4})\s*$/, "").trim();
+    return stripped || (name || "").trim();
+  }
+
+  function slugify(name: string): string {
+    return name
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+      .trim();
+  }
+
+  async function uniqueLeagueSlug(baseSlug: string): Promise<string> {
+    let candidate = baseSlug || "league";
+    let suffix = 2;
+    while (true) {
+      const { data } = await supabaseAdmin.from("leagues").select("id").eq("slug", candidate).maybeSingle();
+      if (!data) return candidate;
+      candidate = `${baseSlug}-${suffix}`;
+      suffix += 1;
+    }
+  }
+
+  // Links a competition to an existing one so they're recognised as the same
+  // league across seasons: both rows' `competitions.competition_id` get set
+  // to the same `leagues.id` (the same "brand" row that already powers the
+  // public /competition/:slug brand page — season picker, gender split,
+  // etc.), creating that leagues row on the fly if the existing competition
+  // isn't part of one yet. It also moves the existing competition's teams
+  // forward onto the new one, mirroring the "move forward" behaviour
+  // json_parser.py already does automatically once real fixture data is
+  // uploaded — this just does it up front so a pre-season competition can
+  // show its teams before any games exist.
+  app.post("/api/league-management/link-season", async (req: Request, res: Response) => {
+    try {
+      const userId = await authenticateSupabaseUser(req);
+      if (!userId) return res.status(401).json({ error: "Authentication required" });
+
+      const { newLeagueId, existingLeagueId } = req.body || {};
+      if (!newLeagueId || !existingLeagueId) {
+        return res.status(400).json({ error: "newLeagueId and existingLeagueId are required" });
+      }
+      if (newLeagueId === existingLeagueId) {
+        return res.status(400).json({ error: "Cannot link a competition to itself" });
+      }
+
+      const [isNewOwner, isExistingOwner] = await Promise.all([
+        verifyLeagueOwnership(userId, newLeagueId),
+        verifyLeagueOwnership(userId, existingLeagueId),
+      ]);
+      if (!isNewOwner || !isExistingOwner) {
+        return res.status(403).json({ error: "Only the owner of both competitions can link them" });
+      }
+
+      const { data: existing, error: existingError } = await supabaseAdmin
+        .from("competitions")
+        .select("league_id, competition_id, name, logo_url")
+        .eq("league_id", existingLeagueId)
+        .single();
+      if (existingError || !existing) {
+        return res.status(404).json({ error: "Existing league not found" });
+      }
+
+      let rootId = existing.competition_id;
+
+      if (!rootId) {
+        const brandName = stripSeasonSuffix(existing.name);
+        const slug = await uniqueLeagueSlug(slugify(brandName));
+        const { data: newBrand, error: brandError } = await supabaseAdmin
+          .from("leagues")
+          .insert({ name: brandName, slug, logo_url: existing.logo_url || null })
+          .select("id")
+          .single();
+        if (brandError || !newBrand) {
+          console.error("Error creating league brand:", brandError);
+          return res.status(500).json({ error: "Failed to link competitions" });
+        }
+        rootId = newBrand.id;
+
+        const { error: rootUpdateError } = await supabaseAdmin
+          .from("competitions")
+          .update({ competition_id: rootId })
+          .eq("league_id", existingLeagueId);
+        if (rootUpdateError) {
+          console.error("Error setting root competition_id:", rootUpdateError);
+          return res.status(500).json({ error: "Failed to link competitions" });
+        }
+      }
+
+      const { error: newUpdateError } = await supabaseAdmin
+        .from("competitions")
+        .update({ competition_id: rootId })
+        .eq("league_id", newLeagueId);
+      if (newUpdateError) {
+        console.error("Error setting new competition_id:", newUpdateError);
+        return res.status(500).json({ error: "Failed to link competitions" });
+      }
+
+      const { data: movedTeams, error: teamsError } = await supabaseAdmin
+        .from("teams")
+        .update({ league_id: newLeagueId })
+        .eq("league_id", existingLeagueId)
+        .select("team_id");
+      if (teamsError) {
+        console.error("Error moving teams to linked competition:", teamsError);
+        return res.status(500).json({ error: "Linked competitions, but failed to carry teams over" });
+      }
+
+      res.json({ success: true, rootId, teamsMoved: movedTeams?.length || 0 });
+    } catch (err: any) {
+      console.error("Error linking competition to league:", err.message);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // Delete team logo endpoint - uses service role to bypass RLS
   app.delete("/api/team-logos/delete", async (req, res) => {
     try {

@@ -122,15 +122,19 @@ const PLAYER_STAT_COLUMNS: Record<string, { key: string; label: string }[]> = {
     { key: "sminutes", label: "MIN" },
     { key: "sfieldgoalsmade", label: "FGM" },
     { key: "sfieldgoalsattempted", label: "FGA" },
+    { key: "sfieldgoalspercentage", label: "FG%" },
     { key: "sthreepointersmade", label: "3PM" },
     { key: "sthreepointersattempted", label: "3PA" },
+    { key: "sthreepointerspercentage", label: "3P%" },
     { key: "sfreethrowsmade", label: "FTM" },
     { key: "sfreethrowsattempted", label: "FTA" },
+    { key: "sfreethrowspercentage", label: "FT%" },
     { key: "sreboundstotal", label: "REB" },
     { key: "sassists", label: "AST" },
     { key: "sturnovers", label: "TO" },
     { key: "ssteals", label: "STL" },
     { key: "sblocks", label: "BLK" },
+    { key: "sfoulspersonal", label: "PF" },
   ],
   Advanced: [
     { key: "efg_percent", label: "EFG%" },
@@ -161,7 +165,6 @@ const PLAYER_STAT_COLUMNS: Record<string, { key: string; label: string }[]> = {
   ],
   Misc: [
     { key: "splusminuspoints", label: "+/-" },
-    { key: "sfoulspersonal", label: "PF" },
     { key: "sblocksreceived", label: "BLK AGAINST" }
   ]
 };
@@ -169,9 +172,11 @@ const PLAYER_STAT_COLUMNS: Record<string, { key: string; label: string }[]> = {
 const PLAYER_STAT_LEGENDS: Record<string, string[]> = {
   Traditional: [
     'PTS = Points', 'MIN = Minutes', 'FGM = Field Goals Made', 'FGA = Field Goals Attempted',
-    '3PM = Three-Pointers Made', '3PA = Three-Pointers Attempted', 'FTM = Free Throws Made',
-    'FTA = Free Throws Attempted', 'REB = Total Rebounds', 'AST = Assists', 'TO = Turnovers',
-    'STL = Steals', 'BLK = Blocks'
+    'FG% = Field Goal Percentage',
+    '3PM = Three-Pointers Made', '3PA = Three-Pointers Attempted', '3P% = Three-Point Percentage',
+    'FTM = Free Throws Made', 'FTA = Free Throws Attempted', 'FT% = Free Throw Percentage',
+    'REB = Total Rebounds', 'AST = Assists', 'TO = Turnovers',
+    'STL = Steals', 'BLK = Blocks', 'PF = Personal Fouls'
   ],
   Advanced: [
     'EFG% = Effective Field Goal Percentage', 'TS% = True Shooting Percentage',
@@ -188,7 +193,7 @@ const PLAYER_STAT_LEGENDS: Record<string, string[]> = {
     '%PTS PITP = % of Points in the Paint', '%PTS FBPS = % of Points from Fastbreaks',
     '%PTS 2ND CH = % of Points from 2nd Chance', '%PTS OFFTO = % of Points off Turnovers'
   ],
-  Misc: ['+/- = Plus/Minus', 'PF = Personal Fouls', 'BLK AGAINST = Blocks Received']
+  Misc: ['+/- = Plus/Minus', 'BLK AGAINST = Blocks Received']
 };
 
 const applyPlayerMode = (
@@ -206,7 +211,8 @@ const applyPlayerMode = (
     'off_rating', 'def_rating', 'net_rating',
     'pts_percent_2pt', 'pts_percent_3pt', 'pts_percent_ft',
     'pts_percent_midrange', 'pts_percent_pitp', 'pts_percent_fastbreak',
-    'pts_percent_second_chance', 'pts_percent_off_turnovers'
+    'pts_percent_second_chance', 'pts_percent_off_turnovers',
+    'sfieldgoalspercentage', 'sthreepointerspercentage', 'sfreethrowspercentage'
   ];
   if (rateStats.includes(statKey)) return value;
   if (statKey === 'sminutes') {
@@ -502,7 +508,8 @@ export default function TeamProfile() {
       'tov_percent', 'usage_percent', 'pie', 'off_rating', 'def_rating', 'net_rating',
       'pts_percent_2pt', 'pts_percent_3pt', 'pts_percent_ft',
       'pts_percent_midrange', 'pts_percent_pitp', 'pts_percent_fastbreak',
-      'pts_percent_second_chance', 'pts_percent_off_turnovers'
+      'pts_percent_second_chance', 'pts_percent_off_turnovers',
+      'sfieldgoalspercentage', 'sthreepointerspercentage', 'sfreethrowspercentage'
     ];
 
     return [...filtered].sort((a, b) => {
@@ -1826,7 +1833,8 @@ export default function TeamProfile() {
                             'tov_percent', 'usage_percent', 'pie', 'off_rating', 'def_rating', 'net_rating',
                             'pts_percent_2pt', 'pts_percent_3pt', 'pts_percent_ft',
                             'pts_percent_midrange', 'pts_percent_pitp', 'pts_percent_fastbreak',
-                            'pts_percent_second_chance', 'pts_percent_off_turnovers'
+                            'pts_percent_second_chance', 'pts_percent_off_turnovers',
+                            'sfieldgoalspercentage', 'sthreepointerspercentage', 'sfreethrowspercentage'
                           ];
                           const isRateStat = rateStats.includes(column.key);
                           const aggregatedValue = rawStats.reduce((acc: number, stat: any) => {

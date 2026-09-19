@@ -55,15 +55,19 @@ const PLAYER_STAT_COLUMNS: Record<string, { key: string; label: string }[]> = {
     { key: "sminutes", label: "MIN" },
     { key: "sfieldgoalsmade", label: "FGM" },
     { key: "sfieldgoalsattempted", label: "FGA" },
+    { key: "sfieldgoalspercentage", label: "FG%" },
     { key: "sthreepointersmade", label: "3PM" },
     { key: "sthreepointersattempted", label: "3PA" },
+    { key: "sthreepointerspercentage", label: "3P%" },
     { key: "sfreethrowsmade", label: "FTM" },
     { key: "sfreethrowsattempted", label: "FTA" },
+    { key: "sfreethrowspercentage", label: "FT%" },
     { key: "sreboundstotal", label: "REB" },
     { key: "sassists", label: "AST" },
     { key: "sturnovers", label: "TO" },
     { key: "ssteals", label: "STL" },
     { key: "sblocks", label: "BLK" },
+    { key: "sfoulspersonal", label: "PF" },
   ],
   Advanced: [
     { key: "efg_percent", label: "EFG%" },
@@ -94,7 +98,8 @@ const RATE_STATS = [
   'tov_percent', 'usage_percent', 'pie', 'off_rating', 'def_rating', 'net_rating',
   'pts_percent_2pt', 'pts_percent_3pt', 'pts_percent_ft',
   'pts_percent_midrange', 'pts_percent_pitp', 'pts_percent_fastbreak',
-  'pts_percent_second_chance', 'pts_percent_off_turnovers'
+  'pts_percent_second_chance', 'pts_percent_off_turnovers',
+  'sfieldgoalspercentage', 'sthreepointerspercentage', 'sfreethrowspercentage'
 ];
 
 const EMPTY_RECORD_MAXES: RecordMaxes = { pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, tpm: 0 };

@@ -34,6 +34,7 @@ interface PlayerGameStats {
   sblocks?: number;
   sturnovers?: number;
   personal_fouls?: number;
+  sfoulspersonal?: number;
   splusminuspoints?: number;
 }
 
@@ -1230,6 +1231,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                             <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">STL</th>
                             <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">BLK</th>
                             <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">TO</th>
+                            <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">PF</th>
                             <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">+/-</th>
                             <th className="text-center px-1.5 py-1.5 md:p-3 font-medium text-slate-700 dark:text-slate-200">EFF</th>
                           </tr>
@@ -1336,6 +1338,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                               <td className="px-1.5 py-1.5 md:p-3 text-center font-medium text-slate-800 dark:text-slate-200">{player.ssteals || 0}</td>
                               <td className="px-1.5 py-1.5 md:p-3 text-center font-medium text-slate-800 dark:text-slate-200">{player.sblocks || 0}</td>
                               <td className="px-1.5 py-1.5 md:p-3 text-center font-medium text-red-600 dark:text-red-400">{player.sturnovers || 0}</td>
+                              <td className="px-1.5 py-1.5 md:p-3 text-center font-medium text-slate-800 dark:text-slate-200">{player.sfoulspersonal || 0}</td>
                               <td className="px-1.5 py-1.5 md:p-3 text-center">
                                 {player.splusminuspoints !== undefined && player.splusminuspoints !== null ? (
                                   <span className={`font-medium ${player.splusminuspoints >= 0 ? 'text-green-600' : 'text-red-600'}`}>
@@ -1375,6 +1378,7 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
                               <td className="px-1.5 py-1.5 md:p-3 text-center">-</td>
                               <td className="px-1.5 py-1.5 md:p-3 text-center">{selectedTeamStats.totalRebounds}</td>
                               <td className="px-1.5 py-1.5 md:p-3 text-center">{selectedTeamStats.totalAssists}</td>
+                              <td className="px-1.5 py-1.5 md:p-3 text-center">-</td>
                               <td className="px-1.5 py-1.5 md:p-3 text-center">-</td>
                               <td className="px-1.5 py-1.5 md:p-3 text-center">-</td>
                               <td className="px-1.5 py-1.5 md:p-3 text-center">-</td>

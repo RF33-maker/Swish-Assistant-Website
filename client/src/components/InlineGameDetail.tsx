@@ -48,6 +48,7 @@ interface PlayerStat {
   ssteals?: number;
   sblocks?: number;
   sturnovers?: number;
+  sfoulspersonal?: number;
 }
 
 interface TeamStatRow {
@@ -584,6 +585,7 @@ export function InlineGameDetail({
                 <th className="text-center py-2 px-2">STL</th>
                 <th className="text-center py-2 px-2">BLK</th>
                 <th className="text-center py-2 px-2">TO</th>
+                <th className="text-center py-2 px-2">PF</th>
                 <th className="text-center py-2 px-2">FG</th>
                 <th className="text-center py-2 px-2">3PT</th>
                 <th className="text-center py-2 px-2">FT</th>
@@ -611,6 +613,7 @@ export function InlineGameDetail({
                   <td className="text-center py-2 px-2 text-slate-500">{p.ssteals || 0}</td>
                   <td className="text-center py-2 px-2 text-slate-500">{p.sblocks || 0}</td>
                   <td className="text-center py-2 px-2 text-slate-500">{p.sturnovers || 0}</td>
+                  <td className="text-center py-2 px-2 text-slate-500">{p.sfoulspersonal || 0}</td>
                   <td className="text-center py-2 px-2 text-slate-500 whitespace-nowrap">{p.sfieldgoalsmade || 0}/{p.sfieldgoalsattempted || 0}</td>
                   <td className="text-center py-2 px-2 text-slate-500 whitespace-nowrap">{p.sthreepointersmade || 0}/{p.sthreepointersattempted || 0}</td>
                   <td className="text-center py-2 px-2 text-slate-500 whitespace-nowrap">{p.sfreethrowsmade || 0}/{p.sfreethrowsattempted || 0}</td>

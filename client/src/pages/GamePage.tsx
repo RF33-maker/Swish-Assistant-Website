@@ -41,6 +41,7 @@ interface PlayerStat {
   ssteals: number;
   sblocks: number;
   sturnovers: number;
+  sfoulspersonal?: number;
   sfieldgoalsmade: number;
   sfieldgoalsattempted: number;
   sthreepointersmade: number;
@@ -1512,6 +1513,7 @@ export default function GamePage() {
                                   <th className="text-center py-2 px-2">STL</th>
                                   <th className="text-center py-2 px-2">BLK</th>
                                   <th className="text-center py-2 px-2">TO</th>
+                                  <th className="text-center py-2 px-2">PF</th>
                                   <th className="text-center py-2 px-2">FG</th>
                                   <th className="text-center py-2 px-2">3PT</th>
                                   <th className="text-center py-2 px-2">FT</th>
@@ -1539,6 +1541,7 @@ export default function GamePage() {
                                     <td className="text-center py-2 px-2 text-slate-500">{player.ssteals || 0}</td>
                                     <td className="text-center py-2 px-2 text-slate-500">{player.sblocks || 0}</td>
                                     <td className="text-center py-2 px-2 text-slate-500">{player.sturnovers || 0}</td>
+                                    <td className="text-center py-2 px-2 text-slate-500">{player.sfoulspersonal || 0}</td>
                                     <td className="text-center py-2 px-2 text-slate-500 whitespace-nowrap">
                                       {player.sfieldgoalsmade || 0}/{player.sfieldgoalsattempted || 0}
                                     </td>
@@ -1579,6 +1582,7 @@ export default function GamePage() {
                                   <th className="text-center py-2 px-2">STL</th>
                                   <th className="text-center py-2 px-2">BLK</th>
                                   <th className="text-center py-2 px-2">TO</th>
+                                  <th className="text-center py-2 px-2">PF</th>
                                   <th className="text-center py-2 px-2">FG</th>
                                   <th className="text-center py-2 px-2">3PT</th>
                                   <th className="text-center py-2 px-2">FT</th>
@@ -1606,6 +1610,7 @@ export default function GamePage() {
                                     <td className="text-center py-2 px-2 text-slate-500">{player.ssteals || 0}</td>
                                     <td className="text-center py-2 px-2 text-slate-500">{player.sblocks || 0}</td>
                                     <td className="text-center py-2 px-2 text-slate-500">{player.sturnovers || 0}</td>
+                                    <td className="text-center py-2 px-2 text-slate-500">{player.sfoulspersonal || 0}</td>
                                     <td className="text-center py-2 px-2 text-slate-500 whitespace-nowrap">
                                       {player.sfieldgoalsmade || 0}/{player.sfieldgoalsattempted || 0}
                                     </td>
