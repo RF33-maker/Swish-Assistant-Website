@@ -395,7 +395,8 @@ const applyPlayerMode = (
     'off_rating', 'def_rating', 'net_rating',
     'pts_percent_2pt', 'pts_percent_3pt', 'pts_percent_ft',
     'pts_percent_midrange', 'pts_percent_pitp', 'pts_percent_fastbreak',
-    'pts_percent_second_chance', 'pts_percent_off_turnovers'
+    'pts_percent_second_chance', 'pts_percent_off_turnovers',
+    'sfieldgoalspercentage', 'sthreepointerspercentage', 'sfreethrowspercentage'
   ];
 
   // For rate stats, return the value unchanged across all modes
@@ -460,15 +461,19 @@ const PLAYER_STAT_COLUMNS: Record<string, PlayerStatColumn[]> = {
     { key: "sminutes", label: "MIN" },
     { key: "sfieldgoalsmade", label: "FGM" },
     { key: "sfieldgoalsattempted", label: "FGA" },
+    { key: "sfieldgoalspercentage", label: "FG%" },
     { key: "sthreepointersmade", label: "3PM" },
     { key: "sthreepointersattempted", label: "3PA" },
+    { key: "sthreepointerspercentage", label: "3P%" },
     { key: "sfreethrowsmade", label: "FTM" },
     { key: "sfreethrowsattempted", label: "FTA" },
+    { key: "sfreethrowspercentage", label: "FT%" },
     { key: "sreboundstotal", label: "REB" },
     { key: "sassists", label: "AST" },
     { key: "sturnovers", label: "TO" },
     { key: "ssteals", label: "STL" },
     { key: "sblocks", label: "BLK" },
+    { key: "sfoulspersonal", label: "PF" },
     { key: "efficiency", label: "EFF" },
   ],
   Advanced: [
@@ -500,7 +505,6 @@ const PLAYER_STAT_COLUMNS: Record<string, PlayerStatColumn[]> = {
   ],
   Misc: [
     { key: "splusminuspoints", label: "+/-" },
-    { key: "sfoulspersonal", label: "PF" },
     { key: "sblocksreceived", label: "BLK AGAINST" }
   ]
 };
@@ -512,15 +516,19 @@ const PLAYER_STAT_LEGENDS: Record<string, string[]> = {
     'MIN = Minutes',
     'FGM = Field Goals Made',
     'FGA = Field Goals Attempted',
+    'FG% = Field Goal Percentage',
     '3PM = Three-Pointers Made',
     '3PA = Three-Pointers Attempted',
+    '3P% = Three-Point Percentage',
     'FTM = Free Throws Made',
     'FTA = Free Throws Attempted',
+    'FT% = Free Throw Percentage',
     'REB = Total Rebounds',
     'AST = Assists',
     'TO = Turnovers',
     'STL = Steals',
     'BLK = Blocks',
+    'PF = Personal Fouls',
     'EFF = Efficiency (PTS + REB + AST + STL + BLK - Missed FG - Missed FT - TO)'
   ],
   Advanced: [
@@ -552,7 +560,6 @@ const PLAYER_STAT_LEGENDS: Record<string, string[]> = {
   ],
   Misc: [
     '+/- = Plus/Minus',
-    'PF = Personal Fouls',
     'BLK AGAINST = Blocks Received'
   ]
 };
@@ -1424,7 +1431,8 @@ export default function LeaguePage() {
               'off_rating', 'def_rating', 'net_rating',
               'pts_percent_2pt', 'pts_percent_3pt', 'pts_percent_ft',
               'pts_percent_midrange', 'pts_percent_pitp', 'pts_percent_fastbreak',
-              'pts_percent_second_chance', 'pts_percent_off_turnovers'
+              'pts_percent_second_chance', 'pts_percent_off_turnovers',
+              'sfieldgoalspercentage', 'sthreepointerspercentage', 'sfreethrowspercentage'
             ];
             
             const isRateStat = rateStats.includes(column.key);
@@ -3404,21 +3412,27 @@ export default function LeaguePage() {
     // Calculate team standings using team_stats table first, fallback to player_stats
     const calculateStandingsWithTeamStats = async (leagueId: string, playerStats: any[], parentLeagueId?: string) => {
       try {
-        const { data: allTeams, error: teamsError } = await db
+        const { data: teamRows, error: teamsError } = await db
           .from("teams")
           .select("team_id, name")
           .eq("league_id", leagueId);
 
-        if (teamsError || !allTeams || allTeams.length === 0) {
+        if (teamsError) {
           console.error("Error fetching teams:", teamsError);
-          setStandings([]);
-          return;
         }
+        // A team row belongs to one competition at a time (it moves forward to the
+        // newest season), so a past season can have none — fall back to the game results.
+        const allTeams = teamRows || [];
 
         const { data: gameResults, error: gameResultsError } = await db
           .from("v_game_results")
           .select("home_team, away_team, home_score, away_score")
           .eq("league_id", leagueId);
+
+        if (allTeams.length === 0 && (!gameResults || gameResults.length === 0)) {
+          setStandings([]);
+          return;
+        }
 
         // Build fuzzy alias map from all raw team name strings in this league
         const rawNamesForFuzzy2: string[] = [];
@@ -3449,6 +3463,15 @@ export default function LeaguePage() {
           const normalizedName = normalizeDynamic2(team.name);
           teamStatsMap[normalizedName] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0 };
         });
+
+        if (gameResults && !gameResultsError) {
+          gameResults.forEach((game: any) => {
+            [game.home_team, game.away_team].filter(Boolean).forEach((n: string) => {
+              const key = normalizeDynamic2(n);
+              if (!teamStatsMap[key]) teamStatsMap[key] = { wins: 0, losses: 0, pointsFor: 0, pointsAgainst: 0, games: 0 };
+            });
+          });
+        }
 
         if (gameResults && gameResults.length > 0 && !gameResultsError) {
           gameResults.forEach((game: any) => {
@@ -3621,25 +3644,31 @@ export default function LeaguePage() {
       try {
         setIsLoadingStandings(true);
 
-        const { data: allTeams, error: teamsError } = await db
+        const { data: teamRows, error: teamsError } = await db
           .from("teams")
           .select("team_id, name")
           .eq("league_id", leagueId);
 
-        if (teamsError || !allTeams || allTeams.length === 0) {
+        if (teamsError) {
           console.error("Error fetching teams:", teamsError);
-          setPoolAStandings([]);
-          setPoolBStandings([]);
-          setFullLeagueStandings([]);
-          setIsLoadingStandings(false);
-          return;
         }
+        // Team rows move forward to the newest season, so a past season can have none —
+        // fall back to the game results below.
+        const allTeams = teamRows || [];
 
         // Fetch game results to get pool information
         const { data: scheduleData, error: scheduleError } = await db
           .from("v_game_results")
           .select("*")
           .eq("league_id", leagueId);
+
+        if (allTeams.length === 0 && (!scheduleData || scheduleData.length === 0)) {
+          setPoolAStandings([]);
+          setPoolBStandings([]);
+          setFullLeagueStandings([]);
+          setIsLoadingStandings(false);
+          return;
+        }
 
         // Build team-to-pool mapping from v_game_results
         const extractPoolName = (poolValue: string): string => {
@@ -4835,7 +4864,7 @@ export default function LeaguePage() {
                     <table className="w-full text-xs md:text-sm">
                       <thead>
                         <tr className="border-b border-gray-200 dark:border-neutral-700 dark:bg-neutral-800" style={{ backgroundColor: brandBg50 }}>
-                          <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 dark:bg-neutral-800 z-10 min-w-[100px] md:min-w-[140px]" style={{ backgroundColor: brandBg50 }}>Player</th>
+                          <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-white dark:bg-neutral-800 z-10 min-w-[100px] md:min-w-[140px]">Player</th>
                           <th className="text-center py-2 md:py-3 px-1 md:px-2 font-semibold text-slate-700 dark:text-slate-200 min-w-[30px]">#</th>
                           <th 
                             onClick={() => {
@@ -4933,7 +4962,8 @@ export default function LeaguePage() {
                                 'off_rating', 'def_rating', 'net_rating',
                                 'pts_percent_2pt', 'pts_percent_3pt', 'pts_percent_ft',
                                 'pts_percent_midrange', 'pts_percent_pitp', 'pts_percent_fastbreak',
-                                'pts_percent_second_chance', 'pts_percent_off_turnovers'
+                                'pts_percent_second_chance', 'pts_percent_off_turnovers',
+                                'sfieldgoalspercentage', 'sthreepointerspercentage', 'sfreethrowspercentage'
                               ];
                               
                               const isRateStat = rateStats.includes(column.key);
@@ -5176,7 +5206,7 @@ export default function LeaguePage() {
                     <table className="w-full text-xs md:text-sm">
                       <thead>
                         <tr className="border-b border-gray-200 dark:border-neutral-700 dark:bg-neutral-800" style={{ backgroundColor: brandBg50 }}>
-                          <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 dark:bg-neutral-800 z-10 w-16" style={{ backgroundColor: brandBg50 }}>Logo</th>
+                          <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 dark:text-slate-200 sticky left-0 bg-white dark:bg-neutral-800 z-10 w-16">Logo</th>
                           <th className="text-left py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 dark:text-slate-200 min-w-[120px]">Team</th>
                           <th className="text-center py-2 md:py-3 px-2 md:px-3 font-semibold text-slate-700 dark:text-slate-200 min-w-[45px]">
                             <div className="flex items-center justify-center gap-1">GP</div>
