@@ -7,6 +7,12 @@ import { TeamLogo, invalidateLogoCache } from "@/components/TeamLogo";
 import SwishLogo from "@/assets/Swish Assistant Logo.png";
 import UploadSection from "@/components/LeagueAdmin/upload-section-la";
 import DuplicatePlayerManager from "@/components/LeagueAdmin/DuplicatePlayerManager";
+import { Link2, ChevronDown } from "lucide-react";
+import { CompetitionFieldSelect } from "@/components/CompetitionFieldSelect";
+import { fetchCompetitionFieldOptions, type CompetitionFieldOptions } from "@/lib/competitionFieldOptions";
+
+const DETAIL_INPUT_CLASS =
+  "w-full px-3 py-2 pr-8 text-sm border border-gray-300 rounded-lg bg-white text-gray-900 [color-scheme:light] focus:ring-2 focus:ring-orange-500 focus:border-transparent";
 
 interface League {
   league_id: string;
@@ -17,6 +23,22 @@ interface League {
   instagram_embed_url?: string;
   created_by: string;
   user_id: string;
+  organisation?: string | null;
+  season?: string | null;
+  division?: string | null;
+  age_group?: string | null;
+  gender?: string | null;
+  competition_id?: string | null;
+}
+
+interface SiblingSeason {
+  league_id: string;
+  competition_id: string | null;
+  name: string;
+  slug: string;
+  season: string | null;
+  gender: string | null;
+  division: string | null;
 }
 
 interface TeamLogo {
@@ -44,6 +66,30 @@ export default function LeagueAdmin() {
   const [uploadingLogo, setUploadingLogo] = useState<string | null>(null);
   const [userLeagues, setUserLeagues] = useState<League[]>([]);
 
+  const [orgInput, setOrgInput] = useState("");
+  const [seasonInput, setSeasonInput] = useState("");
+  const [divisionInput, setDivisionInput] = useState("");
+  const [ageGroupInput, setAgeGroupInput] = useState("");
+  const [genderInput, setGenderInput] = useState("");
+  const [savingDetails, setSavingDetails] = useState(false);
+
+  const [siblingSeasons, setSiblingSeasons] = useState<SiblingSeason[]>([]);
+  const [showLinkPicker, setShowLinkPicker] = useState(false);
+  const [linkSearch, setLinkSearch] = useState("");
+  const [linking, setLinking] = useState(false);
+
+  const [fieldOptions, setFieldOptions] = useState<CompetitionFieldOptions>({
+    organisations: [],
+    seasons: [],
+    divisions: [],
+    ageGroups: [],
+    genders: [],
+  });
+
+  useEffect(() => {
+    fetchCompetitionFieldOptions().then(setFieldOptions);
+  }, []);
+
   useEffect(() => {
     checkUser();
     if (slug) {
@@ -56,6 +102,15 @@ export default function LeagueAdmin() {
       fetchUserLeagues();
     }
   }, [currentUser]);
+
+  // Fetch sibling seasons whenever the league's competition_id changes
+  useEffect(() => {
+    if (league?.competition_id) {
+      fetchSiblingSeasons(league.competition_id);
+    } else {
+      setSiblingSeasons([]);
+    }
+  }, [league?.competition_id]);
 
   // Fetch teams after league is loaded
   useEffect(() => {
@@ -119,15 +174,99 @@ export default function LeagueAdmin() {
 
       setLeague(leagues);
       setInstagramUrl(leagues?.instagram_embed_url || "");
-      
+      setOrgInput(leagues?.organisation || "");
+      setSeasonInput(leagues?.season || "");
+      setDivisionInput(leagues?.division || "");
+      setAgeGroupInput(leagues?.age_group || "");
+      setGenderInput(leagues?.gender || "");
+
       // Check if current user is owner
       const { data: { user } } = await supabase.auth.getUser();
       setIsOwner(user?.id === leagues?.created_by || user?.id === leagues?.user_id);
-      
+
     } catch (error) {
       console.error("Error fetching league:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSiblingSeasons = async (competitionId: string) => {
+    try {
+      const res = await fetch(`/api/league/${competitionId}/competitions`);
+      if (!res.ok) {
+        setSiblingSeasons([]);
+        return;
+      }
+      const data: SiblingSeason[] = await res.json();
+      setSiblingSeasons(data);
+    } catch (error) {
+      console.error("Error fetching sibling seasons:", error);
+      setSiblingSeasons([]);
+    }
+  };
+
+  const handleSaveDetails = async () => {
+    if (!league || !currentUser) return;
+
+    setSavingDetails(true);
+    try {
+      const { error } = await supabase
+        .from('competitions')
+        .update({
+          organisation: orgInput.trim() || null,
+          season: seasonInput.trim() || null,
+          division: divisionInput.trim() || null,
+          age_group: ageGroupInput.trim() || null,
+          gender: genderInput.trim() || null,
+        })
+        .eq('league_id', league.league_id);
+
+      if (error) throw error;
+
+      setLeague({
+        ...league,
+        organisation: orgInput.trim() || null,
+        season: seasonInput.trim() || null,
+        division: divisionInput.trim() || null,
+        age_group: ageGroupInput.trim() || null,
+        gender: genderInput.trim() || null,
+      });
+    } catch (error) {
+      console.error("Error saving competition details:", error);
+      alert("Failed to save competition details");
+    } finally {
+      setSavingDetails(false);
+    }
+  };
+
+  const handleLinkToLeague = async (existingLeagueId: string) => {
+    if (!league || !currentUser) return;
+
+    setLinking(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const response = await fetch('/api/league-management/link-season', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({ newLeagueId: league.league_id, existingLeagueId }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Failed to link competitions');
+
+      setLeague({ ...league, competition_id: result.rootId });
+      setShowLinkPicker(false);
+      setLinkSearch("");
+      fetchTeams();
+      alert(`Linked successfully${result.teamsMoved ? ` — ${result.teamsMoved} team${result.teamsMoved === 1 ? '' : 's'} carried over.` : '.'}`);
+    } catch (error) {
+      console.error("Error linking competition:", error);
+      alert(`Failed to link competition: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLinking(false);
     }
   };
 
@@ -499,7 +638,150 @@ export default function LeagueAdmin() {
 
       <main className="max-w-full md:max-w-7xl mx-auto px-4 md:px-6 py-4 md:py-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
-          
+
+          {/* Competition Details & Linking */}
+          <div className="md:col-span-2 bg-white rounded-xl shadow p-4 md:p-6">
+            <div className="flex items-center gap-3 mb-4 md:mb-6">
+              <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                <Link2 className="w-5 h-5 text-orange-600" />
+              </div>
+              <div>
+                <h2 className="text-lg md:text-xl font-semibold text-gray-800">Competition Details</h2>
+                <p className="text-xs md:text-sm text-gray-600">Organisation, season, and division metadata for this competition</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Organisation</label>
+                <CompetitionFieldSelect
+                  value={orgInput}
+                  onChange={setOrgInput}
+                  options={fieldOptions.organisations}
+                  placeholder="e.g. Basketball England"
+                  inputClassName={DETAIL_INPUT_CLASS}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Season</label>
+                <CompetitionFieldSelect
+                  value={seasonInput}
+                  onChange={setSeasonInput}
+                  options={fieldOptions.seasons}
+                  placeholder="e.g. 2026-27"
+                  inputClassName={DETAIL_INPUT_CLASS}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Division</label>
+                <CompetitionFieldSelect
+                  value={divisionInput}
+                  onChange={setDivisionInput}
+                  options={fieldOptions.divisions}
+                  placeholder="e.g. Division One"
+                  inputClassName={DETAIL_INPUT_CLASS}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Age group</label>
+                <CompetitionFieldSelect
+                  value={ageGroupInput}
+                  onChange={setAgeGroupInput}
+                  options={fieldOptions.ageGroups}
+                  placeholder="e.g. U16"
+                  inputClassName={DETAIL_INPUT_CLASS}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Gender</label>
+                <CompetitionFieldSelect
+                  value={genderInput}
+                  onChange={setGenderInput}
+                  options={fieldOptions.genders}
+                  placeholder="e.g. Women's"
+                  inputClassName={DETAIL_INPUT_CLASS}
+                />
+              </div>
+            </div>
+            <button
+              onClick={handleSaveDetails}
+              disabled={savingDetails}
+              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                savingDetails ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-orange-500 hover:bg-orange-600 text-white'
+              }`}
+            >
+              {savingDetails ? 'Saving...' : 'Save Details'}
+            </button>
+
+            <div className="mt-6 pt-6 border-t border-gray-100">
+              <h3 className="text-sm font-semibold text-gray-800 mb-1">Linked seasons</h3>
+              <p className="text-xs text-gray-500 mb-3">
+                Link this competition to a prior season of the same league so it's recognised as the same league — teams and logos carry over immediately, and new uploads for either season will match instead of creating a duplicate.
+              </p>
+
+              {siblingSeasons.length > 0 ? (
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {siblingSeasons
+                    .filter((s) => s.league_id !== league.league_id)
+                    .map((s) => (
+                      <button
+                        key={s.league_id}
+                        onClick={() => navigate(`/league-admin/${s.slug}`)}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded-full border border-orange-200 text-orange-700 hover:bg-orange-50"
+                      >
+                        <Link2 className="h-3 w-3" />
+                        {s.name}{s.season ? ` · ${s.season}` : ''}
+                      </button>
+                    ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500 mb-3">Not linked to any other season yet.</p>
+              )}
+
+              <div className="relative inline-block">
+                <button
+                  type="button"
+                  onClick={() => setShowLinkPicker(!showLinkPicker)}
+                  disabled={linking}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-orange-700 border border-orange-300 rounded-lg hover:bg-orange-50 transition-colors disabled:opacity-50"
+                >
+                  <Link2 className="h-4 w-4" />
+                  {linking ? 'Linking...' : 'Link to existing league'}
+                  <ChevronDown className={`h-3 w-3 transition-transform ${showLinkPicker ? 'rotate-180' : ''}`} />
+                </button>
+
+                {showLinkPicker && (
+                  <div className="absolute z-10 mt-2 w-72 bg-white rounded-lg border border-orange-200 shadow-lg p-2">
+                    <input
+                      type="text"
+                      placeholder="Search your leagues..."
+                      value={linkSearch}
+                      onChange={(e) => setLinkSearch(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg mb-2 bg-white text-gray-900 [color-scheme:light]"
+                    />
+                    <div className="max-h-48 overflow-y-auto divide-y divide-gray-100">
+                      {userLeagues
+                        .filter((l) => l.league_id !== league.league_id)
+                        .filter((l) => l.name.toLowerCase().includes(linkSearch.trim().toLowerCase()))
+                        .map((l) => (
+                          <button
+                            key={l.league_id}
+                            onClick={() => handleLinkToLeague(l.league_id)}
+                            className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-orange-50 rounded"
+                          >
+                            {l.name}{l.season ? <span className="text-gray-400"> · {l.season}</span> : null}
+                          </button>
+                        ))}
+                      {userLeagues.filter((l) => l.league_id !== league.league_id).length === 0 && (
+                        <p className="px-3 py-2 text-sm text-gray-500">No other leagues found.</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* Banner Management */}
           <div className="bg-white rounded-xl shadow p-4 md:p-6">
             <div className="flex items-center gap-3 mb-4 md:mb-6">
