@@ -41,6 +41,59 @@ function formatCanonicalPlayerName(name: string): string {
   return parts.join(" ");
 }
 
+// ── Team logo fallback ──────────────────────────────────────────────────────
+// A club's logo is stored per competition (bucket file "<league_id>_<Team_Name>"
+// or teams.logo_url), so a new season, a sibling competition (e.g. BCB Trophy vs
+// British Championship Basketball) or the women's/men's side of the same club
+// starts with none. These helpers let the team-logos endpoint borrow a logo for
+// the same club from elsewhere when its own competition has none.
+function logoNameKey(name: string): string {
+  return (name || "")
+    .replace(/_/g, " ")
+    .replace(/!/g, "")
+    .replace(/\s+Senior\s+(Men|Women)\b/gi, "")
+    .replace(/\s+I\s*$/, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+type LogoIndex = {
+  storage: Map<string, { leagueId: string; file: string }[]>;
+  db: Map<string, string>;
+  at: number;
+};
+let logoIndexCache: LogoIndex | null = null;
+
+async function getLogoIndex(): Promise<LogoIndex> {
+  if (logoIndexCache && Date.now() - logoIndexCache.at < 5 * 60 * 1000) return logoIndexCache;
+
+  const storage = new Map<string, { leagueId: string; file: string }[]>();
+  for (let offset = 0; ; offset += 1000) {
+    const { data, error } = await supabaseAdmin.storage.from("team-logos").list("", { limit: 1000, offset });
+    if (error || !data || data.length === 0) break;
+    for (const f of data) {
+      const m = f.name.match(/^([0-9a-f-]{36})_(.+)\.[^.]+$/i);
+      if (!m) continue;
+      const key = logoNameKey(m[2]);
+      const list = storage.get(key) || [];
+      list.push({ leagueId: m[1], file: f.name });
+      storage.set(key, list);
+    }
+    if (data.length < 1000) break;
+  }
+
+  const db = new Map<string, string>();
+  const { data: teamRows } = await supabaseAdmin.from("teams").select("name, logo_url").not("logo_url", "is", null);
+  for (const t of (teamRows || []) as { name: string; logo_url: string }[]) {
+    const key = logoNameKey(t.name);
+    if (key && t.logo_url && !db.has(key)) db.set(key, t.logo_url);
+  }
+
+  logoIndexCache = { storage, db, at: Date.now() };
+  return logoIndexCache;
+}
+
 const PHOTO_FALLBACK_TTL_MS = 5 * 60 * 1000;
 let photoFallbackCache: { map: Map<string, string>; at: number } | null = null;
 
@@ -801,12 +854,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      const { data: currentTeams } = await supabaseAdmin
+      const { data: allTeamRows } = await supabaseAdmin
         .from("teams")
         .select("name, logo_url")
-        .eq("league_id", leagueId)
-        .not("logo_url", "is", null);
-      for (const team of currentTeams || []) {
+        .eq("league_id", leagueId);
+      for (const team of allTeamRows || []) {
         if (team.name && team.logo_url) teamLogos[team.name] = team.logo_url;
       }
 
@@ -825,10 +877,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Filter to only files that belong to this exact league ID
       const leagueFiles = (storageFiles || []).filter(f => f.name.startsWith(prefix));
 
-      if (leagueFiles.length === 0) {
-        res.set('Cache-Control', 'public, max-age=300');
-        return res.json(teamLogos);
-      }
+      // (fallback for teams without a logo of their own is applied below)
 
       // Build a normalised-name → public-URL map from the storage listing.
       // File names look like: <leagueId>_<Team_Name_With_Underscores>.<ext>
@@ -841,6 +890,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .from('team-logos')
           .getPublicUrl(file.name);
         teamLogos[teamName] = urlData.publicUrl;
+      }
+
+      // Fallback: teams in this competition that still have no logo borrow one for
+      // the same club — first from other competitions in the same brand (newest
+      // first), then from any competition. This competition's own logos always win.
+      const haveKeys = new Set(Object.keys(teamLogos).map(logoNameKey));
+      const wanted = new Set<string>();
+      for (const g of scheduleRows || []) {
+        if (g.hometeam) wanted.add(g.hometeam);
+        if (g.awayteam) wanted.add(g.awayteam);
+      }
+      for (const t of (allTeamRows || [])) if (t.name) wanted.add(t.name);
+      const missing = Array.from(wanted).filter((n) => !haveKeys.has(logoNameKey(n)));
+
+      if (missing.length > 0) {
+        const index = await getLogoIndex();
+        const { data: thisComp } = await supabaseAdmin
+          .from("competitions").select("competition_id").eq("league_id", leagueId).maybeSingle();
+        const brandOrder: string[] = [];
+        if (thisComp?.competition_id) {
+          const { data: siblings } = await supabaseAdmin
+            .from("competitions")
+            .select("league_id, created_at")
+            .eq("competition_id", thisComp.competition_id)
+            .neq("league_id", leagueId)
+            .order("created_at", { ascending: false });
+          for (const c of siblings || []) brandOrder.push(c.league_id);
+        }
+        for (const name of missing) {
+          const key = logoNameKey(name);
+          const candidates = index.storage.get(key) || [];
+          const pick =
+            brandOrder.map((id) => candidates.find((c) => c.leagueId === id)).find(Boolean) ||
+            candidates[0];
+          if (pick) {
+            teamLogos[name] = supabaseAdmin.storage.from("team-logos").getPublicUrl(pick.file).data.publicUrl;
+          } else if (index.db.has(key)) {
+            teamLogos[name] = index.db.get(key)!;
+          }
+        }
       }
 
       res.set('Cache-Control', 'public, max-age=300');
