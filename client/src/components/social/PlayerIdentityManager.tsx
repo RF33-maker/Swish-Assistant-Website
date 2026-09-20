@@ -271,9 +271,9 @@ export function PlayerIdentityManager() {
         <CardContent>
           <div className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-700">
             <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-            <div className="text-sm text-amber-800 dark:text-amber-300 space-y-2">
+            <div className="min-w-0 break-words text-sm text-amber-800 dark:text-amber-300 space-y-2">
               <p className="font-semibold">Database migration required</p>
-              <p>Run the SQL in <code className="font-mono text-xs bg-amber-100 dark:bg-amber-900 px-1 rounded">supabase/migrations/20260625_player_identities.sql</code> in your Supabase dashboard (SQL Editor) to create the <code className="font-mono text-xs bg-amber-100 dark:bg-amber-900 px-1 rounded">player_identities</code> and <code className="font-mono text-xs bg-amber-100 dark:bg-amber-900 px-1 rounded">player_identity_members</code> tables.</p>
+              <p>Run the SQL in <code className="break-all font-mono text-xs bg-amber-100 dark:bg-amber-900 px-1 rounded">supabase/migrations/20260625_player_identities.sql</code> in your Supabase dashboard (SQL Editor) to create the <code className="break-all font-mono text-xs bg-amber-100 dark:bg-amber-900 px-1 rounded">player_identities</code> and <code className="break-all font-mono text-xs bg-amber-100 dark:bg-amber-900 px-1 rounded">player_identity_members</code> tables.</p>
               <p>After running the migration, refresh this page.</p>
             </div>
           </div>

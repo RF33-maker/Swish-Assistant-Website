@@ -3548,16 +3548,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const leagueTrendingCache = new Map<string, { data: TrendingApiPayload; at: number }>();
   const leagueTrendingInFlight = new Map<string, Promise<TrendingApiPayload>>();
 
-  async function fetchLeagueTrendingPerformances(slug: string): Promise<TrendingApiPayload> {
-    const empty: TrendingApiPayload = { perfs: [], leagueNames: {}, playerMeta: {} };
-
-    // Resolve the league_id from the slug (could be a URL slug string or a UUID).
-    // Enforce is_public=true so private leagues cannot be accessed by unauthenticated callers.
-    // Only include league_id in the OR filter when the slug looks like a UUID to avoid
-    // PostgreSQL parse errors (league_id is a uuid column, not a text column).
-    // competition_id and league_id are both uuid columns — only include them in
-    // the OR filter when the slug param is itself a valid UUID, otherwise
-    // PostgreSQL will throw "invalid input syntax for type uuid".
+  // Resolve a public competition from its slug (or UUID) plus its direct children.
+  // Enforces is_public=true so private leagues cannot be read by unauthenticated callers.
+  async function resolvePublicLeagueFamily(slug: string, logTag: string) {
+    // league_id / competition_id are uuid columns — only include them in the OR
+    // filter when the slug is itself a valid UUID, otherwise PostgreSQL throws
+    // "invalid input syntax for type uuid".
     const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     const isUuid = UUID_RE.test(slug);
 
@@ -3575,8 +3571,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const { data: leagueRow, error: lErr } = await leagueQuery.maybeSingle();
 
     if (lErr || !leagueRow) {
-      console.error("[LeagueTrendingPerf] league lookup error (not found or not public)", slug, lErr?.message);
-      return empty;
+      console.error(`[${logTag}] league lookup error (not found or not public)`, slug, lErr?.message);
+      return null;
     }
 
     const { league_id, name } = leagueRow as { league_id: string; name: string | null; is_public: boolean };
@@ -3587,7 +3583,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       .eq("parent_league_id", league_id);
 
     if (childError) {
-      console.error("[LeagueTrendingPerf] child competition lookup error", slug, childError.message);
+      console.error(`[${logTag}] child competition lookup error`, slug, childError.message);
     }
 
     const leagueIds = [league_id];
@@ -3596,6 +3592,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       leagueIds.push(child.league_id);
       leagueNames[child.league_id] = child.name || name || slug;
     }
+    return { league_id, name, leagueIds, leagueNames };
+  }
+
+  async function fetchLeagueTrendingPerformances(slug: string): Promise<TrendingApiPayload> {
+    const empty: TrendingApiPayload = { perfs: [], leagueNames: {}, playerMeta: {} };
+
+    const family = await resolvePublicLeagueFamily(slug, "LeagueTrendingPerf");
+    if (!family) return empty;
+    const { leagueIds, leagueNames } = family;
 
     // Show the whole most recent game week (Mon–Sun) across the parent and its
     // child competitions, so a Fri–Sun weekend stays on the card until the next
@@ -3746,6 +3751,138 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err: any) {
       console.error("[LeagueTrendingPerf] fetch error", slug, err.message);
       if (cached) return res.json(cached.data);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Team / Player of the Week: the best single-game scores across a Mon–Sun week
+  // (one entry per player), enriched with photo, opponent and shooting splits.
+  app.get("/api/league/:slug/weekly-awards", async (req: Request, res: Response) => {
+    try {
+      const { slug } = req.params;
+      const family = await resolvePublicLeagueFamily(slug, "WeeklyAwards");
+      if (!family) return res.status(404).json({ error: "League not found or not public" });
+      const { leagueIds, leagueNames, name } = family;
+
+      const { data: weekRows } = await supabaseAdmin
+        .from("vw_player_game_scores")
+        .select("week_start")
+        .in("league_id", leagueIds)
+        .order("week_start", { ascending: false, nullsFirst: false })
+        .limit(3000)
+        .returns<{ week_start: string | null }[]>();
+      const weeks = Array.from(new Set((weekRows || []).map((r) => r.week_start).filter((w): w is string => !!w))).slice(0, 12);
+
+      const requestedWeek = typeof req.query.weekStart === "string" ? req.query.weekStart : "";
+      const weekStart = /^\d{4}-\d{2}-\d{2}$/.test(requestedWeek) ? requestedWeek : weeks[0] ?? null;
+      const count = Math.max(1, Math.min(10, Number(req.query.count) || 5));
+      if (!weekStart) return res.json({ league: { name: name || slug }, weekStart: null, weeks, awards: [] });
+
+      const { data: rows, error } = await supabaseAdmin
+        .from("vw_player_game_scores")
+        .select("league_id,game_date,game_key,player_id,full_name,team_id,team_name,pts,reb,ast,stl,blk,tov,fga,fta,ts_pct,game_score")
+        .in("league_id", leagueIds)
+        .eq("week_start", weekStart)
+        .order("game_score", { ascending: false })
+        .limit(80)
+        .returns<TrendingPerfRow[]>();
+      if (error) {
+        console.error("[WeeklyAwards] query error", slug, error.message);
+        return res.status(500).json({ error: "Internal server error" });
+      }
+
+      const seen = new Set<string>();
+      const top: TrendingPerfRow[] = [];
+      for (const r of rows || []) {
+        if (seen.has(r.player_id)) continue;
+        seen.add(r.player_id);
+        top.push(r);
+        if (top.length >= count) break;
+      }
+
+      const playerIds = top.map((p) => p.player_id);
+      const gameKeys = Array.from(new Set(top.map((p) => p.game_key).filter((k): k is string => !!k)));
+
+      const [playersResp, statsResp, gamesResp] = await Promise.all([
+        playerIds.length
+          ? supabaseAdmin.from("players").select("id, full_name, slug, photo_path, photo_focus_y").in("id", playerIds)
+          : Promise.resolve({ data: [] as any[] }),
+        playerIds.length
+          ? supabaseAdmin
+              .from("player_stats")
+              .select("game_key,player_id,sminutes,sfieldgoalsmade,sfieldgoalsattempted,sthreepointersmade,sthreepointersattempted,sfreethrowsmade,sfreethrowsattempted,splusminuspoints")
+              .in("game_key", gameKeys)
+              .in("player_id", playerIds)
+          : Promise.resolve({ data: [] as any[] }),
+        gameKeys.length
+          ? supabaseAdmin
+              .from("v_game_results")
+              .select("game_key,home_team,away_team,home_score,away_score")
+              .in("game_key", gameKeys)
+          : Promise.resolve({ data: [] as any[] }),
+      ]);
+
+      const playerById = new Map<string, any>((playersResp.data || []).map((p: any) => [p.id, p]));
+
+      // Players without their own photo borrow one from another record with the same name.
+      const needPhoto = top.filter((p) => !playerById.get(p.player_id)?.photo_path).map((p) => playerById.get(p.player_id)?.full_name || p.full_name);
+      const photoByName = new Map<string, { photo_path: string; photo_focus_y: number | null }>();
+      if (needPhoto.length > 0) {
+        const { data: sameName } = await supabaseAdmin
+          .from("players")
+          .select("full_name, photo_path, photo_focus_y")
+          .in("full_name", needPhoto)
+          .not("photo_path", "is", null);
+        for (const p of (sameName || []) as any[]) {
+          const key = String(p.full_name).toLowerCase();
+          if (p.photo_path && !photoByName.has(key)) photoByName.set(key, p);
+        }
+      }
+
+      const statsByKey = new Map<string, any>((statsResp.data || []).map((s: any) => [`${s.game_key}_${s.player_id}`, s]));
+      const gameByKey = new Map<string, any>((gamesResp.data || []).map((g: any) => [g.game_key, g]));
+      const photoUrl = (path: string | null | undefined) =>
+        path ? supabaseAdmin.storage.from("player-photos").getPublicUrl(path).data.publicUrl : null;
+
+      const awards = top.map((perf, i) => {
+        const player = playerById.get(perf.player_id);
+        const fullName = player?.full_name || perf.full_name;
+        const borrowed = !player?.photo_path ? photoByName.get(String(fullName).toLowerCase()) : undefined;
+        const s = statsByKey.get(`${perf.game_key}_${perf.player_id}`);
+        const g = perf.game_key ? gameByKey.get(perf.game_key) : undefined;
+        const isHome = g?.home_team && perf.team_name && g.home_team.toLowerCase() === perf.team_name.toLowerCase();
+        const myScore = g ? (isHome ? g.home_score : g.away_score) : null;
+        const oppScore = g ? (isHome ? g.away_score : g.home_score) : null;
+        return {
+          rank: i + 1,
+          player_id: perf.player_id,
+          league_id: perf.league_id,
+          slug: player?.slug ?? null,
+          full_name: formatCanonicalPlayerName(fullName),
+          team_name: perf.team_name,
+          game_key: perf.game_key,
+          game_date: perf.game_date,
+          pts: perf.pts, reb: perf.reb, ast: perf.ast, stl: perf.stl, blk: perf.blk, tov: perf.tov,
+          fgm: s?.sfieldgoalsmade ?? null, fga: s?.sfieldgoalsattempted ?? perf.fga,
+          tpm: s?.sthreepointersmade ?? null, tpa: s?.sthreepointersattempted ?? null,
+          ftm: s?.sfreethrowsmade ?? null, fta: s?.sfreethrowsattempted ?? perf.fta,
+          minutes: s?.sminutes ?? null,
+          plus_minus: s?.splusminuspoints ?? null,
+          ts_pct: perf.ts_pct,
+          game_score: perf.game_score,
+          photoUrl: photoUrl(player?.photo_path || borrowed?.photo_path),
+          photoFocusY: player?.photo_path ? player?.photo_focus_y ?? 50 : borrowed?.photo_focus_y ?? 50,
+          opponent_name: g ? (isHome ? g.away_team : g.home_team) : null,
+          game_result:
+            myScore != null && oppScore != null
+              ? `${myScore > oppScore ? "W" : myScore < oppScore ? "L" : "T"} ${myScore}-${oppScore}`
+              : null,
+        };
+      });
+
+      return res.json({ league: { name: name || slug, leagueNames }, weekStart, weeks, awards });
+    } catch (err: any) {
+      console.error("[WeeklyAwards] error", err?.message);
       return res.status(500).json({ error: "Internal server error" });
     }
   });
