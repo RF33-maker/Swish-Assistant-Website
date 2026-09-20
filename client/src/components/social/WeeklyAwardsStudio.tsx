@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, Loader2, RotateCcw } from "lucide-react";
+import { Download, ImagePlus, Loader2, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -28,6 +28,16 @@ import type { WeeklyAward, WeeklyAwardsResponse } from "@/types/weeklyAwards";
 const DEFAULT_SLUG = "nbl-division-1-2026-2027";
 type CompetitionOption = { slug: string; name: string };
 type CardKind = "team" | "player";
+
+/** Phones (touch devices that can share files) get the share sheet, whose "Save Image" goes straight to Photos. */
+function supportsFileSharing(file: File): boolean {
+  return (
+    typeof navigator !== "undefined" &&
+    typeof navigator.canShare === "function" &&
+    navigator.canShare({ files: [file] }) &&
+    window.matchMedia("(pointer: coarse)").matches
+  );
+}
 
 function fmtShift(v: number): string {
   const n = Math.round(v);
@@ -98,6 +108,9 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
   const [subtitle, setSubtitle] = useState("");
   const [teamLogoUrl, setTeamLogoUrl] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
+  // Made ahead of time: iOS only opens the share sheet from a fresh tap, so the file must already exist.
+  const [shareFile, setShareFile] = useState<File | null>(null);
+  const [canShareFiles, setCanShareFiles] = useState(false);
   const [framing, setFraming] = useState<FramingMap>({});
   const [activeId, setActiveId] = useState<string | null>(null);
   // Marked face positions, saved by photo so they are reused week after week.
@@ -275,6 +288,7 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
   const [rendering, setRendering] = useState(false);
   const [hasCard, setHasCard] = useState(false);
   const cardCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const cardFileName = `${kind === "team" ? "team" : "player"}-of-the-week-${slug}-${weekStart || "latest"}.png`;
   const renderToken = useRef(0);
 
   useEffect(() => {
@@ -287,6 +301,7 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
       return;
     }
     setRendering(true);
+    setShareFile(null);
     const draw =
       kind === "team"
         ? renderTeamOfTheWeek(chosen, brand, {
@@ -307,10 +322,16 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
         cardCanvasRef.current = canvas;
         canvasHostRef.current?.replaceChildren(canvas);
         setHasCard(true);
+        void canvasToBlob(canvas).then((blob) => {
+          if (token !== renderToken.current || !blob) return;
+          const file = new File([blob], cardFileName, { type: "image/png" });
+          setShareFile(file);
+          setCanShareFiles(supportsFileSharing(file));
+        });
       })
       .catch((err) => token === renderToken.current && setError(err?.message || "Could not draw the card"))
       .finally(() => token === renderToken.current && setRendering(false));
-  }, [kind, chosen, potw, brand, teamLogoUrl, framing, tint, showGameScore, headMap, align]);
+  }, [kind, chosen, potw, brand, teamLogoUrl, framing, tint, showGameScore, headMap, align, cardFileName]);
 
   const toggle = (id: string) =>
     setSelected((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : cur.length >= 5 ? cur : [...cur, id]));
@@ -323,6 +344,18 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
     if (index != null) setActiveId(chosen[index].player_id);
   };
 
+  const saveToPhotos = async () => {
+    if (!shareFile) return;
+    try {
+      // Only the file, no title or text: that is what makes iOS offer "Save Image".
+      await navigator.share({ files: [shareFile] });
+    } catch (err) {
+      if ((err as Error)?.name !== "AbortError") {
+        setError("Couldn't open the share sheet. Use Download file instead.");
+      }
+    }
+  };
+
   const download = async () => {
     const canvas = cardCanvasRef.current;
     if (!canvas) return;
@@ -333,7 +366,7 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${kind === "team" ? "team" : "player"}-of-the-week-${slug}-${weekStart || "latest"}.png`;
+      a.download = cardFileName;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err: any) {
@@ -661,10 +694,35 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
           )}
 
           <div className="mx-auto mt-3 max-w-[640px] space-y-2">
-            <Button onClick={download} disabled={!hasCard || rendering || downloading} className="w-full bg-orange-500 hover:bg-orange-600 text-white">
-              {downloading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-              Download PNG
-            </Button>
+            {canShareFiles ? (
+              <>
+                <Button
+                  onClick={saveToPhotos}
+                  disabled={!shareFile || rendering}
+                  className="w-full bg-orange-500 hover:bg-orange-600 text-white"
+                  data-testid="button-save-to-photos"
+                >
+                  <ImagePlus className="mr-2 h-4 w-4" />
+                  Save to Photos
+                </Button>
+                <p className="text-center text-xs text-gray-500 dark:text-gray-400">Tap Save Image in the menu that opens.</p>
+                <Button
+                  onClick={download}
+                  disabled={!hasCard || rendering || downloading}
+                  variant="outline"
+                  className="w-full"
+                  data-testid="button-download-file"
+                >
+                  {downloading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                  Download file
+                </Button>
+              </>
+            ) : (
+              <Button onClick={download} disabled={!hasCard || rendering || downloading} className="w-full bg-orange-500 hover:bg-orange-600 text-white">
+                {downloading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+                Download PNG
+              </Button>
+            )}
             {error && <p className="text-sm text-red-600">{error}</p>}
             <p className="text-center text-xs text-gray-500 dark:text-gray-400">Card size: 1080×1350px (Instagram portrait)</p>
           </div>
