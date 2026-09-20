@@ -9,6 +9,7 @@ type PlayerOption = {
   id: string;
   name: string;
   team: string | null;
+  allTeams: string[];
   photo_path: string | null;
 };
 
@@ -53,28 +54,34 @@ export function PlayerPhotoUploader() {
         }
       }
 
-      // Deduplicate by full_name - keep the first occurrence (which has photo_path if any)
-      const seenNames = new Map<string, any>();
+      // One entry per name, showing the newest record's team. Every team the
+      // name has played for stays searchable, so a mover is found by their new club.
+      const groups = new Map<string, any[]>();
       allPlayers.forEach((row: any) => {
         const name = (row.full_name || row.name || "").toLowerCase().trim();
-        if (name && !seenNames.has(name)) {
-          seenNames.set(name, row);
-        } else if (name && seenNames.has(name)) {
-          // If existing entry has no photo but this one does, use this one
-          const existing = seenNames.get(name);
-          if (!existing.photo_path && row.photo_path) {
-            seenNames.set(name, row);
-          }
-        }
+        if (!name) return;
+        const group = groups.get(name);
+        if (group) group.push(row);
+        else groups.set(name, [row]);
       });
-      
-      const uniquePlayers = Array.from(seenNames.values());
-      const mapped = uniquePlayers.map((row: any) => ({
-        id: row.id,
-        name: row.full_name || row.name || "Unknown",
-        team: row.team_name || row.team || null,
-        photo_path: row.photo_path || null,
-      }));
+
+      const mapped: PlayerOption[] = Array.from(groups.values()).map((rows) => {
+        const newestFirst = [...rows].sort((a, b) =>
+          String(b.created_at || "").localeCompare(String(a.created_at || ""))
+        );
+        const newest = newestFirst[0];
+        const withPhoto = newestFirst.find((r) => r.photo_path);
+        const teams = Array.from(
+          new Set(newestFirst.map((r) => r.team_name || r.team).filter(Boolean))
+        ) as string[];
+        return {
+          id: (withPhoto || newest).id,
+          name: newest.full_name || newest.name || "Unknown",
+          team: teams[0] || null,
+          allTeams: teams,
+          photo_path: withPhoto?.photo_path || null,
+        };
+      });
       
       // Sort by name
       mapped.sort((a, b) => a.name.localeCompare(b.name));
@@ -92,7 +99,7 @@ export function PlayerPhotoUploader() {
     return players.filter(
       (p) =>
         p.name.toLowerCase().includes(query) ||
-        (p.team && p.team.toLowerCase().includes(query))
+        p.allTeams.some((t) => t.toLowerCase().includes(query))
     ).slice(0, 20);
   }, [players, searchQuery]);
 
@@ -268,7 +275,12 @@ export function PlayerPhotoUploader() {
                       data-testid={`option-player-${idx}`}
                     >
                       <div className="font-medium text-gray-900 dark:text-white">{p.name}</div>
-                      {p.team && <div className="text-xs text-gray-500 dark:text-gray-400">{p.team}</div>}
+                      {p.team && (
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          {p.team}
+                          {p.allTeams.length > 1 && ` · also ${p.allTeams.slice(1).join(", ")}`}
+                        </div>
+                      )}
                     </button>
                   ))}
                 </div>

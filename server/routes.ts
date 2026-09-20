@@ -3597,17 +3597,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       leagueNames[child.league_id] = child.name || name || slug;
     }
 
-    // First find the most recent game_date across the parent and its child
-    // competitions so parent competition pages include their actual stats.
+    // Show the whole most recent game week (Mon–Sun) across the parent and its
+    // child competitions, so a Fri–Sun weekend stays on the card until the next
+    // week's games start rather than only the latest day.
     const { data: latestGame } = await supabaseAdmin
       .from("vw_player_game_scores")
-      .select("game_date")
+      .select("week_start")
       .in("league_id", leagueIds)
-      .order("game_date", { ascending: false, nullsFirst: false })
+      .order("week_start", { ascending: false, nullsFirst: false })
       .limit(1)
-      .returns<{ game_date: string | null }[]>();
+      .returns<{ week_start: string | null }[]>();
 
-    const mostRecentGameDate = latestGame?.[0]?.game_date ?? null;
+    const mostRecentWeekStart = latestGame?.[0]?.week_start ?? null;
 
     let query = supabaseAdmin
       .from("vw_player_game_scores")
@@ -3615,8 +3616,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       .in("league_id", leagueIds)
       .order("game_score", { ascending: false });
 
-    if (mostRecentGameDate) {
-      query = query.eq("game_date", mostRecentGameDate);
+    if (mostRecentWeekStart) {
+      query = query.eq("week_start", mostRecentWeekStart);
     }
 
     const { data: rows, error } = await query
