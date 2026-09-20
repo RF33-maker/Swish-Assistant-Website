@@ -153,6 +153,24 @@ async function verifyLeagueOwnership(userId: string, leagueId: string): Promise<
   return data.user_id === userId || data.created_by === userId;
 }
 
+// Spellings the scorers keep entering for a player (their old name after a rename,
+// or the name of a duplicate that was merged away). The ingestion worker matches
+// feed names against players.aliases, so recording them here keeps the fix
+// from being undone by the next game's stat capture.
+function withAliases(existing: string[] | null | undefined, canonicalName: string, ...names: (string | null | undefined)[]): string[] {
+  const canonicalKey = canonicalName.trim().toLowerCase();
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const name of [...(existing || []), ...names]) {
+    const trimmed = (name || "").replace(/\s+/g, " ").trim();
+    const key = trimmed.toLowerCase();
+    if (!trimmed || key === canonicalKey || seen.has(key)) continue;
+    seen.add(key);
+    out.push(trimmed);
+  }
+  return out;
+}
+
 const RENDER_BACKEND_URL = (process.env.VITE_BACKEND_URL || '').replace(/\/$/, '');
 
 function proxyToRender(req: Request, res: Response, urlPath: string): void {
@@ -1832,7 +1850,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const allIds = await getScopedLeagueIds(leagueId);
       const { data: player, error: playerError } = await supabaseAdmin
         .from("players")
-        .select("id, league_id")
+        .select("id, league_id, full_name, aliases")
         .eq("id", playerId)
         .maybeSingle();
 
@@ -1845,7 +1863,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { data: updated, error: updateError } = await supabaseAdmin
         .from("players")
-        .update({ full_name: formattedName })
+        .update({ full_name: formattedName, aliases: withAliases(player.aliases, formattedName, player.full_name) })
         .eq("id", playerId)
         .select("id, full_name, slug, league_id")
         .single();
@@ -1933,7 +1951,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Fetch both player records
       const { data: playerCheck, error: checkError } = await supabaseAdmin
         .from('players')
-        .select('id, league_id, full_name')
+        .select('id, league_id, full_name, aliases')
         .in('id', [canonicalId, duplicateId]);
 
       if (checkError) return res.status(500).json({ error: checkError.message });
@@ -1974,6 +1992,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       console.log(`[merge-players] RPC complete — processed=${result?.processed ?? 0}, skipped=${result?.skipped ?? 0}`);
+
+      if ((result?.processed ?? 0) > 0) {
+        const { error: aliasError } = await supabaseAdmin
+          .from('players')
+          .update({ aliases: withAliases(canonical.aliases, canonical.full_name || '', duplicate.full_name, ...(duplicate.aliases || [])) })
+          .eq('id', canonicalId);
+        if (aliasError) console.error('[merge-players] could not record alias:', aliasError.message);
+      }
 
       res.json({
         success: true,
