@@ -10,6 +10,7 @@ import { usePublicLeagueBrandingBySlug } from "@/hooks/usePublicLeagueBranding";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
 import { extractColorsFromImage } from "@/lib/colorExtractor";
 import {
+  DEFAULT_HEAD_LINE,
   DEFAULT_TINT,
   canvasToBlob,
   defaultFraming,
@@ -18,6 +19,8 @@ import {
   renderTeamOfTheWeek,
   teamPanelIndexAt,
   type FramingMap,
+  type HeadMap,
+  type HeadPoint,
   type PhotoFraming,
 } from "@/lib/generateWeeklyCards";
 import type { WeeklyAward, WeeklyAwardsResponse } from "@/types/weeklyAwards";
@@ -48,6 +51,25 @@ function toHex(rgb?: { r: number; g: number; b: number } | null): string {
 }
 
 const SLUG_KEY = "weekly-awards-slug";
+const HEADS_KEY = "weekly-awards-heads";
+const ALIGN_KEY = "weekly-awards-align";
+
+function readJson<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeJson(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // remembering these is a convenience only
+  }
+}
 
 function readStored(key: string): string | null {
   try {
@@ -78,6 +100,12 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
   const [downloading, setDownloading] = useState(false);
   const [framing, setFraming] = useState<FramingMap>({});
   const [activeId, setActiveId] = useState<string | null>(null);
+  // Marked face positions, saved by photo so they are reused week after week.
+  const [heads, setHeads] = useState<Record<string, HeadPoint>>(() => readJson(HEADS_KEY, {}));
+  const [align, setAlign] = useState<{ on: boolean; line: number }>(() =>
+    readJson(ALIGN_KEY, { on: true, line: DEFAULT_HEAD_LINE }),
+  );
+  const [unaligned, setUnaligned] = useState<string[]>([]);
   const [tint, setTint] = useState(DEFAULT_TINT);
 
   const [leagueLogoUrl, setLeagueLogoUrl] = useState<string | null>(null);
@@ -191,6 +219,40 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
     setFraming((prev) => ({ ...prev, [target.player_id]: undefined }));
   };
 
+  const headMap: HeadMap = useMemo(
+    () => Object.fromEntries(chosen.map((a) => [a.player_id, a.photoUrl ? heads[a.photoUrl] : undefined])),
+    [chosen, heads],
+  );
+  const needMarks = kind === "team" && align.on ? chosen.filter((a) => a.photoUrl && !heads[a.photoUrl]) : [];
+  const couldNotAlign = kind === "team" && align.on ? chosen.filter((a) => a.photoUrl && heads[a.photoUrl] && unaligned.includes(a.player_id)) : [];
+  const targetHead = target?.photoUrl ? heads[target.photoUrl] : undefined;
+
+  const updateAlign = (patch: Partial<{ on: boolean; line: number }>) => {
+    const next = { ...align, ...patch };
+    setAlign(next);
+    writeJson(ALIGN_KEY, next);
+  };
+  const markHead = (e: React.MouseEvent<HTMLImageElement>) => {
+    const photo = target?.photoUrl;
+    if (!photo) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const point = {
+      x: Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)),
+      y: Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)),
+    };
+    const next = { ...heads, [photo]: point };
+    setHeads(next);
+    writeJson(HEADS_KEY, next);
+  };
+  const clearHead = () => {
+    const photo = target?.photoUrl;
+    if (!photo) return;
+    const next = { ...heads };
+    delete next[photo];
+    setHeads(next);
+    writeJson(HEADS_KEY, next);
+  };
+
   useEffect(() => {
     let cancelled = false;
     setTeamLogoUrl(null);
@@ -227,7 +289,16 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
     setRendering(true);
     const draw =
       kind === "team"
-        ? renderTeamOfTheWeek(chosen, brand, framing, showGameScore)
+        ? renderTeamOfTheWeek(chosen, brand, {
+            framing,
+            showGameScore,
+            heads: headMap,
+            alignHeads: align.on,
+            headLine: align.line,
+          }).then((result) => {
+            if (token === renderToken.current) setUnaligned(result.unaligned);
+            return result.canvas;
+          })
         : renderPlayerOfTheWeek(potw!, brand, teamLogoUrl, framing[potw!.player_id], tint, showGameScore);
     void draw
       .then((canvas) => {
@@ -239,7 +310,7 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
       })
       .catch((err) => token === renderToken.current && setError(err?.message || "Could not draw the card"))
       .finally(() => token === renderToken.current && setRendering(false));
-  }, [kind, chosen, potw, brand, teamLogoUrl, framing, tint, showGameScore]);
+  }, [kind, chosen, potw, brand, teamLogoUrl, framing, tint, showGameScore, headMap, align]);
 
   const toggle = (id: string) =>
     setSelected((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : cur.length >= 5 ? cur : [...cur, id]));
@@ -456,6 +527,7 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
                       >
                         {a.full_name.split(" ").slice(-1)[0]}
                         {framing[a.player_id] ? " •" : ""}
+                        {align.on && a.photoUrl && !heads[a.photoUrl] ? " ?" : ""}
                       </button>
                     );
                   })}
@@ -463,6 +535,78 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
               )}
               {kind === "team" && (
                 <p className="text-xs text-gray-500 dark:text-gray-400">Tip: tap a photo in the preview to adjust it.</p>
+              )}
+
+              {kind === "team" && (
+                <div className="space-y-2 rounded-md border border-orange-200 bg-white/70 p-2.5 dark:border-orange-700 dark:bg-gray-900/40">
+                  <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-gray-700 dark:text-gray-300">
+                    <input
+                      type="checkbox"
+                      checked={align.on}
+                      onChange={(e) => updateAlign({ on: e.target.checked })}
+                      data-testid="toggle-align-heads"
+                    />
+                    Line up heads across the photos
+                  </label>
+                  {align.on && (
+                    <>
+                      <label className="block space-y-2 text-xs font-medium text-gray-700 dark:text-gray-300">
+                        <span className="flex justify-between">
+                          Head height
+                          <span className="tabular-nums text-gray-500">{align.line}%</span>
+                        </span>
+                        <Slider min={10} max={50} step={1} value={[align.line]} onValueChange={([v]) => updateAlign({ line: v })} data-testid="slider-head-line" />
+                      </label>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Photos always fill their frame with nothing faded. Each one is zoomed and shifted just enough to put the marked
+                        face on this line.
+                      </p>
+                      {needMarks.length > 0 && (
+                        <p className="text-xs text-amber-700 dark:text-amber-400">
+                          Mark the face for {needMarks.map((a) => a.full_name.split(" ").slice(-1)[0]).join(", ")} (chips with ?). Until then a
+                          guess is used.
+                        </p>
+                      )}
+                      {couldNotAlign.length > 0 && (
+                        <p className="text-xs text-amber-700 dark:text-amber-400">
+                          {couldNotAlign.map((a) => a.full_name.split(" ").slice(-1)[0]).join(", ")}: face is too close to the edge of the
+                          photo to reach the line without zooming in too far, so it sits as near as it can.
+                        </p>
+                      )}
+                      {target.photoUrl && (
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                              Tap the middle of {target.full_name.split(" ")[0]}'s face
+                            </p>
+                            {targetHead && (
+                              <button type="button" onClick={clearHead} className="text-xs text-orange-700 underline">
+                                Clear
+                              </button>
+                            )}
+                          </div>
+                          <div className="relative mx-auto w-fit">
+                            <img
+                              src={target.photoUrl}
+                              alt={target.full_name}
+                              draggable={false}
+                              onClick={markHead}
+                              className="block max-h-64 max-w-full cursor-crosshair rounded-md"
+                              data-testid="img-mark-head"
+                            />
+                            {targetHead && (
+                              <span
+                                className="pointer-events-none absolute h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-orange-500 bg-white/30 shadow"
+                                style={{ left: `${targetHead.x * 100}%`, top: `${targetHead.y * 100}%` }}
+                              />
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Saved for this photo, so you only do it once.</p>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
               )}
 
               {!target.photoUrl ? (
@@ -474,7 +618,7 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
                       Zoom
                       <span className="tabular-nums text-gray-500">{Math.round(targetFraming.zoom * 100)}%</span>
                     </span>
-                    <Slider min={0.4} max={3} step={0.05} value={[targetFraming.zoom]} onValueChange={([v]) => adjust({ zoom: v })} data-testid="slider-photo-zoom" />
+                    <Slider min={kind === "team" ? 1 : 0.4} max={3} step={0.05} value={[targetFraming.zoom]} onValueChange={([v]) => adjust({ zoom: v })} data-testid="slider-photo-zoom" />
                   </label>
                   <label className="space-y-2 text-xs font-medium text-gray-700 dark:text-gray-300">
                     <span className="flex justify-between">
@@ -508,8 +652,9 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
 
               {target.photoUrl && (
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Move the photo freely: any space that opens up at an edge shows a soft blurred copy of the same photo.
-                  Slide Down (or zoom out) to bring a player's head clear of the heading.
+                  {kind === "team"
+                    ? "Fine-tune just this photo: extra zoom, or nudge the head from the shared line. The photo always stays filled edge to edge."
+                    : "Move the photo freely: any space that opens up at an edge shows a soft blurred copy of the same photo. Slide Down (or zoom out) to bring a player's head clear of the heading."}
                 </p>
               )}
             </div>

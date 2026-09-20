@@ -163,6 +163,56 @@ export function defaultFraming(_award?: WeeklyAward): PhotoFraming {
   return { ...DEFAULT_FRAMING };
 }
 
+/** Where a face sits in its photo, as fractions of the photo (0–1). */
+export type HeadPoint = { x: number; y: number };
+export type HeadMap = Record<string, HeadPoint | undefined>;
+
+/** Shared height for every head on Team of the Week, as a percentage of the photo panel. */
+export const DEFAULT_HEAD_LINE = 26;
+// Used until a face has been marked: roughly where a head sits in a three-quarter shot.
+const GUESSED_HEAD: HeadPoint = { x: 0.5, y: 0.3 };
+const MAX_HEAD_ZOOM = 2.5;
+
+type Placement = { left: number; top: number; scale: number; aligned: boolean };
+
+/**
+ * Positions a photo inside a frame so it always fills it edge to edge (no gaps, no fades).
+ * With a head point, the photo is zoomed just enough, and shifted, so that face lands on
+ * the shared head line; if that would need more than MAX_HEAD_ZOOM it gets as close as it can.
+ */
+function placeInFrame(
+  img: HTMLImageElement,
+  w: number,
+  h: number,
+  o: { framing: PhotoFraming; head: HeadPoint | null; headLine: number; focusY: number },
+): Placement {
+  const iw = img.naturalWidth;
+  const ih = img.naturalHeight;
+  const cover = Math.max(w / iw, h / ih);
+  const base = cover * Math.max(1, o.framing.zoom);
+  const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+
+  if (!o.head) {
+    const left = clamp((w - iw * base) / 2 + (o.framing.x / 100) * w, w - iw * base, 0);
+    const top = clamp((h - ih * base) * (clamp(o.focusY, 0, 100) / 100) + (o.framing.y / 100) * h, h - ih * base, 0);
+    return { left, top, scale: base, aligned: true };
+  }
+
+  const headX = o.head.x * iw;
+  const headY = o.head.y * ih;
+  const targetX = w / 2 + (o.framing.x / 100) * w;
+  const targetY = (o.headLine / 100 + o.framing.y / 100) * h;
+  // Smallest zoom that lets the head reach the target without exposing the top or bottom edge.
+  const needTop = headY > 0 ? targetY / headY : 0;
+  const needBottom = ih - headY > 0 ? (h - targetY) / (ih - headY) : 0;
+  const scale = Math.min(Math.max(base, needTop, needBottom), cover * Math.max(MAX_HEAD_ZOOM, o.framing.zoom));
+
+  const wantedTop = targetY - headY * scale;
+  const top = clamp(wantedTop, h - ih * scale, 0);
+  const left = clamp(targetX - headX * scale, w - iw * scale, 0);
+  return { left, top, scale, aligned: Math.abs(top - wantedTop) < 1 };
+}
+
 /**
  * Draws a photo into a frame: filled edge to edge by default, but free to be zoomed
  * out or shifted. Wherever a photo edge ends up inside the frame it fades into the
@@ -360,12 +410,28 @@ export function teamPanelIndexAt(cardX: number, count: number): number | null {
   return null;
 }
 
+export type TeamCardOptions = {
+  framing?: FramingMap;
+  showGameScore?: boolean;
+  /** Marked face positions by player_id; unmarked players use a guess. */
+  heads?: HeadMap;
+  alignHeads?: boolean;
+  headLine?: number;
+};
+
 export async function renderTeamOfTheWeek(
   awards: WeeklyAward[],
   brand: WeeklyCardBrand,
-  framing: FramingMap = {},
-  showGameScore = true,
-): Promise<HTMLCanvasElement> {
+  options: TeamCardOptions = {},
+): Promise<{ canvas: HTMLCanvasElement; unaligned: string[] }> {
+  const {
+    framing = {},
+    showGameScore = true,
+    heads = {},
+    alignHeads = true,
+    headLine = DEFAULT_HEAD_LINE,
+  } = options;
+  const unaligned: string[] = [];
   await ensureDisplayFont();
   const [logo, leagueLogo, ...photos] = await Promise.all([
     fetchImg(swishLogoSrc),
@@ -414,7 +480,20 @@ export async function renderTeamOfTheWeek(
     ctx.fillStyle = bg;
     ctx.fillRect(x, panelTop, panelW, panelH);
     if (photo) {
-      drawPhoto(ctx, photo, x, panelTop, panelW, panelH, a.photoFocusY ?? 50, framing[a.player_id] ?? DEFAULT_FRAMING);
+      const placed = placeInFrame(photo, panelW, panelH, {
+        framing: framing[a.player_id] ?? DEFAULT_FRAMING,
+        head: alignHeads ? heads[a.player_id] ?? GUESSED_HEAD : null,
+        headLine,
+        focusY: a.photoFocusY ?? 50,
+      });
+      if (!placed.aligned) unaligned.push(a.player_id);
+      ctx.drawImage(
+        photo,
+        x + placed.left,
+        panelTop + placed.top,
+        photo.naturalWidth * placed.scale,
+        photo.naturalHeight * placed.scale,
+      );
     } else {
       drawTextTop(ctx, initialsOf(a.full_name), x + panelW / 2, panelTop + panelH * 0.3, {
         size: 150, weight: 700, color: "#fff", alpha: 0.22, align: "center",
@@ -462,7 +541,7 @@ export async function renderTeamOfTheWeek(
   });
 
   drawFooter(ctx, [logo, "statsthread", leagueLogo], brand.leagueName);
-  return canvas;
+  return { canvas, unaligned };
 }
 
 // ── Player of the Week ───────────────────────────────────────────────────────
