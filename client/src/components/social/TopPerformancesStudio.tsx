@@ -12,6 +12,7 @@ import { normalizeTeamName } from "@/lib/teamUtils";
 import { fetchLeagueChildren } from "@/lib/leagueChildren";
 import { generateMaskedPhoto } from "@/lib/photoMasking";
 import { renderSocialCardToBlob } from "@/lib/socialCardCapture";
+import { shareImageFile, supportsFileSharing } from "@/lib/shareImage";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
 import {
   Select,
@@ -369,6 +370,10 @@ export default function TopPerformancesStudio() {
   const [previewGenerating, setPreviewGenerating] = useState(false);
   const [previewError, setPreviewError] = useState(false);
   const socialBlobRef = useRef<Blob | null>(null);
+  // Built when the preview is ready: iOS only opens the share sheet straight from a tap.
+  const [shareFile, setShareFile] = useState<File | null>(null);
+  const [canShareFiles, setCanShareFiles] = useState(false);
+  const [shareNotice, setShareNotice] = useState<string | null>(null);
   const framingPreviewTimerRef = useRef<number | null>(null);
   // Monotonically-increasing token: only the latest generation request may
   // commit its result. Guards against rapid selection/template changes where
@@ -805,6 +810,8 @@ export default function TopPerformancesStudio() {
     const token = ++generationTokenRef.current;
     // Immediately clear stale preview so old card doesn't show while new one loads.
     socialBlobRef.current = null;
+    setShareFile(null);
+    setShareNotice(null);
     setPreviewImgUrl((prev) => {
       if (prev) URL.revokeObjectURL(prev);
       return null;
@@ -820,6 +827,9 @@ export default function TopPerformancesStudio() {
         return;
       }
       socialBlobRef.current = blob;
+      const file = new File([blob], `${data.player_name.replace(/\s+/g, "-")}-performance.png`, { type: "image/png" });
+      setShareFile(file);
+      setCanShareFiles(supportsFileSharing(file));
       const url = URL.createObjectURL(blob);
       setPreviewImgUrl((prev) => {
         if (prev) URL.revokeObjectURL(prev);
@@ -965,6 +975,14 @@ export default function TopPerformancesStudio() {
   
   const handleClearQueue = () => {
     setQueueIds([]);
+  };
+
+  const handleSaveToPhotos = async () => {
+    if (!shareFile) return;
+    setShareNotice(null);
+    if ((await shareImageFile(shareFile)) === "failed") {
+      setShareNotice("Couldn't open the share sheet. Use Download file instead.");
+    }
   };
 
   const handleDownload = async () => {
@@ -1334,15 +1352,41 @@ export default function TopPerformancesStudio() {
                   </div>
                 )}
                 <div className="mb-4 flex gap-2">
-                  <Button
-                    onClick={handleDownload}
-                    className="flex-1 bg-orange-600 hover:bg-orange-700 text-white"
-                    disabled={selectedId === null || previewGenerating}
-                    data-testid="button-download"
-                  >
-                    <Download className="h-4 w-4 mr-2" />
-                    Download as PNG
-                  </Button>
+                  {canShareFiles ? (
+                    <div className="flex flex-1 flex-col gap-2">
+                      <Button
+                        onClick={handleSaveToPhotos}
+                        className="w-full bg-orange-600 hover:bg-orange-700 text-white"
+                        disabled={selectedId === null || previewGenerating || !shareFile}
+                        data-testid="button-save-to-photos"
+                      >
+                        <ImagePlus className="h-4 w-4 mr-2" />
+                        Save to Photos
+                      </Button>
+                      <p className="text-center text-xs text-gray-500 dark:text-gray-400">Tap Save Image in the menu that opens.</p>
+                      {shareNotice && <p className="text-center text-xs text-red-600">{shareNotice}</p>}
+                      <Button
+                        onClick={handleDownload}
+                        variant="outline"
+                        className="w-full"
+                        disabled={selectedId === null || previewGenerating}
+                        data-testid="button-download"
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Download file
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      onClick={handleDownload}
+                      className="flex-1 bg-orange-600 hover:bg-orange-700 text-white"
+                      disabled={selectedId === null || previewGenerating}
+                      data-testid="button-download"
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Download as PNG
+                    </Button>
+                  )}
                   {selectedId !== null && (
                     <Button
                       variant="outline"
