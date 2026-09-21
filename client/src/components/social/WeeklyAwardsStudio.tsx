@@ -23,21 +23,12 @@ import {
   type HeadPoint,
   type PhotoFraming,
 } from "@/lib/generateWeeklyCards";
+import { shareImageFile, supportsFileSharing } from "@/lib/shareImage";
 import type { WeeklyAward, WeeklyAwardsResponse } from "@/types/weeklyAwards";
 
 const DEFAULT_SLUG = "nbl-division-1-2026-2027";
 type CompetitionOption = { slug: string; name: string };
 type CardKind = "team" | "player";
-
-/** Phones (touch devices that can share files) get the share sheet, whose "Save Image" goes straight to Photos. */
-function supportsFileSharing(file: File): boolean {
-  return (
-    typeof navigator !== "undefined" &&
-    typeof navigator.canShare === "function" &&
-    navigator.canShare({ files: [file] }) &&
-    window.matchMedia("(pointer: coarse)").matches
-  );
-}
 
 function fmtShift(v: number): string {
   const n = Math.round(v);
@@ -346,13 +337,8 @@ export default function WeeklyAwardsStudio({ kind, showGameScore, onShowGameScor
 
   const saveToPhotos = async () => {
     if (!shareFile) return;
-    try {
-      // Only the file, no title or text: that is what makes iOS offer "Save Image".
-      await navigator.share({ files: [shareFile] });
-    } catch (err) {
-      if ((err as Error)?.name !== "AbortError") {
-        setError("Couldn't open the share sheet. Use Download file instead.");
-      }
+    if ((await shareImageFile(shareFile)) === "failed") {
+      setError("Couldn't open the share sheet. Use Download file instead.");
     }
   };
 
