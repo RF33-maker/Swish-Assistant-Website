@@ -1,52 +1,35 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { ArrowLeft, ImagePlus, Star, Trophy, Users, type LucideIcon } from "lucide-react";
+import { ArrowLeft, ImagePlus, Medal, Shield, Star, Trophy, Users, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import TopPerformancesStudio from "@/components/social/TopPerformancesStudio";
 import WeeklyAwardsStudio from "@/components/social/WeeklyAwardsStudio";
+import LeadersStudio from "@/components/social/LeadersStudio";
 import { PlayerPhotoUploader } from "@/components/social/PlayerPhotoUploader";
 import { PlayerIdentityManager } from "@/components/social/PlayerIdentityManager";
 
-type SectionId = "performances" | "team-of-the-week" | "player-of-the-week" | "photos";
+type SectionId = "performances" | "team-of-the-week" | "player-of-the-week" | "player-leaders" | "team-leaders" | "photos";
+
+type Group = "Game cards" | "Weekly awards" | "League leaders" | "Tools";
 
 type Section = {
   id: SectionId;
-  group: "Templates" | "Tools";
+  group: Group;
   label: string;
-  blurb: string;
   icon: LucideIcon;
 };
 
-// Add new post templates here and they appear in the hub automatically.
+// Add a template here (under an existing group, or a new one in GROUPS) and it appears in the menu.
+const GROUPS: Group[] = ["Game cards", "Weekly awards", "League leaders", "Tools"];
+
 const SECTIONS: Section[] = [
-  {
-    id: "performances",
-    group: "Templates",
-    label: "Top performances",
-    blurb: "Single-game stat cards with photo overlay and reel variants",
-    icon: Trophy,
-  },
-  {
-    id: "team-of-the-week",
-    group: "Templates",
-    label: "Team of the Week",
-    blurb: "The five best game scores across a week, side by side",
-    icon: Users,
-  },
-  {
-    id: "player-of-the-week",
-    group: "Templates",
-    label: "Player of the Week",
-    blurb: "The week's best performance as a full-photo card",
-    icon: Star,
-  },
-  {
-    id: "photos",
-    group: "Tools",
-    label: "Player photos",
-    blurb: "Upload photos and link duplicate player records",
-    icon: ImagePlus,
-  },
+  { id: "performances", group: "Game cards", label: "Top performances", icon: Trophy },
+  { id: "team-of-the-week", group: "Weekly awards", label: "Team of the Week", icon: Users },
+  { id: "player-of-the-week", group: "Weekly awards", label: "Player of the Week", icon: Star },
+  { id: "player-leaders", group: "League leaders", label: "Player leaders", icon: Medal },
+  { id: "team-leaders", group: "League leaders", label: "Team leaders", icon: Shield },
+  { id: "photos", group: "Tools", label: "Player photos", icon: ImagePlus },
 ];
 
 const SCORE_KEY = "weekly-awards-show-game-score";
@@ -62,38 +45,6 @@ function readShowGameScore(): boolean {
 function initialSection(): SectionId {
   const tab = new URLSearchParams(window.location.search).get("tab");
   return SECTIONS.some((s) => s.id === tab) ? (tab as SectionId) : "performances";
-}
-
-function Tile({ section, active, onSelect }: { section: Section; active: boolean; onSelect: () => void }) {
-  const Icon = section.icon;
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-pressed={active}
-      data-testid={`tab-${section.id}`}
-      className={`flex h-full w-full min-w-0 items-start gap-2.5 rounded-xl border p-3 text-left transition sm:gap-3 sm:p-4 ${
-        active
-          ? "border-orange-500 bg-orange-50 shadow-sm ring-1 ring-orange-500 dark:bg-orange-900/20"
-          : "border-orange-200 bg-white hover:border-orange-400 hover:bg-orange-50/60 dark:border-orange-700 dark:bg-gray-800 dark:hover:bg-orange-900/10"
-      }`}
-    >
-      <span
-        className={`mt-0.5 flex h-8 w-8 flex-none items-center justify-center rounded-lg sm:h-9 sm:w-9 ${
-          active ? "bg-orange-500 text-white" : "bg-orange-100 text-orange-600 dark:bg-orange-900/30"
-        }`}
-      >
-        <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
-      </span>
-      <span className="min-w-0">
-        <span className="block text-[10px] font-semibold uppercase tracking-wider text-orange-600 dark:text-orange-400">
-          {section.group === "Templates" ? "Template" : "Tool"}
-        </span>
-        <span className="block text-sm font-semibold leading-tight text-gray-900 dark:text-white sm:text-base">{section.label}</span>
-        <span className="mt-0.5 hidden text-xs leading-snug text-gray-600 dark:text-gray-400 sm:block">{section.blurb}</span>
-      </span>
-    </button>
-  );
 }
 
 export default function SocialToolsPage() {
@@ -121,6 +72,8 @@ export default function SocialToolsPage() {
   };
 
   const show = (id: SectionId) => (active === id ? "" : "hidden");
+  const current = SECTIONS.find((s) => s.id === active) ?? SECTIONS[0];
+  const CurrentIcon = current.icon;
 
   return (
     <div className="min-h-screen bg-gray-50 py-4 dark:bg-gray-900 sm:py-8">
@@ -137,40 +90,104 @@ export default function SocialToolsPage() {
           </Button>
         </div>
 
-        <div className="mb-6">
+        <div className="mb-4 sm:mb-6">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white sm:text-3xl">Swish Social</h1>
-          <p className="mt-1 text-gray-600 dark:text-gray-400">
-            Create share-ready graphics from your competition stats. Pick a template to get started.
-          </p>
+          <p className="mt-1 text-gray-600 dark:text-gray-400">Create share-ready graphics from your competition stats.</p>
         </div>
 
-        <div className="mb-6 grid grid-cols-2 gap-2 sm:gap-3 lg:mb-8 lg:grid-cols-4">
-          {SECTIONS.map((s) => (
-            <Tile key={s.id} section={s} active={active === s.id} onSelect={() => select(s.id)} />
-          ))}
-        </div>
+        <div className="xl:grid xl:grid-cols-[220px_minmax(0,1fr)] xl:items-start xl:gap-6">
+          {/* Below wide screens: one compact menu */}
+          <div className="mb-4 xl:hidden">
+            <Select value={active} onValueChange={(v) => select(v as SectionId)}>
+              <SelectTrigger className="border-orange-200 bg-white dark:border-orange-700 dark:bg-gray-800" data-testid="select-template">
+                <span className="!flex items-center gap-2">
+                  <CurrentIcon className="h-4 w-4 flex-none text-orange-600" />
+                  <SelectValue />
+                </span>
+              </SelectTrigger>
+              <SelectContent>
+                {GROUPS.map((group) => (
+                  <SelectGroup key={group}>
+                    <SelectLabel className="text-[10px] font-semibold uppercase tracking-wider text-orange-600">{group}</SelectLabel>
+                    {SECTIONS.filter((s) => s.group === group).map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
-        {visited.has("performances") && (
-          <div className={show("performances")}>
-            <TopPerformancesStudio />
+          {/* Wide screens: grouped sidebar */}
+          <nav aria-label="Swish Social templates" className="hidden xl:sticky xl:top-4 xl:block">
+            <div className="space-y-4 rounded-xl border border-orange-200 bg-white p-3 dark:border-orange-700 dark:bg-gray-800">
+              {GROUPS.map((group) => (
+                <div key={group}>
+                  <div className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-wider text-orange-600 dark:text-orange-400">{group}</div>
+                  <div className="space-y-0.5">
+                    {SECTIONS.filter((s) => s.group === group).map((s) => {
+                      const Icon = s.icon;
+                      const on = s.id === active;
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => select(s.id)}
+                          aria-pressed={on}
+                          data-testid={`tab-${s.id}`}
+                          className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm font-medium transition ${
+                            on
+                              ? "bg-orange-500 text-white shadow-sm"
+                              : "text-gray-700 hover:bg-orange-50 dark:text-gray-200 dark:hover:bg-orange-900/20"
+                          }`}
+                        >
+                          <Icon className={`h-4 w-4 flex-none ${on ? "text-white" : "text-orange-600 dark:text-orange-400"}`} />
+                          {s.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </nav>
+
+          <div className="min-w-0">
+            {visited.has("performances") && (
+              <div className={show("performances")}>
+                <TopPerformancesStudio />
+              </div>
+            )}
+            {visited.has("team-of-the-week") && (
+              <div className={show("team-of-the-week")}>
+                <WeeklyAwardsStudio kind="team" showGameScore={showGameScore} onShowGameScoreChange={changeShowGameScore} />
+              </div>
+            )}
+            {visited.has("player-of-the-week") && (
+              <div className={show("player-of-the-week")}>
+                <WeeklyAwardsStudio kind="player" showGameScore={showGameScore} onShowGameScoreChange={changeShowGameScore} />
+              </div>
+            )}
+            {visited.has("player-leaders") && (
+              <div className={show("player-leaders")}>
+                <LeadersStudio kind="player" />
+              </div>
+            )}
+            {visited.has("team-leaders") && (
+              <div className={show("team-leaders")}>
+                <LeadersStudio kind="team" />
+              </div>
+            )}
+            {visited.has("photos") && (
+              <div className={`${show("photos")} grid grid-cols-1 gap-6 2xl:grid-cols-2`}>
+                <PlayerPhotoUploader />
+                <PlayerIdentityManager />
+              </div>
+            )}
           </div>
-        )}
-        {visited.has("team-of-the-week") && (
-          <div className={show("team-of-the-week")}>
-            <WeeklyAwardsStudio kind="team" showGameScore={showGameScore} onShowGameScoreChange={changeShowGameScore} />
-          </div>
-        )}
-        {visited.has("player-of-the-week") && (
-          <div className={show("player-of-the-week")}>
-            <WeeklyAwardsStudio kind="player" showGameScore={showGameScore} onShowGameScoreChange={changeShowGameScore} />
-          </div>
-        )}
-        {visited.has("photos") && (
-          <div className={`${show("photos")} grid grid-cols-1 gap-6 lg:grid-cols-2`}>
-            <PlayerPhotoUploader />
-            <PlayerIdentityManager />
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );
