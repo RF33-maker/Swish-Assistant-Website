@@ -1,17 +1,18 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { ArrowLeft, ImagePlus, Medal, Shield, Star, Trophy, Users, type LucideIcon } from "lucide-react";
+import { ArrowLeft, ImagePlus, Layers, Medal, Shield, Star, Trophy, Users, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import TopPerformancesStudio from "@/components/social/TopPerformancesStudio";
 import WeeklyAwardsStudio from "@/components/social/WeeklyAwardsStudio";
 import LeadersStudio from "@/components/social/LeadersStudio";
+import LineupsStudio from "@/components/social/LineupsStudio";
 import { PlayerPhotoUploader } from "@/components/social/PlayerPhotoUploader";
 import { PlayerIdentityManager } from "@/components/social/PlayerIdentityManager";
 
-type SectionId = "performances" | "team-of-the-week" | "player-of-the-week" | "player-leaders" | "team-leaders" | "photos";
+type SectionId = "performances" | "team-of-the-week" | "player-of-the-week" | "player-leaders" | "team-leaders" | "best-lineup" | "photos";
 
-type Group = "Game cards" | "Weekly awards" | "League leaders" | "Tools";
+type Group = "Game cards" | "Weekly awards" | "League leaders" | "Lineups" | "Tools";
 
 type Section = {
   id: SectionId;
@@ -21,7 +22,7 @@ type Section = {
 };
 
 // Add a template here (under an existing group, or a new one in GROUPS) and it appears in the menu.
-const GROUPS: Group[] = ["Game cards", "Weekly awards", "League leaders", "Tools"];
+const GROUPS: Group[] = ["Game cards", "Weekly awards", "League leaders", "Lineups", "Tools"];
 
 const SECTIONS: Section[] = [
   { id: "performances", group: "Game cards", label: "Top performances", icon: Trophy },
@@ -29,6 +30,7 @@ const SECTIONS: Section[] = [
   { id: "player-of-the-week", group: "Weekly awards", label: "Player of the Week", icon: Star },
   { id: "player-leaders", group: "League leaders", label: "Player leaders", icon: Medal },
   { id: "team-leaders", group: "League leaders", label: "Team leaders", icon: Shield },
+  { id: "best-lineup", group: "Lineups", label: "Best lineup", icon: Layers },
   { id: "photos", group: "Tools", label: "Player photos", icon: ImagePlus },
 ];
 
@@ -178,6 +180,11 @@ export default function SocialToolsPage() {
             {visited.has("team-leaders") && (
               <div className={show("team-leaders")}>
                 <LeadersStudio kind="team" />
+              </div>
+            )}
+            {visited.has("best-lineup") && (
+              <div className={show("best-lineup")}>
+                <LineupsStudio />
               </div>
             )}
             {visited.has("photos") && (

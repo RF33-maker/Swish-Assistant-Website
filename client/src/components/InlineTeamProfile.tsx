@@ -18,6 +18,7 @@ import { buildTeamSeasonOptions, type TeamSeasonCompetition } from "@/lib/teamSe
 import { AccoladeBadges } from "@/components/AccoladeBadges";
 import { computeTeamAccolades } from "@/lib/accolades";
 import { fetchTeamRecordMaxes, type RecordMaxes } from "@/lib/recordMaxes";
+import { TeamLineupsPanel } from "@/components/TeamLineupsPanel";
 import {
   Select,
   SelectContent,
@@ -122,7 +123,7 @@ const applyPlayerMode = (
 export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, childLeagueIds, seasonCompetitions, onBack, onPlayerClick }: InlineTeamProfileProps) {
   const [, navigate] = useLocation();
   const readableBrand = useReadableTeamColor(brandColor);
-  const [activeTab, setActiveTab] = useState<'overview' | 'playerStats' | 'shotChart'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'playerStats' | 'shotChart' | 'lineups'>('overview');
   const [playerStatsCategory, setPlayerStatsCategory] = useState<'Traditional' | 'Advanced' | 'Scoring'>('Traditional');
   const [playerStatsView, setPlayerStatsView] = useState<'Total' | 'Per Game' | 'Per 40'>('Per Game');
   const [statsSortColumn, setStatsSortColumn] = useState<string>('PTS');
@@ -143,6 +144,17 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
   );
   const activeSeason = seasonOptions.find(option => option.key === selectedSeason) || seasonOptions[0];
   const effectiveLeagueIds = activeSeason?.leagueIds || allLeagueIds;
+  // Competition whose lineups the "Lineups" tab reads: the one being viewed, if it is in the chosen season.
+  const lineupsSlug = useMemo(() => {
+    const inSeason = (seasonCompetitions || []).filter(c => c.slug && effectiveLeagueIds.includes(c.league_id));
+    return (inSeason.find(c => c.slug === leagueSlug) ?? inSeason[0])?.slug || leagueSlug || "";
+  }, [seasonCompetitions, effectiveLeagueIds.join(","), leagueSlug]);
+  const brandRgb = useMemo(() => {
+    const m = /^#?([0-9a-f]{6})$/i.exec((brandColor || "").trim());
+    if (!m) return null;
+    const n = parseInt(m[1], 16);
+    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+  }, [brandColor]);
 
   const [teamRecordMaxes, setTeamRecordMaxes] = useState<RecordMaxes>(EMPTY_RECORD_MAXES);
   useEffect(() => {
@@ -607,8 +619,8 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
       </div>
 
       <div className="flex rounded-lg overflow-hidden border border-gray-200 dark:border-neutral-700 w-fit">
-        {(["overview", "playerStats", "shotChart"] as const)
-          .filter(tab => isPreSeason ? tab === 'overview' : true)
+        {(["overview", "playerStats", "shotChart", "lineups"] as const)
+          .filter(tab => (isPreSeason ? tab === 'overview' : true) && (tab !== 'lineups' || !!lineupsSlug))
           .map(tab => (
           <button
             key={tab}
@@ -618,7 +630,7 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
             }`}
             style={activeTab === tab ? { backgroundColor: readableBrand.onWhite } : {}}
           >
-            {tab === 'playerStats' ? 'Player Stats' : tab === 'shotChart' ? 'Shot Chart' : 'Overview'}
+            {tab === 'playerStats' ? 'Player Stats' : tab === 'shotChart' ? 'Shot Chart' : tab === 'lineups' ? 'Lineups' : 'Overview'}
           </button>
         ))}
       </div>
@@ -899,6 +911,10 @@ export function InlineTeamProfile({ teamName, brandColor, leagueSlug, leagueId, 
             </table>
           </div>
         </div>
+      )}
+
+      {activeTab === 'lineups' && lineupsSlug && (
+        <TeamLineupsPanel slug={lineupsSlug} teamName={teamData.name || teamName} accentColor={readableBrand.body} teamRgb={brandRgb} />
       )}
 
       {activeTab === 'shotChart' && (

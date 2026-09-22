@@ -5,6 +5,8 @@ import * as http from "http";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { supabaseAdmin } from "./supabaseServiceClient";
 import { detectDuplicates } from "./playerMergeUtils";
+import { computeLineups } from "./lineupsService";
+import type { LineupMetric } from "./lineups";
 import { resolveAmbiguousTeam, syncTeamIdentitiesForLeague } from "./teamIdentityService";
 import multer from 'multer';
 import OpenAI from 'openai';
@@ -3550,7 +3552,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Resolve a public competition from its slug (or UUID) plus its direct children.
   // Enforces is_public=true so private leagues cannot be read by unauthenticated callers.
-  async function resolvePublicLeagueFamily(slug: string, logTag: string) {
+  // `viewer`: pass the request to also let a signed-in owner or admin read a private competition
+  // (used by the admin-only Swish Social tools). Without it only public competitions resolve.
+  async function resolvePublicLeagueFamily(slug: string, logTag: string, viewer?: Request) {
     // league_id / competition_id are uuid columns — only include them in the OR
     // filter when the slug is itself a valid UUID, otherwise PostgreSQL throws
     // "invalid input syntax for type uuid".
@@ -3559,8 +3563,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     let leagueQuery = supabaseAdmin
       .from("competitions")
-      .select("league_id, name, is_public")
-      .eq("is_public", true);
+      .select("league_id, name, is_public, user_id, created_by");
+    if (!viewer) leagueQuery = leagueQuery.eq("is_public", true);
 
     if (isUuid) {
       leagueQuery = leagueQuery.or(`slug.eq.${slug},competition_id.eq.${slug},league_id.eq.${slug}`);
@@ -3575,7 +3579,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return null;
     }
 
-    const { league_id, name } = leagueRow as { league_id: string; name: string | null; is_public: boolean };
+    const { league_id, name, is_public, user_id: ownerId, created_by: creatorId } = leagueRow as {
+      league_id: string; name: string | null; is_public: boolean; user_id: string | null; created_by: string | null;
+    };
+    if (!is_public) {
+      const userId = viewer ? await authenticateSupabaseUser(viewer) : null;
+      let allowed = !!userId && (ownerId === userId || creatorId === userId);
+      if (userId && !allowed) {
+        const { data: adminUser } = await supabaseAdmin.auth.admin.getUserById(userId);
+        allowed = adminUser?.user?.app_metadata?.role === "admin";
+      }
+      if (!allowed) {
+        console.error(`[${logTag}] private league requested without access`, slug);
+        return null;
+      }
+    }
     const leagueNames: Record<string, string> = { [league_id]: name || slug };
     const { data: childRows, error: childError } = await supabaseAdmin
       .from("competitions")
@@ -4088,6 +4106,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (err: any) {
       console.error("[LeagueLeaders] error", err?.message);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Competitions the signed-in admin/owner can use in Swish Social, including private ones the
+  // browser's own query can't see because of row-level security.
+  app.get("/api/social/competitions", async (req: Request, res: Response) => {
+    try {
+      const userId = await authenticateSupabaseUser(req);
+      if (!userId) return res.status(401).json({ error: "Authentication required" });
+      const { data: adminUser } = await supabaseAdmin.auth.admin.getUserById(userId);
+      const isAdmin = adminUser?.user?.app_metadata?.role === "admin";
+      let query = supabaseAdmin
+        .from("competitions")
+        .select("slug, name, is_public")
+        .not("slug", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(300);
+      if (!isAdmin) query = query.or(`is_public.eq.true,user_id.eq.${userId},created_by.eq.${userId}`);
+      const { data, error } = await query;
+      if (error) throw new Error(error.message);
+      return res.json((data || []).filter((c) => c.slug && c.name));
+    } catch (err: any) {
+      console.error("[SocialCompetitions] error", err?.message);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Best five-man units for one team, from the on-court stints. Admin tooling: a signed-in owner
+  // or admin may also read a private competition.
+  app.get("/api/league/:slug/lineups", async (req: Request, res: Response) => {
+    try {
+      const { slug } = req.params;
+      const family = await resolvePublicLeagueFamily(slug, "Lineups", req);
+      if (!family) return res.status(404).json({ error: "League not found or not accessible" });
+      const { leagueIds, name } = family;
+
+      const metric: LineupMetric = req.query.metric === "plusminus" || req.query.metric === "minutes" ? req.query.metric : "net";
+      const minMinutes = Math.max(1, Math.min(30, Number(req.query.minMinutes) || 8));
+      const limit = Math.max(1, Math.min(10, Number(req.query.limit) || 3));
+      const requestedTeam = typeof req.query.team_id === "string" ? req.query.team_id : "";
+      const requestedTeamName = typeof req.query.team_name === "string" ? req.query.team_name.slice(0, 120) : "";
+
+      const result = await computeLineups({
+        leagueIds,
+        leagueName: name || slug,
+        rootLeagueId: family.league_id,
+        metric,
+        minMinutes,
+        limit,
+        teamId: requestedTeam,
+        teamName: requestedTeamName || undefined,
+        formatName: formatCanonicalPlayerName,
+        onlyReliable: req.query.onlyReliable !== "false",
+      });
+      return res.json(result);
+    } catch (err: any) {
+      console.error("[Lineups] error", err?.message);
       return res.status(500).json({ error: "Internal server error" });
     }
   });
