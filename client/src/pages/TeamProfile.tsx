@@ -35,6 +35,7 @@ import { AccoladeBadges } from "@/components/AccoladeBadges";
 import { ProfileChip } from "@/components/ProfileChip";
 import { PillTabBar } from "@/components/PillTabBar";
 import { computeTeamAccolades, topAccolades } from "@/lib/accolades";
+import { TeamLineupsPanel } from "@/components/TeamLineupsPanel";
 import { fetchTeamRecordMaxes, type RecordMaxes } from "@/lib/recordMaxes";
 
 const EMPTY_RECORD_MAXES: RecordMaxes = { pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, tpm: 0 };
@@ -344,7 +345,7 @@ export default function TeamProfile() {
   const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
   const [isGameModalOpen, setIsGameModalOpen] = useState(false);
   const [currentLeagueId, setCurrentLeagueId] = useState<string | null>(null);
-  const [activeStatsTab, setActiveStatsTab] = useState<'overview' | 'playerStats' | 'teamStats' | 'shotChart' | 'accolades'>('overview');
+  const [activeStatsTab, setActiveStatsTab] = useState<'overview' | 'playerStats' | 'teamStats' | 'shotChart' | 'lineups' | 'accolades'>('overview');
   const [shotChartRange, setShotChartRange] = useState<string>("season");
   const [playerStatsCategory, setPlayerStatsCategory] = useState<'Traditional' | 'Advanced' | 'Scoring' | 'Misc'>('Traditional');
   const [playerStatsView, setPlayerStatsView] = useState<'Total' | 'Per Game' | 'Per 40'>('Per Game');
@@ -359,6 +360,11 @@ export default function TeamProfile() {
   );
   const activeSeason = seasonOptions.find(option => option.key === selectedSeason) || seasonOptions[0];
   const selectedLeagueIds = activeSeason?.leagueIds || [];
+  // Competition whose lineups the "Lineups" tab reads: the URL's, if it is in the chosen season.
+  const lineupsSlug = useMemo(() => {
+    const inSeason = seasonCompetitions.filter(c => c.slug && (activeSeason?.leagueIds || []).includes(c.league_id));
+    return (inSeason.find(c => c.slug === leagueSlug) ?? inSeason[0])?.slug || leagueSlug || "";
+  }, [seasonCompetitions, activeSeason?.key, leagueSlug]);
   // Sibling seasons of this same team/competition — used as a branding/logo
   // fallback when the current season's own `teams` row hasn't been populated
   // yet (common for newly-created seasons before data import catches up).
@@ -1367,6 +1373,7 @@ export default function TeamProfile() {
               { key: 'playerStats', label: 'Player Stats' },
               { key: 'teamStats', label: 'Team Stats' },
               { key: 'shotChart', label: 'Shot Chart' },
+              ...(lineupsSlug ? [{ key: 'lineups', label: 'Lineups' }] : []),
               { key: 'accolades', label: 'Accolades' },
             ]}
             active={activeStatsTab}
@@ -1886,6 +1893,15 @@ export default function TeamProfile() {
             recentGames={team.recentGames}
             shotChartRange={shotChartRange}
             setShotChartRange={setShotChartRange}
+          />
+        )}
+
+        {activeStatsTab === 'lineups' && lineupsSlug && (
+          <TeamLineupsPanel
+            slug={lineupsSlug}
+            teamName={team.name}
+            accentColor={readablePrimary.body}
+            teamRgb={teamBranding?.primaryRgb}
           />
         )}
 

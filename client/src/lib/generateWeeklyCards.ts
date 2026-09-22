@@ -170,7 +170,7 @@ export type HeadMap = Record<string, HeadPoint | undefined>;
 /** Shared height for every head on Team of the Week, as a percentage of the photo panel. */
 export const DEFAULT_HEAD_LINE = 26;
 // Used until a face has been marked: roughly where a head sits in a three-quarter shot.
-const GUESSED_HEAD: HeadPoint = { x: 0.5, y: 0.3 };
+export const GUESSED_HEAD: HeadPoint = { x: 0.5, y: 0.3 };
 const MAX_HEAD_ZOOM = 2.5;
 
 type Placement = { left: number; top: number; scale: number; aligned: boolean };
