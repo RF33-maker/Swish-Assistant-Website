@@ -11,8 +11,8 @@ import type { WeeklyAward, WeeklyCardBrand } from "@/types/weeklyAwards";
 export const CARD_W = 1080;
 export const CARD_H = 1350;
 
-const DISPLAY = '"Oswald", Impact, "Arial Narrow", sans-serif';
-const BODY = "Arial, Helvetica, sans-serif";
+export const DISPLAY = '"Oswald", Impact, "Arial Narrow", sans-serif';
+export const BODY = "Arial, Helvetica, sans-serif";
 const FONT_HREF = "https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&display=swap";
 
 /** Loads the condensed display font on demand (only the weekly cards need it). */
@@ -64,7 +64,7 @@ export function headlineStats(a: WeeklyAward): { key: StatKey; label: string; va
 
 const fmtGameScore = (v: number | null) => (v == null ? "—" : Number(v).toFixed(1));
 const splitStat = (made: number | null, att: number | null) => (made == null || att == null ? "—" : `${made}/${att}`);
-const initialsOf = (name: string) =>
+export const initialsOf = (name: string) =>
   name.split(/\s+/).filter(Boolean).map((p) => p[0]).slice(0, 2).join("").toUpperCase();
 
 // ── image loading ────────────────────────────────────────────────────────────
@@ -95,7 +95,7 @@ async function loadWithFallback(src: string): Promise<HTMLImageElement | null> {
 // Photo framing redraws the card on every slider tick, so keep decoded images around.
 const imageCache = new Map<string, Promise<HTMLImageElement | null>>();
 
-function fetchImg(src: string | null | undefined): Promise<HTMLImageElement | null> {
+export function fetchImg(src: string | null | undefined): Promise<HTMLImageElement | null> {
   if (!src) return Promise.resolve(null);
   let cached = imageCache.get(src);
   if (!cached) {
@@ -110,7 +110,7 @@ function fetchImg(src: string | null | undefined): Promise<HTMLImageElement | nu
 
 // ── canvas helpers ───────────────────────────────────────────────────────────
 
-type TextOpts = {
+export type TextOpts = {
   size: number;
   weight?: number;
   color?: string;
@@ -119,17 +119,17 @@ type TextOpts = {
   alpha?: number;
 };
 
-function setFont(ctx: CanvasRenderingContext2D, o: TextOpts) {
+export function setFont(ctx: CanvasRenderingContext2D, o: TextOpts) {
   ctx.font = `${o.weight ?? 400} ${o.size}px ${o.family ?? DISPLAY}`;
 }
 
-function capHeight(ctx: CanvasRenderingContext2D, o: TextOpts): number {
+export function capHeight(ctx: CanvasRenderingContext2D, o: TextOpts): number {
   setFont(ctx, o);
   return ctx.measureText("H").actualBoundingBoxAscent;
 }
 
 /** Draws text with its capital-letter top edge at `topY`; returns the cap height. */
-function drawTextTop(ctx: CanvasRenderingContext2D, text: string, x: number, topY: number, o: TextOpts): number {
+export function drawTextTop(ctx: CanvasRenderingContext2D, text: string, x: number, topY: number, o: TextOpts): number {
   setFont(ctx, o);
   const cap = ctx.measureText("H").actualBoundingBoxAscent;
   ctx.save();
@@ -142,7 +142,7 @@ function drawTextTop(ctx: CanvasRenderingContext2D, text: string, x: number, top
   return cap;
 }
 
-function fitSize(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, max: number, min: number, weight = 400): number {
+export function fitSize(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, max: number, min: number, weight = 400): number {
   for (let size = max; size > min; size -= 1) {
     ctx.font = `${weight} ${size}px ${DISPLAY}`;
     if (ctx.measureText(text).width <= maxWidth) return size;
@@ -180,7 +180,7 @@ type Placement = { left: number; top: number; scale: number; aligned: boolean };
  * With a head point, the photo is zoomed just enough, and shifted, so that face lands on
  * the shared head line; if that would need more than MAX_HEAD_ZOOM it gets as close as it can.
  */
-function placeInFrame(
+export function placeInFrame(
   img: HTMLImageElement,
   w: number,
   h: number,
@@ -283,7 +283,7 @@ function drawBlurredBackdrop(ctx: CanvasRenderingContext2D, img: HTMLImageElemen
   ctx.restore();
 }
 
-function drawContain(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: number, y: number, w: number, h: number, alpha = 1) {
+export function drawContain(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: number, y: number, w: number, h: number, alpha = 1) {
   const scale = Math.min(w / img.naturalWidth, h / img.naturalHeight);
   const dw = img.naturalWidth * scale;
   const dh = img.naturalHeight * scale;
@@ -293,13 +293,13 @@ function drawContain(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: nu
   ctx.restore();
 }
 
-function verticalGradient(ctx: CanvasRenderingContext2D, y0: number, y1: number, stops: [number, string][]) {
+export function verticalGradient(ctx: CanvasRenderingContext2D, y0: number, y1: number, stops: [number, string][]) {
   const g = ctx.createLinearGradient(0, y0, 0, y1);
   stops.forEach(([at, colour]) => g.addColorStop(at, colour));
   return g;
 }
 
-function withAlpha(hex: string, alpha: number): string {
+export function withAlpha(hex: string, alpha: number): string {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex);
   if (!m) return hex;
   const n = parseInt(m[1], 16);
@@ -330,7 +330,7 @@ function drawStatsThreadMark(ctx: CanvasRenderingContext2D, x: number, y: number
 }
 
 /** Centred logo row along the bottom with a small competition label under it (photo overlay style). */
-function drawFooter(ctx: CanvasRenderingContext2D, logos: (FooterLogo | null)[], label: string) {
+export function drawFooter(ctx: CanvasRenderingContext2D, logos: (FooterLogo | null)[], label: string) {
   const items = logos.filter((l): l is FooterLogo => l !== null);
   const rowH = items.length <= 4 ? 64 : 54;
   const maxW = items.length <= 4 ? 150 : 110;

@@ -3887,6 +3887,211 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // League leaders: per-game season leaders for players or teams in one public competition
+  // (and its child competitions), for the Swish Social leaders cards.
+  type LeaderCategory = {
+    key: string;
+    label: string;
+    title: string;
+    short: string;
+    lowerIsBetter?: boolean;
+    col?: string; // per-game average of this column
+    made?: string; // percentage categories: made / attempted
+    att?: string;
+    minAtt?: number;
+    signed?: boolean;
+  };
+  const PLAYER_LEADER_CATEGORIES: LeaderCategory[] = [
+    { key: "pts", title: "Points Per Game", label: "Points", short: "PPG", col: "spoints" },
+    { key: "reb", title: "Rebounds Per Game", label: "Rebounds", short: "RPG", col: "sreboundstotal" },
+    { key: "ast", title: "Assists Per Game", label: "Assists", short: "APG", col: "sassists" },
+    { key: "stl", title: "Steals Per Game", label: "Steals", short: "SPG", col: "ssteals" },
+    { key: "blk", title: "Blocks Per Game", label: "Blocks", short: "BPG", col: "sblocks" },
+    { key: "tpm", title: "3-Pointers Made Per Game", label: "3-Pointers Made", short: "3PM", col: "sthreepointersmade" },
+    { key: "fg_pct", title: "Field Goal Percentage", label: "Field Goal %", short: "FG%", made: "sfieldgoalsmade", att: "sfieldgoalsattempted", minAtt: 5 },
+    { key: "tp_pct", title: "3-Point Percentage", label: "3-Point %", short: "3P%", made: "sthreepointersmade", att: "sthreepointersattempted", minAtt: 5 },
+    { key: "ft_pct", title: "Free Throw Percentage", label: "Free Throw %", short: "FT%", made: "sfreethrowsmade", att: "sfreethrowsattempted", minAtt: 5 },
+  ];
+  const TEAM_LEADER_CATEGORIES: LeaderCategory[] = [
+    { key: "pts", title: "Points Scored Per Game", label: "Points Scored", short: "PPG", col: "tot_spoints" },
+    { key: "opp", title: "Points Allowed Per Game", label: "Points Allowed", short: "OPP", lowerIsBetter: true },
+    { key: "diff", title: "Point Differential Per Game", label: "Point Differential", short: "DIFF", signed: true },
+    { key: "reb", title: "Rebounds Per Game", label: "Rebounds", short: "RPG", col: "tot_sreboundstotal" },
+    { key: "ast", title: "Assists Per Game", label: "Assists", short: "APG", col: "tot_sassists" },
+    { key: "stl", title: "Steals Per Game", label: "Steals", short: "SPG", col: "tot_ssteals" },
+    { key: "blk", title: "Blocks Per Game", label: "Blocks", short: "BPG", col: "tot_sblocks" },
+    { key: "tov", title: "Fewest Turnovers Per Game", label: "Fewest Turnovers", short: "TOV", lowerIsBetter: true, col: "tot_sturnovers" },
+    { key: "fg_pct", title: "Field Goal Percentage", label: "Field Goal %", short: "FG%", made: "tot_sfieldgoalsmade", att: "tot_sfieldgoalsattempted", minAtt: 1 },
+    { key: "tp_pct", title: "3-Point Percentage", label: "3-Point %", short: "3P%", made: "tot_sthreepointersmade", att: "tot_sthreepointersattempted", minAtt: 1 },
+    { key: "ft_pct", title: "Free Throw Percentage", label: "Free Throw %", short: "FT%", made: "tot_sfreethrowsmade", att: "tot_sfreethrowsattempted", minAtt: 1 },
+  ];
+
+  async function fetchAllLeagueRows(table: string, columns: string, leagueIds: string[]): Promise<Record<string, any>[]> {
+    const out: Record<string, any>[] = [];
+    for (let from = 0; from < 60000; from += 1000) {
+      const { data, error } = await supabaseAdmin
+        .from(table)
+        .select(columns)
+        .in("league_id", leagueIds)
+        .order("id")
+        .range(from, from + 999);
+      if (error) throw new Error(error.message);
+      out.push(...((data || []) as unknown as Record<string, any>[]));
+      if ((data?.length || 0) < 1000) break;
+    }
+    return out;
+  }
+
+  const minutesPlayed = (v: unknown): number => {
+    if (typeof v === "number") return v;
+    const m = /^(\d+):(\d+)/.exec(String(v ?? ""));
+    return m ? Number(m[1]) * 60 + Number(m[2]) : 0;
+  };
+
+  app.get("/api/league/:slug/leaders", async (req: Request, res: Response) => {
+    try {
+      const { slug } = req.params;
+      const kind = req.query.kind === "team" ? "team" : "player";
+      const family = await resolvePublicLeagueFamily(slug, "LeagueLeaders");
+      if (!family) return res.status(404).json({ error: "League not found or not public" });
+      const { leagueIds, name } = family;
+
+      const categories = kind === "team" ? TEAM_LEADER_CATEGORIES : PLAYER_LEADER_CATEGORIES;
+      const category = categories.find((c) => c.key === req.query.category) ?? categories[0];
+      const limit = Math.max(1, Math.min(10, Number(req.query.limit) || 5));
+      const categoryList = categories.map(({ key, label, title, short, lowerIsBetter }) => ({ key, label, title, short, lowerIsBetter: !!lowerIsBetter }));
+
+      type Agg = { id: string; name: string; team_name: string | null; team_id: string | null; league_id: string; games: number; sums: Record<string, number> };
+      const aggs = new Map<string, Agg>();
+      const bump = (id: string, seed: Omit<Agg, "games" | "sums">, values: Record<string, number>) => {
+        let a = aggs.get(id);
+        if (!a) aggs.set(id, (a = { ...seed, games: 0, sums: {} }));
+        a.games += 1;
+        a.team_name = seed.team_name ?? a.team_name;
+        for (const [k, v] of Object.entries(values)) a.sums[k] = (a.sums[k] || 0) + v;
+      };
+      const num = (v: unknown) => Number(v) || 0;
+
+      let gamesCounted = 0;
+      if (kind === "player") {
+        const cols = ["player_id", "full_name", "team_id", "team_name", "league_id", "game_key", "sminutes", "spoints", "sreboundstotal", "sassists", "ssteals", "sblocks", "sthreepointersmade", "sthreepointersattempted", "sfieldgoalsmade", "sfieldgoalsattempted", "sfreethrowsmade", "sfreethrowsattempted"];
+        const rows = await fetchAllLeagueRows("player_stats", cols.join(","), leagueIds);
+        gamesCounted = new Set(rows.map((r) => r.game_key)).size;
+        for (const r of rows) {
+          if (!r.player_id) continue;
+          const played = minutesPlayed(r.sminutes) > 0 || cols.slice(7).some((c) => num(r[c]) > 0);
+          if (!played) continue;
+          const values: Record<string, number> = {};
+          for (const c of cols.slice(7)) values[c] = num(r[c]);
+          bump(r.player_id, { id: r.player_id, name: r.full_name, team_name: r.team_name, team_id: r.team_id, league_id: r.league_id }, values);
+        }
+      } else {
+        const cols = ["team_id", "name", "league_id", "game_key", "tot_spoints", "tot_sreboundstotal", "tot_sassists", "tot_ssteals", "tot_sblocks", "tot_sturnovers", "tot_sfieldgoalsmade", "tot_sfieldgoalsattempted", "tot_sthreepointersmade", "tot_sthreepointersattempted", "tot_sfreethrowsmade", "tot_sfreethrowsattempted"];
+        const rows = await fetchAllLeagueRows("team_stats", cols.join(","), leagueIds);
+        gamesCounted = new Set(rows.map((r) => r.game_key)).size;
+        const byGame = new Map<string, Record<string, any>[]>();
+        for (const r of rows) byGame.set(r.game_key, [...(byGame.get(r.game_key) || []), r]);
+        for (const r of rows) {
+          const id = r.team_id || r.name;
+          if (!id) continue;
+          const values: Record<string, number> = {};
+          for (const c of cols.slice(4)) values[c] = num(r[c]);
+          const opponent = (byGame.get(r.game_key) || []).find((o) => o !== r);
+          if (opponent) {
+            values.opp = num(opponent.tot_spoints);
+            values.oppGames = 1;
+          }
+          bump(id, { id, name: r.name, team_name: r.name, team_id: r.team_id, league_id: r.league_id }, values);
+        }
+      }
+
+      const maxGames = Math.max(0, ...Array.from(aggs.values()).map((a) => a.games));
+      const requestedMin = Number(req.query.minGames);
+      const minGames = Number.isFinite(requestedMin) && requestedMin >= 1 ? Math.floor(requestedMin) : Math.max(1, Math.ceil(maxGames * 0.5));
+
+      const scored: { agg: Agg; value: number; display: string }[] = [];
+      for (const a of Array.from(aggs.values())) {
+        if (a.games < minGames) continue;
+        let value: number | null = null;
+        if (category.made && category.att) {
+          const att = a.sums[category.att] || 0;
+          if (att >= Math.max(category.minAtt ?? 1, minGames * (kind === "player" ? 1 : 0))) value = ((a.sums[category.made] || 0) / att) * 100;
+        } else if (category.key === "opp") {
+          const g = a.sums.oppGames || 0;
+          if (g > 0) value = (a.sums.opp || 0) / g;
+        } else if (category.key === "diff") {
+          const g = a.sums.oppGames || 0;
+          if (g > 0) value = ((a.sums.tot_spoints || 0) - (a.sums.opp || 0)) / g;
+        } else if (category.col) {
+          value = (a.sums[category.col] || 0) / a.games;
+        }
+        if (value == null || !Number.isFinite(value)) continue;
+        const display = category.made ? `${value.toFixed(1)}%` : category.signed ? `${value > 0 ? "+" : ""}${value.toFixed(1)}` : value.toFixed(1);
+        scored.push({ agg: a, value, display });
+      }
+      scored.sort((x, y) => (category.lowerIsBetter ? x.value - y.value : y.value - x.value) || y.agg.games - x.agg.games);
+      const top = scored.slice(0, limit);
+
+      // Players: canonical name and photo (borrowing another record's photo of the same name if needed).
+      const playerInfo = new Map<string, any>();
+      const borrowed = new Map<string, { photo_path: string; photo_focus_y: number | null }>();
+      if (kind === "player" && top.length > 0) {
+        const { data: playerRows } = await supabaseAdmin
+          .from("players")
+          .select("id, full_name, photo_path, photo_focus_y")
+          .in("id", top.map((t) => t.agg.id));
+        for (const p of playerRows || []) playerInfo.set(p.id, p);
+        const needPhoto = top.map((t) => playerInfo.get(t.agg.id)).filter((p) => p && !p.photo_path).map((p) => p.full_name);
+        if (needPhoto.length > 0) {
+          const { data: sameName } = await supabaseAdmin
+            .from("players")
+            .select("full_name, photo_path, photo_focus_y")
+            .in("full_name", needPhoto)
+            .not("photo_path", "is", null);
+          for (const p of (sameName || []) as any[]) {
+            const key = String(p.full_name).toLowerCase();
+            if (p.photo_path && !borrowed.has(key)) borrowed.set(key, p);
+          }
+        }
+      }
+      const photoUrl = (path: string | null | undefined) =>
+        path ? supabaseAdmin.storage.from("player-photos").getPublicUrl(path).data.publicUrl : null;
+
+      const leaders = top.map(({ agg, value, display }, i) => {
+        const info = playerInfo.get(agg.id);
+        const fullName = kind === "player" ? formatCanonicalPlayerName(info?.full_name || agg.name) : agg.name;
+        const borrow = info && !info.photo_path ? borrowed.get(String(info.full_name).toLowerCase()) : undefined;
+        return {
+          rank: i + 1,
+          id: agg.id,
+          name: fullName,
+          team_name: agg.team_name,
+          team_id: agg.team_id,
+          league_id: agg.league_id,
+          games: agg.games,
+          value: Math.round(value * 100) / 100,
+          display,
+          photoUrl: kind === "player" ? photoUrl(info?.photo_path || borrow?.photo_path) : null,
+          photoFocusY: info?.photo_path ? info?.photo_focus_y ?? 50 : borrow?.photo_focus_y ?? 50,
+        };
+      });
+
+      return res.json({
+        league: { name: name || slug },
+        kind,
+        category: { key: category.key, label: category.label, title: category.title, short: category.short, lowerIsBetter: !!category.lowerIsBetter },
+        categories: categoryList,
+        minGames,
+        maxGames,
+        gamesCounted,
+        leaders,
+      });
+    } catch (err: any) {
+      console.error("[LeagueLeaders] error", err?.message);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   app.get("/api/home/trending-performances", async (req: Request, res: Response) => {
     const now = Date.now();
     if (trendingCache && now - trendingCache.at < TRENDING_TTL_MS) {
