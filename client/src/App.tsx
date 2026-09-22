@@ -36,9 +36,11 @@ import GamePage from "@/pages/GamePage";
 import { AuthProvider } from "./hooks/use-auth";
 import { AdminRoute, ProtectedRoute } from "./lib/protected-route";
 import ResetPassword from "./pages/reset-password";
+import AuthConfirm from "./pages/auth-confirm";
 import SettingsPage from "@/pages/settings-page";
 import ProfilePage from "./pages/profile-page";
 import ImportPlayersPage from "@/pages/admin/import-players";
+import UnconfirmedAccountsPage from "@/pages/admin/unconfirmed-accounts";
 import TestConnections from "./components/test-connections";
 import PaymentPage from "@/pages/payment";
 import ContactSalesPage from "@/pages/contact-sales";
@@ -80,6 +82,7 @@ function Router() {
       <Route path="/league/:slug/team-logos" component={TeamLogoManager} />
       <Route path="/league/:leagueSlug/team/:teamName" component={TeamProfile} />
       <Route path="/reset-password" component={ResetPassword} />
+      <Route path="/auth/confirm" component={AuthConfirm} />
       <Route path="/privacy" component={PrivacyPolicyPage} />
       <Route path="/terms" component={TermsOfServicePage} />
       <Route path="/cookies" component={CookiePolicyPage} />
@@ -108,6 +111,7 @@ function Router() {
       <AdminRoute path="/team-logos/:slug" component={TeamLogoManager} />
       <AdminRoute path="/news-manager" component={NewsManager} />
       <AdminRoute path="/admin/import-players" component={ImportPlayersPage} />
+      <AdminRoute path="/admin/unconfirmed-accounts" component={UnconfirmedAccountsPage} />
 
       {/* Fallback */}
       <Route component={NotFound} />

@@ -4739,6 +4739,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return res.json({ success: true });
   });
 
+  // GET /api/admin/unconfirmed-users
+  // Lists accounts that signed up but never confirmed their email, so an
+  // admin can prompt them again — e.g. after fixing a bug in the
+  // confirmation flow itself, where a backlog of stuck accounts is expected.
+  // Excludes anyone who signed up within the last `olderThanMinutes` (default
+  // 60) since they likely just haven't checked their inbox yet.
+  app.get("/api/admin/unconfirmed-users", async (req: Request, res: Response) => {
+    const adminId = await requireAdmin(req, res);
+    if (!adminId) return;
+
+    try {
+      const olderThanMinutes = Math.max(0, Number(req.query.olderThanMinutes) || 60);
+      const cutoff = Date.now() - olderThanMinutes * 60_000;
+
+      const users: { id: string; email: string; createdAt: string; confirmationSentAt: string | null }[] = [];
+      for (let page = 1; page <= 20; page++) {
+        const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page, perPage: 1000 });
+        if (error) throw new Error(error.message);
+        for (const u of data.users) {
+          if (!u.email_confirmed_at && u.email && new Date(u.created_at).getTime() <= cutoff) {
+            users.push({
+              id: u.id,
+              email: u.email,
+              createdAt: u.created_at,
+              confirmationSentAt: u.confirmation_sent_at ?? null,
+            });
+          }
+        }
+        if (data.users.length < 1000) break;
+      }
+      users.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      return res.json({ users });
+    } catch (err: any) {
+      console.error("[AdminUnconfirmedUsers] error", err?.message);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // POST /api/account/update-profile
   // Authenticated endpoint to update the member's display name only.
   // Marketing consent is handled by /api/account/update-marketing-consent.
