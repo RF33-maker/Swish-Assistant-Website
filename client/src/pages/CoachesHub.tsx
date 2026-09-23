@@ -11,8 +11,10 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import TeamPerformanceTrends, { type TeamGameLogRow } from '@/components/TeamPerformanceTrends';
 import AdvancedInsights from '@/components/coaches-hub/AdvancedInsights';
 import FullRankings from '@/components/coaches-hub/FullRankings';
+import PlayerDetail from '@/components/coaches-hub/PlayerDetail';
+import TeamDetail from '@/components/coaches-hub/TeamDetail';
 import LeagueChatbot from '@/components/LeagueChatbot';
-import { TrendingUp, BarChart3, Users, Target, Award, Eye, MessageCircle, Search, FileText, User, Calendar, Trophy, X } from 'lucide-react';
+import { TrendingUp, BarChart3, Users, Target, Award, Eye, MessageCircle, Search, User, Calendar, Trophy, X, ChevronDown } from 'lucide-react';
 import { Link } from 'wouter';
 import SwishLogo from '@/assets/Swish Assistant Logo.png';
 import UnifiedScoutingEditor from '@/components/scout-editor/UnifiedScoutingEditor';
@@ -20,12 +22,24 @@ import { safelyParseReport } from "@/utils/parseReport";
 import { ScoutingReport } from "@/types/reportSchema";
 import { namesMatch, strictNamesMatch, getMostCompleteName } from "@/lib/fuzzyMatch";
 import { normalizeTeamName } from "@/lib/teamUtils";
+import {
+  makeAdvancedAggregator,
+  accumulateAdvancedRow,
+  mergeAdvancedInto,
+  averageAdvanced,
+  type AdvancedAggregatorPart,
+  type AdvancedAverages,
+} from "@/lib/advancedStats";
 
 export interface PlayerSeasonAverage {
   player_name: string;
   team_id: string;
   team_name: string;
   league_id: string;
+  /** Every raw player_stats.player_id merged into this row — a coach's
+      player can be split across a few ids (re-imports, name typos), so the
+      deep-dive game log / shot chart need the full set to query by. */
+  player_ids: string[];
   games_played: number;
   avg_pts: number;
   avg_ast: number;
@@ -48,6 +62,7 @@ export interface PlayerSeasonAverage {
   total_ftm: number;
   total_fta: number;
   season_ft_pct: number | null;
+  advanced: AdvancedAverages;
 }
 
 export interface TeamSeasonAverage {
@@ -70,9 +85,23 @@ export interface TeamSeasonAverage {
   avg_ftm: number;
   avg_fta: number;
   season_ft_pct: number | null;
+  /** Optional: only populated once the advanced team_stats aggregation pass has run. */
+  advanced?: AdvancedAverages & { pace: number | null };
 }
 
-type HubTab = 'overview' | 'trends' | 'advanced' | 'rankings' | 'scouting';
+type HubTab = 'overview' | 'rankings' | 'lineups' | 'trends' | 'scouting';
+
+// Small numbered section header — same "01 · label" convention used across
+// the tab panels below, borrowed from the sectioned-page pattern coaches
+// pointed to as a reference (Epinoia), recolored to the league's own brand.
+function SectionKicker({ n, label, color, className = 'mb-3' }: { n: string; label: string; color: string; className?: string }) {
+  return (
+    <div className={`flex items-baseline gap-2 ${className}`}>
+      <span className="text-[11px] font-mono font-semibold tracking-widest" style={{ color }}>{n}</span>
+      <h3 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">{label}</h3>
+    </div>
+  );
+}
 
 interface RawPlayerAgg {
   playerIds: Set<string>;
@@ -96,6 +125,7 @@ interface RawPlayerAgg {
   tpa: number;
   ftm: number;
   fta: number;
+  adv: AdvancedAggregatorPart;
 }
 
 function accumulateRawInto(target: RawPlayerAgg, source: RawPlayerAgg) {
@@ -112,6 +142,7 @@ function accumulateRawInto(target: RawPlayerAgg, source: RawPlayerAgg) {
   target.tpa += source.tpa;
   target.ftm += source.ftm;
   target.fta += source.fta;
+  mergeAdvancedInto(target.adv, source.adv);
   target.name = getMostCompleteName([target.name, source.name]);
   source.playerIds.forEach(id => target.playerIds.add(id));
   if (source.latestGameTs > target.latestGameTs) {
@@ -137,7 +168,7 @@ async function fetchAndMergePlayerRankings(leagueId: string): Promise<PlayerSeas
   while (hasMore) {
     const { data, error } = await supabase
       .from('player_stats')
-      .select('player_id, id, full_name, firstname, familyname, team_id, team_name, game_key, spoints, sreboundstotal, sassists, ssteals, sblocks, sturnovers, sfieldgoalsmade, sfieldgoalsattempted, sthreepointersmade, sthreepointersattempted, sfreethrowsmade, sfreethrowsattempted')
+      .select('player_id, id, full_name, firstname, familyname, team_id, team_name, game_key, spoints, sreboundstotal, sassists, ssteals, sblocks, sturnovers, sfieldgoalsmade, sfieldgoalsattempted, sthreepointersmade, sthreepointersattempted, sfreethrowsmade, sfreethrowsattempted, efg_percent, ts_percent, three_point_rate, ast_percent, oreb_percent, dreb_percent, reb_percent, tov_percent, usage_percent, pie, off_rating, def_rating, net_rating, pts_percent_2pt, pts_percent_3pt, pts_percent_ft, pts_percent_midrange, pts_percent_pitp, pts_percent_fastbreak, pts_percent_second_chance, pts_percent_off_turnovers')
       .eq('league_id', leagueId)
       .range(page * pageSize, (page + 1) * pageSize - 1);
     if (error) throw error;
@@ -164,6 +195,7 @@ async function fetchAndMergePlayerRankings(leagueId: string): Promise<PlayerSeas
         gamesPlayed: 0,
         pts: 0, reb: 0, ast: 0, stl: 0, blk: 0, tov: 0,
         fgm: 0, fga: 0, tpm: 0, tpa: 0, ftm: 0, fta: 0,
+        adv: makeAdvancedAggregator(),
       };
       byId.set(key, agg);
     }
@@ -180,6 +212,7 @@ async function fetchAndMergePlayerRankings(leagueId: string): Promise<PlayerSeas
     agg.tpa += row.sthreepointersattempted || 0;
     agg.ftm += row.sfreethrowsmade || 0;
     agg.fta += row.sfreethrowsattempted || 0;
+    accumulateAdvancedRow(agg.adv, row);
   }
 
   // Pass 1: merge fuzzy-name duplicates within the same team.
@@ -217,6 +250,7 @@ async function fetchAndMergePlayerRankings(leagueId: string): Promise<PlayerSeas
     team_id: p.teamId,
     team_name: p.teamName,
     league_id: leagueId,
+    player_ids: Array.from(p.playerIds),
     games_played: p.gamesPlayed,
     avg_pts: p.gamesPlayed ? p.pts / p.gamesPlayed : 0,
     avg_ast: p.gamesPlayed ? p.ast / p.gamesPlayed : 0,
@@ -239,11 +273,66 @@ async function fetchAndMergePlayerRankings(leagueId: string): Promise<PlayerSeas
     total_ftm: p.ftm,
     total_fta: p.fta,
     season_ft_pct: p.fta > 0 ? (p.ftm / p.fta) * 100 : null,
+    advanced: averageAdvanced(p.adv),
   }));
 }
 
+// Advanced team-level averages (eFG%, TS%, ORTG/DRTG/NET, PACE, scoring
+// distribution) for the "Advanced" rankings in Coaches Hub. team_stats
+// carries the same-named advanced columns as player_stats (see
+// AdvancedStatRow) plus its own `pace`, which player_stats has no
+// equivalent of. Fetched and averaged separately from v_team_season_averages
+// (which only has the traditional box columns) rather than changing that
+// shared view, and merged onto its rows afterwards by team_id.
+async function fetchTeamAdvancedAverages(leagueId: string): Promise<Map<string, AdvancedAverages & { pace: number | null }>> {
+  let allRows: any[] = [];
+  let page = 0;
+  const pageSize = 1000;
+  let hasMore = true;
+  while (hasMore) {
+    const { data, error } = await supabase
+      .from('team_stats')
+      // No usage_percent here — it doesn't exist on team_stats (usage% is a
+      // per-player share-of-team-possessions stat with no team-level
+      // equivalent; requesting it 400s the whole select, which was silently
+      // blanking every other team advanced stat too).
+      .select('team_id, efg_percent, ts_percent, three_point_rate, ast_percent, oreb_percent, dreb_percent, reb_percent, tov_percent, pie, off_rating, def_rating, net_rating, pace, pts_percent_2pt, pts_percent_3pt, pts_percent_ft, pts_percent_midrange, pts_percent_pitp, pts_percent_fastbreak, pts_percent_second_chance, pts_percent_off_turnovers')
+      .eq('league_id', leagueId)
+      .range(page * pageSize, (page + 1) * pageSize - 1);
+    if (error) throw error;
+    if (!data || data.length === 0) { hasMore = false; break; }
+    allRows = allRows.concat(data);
+    hasMore = data.length === pageSize;
+    page++;
+  }
+
+  const byTeam = new Map<string, { adv: AdvancedAggregatorPart; sumPace: number; hasPace: number }>();
+  for (const row of allRows) {
+    if (!row.team_id) continue;
+    let agg = byTeam.get(row.team_id);
+    if (!agg) {
+      agg = { adv: makeAdvancedAggregator(), sumPace: 0, hasPace: 0 };
+      byTeam.set(row.team_id, agg);
+    }
+    accumulateAdvancedRow(agg.adv, row);
+    if (row.pace !== null && row.pace !== undefined && !Number.isNaN(Number(row.pace))) {
+      agg.sumPace += Number(row.pace);
+      agg.hasPace += 1;
+    }
+  }
+
+  const out = new Map<string, AdvancedAverages & { pace: number | null }>();
+  byTeam.forEach((agg, teamId) => {
+    out.set(teamId, {
+      ...averageAdvanced(agg.adv),
+      pace: agg.hasPace > 0 ? agg.sumPace / agg.hasPace : null,
+    });
+  });
+  return out;
+}
+
 export default function CoachesHub() {
-  const { user } = useAuth();
+  const { user, logoutMutation } = useAuth();
   const [, navigate] = useLocation();
   const { query: search, setQuery: setSearch, suggestions, handleSelect: handleSelectSearch, handleSubmit: handleSubmitSearch } = useGlobalSearch();
   const [leagues, setLeagues] = useState<any[]>([]);
@@ -254,6 +343,11 @@ export default function CoachesHub() {
   const [filteredLeagues, setFilteredLeagues] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<HubTab>('overview');
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
+  const [leaguePickerOpen, setLeaguePickerOpen] = useState(false);
+  // Deep-dive drill-in — set from a Rankings/roster row click, cleared by the
+  // detail view's own back button or a league switch. Lives above the tab
+  // strip: while set, it replaces the active tab's content entirely.
+  const [detailView, setDetailView] = useState<{ type: 'player'; player: PlayerSeasonAverage } | { type: 'team'; team: TeamSeasonAverage } | null>(null);
 
   const [chatbotResponse, setChatbotResponse] = useState('');
 
@@ -274,6 +368,7 @@ export default function CoachesHub() {
   }, [user]);
 
   useEffect(() => {
+    setDetailView(null);
     if (selectedLeague) {
       fetchLeagueStats();
       setActiveTab('overview');
@@ -321,7 +416,7 @@ export default function CoachesHub() {
     setStatsLoading(true);
     try {
       const leagueId = selectedLeague.league_id;
-      const [players, teamsRes, gameLogRes] = await Promise.all([
+      const [players, teamsRes, gameLogRes, teamAdvancedMap] = await Promise.all([
         // Raw rows + fuzzy-name merge, not the pre-aggregated view — see
         // fetchAndMergePlayerRankings for why.
         fetchAndMergePlayerRankings(leagueId),
@@ -335,6 +430,11 @@ export default function CoachesHub() {
           .select('team_name, game_date, pts, reb, ast, fg_pct')
           .eq('league_id', leagueId)
           .order('game_date', { ascending: true }),
+        // Non-fatal: the rest of the hub should still work if this one fails.
+        fetchTeamAdvancedAverages(leagueId).catch((err) => {
+          console.error('Error fetching team advanced averages:', err);
+          return new Map<string, AdvancedAverages & { pace: number | null }>();
+        }),
       ]);
 
       if (teamsRes.error) throw teamsRes.error;
@@ -342,7 +442,12 @@ export default function CoachesHub() {
 
       players.sort((a, b) => b.total_pts - a.total_pts);
       setPlayerSeasonAverages(players);
-      setTeamSeasonAverages((teamsRes.data || []) as TeamSeasonAverage[]);
+      setTeamSeasonAverages(
+        ((teamsRes.data || []) as TeamSeasonAverage[]).map((t) => ({
+          ...t,
+          advanced: teamAdvancedMap.get(t.team_id),
+        }))
+      );
       setTeamGameLog((gameLogRes.data || []) as TeamGameLogRow[]);
     } catch (error) {
       console.error('Error fetching league stats:', error);
@@ -373,12 +478,24 @@ export default function CoachesHub() {
   // dark team colour that disappears against the dark-mode surface.
   const readableBrand = useReadableTeamColor(brandColor).body;
 
-  const tabs: { id: HubTab; label: string }[] = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'trends', label: 'Trends' },
-    { id: 'advanced', label: 'Advanced Insights' },
-    { id: 'rankings', label: 'Rankings' },
-    { id: 'scouting', label: 'Scouting Reports' },
+  // Grouped so "look something up" (Stats) and "write something" (Build) read
+  // as two different jobs, not five flat equal-weight options. "Lineups" used
+  // to be labelled "Advanced Insights", which collided with the "Advanced"
+  // category group inside Rankings below — renamed to what it actually shows.
+  const tabGroups: { group: string; tabs: { id: HubTab; label: string }[] }[] = [
+    {
+      group: 'Stats', tabs: [
+        { id: 'overview', label: 'Overview' },
+        { id: 'rankings', label: 'Rankings' },
+        { id: 'lineups', label: 'Lineups' },
+        { id: 'trends', label: 'Trends' },
+      ]
+    },
+    {
+      group: 'Build', tabs: [
+        { id: 'scouting', label: 'Scouting Reports' },
+      ]
+    },
   ];
 
   if (loading) {
@@ -486,6 +603,15 @@ export default function CoachesHub() {
             ← Back to Dashboard
           </Link>
 
+          <button
+            onClick={() => logoutMutation.mutate()}
+            disabled={logoutMutation.isPending}
+            className="text-xs md:text-sm text-slate-600 dark:text-slate-400 hover:text-orange-600 dark:hover:text-orange-400 transition whitespace-nowrap disabled:opacity-50"
+            data-testid="button-logout"
+          >
+            {logoutMutation.isPending ? "Signing out…" : "Log out"}
+          </button>
+
           <ThemeToggle />
         </div>
       </header>
@@ -519,19 +645,20 @@ export default function CoachesHub() {
           </div>
         ) : (
           <div className="space-y-4 md:space-y-6">
-            {/* League Selection - Always Show */}
-            <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">Select League</h3>
-                <div className="text-sm text-slate-500 dark:text-slate-400">
-                  {leagues.length} available
+            {/* League chooser — full search card until one's picked, then it
+                collapses to a small switcher pill so it stops competing with
+                the header's own global search and the tab content below. */}
+            {!selectedLeague ? (
+              <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">Select league</h3>
+                  <div className="text-sm text-slate-500 dark:text-slate-400">
+                    {leagues.length} available
+                  </div>
                 </div>
-              </div>
 
-              {/* League Search Input */}
-              <div className="mb-4 relative">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -y-1/2 w-4 h-4 text-gray-400 dark:text-neutral-500" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-neutral-500" />
                   <input
                     type="text"
                     placeholder="Search for a league to analyze..."
@@ -539,110 +666,179 @@ export default function CoachesHub() {
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-neutral-700 rounded-md text-sm bg-white dark:bg-neutral-800 text-slate-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                   />
+
+                  {searchQuery && filteredLeagues.length > 0 && (
+                    <div className="absolute z-10 w-full mt-1 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                      {filteredLeagues.map((league) => (
+                        <button
+                          key={league.league_id}
+                          onClick={() => { setSelectedLeague(league); setSearchQuery(''); }}
+                          className="w-full text-left px-4 py-2 text-sm text-gray-900 dark:text-white hover:bg-orange-50 dark:hover:bg-neutral-800 hover:text-orange-800 dark:hover:text-orange-300 focus:outline-none focus:bg-orange-50 dark:focus:bg-neutral-800 focus:text-orange-800 dark:focus:text-orange-300"
+                        >
+                          <div className="font-medium">{league.name}</div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {searchQuery && filteredLeagues.length === 0 && (
+                    <div className="absolute z-10 w-full mt-1 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-md shadow-lg p-3 text-sm text-gray-500 dark:text-neutral-400">
+                      No leagues found matching "{searchQuery}"
+                    </div>
+                  )}
                 </div>
 
-                {/* Filtered League Results */}
-                {searchQuery && filteredLeagues.length > 0 && (
-                  <div className="absolute z-10 w-full mt-1 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                    {filteredLeagues.map((league) => (
+                {leagues.length <= 5 && (
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    <span className="text-xs text-gray-500 dark:text-neutral-400 self-center">Quick select:</span>
+                    {leagues.map((league) => (
                       <button
                         key={league.league_id}
-                        onClick={() => {
-                          setSelectedLeague(league);
-                          setSearchQuery('');
-                        }}
-                        className="w-full text-left px-4 py-2 text-sm text-gray-900 dark:text-white hover:bg-orange-50 dark:hover:bg-neutral-800 hover:text-orange-800 dark:hover:text-orange-300 focus:outline-none focus:bg-orange-50 dark:focus:bg-neutral-800 focus:text-orange-800 dark:focus:text-orange-300"
+                        onClick={() => setSelectedLeague(league)}
+                        className="px-3 md:px-4 py-1 text-xs md:text-sm text-gray-700 dark:text-neutral-300 bg-gray-100 dark:bg-neutral-800 hover:bg-orange-100 dark:hover:bg-orange-900/30 hover:text-orange-800 dark:hover:text-orange-300 rounded-full transition-colors border border-gray-200 dark:border-neutral-700"
                       >
-                        <div className="font-medium">{league.name}</div>
+                        {league.name}
                       </button>
                     ))}
                   </div>
                 )}
+              </div>
+            ) : (
+              <div className="relative inline-block">
+                <button
+                  onClick={() => setLeaguePickerOpen(o => !o)}
+                  className="flex items-center gap-2 pl-2 pr-3 py-1.5 bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-full hover:border-gray-300 dark:hover:border-neutral-700 transition-colors"
+                >
+                  {selectedLeague.logo_url ? (
+                    <img
+                      src={selectedLeague.logo_url}
+                      alt={selectedLeague.name}
+                      className="w-6 h-6 rounded-full object-contain bg-white border border-gray-200 dark:border-neutral-700 shrink-0"
+                    />
+                  ) : (
+                    <div className="w-2 h-2 bg-green-500 rounded-full shrink-0" />
+                  )}
+                  <span className="text-sm font-medium text-slate-800 dark:text-white">{selectedLeague.name}</span>
+                  <span className="text-xs text-slate-400 dark:text-slate-500 hidden sm:inline">
+                    {statsLoading ? 'Loading…' : `${playerSeasonAverages.length} players`}
+                  </span>
+                  <ChevronDown className="w-3.5 h-3.5 text-gray-400 dark:text-neutral-500" />
+                </button>
 
-                {/* No Results Message */}
-                {searchQuery && filteredLeagues.length === 0 && (
-                  <div className="absolute z-10 w-full mt-1 bg-white dark:bg-neutral-900 border border-gray-300 dark:border-neutral-700 rounded-md shadow-lg p-3 text-sm text-gray-500 dark:text-neutral-400">
-                    No leagues found matching "{searchQuery}"
-                  </div>
+                {leaguePickerOpen && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setLeaguePickerOpen(false)} />
+                    <div className="absolute z-20 mt-2 w-80 bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-800 rounded-lg shadow-lg p-3">
+                      <div className="relative mb-2">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-neutral-500" />
+                        <input
+                          type="text"
+                          autoFocus
+                          placeholder="Switch league..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-neutral-700 rounded-md text-sm bg-white dark:bg-neutral-800 text-slate-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                        />
+                      </div>
+
+                      {searchQuery ? (
+                        filteredLeagues.length > 0 ? (
+                          <div className="max-h-60 overflow-y-auto">
+                            {filteredLeagues.map((league) => (
+                              <button
+                                key={league.league_id}
+                                onClick={() => { setSelectedLeague(league); setSearchQuery(''); setLeaguePickerOpen(false); }}
+                                className="w-full text-left px-3 py-2 text-sm text-gray-900 dark:text-white rounded-md hover:bg-orange-50 dark:hover:bg-neutral-800 hover:text-orange-800 dark:hover:text-orange-300"
+                              >
+                                {league.name}
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="px-3 py-2 text-sm text-gray-500 dark:text-neutral-400">No leagues found matching "{searchQuery}"</p>
+                        )
+                      ) : (
+                        <div className="max-h-60 overflow-y-auto">
+                          {leagues.map((league) => (
+                            <button
+                              key={league.league_id}
+                              onClick={() => { setSelectedLeague(league); setLeaguePickerOpen(false); }}
+                              className="w-full flex items-center justify-between text-left px-3 py-2 text-sm rounded-md hover:bg-orange-50 dark:hover:bg-neutral-800"
+                              style={league.league_id === selectedLeague.league_id ? { color: readableBrand, fontWeight: 600 } : {}}
+                            >
+                              <span className={league.league_id === selectedLeague.league_id ? '' : 'text-gray-900 dark:text-white'}>{league.name}</span>
+                              {league.league_id === selectedLeague.league_id && <span className="text-xs">Current</span>}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </>
                 )}
               </div>
-
-              {/* Selected League Display */}
-              {selectedLeague && (
-                <div
-                  className="flex items-center justify-between p-3 bg-orange-50 dark:bg-orange-900/20 border rounded-md"
-                  style={{ borderColor: brandColor }}
-                >
-                  <div className="flex items-center gap-3">
-                    {selectedLeague.logo_url ? (
-                      <img
-                        src={selectedLeague.logo_url}
-                        alt={selectedLeague.name}
-                        className="w-8 h-8 rounded-full object-contain bg-white border border-orange-200 dark:border-neutral-700 shrink-0"
-                      />
-                    ) : (
-                      <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                    )}
-                    <div>
-                      <span className="font-medium text-slate-800 dark:text-white">{selectedLeague.name}</span>
-                      <span className="text-sm text-slate-500 dark:text-slate-400 ml-2">Active League</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="text-sm text-slate-500 dark:text-slate-400">
-                      {statsLoading ? 'Loading…' : `${playerSeasonAverages.length} player records`}
-                    </div>
-                    <button
-                      onClick={() => setSelectedLeague(null)}
-                      className="text-gray-400 dark:text-neutral-500 hover:text-gray-600 dark:hover:text-neutral-300 focus:outline-none"
-                      title="Clear selection"
-                    >
-                      ×
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Quick League Selection (for frequently used leagues) */}
-              {!selectedLeague && leagues.length <= 5 && leagues.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2">
-                  <span className="text-xs text-gray-500 dark:text-neutral-400 self-center">Quick select:</span>
-                  {leagues.map((league) => (
-                    <button
-                      key={league.league_id}
-                      onClick={() => setSelectedLeague(league)}
-                      className="px-3 md:px-4 py-1 text-xs md:text-sm text-gray-700 dark:text-neutral-300 bg-gray-100 dark:bg-neutral-800 hover:bg-orange-100 dark:hover:bg-orange-900/30 hover:text-orange-800 dark:hover:text-orange-300 rounded-full transition-colors border border-gray-200 dark:border-neutral-700"
-                    >
-                      {league.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            )}
 
             {selectedLeague && (
               <>
-                {/* Section tabs — same pattern as the public league pages, tinted with the league's own brand color */}
-                <div className="flex gap-4 md:gap-6 text-sm font-medium text-slate-600 dark:text-slate-400 overflow-x-auto border-b border-gray-200 dark:border-neutral-800 pb-px">
-                  {tabs.map((tab) => (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
-                      className="cursor-pointer whitespace-nowrap pb-2 bg-transparent border-0 border-b-2 -mb-px transition-colors"
-                      style={activeTab === tab.id ? { fontWeight: 600, color: readableBrand, borderBottomColor: brandColor } : { borderBottomColor: 'transparent' }}
-                      onMouseEnter={(e) => { if (activeTab !== tab.id) (e.target as HTMLElement).style.color = readableBrand; }}
-                      onMouseLeave={(e) => { if (activeTab !== tab.id) (e.target as HTMLElement).style.color = ''; }}
-                    >
-                      {tab.label}
-                    </button>
+                {/* Section tabs, grouped by job — "Stats" to look something up,
+                    "Build" to make something — instead of one flat row. */}
+                <div className="flex flex-wrap items-end gap-x-8 gap-y-3 pb-4 border-b border-gray-200 dark:border-neutral-800">
+                  {tabGroups.map((g) => (
+                    <div key={g.group}>
+                      <div className="text-[11px] font-semibold uppercase tracking-widest text-slate-400 dark:text-neutral-500 mb-1.5">
+                        {g.group}
+                      </div>
+                      <div className="flex gap-1.5">
+                        {g.tabs.map((tab) => (
+                          <button
+                            key={tab.id}
+                            onClick={() => { setActiveTab(tab.id); setDetailView(null); }}
+                            className={`px-3 py-1.5 text-sm font-medium rounded-md border whitespace-nowrap transition-colors ${
+                              activeTab === tab.id
+                                ? ''
+                                : 'border-gray-200 dark:border-neutral-700 text-gray-600 dark:text-neutral-400 hover:border-gray-300 dark:hover:border-neutral-600'
+                            }`}
+                            style={activeTab === tab.id ? { backgroundColor: readableBrand, color: '#fff', borderColor: readableBrand } : {}}
+                          >
+                            {tab.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
 
+                {/* Drill-in from a Rankings/roster row takes over the content
+                    area regardless of which tab is active; the tab strip
+                    above still works to back out of it. */}
+                {detailView ? (
+                  detailView.type === 'player' ? (
+                    <PlayerDetail
+                      player={detailView.player}
+                      players={playerSeasonAverages}
+                      teams={teamSeasonAverages}
+                      brandColor={brandColor}
+                      onBack={() => setDetailView(null)}
+                      onSelectTeam={(team) => setDetailView({ type: 'team', team })}
+                    />
+                  ) : (
+                    <TeamDetail
+                      team={detailView.team}
+                      teams={teamSeasonAverages}
+                      players={playerSeasonAverages}
+                      brandColor={brandColor}
+                      onBack={() => setDetailView(null)}
+                      onSelectPlayer={(player) => setDetailView({ type: 'player', player })}
+                    />
+                  )
+                ) : (
+                  <>
                 {/* Overview */}
                 {activeTab === 'overview' && (
                   <div className="space-y-4 md:space-y-6">
                     {hasStats ? (
                       <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
+                        <SectionKicker n="01" label="Season snapshot" color={readableBrand} />
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-4 md:mb-6">
                           <div className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700">
                             <div className="flex items-center gap-2 mb-2">
@@ -685,6 +881,7 @@ export default function CoachesHub() {
                           </div>
                         </div>
 
+                        <SectionKicker n="02" label="Team leaders" color={readableBrand} />
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
                           <div className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700">
                             <h4 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
@@ -702,7 +899,7 @@ export default function CoachesHub() {
                                     }`}>
                                       {index + 1}
                                     </div>
-                                    <span className="text-sm font-medium text-gray-900 dark:text-white">{team.team_name}</span>
+                                    <button onClick={() => setDetailView({ type: 'team', team })} className="text-sm font-medium text-gray-900 dark:text-white hover:underline text-left">{team.team_name}</button>
                                   </div>
                                   <span className="text-sm font-bold text-gray-700 dark:text-neutral-300">{Number(team.avg_pts ?? 0).toFixed(1)} avg pts</span>
                                 </div>
@@ -759,7 +956,7 @@ export default function CoachesHub() {
 
                     {/* Quick Actions */}
                     <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
-                      <h3 className="font-semibold text-slate-800 dark:text-white mb-3">Quick Actions</h3>
+                      <SectionKicker n="03" label="Quick actions" color={readableBrand} />
                       <div className="flex flex-wrap gap-x-6 gap-y-2">
                         <Link
                           href="/league-admin"
@@ -787,39 +984,56 @@ export default function CoachesHub() {
                   </div>
                 )}
 
-                {/* Trends */}
-                {activeTab === 'trends' && (
-                  teamGameLog.length > 0 ? (
-                    <TeamPerformanceTrends teamGameLog={teamGameLog} leagueId={selectedLeague.league_id} />
-                  ) : (
-                    <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-8 text-center">
-                      <BarChart3 className="w-16 h-16 text-gray-400 dark:text-neutral-600 mx-auto mb-4" />
-                      <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-2">No Player Data Found</h3>
-                      <p className="text-slate-600 dark:text-slate-400">
-                        Upload player statistics for this league to see performance trends.
-                      </p>
-                    </div>
-                  )
-                )}
-
-                {/* Advanced Insights */}
-                {activeTab === 'advanced' && (
-                  <AdvancedInsights leagueId={selectedLeague.league_id} />
-                )}
-
                 {/* Rankings */}
                 {activeTab === 'rankings' && (
-                  <FullRankings players={playerSeasonAverages} teams={teamSeasonAverages} brandColor={brandColor} />
+                  <div>
+                    <SectionKicker n="01" label="Rankings" color={readableBrand} />
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+                      Season averages across {teamSeasonAverages.length} teams and {playerSeasonAverages.length} players, updated as new stats are uploaded.
+                    </p>
+                    <FullRankings
+                      players={playerSeasonAverages}
+                      teams={teamSeasonAverages}
+                      brandColor={brandColor}
+                      onSelectPlayer={(player) => setDetailView({ type: 'player', player })}
+                      onSelectTeam={(team) => setDetailView({ type: 'team', team })}
+                    />
+                  </div>
+                )}
+
+                {/* Lineups — five-man unit net rating / plus-minus / minutes,
+                    was labelled "Advanced Insights" which collided with the
+                    "Advanced" category group inside Rankings above. */}
+                {activeTab === 'lineups' && (
+                  <div>
+                    <SectionKicker n="01" label="Lineups" color={readableBrand} />
+                    <AdvancedInsights leagueId={selectedLeague.league_id} />
+                  </div>
+                )}
+
+                {/* Trends */}
+                {activeTab === 'trends' && (
+                  <div>
+                    <SectionKicker n="01" label="Performance trends" color={readableBrand} />
+                    {teamGameLog.length > 0 ? (
+                      <TeamPerformanceTrends teamGameLog={teamGameLog} leagueId={selectedLeague.league_id} />
+                    ) : (
+                      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-8 text-center">
+                        <BarChart3 className="w-16 h-16 text-gray-400 dark:text-neutral-600 mx-auto mb-4" />
+                        <h3 className="text-lg font-semibold text-slate-800 dark:text-white mb-2">No Player Data Found</h3>
+                        <p className="text-slate-600 dark:text-slate-400">
+                          Upload player statistics for this league to see performance trends.
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {/* Scouting Reports */}
                 {activeTab === 'scouting' && (
                   <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 overflow-hidden">
                     <div className="flex flex-col md:flex-row md:items-center justify-between p-4 md:p-6 border-b border-gray-200 dark:border-neutral-800 gap-2 md:gap-0">
-                      <div className="flex items-center gap-3">
-                        <FileText className="w-5 md:w-6 h-5 md:h-6 text-orange-600 dark:text-orange-400" />
-                        <h2 className="text-lg md:text-xl font-bold text-slate-800 dark:text-white">Scouting Reports</h2>
-                      </div>
+                      <SectionKicker n="01" label="Scouting reports" color={readableBrand} className="" />
                       <span className="text-xs text-slate-500 dark:text-slate-400">Mobile-optimized A4 editor</span>
                     </div>
 
@@ -838,6 +1052,8 @@ export default function CoachesHub() {
                       parseError={parseError}
                     />
                   </div>
+                )}
+                  </>
                 )}
               </>
             )}

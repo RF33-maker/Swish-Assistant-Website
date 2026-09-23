@@ -6,7 +6,7 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["tsx", "server/index.ts"],
       "port": 5050,
-      "env": { "PORT": "5050" }
+      "env": { "PORT": "5050", "NODE_OPTIONS": "--import dotenv/config" }
     }
   ]
 }
