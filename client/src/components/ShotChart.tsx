@@ -64,6 +64,8 @@ const CORNER_END_Y =
   BASKET_CY +
   Math.sqrt(Math.max(0, TP_R * TP_R - (CENTER_X - CORNER_LINE_X_L) ** 2));
 
+const PPP_BASELINE_KEY = "shot-chart-ppp-baseline";
+
 const COLOR_MADE = "#f59e3b";
 const COLOR_AVG = "#7a8b9c";
 const COLOR_MISSED = "#5b9fbf";
@@ -173,10 +175,22 @@ const ZONES: ZoneInfo[] = [
   { key: "ra", label: "Restricted" },
   { key: "paint", label: "Paint (non-RA)" },
   { key: "mid", label: "Mid-range" },
-  { key: "arc3", label: "Arc 3" },
+  { key: "lw3", label: "L Wing 3" },
+  { key: "rw3", label: "R Wing 3" },
   { key: "lc3", label: "L Corner 3" },
   { key: "rc3", label: "R Corner 3" },
 ];
+
+/** Points a make is worth in this zone — every zone here is either all-2 or all-3. */
+const ZONE_POINTS: Record<string, number> = {
+  ra: 2,
+  paint: 2,
+  mid: 2,
+  lw3: 3,
+  rw3: 3,
+  lc3: 3,
+  rc3: 3,
+};
 
 /**
  * Fold a shot from the legacy full-court coordinate space (0-100 horizontal,
@@ -207,7 +221,7 @@ function projectShot(shot: ShotData): { sx: number; sy: number; zone: string } {
   if (isThree) {
     if (sy <= CORNER_END_Y && sx < CORNER_LINE_X_L + 5) zone = "lc3";
     else if (sy <= CORNER_END_Y && sx > CORNER_LINE_X_R - 5) zone = "rc3";
-    else zone = "arc3";
+    else zone = sx < CENTER_X ? "lw3" : "rw3";
   } else if (dist <= RA_R) {
     zone = "ra";
   } else if (Math.abs(dx) <= paintHalfW && sy <= PAINT_BOT) {
@@ -306,16 +320,40 @@ export default function ShotChart({
   const total = filteredShots.length;
   const percentage = total > 0 ? ((makes / total) * 100).toFixed(1) : "0.0";
 
-  const overallPct = total > 0 ? makes / total : 0;
+  // Points per shot — the standard stand-in for "points per possession" when
+  // only shot-level data is available (no play-by-play to link and-1 free
+  // throws or offensive-rebound continuations back to the original shot).
+  // 1.1+ is the widely-used baseline for "a shot worth running again";
+  // pppBaseline lets a coach nudge that up or down to taste.
+  const [pppBaseline, setPppBaseline] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem(PPP_BASELINE_KEY);
+      const n = saved ? Number(saved) : NaN;
+      return Number.isFinite(n) && n > 0 ? n : 1.1;
+    } catch {
+      return 1.1;
+    }
+  });
+  const updatePppBaseline = (v: number) => {
+    setPppBaseline(v);
+    try {
+      localStorage.setItem(PPP_BASELINE_KEY, String(v));
+    } catch {
+      // remembering the preference is a convenience only
+    }
+  };
 
   const zoneStats = useMemo(() => {
-    const totals: Record<string, { made: number; total: number }> = {};
-    ZONES.forEach((z) => (totals[z.key] = { made: 0, total: 0 }));
+    const totals: Record<string, { made: number; total: number; points: number }> = {};
+    ZONES.forEach((z) => (totals[z.key] = { made: 0, total: 0, points: 0 }));
     projected.forEach((p) => {
       const z = totals[p.zone];
       if (!z) return;
       z.total += 1;
-      if (p.shot.success) z.made += 1;
+      if (p.shot.success) {
+        z.made += 1;
+        z.points += ZONE_POINTS[p.zone] ?? 2;
+      }
     });
     return totals;
   }, [projected]);
@@ -409,25 +447,26 @@ export default function ShotChart({
           <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 18, flexShrink: 0, width: 148, paddingTop: 8, fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
             {ZONES.map((z) => {
               const s = zoneStats[z.key];
+              const pps = s.total > 0 ? s.points / s.total : null;
               const pct = s.total > 0 ? (s.made / s.total) * 100 : null;
               const color =
-                pct === null
+                pps === null
                   ? "#94a3b8"
-                  : overallPct > 0 && pct / 100 > overallPct + 0.03
+                  : pps >= pppBaseline
                   ? "#f97316"
-                  : overallPct > 0 && pct / 100 < overallPct - 0.03
+                  : pps <= pppBaseline - 0.3
                   ? "#0284c7"
                   : "#334155";
               return (
                 <div key={z.key} style={{ lineHeight: 1.2 }}>
                   <div style={{ fontWeight: 700, fontSize: 24, color, fontVariantNumeric: "tabular-nums" }}>
-                    {pct === null ? "—" : pct.toFixed(1)}
-                    {pct !== null && <span style={{ fontSize: 14, fontWeight: 600 }}>%</span>}
+                    {pps === null ? "—" : pps.toFixed(2)}
+                    {pps !== null && <span style={{ fontSize: 12, fontWeight: 600 }}> PPS</span>}
                   </div>
                   <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#94a3b8", marginTop: 3 }}>
                     {z.label}
                     {s.total > 0 && (
-                      <span style={{ color: "#cbd5e1", textTransform: "none", letterSpacing: 0 }}> · {s.made}-{s.total}</span>
+                      <span style={{ color: "#cbd5e1", textTransform: "none", letterSpacing: 0 }}> · {s.made}-{s.total} ({pct!.toFixed(0)}%)</span>
                     )}
                   </div>
                 </div>
@@ -656,33 +695,54 @@ export default function ShotChart({
           </div>
 
           {/* Zone breakdown */}
-          <div className="lg:w-44 flex-shrink-0 grid grid-cols-2 lg:grid-cols-1 gap-x-4 gap-y-3 lg:gap-y-4">
-            {ZONES.map((z) => {
-              const s = zoneStats[z.key];
-              const pct = s.total > 0 ? (s.made / s.total) * 100 : null;
-              const color =
-                pct === null
-                  ? "text-slate-400 dark:text-slate-500"
-                  : overallPct > 0 && pct / 100 > overallPct + 0.03
-                  ? "text-orange-500 dark:text-orange-400"
-                  : overallPct > 0 && pct / 100 < overallPct - 0.03
-                  ? "text-sky-600 dark:text-sky-400"
-                  : "text-slate-700 dark:text-slate-200";
-              return (
-                <div key={z.key} className="leading-tight">
-                  <div className={`font-bold tabular-nums text-xl md:text-2xl ${color}`}>
-                    {pct === null ? "—" : pct.toFixed(1)}
-                    {pct !== null && <span className="text-sm md:text-base">%</span>}
+          <div className="lg:w-48 flex-shrink-0">
+            {!shareMode && (
+              <div className="mb-3 pb-3 border-b border-gray-200 dark:border-neutral-700">
+                <label className="flex items-center justify-between text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1.5">
+                  <span>Good-shot baseline</span>
+                  <span className="tabular-nums text-slate-700 dark:text-slate-200">{pppBaseline.toFixed(2)} PPS</span>
+                </label>
+                <input
+                  type="range"
+                  min={0.7}
+                  max={1.5}
+                  step={0.05}
+                  value={pppBaseline}
+                  onChange={(e) => updatePppBaseline(Number(e.target.value))}
+                  className="w-full accent-orange-500"
+                  aria-label="Points-per-shot baseline"
+                />
+              </div>
+            )}
+            <div className="grid grid-cols-2 lg:grid-cols-1 gap-x-4 gap-y-3 lg:gap-y-4">
+              {ZONES.map((z) => {
+                const s = zoneStats[z.key];
+                const pps = s.total > 0 ? s.points / s.total : null;
+                const pct = s.total > 0 ? (s.made / s.total) * 100 : null;
+                const color =
+                  pps === null
+                    ? "text-slate-400 dark:text-slate-500"
+                    : pps >= pppBaseline
+                    ? "text-orange-500 dark:text-orange-400"
+                    : pps <= pppBaseline - 0.3
+                    ? "text-sky-600 dark:text-sky-400"
+                    : "text-slate-700 dark:text-slate-200";
+                return (
+                  <div key={z.key} className="leading-tight">
+                    <div className={`font-bold tabular-nums text-xl md:text-2xl ${color}`}>
+                      {pps === null ? "—" : pps.toFixed(2)}
+                      {pps !== null && <span className="text-xs md:text-sm font-semibold"> PPS</span>}
+                    </div>
+                    <div className="text-[10px] md:text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400 mt-0.5">
+                      {z.label}
+                      {s.total > 0 && (
+                        <span className="text-slate-400 dark:text-slate-500 normal-case tracking-normal"> · {s.made}-{s.total} ({pct!.toFixed(0)}%)</span>
+                      )}
+                    </div>
                   </div>
-                  <div className="text-[10px] md:text-[11px] uppercase tracking-wide text-slate-500 dark:text-slate-400 mt-0.5">
-                    {z.label}
-                    {s.total > 0 && (
-                      <span className="text-slate-400 dark:text-slate-500 normal-case tracking-normal"> · {s.made}-{s.total}</span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
