@@ -23,7 +23,6 @@ import { withAlpha } from "@/lib/colorContrast";
 import { extractColorsFromImage } from "@/lib/colorExtractor";
 import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
 import { getTeamLogoCached } from "@/utils/teamLogoCache";
-import { PlayerPerformanceSplits } from "@/components/PlayerPerformanceSplits";
 import { PerformanceCardDownload } from "@/components/social/PerformanceCardDownload";
 import { computeGmSc } from "@/lib/performanceCardUtils";
 import { AccoladeBadges } from "@/components/AccoladeBadges";
@@ -2548,23 +2547,12 @@ export function PlayerProfileContent({ playerSlug, brandColorOverride, onBack, l
         )}
         </>}
 
-        {activeTab === 'splits' && playerInfo?.playerId && (
-          selectedLeagueIds.size > 1 ? (
-            <div className="bg-white dark:bg-neutral-900 rounded-xl shadow-sm border border-gray-100 dark:border-neutral-800 p-5 text-center text-sm text-slate-500 dark:text-neutral-400">
-              Select a single league to view shooting splits and on/off impact.
-            </div>
-          ) : (
-            <PlayerPerformanceSplits
-              playerId={playerInfo.playerId}
-              leagueIds={Array.from(expandedCompIds)}
-              playerName={playerInfo.name}
-              playerTeam={playerInfo.team}
-              playerPhotoUrl={playerPhotoUrl}
-              primaryColor={primaryColor}
-              teamLogoUrl={shareTeamLogoUrl}
-            />
-          )
-        )}
+        {/* Team Performance Splits (on/off ORTG/DRTG impact, <PlayerPerformanceSplits>)
+            is hidden for now — the underlying numbers are too inconsistent to trust
+            yet and need more work on the tracking/attribution side before showing
+            them to users. The rest of the Splits tab (shooting splits, shot chart)
+            is unaffected. See git history on this file for the removed JSX to
+            restore once that's sorted. */}
 
         {activeTab === 'stats' && <>
         {(careerHighs.length > 0 || seasonHighs.length > 0) && (() => {
