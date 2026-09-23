@@ -13,6 +13,7 @@ import { useTeamBranding } from "@/hooks/useTeamBranding";
 import { useReadableTeamColor } from "@/hooks/useReadableColor";
 import { adjustOpacity } from "@/lib/colorExtractor";
 import { namesMatch } from "@/lib/fuzzyMatch";
+import { getPlayerPhotoUrlCached } from "@/utils/playerPhotoCache";
 import {
   buildUnambiguousFullNameAliases,
   expandUnambiguousPlayerName,
@@ -51,6 +52,8 @@ interface PlayerStat {
   player_slug?: string;
   name: string;
   position: string;
+  photoUrl?: string | null;
+  photoFocusY?: number | null;
   avgPoints: number;
   avgRebounds: number;
   avgAssists: number;
@@ -711,7 +714,7 @@ export default function TeamProfile() {
 
         let statsQuery = supabase
           .from("player_stats")
-          .select("*, players:player_id(slug, full_name, league_id)");
+          .select("*, players:player_id(slug, full_name, league_id, photo_path_bg_removed, photo_path, photo_focus_y)");
         if (linkedTeamId && selectedLeagueIds.length <= 1) {
           statsQuery = statsQuery.eq("team_id", linkedTeamId);
           if (selectedLeagueIds.length === 1) {
@@ -926,6 +929,8 @@ export default function TeamProfile() {
             player_slug?: string;
             name: string;
             position: string;
+            photoUrl: string | null;
+            photoFocusY: number | null;
             totalPoints: number;
             totalRebounds: number;
             totalAssists: number;
@@ -936,16 +941,22 @@ export default function TeamProfile() {
 
           allStats.forEach((stat: any) => {
             const playerId = stat.player_id || stat.id;
-            
+
             // Skip stats without valid player_id
             if (!playerId) {
               console.warn('Skipping stat without player_id:', stat);
               return;
             }
-            
+
             const playerName = getTeamRosterPlayerName(stat);
             const playerSlug = stat.players?.slug || null;
-            
+            // Prefer the background-removed cutout (used across the rest of the
+            // site's cards); fall back to the raw upload if that's all there is.
+            const photoUrl = getPlayerPhotoUrlCached(
+              stat.players?.photo_path_bg_removed || stat.players?.photo_path || null
+            );
+            const photoFocusY = stat.players?.photo_focus_y ?? null;
+
             if (!playerStatsMap.has(playerId)) {
               // First time seeing this player - initialize with this stat's data
               playerStatsMap.set(playerId, {
@@ -953,6 +964,8 @@ export default function TeamProfile() {
                 player_slug: playerSlug,
                 name: playerName,
                 position: stat.position || 'Player',
+                photoUrl,
+                photoFocusY,
                 totalPoints: 0,
                 totalRebounds: 0,
                 totalAssists: 0,
@@ -961,8 +974,11 @@ export default function TeamProfile() {
                 gamesPlayed: 0
               });
             }
-            
+
             const playerData = playerStatsMap.get(playerId)!;
+            // A duplicate record for the same player_id might carry the photo
+            // when an earlier stat row didn't (e.g. joined mid-season).
+            if (!playerData.photoUrl && photoUrl) playerData.photoUrl = photoUrl;
             // Accumulate stats for this player across all games
             playerData.totalPoints += stat.spoints || 0;
             playerData.totalRebounds += stat.sreboundstotal || 0;
@@ -1055,6 +1071,10 @@ export default function TeamProfile() {
             for (const [existingName, existingPlayer] of Array.from(mergedByName.entries())) {
               if (areSimilarNames(player.name, existingName)) {
                 // Merge with existing player
+                if (!existingPlayer.photoUrl && player.photoUrl) {
+                  existingPlayer.photoUrl = player.photoUrl;
+                  existingPlayer.photoFocusY = player.photoFocusY;
+                }
                 existingPlayer.totalPoints += player.totalPoints;
                 existingPlayer.totalRebounds += player.totalRebounds;
                 existingPlayer.totalAssists += player.totalAssists;
@@ -1084,6 +1104,8 @@ export default function TeamProfile() {
               player_slug: player.player_slug,
               name: player.name,
               position: player.position,
+              photoUrl: player.photoUrl,
+              photoFocusY: player.photoFocusY,
               avgPoints,
               avgRebounds,
               avgAssists,
@@ -1522,11 +1544,25 @@ export default function TeamProfile() {
                   data-testid={`player-card-${team.topPlayer.player_id}`}
                 >
                   <div className="flex flex-col md:flex-row items-center md:items-start gap-3 md:gap-4">
-                    <div 
-                      className="w-12 h-12 md:w-16 md:h-16 rounded-full flex items-center justify-center font-bold text-lg md:text-xl"
-                      style={{ 
+                    {team.topPlayer.photoUrl ? (
+                      <img
+                        src={team.topPlayer.photoUrl}
+                        alt={team.topPlayer.name}
+                        loading="lazy"
+                        className="w-12 h-12 md:w-16 md:h-16 rounded-full object-cover flex-shrink-0"
+                        style={{ objectPosition: `center ${team.topPlayer.photoFocusY ?? 50}%` }}
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).style.display = "none";
+                          (e.currentTarget.nextElementSibling as HTMLElement | null)?.style.removeProperty("display");
+                        }}
+                      />
+                    ) : null}
+                    <div
+                      className="w-12 h-12 md:w-16 md:h-16 rounded-full flex items-center justify-center font-bold text-lg md:text-xl flex-shrink-0"
+                      style={{
                         backgroundColor: primaryColor,
-                        color: teamBranding?.textContrast || '#ffffff'
+                        color: teamBranding?.textContrast || '#ffffff',
+                        display: team.topPlayer.photoUrl ? "none" : undefined,
                       }}
                     >
                       {team.topPlayer.name.charAt(0)}
@@ -1600,11 +1636,25 @@ export default function TeamProfile() {
                       >
                         <td className="sticky left-0 bg-white dark:bg-neutral-900 py-2 md:py-3 px-2 z-10">
                           <div className="flex items-center gap-2">
-                            <div 
-                              className="w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center font-bold text-xs"
-                              style={{ 
+                            {player.photoUrl ? (
+                              <img
+                                src={player.photoUrl}
+                                alt={player.name}
+                                loading="lazy"
+                                className="w-6 h-6 md:w-8 md:h-8 rounded-full object-cover flex-shrink-0"
+                                style={{ objectPosition: `center ${player.photoFocusY ?? 50}%` }}
+                                onError={(e) => {
+                                  (e.currentTarget as HTMLImageElement).style.display = "none";
+                                  (e.currentTarget.nextElementSibling as HTMLElement | null)?.style.removeProperty("display");
+                                }}
+                              />
+                            ) : null}
+                            <div
+                              className="w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0"
+                              style={{
                                 backgroundColor: primaryColor,
-                                color: teamBranding?.textContrast || '#ffffff'
+                                color: teamBranding?.textContrast || '#ffffff',
+                                display: player.photoUrl ? "none" : undefined,
                               }}
                             >
                               {player.name.charAt(0)}
