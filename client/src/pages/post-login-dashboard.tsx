@@ -23,7 +23,7 @@ type SuggestedLeague = {
 
 export default function DashboardLanding() {
   const [, navigate] = useLocation();
-  const { isAdmin, emailConfirmed, user } = useAuth();
+  const { isAdmin, emailConfirmed, user, logoutMutation } = useAuth();
   const { toast } = useToast();
   const [resendLoading, setResendLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(false);
@@ -136,13 +136,24 @@ export default function DashboardLanding() {
     <div className="bg-white py-24 sm:py-32">
       <div className="mx-auto max-w-6xl px-6">
         <div className="flex items-center justify-between w-full mb-8">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={() => navigate("/")}
             className="border-orange-200 text-orange-700 hover:bg-orange-50 hover:border-orange-300"
           >
             ← Back to Home
           </Button>
+          {user && (
+            <Button
+              variant="outline"
+              onClick={() => logoutMutation.mutate()}
+              disabled={logoutMutation.isPending}
+              className="border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300"
+              data-testid="button-logout"
+            >
+              {logoutMutation.isPending ? "Signing out…" : "Log out"}
+            </Button>
+          )}
         </div>
         
         <div className="flex flex-col items-center gap-3 mb-2">

@@ -123,7 +123,7 @@ const HAS_KEYS: HasKey[] = [
   'has_pts_pitp', 'has_pts_fb', 'has_pts_2nd_ch', 'has_pts_off_to',
 ];
 
-type AdvancedAggregatorPart = Pick<AdvancedAggregator, SumKey | HasKey>;
+export type AdvancedAggregatorPart = Pick<AdvancedAggregator, SumKey | HasKey>;
 
 export function makeAdvancedAggregator(): AdvancedAggregatorPart {
   const out = {} as AdvancedAggregatorPart;
@@ -145,6 +145,13 @@ export function accumulateAdvancedRow(
       target[hasKey] = (target[hasKey] || 0) + 1;
     }
   };
+  // The scoring-distribution pts_percent_* columns are stored as 0-1
+  // fractions (spointsinthepaint / spoints), unlike efg_percent/ts_percent/etc
+  // which the feed already stores as 0-100 — scaled here, at the single point
+  // every consumer reads through, so "0.6" doesn't get displayed as "0.6%"
+  // instead of "60.0%" (a real bug this caught in the existing public
+  // League Leaders scoring-distribution cards, not just new code).
+  const scalePct = (v: number | null | undefined) => (v === null || v === undefined ? v : v * 100);
   add('sum_efg_percent', 'has_efg', stat.efg_percent);
   add('sum_ts_percent', 'has_ts', stat.ts_percent);
   add('sum_three_pt_rate', 'has_three_pt_rate', stat.three_point_rate);
@@ -158,14 +165,14 @@ export function accumulateAdvancedRow(
   add('sum_off_rating', 'has_off_rating', stat.off_rating);
   add('sum_def_rating', 'has_def_rating', stat.def_rating);
   add('sum_net_rating', 'has_net_rating', stat.net_rating);
-  add('sum_pts_2pt', 'has_pts_2pt', stat.pts_percent_2pt);
-  add('sum_pts_3pt', 'has_pts_3pt', stat.pts_percent_3pt);
-  add('sum_pts_ft', 'has_pts_ft', stat.pts_percent_ft);
-  add('sum_pts_midrange', 'has_pts_midrange', stat.pts_percent_midrange);
-  add('sum_pts_pitp', 'has_pts_pitp', stat.pts_percent_pitp);
-  add('sum_pts_fb', 'has_pts_fb', stat.pts_percent_fastbreak);
-  add('sum_pts_2nd_ch', 'has_pts_2nd_ch', stat.pts_percent_second_chance);
-  add('sum_pts_off_to', 'has_pts_off_to', stat.pts_percent_off_turnovers);
+  add('sum_pts_2pt', 'has_pts_2pt', scalePct(stat.pts_percent_2pt));
+  add('sum_pts_3pt', 'has_pts_3pt', scalePct(stat.pts_percent_3pt));
+  add('sum_pts_ft', 'has_pts_ft', scalePct(stat.pts_percent_ft));
+  add('sum_pts_midrange', 'has_pts_midrange', scalePct(stat.pts_percent_midrange));
+  add('sum_pts_pitp', 'has_pts_pitp', scalePct(stat.pts_percent_pitp));
+  add('sum_pts_fb', 'has_pts_fb', scalePct(stat.pts_percent_fastbreak));
+  add('sum_pts_2nd_ch', 'has_pts_2nd_ch', scalePct(stat.pts_percent_second_chance));
+  add('sum_pts_off_to', 'has_pts_off_to', scalePct(stat.pts_percent_off_turnovers));
 }
 
 export function mergeAdvancedInto(
@@ -178,6 +185,62 @@ export function mergeAdvancedInto(
   for (const k of HAS_KEYS) {
     target[k] = (target[k] || 0) + (source[k] || 0);
   }
+}
+
+export interface AdvancedAverages {
+  efg_pct: number | null;
+  ts_pct: number | null;
+  three_pt_rate: number | null;
+  ast_pct: number | null;
+  oreb_pct: number | null;
+  dreb_pct: number | null;
+  reb_pct: number | null;
+  tov_pct: number | null;
+  usg_pct: number | null;
+  pie: number | null;
+  off_rtg: number | null;
+  def_rtg: number | null;
+  net_rtg: number | null;
+  pts_pct_2pt: number | null;
+  pts_pct_3pt: number | null;
+  pts_pct_ft: number | null;
+  pts_pct_midrange: number | null;
+  pts_pct_pitp: number | null;
+  pts_pct_fastbreak: number | null;
+  pts_pct_2nd_chance: number | null;
+  pts_pct_off_to: number | null;
+}
+
+// Averages a captured metric across only the rows where it was actually
+// present (see perCapturedAvg above for why: dividing by games_played would
+// dilute the value whenever some games were recorded without that column).
+const avgOf = (sum: number, has: number): number | null => (has > 0 ? sum / has : null);
+
+/** Flattens an accumulated aggregator into the per-player/per-team advanced averages. */
+export function averageAdvanced(p: AdvancedAggregatorPart): AdvancedAverages {
+  return {
+    efg_pct: avgOf(p.sum_efg_percent, p.has_efg),
+    ts_pct: avgOf(p.sum_ts_percent, p.has_ts),
+    three_pt_rate: avgOf(p.sum_three_pt_rate, p.has_three_pt_rate),
+    ast_pct: avgOf(p.sum_ast_percent, p.has_ast_percent),
+    oreb_pct: avgOf(p.sum_oreb_percent, p.has_oreb_percent),
+    dreb_pct: avgOf(p.sum_dreb_percent, p.has_dreb_percent),
+    reb_pct: avgOf(p.sum_reb_percent, p.has_reb_percent),
+    tov_pct: avgOf(p.sum_tov_percent, p.has_tov_percent),
+    usg_pct: avgOf(p.sum_usage_percent, p.has_usage_percent),
+    pie: avgOf(p.sum_pie, p.has_pie),
+    off_rtg: avgOf(p.sum_off_rating, p.has_off_rating),
+    def_rtg: avgOf(p.sum_def_rating, p.has_def_rating),
+    net_rtg: avgOf(p.sum_net_rating, p.has_net_rating),
+    pts_pct_2pt: avgOf(p.sum_pts_2pt, p.has_pts_2pt),
+    pts_pct_3pt: avgOf(p.sum_pts_3pt, p.has_pts_3pt),
+    pts_pct_ft: avgOf(p.sum_pts_ft, p.has_pts_ft),
+    pts_pct_midrange: avgOf(p.sum_pts_midrange, p.has_pts_midrange),
+    pts_pct_pitp: avgOf(p.sum_pts_pitp, p.has_pts_pitp),
+    pts_pct_fastbreak: avgOf(p.sum_pts_fb, p.has_pts_fb),
+    pts_pct_2nd_chance: avgOf(p.sum_pts_2nd_ch, p.has_pts_2nd_ch),
+    pts_pct_off_to: avgOf(p.sum_pts_off_to, p.has_pts_off_to),
+  };
 }
 
 export interface AdvancedLeaderDef {
