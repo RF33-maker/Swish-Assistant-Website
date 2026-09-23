@@ -111,22 +111,44 @@ export default function LandingPage() {
       ]);
 
       // Competition slugs that are redundant in THIS row specifically because
-      // their brand-level league (e.g. "British Championship Basketball") is
-      // also pinned to trending and already routes to that season via its
-      // own season picker — showing both is two cards for one destination.
-      // Scoped to this row only (not the trending_position column itself),
-      // so Top Players / Latest Scores — which also read trending_position —
-      // keep surfacing that season's data untouched.
-      const REDUNDANT_WITH_LEAGUE_BRAND = new Set([
-        "british-championship-basketball-2026-2027",
-      ]);
+      // their brand-level league (e.g. "British Championship Basketball",
+      // "NBL Division One" — which also covers WNBL D1 via its own gender
+      // picker) is also pinned to trending and already routes to that season
+      // via its own season/gender picker — showing both is two cards for one
+      // destination. Scoped to this row only (not the trending_position
+      // column itself), so Top Players / Latest Scores — which also read
+      // trending_position — keep surfacing that season's data untouched.
+      // The mapped value is the brand's own trending_position: the brand
+      // card inherits the excluded competition's slot rather than whatever
+      // position the brand row happens to carry, so it doesn't get bumped
+      // out by an unrelated tie against some other competition.
+      const SUPERSEDED_BY_LEAGUE_BRAND: Record<string, string> = {
+        "british-championship-basketball-2026-2027": "british-championship-basketball",
+        "nbl-division-1-2026-2027": "nbl-division-one",
+      };
+      // Shorter label for this row only — the underlying league name stays
+      // "NBL Division One" everywhere else (its own brand page, search, etc).
+      const DISPLAY_NAME_OVERRIDE: Record<string, string> = {
+        "nbl-division-one": "NBL",
+      };
+
+      const inheritedPositionByLeagueSlug = new Map<string, number>();
+      (competitionsResult.data || []).forEach((row: any) => {
+        const leagueSlug = SUPERSEDED_BY_LEAGUE_BRAND[row.slug];
+        if (leagueSlug) inheritedPositionByLeagueSlug.set(leagueSlug, row.trending_position);
+      });
 
       const combined = [
         ...(competitionsResult.data || [])
-          .filter((row: any) => !REDUNDANT_WITH_LEAGUE_BRAND.has(row.slug))
-          .map((row: any) => ({ ...row, _type: "competition" as const })),
-        ...(leaguesResult.data || []).map((row: any) => ({ ...row, _type: "league" as const })),
-      ].sort((a, b) => a.trending_position - b.trending_position);
+          .filter((row: any) => !(row.slug in SUPERSEDED_BY_LEAGUE_BRAND))
+          .map((row: any) => ({ ...row, _type: "competition" as const, _sortPos: row.trending_position })),
+        ...(leaguesResult.data || []).map((row: any) => ({
+          ...row,
+          name: DISPLAY_NAME_OVERRIDE[row.slug] ?? row.name,
+          _type: "league" as const,
+          _sortPos: inheritedPositionByLeagueSlug.get(row.slug) ?? row.trending_position,
+        })),
+      ].sort((a, b) => a._sortPos - b._sortPos);
 
       const seen = new Set<string>();
       const deduped: any[] = [];
