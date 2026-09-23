@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import LeagueChatbot from "@/components/LeagueChatbot";
 import ShotChart, { type ShotData } from "@/components/ShotChart";
+import GameFlowSummary from "@/components/GameFlowSummary";
 import UpcomingGamePreview from "@/components/UpcomingGamePreview";
 
 interface GameSchedule {
@@ -1720,6 +1721,11 @@ export default function GamePage() {
                 </TabsContent>
 
                 <TabsContent value="feed">
+                  {liveEvents && liveEvents.length > 0 && (
+                    <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700 mb-3">
+                      <GameFlowSummary events={liveEvents as any} homeTeam={gameData.hometeam} awayTeam={gameData.awayteam} />
+                    </div>
+                  )}
                   <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
                     {liveEvents && liveEvents.length > 0 ? (
                       <div className="space-y-2 max-h-96 overflow-y-auto">

@@ -5,6 +5,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { TeamLogo } from "./TeamLogo";
 import { generatePlayCaption } from "@/utils/generatePlayCaption";
 import ShotChart, { type ShotData } from "./ShotChart";
+import GameFlowSummary from "./GameFlowSummary";
 import { useReadableTeamColor } from "@/hooks/useReadableColor";
 import UpcomingGamePreview, { type PreviewGame } from "./UpcomingGamePreview";
 
@@ -959,6 +960,11 @@ export function InlineGameDetail({
 
               {/* FEED TAB */}
               <TabsContent value="feed">
+                {!eventsLoading && liveEvents.length > 0 && (
+                  <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700 mb-3">
+                    <GameFlowSummary events={liveEvents as any} homeTeam={hometeam} awayTeam={awayteam} />
+                  </div>
+                )}
                 <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
                   {eventsLoading ? (
                     <div className="flex justify-center py-8">
