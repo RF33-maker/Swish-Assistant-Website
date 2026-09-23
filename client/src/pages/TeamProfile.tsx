@@ -519,7 +519,9 @@ export default function TeamProfile() {
         }
         if (playerName.length > agg.name.length) agg.name = playerName;
         if (!agg.photoUrl) {
-          agg.photoUrl = getPlayerPhotoUrlCached(stat.players?.photo_path_bg_removed || stat.players?.photo_path || null);
+          // Only the profile-page photo (background-removed) — never the
+          // separate original kept for social-graphic generation.
+          agg.photoUrl = getPlayerPhotoUrlCached(stat.players?.photo_path_bg_removed || null);
         }
       }
     });
@@ -996,10 +998,12 @@ export default function TeamProfile() {
 
             const playerName = getTeamRosterPlayerName(stat);
             const playerSlug = stat.players?.slug || null;
-            // Prefer the background-removed cutout (used across the rest of the
-            // site's cards); fall back to the raw upload if that's all there is.
+            // Only the profile-page photo (background-removed) — never
+            // photo_path, which is the separate original kept for
+            // social-graphic generation. No photo there means no photo here;
+            // the initials fallback covers it.
             const photoUrl = getPlayerPhotoUrlCached(
-              stat.players?.photo_path_bg_removed || stat.players?.photo_path || null
+              stat.players?.photo_path_bg_removed || null
             );
             const photoFocusY = stat.players?.photo_focus_y ?? null;
 
