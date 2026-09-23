@@ -327,6 +327,46 @@ function TeamShotChartSection({
   );
 }
 
+// Small circular avatar for name-list rows (Team Roster, Player Stats).
+// The source photos are portrait, near-square-ish (0.96 aspect), so
+// object-fit: cover barely crops them into a ~1:1 circle — most of what
+// showed was jersey, not face. Zooms in on the top of the frame instead of
+// trusting photo_focus_y (mostly unset/default in the data, not reliably
+// calibrated to the face) — our own crop pipeline already consistently
+// frames the head near the top with a small buffer, so anchoring there
+// works across the board.
+function PlayerAvatarThumb({ photoUrl, name, size = "w-6 h-6 md:w-7 md:h-7", fallbackClassName, fallbackStyle }: {
+  photoUrl?: string | null;
+  name: string;
+  size?: string;
+  fallbackClassName: string;
+  fallbackStyle?: React.CSSProperties;
+}) {
+  return (
+    <>
+      {photoUrl ? (
+        <div className={`${size} rounded-full overflow-hidden flex-shrink-0`}>
+          <img
+            src={photoUrl}
+            alt={name}
+            loading="lazy"
+            className="w-full h-full object-cover"
+            style={{ objectPosition: "center 12%", transform: "scale(2.4)", transformOrigin: "center 12%" }}
+            onError={(e) => {
+              const wrapper = e.currentTarget.parentElement;
+              if (wrapper) wrapper.style.display = "none";
+              (wrapper?.nextElementSibling as HTMLElement | null)?.style.removeProperty("display");
+            }}
+          />
+        </div>
+      ) : null}
+      <div className={`${size} rounded-full flex items-center justify-center font-bold flex-shrink-0 ${fallbackClassName}`} style={{ ...fallbackStyle, display: photoUrl ? "none" : undefined }}>
+        {name.charAt(0)}
+      </div>
+    </>
+  );
+}
+
 export default function TeamProfile() {
   const {
     teamName,
@@ -1642,29 +1682,13 @@ export default function TeamProfile() {
                       >
                         <td className="sticky left-0 bg-white dark:bg-neutral-900 py-2 md:py-3 px-2 z-10">
                           <div className="flex items-center gap-2">
-                            {player.photoUrl ? (
-                              <img
-                                src={player.photoUrl}
-                                alt={player.name}
-                                loading="lazy"
-                                className="w-6 h-6 md:w-8 md:h-8 rounded-full object-cover flex-shrink-0"
-                                style={{ objectPosition: `center ${player.photoFocusY ?? 50}%` }}
-                                onError={(e) => {
-                                  (e.currentTarget as HTMLImageElement).style.display = "none";
-                                  (e.currentTarget.nextElementSibling as HTMLElement | null)?.style.removeProperty("display");
-                                }}
-                              />
-                            ) : null}
-                            <div
-                              className="w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0"
-                              style={{
-                                backgroundColor: primaryColor,
-                                color: teamBranding?.textContrast || '#ffffff',
-                                display: player.photoUrl ? "none" : undefined,
-                              }}
-                            >
-                              {player.name.charAt(0)}
-                            </div>
+                            <PlayerAvatarThumb
+                              photoUrl={player.photoUrl}
+                              name={player.name}
+                              size="w-6 h-6 md:w-8 md:h-8"
+                              fallbackClassName="text-xs"
+                              fallbackStyle={{ backgroundColor: primaryColor, color: teamBranding?.textContrast || '#ffffff' }}
+                            />
                             {(() => {
                               const identifier = player.player_slug || player.player_id;
                               return identifier ? (
@@ -1878,25 +1902,11 @@ export default function TeamProfile() {
                       >
                         <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 dark:text-slate-200 sticky left-0 bg-white dark:bg-neutral-900 hover:bg-orange-50 dark:hover:bg-neutral-800 z-10">
                           <div className="flex items-center gap-2 min-w-0">
-                            {player.photoUrl ? (
-                              <img
-                                src={player.photoUrl}
-                                alt={player.name}
-                                loading="lazy"
-                                className="w-6 h-6 md:w-7 md:h-7 rounded-full object-cover flex-shrink-0"
-                                style={{ objectPosition: `center ${player.photoFocusY ?? 50}%` }}
-                                onError={(e) => {
-                                  (e.currentTarget as HTMLImageElement).style.display = "none";
-                                  (e.currentTarget.nextElementSibling as HTMLElement | null)?.style.removeProperty("display");
-                                }}
-                              />
-                            ) : null}
-                            <div
-                              className="w-6 h-6 md:w-7 md:h-7 rounded-full flex items-center justify-center font-bold text-[10px] md:text-xs flex-shrink-0 bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300"
-                              style={{ display: player.photoUrl ? "none" : undefined }}
-                            >
-                              {player.name.charAt(0)}
-                            </div>
+                            <PlayerAvatarThumb
+                              photoUrl={player.photoUrl}
+                              name={player.name}
+                              fallbackClassName="text-[10px] md:text-xs bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300"
+                            />
                             {player.slug ? (
                               <Link href={`/player/${encodeURIComponent(player.slug)}`} className="font-medium text-slate-900 dark:text-white text-xs md:text-sm truncate hover:underline">
                                 {player.name}
