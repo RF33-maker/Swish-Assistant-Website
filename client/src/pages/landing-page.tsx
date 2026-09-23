@@ -110,8 +110,21 @@ export default function LandingPage() {
           .order("trending_position", { ascending: true }),
       ]);
 
+      // Competition slugs that are redundant in THIS row specifically because
+      // their brand-level league (e.g. "British Championship Basketball") is
+      // also pinned to trending and already routes to that season via its
+      // own season picker — showing both is two cards for one destination.
+      // Scoped to this row only (not the trending_position column itself),
+      // so Top Players / Latest Scores — which also read trending_position —
+      // keep surfacing that season's data untouched.
+      const REDUNDANT_WITH_LEAGUE_BRAND = new Set([
+        "british-championship-basketball-2026-2027",
+      ]);
+
       const combined = [
-        ...(competitionsResult.data || []).map((row: any) => ({ ...row, _type: "competition" as const })),
+        ...(competitionsResult.data || [])
+          .filter((row: any) => !REDUNDANT_WITH_LEAGUE_BRAND.has(row.slug))
+          .map((row: any) => ({ ...row, _type: "competition" as const })),
         ...(leaguesResult.data || []).map((row: any) => ({ ...row, _type: "league" as const })),
       ].sort((a, b) => a.trending_position - b.trending_position);
 
