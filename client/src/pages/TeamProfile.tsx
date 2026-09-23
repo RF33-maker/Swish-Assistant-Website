@@ -466,7 +466,9 @@ export default function TeamProfile() {
             slug: stat.players?.slug || null,
             games: 0,
             totalMinutes: 0,
-            rawStats: []
+            rawStats: [],
+            photoUrl: null as string | null,
+            photoFocusY: stat.players?.photo_focus_y ?? null,
           });
         }
         const agg = byPlayerId.get(stat.player_id)!;
@@ -476,6 +478,9 @@ export default function TeamProfile() {
           agg.rawStats.push(stat);
         }
         if (playerName.length > agg.name.length) agg.name = playerName;
+        if (!agg.photoUrl) {
+          agg.photoUrl = getPlayerPhotoUrlCached(stat.players?.photo_path_bg_removed || stat.players?.photo_path || null);
+        }
       }
     });
 
@@ -491,6 +496,7 @@ export default function TeamProfile() {
         existing.rawStats = existing.rawStats.concat(p.rawStats);
         if (p.name.length > existing.name.length) existing.name = p.name;
         if (!existing.slug && p.slug) existing.slug = p.slug;
+        if (!existing.photoUrl && p.photoUrl) { existing.photoUrl = p.photoUrl; existing.photoFocusY = p.photoFocusY; }
       } else {
         byName.set(key, { ...p, rawStats: [...p.rawStats] });
       }
@@ -1871,7 +1877,26 @@ export default function TeamProfile() {
                         onClick={() => { if (player.slug) navigate(`/player/${player.slug}`); }}
                       >
                         <td className="py-2 md:py-3 px-2 md:px-3 font-medium text-slate-800 dark:text-slate-200 sticky left-0 bg-white dark:bg-neutral-900 hover:bg-orange-50 dark:hover:bg-neutral-800 z-10">
-                          <div className="min-w-0">
+                          <div className="flex items-center gap-2 min-w-0">
+                            {player.photoUrl ? (
+                              <img
+                                src={player.photoUrl}
+                                alt={player.name}
+                                loading="lazy"
+                                className="w-6 h-6 md:w-7 md:h-7 rounded-full object-cover flex-shrink-0"
+                                style={{ objectPosition: `center ${player.photoFocusY ?? 50}%` }}
+                                onError={(e) => {
+                                  (e.currentTarget as HTMLImageElement).style.display = "none";
+                                  (e.currentTarget.nextElementSibling as HTMLElement | null)?.style.removeProperty("display");
+                                }}
+                              />
+                            ) : null}
+                            <div
+                              className="w-6 h-6 md:w-7 md:h-7 rounded-full flex items-center justify-center font-bold text-[10px] md:text-xs flex-shrink-0 bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300"
+                              style={{ display: player.photoUrl ? "none" : undefined }}
+                            >
+                              {player.name.charAt(0)}
+                            </div>
                             {player.slug ? (
                               <Link href={`/player/${encodeURIComponent(player.slug)}`} className="font-medium text-slate-900 dark:text-white text-xs md:text-sm truncate hover:underline">
                                 {player.name}
