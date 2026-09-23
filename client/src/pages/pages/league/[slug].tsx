@@ -104,6 +104,7 @@ type GameSchedule = {
 const teamNameMap: Record<string, string> = {
   // Intentional canonical renames — too different for fuzzy distance to infer
   'MK Breakers': 'Milton Keynes Breakers',
+  'Signs Express Falkirk Fury': 'Falkirk Fury',
   // Abbreviation / shortened forms that fuzzy can't catch
   'Bath': 'Bath Basketball',
   'DIAWYSC Tempo': 'DIAWYSC',
@@ -664,6 +665,10 @@ export default function LeaguePage() {
   const [poolAStandings, setPoolAStandings] = useState<any[]>([]);
   const [poolBStandings, setPoolBStandings] = useState<any[]>([]);
   const [fullLeagueStandings, setFullLeagueStandings] = useState<any[]>([]);
+  // Generalized version of poolA/poolB — any number of named groups (BCB
+  // Trophy's "North"/"Midlands"/"South 1"/"South 2", not just two), each
+  // shown as its own stacked table instead of a two-way toggle.
+  const [groupedStandings, setGroupedStandings] = useState<{ name: string; standings: any[] }[]>([]);
   const [previousRankings, setPreviousRankings] = useState<Record<string, number>>({});
   const [hasPools, setHasPools] = useState(false); // Track if league has pools
   const [viewMode, setViewMode] = useState<'standings' | 'bracket'>('standings'); // Toggle between standings and bracket
@@ -682,7 +687,7 @@ export default function LeaguePage() {
   const dividerRef = useRef<HTMLDivElement>(null); // Ref for the orange divider
   const [selectedAgeGroup, setSelectedAgeGroup] = useState<string>('all');
   const [selectedStop, setSelectedStop] = useState<string>('all');
-  const [parentStandingsGroups, setParentStandingsGroups] = useState<{ageGroup: string, standings: any[], poolAStandings: any[], poolBStandings: any[], hasPools: boolean}[]>([]);
+  const [parentStandingsGroups, setParentStandingsGroups] = useState<{ageGroup: string, standings: any[], poolAStandings: any[], poolBStandings: any[], hasPools: boolean, groupedStandings: {name: string, standings: any[]}[]}[]>([]);
   type SeasonCompetitionOption = {
     name: string;
     slug: string;
@@ -2074,12 +2079,12 @@ export default function LeaguePage() {
             
             if (isParent) {
               try {
-                const groups: {ageGroup: string, standings: any[], poolAStandings: any[], poolBStandings: any[], hasPools: boolean}[] = [];
+                const groups: {ageGroup: string, standings: any[], poolAStandings: any[], poolBStandings: any[], hasPools: boolean, groupedStandings: {name: string, standings: any[]}[]}[] = [];
                 for (const child of fetchedChildCompetitions) {
                   const ageGroup = childNameMap.get(child.league_id) || child.name;
                   const result = await calculateStandingsForLeague(child.league_id, league?.league_id);
                   if (result.standings.length > 0) {
-                    groups.push({ ageGroup, standings: result.standings, poolAStandings: result.poolAStandings, poolBStandings: result.poolBStandings, hasPools: result.hasPools });
+                    groups.push({ ageGroup, standings: result.standings, poolAStandings: result.poolAStandings, poolBStandings: result.poolBStandings, hasPools: result.hasPools, groupedStandings: result.groupedStandings });
                   }
                 }
                 setParentStandingsGroups(groups);
@@ -3243,7 +3248,7 @@ export default function LeaguePage() {
       }
     };
 
-    const calculateStandingsForLeague = async (leagueId: string, parentLeagueId?: string): Promise<{standings: any[], poolAStandings: any[], poolBStandings: any[], hasPools: boolean}> => {
+    const calculateStandingsForLeague = async (leagueId: string, parentLeagueId?: string): Promise<{standings: any[], poolAStandings: any[], poolBStandings: any[], hasPools: boolean, groupedStandings: {name: string, standings: any[]}[]}> => {
       try {
         const { data: allTeams, error: teamsError } = await db
           .from("teams")
@@ -3259,10 +3264,10 @@ export default function LeaguePage() {
           .eq("league_id", leagueId);
 
         if ((!gameResults || gameResults.length === 0 || gameResultsError) && (!allTeams || allTeams.length === 0)) {
-          return { standings: [], poolAStandings: [], poolBStandings: [], hasPools: false };
+          return { standings: [], poolAStandings: [], poolBStandings: [], hasPools: false, groupedStandings: [] };
         }
         if (!gameResults || gameResults.length === 0 || gameResultsError) {
-          return { standings: [], poolAStandings: [], poolBStandings: [], hasPools: false };
+          return { standings: [], poolAStandings: [], poolBStandings: [], hasPools: false, groupedStandings: [] };
         }
 
         const extractPoolName = (poolValue: string): string => {
@@ -3399,13 +3404,29 @@ export default function LeaguePage() {
 
         const poolAStandings = buildStatsFromGames(poolAGames);
         const poolBStandings = buildStatsFromGames(poolBGames);
-        const anyGameHasPool = gameResults.some((g: any) => g.pool && (normalizePoolLabel(g.pool) === 'Pool A' || normalizePoolLabel(g.pool) === 'Pool B'));
-        const poolsExist = anyGameHasPool;
 
-        return { standings: fullStandings, poolAStandings, poolBStandings, hasPools: poolsExist };
+        // Generalized version — any number of named groups (BCB Trophy's
+        // North/Midlands/South 1/South 2), not just the legacy two-pool
+        // convention above. Order follows first appearance in the fixture
+        // list rather than alphabetising.
+        const groupNamesInOrder: string[] = [];
+        gameResults.forEach((g: any) => {
+          if (g.pool) {
+            const name = extractPoolName(g.pool);
+            if (!groupNamesInOrder.includes(name)) groupNamesInOrder.push(name);
+          }
+        });
+        const groupedStandings = groupNamesInOrder
+          .map(name => ({ name, standings: buildStatsFromGames(gameResults.filter((g: any) => g.pool && extractPoolName(g.pool) === name)) }))
+          .filter(g => g.standings.length > 0);
+
+        const anyGameHasPool = gameResults.some((g: any) => g.pool && (normalizePoolLabel(g.pool) === 'Pool A' || normalizePoolLabel(g.pool) === 'Pool B'));
+        const poolsExist = anyGameHasPool || groupedStandings.length > 0;
+
+        return { standings: fullStandings, poolAStandings, poolBStandings, hasPools: poolsExist, groupedStandings };
       } catch (error) {
         console.error("Error calculating standings for league:", leagueId, error);
-        return { standings: [], poolAStandings: [], poolBStandings: [], hasPools: false };
+        return { standings: [], poolAStandings: [], poolBStandings: [], hasPools: false, groupedStandings: [] };
       }
     };
 
@@ -3825,8 +3846,23 @@ export default function LeaguePage() {
         setPoolAStandings(poolAStandings);
         setPoolBStandings(poolBStandings);
 
+        // Generalized grouping — any named groups found in the data (e.g.
+        // BCB Trophy's "North"/"Midlands"/"South 1"/"South 2"), not just the
+        // legacy two-pool "Pool A"/"Pool B" convention above. Preserves the
+        // order groups first appear in the schedule rather than sorting
+        // alphabetically, so it reads "North, Midlands, South 1, South 2"
+        // the way the source data lists them, not alphabetised.
+        const groupNamesInOrder: string[] = [];
+        mergedTeamsArray.forEach(t => {
+          if (t.pool && !groupNamesInOrder.includes(t.pool)) groupNamesInOrder.push(t.pool);
+        });
+        const groups = groupNamesInOrder
+          .map(name => ({ name, standings: formatStandings(mergedTeamsArray, name) }))
+          .filter(g => g.standings.length > 0);
+        setGroupedStandings(groups);
+
         // Check if pools exist (any team has pool data)
-        const poolsExist = poolAStandings.length > 0 || poolBStandings.length > 0;
+        const poolsExist = groups.length > 0 || poolAStandings.length > 0 || poolBStandings.length > 0;
         setHasPools(poolsExist);
 
         // Update previous rankings for next calculation
@@ -4441,8 +4477,14 @@ export default function LeaguePage() {
                   <>
                     {/* Pool Tabs - shown for non-parent leagues or when a specific age group with pools is selected */}
                     {(() => {
-                      const parentAgeGroupHasPools = isParentLeague && selectedAgeGroup !== 'all' && parentStandingsGroups.some(g => g.ageGroup === selectedAgeGroup && g.hasPools);
-                      const showPoolSection = !isParentLeague || parentAgeGroupHasPools;
+                      // Only the legacy two-pool convention (poolAStandings/
+                      // poolBStandings actually populated) needs this toggle.
+                      // Named groups (BCB Trophy's North/Midlands/South 1/
+                      // South 2) render as stacked tables below instead —
+                      // `hasPools` alone isn't enough here since it's true
+                      // for both cases.
+                      const parentAgeGroupHasPools = isParentLeague && selectedAgeGroup !== 'all' && parentStandingsGroups.some(g => g.ageGroup === selectedAgeGroup && (g.poolAStandings.length > 0 || g.poolBStandings.length > 0));
+                      const showPoolSection = (!isParentLeague && groupedStandings.length === 0) || parentAgeGroupHasPools;
                       const effectiveHasPools = isParentLeague ? parentAgeGroupHasPools : hasPools;
                       return showPoolSection ? (
                     <div className="flex flex-wrap gap-2 mb-4 md:mb-6 border-b border-gray-200 dark:border-neutral-700">
@@ -4501,10 +4543,70 @@ export default function LeaguePage() {
                         <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
                         <p className="text-gray-600 dark:text-gray-400 mt-4">Loading standings...</p>
                       </div>
-                    ) : (
+                    ) : (() => {
+                      const renderParentStandingsTable = (rows: any[]) => (
+                        <div className="overflow-x-auto -mx-4 md:mx-0 mb-4">
+                          <table className="w-full text-sm min-w-[600px]">
+                            <thead>
+                              <tr className="border-b-2 border-gray-200 dark:border-neutral-700">
+                                <th className="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-16 sticky left-0 bg-white dark:bg-neutral-900 z-10">Logo</th>
+                                <th className="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 min-w-[140px]">Team</th>
+                                <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-16">W</th>
+                                <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-16">L</th>
+                                <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">Win%</th>
+                                <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">PF</th>
+                                <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">PA</th>
+                                <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">Diff</th>
+                                <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-12"></th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {rows.map((team: any, index: number) => (
+                                <tr
+                                  key={`${team.team}-${index}`}
+                                  className="border-b border-gray-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors group"
+                                >
+                                  <td className="py-3 px-3 sticky left-0 bg-white dark:bg-neutral-900 group-hover:bg-orange-50 dark:group-hover:bg-neutral-800 z-10 transition-colors">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-medium text-slate-600 dark:text-slate-400 text-xs">{team.rank}</span>
+                                      <TeamLogo
+                                        teamName={team.originalName || team.team}
+                                        leagueId={league?.league_id}
+                                        size="sm"
+                                        logoUrl={getTeamLogoUrl(team.originalName || team.team)}
+                                      />
+                                    </div>
+                                  </td>
+                                  <td className="py-3 px-3 font-medium text-slate-800 dark:text-slate-200">
+                                    <span className="truncate">{team.team}</span>
+                                  </td>
+                                  <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.wins}</td>
+                                  <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.losses}</td>
+                                  <td className="py-3 px-3 text-center font-medium text-slate-600 dark:text-slate-400">{(team.winPct * 100).toFixed(1)}%</td>
+                                  <td className="py-3 px-3 text-right font-medium text-slate-700 dark:text-slate-300">{team.pointsFor}</td>
+                                  <td className="py-3 px-3 text-right font-medium text-slate-700 dark:text-slate-300">{team.pointsAgainst}</td>
+                                  <td className={`py-3 px-3 text-right font-semibold ${team.pointsDiff > 0 ? 'text-green-600 dark:text-green-400' : team.pointsDiff < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-400'}`}>
+                                    {team.pointsDiff > 0 ? `+${team.pointsDiff}` : team.pointsDiff}
+                                  </td>
+                                  <td className="py-3 px-3 text-center">
+                                    {team.movement === 'up' && <span className="text-green-600 font-bold text-sm">▲</span>}
+                                    {team.movement === 'down' && <span className="text-red-600 font-bold text-sm">▼</span>}
+                                    {team.movement === 'same' && <span className="text-gray-400 text-sm">▬</span>}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                          {rows.length === 0 && (
+                            <div className="text-center py-4 text-gray-500 text-sm">No standings data available</div>
+                          )}
+                        </div>
+                      );
+
+                      return (
                       <div className="space-y-6">
                         {(selectedAgeGroup === 'all' ? parentStandingsGroups : parentStandingsGroups.filter(g => g.ageGroup === selectedAgeGroup)).map((group) => {
-                          const displayStandings = selectedAgeGroup !== 'all' && group.hasPools
+                          const displayStandings = selectedAgeGroup !== 'all' && group.hasPools && group.groupedStandings.length === 0
                             ? (standingsView === 'poolA' ? group.poolAStandings : standingsView === 'poolB' ? group.poolBStandings : group.standings)
                             : group.standings;
                           return (
@@ -4515,62 +4617,18 @@ export default function LeaguePage() {
                                 {group.ageGroup}
                               </h3>
                             )}
-                            <div className="overflow-x-auto -mx-4 md:mx-0 mb-4">
-                              <table className="w-full text-sm min-w-[600px]">
-                                <thead>
-                                  <tr className="border-b-2 border-gray-200 dark:border-neutral-700">
-                                    <th className="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-16 sticky left-0 bg-white dark:bg-neutral-900 z-10">Logo</th>
-                                    <th className="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 min-w-[140px]">Team</th>
-                                    <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-16">W</th>
-                                    <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-16">L</th>
-                                    <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">Win%</th>
-                                    <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">PF</th>
-                                    <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">PA</th>
-                                    <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">Diff</th>
-                                    <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-12"></th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {displayStandings.map((team: any, index: number) => (
-                                    <tr 
-                                      key={`${team.team}-${index}`}
-                                      className="border-b border-gray-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors group"
-                                    >
-                                      <td className="py-3 px-3 sticky left-0 bg-white dark:bg-neutral-900 group-hover:bg-orange-50 dark:group-hover:bg-neutral-800 z-10 transition-colors">
-                                        <div className="flex items-center gap-2">
-                                          <span className="font-medium text-slate-600 dark:text-slate-400 text-xs">{team.rank}</span>
-                                          <TeamLogo 
-                                            teamName={team.originalName || team.team} 
-                                            leagueId={league?.league_id} 
-                                            size="sm"
-                                            logoUrl={getTeamLogoUrl(team.originalName || team.team)}
-                                          />
-                                        </div>
-                                      </td>
-                                      <td className="py-3 px-3 font-medium text-slate-800 dark:text-slate-200">
-                                        <span className="truncate">{team.team}</span>
-                                      </td>
-                                      <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.wins}</td>
-                                      <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.losses}</td>
-                                      <td className="py-3 px-3 text-center font-medium text-slate-600 dark:text-slate-400">{(team.winPct * 100).toFixed(1)}%</td>
-                                      <td className="py-3 px-3 text-right font-medium text-slate-700 dark:text-slate-300">{team.pointsFor}</td>
-                                      <td className="py-3 px-3 text-right font-medium text-slate-700 dark:text-slate-300">{team.pointsAgainst}</td>
-                                      <td className={`py-3 px-3 text-right font-semibold ${team.pointsDiff > 0 ? 'text-green-600 dark:text-green-400' : team.pointsDiff < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-400'}`}>
-                                        {team.pointsDiff > 0 ? `+${team.pointsDiff}` : team.pointsDiff}
-                                      </td>
-                                      <td className="py-3 px-3 text-center">
-                                        {team.movement === 'up' && <span className="text-green-600 font-bold text-sm">▲</span>}
-                                        {team.movement === 'down' && <span className="text-red-600 font-bold text-sm">▼</span>}
-                                        {team.movement === 'same' && <span className="text-gray-400 text-sm">▬</span>}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                              {displayStandings.length === 0 && (
-                                <div className="text-center py-4 text-gray-500 text-sm">No standings data available</div>
-                              )}
-                            </div>
+                            {group.groupedStandings.length > 0 ? (
+                              <div className="space-y-5">
+                                {group.groupedStandings.map(sub => (
+                                  <div key={sub.name}>
+                                    <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2 ml-1">{sub.name}</h4>
+                                    {renderParentStandingsTable(sub.standings)}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              renderParentStandingsTable(displayStandings)
+                            )}
                           </div>
                           );
                         })}
@@ -4578,91 +4636,117 @@ export default function LeaguePage() {
                           <div className="text-center py-8 text-gray-500">No standings data available</div>
                         )}
                       </div>
-                    )}
+                      );
+                    })()}
                   </>
                 )}
 
                 {/* Non-parent League Standings */}
-                {!isParentLeague && (
-                <>
-                {isLoadingStandings ? (
-                  <div className="text-center py-8">
-                    <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                    <p className="text-gray-600 dark:text-gray-400 mt-4">Loading standings...</p>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto -mx-4 md:mx-0">
-                    <table className="w-full text-sm min-w-[600px]">
-                      <thead>
-                        <tr className="border-b-2 border-gray-200 dark:border-neutral-700">
-                          <th className="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-16 sticky left-0 bg-white dark:bg-neutral-900 z-10">Logo</th>
-                          <th className="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 min-w-[140px]">Team</th>
-                          <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-16">W</th>
-                          <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-16">L</th>
-                          <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">Win%</th>
-                          <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">PF</th>
-                          <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">PA</th>
-                          <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">Diff</th>
-                          <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-12"></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(standingsView === 'poolA' ? poolAStandings : 
-                          standingsView === 'poolB' ? poolBStandings : 
-                          fullLeagueStandings).map((team, index) => (
-                          <tr 
-                            key={`${team.team}-${index}`}
-                            className="border-b border-gray-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors group"
-                          >
-                            <td className="py-3 px-3 sticky left-0 bg-white dark:bg-neutral-900 group-hover:bg-orange-50 dark:group-hover:bg-neutral-800 z-10 transition-colors">
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium text-slate-600 dark:text-slate-400 text-xs">{team.rank}</span>
-                                <TeamLogo 
-                                  teamName={team.originalName || team.team} 
-                                  leagueId={league?.league_id} 
-                                  size="sm"
-                                  logoUrl={getTeamLogoUrl(team.originalName || team.team)}
-                                />
-                              </div>
-                            </td>
-                            <td className="py-3 px-3 font-medium text-slate-800 dark:text-slate-200">
-                              <span className="truncate">{team.team}</span>
-                            </td>
-                            <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.wins}</td>
-                            <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.losses}</td>
-                            <td className="py-3 px-3 text-center font-medium text-slate-600 dark:text-slate-400">{(team.winPct * 100).toFixed(1)}%</td>
-                            <td className="py-3 px-3 text-right font-medium text-slate-700 dark:text-slate-300">{team.pointsFor}</td>
-                            <td className="py-3 px-3 text-right font-medium text-slate-700 dark:text-slate-300">{team.pointsAgainst}</td>
-                            <td className={`py-3 px-3 text-right font-semibold ${team.pointsDiff > 0 ? 'text-green-600 dark:text-green-400' : team.pointsDiff < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-400'}`}>
-                              {team.pointsDiff > 0 ? `+${team.pointsDiff}` : team.pointsDiff}
-                            </td>
-                            <td className="py-3 px-3 text-center">
-                              {team.movement === 'up' && (
-                                <span className="text-green-600 font-bold text-sm">▲</span>
-                              )}
-                              {team.movement === 'down' && (
-                                <span className="text-red-600 font-bold text-sm">▼</span>
-                              )}
-                              {team.movement === 'same' && (
-                                <span className="text-gray-400 text-sm">▬</span>
-                              )}
-                            </td>
+                {!isParentLeague && (() => {
+                  const renderStandingsTable = (rows: any[]) => (
+                    <div className="overflow-x-auto -mx-4 md:mx-0">
+                      <table className="w-full text-sm min-w-[600px]">
+                        <thead>
+                          <tr className="border-b-2 border-gray-200 dark:border-neutral-700">
+                            <th className="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-16 sticky left-0 bg-white dark:bg-neutral-900 z-10">Logo</th>
+                            <th className="text-left py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 min-w-[140px]">Team</th>
+                            <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-16">W</th>
+                            <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-16">L</th>
+                            <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">Win%</th>
+                            <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">PF</th>
+                            <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">PA</th>
+                            <th className="text-right py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-20">Diff</th>
+                            <th className="text-center py-3 px-3 font-semibold text-slate-700 dark:text-slate-200 w-12"></th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    
-                    {(standingsView === 'poolA' ? poolAStandings : 
-                      standingsView === 'poolB' ? poolBStandings : 
-                      fullLeagueStandings).length === 0 && (
-                      <div className="text-center py-8 text-gray-500">
-                        No standings data available
+                        </thead>
+                        <tbody>
+                          {rows.map((team, index) => (
+                            <tr
+                              key={`${team.team}-${index}`}
+                              className="border-b border-gray-100 dark:border-neutral-700 hover:bg-orange-50 dark:hover:bg-neutral-800 transition-colors group"
+                            >
+                              <td className="py-3 px-3 sticky left-0 bg-white dark:bg-neutral-900 group-hover:bg-orange-50 dark:group-hover:bg-neutral-800 z-10 transition-colors">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium text-slate-600 dark:text-slate-400 text-xs">{team.rank}</span>
+                                  <TeamLogo
+                                    teamName={team.originalName || team.team}
+                                    leagueId={league?.league_id}
+                                    size="sm"
+                                    logoUrl={getTeamLogoUrl(team.originalName || team.team)}
+                                  />
+                                </div>
+                              </td>
+                              <td className="py-3 px-3 font-medium text-slate-800 dark:text-slate-200">
+                                <span className="truncate">{team.team}</span>
+                              </td>
+                              <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.wins}</td>
+                              <td className="py-3 px-3 text-center font-semibold text-slate-700 dark:text-slate-300">{team.losses}</td>
+                              <td className="py-3 px-3 text-center font-medium text-slate-600 dark:text-slate-400">{(team.winPct * 100).toFixed(1)}%</td>
+                              <td className="py-3 px-3 text-right font-medium text-slate-700 dark:text-slate-300">{team.pointsFor}</td>
+                              <td className="py-3 px-3 text-right font-medium text-slate-700 dark:text-slate-300">{team.pointsAgainst}</td>
+                              <td className={`py-3 px-3 text-right font-semibold ${team.pointsDiff > 0 ? 'text-green-600 dark:text-green-400' : team.pointsDiff < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-400'}`}>
+                                {team.pointsDiff > 0 ? `+${team.pointsDiff}` : team.pointsDiff}
+                              </td>
+                              <td className="py-3 px-3 text-center">
+                                {team.movement === 'up' && (
+                                  <span className="text-green-600 font-bold text-sm">▲</span>
+                                )}
+                                {team.movement === 'down' && (
+                                  <span className="text-red-600 font-bold text-sm">▼</span>
+                                )}
+                                {team.movement === 'same' && (
+                                  <span className="text-gray-400 text-sm">▬</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+
+                      {rows.length === 0 && (
+                        <div className="text-center py-8 text-gray-500">
+                          No standings data available
+                        </div>
+                      )}
+                    </div>
+                  );
+
+                  if (isLoadingStandings) {
+                    return (
+                      <div className="text-center py-8">
+                        <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                        <p className="text-gray-600 dark:text-gray-400 mt-4">Loading standings...</p>
                       </div>
-                    )}
-                  </div>
-                )}
-                </>
-                )}
+                    );
+                  }
+
+                  // Named groups (BCB Trophy's North/Midlands/South 1/South 2, or
+                  // any other league with more than a two-pool split) each get
+                  // their own stacked table with their own real name as the
+                  // header — matches how the source competition itself presents
+                  // group-stage standings, instead of one flat combined table.
+                  if (groupedStandings.length > 0) {
+                    return (
+                      <div className="space-y-6">
+                        {groupedStandings.map(group => (
+                          <div key={group.name}>
+                            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: brandColor }}></span>
+                              {group.name}
+                            </h3>
+                            {renderStandingsTable(group.standings)}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  }
+
+                  return renderStandingsTable(
+                    standingsView === 'poolA' ? poolAStandings :
+                    standingsView === 'poolB' ? poolBStandings :
+                    fullLeagueStandings
+                  );
+                })()}
                   </>
               )}
                 
