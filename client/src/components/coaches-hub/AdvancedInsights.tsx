@@ -4,6 +4,10 @@ import { supabase } from '@/lib/supabase';
 
 interface Props {
   leagueId: string;
+  /** When set, every section is scoped to this team only (lineups, plus-minus, minutes) instead of the whole league. */
+  teamId?: string;
+  /** False hides the built-in heading — for call sites (Coaches Hub's Lineups tab) that already show their own section title above this. */
+  showHeading?: boolean;
 }
 
 interface LineupRow {
@@ -57,7 +61,7 @@ interface PlayerMinutes {
 const MIN_LINEUP_POSSESSIONS = 10;
 const MIN_PLAYER_STINTS = 3;
 
-export default function AdvancedInsights({ leagueId }: Props) {
+export default function AdvancedInsights({ leagueId, teamId, showHeading = true }: Props) {
   const [loading, setLoading] = useState(true);
   const [lineups, setLineups] = useState<LineupAgg[]>([]);
   const [plusMinusLeaders, setPlusMinusLeaders] = useState<PlayerPlusMinus[]>([]);
@@ -69,21 +73,28 @@ export default function AdvancedInsights({ leagueId }: Props) {
 
     (async () => {
       setLoading(true);
-      const [lineupRes, onCourtRes, minutesRes] = await Promise.all([
-        supabase
-          .from('lineup_stints')
-          .select('lineup_key, team_id, lineup_names, points_for, points_against, possessions_for, possessions_against')
-          .eq('league_id', leagueId)
-          .eq('is_valid_lineup', true),
-        supabase
-          .from('player_on_court_stints')
-          .select('player_id, player_name, team_id, points_for, points_against')
-          .eq('league_id', leagueId),
-        supabase
-          .from('player_lineup_stints_v1')
-          .select('player_id, seconds_on_court')
-          .eq('league_id', leagueId),
-      ]);
+      let lineupQuery = supabase
+        .from('lineup_stints')
+        .select('lineup_key, team_id, lineup_names, points_for, points_against, possessions_for, possessions_against')
+        .eq('league_id', leagueId)
+        .eq('is_valid_lineup', true);
+      let onCourtQuery = supabase
+        .from('player_on_court_stints')
+        .select('player_id, player_name, team_id, points_for, points_against')
+        .eq('league_id', leagueId);
+      // player_lineup_stints_v1 (minutes) has no team_id column of its own —
+      // minutes are filtered to this team's roster after the fact instead,
+      // via the same player ids the (already team-filtered) plus-minus pass finds.
+      const minutesQuery = supabase
+        .from('player_lineup_stints_v1')
+        .select('player_id, seconds_on_court')
+        .eq('league_id', leagueId);
+      if (teamId) {
+        lineupQuery = lineupQuery.eq('team_id', teamId);
+        onCourtQuery = onCourtQuery.eq('team_id', teamId);
+      }
+
+      const [lineupRes, onCourtRes, minutesRes] = await Promise.all([lineupQuery, onCourtQuery, minutesQuery]);
 
       if (cancelled) return;
 
@@ -136,9 +147,13 @@ export default function AdvancedInsights({ leagueId }: Props) {
         .sort((a, b) => b.plusMinus - a.plusMinus);
 
       // ── Minutes: total seconds on court per player ─────────────────────
+      // player_lineup_stints_v1 has no team_id column, so when scoped to one
+      // team, restrict to player ids the (already team-filtered) on-court
+      // pass above found for this team's roster.
       const secondsMap = new Map<string, number>();
       ((minutesRes.data || []) as MinutesRow[]).forEach(row => {
         if (!row.player_id) return;
+        if (teamId && !nameByPlayerId.has(row.player_id)) return;
         secondsMap.set(row.player_id, (secondsMap.get(row.player_id) || 0) + (row.seconds_on_court ?? 0));
       });
       const minutesList = Array.from(secondsMap.entries())
@@ -156,7 +171,7 @@ export default function AdvancedInsights({ leagueId }: Props) {
     })();
 
     return () => { cancelled = true; };
-  }, [leagueId]);
+  }, [leagueId, teamId]);
 
   function netRating(l: LineupAgg): number {
     if (l.possessionsFor > 0 && l.possessionsAgainst > 0) {
@@ -166,14 +181,18 @@ export default function AdvancedInsights({ leagueId }: Props) {
   }
 
   const hasAnyData = lineups.length > 0 || plusMinusLeaders.length > 0 || minutesLeaders.length > 0;
+  const headingText = teamId ? 'Lineups & On-Court Impact' : 'Advanced Insights';
+  const scopeText = teamId ? 'this team' : 'this league';
 
   if (loading) {
     return (
       <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
-        <div className="flex items-center gap-3 mb-4">
-          <LineChart className="w-5 md:w-6 h-5 md:h-6 text-orange-600 dark:text-orange-400" />
-          <h2 className="text-lg md:text-xl font-bold text-slate-800 dark:text-white">Advanced Insights</h2>
-        </div>
+        {showHeading && (
+          <div className="flex items-center gap-3 mb-4">
+            <LineChart className="w-5 md:w-6 h-5 md:h-6 text-orange-600 dark:text-orange-400" />
+            <h2 className="text-lg md:text-xl font-bold text-slate-800 dark:text-white">{headingText}</h2>
+          </div>
+        )}
         <p className="text-sm text-slate-500 dark:text-slate-400">Crunching lineup and on-court data…</p>
       </div>
     );
@@ -182,12 +201,14 @@ export default function AdvancedInsights({ leagueId }: Props) {
   if (!hasAnyData) {
     return (
       <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
-        <div className="flex items-center gap-3 mb-2">
-          <LineChart className="w-5 md:w-6 h-5 md:h-6 text-orange-600 dark:text-orange-400" />
-          <h2 className="text-lg md:text-xl font-bold text-slate-800 dark:text-white">Advanced Insights</h2>
-        </div>
+        {showHeading && (
+          <div className="flex items-center gap-3 mb-2">
+            <LineChart className="w-5 md:w-6 h-5 md:h-6 text-orange-600 dark:text-orange-400" />
+            <h2 className="text-lg md:text-xl font-bold text-slate-800 dark:text-white">{headingText}</h2>
+          </div>
+        )}
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          No lineup / on-court stint data is available for this league yet. This section lights up automatically once play-by-play data has been processed for it.
+          No lineup / on-court stint data is available for {scopeText} yet. This section lights up automatically once play-by-play data has been processed for it.
         </p>
       </div>
     );
@@ -195,10 +216,12 @@ export default function AdvancedInsights({ leagueId }: Props) {
 
   return (
     <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
-      <div className="flex items-center gap-3 mb-4 md:mb-6">
-        <LineChart className="w-5 md:w-6 h-5 md:h-6 text-orange-600 dark:text-orange-400" />
-        <h2 className="text-lg md:text-xl font-bold text-slate-800 dark:text-white">Advanced Insights</h2>
-      </div>
+      {showHeading && (
+        <div className="flex items-center gap-3 mb-4 md:mb-6">
+          <LineChart className="w-5 md:w-6 h-5 md:h-6 text-orange-600 dark:text-orange-400" />
+          <h2 className="text-lg md:text-xl font-bold text-slate-800 dark:text-white">{headingText}</h2>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
         {/* Best lineups by net rating */}

@@ -1360,11 +1360,16 @@ export default function CoachesHub() {
 
                 {/* Lineups — five-man unit net rating / plus-minus / minutes,
                     was labelled "Advanced Insights" which collided with the
-                    "Advanced" category group inside Rankings above. */}
+                    "Advanced" category group inside Rankings above. Coach
+                    accounts get their own team only — reading-focused, not a
+                    league-wide leaderboard; to see another team's lineups,
+                    visit that team's own profile (Rankings drill-in), which
+                    shows the same scoped view. League owners still get the
+                    full league here since they're not tied to one team. */}
                 {activeTab === 'lineups' && (
                   <div>
                     <SectionKicker n="01" label="Lineups" color={readableBrand} />
-                    <AdvancedInsights leagueId={selectedLeague.league_id} />
+                    <AdvancedInsights leagueId={selectedLeague.league_id} teamId={isCoach ? coachTeamId ?? undefined : undefined} showHeading={false} />
                   </div>
                 )}
 
