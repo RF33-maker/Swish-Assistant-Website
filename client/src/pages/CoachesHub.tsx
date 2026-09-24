@@ -14,6 +14,7 @@ import FullRankings from '@/components/coaches-hub/FullRankings';
 import PlayerDetail from '@/components/coaches-hub/PlayerDetail';
 import TeamDetail from '@/components/coaches-hub/TeamDetail';
 import CoachTeamOverview from '@/components/coaches-hub/CoachTeamOverview';
+import CoachTeamBanner from '@/components/coaches-hub/CoachTeamBanner';
 import LeagueChatbot from '@/components/LeagueChatbot';
 import { TrendingUp, BarChart3, Users, Target, Award, Eye, MessageCircle, Search, User, Calendar, Trophy, X, ChevronDown } from 'lucide-react';
 import { Link } from 'wouter';
@@ -531,26 +532,51 @@ export default function CoachesHub() {
       // deliberate — a coach scouting an upcoming opponent needs the whole
       // league, not just their own team).
       if (isCoach && coachTeamId) {
-        const { data: team, error: teamError } = await supabase
+        const { data: homeTeam, error: teamError } = await supabase
           .from('teams')
           .select('league_id, name')
           .eq('team_id', coachTeamId)
           .maybeSingle();
         if (teamError) {
           console.error('Error resolving coach team:', teamError);
-        } else if (team?.league_id) {
-          setCoachTeamName(team.name ?? null);
-          const { data: competition, error: competitionError } = await supabase
-            .from('competitions')
-            .select('*')
-            .eq('league_id', team.league_id)
-            .maybeSingle();
-          if (competitionError) {
-            console.error('Error resolving coach league:', competitionError);
-          } else if (competition) {
-            coachCompetition = competition;
-            if (!combined.some((c: any) => c.league_id === competition.league_id)) {
-              combined = [competition, ...combined];
+        } else if (homeTeam?.name) {
+          setCoachTeamName(homeTeam.name);
+
+          // A club plays across several competitions/seasons at once (e.g. a
+          // league season plus a cup), each with its own teams row and
+          // team_id — the coach's account is only provisioned against one of
+          // them. Find every other competition this same team name appears
+          // in so all of them show up as switchable options, not just the
+          // one the account happens to be scoped to. (RLS already limits
+          // this to public competitions for a non-owner account.)
+          const { data: siblingTeams, error: siblingError } = await supabase
+            .from('teams')
+            .select('league_id')
+            .eq('name', homeTeam.name);
+          if (siblingError) {
+            console.error('Error resolving sibling competitions:', siblingError);
+          }
+          const leagueIds = Array.from(new Set((siblingTeams || []).map((t: any) => t.league_id).filter(Boolean)));
+
+          if (leagueIds.length > 0) {
+            const { data: comps, error: compsError } = await supabase
+              .from('competitions')
+              .select('*')
+              .in('league_id', leagueIds);
+            if (compsError) {
+              console.error('Error resolving coach competitions:', compsError);
+            } else if (comps) {
+              comps.forEach((competition: any) => {
+                if (!combined.some((c: any) => c.league_id === competition.league_id)) {
+                  combined = [...combined, competition];
+                }
+              });
+              // Prefer the competition matching the account's own home
+              // team_id as the initial selection; fall back to whichever
+              // sibling competition RLS actually returned (the home one may
+              // be unlisted/private and invisible to this non-owner account).
+              coachCompetition =
+                comps.find((c: any) => c.league_id === homeTeam.league_id) || comps[0] || null;
             }
           }
         }
@@ -653,7 +679,11 @@ export default function CoachesHub() {
   // to — used to surface a "Your team" shortcut ahead of the league-wide
   // leaders, so landing on Coaches Hub answers "how's my team doing" before
   // "who else is in this league".
-  const myTeam = isCoach && coachTeamId ? teamSeasonAverages.find((t) => t.team_id === coachTeamId) : undefined;
+  // Matched by name, not coachTeamId — that id only resolves within the
+  // competition the account was originally provisioned against. A coach can
+  // now switch to any sibling competition their team also plays in (see
+  // fetchUserLeagues), where the same real team has a different team_id.
+  const myTeam = isCoach && coachTeamName ? teamSeasonAverages.find((t) => t.team_name === coachTeamName) : undefined;
 
   // League standings (win-loss based, not the points-per-game sort Rankings
   // uses) — computed client-side from completed results, the same approach
@@ -901,23 +931,31 @@ export default function CoachesHub() {
       </header>
 
       <div className="max-w-full mx-auto px-4 md:px-6 py-4 md:py-6">
-        {/* Trimmed welcome — no feature grid, no pulsing taglines */}
-        <div className="flex items-center gap-3 mb-4 md:mb-6">
-          <div className="p-2 bg-orange-100 dark:bg-orange-900/40 rounded-lg">
-            <Target className="w-5 h-5 md:w-6 md:h-6 text-orange-600 dark:text-orange-400" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl md:text-2xl font-bold text-slate-800 dark:text-white">Coaches Hub</h1>
-              {isCoach && coachTeamName && (
-                <span className="text-[11px] font-semibold uppercase tracking-wide bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 px-2 py-0.5 rounded-full">
-                  Coaching {coachTeamName}
-                </span>
-              )}
+        {/* A coach's own team, once resolved, gets a persistent branded
+            banner instead of the generic title — visible above every tab,
+            not just Overview, so it reads as "this is my team's hub" rather
+            than a stat card that scrolls away. League owners (no single
+            team) keep the plain title. */}
+        {isCoach && myTeam ? (
+          <CoachTeamBanner
+            team={myTeam}
+            leagueId={selectedLeague?.league_id}
+            standing={myStanding}
+            standingsCount={standings.length}
+            fallbackColor={readableBrand}
+            onViewTeam={() => setDetailView({ type: 'team', team: myTeam })}
+          />
+        ) : (
+          <div className="flex items-center gap-3 mb-4 md:mb-6">
+            <div className="p-2 bg-orange-100 dark:bg-orange-900/40 rounded-lg">
+              <Target className="w-5 h-5 md:w-6 md:h-6 text-orange-600 dark:text-orange-400" />
             </div>
-            <p className="text-sm text-slate-600 dark:text-slate-400">Analyze performance, track trends, and build scouting reports.</p>
+            <div>
+              <h1 className="text-xl md:text-2xl font-bold text-slate-800 dark:text-white">Coaches Hub</h1>
+              <p className="text-sm text-slate-600 dark:text-slate-400">Analyze performance, track trends, and build scouting reports.</p>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Shortcuts — top public leagues, for fast navigation while no
             league is selected yet (whether or not the coach has their own). */}
@@ -1174,9 +1212,9 @@ export default function CoachesHub() {
                 {/* Overview */}
                 {activeTab === 'overview' && (
                   <div className="space-y-4 md:space-y-6">
-                    {/* Your team — coach accounts land here, so lead with
-                        "how's my team doing" before the league-wide leaders
-                        below (which stay visible underneath for scouting). */}
+                    {/* The persistent CoachTeamBanner above already covers
+                        "here's my team" (logo, record, rank) — Overview
+                        picks up straight from next/last game and trends. */}
                     {myTeam && (
                       <CoachTeamOverview
                         team={myTeam}
@@ -1189,7 +1227,6 @@ export default function CoachesHub() {
                         last5={last5}
                         last5FgPct={last5FgPct}
                         fallbackColor={readableBrand}
-                        onViewTeam={() => setDetailView({ type: 'team', team: myTeam })}
                       />
                     )}
 

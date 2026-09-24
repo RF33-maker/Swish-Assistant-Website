@@ -1,29 +1,10 @@
 import { Link } from 'wouter';
-import { BarChart2, Calendar, ChevronRight, Clock, MapPin, Minus, PlayCircle, TrendingDown, TrendingUp, Trophy, Video } from 'lucide-react';
-import { TeamLogo } from '@/components/TeamLogo';
+import { BarChart2, Calendar, Clock, MapPin, Minus, PlayCircle, TrendingDown, TrendingUp, Video } from 'lucide-react';
 import { useTeamBranding } from '@/hooks/useTeamBranding';
 import { useReadableTeamColor } from '@/hooks/useReadableColor';
-import { adjustOpacity } from '@/lib/colorExtractor';
 import { getGameFootage } from '@/lib/gameFootage';
 import type { TeamSeasonAverage } from '@/pages/CoachesHub';
 import type { StandingRow, MyTeamGame, NextGameRow } from '@/pages/CoachesHub';
-
-/** Parses a hex (#rgb/#rrggbb) or rgb()/rgba() colour string into {r,g,b}. */
-function parseToRgb(color: string): { r: number; g: number; b: number } {
-  const hex = color.trim();
-  if (hex.startsWith('#')) {
-    const h = hex.slice(1);
-    if (h.length === 3) {
-      return { r: parseInt(h[0] + h[0], 16), g: parseInt(h[1] + h[1], 16), b: parseInt(h[2] + h[2], 16) };
-    }
-    if (h.length >= 6) {
-      return { r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16), b: parseInt(h.slice(4, 6), 16) };
-    }
-  }
-  const match = hex.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
-  if (match) return { r: Number(match[1]), g: Number(match[2]), b: Number(match[3]) };
-  return { r: 249, g: 115, b: 22 }; // orange-500 fallback
-}
 
 interface Props {
   team: TeamSeasonAverage;
@@ -37,7 +18,6 @@ interface Props {
   last5: MyTeamGame[];
   last5FgPct: number | null;
   fallbackColor: string;
-  onViewTeam: () => void;
 }
 
 /**
@@ -98,13 +78,10 @@ function TrendPill({ direction, label, sub, color }: { direction: 'up' | 'down' 
   );
 }
 
-export default function CoachTeamOverview({ team, leagueId, standing, standings, lastGame, nextGame, opponentLastGame, last5, last5FgPct, fallbackColor, onViewTeam }: Props) {
-  const { colors, primaryColor, isLoading: brandLoading } = useTeamBranding({ teamName: team.team_name, leagueId });
+export default function CoachTeamOverview({ team, leagueId, standing, standings, lastGame, nextGame, opponentLastGame, last5, last5FgPct, fallbackColor }: Props) {
+  const { primaryColor, isLoading: brandLoading } = useTeamBranding({ teamName: team.team_name, leagueId });
   const brandColor = brandLoading || !primaryColor ? fallbackColor : primaryColor;
-  const brandRgb = colors?.primaryRgb ?? parseToRgb(brandColor);
   const readable = useReadableTeamColor(brandColor).body;
-  const record = standing ? `${standing.wins}-${standing.losses}` : null;
-  const rankLabel = standing && standings.length > 0 ? `${standing.rank}${standing.rank === 1 ? 'st' : standing.rank === 2 ? 'nd' : standing.rank === 3 ? 'rd' : 'th'} of ${standings.length}` : null;
 
   const fgSeason = team.season_fg_pct;
   const fgDelta = last5FgPct != null && fgSeason != null ? last5FgPct - fgSeason : null;
@@ -129,38 +106,6 @@ export default function CoachTeamOverview({ team, leagueId, standing, standings,
           <p className="text-xs md:text-sm text-gray-500 dark:text-neutral-400">
             Full-game footage with tap-to-jump plays is coming through our StatsThread partnership. Nothing to watch yet.
           </p>
-        </div>
-      </div>
-
-      {/* Branded hero — the team's own colour (from its logo), falling back
-          to the league colour while it loads or if none can be resolved. */}
-      <div
-        className="rounded-lg p-4 md:p-6 text-white relative overflow-hidden"
-        style={{ background: `linear-gradient(135deg, ${adjustOpacity(brandRgb, 0.92)} 0%, ${adjustOpacity(brandRgb, 0.75)} 100%)` }}
-      >
-        <div className="flex items-center justify-between gap-4 flex-wrap relative z-10">
-          <div className="flex items-center gap-3 md:gap-4">
-            <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-white/90 flex items-center justify-center overflow-hidden shrink-0">
-              <TeamLogo teamName={team.team_name} leagueId={leagueId} size="lg" />
-            </div>
-            <div>
-              <h2 className="text-lg md:text-2xl font-bold">{team.team_name}</h2>
-              <div className="flex items-center gap-3 text-sm text-white/80 mt-0.5">
-                {record && <span className="font-semibold text-white">{record}</span>}
-                {rankLabel && (
-                  <span className="flex items-center gap-1">
-                    <Trophy className="w-3.5 h-3.5" /> {rankLabel}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-          <button
-            onClick={onViewTeam}
-            className="flex items-center gap-1 text-sm font-medium bg-white/15 hover:bg-white/25 px-3 py-1.5 rounded-full transition-colors"
-          >
-            Full team detail <ChevronRight className="w-3.5 h-3.5" />
-          </button>
         </div>
       </div>
 
