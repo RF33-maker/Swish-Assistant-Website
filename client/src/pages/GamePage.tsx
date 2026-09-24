@@ -14,6 +14,7 @@ import LeagueChatbot from "@/components/LeagueChatbot";
 import type { ShotData } from "@/components/ShotChart";
 import TeamSplitShotChart from "@/components/TeamSplitShotChart";
 import GameFlowSummary from "@/components/GameFlowSummary";
+import PlayByPlay from "@/components/PlayByPlay";
 import UpcomingGamePreview from "@/components/UpcomingGamePreview";
 
 interface GameSchedule {
@@ -1273,7 +1274,7 @@ export default function GamePage() {
                   <TabsTrigger value="boxscore" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs md:text-sm">Box Score</TabsTrigger>
                   <TabsTrigger value="teamstats" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs md:text-sm">Team Stats</TabsTrigger>
                   <TabsTrigger value="shotchart" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs md:text-sm">Shots</TabsTrigger>
-                  <TabsTrigger value="feed" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs md:text-sm">Feed</TabsTrigger>
+                  <TabsTrigger value="feed" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs md:text-sm">Play by Play</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="game">
@@ -1452,33 +1453,12 @@ export default function GamePage() {
                           </div>
                         )}
 
-                        <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
-                          <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3 uppercase tracking-wide">Score Differential</h3>
-                          <div className="py-6 text-center">
-                            <p className="text-xs text-slate-400 dark:text-slate-500 italic">Coming soon</p>
+                        {liveEvents && liveEvents.length > 0 && (
+                          <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
+                            <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3 uppercase tracking-wide">Game Flow</h3>
+                            <GameFlowSummary events={liveEvents as any} homeTeam={gameData.hometeam} awayTeam={gameData.awayteam} />
                           </div>
-                        </div>
-
-                        <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
-                          <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3 uppercase tracking-wide">Runs</h3>
-                          <div className="py-6 text-center">
-                            <p className="text-xs text-slate-400 dark:text-slate-500 italic">Coming soon</p>
-                          </div>
-                        </div>
-
-                        <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
-                          <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3 uppercase tracking-wide">Momentum</h3>
-                          <div className="py-6 text-center">
-                            <p className="text-xs text-slate-400 dark:text-slate-500 italic">Coming soon</p>
-                          </div>
-                        </div>
-
-                        <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
-                          <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3 uppercase tracking-wide">Biggest Lead Changes</h3>
-                          <div className="py-6 text-center">
-                            <p className="text-xs text-slate-400 dark:text-slate-500 italic">Coming soon</p>
-                          </div>
-                        </div>
+                        )}
                       </>
                     ) : (
                       <div className="bg-white dark:bg-neutral-800 rounded-lg p-8 border border-orange-100 dark:border-neutral-700 text-center">
@@ -1717,78 +1697,13 @@ export default function GamePage() {
                 </TabsContent>
 
                 <TabsContent value="feed">
-                  {liveEvents && liveEvents.length > 0 && (
-                    <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700 mb-3">
-                      <GameFlowSummary events={liveEvents as any} homeTeam={gameData.hometeam} awayTeam={gameData.awayteam} />
-                    </div>
-                  )}
-                  <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
-                    {liveEvents && liveEvents.length > 0 ? (
-                      <div className="space-y-2 max-h-96 overflow-y-auto">
-                        {[...liveEvents].sort((a, b) => {
-                          const periodDiff = (b.period || 0) - (a.period || 0);
-                          if (periodDiff !== 0) return periodDiff;
-                          const parseClockSeconds = (clock: string | null | undefined) => {
-                            if (!clock) return 0;
-                            const parts = clock.split(':').map(Number);
-                            if (parts.length >= 2) return parts[0] * 60 + parts[1];
-                            return parts[0] || 0;
-                          };
-                          return parseClockSeconds(a.clock) - parseClockSeconds(b.clock);
-                        }).map((event) => {
-                          const actionType = event.action_type || 'event';
-                          const subType = event.sub_type;
-                          const eventDescription = event.description || buildEventDescription(actionType, subType, event.success, event.points);
-                          const clockDisplay = event.clock?.split(':').slice(0, 2).join(':') || '';
-                          
-                          return (
-                            <div 
-                              key={event.id} 
-                              className={`flex items-start gap-3 p-3 rounded-lg ${
-                                event.team_no === 1 
-                                  ? 'bg-orange-50 dark:bg-orange-900/20 border-l-4 border-orange-500' 
-                                  : 'bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500'
-                              }`}
-                            >
-                              <div className="flex-shrink-0 text-xs text-slate-500 dark:text-slate-400 w-16">
-                                <div className="font-semibold">Q{event.period}</div>
-                                <div>{clockDisplay}</div>
-                              </div>
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className={`text-xs font-semibold px-2 py-0.5 rounded ${
-                                    event.scoring ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' :
-                                    actionType === 'foul' ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' :
-                                    actionType === 'substitution' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300' :
-                                    actionType === 'turnover' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300' :
-                                    actionType === 'rebound' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300' :
-                                    'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-                                  }`}>
-                                    {actionType.toUpperCase()}
-                                  </span>
-                                  {event.player_name && (
-                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                                      {event.player_name}
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="text-sm text-slate-600 dark:text-slate-400">{eventDescription}</p>
-                              </div>
-                              <div className="flex-shrink-0 text-right">
-                                <div className="text-sm font-bold text-slate-700 dark:text-slate-300">
-                                  {event.score || '0-0'}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <p className="text-slate-500 italic text-center py-8">
-                        {isTestMode ? 'No play-by-play events yet. Events will appear here as the game progresses.' : 'Play-by-play data coming soon'}
-                      </p>
-                    )}
-                  </div>
+                  <PlayByPlay
+                    events={liveEvents || []}
+                    homeTeam={gameData.hometeam}
+                    awayTeam={gameData.awayteam}
+                    emptyMessage={isTestMode ? 'No play-by-play events yet. Events will appear here as the game progresses.' : 'Play-by-play data coming soon.'}
+                    describeEvent={(event) => event.description || buildEventDescription(event.action_type || 'event', event.sub_type, event.success, event.points)}
+                  />
                 </TabsContent>
               </Tabs>
             )}

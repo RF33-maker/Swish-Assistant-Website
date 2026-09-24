@@ -7,6 +7,7 @@ import { generatePlayCaption } from "@/utils/generatePlayCaption";
 import type { ShotData } from "./ShotChart";
 import TeamSplitShotChart from "./TeamSplitShotChart";
 import GameFlowSummary from "./GameFlowSummary";
+import PlayByPlay from "./PlayByPlay";
 import { useReadableTeamColor } from "@/hooks/useReadableColor";
 import UpcomingGamePreview, { type PreviewGame } from "./UpcomingGamePreview";
 
@@ -463,7 +464,7 @@ export function InlineGameDetail({
   }, [gameKey, eventsLoaded]);
 
   useEffect(() => {
-    if ((activeTab === "feed" || activeTab === "shots") && !eventsLoaded) {
+    if ((activeTab === "game" || activeTab === "feed" || activeTab === "shots") && !eventsLoaded) {
       fetchEventsAndShots();
     }
   }, [activeTab, eventsLoaded, fetchEventsAndShots]);
@@ -520,17 +521,6 @@ export function InlineGameDetail({
     ];
     return qs.filter((q) => q.home > 0 || q.away > 0);
   })();
-
-  const sortedFeedEvents = [...liveEvents].sort((a, b) => {
-    const pd = (b.period || 0) - (a.period || 0);
-    if (pd !== 0) return pd;
-    const parseClock = (c: string | null | undefined) => {
-      if (!c) return 0;
-      const parts = c.split(":").map(Number);
-      return parts.length >= 2 ? parts[0] * 60 + parts[1] : parts[0] || 0;
-    };
-    return parseClock(a.clock) - parseClock(b.clock);
-  });
 
   if (loading) {
     return (
@@ -738,7 +728,7 @@ export function InlineGameDetail({
                     className="data-[state=active]:text-white text-xs md:text-sm"
                     style={activeTab === v ? tabActiveStyle : {}}
                   >
-                    {v === "game" ? "Game" : v === "boxscore" ? "Box Score" : v === "teamstats" ? "Team Stats" : v === "shots" ? "Shots" : "Feed"}
+                    {v === "game" ? "Game" : v === "boxscore" ? "Box Score" : v === "teamstats" ? "Team Stats" : v === "shots" ? "Shots" : "Play by Play"}
                   </TabsTrigger>
                 ))}
               </TabsList>
@@ -884,6 +874,13 @@ export function InlineGameDetail({
                     <p className="text-slate-500 dark:text-slate-400 italic">Game statistics will appear here once the game starts.</p>
                   </div>
                 )}
+
+                {!eventsLoading && liveEvents.length > 0 && (
+                  <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
+                    <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3 uppercase tracking-wide">Game Flow</h3>
+                    <GameFlowSummary events={liveEvents as any} homeTeam={hometeam} awayTeam={awayteam} />
+                  </div>
+                )}
               </TabsContent>
 
               {/* BOX SCORE TAB */}
@@ -959,63 +956,16 @@ export function InlineGameDetail({
 
               {/* FEED TAB */}
               <TabsContent value="feed">
-                {!eventsLoading && liveEvents.length > 0 && (
-                  <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700 mb-3">
-                    <GameFlowSummary events={liveEvents as any} homeTeam={hometeam} awayTeam={awayteam} />
-                  </div>
-                )}
-                <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
-                  {eventsLoading ? (
-                    <div className="flex justify-center py-8">
-                      <Loader2 className="w-6 h-6 animate-spin text-orange-400" />
-                    </div>
-                  ) : sortedFeedEvents.length > 0 ? (
-                    <div className="space-y-2 max-h-96 overflow-y-auto">
-                      {sortedFeedEvents.map((event) => {
-                        const caption = generatePlayCaption(event as any) || event.description || `${event.action_type} ${event.sub_type || ""}`.trim();
-                        const clockDisplay = event.clock?.split(":").slice(0, 2).join(":") || "";
-                        return (
-                          <div
-                            key={event.id}
-                            className={`flex items-start gap-3 p-3 rounded-lg ${
-                              event.team_no === 1
-                                ? "bg-orange-50 dark:bg-orange-900/20 border-l-4 border-orange-500"
-                                : "bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500"
-                            }`}
-                          >
-                            <div className="flex-shrink-0 text-xs text-slate-500 dark:text-slate-400 w-16">
-                              <div className="font-semibold">Q{event.period}</div>
-                              <div>{clockDisplay}</div>
-                            </div>
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className={`text-xs font-semibold px-2 py-0.5 rounded ${
-                                  event.scoring ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300" :
-                                  event.action_type === "foul" ? "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300" :
-                                  event.action_type === "substitution" ? "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300" :
-                                  event.action_type === "turnover" ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300" :
-                                  event.action_type === "rebound" ? "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300" :
-                                  "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
-                                }`}>
-                                  {(event.action_type || "").toUpperCase()}
-                                </span>
-                                {event.player_name && (
-                                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{event.player_name}</span>
-                                )}
-                              </div>
-                              <p className="text-sm text-slate-600 dark:text-slate-400">{caption}</p>
-                            </div>
-                            <div className="flex-shrink-0 text-right">
-                              <div className="text-sm font-bold text-slate-700 dark:text-slate-300">{event.score || "0-0"}</div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="text-slate-500 italic text-center py-8">Play-by-play data coming soon</p>
-                  )}
-                </div>
+                <PlayByPlay
+                  events={liveEvents}
+                  homeTeam={hometeam}
+                  awayTeam={awayteam}
+                  loading={eventsLoading}
+                  emptyMessage="Play-by-play data coming soon."
+                  describeEvent={(event, previousScoredEvent) =>
+                    generatePlayCaption(event as any, previousScoredEvent as any) || event.description || `${event.action_type} ${event.sub_type || ""}`.trim()
+                  }
+                />
               </TabsContent>
             </Tabs>
           ) : (
