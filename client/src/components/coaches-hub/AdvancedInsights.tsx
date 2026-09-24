@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { LineChart, Users2, Activity, Clock } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
@@ -18,6 +18,18 @@ interface LineupRow {
   points_against: number | null;
   possessions_for: number | null;
   possessions_against: number | null;
+  fg2_made: number | null;
+  fg2_attempted: number | null;
+  fg3_made: number | null;
+  fg3_attempted: number | null;
+  ft_made: number | null;
+  ft_attempted: number | null;
+  oreb: number | null;
+  dreb: number | null;
+  assists: number | null;
+  turnovers: number | null;
+  steals: number | null;
+  blocks: number | null;
 }
 
 interface OnCourtRow {
@@ -40,7 +52,87 @@ interface LineupAgg {
   pointsAgainst: number;
   possessionsFor: number;
   possessionsAgainst: number;
+  fg2Made: number;
+  fg2Attempted: number;
+  fg3Made: number;
+  fg3Attempted: number;
+  ftMade: number;
+  ftAttempted: number;
+  oreb: number;
+  dreb: number;
+  assists: number;
+  turnovers: number;
+  steals: number;
+  blocks: number;
   stints: number;
+}
+
+function per100(value: number, possessions: number): number {
+  return possessions > 0 ? (value / possessions) * 100 : 0;
+}
+
+function netRatingOf(l: LineupAgg): number {
+  if (l.possessionsFor > 0 && l.possessionsAgainst > 0) {
+    return per100(l.pointsFor, l.possessionsFor) - per100(l.pointsAgainst, l.possessionsAgainst);
+  }
+  return l.pointsFor - l.pointsAgainst;
+}
+
+// Percentage categories need their own minimum sample (attempts), separate
+// from MIN_LINEUP_POSSESSIONS below — a lineup that's only taken one 3 and
+// made it would otherwise top the 3PT% list at "100%".
+const MIN_FGA_FOR_PCT = 10;
+const MIN_3PA_FOR_PCT = 5;
+const MIN_FTA_FOR_PCT = 5;
+
+interface LineupCategoryDef {
+  key: string;
+  label: string;
+  isPercent?: boolean;
+  /** Per-100-possessions rate stats (rebounds, assists, etc.) vs. ratings (net/off/def), which already are a per-100 basis but read as a single number, not "X/100". */
+  isRate?: boolean;
+  lowerIsBetter?: boolean;
+  qualifies: (l: LineupAgg) => boolean;
+  value: (l: LineupAgg) => number;
+}
+
+const LINEUP_CATEGORIES: LineupCategoryDef[] = [
+  { key: 'net', label: 'Net Rating', qualifies: () => true, value: netRatingOf },
+  { key: 'off', label: 'Off Rating', qualifies: () => true, value: (l) => per100(l.pointsFor, l.possessionsFor) },
+  { key: 'def', label: 'Def Rating', lowerIsBetter: true, qualifies: () => true, value: (l) => per100(l.pointsAgainst, l.possessionsAgainst) },
+  {
+    key: 'fg_pct', label: 'FG%', isPercent: true,
+    qualifies: (l) => (l.fg2Attempted + l.fg3Attempted) >= MIN_FGA_FOR_PCT,
+    value: (l) => (l.fg2Attempted + l.fg3Attempted) > 0 ? ((l.fg2Made + l.fg3Made) / (l.fg2Attempted + l.fg3Attempted)) * 100 : 0,
+  },
+  {
+    key: 'efg_pct', label: 'eFG%', isPercent: true,
+    qualifies: (l) => (l.fg2Attempted + l.fg3Attempted) >= MIN_FGA_FOR_PCT,
+    value: (l) => (l.fg2Attempted + l.fg3Attempted) > 0 ? ((l.fg2Made + l.fg3Made + 0.5 * l.fg3Made) / (l.fg2Attempted + l.fg3Attempted)) * 100 : 0,
+  },
+  {
+    key: 'tp_pct', label: '3PT%', isPercent: true,
+    qualifies: (l) => l.fg3Attempted >= MIN_3PA_FOR_PCT,
+    value: (l) => l.fg3Attempted > 0 ? (l.fg3Made / l.fg3Attempted) * 100 : 0,
+  },
+  {
+    key: 'ft_pct', label: 'FT%', isPercent: true,
+    qualifies: (l) => l.ftAttempted >= MIN_FTA_FOR_PCT,
+    value: (l) => l.ftAttempted > 0 ? (l.ftMade / l.ftAttempted) * 100 : 0,
+  },
+  { key: 'reb', label: 'Rebounds', isRate: true, qualifies: () => true, value: (l) => per100(l.oreb + l.dreb, l.possessionsFor + l.possessionsAgainst) },
+  { key: 'ast', label: 'Assists', isRate: true, qualifies: () => true, value: (l) => per100(l.assists, l.possessionsFor) },
+  { key: 'tov', label: 'Turnovers', isRate: true, lowerIsBetter: true, qualifies: () => true, value: (l) => per100(l.turnovers, l.possessionsFor) },
+  { key: 'stl', label: 'Steals', isRate: true, qualifies: () => true, value: (l) => per100(l.steals, l.possessionsAgainst) },
+  { key: 'blk', label: 'Blocks', isRate: true, qualifies: () => true, value: (l) => per100(l.blocks, l.possessionsAgainst) },
+];
+
+function formatLineupValue(cat: LineupCategoryDef, value: number): string {
+  if (cat.isPercent) return `${value.toFixed(1)}%`;
+  // Only Net Rating is a genuine +/- differential — Off/Def Rating and the
+  // per-100 rate stats are plain (always-positive-ish) numbers.
+  if (cat.key === 'net') return `${value >= 0 ? '+' : ''}${value.toFixed(1)}`;
+  return value.toFixed(1);
 }
 
 interface PlayerPlusMinus {
@@ -64,6 +156,7 @@ const MIN_PLAYER_STINTS = 3;
 export default function AdvancedInsights({ leagueId, teamId, showHeading = true }: Props) {
   const [loading, setLoading] = useState(true);
   const [lineups, setLineups] = useState<LineupAgg[]>([]);
+  const [lineupCategoryKey, setLineupCategoryKey] = useState(LINEUP_CATEGORIES[0].key);
   const [plusMinusLeaders, setPlusMinusLeaders] = useState<PlayerPlusMinus[]>([]);
   const [minutesLeaders, setMinutesLeaders] = useState<PlayerMinutes[]>([]);
 
@@ -75,7 +168,7 @@ export default function AdvancedInsights({ leagueId, teamId, showHeading = true 
       setLoading(true);
       let lineupQuery = supabase
         .from('lineup_stints')
-        .select('lineup_key, team_id, lineup_names, points_for, points_against, possessions_for, possessions_against')
+        .select('lineup_key, team_id, lineup_names, points_for, points_against, possessions_for, possessions_against, fg2_made, fg2_attempted, fg3_made, fg3_attempted, ft_made, ft_attempted, oreb, dreb, assists, turnovers, steals, blocks')
         .eq('league_id', leagueId)
         .eq('is_valid_lineup', true);
       let onCourtQuery = supabase
@@ -108,6 +201,18 @@ export default function AdvancedInsights({ leagueId, teamId, showHeading = true 
           existing.pointsAgainst += row.points_against ?? 0;
           existing.possessionsFor += row.possessions_for ?? 0;
           existing.possessionsAgainst += row.possessions_against ?? 0;
+          existing.fg2Made += row.fg2_made ?? 0;
+          existing.fg2Attempted += row.fg2_attempted ?? 0;
+          existing.fg3Made += row.fg3_made ?? 0;
+          existing.fg3Attempted += row.fg3_attempted ?? 0;
+          existing.ftMade += row.ft_made ?? 0;
+          existing.ftAttempted += row.ft_attempted ?? 0;
+          existing.oreb += row.oreb ?? 0;
+          existing.dreb += row.dreb ?? 0;
+          existing.assists += row.assists ?? 0;
+          existing.turnovers += row.turnovers ?? 0;
+          existing.steals += row.steals ?? 0;
+          existing.blocks += row.blocks ?? 0;
           existing.stints += 1;
         } else {
           lineupMap.set(row.lineup_key, {
@@ -117,13 +222,25 @@ export default function AdvancedInsights({ leagueId, teamId, showHeading = true 
             pointsAgainst: row.points_against ?? 0,
             possessionsFor: row.possessions_for ?? 0,
             possessionsAgainst: row.possessions_against ?? 0,
+            fg2Made: row.fg2_made ?? 0,
+            fg2Attempted: row.fg2_attempted ?? 0,
+            fg3Made: row.fg3_made ?? 0,
+            fg3Attempted: row.fg3_attempted ?? 0,
+            ftMade: row.ft_made ?? 0,
+            ftAttempted: row.ft_attempted ?? 0,
+            oreb: row.oreb ?? 0,
+            dreb: row.dreb ?? 0,
+            assists: row.assists ?? 0,
+            turnovers: row.turnovers ?? 0,
+            steals: row.steals ?? 0,
+            blocks: row.blocks ?? 0,
             stints: 1,
           });
         }
       });
       const lineupList = Array.from(lineupMap.values())
         .filter(l => l.possessionsFor >= MIN_LINEUP_POSSESSIONS)
-        .sort((a, b) => netRating(b) - netRating(a));
+        .sort((a, b) => netRatingOf(b) - netRatingOf(a));
 
       // ── Plus-minus: aggregate on-court stints per player ──────────────────
       const nameByPlayerId = new Map<string, string>();
@@ -173,12 +290,13 @@ export default function AdvancedInsights({ leagueId, teamId, showHeading = true 
     return () => { cancelled = true; };
   }, [leagueId, teamId]);
 
-  function netRating(l: LineupAgg): number {
-    if (l.possessionsFor > 0 && l.possessionsAgainst > 0) {
-      return (l.pointsFor / l.possessionsFor) * 100 - (l.pointsAgainst / l.possessionsAgainst) * 100;
-    }
-    return l.pointsFor - l.pointsAgainst;
-  }
+  const lineupCategory = LINEUP_CATEGORIES.find(c => c.key === lineupCategoryKey) ?? LINEUP_CATEGORIES[0];
+  const rankedLineups = useMemo(() => {
+    const eligible = lineups.filter(lineupCategory.qualifies);
+    return [...eligible]
+      .sort((a, b) => lineupCategory.lowerIsBetter ? lineupCategory.value(a) - lineupCategory.value(b) : lineupCategory.value(b) - lineupCategory.value(a))
+      .slice(0, 5);
+  }, [lineups, lineupCategory]);
 
   const hasAnyData = lineups.length > 0 || plusMinusLeaders.length > 0 || minutesLeaders.length > 0;
   const headingText = teamId ? 'Lineups & On-Court Impact' : 'Advanced Insights';
@@ -223,34 +341,56 @@ export default function AdvancedInsights({ leagueId, teamId, showHeading = true 
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
-        {/* Best lineups by net rating */}
-        <div className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700">
-          <h4 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+      {/* Best lineups — by any category, not just net rating */}
+      <div className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700 mb-4 md:mb-6">
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+          <h4 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
             <Users2 className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-            Best Lineups (Net Rating)
+            Best Lineups
           </h4>
-          {lineups.length === 0 ? (
-            <p className="text-sm text-slate-500 dark:text-slate-400">Not enough lineup data yet.</p>
-          ) : (
-            <div className="space-y-3">
-              {lineups.slice(0, 5).map((l, i) => (
+        </div>
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {LINEUP_CATEGORIES.map(c => (
+            <button
+              key={c.key}
+              onClick={() => setLineupCategoryKey(c.key)}
+              className={`px-2.5 py-1 text-xs font-medium rounded-md whitespace-nowrap transition-colors border ${
+                lineupCategoryKey === c.key
+                  ? 'bg-purple-600 text-white border-purple-600'
+                  : 'border-gray-200 dark:border-neutral-700 text-gray-600 dark:text-neutral-400 hover:border-gray-300 dark:hover:border-neutral-600'
+              }`}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+        {lineups.length === 0 ? (
+          <p className="text-sm text-slate-500 dark:text-slate-400">Not enough lineup data yet.</p>
+        ) : rankedLineups.length === 0 ? (
+          <p className="text-sm text-slate-500 dark:text-slate-400">No lineup has enough attempts yet to rank by {lineupCategory.label}.</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+            {rankedLineups.map((l, i) => {
+              const value = lineupCategory.value(l);
+              return (
                 <div key={l.lineupKey} className="text-sm">
                   <div className="flex items-center justify-between">
                     <span className="font-medium text-gray-900 dark:text-white">#{i + 1}</span>
-                    <span className={`font-bold ${netRating(l) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                      {netRating(l) >= 0 ? '+' : ''}{netRating(l).toFixed(1)}
+                    <span className={`font-bold ${lineupCategory.key === 'net' ? (value >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400') : 'text-gray-800 dark:text-white'}`}>
+                      {formatLineupValue(lineupCategory, value)}
                     </span>
                   </div>
                   <div className="text-xs text-gray-500 dark:text-neutral-400 truncate" title={l.players.join(', ')}>
                     {l.players.length > 0 ? l.players.join(', ') : 'Unnamed lineup'}
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
 
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
         {/* Plus-minus leaders */}
         <div className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700">
           <h4 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
