@@ -735,17 +735,18 @@ export default function CoachesHub() {
     return recent.reduce((a, b) => a + b, 0) / recent.length;
   }, [teamGameLog, myTeam]);
 
-  // "Positive trend" — last-5 average scoring margin vs the season's overall
-  // scoring margin (from the same standings pass above), so it's grounded in
-  // actual results rather than a single stat.
-  const scoringTrend = useMemo(() => {
-    if (!myStanding || myStanding.games === 0 || last5.length === 0) return null;
-    const seasonAvgMargin = myStanding.pointDiff / myStanding.games;
-    const last5AvgMargin = last5.reduce((sum, g) => sum + (g.myScore - g.oppScore), 0) / last5.length;
-    const delta = last5AvgMargin - seasonAvgMargin;
-    const direction: 'up' | 'down' | 'flat' = delta > 1.5 ? 'up' : delta < -1.5 ? 'down' : 'flat';
-    return { seasonAvgMargin, last5AvgMargin, delta, direction };
-  }, [myStanding, last5]);
+  // Next game's opponent's own most recent completed game — the scouting
+  // link target ("watch how they played last time out"). Resolved from the
+  // same leagueGameResults already fetched for standings/last-game, no new
+  // query needed.
+  const opponentLastGame = useMemo(() => {
+    if (!nextGame || !myTeam) return null;
+    const opponentName = nextGame.home_team_id === myTeam.team_id ? nextGame.awayteam : nextGame.hometeam;
+    const game = leagueGameResults.find(
+      (g) => (g.home_team === opponentName || g.away_team === opponentName) && g.home_score != null && g.away_score != null
+    );
+    return game ? { gameKey: game.game_key, opponentName } : null;
+  }, [nextGame, myTeam, leagueGameResults]);
 
   // Same brand-color extraction the public league pages use, so Coaches Hub
   // picks up each league's own look once one is selected.
@@ -1184,6 +1185,7 @@ export default function CoachesHub() {
                         standings={standings}
                         lastGame={lastGame}
                         nextGame={nextGame}
+                        opponentLastGame={opponentLastGame}
                         last5={last5}
                         last5FgPct={last5FgPct}
                         fallbackColor={readableBrand}

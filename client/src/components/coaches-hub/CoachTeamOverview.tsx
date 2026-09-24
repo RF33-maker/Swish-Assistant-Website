@@ -1,8 +1,9 @@
-import { Calendar, ChevronRight, Clock, MapPin, Minus, TrendingDown, TrendingUp, Trophy } from 'lucide-react';
+import { Calendar, ChevronRight, Clock, MapPin, Minus, PlayCircle, TrendingDown, TrendingUp, Trophy, Video } from 'lucide-react';
 import { TeamLogo } from '@/components/TeamLogo';
 import { useTeamBranding } from '@/hooks/useTeamBranding';
 import { useReadableTeamColor } from '@/hooks/useReadableColor';
 import { adjustOpacity } from '@/lib/colorExtractor';
+import { getGameFootage } from '@/lib/gameFootage';
 import type { TeamSeasonAverage } from '@/pages/CoachesHub';
 import type { StandingRow, MyTeamGame, NextGameRow } from '@/pages/CoachesHub';
 
@@ -30,10 +31,41 @@ interface Props {
   standings: StandingRow[];
   lastGame?: MyTeamGame;
   nextGame: NextGameRow | null;
+  /** The upcoming opponent's own most recent completed game — the scouting-video link target. */
+  opponentLastGame?: { gameKey: string; opponentName: string } | null;
   last5: MyTeamGame[];
   last5FgPct: number | null;
   fallbackColor: string;
   onViewTeam: () => void;
+}
+
+/**
+ * A "watch video" link when footage exists for gameKey, otherwise a muted
+ * not-yet-available state — see client/src/lib/gameFootage.ts for why this
+ * is always the unavailable state today.
+ */
+function VideoLink({ gameKey, availableLabel, unavailableLabel }: { gameKey: string | null | undefined; availableLabel: string; unavailableLabel: string }) {
+  const footage = getGameFootage(gameKey);
+  if (footage) {
+    return (
+      <a
+        href={footage.url}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center gap-1.5 text-xs font-semibold text-orange-600 dark:text-orange-400 hover:underline mt-2"
+      >
+        <PlayCircle className="w-3.5 h-3.5" /> {availableLabel}
+      </a>
+    );
+  }
+  return (
+    <span
+      title="Coming through our StatsThread partnership — nothing to watch yet"
+      className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-400 dark:text-neutral-600 mt-2"
+    >
+      <Video className="w-3.5 h-3.5" /> {unavailableLabel}
+    </span>
+  );
 }
 
 function formatGameDate(iso: string | null): string {
@@ -65,7 +97,7 @@ function TrendPill({ direction, label, sub, color }: { direction: 'up' | 'down' 
   );
 }
 
-export default function CoachTeamOverview({ team, leagueId, standing, standings, lastGame, nextGame, last5, last5FgPct, fallbackColor, onViewTeam }: Props) {
+export default function CoachTeamOverview({ team, leagueId, standing, standings, lastGame, nextGame, opponentLastGame, last5, last5FgPct, fallbackColor, onViewTeam }: Props) {
   const { colors, primaryColor, isLoading: brandLoading } = useTeamBranding({ teamName: team.team_name, leagueId });
   const brandColor = brandLoading || !primaryColor ? fallbackColor : primaryColor;
   const brandRgb = colors?.primaryRgb ?? parseToRgb(brandColor);
@@ -84,6 +116,21 @@ export default function CoachTeamOverview({ team, leagueId, standing, standings,
 
   return (
     <div className="space-y-4 md:space-y-6">
+      {/* Game footage — StatsThread partnership placeholder, up top so it's
+          visible the moment a coach lands here rather than buried in the
+          team detail's own Video tab. */}
+      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-5 flex items-center gap-3 md:gap-4">
+        <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-gray-100 dark:bg-neutral-800 flex items-center justify-center shrink-0">
+          <Video className="w-5 h-5 md:w-6 md:h-6 text-gray-400 dark:text-neutral-500" />
+        </div>
+        <div>
+          <h3 className="text-sm md:text-base font-semibold text-slate-800 dark:text-white">Game footage is on the way</h3>
+          <p className="text-xs md:text-sm text-gray-500 dark:text-neutral-400">
+            Full-game footage with tap-to-jump plays is coming through our StatsThread partnership. Nothing to watch yet.
+          </p>
+        </div>
+      </div>
+
       {/* Branded hero — the team's own colour (from its logo), falling back
           to the league colour while it loads or if none can be resolved. */}
       <div
@@ -132,6 +179,12 @@ export default function CoachTeamOverview({ team, leagueId, standing, standings,
                 <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{formatGameTime(nextGame.matchtime)}</span>
                 <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />{nextGame.home_team_id === team.team_id ? 'Home' : 'Away'}</span>
               </div>
+              {/* Scouting link — the opponent's own most recent game, not this one (it hasn't happened yet). */}
+              <VideoLink
+                gameKey={opponentLastGame?.gameKey}
+                availableLabel={`Watch ${opponentLastGame?.opponentName ?? 'their'} last game`}
+                unavailableLabel={opponentLastGame ? `No footage of ${opponentLastGame.opponentName} yet` : 'No scouting footage yet'}
+              />
             </div>
           ) : (
             <p className="text-sm text-gray-400 dark:text-neutral-500 italic">No upcoming games scheduled.</p>
@@ -153,6 +206,7 @@ export default function CoachTeamOverview({ team, leagueId, standing, standings,
                 </span>
               </div>
               <div className="text-sm text-gray-500 dark:text-neutral-400 mt-1">{formatGameDate(lastGame.matchTime)}</div>
+              <VideoLink gameKey={lastGame.gameKey} availableLabel="Watch this game" unavailableLabel="Video not available yet" />
             </div>
           ) : (
             <p className="text-sm text-gray-400 dark:text-neutral-500 italic">No completed games yet.</p>
