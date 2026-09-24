@@ -34,7 +34,7 @@ import WidgetDemo from "@/pages/widget-demo";
 import EmbedGuide from "@/pages/embed-guide";
 import GamePage from "@/pages/GamePage";
 import { AuthProvider } from "./hooks/use-auth";
-import { AdminRoute, ProtectedRoute } from "./lib/protected-route";
+import { AdminRoute, ProtectedRoute, TeamRoute } from "./lib/protected-route";
 import ResetPassword from "./pages/reset-password";
 import AuthConfirm from "./pages/auth-confirm";
 import SettingsPage from "@/pages/settings-page";
@@ -96,7 +96,7 @@ function Router() {
 
       {/* Member routes — any authenticated user */}
       <ProtectedRoute path="/dashboard" component={PostLoginDashboard} />
-      <AdminRoute path="/coaches-hub" component={CoachesHub} />
+      <TeamRoute path="/coaches-hub" component={CoachesHub} />
       <ProtectedRoute path="/profile" component={ProfilePage} />
       <ProtectedRoute path="/settings" component={SettingsPage} />
       <ProtectedRoute path="/payment" component={PaymentPage} />

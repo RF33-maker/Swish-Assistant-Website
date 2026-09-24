@@ -97,6 +97,52 @@ export function AdminRoute({
   return <Route path={path} component={Component} />;
 }
 
+/**
+ * TeamRoute – requires an authenticated user who is either an admin or a
+ * coach (a paying team's login, app_metadata.role === "coach"). Used for
+ * Coaches Hub, which a coach account should open straight into — see
+ * CoachesHub.tsx's team→league auto-resolution. Distinct from AdminRoute:
+ * genuinely admin-only pages (league management, player import, etc.) stay
+ * on AdminRoute so a coach login can't reach them.
+ */
+export function TeamRoute({
+  path,
+  component: Component,
+}: {
+  path: string;
+  component: () => React.JSX.Element | null;
+}) {
+  const { user, isAdmin, isCoach, isLoading } = useAuth();
+
+  if (isLoading || user === undefined) {
+    return (
+      <Route path={path}>
+        <div className="flex items-center justify-center min-h-screen">
+          <Loader2 className="h-8 w-8 animate-spin text-border" />
+        </div>
+      </Route>
+    );
+  }
+
+  if (!user) {
+    return (
+      <Route path={path}>
+        <Redirect to="/auth" />
+      </Route>
+    );
+  }
+
+  if (!isAdmin && !isCoach) {
+    return (
+      <Route path={path}>
+        <AccessDenied message="This page is restricted to team and owner accounts. If you believe you should have access, please contact an administrator." />
+      </Route>
+    );
+  }
+
+  return <Route path={path} component={Component} />;
+}
+
 // ── Screens ────────────────────────────────────────────────────────────────
 
 /**
@@ -204,7 +250,11 @@ function VerifyEmailGate({ email }: { email: string }) {
   );
 }
 
-function AccessDenied() {
+function AccessDenied({
+  message = "This page is restricted to owner accounts. If you believe you should have access, please contact an administrator.",
+}: {
+  message?: string;
+}) {
   return (
     <div className="flex items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-950">
       <div className="text-center space-y-4 px-4">
@@ -215,8 +265,7 @@ function AccessDenied() {
           Access Denied
         </h1>
         <p className="text-slate-500 dark:text-slate-400 max-w-sm">
-          This page is restricted to owner accounts. If you believe you should
-          have access, please contact an administrator.
+          {message}
         </p>
         <Button asChild variant="outline">
           <Link href="/dashboard">Back to Dashboard</Link>

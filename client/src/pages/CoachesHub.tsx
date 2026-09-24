@@ -380,11 +380,14 @@ async function fetchTeamAdvancedAverages(leagueId: string): Promise<Map<string, 
 }
 
 export default function CoachesHub() {
-  const { user, logoutMutation } = useAuth();
+  const { user, isCoach, teamId: coachTeamId, logoutMutation } = useAuth();
   const [, navigate] = useLocation();
   const { query: search, setQuery: setSearch, suggestions, handleSelect: handleSelectSearch, handleSubmit: handleSubmitSearch } = useGlobalSearch();
   const [leagues, setLeagues] = useState<any[]>([]);
   const [selectedLeague, setSelectedLeague] = useState<any>(null);
+  // The coach's own team name — resolved alongside their league in
+  // fetchUserLeagues, purely for a "Coaching {team}" label in the UI.
+  const [coachTeamName, setCoachTeamName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [statsLoading, setStatsLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -470,9 +473,46 @@ export default function CoachesHub() {
 
       if (error) throw error;
 
-      setLeagues(data || []);
-      if (data && data.length === 1) {
-        setSelectedLeague(data[0]);
+      let combined = data || [];
+      let coachCompetition: any = null;
+
+      // Coach (team) logins own no competitions of their own — resolve their
+      // team_id to its league instead, so Coaches Hub opens straight into
+      // their team's data rather than an empty "No Leagues Found" state.
+      // Gets the same full analytics any league owner already sees (that's
+      // deliberate — a coach scouting an upcoming opponent needs the whole
+      // league, not just their own team).
+      if (isCoach && coachTeamId) {
+        const { data: team, error: teamError } = await supabase
+          .from('teams')
+          .select('league_id, name')
+          .eq('team_id', coachTeamId)
+          .maybeSingle();
+        if (teamError) {
+          console.error('Error resolving coach team:', teamError);
+        } else if (team?.league_id) {
+          setCoachTeamName(team.name ?? null);
+          const { data: competition, error: competitionError } = await supabase
+            .from('competitions')
+            .select('*')
+            .eq('league_id', team.league_id)
+            .maybeSingle();
+          if (competitionError) {
+            console.error('Error resolving coach league:', competitionError);
+          } else if (competition) {
+            coachCompetition = competition;
+            if (!combined.some((c: any) => c.league_id === competition.league_id)) {
+              combined = [competition, ...combined];
+            }
+          }
+        }
+      }
+
+      setLeagues(combined);
+      if (coachCompetition) {
+        setSelectedLeague(coachCompetition);
+      } else if (combined.length === 1) {
+        setSelectedLeague(combined[0]);
       }
     } catch (error) {
       console.error('Error fetching leagues:', error);
@@ -694,7 +734,14 @@ export default function CoachesHub() {
             <Target className="w-5 h-5 md:w-6 md:h-6 text-orange-600 dark:text-orange-400" />
           </div>
           <div>
-            <h1 className="text-xl md:text-2xl font-bold text-slate-800 dark:text-white">Coaches Hub</h1>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl md:text-2xl font-bold text-slate-800 dark:text-white">Coaches Hub</h1>
+              {isCoach && coachTeamName && (
+                <span className="text-[11px] font-semibold uppercase tracking-wide bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 px-2 py-0.5 rounded-full">
+                  Coaching {coachTeamName}
+                </span>
+              )}
+            </div>
             <p className="text-sm text-slate-600 dark:text-slate-400">Analyze performance, track trends, and build scouting reports.</p>
           </div>
         </div>

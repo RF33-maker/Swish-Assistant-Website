@@ -20,6 +20,14 @@ type AuthContextType = {
   user: any | null;
   /** True when the Supabase user has app_metadata.role === "admin". */
   isAdmin: boolean;
+  /**
+   * True when the Supabase user has app_metadata.role === "coach" — a paying
+   * team's login, scoped to app_metadata.team_id (see `teamId` below).
+   * Provisioned via POST /api/admin/provision-coach.
+   */
+  isCoach: boolean;
+  /** The team this account is scoped to, when isCoach is true. Null otherwise. */
+  teamId: string | null;
   /** True when the Supabase user has confirmed their email address. */
   emailConfirmed: boolean;
   /**
@@ -64,10 +72,12 @@ function useAuthProviderValue(): AuthContextType {
     retry: false,
   });
 
-  // Derive admin and email-confirmed state from the Supabase user object.
+  // Derive admin/coach and email-confirmed state from the Supabase user object.
   // app_metadata is authoritative — it can only be written server-side via the
   // service-role key, so it cannot be spoofed from the browser.
   const isAdmin = user?.app_metadata?.role === "admin";
+  const isCoach = user?.app_metadata?.role === "coach";
+  const teamId = isCoach ? (user?.app_metadata?.team_id ?? null) : null;
   const emailConfirmed = !!user?.email_confirmed_at;
   // A member is a verified account: logged in + email confirmed, or admin.
   const isMember = !!user && (emailConfirmed || isAdmin);
@@ -142,6 +152,8 @@ function useAuthProviderValue(): AuthContextType {
   return {
     user,
     isAdmin,
+    isCoach,
+    teamId,
     emailConfirmed,
     isMember,
     chatbotEnabled,
