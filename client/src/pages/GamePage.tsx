@@ -291,6 +291,11 @@ export default function GamePage() {
 
   const searchParams = new URLSearchParams(window.location.search);
   const isTestMode = searchParams.get("mode") === "test";
+  // Deep-link support for ?tab=boxscore|teamstats|shotchart|feed (e.g. the
+  // Coaches Hub "last game" box score link) — anything else, including no
+  // param, falls back to the normal default.
+  const requestedTab = searchParams.get("tab");
+  const initialTab = ["game", "boxscore", "teamstats", "shotchart", "feed"].includes(requestedTab || "") ? requestedTab! : "game";
   
   const db = isTestMode ? supabase.schema("test") : supabase;
 
@@ -1276,7 +1281,7 @@ export default function GamePage() {
                 </div>
               </div>
             ) : (
-              <Tabs defaultValue="game" className="w-full">
+              <Tabs defaultValue={initialTab} className="w-full">
                 <TabsList className="grid w-full grid-cols-5 bg-orange-100 dark:bg-neutral-800 mb-4">
                   <TabsTrigger value="game" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs md:text-sm">Game</TabsTrigger>
                   <TabsTrigger value="boxscore" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs md:text-sm">Box Score</TabsTrigger>
