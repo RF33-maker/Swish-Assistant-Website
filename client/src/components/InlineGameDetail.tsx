@@ -95,6 +95,14 @@ interface LiveClock {
   clock: string | null;
 }
 
+const LEADER_CATEGORIES: { key: string; label: string }[] = [
+  { key: "spoints", label: "PTS" },
+  { key: "sreboundstotal", label: "REB" },
+  { key: "sassists", label: "AST" },
+  { key: "ssteals", label: "STL" },
+  { key: "sblocks", label: "BLK" },
+];
+
 function parseMinutes(s: string | null | undefined): string {
   if (!s) return "0:00";
   if (s.includes(":")) return s;
@@ -841,14 +849,30 @@ export function InlineGameDetail({
                       <div className="text-slate-800 dark:text-white font-medium">
                         {awayTeamStats!.tot_sfieldgoalsattempted > 0 ? ((awayTeamStats!.tot_sfieldgoalsmade / awayTeamStats!.tot_sfieldgoalsattempted) * 100).toFixed(1) : "0.0"}%
                       </div>
+
+                      <div className="text-slate-800 dark:text-white font-medium">
+                        {homeTeamStats!.tot_sthreepointersattempted > 0 ? ((homeTeamStats!.tot_sthreepointersmade / homeTeamStats!.tot_sthreepointersattempted) * 100).toFixed(1) : "0.0"}%
+                      </div>
+                      <div className="text-slate-500 dark:text-slate-400 text-xs">3PT%</div>
+                      <div className="text-slate-800 dark:text-white font-medium">
+                        {awayTeamStats!.tot_sthreepointersattempted > 0 ? ((awayTeamStats!.tot_sthreepointersmade / awayTeamStats!.tot_sthreepointersattempted) * 100).toFixed(1) : "0.0"}%
+                      </div>
+
+                      <div className="text-slate-800 dark:text-white font-medium">
+                        {homeTeamStats!.tot_sfreethrowsattempted > 0 ? ((homeTeamStats!.tot_sfreethrowsmade / homeTeamStats!.tot_sfreethrowsattempted) * 100).toFixed(1) : "0.0"}%
+                      </div>
+                      <div className="text-slate-500 dark:text-slate-400 text-xs">FT%</div>
+                      <div className="text-slate-800 dark:text-white font-medium">
+                        {awayTeamStats!.tot_sfreethrowsattempted > 0 ? ((awayTeamStats!.tot_sfreethrowsmade / awayTeamStats!.tot_sfreethrowsattempted) * 100).toFixed(1) : "0.0"}%
+                      </div>
                     </div>
                   </div>
                 )}
 
-                {/* Top scorers */}
+                {/* Team leaders */}
                 {(homePlayerStats.length > 0 || awayPlayerStats.length > 0) && (
                   <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
-                    <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3 uppercase tracking-wide">Top Scorers</h3>
+                    <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3 uppercase tracking-wide">Team Leaders</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {[{ team: hometeam, players: homePlayerStats }, { team: awayteam, players: awayPlayerStats }].map(({ team, players }) => (
                         <div key={team} className="space-y-2">
@@ -856,12 +880,16 @@ export function InlineGameDetail({
                             {leagueId && <TeamLogo teamName={team} leagueId={leagueId} size="sm" />}
                             <span className="text-xs font-medium text-slate-600 dark:text-slate-400">{team}</span>
                           </div>
-                          {[...players].slice(0, 3).map((p, i) => (
-                            <div key={i} className="flex justify-between items-center text-sm">
-                              <span className="text-slate-700 dark:text-slate-300">{p.firstname} {p.familyname}</span>
-                              <span className="font-bold" style={{ color: readable.body }}>{p.spoints || 0} PTS</span>
-                            </div>
-                          ))}
+                          {LEADER_CATEGORIES.map(({ key, label }) => {
+                            const leader = [...players].sort((a, b) => ((b as any)[key] || 0) - ((a as any)[key] || 0))[0];
+                            if (!leader) return null;
+                            return (
+                              <div key={key} className="flex justify-between items-center text-sm">
+                                <span className="text-slate-700 dark:text-slate-300">{leader.firstname} {leader.familyname}</span>
+                                <span className="font-bold" style={{ color: readable.body }}>{(leader as any)[key] || 0} {label}</span>
+                              </div>
+                            );
+                          })}
                           {players.length === 0 && <p className="text-xs text-slate-400 italic">No data</p>}
                         </div>
                       ))}
