@@ -91,6 +91,49 @@ export interface TeamSeasonAverage {
 
 type HubTab = 'overview' | 'rankings' | 'lineups' | 'trends' | 'scouting';
 
+interface TopLeagueShortcut {
+  name: string;
+  slug: string;
+  logoUrl?: string | null;
+  type: 'league' | 'competition';
+}
+
+// Same "trending public competitions" query the post-login dashboard uses to
+// suggest leagues to a coach who hasn't set one up yet — reused here so a
+// coach can jump straight to a popular league (their own or not) to scout,
+// compare, or just explore, without leaving the Coaches Hub.
+async function fetchTopLeagueShortcuts(limit = 6): Promise<TopLeagueShortcut[]> {
+  const { data, error } = await supabase
+    .from('competitions')
+    .select('name, slug, logo_url, trending_position, competition_id, leagues:competition_id(name, slug, logo_url)')
+    .eq('is_public', true)
+    .not('trending_position', 'is', null)
+    .order('trending_position', { ascending: true })
+    .limit(limit * 2); // headroom for dedupe below
+
+  if (error) throw error;
+
+  const seen = new Set<string>();
+  const out: TopLeagueShortcut[] = [];
+  for (const competition of data || []) {
+    const relation = (competition as any).leagues;
+    const league = Array.isArray(relation) ? relation[0] : relation;
+    const type: TopLeagueShortcut['type'] = league?.slug ? 'league' : 'competition';
+    const slug = league?.slug || competition.slug;
+    const key = `${type}:${slug}`;
+    if (!slug || seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      name: league?.name || competition.name,
+      slug,
+      logoUrl: league?.logo_url || competition.logo_url,
+      type,
+    });
+    if (out.length === limit) break;
+  }
+  return out;
+}
+
 // Small numbered section header — same "01 · label" convention used across
 // the tab panels below, borrowed from the sectioned-page pattern coaches
 // pointed to as a reference (Epinoia), recolored to the league's own brand.
@@ -361,11 +404,34 @@ export default function CoachesHub() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("clean-pro");
   const [parseError, setParseError] = useState<string | null>(null);
 
+  // Shortcuts — top public leagues, shown while no league is selected yet.
+  const [topLeagues, setTopLeagues] = useState<TopLeagueShortcut[]>([]);
+  const [topLeaguesLoading, setTopLeaguesLoading] = useState(true);
+  const [topLeaguesError, setTopLeaguesError] = useState(false);
+
   useEffect(() => {
     if (user) {
       fetchUserLeagues();
     }
   }, [user]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setTopLeaguesLoading(true);
+      setTopLeaguesError(false);
+      try {
+        const shortcuts = await fetchTopLeagueShortcuts();
+        if (!cancelled) setTopLeagues(shortcuts);
+      } catch (error) {
+        console.error('Error fetching top league shortcuts:', error);
+        if (!cancelled) setTopLeaguesError(true);
+      } finally {
+        if (!cancelled) setTopLeaguesLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     setDetailView(null);
@@ -627,6 +693,52 @@ export default function CoachesHub() {
             <p className="text-sm text-slate-600 dark:text-slate-400">Analyze performance, track trends, and build scouting reports.</p>
           </div>
         </div>
+
+        {/* Shortcuts — top public leagues, for fast navigation while no
+            league is selected yet (whether or not the coach has their own). */}
+        {!selectedLeague && (
+          <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6 mb-4 md:mb-6">
+            <div className="flex items-center gap-2 mb-1">
+              <TrendingUp className="w-4 h-4 md:w-5 md:h-5 text-orange-500" />
+              <h3 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">Shortcuts</h3>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+              Top leagues on Swish Assistant — jump straight in to scout, compare, or explore.
+            </p>
+
+            {topLeaguesLoading ? (
+              <div className="flex items-center gap-2 text-sm text-slate-400 dark:text-neutral-500 py-3">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-orange-500" />
+                Finding leagues…
+              </div>
+            ) : topLeaguesError ? (
+              <p className="text-sm text-slate-400 dark:text-neutral-500 py-2">League suggestions are temporarily unavailable.</p>
+            ) : topLeagues.length === 0 ? (
+              <p className="text-sm text-slate-400 dark:text-neutral-500 py-2">No featured leagues right now.</p>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 md:gap-3">
+                {topLeagues.map((lg) => (
+                  <Link
+                    key={`${lg.type}:${lg.slug}`}
+                    href={`/${lg.type}/${lg.slug}`}
+                    className="group flex flex-col items-center gap-2 rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800/60 p-3 text-center hover:border-orange-300 dark:hover:border-orange-500/50 hover:bg-orange-50 dark:hover:bg-orange-900/10 transition-colors"
+                  >
+                    {lg.logoUrl ? (
+                      <img src={lg.logoUrl} alt="" className="h-10 w-10 object-contain" />
+                    ) : (
+                      <div className="h-10 w-10 rounded-full bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center">
+                        <Trophy className="h-5 w-5 text-orange-500" />
+                      </div>
+                    )}
+                    <span className="text-xs font-medium text-slate-700 dark:text-slate-300 line-clamp-2 group-hover:text-orange-700 dark:group-hover:text-orange-400">
+                      {lg.name}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {leagues.length === 0 ? (
           <div className="text-center py-12">
