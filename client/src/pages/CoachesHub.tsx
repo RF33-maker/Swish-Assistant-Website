@@ -92,20 +92,25 @@ export interface TeamSeasonAverage {
 type HubTab = 'overview' | 'rankings' | 'lineups' | 'trends' | 'scouting';
 
 interface TopLeagueShortcut {
+  // Display label/logo prefer the parent league brand (shorter, more
+  // recognisable name) when the competition belongs to one.
   name: string;
-  slug: string;
   logoUrl?: string | null;
-  type: 'league' | 'competition';
+  // The actual competitions row — passed straight to setSelectedLeague so
+  // clicking a shortcut opens that league's stats *inside* Coaches Hub
+  // (same shape fetchUserLeagues already puts in `leagues`), not the public
+  // league page.
+  competition: any;
 }
 
 // Same "trending public competitions" query the post-login dashboard uses to
 // suggest leagues to a coach who hasn't set one up yet — reused here so a
-// coach can jump straight to a popular league (their own or not) to scout,
-// compare, or just explore, without leaving the Coaches Hub.
+// coach can jump straight to a popular league's stats (their own or not) to
+// scout, compare, or just explore, without leaving the Coaches Hub.
 async function fetchTopLeagueShortcuts(limit = 6): Promise<TopLeagueShortcut[]> {
   const { data, error } = await supabase
     .from('competitions')
-    .select('name, slug, logo_url, trending_position, competition_id, leagues:competition_id(name, slug, logo_url)')
+    .select('*, leagues:competition_id(name, slug, logo_url)')
     .eq('is_public', true)
     .not('trending_position', 'is', null)
     .order('trending_position', { ascending: true })
@@ -118,16 +123,16 @@ async function fetchTopLeagueShortcuts(limit = 6): Promise<TopLeagueShortcut[]> 
   for (const competition of data || []) {
     const relation = (competition as any).leagues;
     const league = Array.isArray(relation) ? relation[0] : relation;
-    const type: TopLeagueShortcut['type'] = league?.slug ? 'league' : 'competition';
-    const slug = league?.slug || competition.slug;
-    const key = `${type}:${slug}`;
-    if (!slug || seen.has(key)) continue;
+    // Dedupe on the parent league brand (or the competition's own slug when
+    // it has none), so a league with several trending seasons only shows
+    // once here — same idea as the landing page's trending row.
+    const key = league?.slug || competition.slug;
+    if (!key || seen.has(key)) continue;
     seen.add(key);
     out.push({
       name: league?.name || competition.name,
-      slug,
       logoUrl: league?.logo_url || competition.logo_url,
-      type,
+      competition,
     });
     if (out.length === limit) break;
   }
@@ -718,9 +723,10 @@ export default function CoachesHub() {
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 md:gap-3">
                 {topLeagues.map((lg) => (
-                  <Link
-                    key={`${lg.type}:${lg.slug}`}
-                    href={`/${lg.type}/${lg.slug}`}
+                  <button
+                    key={lg.competition.competition_id ?? lg.competition.league_id}
+                    type="button"
+                    onClick={() => setSelectedLeague(lg.competition)}
                     className="group flex flex-col items-center gap-2 rounded-lg border border-gray-200 dark:border-neutral-700 bg-gray-50 dark:bg-neutral-800/60 p-3 text-center hover:border-orange-300 dark:hover:border-orange-500/50 hover:bg-orange-50 dark:hover:bg-orange-900/10 transition-colors"
                   >
                     {lg.logoUrl ? (
@@ -733,7 +739,7 @@ export default function CoachesHub() {
                     <span className="text-xs font-medium text-slate-700 dark:text-slate-300 line-clamp-2 group-hover:text-orange-700 dark:group-hover:text-orange-400">
                       {lg.name}
                     </span>
-                  </Link>
+                  </button>
                 ))}
               </div>
             )}
