@@ -45,6 +45,14 @@ interface MinutesRow {
   seconds_on_court: number | null;
 }
 
+type TimeRange = 'season' | 'last5' | 'last3';
+
+const TIME_RANGE_OPTIONS: { key: TimeRange; label: string }[] = [
+  { key: 'season', label: 'Full Season' },
+  { key: 'last5', label: 'Last 5 Games' },
+  { key: 'last3', label: 'Last 3 Games' },
+];
+
 interface LineupAgg {
   lineupKey: string;
   players: string[];
@@ -157,6 +165,8 @@ export default function AdvancedInsights({ leagueId, teamId, showHeading = true 
   const [loading, setLoading] = useState(true);
   const [lineups, setLineups] = useState<LineupAgg[]>([]);
   const [lineupCategoryKey, setLineupCategoryKey] = useState(LINEUP_CATEGORIES[0].key);
+  const [timeRange, setTimeRange] = useState<TimeRange>('season');
+  const [noRecentGames, setNoRecentGames] = useState(false);
   const [plusMinusLeaders, setPlusMinusLeaders] = useState<PlayerPlusMinus[]>([]);
   const [minutesLeaders, setMinutesLeaders] = useState<PlayerMinutes[]>([]);
 
@@ -166,6 +176,38 @@ export default function AdvancedInsights({ leagueId, teamId, showHeading = true 
 
     (async () => {
       setLoading(true);
+      setNoRecentGames(false);
+
+      // Resolve which games count as "recent" first, when a time range other
+      // than the full season is selected — everything below then filters to
+      // just those game_keys. Scoped to this team's own games when teamId is
+      // set, otherwise the league's games overall.
+      let recentGameKeys: string[] | null = null;
+      if (timeRange !== 'season') {
+        let gamesQuery = supabase
+          .from('game_schedule')
+          .select('game_key, matchtime, home_team_id, away_team_id')
+          .eq('league_id', leagueId)
+          .not('matchtime', 'is', null)
+          .lte('matchtime', new Date().toISOString())
+          .order('matchtime', { ascending: false });
+        const { data: games } = await gamesQuery;
+        if (cancelled) return;
+        const relevant = teamId
+          ? (games || []).filter(g => g.home_team_id === teamId || g.away_team_id === teamId)
+          : (games || []);
+        const n = timeRange === 'last3' ? 3 : 5;
+        recentGameKeys = relevant.slice(0, n).map(g => g.game_key).filter((k): k is string => !!k);
+        if (recentGameKeys.length === 0) {
+          setLineups([]);
+          setPlusMinusLeaders([]);
+          setMinutesLeaders([]);
+          setNoRecentGames(true);
+          setLoading(false);
+          return;
+        }
+      }
+
       let lineupQuery = supabase
         .from('lineup_stints')
         .select('lineup_key, team_id, lineup_names, points_for, points_against, possessions_for, possessions_against, fg2_made, fg2_attempted, fg3_made, fg3_attempted, ft_made, ft_attempted, oreb, dreb, assists, turnovers, steals, blocks')
@@ -175,16 +217,19 @@ export default function AdvancedInsights({ leagueId, teamId, showHeading = true 
         .from('player_on_court_stints')
         .select('player_id, player_name, team_id, points_for, points_against')
         .eq('league_id', leagueId);
-      // player_lineup_stints_v1 (minutes) has no team_id column of its own —
-      // minutes are filtered to this team's roster after the fact instead,
-      // via the same player ids the (already team-filtered) plus-minus pass finds.
-      const minutesQuery = supabase
+      let minutesQuery = supabase
         .from('player_lineup_stints_v1')
         .select('player_id, seconds_on_court')
         .eq('league_id', leagueId);
       if (teamId) {
         lineupQuery = lineupQuery.eq('team_id', teamId);
         onCourtQuery = onCourtQuery.eq('team_id', teamId);
+        minutesQuery = minutesQuery.eq('team_id', teamId);
+      }
+      if (recentGameKeys) {
+        lineupQuery = lineupQuery.in('game_key', recentGameKeys);
+        onCourtQuery = onCourtQuery.in('game_key', recentGameKeys);
+        minutesQuery = minutesQuery.in('game_key', recentGameKeys);
       }
 
       const [lineupRes, onCourtRes, minutesRes] = await Promise.all([lineupQuery, onCourtQuery, minutesQuery]);
@@ -264,13 +309,9 @@ export default function AdvancedInsights({ leagueId, teamId, showHeading = true 
         .sort((a, b) => b.plusMinus - a.plusMinus);
 
       // ── Minutes: total seconds on court per player ─────────────────────
-      // player_lineup_stints_v1 has no team_id column, so when scoped to one
-      // team, restrict to player ids the (already team-filtered) on-court
-      // pass above found for this team's roster.
       const secondsMap = new Map<string, number>();
       ((minutesRes.data || []) as MinutesRow[]).forEach(row => {
         if (!row.player_id) return;
-        if (teamId && !nameByPlayerId.has(row.player_id)) return;
         secondsMap.set(row.player_id, (secondsMap.get(row.player_id) || 0) + (row.seconds_on_court ?? 0));
       });
       const minutesList = Array.from(secondsMap.entries())
@@ -288,7 +329,7 @@ export default function AdvancedInsights({ leagueId, teamId, showHeading = true 
     })();
 
     return () => { cancelled = true; };
-  }, [leagueId, teamId]);
+  }, [leagueId, teamId, timeRange]);
 
   const lineupCategory = LINEUP_CATEGORIES.find(c => c.key === lineupCategoryKey) ?? LINEUP_CATEGORIES[0];
   const rankedLineups = useMemo(() => {
@@ -312,6 +353,36 @@ export default function AdvancedInsights({ leagueId, teamId, showHeading = true 
           </div>
         )}
         <p className="text-sm text-slate-500 dark:text-slate-400">Crunching lineup and on-court data…</p>
+      </div>
+    );
+  }
+
+  const timeRangeSelect = (
+    <select
+      value={timeRange}
+      onChange={(e) => setTimeRange(e.target.value as TimeRange)}
+      className="px-3 py-1.5 text-xs md:text-sm border border-gray-300 dark:border-neutral-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white dark:bg-neutral-700 text-slate-800 dark:text-white"
+    >
+      {TIME_RANGE_OPTIONS.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+    </select>
+  );
+
+  // The time-range filter matched real games, just none this recent — a
+  // different message (and still a way back to Full Season) from "no data
+  // has been processed for this league/team at all" below.
+  if (noRecentGames) {
+    return (
+      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
+        {showHeading && (
+          <div className="flex items-center gap-3 mb-4">
+            <LineChart className="w-5 md:w-6 h-5 md:h-6 text-orange-600 dark:text-orange-400" />
+            <h2 className="text-lg md:text-xl font-bold text-slate-800 dark:text-white">{headingText}</h2>
+          </div>
+        )}
+        <div className="mb-3">{timeRangeSelect}</div>
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          {teamId ? 'This team hasn’t' : 'This league hasn’t'} played that many games yet — try Full Season instead.
+        </p>
       </div>
     );
   }
@@ -349,20 +420,15 @@ export default function AdvancedInsights({ leagueId, teamId, showHeading = true 
             Best Lineups
           </h4>
         </div>
-        <div className="flex flex-wrap gap-1.5 mb-3">
-          {LINEUP_CATEGORIES.map(c => (
-            <button
-              key={c.key}
-              onClick={() => setLineupCategoryKey(c.key)}
-              className={`px-2.5 py-1 text-xs font-medium rounded-md whitespace-nowrap transition-colors border ${
-                lineupCategoryKey === c.key
-                  ? 'bg-purple-600 text-white border-purple-600'
-                  : 'border-gray-200 dark:border-neutral-700 text-gray-600 dark:text-neutral-400 hover:border-gray-300 dark:hover:border-neutral-600'
-              }`}
-            >
-              {c.label}
-            </button>
-          ))}
+        <div className="flex flex-wrap gap-2 mb-3">
+          {timeRangeSelect}
+          <select
+            value={lineupCategoryKey}
+            onChange={(e) => setLineupCategoryKey(e.target.value)}
+            className="px-3 py-1.5 text-xs md:text-sm border border-gray-300 dark:border-neutral-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white dark:bg-neutral-700 text-slate-800 dark:text-white"
+          >
+            {LINEUP_CATEGORIES.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+          </select>
         </div>
         {lineups.length === 0 ? (
           <p className="text-sm text-slate-500 dark:text-slate-400">Not enough lineup data yet.</p>
