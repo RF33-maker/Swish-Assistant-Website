@@ -4,7 +4,8 @@ import { supabase } from "@/lib/supabase";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { TeamLogo } from "./TeamLogo";
 import { generatePlayCaption } from "@/utils/generatePlayCaption";
-import ShotChart, { type ShotData } from "./ShotChart";
+import type { ShotData } from "./ShotChart";
+import TeamSplitShotChart from "./TeamSplitShotChart";
 import GameFlowSummary from "./GameFlowSummary";
 import { useReadableTeamColor } from "@/hooks/useReadableColor";
 import UpcomingGamePreview, { type PreviewGame } from "./UpcomingGamePreview";
@@ -944,17 +945,15 @@ export function InlineGameDetail({
 
               {/* SHOTS TAB */}
               <TabsContent value="shots">
-                <ShotChart
+                <TeamSplitShotChart
                   shots={shotData}
                   loading={shotLoading}
                   emptyMessage="No shot data available for this game yet."
-                  filters={{
-                    showPlayerFilter: true,
-                    showQuarterFilter: true,
-                    showTeamFilter: true,
-                    showResultFilter: true,
-                    teamNames: { home: hometeam, away: awayteam },
-                  }}
+                  homeTeam={hometeam}
+                  awayTeam={awayteam}
+                  showPlayerFilter
+                  showQuarterFilter
+                  showResultFilter
                 />
               </TabsContent>
 
