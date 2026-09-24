@@ -11,7 +11,8 @@ import { useReadableTeamColor } from "@/hooks/useReadableColor";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import LeagueChatbot from "@/components/LeagueChatbot";
-import ShotChart, { type ShotData } from "@/components/ShotChart";
+import type { ShotData } from "@/components/ShotChart";
+import TeamSplitShotChart from "@/components/TeamSplitShotChart";
 import GameFlowSummary from "@/components/GameFlowSummary";
 import UpcomingGamePreview from "@/components/UpcomingGamePreview";
 
@@ -1703,20 +1704,15 @@ export default function GamePage() {
                 </TabsContent>
 
                 <TabsContent value="shotchart">
-                  <ShotChart
+                  <TeamSplitShotChart
                     shots={shotChartData || []}
                     loading={shotChartLoading}
                     emptyMessage="No shot data is available for this game yet."
-                    filters={{
-                      showPlayerFilter: true,
-                      showQuarterFilter: true,
-                      showTeamFilter: true,
-                      showResultFilter: true,
-                      teamNames: {
-                        home: gameData.hometeam,
-                        away: gameData.awayteam,
-                      },
-                    }}
+                    homeTeam={gameData.hometeam}
+                    awayTeam={gameData.awayteam}
+                    showPlayerFilter
+                    showQuarterFilter
+                    showResultFilter
                   />
                 </TabsContent>
 

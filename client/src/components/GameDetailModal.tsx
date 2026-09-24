@@ -7,7 +7,8 @@ import { extractColorsFromImage, TeamColors, adjustOpacity } from "@/lib/colorEx
 import { useReadableTeamColor, useIsDarkMode } from "@/hooks/useReadableColor";
 import { readableTextColor } from "@/lib/colorContrast";
 import { generatePlayCaption } from "@/utils/generatePlayCaption";
-import ShotChart, { type ShotData } from "./ShotChart";
+import type { ShotData } from "./ShotChart";
+import TeamSplitShotChart from "./TeamSplitShotChart";
 
 interface PlayerGameStats {
   id: string;
@@ -1617,16 +1618,16 @@ export default function GameDetailModal({ gameId, isOpen, onClose }: GameDetailM
 
                 {/* Shot Chart Tab */}
                 <TabsContent value="shotchart" className="mt-4 space-y-4">
-                  <ShotChart
+                  <TeamSplitShotChart
                     shots={shotChartShots}
                     loading={shotChartLoading}
                     compact
                     emptyMessage="No shot data is available for this game yet."
-                    filters={{
-                      showPlayerFilter: true,
-                      showQuarterFilter: true,
-                      showResultFilter: true,
-                    }}
+                    homeTeam={gameInfo?.teams[0] || "Home"}
+                    awayTeam={gameInfo?.teams[1] || "Away"}
+                    showPlayerFilter
+                    showQuarterFilter
+                    showResultFilter
                   />
                 </TabsContent>
               </Tabs>

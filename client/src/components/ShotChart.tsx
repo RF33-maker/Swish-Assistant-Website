@@ -259,6 +259,7 @@ export default function ShotChart({
   const [resultFilter, setResultFilter] = useState("all");
   const [shotTypeFilter, setShotTypeFilter] = useState("all");
   const [subTypeFilter, setSubTypeFilter] = useState("all");
+  const [hovered, setHovered] = useState<{ shot: ShotData; sx: number; sy: number } | null>(null);
 
   const players = useMemo(() => {
     const map = new Map<string, string>();
@@ -599,7 +600,7 @@ export default function ShotChart({
         <div className="flex flex-col lg:flex-row gap-4 md:gap-6">
           {/* Court */}
           <div className="flex-1 min-w-0">
-            <div className="mx-auto" style={{ maxWidth: compact ? 420 : 560 }}>
+            <div className="mx-auto relative" style={{ maxWidth: compact ? 420 : 560 }}>
               <svg viewBox={`0 0 ${CW} ${CH}`} className="w-full h-auto">
                 <defs>
                   <filter id="shotGlowMade" x="-50%" y="-50%" width="200%" height="200%">
@@ -624,7 +625,11 @@ export default function ShotChart({
                       transform={`translate(${sx} ${sy}) rotate(45)`}
                       style={{
                         animation: `shotFadeIn 0.4s ease-out ${Math.min(idx * 0.006, 1.4)}s both`,
+                        cursor: "pointer",
                       }}
+                      onMouseEnter={() => setHovered({ shot, sx, sy })}
+                      onMouseLeave={() => setHovered((h) => (h?.shot === shot ? null : h))}
+                      onClick={() => setHovered({ shot, sx, sy })}
                     >
                       {isRecent && (
                         <rect
@@ -666,6 +671,31 @@ export default function ShotChart({
                   );
                 })}
               </svg>
+
+              {/* Hover/tap tooltip — player, make/miss, shot type, positioned
+                  over the dot using the same viewBox-fraction coordinates
+                  the SVG itself uses, so it tracks correctly at any render size. */}
+              {hovered && (
+                <div
+                  className="absolute z-10 pointer-events-none bg-white dark:bg-neutral-900 border border-gray-200 dark:border-neutral-700 rounded-md shadow-lg px-2.5 py-1.5 text-xs leading-snug whitespace-nowrap"
+                  style={{
+                    left: `${(hovered.sx / CW) * 100}%`,
+                    top: `${(hovered.sy / CH) * 100}%`,
+                    transform: "translate(-50%, -130%)",
+                  }}
+                >
+                  <div className="font-semibold text-slate-800 dark:text-white">
+                    {hovered.shot.player_name || "Unknown player"}
+                  </div>
+                  <div className="text-slate-500 dark:text-slate-400">
+                    <span className={hovered.shot.success ? "text-orange-500 dark:text-orange-400 font-medium" : "text-sky-600 dark:text-sky-400 font-medium"}>
+                      {hovered.shot.success ? "Made" : "Missed"}
+                    </span>
+                    {hovered.shot.shot_type && <> · {hovered.shot.shot_type.toUpperCase()}</>}
+                    {hovered.shot.sub_type && <> · {formatSubType(hovered.shot.sub_type)}</>}
+                  </div>
+                </div>
+              )}
 
               {/* Legend */}
               <div className="flex items-center justify-center gap-4 md:gap-6 mt-3 text-[11px] md:text-xs">
