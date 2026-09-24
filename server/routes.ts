@@ -4535,6 +4535,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return res.json({ success: true, userId });
   });
 
+  // ─── Team (coach) account provisioning ─────────────────────────────────────
+  // POST /api/admin/provision-coach
+  // Grants the "coach" role, scoped to one team, to a Supabase user. This is
+  // the paying-client "team login": a coach signs in and Coaches Hub opens
+  // straight into their team's league (see CoachesHub.tsx), with the same
+  // full analytics/scouting access any league owner already has — the role
+  // exists so future team-private content (video breakdowns from the
+  // StatsThread pipeline) can be scoped to team_id via RLS. Admin-only, same
+  // pattern as provision-owner above.
+  app.post("/api/admin/provision-coach", async (req: Request, res: Response) => {
+    const adminId = await requireAdmin(req, res);
+    if (!adminId) return;
+
+    const { userId, teamId } = req.body || {};
+    if (!userId) return res.status(400).json({ error: "userId is required" });
+    if (!teamId) return res.status(400).json({ error: "teamId is required" });
+
+    // Verify the team actually exists before granting access to it — avoids
+    // silently provisioning a coach login pointed at a typo'd team_id.
+    const { data: team, error: teamError } = await supabaseAdmin
+      .from("teams")
+      .select("team_id, name, league_id")
+      .eq("team_id", teamId)
+      .maybeSingle();
+    if (teamError) {
+      console.error("[provision-coach] Failed to look up team:", teamError.message);
+      return res.status(500).json({ error: "Failed to look up team" });
+    }
+    if (!team) return res.status(404).json({ error: "Team not found" });
+
+    const { data: targetUserData, error: fetchError } = await supabaseAdmin.auth.admin.getUserById(userId);
+    if (fetchError || !targetUserData?.user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+      app_metadata: { ...targetUserData.user.app_metadata, role: "coach", team_id: teamId },
+    });
+
+    if (updateError) {
+      console.error("[provision-coach] Failed to grant coach role:", updateError.message);
+      return res.status(500).json({ error: "Failed to provision coach" });
+    }
+
+    console.log(`[provision-coach] Granted coach role for team ${teamId} (${team.name}) to user ${userId}`);
+    return res.json({ success: true, userId, email: targetUserData.user.email, team: { id: team.team_id, name: team.name, leagueId: team.league_id } });
+  });
+
+  // POST /api/admin/revoke-coach
+  // Removes the "coach" role and team_id from a Supabase user, reverting
+  // them to a standard free member. Admin-only.
+  app.post("/api/admin/revoke-coach", async (req: Request, res: Response) => {
+    const adminId = await requireAdmin(req, res);
+    if (!adminId) return;
+
+    const { userId } = req.body || {};
+    if (!userId) return res.status(400).json({ error: "userId is required" });
+
+    const { data: targetUserData, error: fetchError } = await supabaseAdmin.auth.admin.getUserById(userId);
+    if (fetchError || !targetUserData?.user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const updatedMeta = { ...targetUserData.user.app_metadata };
+    delete updatedMeta.role;
+    delete updatedMeta.team_id;
+
+    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+      app_metadata: updatedMeta,
+    });
+
+    if (updateError) {
+      console.error("[revoke-coach] Failed to revoke coach role:", updateError.message);
+      return res.status(500).json({ error: "Failed to revoke coach role" });
+    }
+
+    console.log(`[revoke-coach] Revoked coach role from user ${userId}`);
+    return res.json({ success: true, userId });
+  });
+
   // ─── Member account registration & data-rights endpoints ─────────────────
 
   // POST /api/account/register
