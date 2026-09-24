@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useLocation } from 'wouter';
 import { useAuth } from '@/hooks/use-auth';
 import { supabase } from '@/lib/supabase';
@@ -13,6 +13,7 @@ import AdvancedInsights from '@/components/coaches-hub/AdvancedInsights';
 import FullRankings from '@/components/coaches-hub/FullRankings';
 import PlayerDetail from '@/components/coaches-hub/PlayerDetail';
 import TeamDetail from '@/components/coaches-hub/TeamDetail';
+import CoachTeamOverview from '@/components/coaches-hub/CoachTeamOverview';
 import LeagueChatbot from '@/components/LeagueChatbot';
 import { TrendingUp, BarChart3, Users, Target, Award, Eye, MessageCircle, Search, User, Calendar, Trophy, X, ChevronDown } from 'lucide-react';
 import { Link } from 'wouter';
@@ -87,6 +88,51 @@ export interface TeamSeasonAverage {
   season_ft_pct: number | null;
   /** Optional: only populated once the advanced team_stats aggregation pass has run. */
   advanced?: AdvancedAverages & { pace: number | null };
+}
+
+/** A completed game from v_game_results — the same source the public Standings widget uses. */
+export interface GameResultRow {
+  game_key: string;
+  home_team: string;
+  away_team: string;
+  home_score: number | null;
+  away_score: number | null;
+  match_time: string | null;
+}
+
+/** A coach's own team's next scheduled (not yet played) game. */
+export interface NextGameRow {
+  game_key: string;
+  hometeam: string;
+  awayteam: string;
+  home_team_id: string | null;
+  away_team_id: string | null;
+  matchtime: string;
+  status: string | null;
+}
+
+/** One row of win-loss standings, computed client-side from GameResultRow[]. */
+export interface StandingRow {
+  teamId: string;
+  teamName: string;
+  wins: number;
+  losses: number;
+  games: number;
+  /** Total point differential across the season — tiebreaker and the scoring-trend baseline. */
+  pointDiff: number;
+  pct: number;
+  rank: number;
+}
+
+/** One of the coach's own team's completed games, from their team's point of view. */
+export interface MyTeamGame {
+  gameKey: string;
+  opponent: string;
+  isHome: boolean;
+  myScore: number;
+  oppScore: number;
+  result: 'W' | 'L';
+  matchTime: string | null;
 }
 
 type HubTab = 'overview' | 'rankings' | 'lineups' | 'trends' | 'scouting';
@@ -406,6 +452,8 @@ export default function CoachesHub() {
   const [playerSeasonAverages, setPlayerSeasonAverages] = useState<PlayerSeasonAverage[]>([]);
   const [teamSeasonAverages, setTeamSeasonAverages] = useState<TeamSeasonAverage[]>([]);
   const [teamGameLog, setTeamGameLog] = useState<TeamGameLogRow[]>([]);
+  const [leagueGameResults, setLeagueGameResults] = useState<GameResultRow[]>([]);
+  const [nextGame, setNextGame] = useState<NextGameRow | null>(null);
 
   // Templates section states
   const [reportData, setReportData] = useState<ScoutingReport | null>(null);
@@ -527,7 +575,7 @@ export default function CoachesHub() {
     setStatsLoading(true);
     try {
       const leagueId = selectedLeague.league_id;
-      const [players, teamsRes, gameLogRes, teamAdvancedMap] = await Promise.all([
+      const [players, teamsRes, gameLogRes, teamAdvancedMap, gameResultsRes, nextGameRes] = await Promise.all([
         // Raw rows + fuzzy-name merge, not the pre-aggregated view — see
         // fetchAndMergePlayerRankings for why.
         fetchAndMergePlayerRankings(leagueId),
@@ -546,10 +594,33 @@ export default function CoachesHub() {
           console.error('Error fetching team advanced averages:', err);
           return new Map<string, AdvancedAverages & { pace: number | null }>();
         }),
+        // Completed-game results, used to build standings (W-L/rank) and a
+        // coach's own last-game / last-5-games trend. Same source the
+        // Standings widget already uses.
+        supabase
+          .from('v_game_results')
+          .select('game_key, home_team, away_team, home_score, away_score, match_time')
+          .eq('league_id', leagueId)
+          .order('match_time', { ascending: false }),
+        // Next scheduled game for a coach's own team — league owners viewing
+        // generally don't need this, so it's skipped for them.
+        isCoach && coachTeamId
+          ? supabase
+              .from('game_schedule')
+              .select('game_key, hometeam, awayteam, home_team_id, away_team_id, matchtime, status')
+              .eq('league_id', leagueId)
+              .or(`home_team_id.eq.${coachTeamId},away_team_id.eq.${coachTeamId}`)
+              .gt('matchtime', new Date().toISOString())
+              .order('matchtime', { ascending: true })
+              .limit(1)
+              .maybeSingle()
+          : Promise.resolve({ data: null, error: null }),
       ]);
 
       if (teamsRes.error) throw teamsRes.error;
       if (gameLogRes.error) throw gameLogRes.error;
+      if (gameResultsRes.error) console.error('Error fetching game results:', gameResultsRes.error);
+      if (nextGameRes.error) console.error('Error fetching next game:', nextGameRes.error);
 
       players.sort((a, b) => b.total_pts - a.total_pts);
       setPlayerSeasonAverages(players);
@@ -560,11 +631,15 @@ export default function CoachesHub() {
         }))
       );
       setTeamGameLog((gameLogRes.data || []) as TeamGameLogRow[]);
+      setLeagueGameResults((gameResultsRes.data || []) as GameResultRow[]);
+      setNextGame((nextGameRes.data || null) as NextGameRow | null);
     } catch (error) {
       console.error('Error fetching league stats:', error);
       setPlayerSeasonAverages([]);
       setTeamSeasonAverages([]);
       setTeamGameLog([]);
+      setLeagueGameResults([]);
+      setNextGame(null);
     } finally {
       setStatsLoading(false);
     }
@@ -579,6 +654,98 @@ export default function CoachesHub() {
   // leaders, so landing on Coaches Hub answers "how's my team doing" before
   // "who else is in this league".
   const myTeam = isCoach && coachTeamId ? teamSeasonAverages.find((t) => t.team_id === coachTeamId) : undefined;
+
+  // League standings (win-loss based, not the points-per-game sort Rankings
+  // uses) — computed client-side from completed results, the same approach
+  // the public Standings widget uses. Every team in the league seeds a row
+  // first (0-0) so a team with no completed games yet still appears.
+  const standings: StandingRow[] = useMemo(() => {
+    if (teamSeasonAverages.length === 0) return [];
+    const byName = new Map<string, StandingRow>();
+    teamSeasonAverages.forEach((t) => {
+      byName.set(t.team_name, { teamId: t.team_id, teamName: t.team_name, wins: 0, losses: 0, games: 0, pointDiff: 0, pct: 0, rank: 0 });
+    });
+    leagueGameResults.forEach((g) => {
+      if (g.home_score == null || g.away_score == null) return;
+      const diff = g.home_score - g.away_score;
+      if (g.home_team) {
+        if (!byName.has(g.home_team)) byName.set(g.home_team, { teamId: '', teamName: g.home_team, wins: 0, losses: 0, games: 0, pointDiff: 0, pct: 0, rank: 0 });
+        const row = byName.get(g.home_team)!;
+        row.games++; row.pointDiff += diff;
+        if (diff > 0) row.wins++; else if (diff < 0) row.losses++;
+      }
+      if (g.away_team) {
+        if (!byName.has(g.away_team)) byName.set(g.away_team, { teamId: '', teamName: g.away_team, wins: 0, losses: 0, games: 0, pointDiff: 0, pct: 0, rank: 0 });
+        const row = byName.get(g.away_team)!;
+        row.games++; row.pointDiff += -diff;
+        if (diff < 0) row.wins++; else if (diff > 0) row.losses++;
+      }
+    });
+    const rows = Array.from(byName.values())
+      .map((r) => ({ ...r, pct: r.games > 0 ? r.wins / r.games : 0 }))
+      .sort((a, b) => b.pct - a.pct || b.wins - a.wins || b.pointDiff - a.pointDiff);
+    rows.forEach((r, i) => { r.rank = i + 1; });
+    return rows;
+  }, [teamSeasonAverages, leagueGameResults]);
+
+  const myStanding = myTeam ? standings.find((s) => s.teamName === myTeam.team_name) : undefined;
+
+  // This team's own completed games, most-recent-first (leagueGameResults is
+  // already ordered that way) — the source for "last game" and the last-5
+  // trend strip.
+  const myTeamGames: MyTeamGame[] = useMemo(() => {
+    if (!myTeam) return [];
+    return leagueGameResults
+      .filter((g) => (g.home_team === myTeam.team_name || g.away_team === myTeam.team_name) && g.home_score != null && g.away_score != null)
+      .map((g) => {
+        const isHome = g.home_team === myTeam.team_name;
+        const myScore = (isHome ? g.home_score : g.away_score) as number;
+        const oppScore = (isHome ? g.away_score : g.home_score) as number;
+        return {
+          gameKey: g.game_key,
+          opponent: isHome ? g.away_team : g.home_team,
+          isHome,
+          myScore,
+          oppScore,
+          result: (myScore > oppScore ? 'W' : 'L') as 'W' | 'L',
+          matchTime: g.match_time,
+        };
+      });
+  }, [leagueGameResults, myTeam]);
+
+  const lastGame = myTeamGames[0];
+  const last5 = myTeamGames.slice(0, 5);
+
+  // FG% trend — last 5 games' average vs the season average already on
+  // myTeam. teamGameLog covers every team in the league and is ordered
+  // oldest-first, so this team's own most recent games are its last 5 rows.
+  const last5FgPct = useMemo(() => {
+    if (!myTeam) return null;
+    // fg_pct (like several other numeric columns from these views) can come
+    // back from Supabase as a numeric-typed string rather than a number —
+    // Number(...) it explicitly rather than relying on the declared type, or
+    // a plain `+` reduce silently does string concatenation instead of
+    // summing. Already a 0-100 scale (e.g. "38" = 38%), not a fraction.
+    const recent = teamGameLog
+      .filter((g) => g.team_name === myTeam.team_name)
+      .slice(-5)
+      .map((g) => (g.fg_pct != null ? Number(g.fg_pct) : null))
+      .filter((v): v is number => v != null && !Number.isNaN(v));
+    if (recent.length === 0) return null;
+    return recent.reduce((a, b) => a + b, 0) / recent.length;
+  }, [teamGameLog, myTeam]);
+
+  // "Positive trend" — last-5 average scoring margin vs the season's overall
+  // scoring margin (from the same standings pass above), so it's grounded in
+  // actual results rather than a single stat.
+  const scoringTrend = useMemo(() => {
+    if (!myStanding || myStanding.games === 0 || last5.length === 0) return null;
+    const seasonAvgMargin = myStanding.pointDiff / myStanding.games;
+    const last5AvgMargin = last5.reduce((sum, g) => sum + (g.myScore - g.oppScore), 0) / last5.length;
+    const delta = last5AvgMargin - seasonAvgMargin;
+    const direction: 'up' | 'down' | 'flat' = delta > 1.5 ? 'up' : delta < -1.5 ? 'down' : 'flat';
+    return { seasonAvgMargin, last5AvgMargin, delta, direction };
+  }, [myStanding, last5]);
 
   // Same brand-color extraction the public league pages use, so Coaches Hub
   // picks up each league's own look once one is selected.
@@ -1010,35 +1177,18 @@ export default function CoachesHub() {
                         "how's my team doing" before the league-wide leaders
                         below (which stay visible underneath for scouting). */}
                     {myTeam && (
-                      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border-2 p-4 md:p-6" style={{ borderColor: readableBrand }}>
-                        <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
-                          <div className="flex items-center gap-2">
-                            <Award className="w-4 h-4 md:w-5 md:h-5" style={{ color: readableBrand }} />
-                            <h3 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">Your team</h3>
-                          </div>
-                          <button
-                            onClick={() => setDetailView({ type: 'team', team: myTeam })}
-                            className="text-sm font-medium hover:underline"
-                            style={{ color: readableBrand }}
-                          >
-                            View {myTeam.team_name} →
-                          </button>
-                        </div>
-                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4">
-                          {[
-                            { label: 'Games', value: myTeam.games_played },
-                            { label: 'PPG', value: Number(myTeam.avg_pts ?? 0).toFixed(1) },
-                            { label: 'RPG', value: Number(myTeam.avg_reb ?? 0).toFixed(1) },
-                            { label: 'APG', value: Number(myTeam.avg_ast ?? 0).toFixed(1) },
-                            { label: 'FG%', value: myTeam.season_fg_pct != null ? `${Number(myTeam.season_fg_pct).toFixed(1)}%` : '—' },
-                          ].map((stat) => (
-                            <div key={stat.label} className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700">
-                              <div className="text-xl md:text-2xl font-bold" style={{ color: readableBrand }}>{stat.value}</div>
-                              <div className="text-xs md:text-sm text-gray-500 dark:text-neutral-400">{stat.label}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
+                      <CoachTeamOverview
+                        team={myTeam}
+                        leagueId={selectedLeague.league_id}
+                        standing={myStanding}
+                        standings={standings}
+                        lastGame={lastGame}
+                        nextGame={nextGame}
+                        last5={last5}
+                        last5FgPct={last5FgPct}
+                        fallbackColor={readableBrand}
+                        onViewTeam={() => setDetailView({ type: 'team', team: myTeam })}
+                      />
                     )}
 
                     {hasStats ? (

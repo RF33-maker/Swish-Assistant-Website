@@ -1,0 +1,256 @@
+import { Calendar, ChevronRight, Clock, MapPin, Minus, TrendingDown, TrendingUp, Trophy } from 'lucide-react';
+import { TeamLogo } from '@/components/TeamLogo';
+import { useTeamBranding } from '@/hooks/useTeamBranding';
+import { useReadableTeamColor } from '@/hooks/useReadableColor';
+import { adjustOpacity } from '@/lib/colorExtractor';
+import type { TeamSeasonAverage } from '@/pages/CoachesHub';
+import type { StandingRow, MyTeamGame, NextGameRow } from '@/pages/CoachesHub';
+
+/** Parses a hex (#rgb/#rrggbb) or rgb()/rgba() colour string into {r,g,b}. */
+function parseToRgb(color: string): { r: number; g: number; b: number } {
+  const hex = color.trim();
+  if (hex.startsWith('#')) {
+    const h = hex.slice(1);
+    if (h.length === 3) {
+      return { r: parseInt(h[0] + h[0], 16), g: parseInt(h[1] + h[1], 16), b: parseInt(h[2] + h[2], 16) };
+    }
+    if (h.length >= 6) {
+      return { r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16), b: parseInt(h.slice(4, 6), 16) };
+    }
+  }
+  const match = hex.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+  if (match) return { r: Number(match[1]), g: Number(match[2]), b: Number(match[3]) };
+  return { r: 249, g: 115, b: 22 }; // orange-500 fallback
+}
+
+interface Props {
+  team: TeamSeasonAverage;
+  leagueId: string;
+  standing?: StandingRow;
+  standings: StandingRow[];
+  lastGame?: MyTeamGame;
+  nextGame: NextGameRow | null;
+  last5: MyTeamGame[];
+  last5FgPct: number | null;
+  fallbackColor: string;
+  onViewTeam: () => void;
+}
+
+function formatGameDate(iso: string | null): string {
+  if (!iso) return '';
+  return new Date(iso).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+function formatGameTime(iso: string | null): string {
+  if (!iso) return '';
+  return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
+}
+
+function TrendPill({ direction, label, sub, color }: { direction: 'up' | 'down' | 'flat'; label: string; sub: string; color: string }) {
+  const Icon = direction === 'up' ? TrendingUp : direction === 'down' ? TrendingDown : Minus;
+  const toneClass =
+    direction === 'up'
+      ? 'text-green-600 dark:text-green-400'
+      : direction === 'down'
+      ? 'text-red-600 dark:text-red-400'
+      : 'text-gray-500 dark:text-neutral-400';
+  return (
+    <div className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700">
+      <div className="flex items-center gap-1.5 text-xs md:text-sm font-medium text-gray-600 dark:text-neutral-400 mb-1.5">
+        <Icon className={`w-3.5 h-3.5 ${toneClass}`} />
+        {label}
+      </div>
+      <div className={`text-base md:text-lg font-bold ${toneClass}`}>{sub}</div>
+    </div>
+  );
+}
+
+export default function CoachTeamOverview({ team, leagueId, standing, standings, lastGame, nextGame, last5, last5FgPct, fallbackColor, onViewTeam }: Props) {
+  const { colors, primaryColor, isLoading: brandLoading } = useTeamBranding({ teamName: team.team_name, leagueId });
+  const brandColor = brandLoading || !primaryColor ? fallbackColor : primaryColor;
+  const brandRgb = colors?.primaryRgb ?? parseToRgb(brandColor);
+  const readable = useReadableTeamColor(brandColor).body;
+  const record = standing ? `${standing.wins}-${standing.losses}` : null;
+  const rankLabel = standing && standings.length > 0 ? `${standing.rank}${standing.rank === 1 ? 'st' : standing.rank === 2 ? 'nd' : standing.rank === 3 ? 'rd' : 'th'} of ${standings.length}` : null;
+
+  const fgSeason = team.season_fg_pct;
+  const fgDelta = last5FgPct != null && fgSeason != null ? last5FgPct - fgSeason : null;
+  const fgDirection: 'up' | 'down' | 'flat' = fgDelta == null ? 'flat' : fgDelta > 1.5 ? 'up' : fgDelta < -1.5 ? 'down' : 'flat';
+
+  const seasonAvgMargin = standing && standing.games > 0 ? standing.pointDiff / standing.games : null;
+  const last5AvgMargin = last5.length > 0 ? last5.reduce((sum, g) => sum + (g.myScore - g.oppScore), 0) / last5.length : null;
+  const marginDelta = seasonAvgMargin != null && last5AvgMargin != null ? last5AvgMargin - seasonAvgMargin : null;
+  const marginDirection: 'up' | 'down' | 'flat' = marginDelta == null ? 'flat' : marginDelta > 1.5 ? 'up' : marginDelta < -1.5 ? 'down' : 'flat';
+
+  return (
+    <div className="space-y-4 md:space-y-6">
+      {/* Branded hero — the team's own colour (from its logo), falling back
+          to the league colour while it loads or if none can be resolved. */}
+      <div
+        className="rounded-lg p-4 md:p-6 text-white relative overflow-hidden"
+        style={{ background: `linear-gradient(135deg, ${adjustOpacity(brandRgb, 0.92)} 0%, ${adjustOpacity(brandRgb, 0.75)} 100%)` }}
+      >
+        <div className="flex items-center justify-between gap-4 flex-wrap relative z-10">
+          <div className="flex items-center gap-3 md:gap-4">
+            <div className="w-12 h-12 md:w-16 md:h-16 rounded-full bg-white/90 flex items-center justify-center overflow-hidden shrink-0">
+              <TeamLogo teamName={team.team_name} leagueId={leagueId} size="lg" />
+            </div>
+            <div>
+              <h2 className="text-lg md:text-2xl font-bold">{team.team_name}</h2>
+              <div className="flex items-center gap-3 text-sm text-white/80 mt-0.5">
+                {record && <span className="font-semibold text-white">{record}</span>}
+                {rankLabel && (
+                  <span className="flex items-center gap-1">
+                    <Trophy className="w-3.5 h-3.5" /> {rankLabel}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={onViewTeam}
+            className="flex items-center gap-1 text-sm font-medium bg-white/15 hover:bg-white/25 px-3 py-1.5 rounded-full transition-colors"
+          >
+            Full team detail <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Next game / last game */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+        <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-5">
+          <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-neutral-500 mb-2">
+            <Calendar className="w-3.5 h-3.5" /> Next game
+          </div>
+          {nextGame ? (
+            <div>
+              <div className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">
+                {nextGame.home_team_id === team.team_id ? 'vs' : '@'} {nextGame.home_team_id === team.team_id ? nextGame.awayteam : nextGame.hometeam}
+              </div>
+              <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-neutral-400 mt-1">
+                <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{formatGameDate(nextGame.matchtime)}</span>
+                <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{formatGameTime(nextGame.matchtime)}</span>
+                <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />{nextGame.home_team_id === team.team_id ? 'Home' : 'Away'}</span>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400 dark:text-neutral-500 italic">No upcoming games scheduled.</p>
+          )}
+        </div>
+
+        <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-5">
+          <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-neutral-500 mb-2">
+            <Clock className="w-3.5 h-3.5" /> Last game
+          </div>
+          {lastGame ? (
+            <div>
+              <div className="flex items-center gap-2">
+                <span className={`text-xs px-2 py-0.5 rounded font-bold ${lastGame.result === 'W' ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-400' : 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-400'}`}>
+                  {lastGame.result}
+                </span>
+                <span className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">
+                  {lastGame.myScore}–{lastGame.oppScore} {lastGame.isHome ? 'vs' : '@'} {lastGame.opponent}
+                </span>
+              </div>
+              <div className="text-sm text-gray-500 dark:text-neutral-400 mt-1">{formatGameDate(lastGame.matchTime)}</div>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400 dark:text-neutral-500 italic">No completed games yet.</p>
+          )}
+        </div>
+      </div>
+
+      {/* Trends */}
+      <div>
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-neutral-500 mb-2">Form</h4>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
+          <div className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700">
+            <div className="text-xs md:text-sm font-medium text-gray-600 dark:text-neutral-400 mb-2">Last 5 games</div>
+            {last5.length > 0 ? (
+              <div className="flex items-center gap-1.5">
+                {last5.map((g) => (
+                  <span
+                    key={g.gameKey}
+                    title={`${g.result} ${g.myScore}-${g.oppScore} ${g.isHome ? 'vs' : '@'} ${g.opponent}`}
+                    className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold ${g.result === 'W' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}
+                  >
+                    {g.result}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <div className="text-sm text-gray-400 dark:text-neutral-500 italic">No games yet</div>
+            )}
+          </div>
+
+          <TrendPill
+            direction={marginDirection}
+            label="Scoring margin trend"
+            sub={marginDelta == null ? '—' : `${marginDelta > 0 ? '+' : ''}${marginDelta.toFixed(1)} vs season`}
+            color={readable}
+          />
+
+          <TrendPill
+            direction={fgDirection}
+            label="FG% trend"
+            sub={fgDelta == null ? '—' : `${fgDelta > 0 ? '+' : ''}${fgDelta.toFixed(1)}pt vs season`}
+            color={readable}
+          />
+        </div>
+      </div>
+
+      {/* Season averages */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4">
+        {[
+          { label: 'Games', value: team.games_played },
+          { label: 'PPG', value: Number(team.avg_pts ?? 0).toFixed(1) },
+          { label: 'RPG', value: Number(team.avg_reb ?? 0).toFixed(1) },
+          { label: 'APG', value: Number(team.avg_ast ?? 0).toFixed(1) },
+          { label: 'FG%', value: team.season_fg_pct != null ? `${Number(team.season_fg_pct).toFixed(1)}%` : '—' },
+        ].map((stat) => (
+          <div key={stat.label} className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700">
+            <div className="text-xl md:text-2xl font-bold" style={{ color: readable }}>{stat.value}</div>
+            <div className="text-xs md:text-sm text-gray-500 dark:text-neutral-400">{stat.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* League standings */}
+      {standings.length > 0 && (
+        <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-200 dark:border-neutral-800">
+            <h4 className="text-sm font-semibold text-slate-800 dark:text-white">League standings</h4>
+          </div>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-[10px] uppercase tracking-wide text-slate-400 dark:text-neutral-500">
+                <th className="w-8 pl-4 py-1.5 text-left font-medium"></th>
+                <th className="py-1.5 text-left font-medium">Team</th>
+                <th className="py-1.5 text-right font-medium">W-L</th>
+                <th className="pr-4 py-1.5 text-right font-medium">PCT</th>
+              </tr>
+            </thead>
+            <tbody>
+              {standings.map((row) => {
+                const isMe = row.teamId === team.team_id;
+                return (
+                  <tr
+                    key={row.teamId || row.teamName}
+                    className={`border-t border-gray-100 dark:border-neutral-800 ${isMe ? 'bg-gray-50 dark:bg-neutral-800/60' : ''}`}
+                  >
+                    <td className="pl-4 py-2 text-slate-400 dark:text-neutral-500 text-xs tabular-nums">{row.rank}</td>
+                    <td className={`py-2 pr-2 font-medium ${isMe ? '' : 'text-slate-800 dark:text-white'}`} style={isMe ? { color: readable } : undefined}>
+                      {row.teamName}{isMe && <span className="ml-1.5 text-[10px] font-bold uppercase tracking-wide opacity-70">You</span>}
+                    </td>
+                    <td className="py-2 text-right text-slate-600 dark:text-neutral-300 whitespace-nowrap tabular-nums">{row.wins}-{row.losses}</td>
+                    <td className="pr-4 py-2 text-right font-bold tabular-nums text-slate-700 dark:text-neutral-300">{(row.pct * 100).toFixed(0)}%</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
