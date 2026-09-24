@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -16,21 +16,45 @@ export default function ResetPassword() {
   const [loading, setLoading] = useState(false);
   const [, navigate] = useLocation();
 
-  useEffect(() => {
-    // Supabase embeds the access token in the URL hash after a password-reset email click.
-    const params = new URLSearchParams(window.location.hash.replace("#", "?"));
-    const token = params.get("access_token");
+  // Supabase's client already auto-detects the #access_token=...&type=recovery
+  // hash on a password-reset email link (detectSessionInUrl, on by default)
+  // — it runs at client-init time, establishes the session, and clears the
+  // hash from the URL. That happens before this effect can run, so trying to
+  // re-parse window.location.hash here always finds it already empty and
+  // wrongly reports an invalid link, even though the session was actually
+  // established. Instead: check for the session it already created, and
+  // also listen for Supabase's own PASSWORD_RECOVERY event in case
+  // detection is still in flight when this mounts.
+  const sessionFoundRef = useRef(false);
 
-    if (token) {
-      supabase.auth
-        .setSession({ access_token: token, refresh_token: "" })
-        .then(({ error }) => {
-          if (error) setError("This reset link has expired or is invalid. Please request a new one.");
-          else setSessionReady(true);
-        });
-    } else {
-      setError("No reset token found. Please use the link from your password-reset email.");
-    }
+  useEffect(() => {
+    let mounted = true;
+    const markReady = () => {
+      sessionFoundRef.current = true;
+      if (mounted) setSessionReady(true);
+    };
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) markReady();
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") markReady();
+    });
+
+    // Give detection a moment to finish before concluding the link is bad —
+    // covers the case where this effect runs before it has resolved.
+    const timeout = setTimeout(() => {
+      if (mounted && !sessionFoundRef.current) {
+        setError("This reset link has expired or is invalid. Please request a new one.");
+      }
+    }, 3000);
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+      clearTimeout(timeout);
+    };
   }, []);
 
   const handleSubmit = async () => {
