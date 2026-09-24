@@ -5,6 +5,7 @@ import type { PlayerSeasonAverage, TeamSeasonAverage } from '@/pages/CoachesHub'
 import { useReadableTeamColor } from '@/hooks/useReadableColor';
 import { getCategory, teamPercentileRow, type PercentileRow } from '@/lib/coachesHubCategories';
 import { fetchGameSchedule } from '@/lib/coachesHubGameData';
+import AdvancedInsights from './AdvancedInsights';
 
 interface Props {
   team: TeamSeasonAverage;
@@ -15,7 +16,7 @@ interface Props {
   onSelectPlayer?: (player: PlayerSeasonAverage) => void;
 }
 
-type DetailTab = 'profile' | 'video';
+type DetailTab = 'profile' | 'lineups' | 'video';
 
 interface TeamGameLogRow {
   gameKey: string;
@@ -162,7 +163,7 @@ export default function TeamDetail({ team, teams, players, brandColor, onBack, o
         </div>
 
         <div className="flex border-t border-gray-200 dark:border-neutral-800">
-          {(['profile', 'video'] as DetailTab[]).map(t => (
+          {(['profile', 'lineups', 'video'] as DetailTab[]).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -286,6 +287,8 @@ export default function TeamDetail({ team, teams, players, brandColor, onBack, o
             )}
           </div>
         </div>
+      ) : tab === 'lineups' ? (
+        <AdvancedInsights leagueId={team.league_id} teamId={team.team_id} />
       ) : (
         <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-8 text-center">
           <Video className="w-12 h-12 text-gray-300 dark:text-neutral-700 mx-auto mb-3" />
