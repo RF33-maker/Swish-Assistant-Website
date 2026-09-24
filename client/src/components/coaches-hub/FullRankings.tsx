@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { ArrowDown, ArrowUp } from 'lucide-react';
 import type { PlayerSeasonAverage, TeamSeasonAverage } from '@/pages/CoachesHub';
 import { useReadableTeamColor } from '@/hooks/useReadableColor';
 import { CATEGORIES, type CategoryGroup, type Entity, type ValueMode } from '@/lib/coachesHubCategories';
@@ -17,11 +18,26 @@ export default function FullRankings({ players, teams, brandColor, onSelectPlaye
   const [entity, setEntity] = useState<Entity>('players');
   const [categoryKey, setCategoryKey] = useState(CATEGORIES[0].key);
   const [valueMode, setValueMode] = useState<ValueMode>('averages');
+  // Literal raw-value order — "Descending" always means highest number at
+  // rank #1, "Ascending" always means lowest. Defaults per-category so the
+  // *best* performer still lands at #1 without the toggle lying about which
+  // direction it's showing (e.g. Turnovers defaults to Ascending, since
+  // fewest turnovers is the good end of that stat).
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   const category = CATEGORIES.find(c => c.key === categoryKey) ?? CATEGORIES[0];
 
+  // Reset to that category's sensible default whenever the category changes
+  // — otherwise switching from an ascending-flipped view of one stat would
+  // silently carry "worst first" into the next category too.
+  useEffect(() => {
+    setSortDirection(category.lowerIsBetter ? 'asc' : 'desc');
+  }, [categoryKey]);
+
   const rows = useMemo(() => {
-    const dir = category.lowerIsBetter ? 1 : -1;
+    const compare = sortDirection === 'desc'
+      ? (a: { value: number }, b: { value: number }) => b.value - a.value
+      : (a: { value: number }, b: { value: number }) => a.value - b.value;
     if (entity === 'players') {
       const eligible = category.playerEligible ? players.filter(category.playerEligible) : players;
       return eligible
@@ -33,7 +49,7 @@ export default function FullRankings({ players, teams, brandColor, onSelectPlaye
           ref: p,
         }))
         .filter((r): r is { id: string; name: string; sub: string; value: number; ref: PlayerSeasonAverage } => r.value !== null)
-        .sort((a, b) => dir * (b.value - a.value));
+        .sort(compare);
     }
     return teams
       .map(t => ({
@@ -46,8 +62,8 @@ export default function FullRankings({ players, teams, brandColor, onSelectPlaye
         ref: t,
       }))
       .filter((r): r is { id: string; name: string; sub: string; value: number; ref: TeamSeasonAverage } => r.value !== null)
-      .sort((a, b) => dir * (b.value - a.value));
-  }, [entity, category, valueMode, players, teams]);
+      .sort(compare);
+  }, [entity, category, valueMode, sortDirection, players, teams]);
 
   function formatValue(value: number): string {
     if (category.isPercent) return `${value.toFixed(1)}%`;
@@ -88,6 +104,24 @@ export default function FullRankings({ players, teams, brandColor, onSelectPlaye
               ))}
             </div>
           )}
+
+          <div className="inline-flex rounded-md border border-gray-200 dark:border-neutral-700 overflow-hidden">
+            {([
+              { key: 'desc' as const, label: 'Descending', Icon: ArrowDown },
+              { key: 'asc' as const, label: 'Ascending', Icon: ArrowUp },
+            ]).map(({ key, label, Icon }) => (
+              <button
+                key={key}
+                onClick={() => setSortDirection(key)}
+                title={`Sort ${label.toLowerCase()} by ${category.label}`}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm transition-colors"
+                style={sortDirection === key ? { backgroundColor: readableBrand.onWhite, color: '#fff' } : {}}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                <span className={`hidden sm:inline ${sortDirection === key ? '' : 'text-gray-600 dark:text-neutral-400'}`}>{label}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

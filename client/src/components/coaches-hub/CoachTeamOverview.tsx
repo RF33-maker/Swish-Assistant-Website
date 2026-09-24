@@ -1,4 +1,5 @@
-import { Calendar, ChevronRight, Clock, MapPin, Minus, PlayCircle, TrendingDown, TrendingUp, Trophy, Video } from 'lucide-react';
+import { Link } from 'wouter';
+import { BarChart2, Calendar, ChevronRight, Clock, MapPin, Minus, PlayCircle, TrendingDown, TrendingUp, Trophy, Video } from 'lucide-react';
 import { TeamLogo } from '@/components/TeamLogo';
 import { useTeamBranding } from '@/hooks/useTeamBranding';
 import { useReadableTeamColor } from '@/hooks/useReadableColor';
@@ -206,7 +207,16 @@ export default function CoachTeamOverview({ team, leagueId, standing, standings,
                 </span>
               </div>
               <div className="text-sm text-gray-500 dark:text-neutral-400 mt-1">{formatGameDate(lastGame.matchTime)}</div>
-              <VideoLink gameKey={lastGame.gameKey} availableLabel="Watch this game" unavailableLabel="Video not available yet" />
+              <div className="flex items-center gap-3 flex-wrap">
+                <Link
+                  href={`/game/${encodeURIComponent(lastGame.gameKey)}?tab=boxscore`}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold hover:underline mt-2"
+                  style={{ color: readable }}
+                >
+                  <BarChart2 className="w-3.5 h-3.5" /> Box score
+                </Link>
+                <VideoLink gameKey={lastGame.gameKey} availableLabel="Watch this game" unavailableLabel="Video not available yet" />
+              </div>
             </div>
           ) : (
             <p className="text-sm text-gray-400 dark:text-neutral-500 italic">No completed games yet.</p>
