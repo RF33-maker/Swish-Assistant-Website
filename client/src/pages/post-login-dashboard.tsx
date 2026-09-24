@@ -23,7 +23,11 @@ type SuggestedLeague = {
 
 export default function DashboardLanding() {
   const [, navigate] = useLocation();
-  const { isAdmin, emailConfirmed, user, logoutMutation } = useAuth();
+  const { isAdmin, isCoach, emailConfirmed, user, logoutMutation } = useAuth();
+  // Coach (team) accounts get the Coaches Hub card too — everything else on
+  // this dashboard (League Management, Social Tools, API/Widgets) stays
+  // admin-only.
+  const canAccessCoachesHub = isAdmin || isCoach;
   const { toast } = useToast();
   const [resendLoading, setResendLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(false);
@@ -237,10 +241,10 @@ export default function DashboardLanding() {
 
           <Card
             data-testid="card-coaches-hub"
-            className={isAdmin
+            className={canAccessCoachesHub
               ? "bg-white border-orange-200 shadow-lg shadow-orange-500/20 hover:shadow-xl hover:shadow-orange-500/40 transition-all duration-300 cursor-pointer transform hover:scale-105 group"
               : "bg-slate-50 border-slate-200 shadow-sm"}
-            onClick={isAdmin ? () => navigate("/coaches-hub") : undefined}
+            onClick={canAccessCoachesHub ? () => navigate("/coaches-hub") : undefined}
           >
             <CardHeader className="pb-3">
               <div className="flex items-center gap-3">
@@ -250,7 +254,7 @@ export default function DashboardLanding() {
                 <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <CardTitle className="text-orange-900 text-lg group-hover:text-orange-700 transition-colors duration-300">Coaches Hub</CardTitle>
-                      {!isAdmin && <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-700">Coming soon</span>}
+                      {!canAccessCoachesHub && <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-700">Coming soon</span>}
                     </div>
                     <CardDescription className="group-hover:text-orange-600 transition-colors duration-300">Coaching tools and resources</CardDescription>
                 </div>
@@ -258,8 +262,8 @@ export default function DashboardLanding() {
             </CardHeader>
             <CardContent>
               <p className="text-orange-700 text-sm mb-4">Access coaching resources, game analysis tools, and team management features.</p>
-              {isAdmin ? <Button
-                size="sm" 
+              {canAccessCoachesHub ? <Button
+                size="sm"
                 className="bg-orange-600 hover:bg-orange-700 text-white transform transition-all duration-300 group-hover:scale-105 group-hover:shadow-lg"
                 onClick={(e) => {
                   e.stopPropagation();

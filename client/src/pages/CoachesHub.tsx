@@ -574,6 +574,11 @@ export default function CoachesHub() {
   // v_team_game_log has one row per team per game, so total games = rows / 2 (two teams per game).
   const uniqueGameCount = Math.round(teamGameLog.length / 2);
   const topTeam = teamSeasonAverages[0];
+  // A coach's own team, when this league is the one their account is scoped
+  // to — used to surface a "Your team" shortcut ahead of the league-wide
+  // leaders, so landing on Coaches Hub answers "how's my team doing" before
+  // "who else is in this league".
+  const myTeam = isCoach && coachTeamId ? teamSeasonAverages.find((t) => t.team_id === coachTeamId) : undefined;
 
   // Same brand-color extraction the public league pages use, so Coaches Hub
   // picks up each league's own look once one is selected.
@@ -1001,6 +1006,41 @@ export default function CoachesHub() {
                 {/* Overview */}
                 {activeTab === 'overview' && (
                   <div className="space-y-4 md:space-y-6">
+                    {/* Your team — coach accounts land here, so lead with
+                        "how's my team doing" before the league-wide leaders
+                        below (which stay visible underneath for scouting). */}
+                    {myTeam && (
+                      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border-2 p-4 md:p-6" style={{ borderColor: readableBrand }}>
+                        <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
+                          <div className="flex items-center gap-2">
+                            <Award className="w-4 h-4 md:w-5 md:h-5" style={{ color: readableBrand }} />
+                            <h3 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">Your team</h3>
+                          </div>
+                          <button
+                            onClick={() => setDetailView({ type: 'team', team: myTeam })}
+                            className="text-sm font-medium hover:underline"
+                            style={{ color: readableBrand }}
+                          >
+                            View {myTeam.team_name} →
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4">
+                          {[
+                            { label: 'Games', value: myTeam.games_played },
+                            { label: 'PPG', value: Number(myTeam.avg_pts ?? 0).toFixed(1) },
+                            { label: 'RPG', value: Number(myTeam.avg_reb ?? 0).toFixed(1) },
+                            { label: 'APG', value: Number(myTeam.avg_ast ?? 0).toFixed(1) },
+                            { label: 'FG%', value: myTeam.season_fg_pct != null ? `${Number(myTeam.season_fg_pct).toFixed(1)}%` : '—' },
+                          ].map((stat) => (
+                            <div key={stat.label} className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700">
+                              <div className="text-xl md:text-2xl font-bold" style={{ color: readableBrand }}>{stat.value}</div>
+                              <div className="text-xs md:text-sm text-gray-500 dark:text-neutral-400">{stat.label}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {hasStats ? (
                       <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
                         <SectionKicker n="01" label="Season snapshot" color={readableBrand} />
