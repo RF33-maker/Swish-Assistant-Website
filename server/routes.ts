@@ -1329,6 +1329,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Service-role-backed lookup of every competition a given team plays in.
+  //
+  // Coaches Hub needs this because the live parser writes each feed into its
+  // own competition record, kept private (is_public=false) beneath a public
+  // parent — see .agents/memory/bcb-live-feed-league-alias.md. RLS on
+  // `competitions` and `teams` checks is_public directly (not the parent
+  // chain), so an anon/authenticated client resolving a coach's competitions
+  // never sees those feed children: the coach silently loses the competition
+  // their team is actually playing in right now. Their stats are visible —
+  // team_stats, player_stats and game_schedule all expose this league
+  // already — it's only the competition and teams rows that are hidden.
+  //
+  // Scope: the same "public, or a child of a public parent" envelope as
+  // /api/public/league-data, via filterLeagueIdsForPublicScope. Fully private
+  // leagues with no public parent stay invisible, so this can't be used to
+  // enumerate them by guessing team ids.
+  app.get("/api/public/team-competitions/:teamId", async (req: Request, res: Response) => {
+    try {
+      const { teamId } = req.params;
+      if (!teamId) return res.status(400).json({ error: "teamId is required" });
+
+      const { data: homeTeam, error: teamError } = await supabaseAdmin
+        .from("teams")
+        .select("league_id, name")
+        .eq("team_id", teamId)
+        .maybeSingle();
+      if (teamError) {
+        console.error("team-competitions: team lookup failed:", teamError.message);
+        return res.status(500).json({ error: "Failed to resolve team" });
+      }
+      if (!homeTeam?.name) return res.status(404).json({ error: "Team not found" });
+
+      // A club fields the same named team across several competitions at once
+      // (a league season plus a cup), each with its own teams row and team_id.
+      // Match by name to find them all — the coach's account is provisioned
+      // against only one of them.
+      const { data: siblingTeams, error: siblingError } = await supabaseAdmin
+        .from("teams")
+        .select("league_id")
+        .eq("name", homeTeam.name);
+      if (siblingError) {
+        console.error("team-competitions: sibling lookup failed:", siblingError.message);
+        return res.status(500).json({ error: "Failed to resolve competitions" });
+      }
+
+      const leagueIds = Array.from(
+        new Set((siblingTeams || []).map((t: any) => t.league_id).filter(Boolean))
+      ) as string[];
+      const allowedIds = await filterLeagueIdsForPublicScope(leagueIds);
+      if (allowedIds.length === 0) {
+        return res.json({ teamName: homeTeam.name, homeLeagueId: homeTeam.league_id, competitions: [] });
+      }
+
+      const { data: comps, error: compsError } = await supabaseAdmin
+        .from("competitions")
+        .select("*")
+        .in("league_id", allowedIds);
+      if (compsError) {
+        console.error("team-competitions: competitions lookup failed:", compsError.message);
+        return res.status(500).json({ error: "Failed to resolve competitions" });
+      }
+
+      res.json({
+        teamName: homeTeam.name,
+        homeLeagueId: homeTeam.league_id,
+        competitions: comps || [],
+      });
+    } catch (err: any) {
+      console.error("team-competitions: unexpected error:", err.message);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   app.post("/api/public/league-data", async (req: Request, res: Response) => {
     try {
       const { table, leagueIds, parentLeagueId } = req.body || {};
