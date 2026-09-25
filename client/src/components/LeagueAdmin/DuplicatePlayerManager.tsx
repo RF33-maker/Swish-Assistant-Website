@@ -9,7 +9,23 @@ interface DuplicatePair {
   duplicateName: string;
   duplicateSlug?: string;
   statsToRepoint: number;
+  /** 0-1 from the server matcher. Pairs arrive sorted strongest first. */
+  confidence?: number;
+  reason?: string;
+  /** Matches more than one player, or the squad numbers disagree. */
+  ambiguous?: boolean;
+  warning?: string;
 }
+
+const REASON_LABELS: Record<string, string> = {
+  exact: "same name",
+  "middle-name": "extra middle name",
+  initial: "initial vs full name",
+  nickname: "nickname",
+  typo: "likely typo",
+  hyphenated: "double-barrelled surname",
+  "surname-only": "surname only",
+};
 
 interface Player {
   id: string;
@@ -528,7 +544,12 @@ export default function DuplicatePlayerManager({ leagueId }: Props) {
             ) : (
               <div className="space-y-2">
                 <p className="text-xs text-gray-500 mb-3">
-                  {pairs.length} potential duplicate pair{pairs.length !== 1 ? "s" : ""} found. Review each and click Merge to consolidate records.
+                  {pairs.length} potential duplicate pair{pairs.length !== 1 ? "s" : ""} found, strongest match first.
+                  Review each and click Merge to consolidate records.
+                  {pairs.some((p) => p.ambiguous) && (
+                    <> Pairs marked <span className="font-medium text-amber-700">check carefully</span> matched on weak
+                    evidence — confirm they are the same person before merging.</>
+                  )}
                 </p>
                 {pairs.map((pair) => (
                   <div key={pair.duplicateId} className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 border border-gray-200 rounded-lg bg-gray-50">
@@ -541,7 +562,20 @@ export default function DuplicatePlayerManager({ leagueId }: Props) {
                         </svg>
                         <span className="font-medium text-gray-600 truncate">{pair.duplicateName}</span>
                         <span className="px-1.5 py-0.5 text-xs bg-red-100 text-red-700 rounded font-medium flex-shrink-0">merge</span>
+                        {pair.reason && (
+                          <span className="px-1.5 py-0.5 text-xs bg-gray-200 text-gray-600 rounded flex-shrink-0">
+                            {REASON_LABELS[pair.reason] || pair.reason}
+                          </span>
+                        )}
+                        {pair.ambiguous && (
+                          <span className="px-1.5 py-0.5 text-xs bg-amber-100 text-amber-800 rounded font-medium flex-shrink-0">
+                            check carefully
+                          </span>
+                        )}
                       </div>
+                      {pair.warning && (
+                        <p className="text-xs text-amber-700 mt-0.5">{pair.warning}</p>
+                      )}
                       {pair.statsToRepoint > 0 && (
                         <p className="text-xs text-gray-400 mt-0.5">
                           {pair.statsToRepoint} stat row{pair.statsToRepoint !== 1 ? "s" : ""} will be re-pointed

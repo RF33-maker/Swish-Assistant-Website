@@ -669,13 +669,74 @@ export default function CoachesHub() {
   // uses) — computed client-side from completed results, the same approach
   // the public Standings widget uses. Every team in the league seeds a row
   // first (0-0) so a team with no completed games yet still appears.
+  // The feed records the same club under more than one name in the same
+  // competition -- a sponsor prefix ("Signs Express Falkirk Fury"), an
+  // abbreviation ("MK Breakers"), a suffix ("Essex Rebels (M)"). Those rows
+  // share a team_id, so keying standings purely on the name split one club
+  // into two half-record rows and produced duplicate React keys. Collapse
+  // onto the team_id and pick the name the competition uses most often,
+  // falling back to the shortest so a sponsor prefix loses to the plain club
+  // name on a tie.
+  const canonicalTeamName = useMemo(() => {
+    // The fixture list is the authority: it carries the plain club name
+    // ("Falkirk Fury", "Milton Keynes Breakers") while the box-score feed is
+    // what varies. Fall back to games played, then to the shortest name, so
+    // a sponsor prefix loses -- but never let that fallback alone decide,
+    // or "MK Breakers" would beat "Milton Keynes Breakers".
+    const scheduleNames = new Set<string>();
+    leagueGameResults.forEach((g) => {
+      if (g.home_team) scheduleNames.add(g.home_team);
+      if (g.away_team) scheduleNames.add(g.away_team);
+    });
+
+    const bestByTeamId = new Map<string, { name: string; games: number; inSchedule: boolean }>();
+    teamSeasonAverages.forEach((t) => {
+      if (!t.team_id) return;
+      const candidate = {
+        name: t.team_name,
+        games: t.games_played || 0,
+        inSchedule: scheduleNames.has(t.team_name),
+      };
+      const current = bestByTeamId.get(t.team_id);
+      if (!current) {
+        bestByTeamId.set(t.team_id, candidate);
+        return;
+      }
+      const better =
+        candidate.inSchedule !== current.inSchedule
+          ? candidate.inSchedule
+          : candidate.games !== current.games
+            ? candidate.games > current.games
+            : candidate.name.length < current.name.length;
+      if (better) bestByTeamId.set(t.team_id, candidate);
+    });
+    const aliases = new Map<string, string>();
+    teamSeasonAverages.forEach((t) => {
+      const best = t.team_id ? bestByTeamId.get(t.team_id) : undefined;
+      if (best) aliases.set(t.team_name, best.name);
+    });
+    return (name: string) => aliases.get(name) || name;
+  }, [teamSeasonAverages, leagueGameResults]);
+
   const standings: StandingRow[] = useMemo(() => {
     if (teamSeasonAverages.length === 0) return [];
     const byName = new Map<string, StandingRow>();
     teamSeasonAverages.forEach((t) => {
-      byName.set(t.team_name, { teamId: t.team_id, teamName: t.team_name, wins: 0, losses: 0, games: 0, pointDiff: 0, pct: 0, rank: 0 });
+      const name = canonicalTeamName(t.team_name);
+      const existing = byName.get(name);
+      if (existing) {
+        // Second alias for a club already seeded; keep the one row.
+        if (!existing.teamId && t.team_id) existing.teamId = t.team_id;
+        return;
+      }
+      byName.set(name, { teamId: t.team_id, teamName: name, wins: 0, losses: 0, games: 0, pointDiff: 0, pct: 0, rank: 0 });
     });
-    leagueGameResults.forEach((g) => {
+    leagueGameResults.forEach((raw) => {
+      const g = {
+        ...raw,
+        home_team: raw.home_team ? canonicalTeamName(raw.home_team) : raw.home_team,
+        away_team: raw.away_team ? canonicalTeamName(raw.away_team) : raw.away_team,
+      };
       if (g.home_score == null || g.away_score == null) return;
       const diff = g.home_score - g.away_score;
       if (g.home_team) {
@@ -696,9 +757,11 @@ export default function CoachesHub() {
       .sort((a, b) => b.pct - a.pct || b.wins - a.wins || b.pointDiff - a.pointDiff);
     rows.forEach((r, i) => { r.rank = i + 1; });
     return rows;
-  }, [teamSeasonAverages, leagueGameResults]);
+  }, [teamSeasonAverages, leagueGameResults, canonicalTeamName]);
 
-  const myStanding = myTeam ? standings.find((s) => s.teamName === myTeam.team_name) : undefined;
+  const myStanding = myTeam
+    ? standings.find((s) => s.teamName === canonicalTeamName(myTeam.team_name))
+    : undefined;
 
   // This team's own completed games, most-recent-first (leagueGameResults is
   // already ordered that way) — the source for "last game" and the last-5

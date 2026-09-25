@@ -2058,7 +2058,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       while (true) {
         const { data, error } = await supabaseAdmin
           .from('players')
-          .select('id, full_name, league_id, slug')
+          // team_id and shirtNumber are corroborating signals, not filters:
+          // two records on the same squad with different numbers are very
+          // likely different people, so detectDuplicates demotes that pair.
+          .select('id, full_name, league_id, slug, team_id, "shirtNumber"')
           .in('league_id', allIds)
           .range(offset, offset + PAGE - 1);
         if (error) return res.status(500).json({ error: error.message });
