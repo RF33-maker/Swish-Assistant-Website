@@ -3,7 +3,8 @@ import { ArrowLeft, Crosshair, Shield, Swords, AlertTriangle } from 'lucide-reac
 import { supabase } from '@/lib/supabase';
 import { useTeamBranding } from '@/hooks/useTeamBranding';
 import ShotChart, { type ShotData } from '@/components/ShotChart';
-import { ComparisonBarRow, RankTrack, StackedShare } from './reportVisuals';
+import { ComparisonBarRow, NarrativeSummary, RankTrack, SectionNarrative } from './reportVisuals';
+import { useReportNarrative } from '@/hooks/useReportNarrative';
 import { num, ordinal, toPlayerLine, type PlayerGameRow, type PlayerLine } from '@/lib/gameReport';
 import type { PlayerSeasonAverage, StandingRow, TeamSeasonAverage } from '@/pages/CoachesHub';
 
@@ -29,8 +30,8 @@ interface RecentGame {
   tov: number | null;
 }
 
-function Section({ n, title, subtitle, color, children }: {
-  n: string; title: string; subtitle?: string; color: string; children: React.ReactNode;
+function Section({ n, title, subtitle, color, children, narrative }: {
+  n: string; title: string; subtitle?: string; color: string; children: React.ReactNode; narrative?: string;
 }) {
   return (
     <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
@@ -40,6 +41,7 @@ function Section({ n, title, subtitle, color, children }: {
       </div>
       {subtitle && <p className="text-xs text-gray-500 dark:text-neutral-400 mb-3">{subtitle}</p>}
       <div className={subtitle ? '' : 'mt-3'}>{children}</div>
+      <SectionNarrative body={narrative} />
     </div>
   );
 }
@@ -234,6 +236,38 @@ export default function OpponentScoutReport({
     ];
   }, [mine, opponent]);
 
+  const facts = useMemo(() => {
+    if (!opponent) return null;
+    return {
+      yourTeam: myTeamName,
+      opponent: opponentName,
+      theirRecord: oppStanding
+        ? { wins: oppStanding.wins, losses: oppStanding.losses, leaguePosition: oppStanding.rank, teamsInLeague: standings.length }
+        : null,
+      theirSeasonAverages: {
+        pointsPerGame: Number(opponent.avg_pts ?? 0),
+        reboundsPerGame: Number(opponent.avg_reb ?? 0),
+        assistsPerGame: Number(opponent.avg_ast ?? 0),
+        fieldGoalPct: opponent.season_fg_pct != null ? Number(opponent.season_fg_pct) : null,
+        turnoversPerGame: Number(opponent.avg_tov ?? 0),
+        gamesPlayed: opponent.games_played ?? null,
+      },
+      theirRanks: ranks,
+      headToHeadAverages: headToHead.map((r) => ({ stat: r.label, you: r.mine, them: r.theirs })),
+      theirLastThree: recent.map((g) => ({
+        result: g.score != null && g.oppScore != null ? (g.score > g.oppScore ? 'W' : 'L') : null,
+        scored: g.score, conceded: g.oppScore, against: g.oppName,
+        effectiveFgPct: g.efg, turnoverRate: g.tov,
+      })),
+      theirLeadingPlayers: theirPlayers.map((p) => ({
+        name: p.name, pointsPerGame: p.points, reboundsPerGame: p.rebounds, assistsPerGame: p.assists,
+      })),
+    };
+  }, [opponent, myTeamName, opponentName, oppStanding, standings.length, ranks, headToHead, recent, theirPlayers]);
+
+  const SECTION_KEYS = ['keys', 'profile', 'matchup', 'form', 'players'];
+  const { narrative, status, bodyFor } = useReportNarrative('scout', facts, SECTION_KEYS, !loading && !!facts);
+
   if (!opponent) {
     return (
       <div className="space-y-4">
@@ -265,8 +299,22 @@ export default function OpponentScoutReport({
         </p>
       </div>
 
+      <NarrativeSummary
+        headline={narrative?.headline}
+        overview={narrative?.overview}
+        takeaways={narrative?.takeaways}
+        status={status}
+        color={brand}
+      />
+
       {/* Keys to the game */}
-      <Section n="01" title="Keys to the game" subtitle="Derived from where they rank in this competition. Only genuine outliers are listed." color={brand}>
+      <Section
+        n="01"
+        title="Keys to the game"
+        subtitle="Derived from where they sit in this competition — only top-third and bottom-third finishes are listed, so a side with no real outlier correctly produces nothing to plan around rather than filler."
+        color={brand}
+        narrative={bodyFor('keys')}
+      >
         {keys.length === 0 ? (
           <p className="text-sm text-gray-500 dark:text-neutral-400 italic">
             They sit mid-table across the board — no obvious statistical weakness to target or threat to plan around.
@@ -285,7 +333,13 @@ export default function OpponentScoutReport({
 
       {/* Their profile */}
       {ranks && (
-        <Section n="02" title="Their season profile" subtitle="Where they rank in this competition. A full bar means best in the league." color={brand}>
+        <Section
+          n="02"
+          title="Their season profile"
+          subtitle="Where they rank across the competition. The bar is their position rather than the raw number, so a full bar means best in the league and an empty one means last — read the shape, not the length."
+          color={brand}
+          narrative={bodyFor('profile')}
+        >
           <RankTrack label="Points per game" value={Number(opponent.avg_pts ?? 0)} rank={ranks.pts?.rank ?? null} of={ranks.pts?.of ?? null} color={brand} />
           <RankTrack label="Rebounds per game" value={Number(opponent.avg_reb ?? 0)} rank={ranks.reb?.rank ?? null} of={ranks.reb?.of ?? null} color={brand} />
           <RankTrack label="Assists per game" value={Number(opponent.avg_ast ?? 0)} rank={ranks.ast?.rank ?? null} of={ranks.ast?.of ?? null} color={brand} />
@@ -296,7 +350,13 @@ export default function OpponentScoutReport({
 
       {/* Head to head */}
       {headToHead.length > 0 && (
-        <Section n="03" title="How you match up" subtitle={`${myTeamName} (left) against ${opponentName} (right), season averages.`} color={brand}>
+        <Section
+          n="03"
+          title="How you match up"
+          subtitle={`${myTeamName} on the left against ${opponentName} on the right, season averages. These are full-season numbers, so weigh them against the recent form below rather than on their own.`}
+          color={brand}
+          narrative={bodyFor('matchup')}
+        >
           {headToHead.map((row) => (
             <ComparisonBarRow key={row.label} row={row} myColor={brand} theirColor={OPP_COLOR} myLabel={myTeamName} theirLabel={opponentName} />
           ))}
@@ -304,7 +364,13 @@ export default function OpponentScoutReport({
       )}
 
       {/* Recent form */}
-      <Section n="04" title="Last 3 games" subtitle="Their most recent results, newest first." color={brand}>
+      <Section
+        n="04"
+        title="Last 3 games"
+        subtitle="Their most recent results, newest first, with shooting efficiency and turnover rate for each. Three games is a small sample — treat it as form, not evidence of a change in quality."
+        color={brand}
+        narrative={bodyFor('form')}
+      >
         {loading ? (
           <p className="text-sm text-gray-500 dark:text-neutral-400">Loading recent games…</p>
         ) : recent.length === 0 ? (
@@ -342,7 +408,13 @@ export default function OpponentScoutReport({
       </Section>
 
       {/* Standout players */}
-      <Section n="05" title="Standout players" subtitle="Season averages for their leading scorers." color={brand}>
+      <Section
+        n="05"
+        title="Standout players"
+        subtitle="Their leading scorers by season average. Where scoring is concentrated in one or two players, taking them out of the game is usually worth more than defending evenly across the roster."
+        color={brand}
+        narrative={bodyFor('players')}
+      >
         {theirPlayers.length === 0 ? (
           <p className="text-sm text-gray-500 dark:text-neutral-400 italic">No player data for this team yet.</p>
         ) : (
