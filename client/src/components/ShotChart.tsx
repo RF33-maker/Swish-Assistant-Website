@@ -24,6 +24,7 @@ interface ShotChartFilters {
   showResultFilter?: boolean;
   showShotTypeFilter?: boolean;
   showSubTypeFilter?: boolean;
+  showZoneFilter?: boolean;
   teamNames?: { home?: string; away?: string };
 }
 
@@ -193,6 +194,49 @@ const ZONE_POINTS: Record<string, number> = {
 };
 
 /**
+ * Court-area filter groups, keyed to the zones projectShot already assigns.
+ * These sit alongside the 2PT/3PT filter rather than duplicating it: the
+ * shot-type filter answers "how much is it worth", this answers "where on the
+ * floor", which is the split a coach actually wants (corner threes and
+ * above-the-break threes are different shots at the same value).
+ */
+const ZONE_FILTER_OPTIONS: Array<{ value: string; label: string; zones: string[] }> = [
+  { value: "ra", label: "Restricted Area", zones: ["ra"] },
+  { value: "paint", label: "Paint (non-RA)", zones: ["paint"] },
+  { value: "mid", label: "Mid-Range", zones: ["mid"] },
+  { value: "corner3", label: "Corner 3s", zones: ["lc3", "rc3"] },
+  { value: "abovebreak3", label: "Above the Break 3s", zones: ["lw3", "rw3"] },
+  { value: "left", label: "Left Side", zones: ["lc3", "lw3"] },
+  { value: "right", label: "Right Side", zones: ["rc3", "rw3"] },
+];
+
+const ZONE_FILTER_MAP: Record<string, string[]> = Object.fromEntries(
+  ZONE_FILTER_OPTIONS.map((o) => [o.value, o.zones])
+);
+
+// The feed writes sub types as lowercase run-together words ("drivinglayup"),
+// so the generic camelCase splitter alone renders "Drivinglayup". Spell out
+// the ones we actually receive and let anything new fall back to the splitter.
+const SUB_TYPE_LABELS: Record<string, string> = {
+  jumpshot: "Jump Shot",
+  layup: "Layup",
+  drivinglayup: "Driving Layup",
+  tipinlayup: "Tip-In Layup",
+  reverselayup: "Reverse Layup",
+  floatingjumpshot: "Floater",
+  pullupjumpshot: "Pull-Up Jumper",
+  turnaroundjumpshot: "Turnaround Jumper",
+  stepbackjumpshot: "Step-Back Jumper",
+  fadeaway: "Fadeaway",
+  hookshot: "Hook Shot",
+  dunk: "Dunk",
+  tipindunk: "Tip-In Dunk",
+  alleyoopdunk: "Alley-Oop Dunk",
+  alleyoop: "Alley-Oop",
+  eurostep: "Euro Step",
+};
+
+/**
  * Fold a shot from the legacy full-court coordinate space (0-100 horizontal,
  * 0-100 vertical, two baskets at x≈5 and x≈95) into a vertical half-court
  * view (basket at top center). Returns x/y in viewBox units plus zone key.
@@ -250,6 +294,7 @@ export default function ShotChart({
     showResultFilter = false,
     showShotTypeFilter = false,
     showSubTypeFilter = false,
+    showZoneFilter = false,
     teamNames,
   } = filters;
 
@@ -259,6 +304,7 @@ export default function ShotChart({
   const [resultFilter, setResultFilter] = useState("all");
   const [shotTypeFilter, setShotTypeFilter] = useState("all");
   const [subTypeFilter, setSubTypeFilter] = useState("all");
+  const [zoneFilter, setZoneFilter] = useState("all");
   const [hovered, setHovered] = useState<{ shot: ShotData; sx: number; sy: number } | null>(null);
 
   const players = useMemo(() => {
@@ -290,9 +336,33 @@ export default function ShotChart({
       if (resultFilter === "misses" && shot.success) return false;
       if (shotTypeFilter !== "all" && shot.shot_type !== shotTypeFilter) return false;
       if (subTypeFilter !== "all" && shot.sub_type !== subTypeFilter) return false;
+      if (zoneFilter !== "all") {
+        const allowed = ZONE_FILTER_MAP[zoneFilter];
+        if (allowed && !allowed.includes(projectShot(shot).zone)) return false;
+      }
       return true;
     });
-  }, [shots, playerFilter, quarterFilter, teamFilter, resultFilter, shotTypeFilter, subTypeFilter]);
+  }, [shots, playerFilter, quarterFilter, teamFilter, resultFilter, shotTypeFilter, subTypeFilter, zoneFilter]);
+
+  const activeFilterCount = [
+    playerFilter,
+    quarterFilter,
+    teamFilter,
+    resultFilter,
+    shotTypeFilter,
+    subTypeFilter,
+    zoneFilter,
+  ].filter((v) => v !== "all").length;
+
+  const resetFilters = () => {
+    setPlayerFilter("all");
+    setQuarterFilter("all");
+    setTeamFilter("all");
+    setResultFilter("all");
+    setShotTypeFilter("all");
+    setSubTypeFilter("all");
+    setZoneFilter("all");
+  };
 
   const projected = useMemo(
     () =>
@@ -360,7 +430,7 @@ export default function ShotChart({
   }, [projected]);
 
   const hasFilters =
-    showPlayerFilter || showQuarterFilter || showTeamFilter || showResultFilter || showShotTypeFilter || showSubTypeFilter;
+    showPlayerFilter || showQuarterFilter || showTeamFilter || showResultFilter || showShotTypeFilter || showSubTypeFilter || showZoneFilter;
 
   if (loading) {
     return (
@@ -382,6 +452,7 @@ export default function ShotChart({
   }
 
   const formatSubType = (st: string) =>
+    SUB_TYPE_LABELS[st] ??
     st.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase()).trim();
 
   const dotR = shareMode ? 5 : compact ? 4 : 5;
@@ -543,6 +614,19 @@ export default function ShotChart({
                 </select>
               )}
 
+              {showZoneFilter && (
+                <select
+                  value={zoneFilter}
+                  onChange={(e) => setZoneFilter(e.target.value)}
+                  className="px-3 py-2 text-sm border border-gray-300 dark:border-neutral-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-neutral-700 text-slate-800 dark:text-white"
+                >
+                  <option value="all">All Areas</option>
+                  {ZONE_FILTER_OPTIONS.map((z) => (
+                    <option key={z.value} value={z.value}>{z.label}</option>
+                  ))}
+                </select>
+              )}
+
               {showSubTypeFilter && subTypes.length > 0 && (
                 <select
                   value={subTypeFilter}
@@ -566,6 +650,16 @@ export default function ShotChart({
                   <option value="makes">Makes Only</option>
                   <option value="misses">Misses Only</option>
                 </select>
+              )}
+
+              {activeFilterCount > 0 && (
+                <button
+                  type="button"
+                  onClick={resetFilters}
+                  className="px-3 py-2 text-sm font-medium rounded-lg text-orange-600 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-neutral-700 transition-colors"
+                >
+                  Reset{activeFilterCount > 1 ? ` (${activeFilterCount})` : ""}
+                </button>
               )}
             </div>
 
