@@ -532,53 +532,33 @@ export default function CoachesHub() {
       // deliberate — a coach scouting an upcoming opponent needs the whole
       // league, not just their own team).
       if (isCoach && coachTeamId) {
-        const { data: homeTeam, error: teamError } = await supabase
-          .from('teams')
-          .select('league_id, name')
-          .eq('team_id', coachTeamId)
-          .maybeSingle();
-        if (teamError) {
-          console.error('Error resolving coach team:', teamError);
-        } else if (homeTeam?.name) {
-          setCoachTeamName(homeTeam.name);
+        // Resolved server-side (service role) rather than with the anon
+        // client: a club fields the same named team across several
+        // competitions at once, and the live parser keeps each feed in its
+        // own private competition beneath a public parent. RLS on
+        // `competitions`/`teams` tests is_public directly instead of walking
+        // the parent chain, so querying here would silently drop exactly the
+        // competition the coach is currently playing in. The endpoint applies
+        // the same public-or-child-of-public scope the league pages use.
+        try {
+          const res = await fetch(`/api/public/team-competitions/${encodeURIComponent(coachTeamId)}`);
+          if (!res.ok) throw new Error(`team-competitions returned ${res.status}`);
+          const { teamName, homeLeagueId, competitions } = await res.json();
 
-          // A club plays across several competitions/seasons at once (e.g. a
-          // league season plus a cup), each with its own teams row and
-          // team_id — the coach's account is only provisioned against one of
-          // them. Find every other competition this same team name appears
-          // in so all of them show up as switchable options, not just the
-          // one the account happens to be scoped to. (RLS already limits
-          // this to public competitions for a non-owner account.)
-          const { data: siblingTeams, error: siblingError } = await supabase
-            .from('teams')
-            .select('league_id')
-            .eq('name', homeTeam.name);
-          if (siblingError) {
-            console.error('Error resolving sibling competitions:', siblingError);
-          }
-          const leagueIds = Array.from(new Set((siblingTeams || []).map((t: any) => t.league_id).filter(Boolean)));
+          if (teamName) setCoachTeamName(teamName);
 
-          if (leagueIds.length > 0) {
-            const { data: comps, error: compsError } = await supabase
-              .from('competitions')
-              .select('*')
-              .in('league_id', leagueIds);
-            if (compsError) {
-              console.error('Error resolving coach competitions:', compsError);
-            } else if (comps) {
-              comps.forEach((competition: any) => {
-                if (!combined.some((c: any) => c.league_id === competition.league_id)) {
-                  combined = [...combined, competition];
-                }
-              });
-              // Prefer the competition matching the account's own home
-              // team_id as the initial selection; fall back to whichever
-              // sibling competition RLS actually returned (the home one may
-              // be unlisted/private and invisible to this non-owner account).
-              coachCompetition =
-                comps.find((c: any) => c.league_id === homeTeam.league_id) || comps[0] || null;
+          const comps: any[] = competitions || [];
+          comps.forEach((competition: any) => {
+            if (!combined.some((c: any) => c.league_id === competition.league_id)) {
+              combined = [...combined, competition];
             }
-          }
+          });
+          // Prefer the competition the account was provisioned against; fall
+          // back to any other competition the team plays in.
+          coachCompetition =
+            comps.find((c: any) => c.league_id === homeLeagueId) || comps[0] || null;
+        } catch (coachError) {
+          console.error('Error resolving coach competitions:', coachError);
         }
       }
 
