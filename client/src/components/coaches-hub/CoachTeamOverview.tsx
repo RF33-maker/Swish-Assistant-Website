@@ -1,5 +1,5 @@
 import { Link } from 'wouter';
-import { BarChart2, Calendar, Clock, MapPin, Minus, PlayCircle, TrendingDown, TrendingUp, Video } from 'lucide-react';
+import { BarChart2, Calendar, Clock, FileText, MapPin, Minus, PlayCircle, TrendingDown, TrendingUp, Video } from 'lucide-react';
 import { useTeamBranding } from '@/hooks/useTeamBranding';
 import { useReadableTeamColor } from '@/hooks/useReadableColor';
 import { getGameFootage } from '@/lib/gameFootage';
@@ -161,6 +161,12 @@ export default function CoachTeamOverview({ team, leagueId, standing, standings,
                   <BarChart2 className="w-3.5 h-3.5" /> Box score
                 </Link>
                 <VideoLink gameKey={lastGame.gameKey} availableLabel="Watch this game" unavailableLabel="Video not available yet" />
+                <span
+                  title="Coming soon — a generated write-up of this game"
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-400 dark:text-neutral-600 mt-2"
+                >
+                  <FileText className="w-3.5 h-3.5" /> Match report coming soon
+                </span>
               </div>
             </div>
           ) : (
