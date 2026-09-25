@@ -20,6 +20,9 @@ import { TrendingUp, BarChart3, Users, Target, Award, Eye, MessageCircle, Search
 import { Link } from 'wouter';
 import SwishLogo from '@/assets/Swish Assistant Logo.png';
 import UnifiedScoutingEditor from '@/components/scout-editor/UnifiedScoutingEditor';
+import { ordinal } from '@/lib/gameReport';
+import MatchReport from '@/components/coaches-hub/MatchReport';
+import OpponentScoutReport from '@/components/coaches-hub/OpponentScoutReport';
 import { safelyParseReport } from "@/utils/parseReport";
 import { ScoutingReport } from "@/types/reportSchema";
 import { namesMatch, strictNamesMatch, getMostCompleteName } from "@/lib/fuzzyMatch";
@@ -110,18 +113,6 @@ export interface NextGameRow {
   away_team_id: string | null;
   matchtime: string;
   status: string | null;
-}
-
-/** 1 -> "1st", 2 -> "2nd", 13 -> "13th". */
-function ordinal(n: number): string {
-  const mod100 = n % 100;
-  if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
-  switch (n % 10) {
-    case 1: return `${n}st`;
-    case 2: return `${n}nd`;
-    case 3: return `${n}rd`;
-    default: return `${n}th`;
-  }
 }
 
 /** One row of win-loss standings, computed client-side from GameResultRow[]. */
@@ -457,7 +448,13 @@ export default function CoachesHub() {
   // Deep-dive drill-in — set from a Rankings/roster row click, cleared by the
   // detail view's own back button or a league switch. Lives above the tab
   // strip: while set, it replaces the active tab's content entirely.
-  const [detailView, setDetailView] = useState<{ type: 'player'; player: PlayerSeasonAverage } | { type: 'team'; team: TeamSeasonAverage } | null>(null);
+  const [detailView, setDetailView] = useState<
+    | { type: 'player'; player: PlayerSeasonAverage }
+    | { type: 'team'; team: TeamSeasonAverage }
+    | { type: 'matchReport'; gameKey: string }
+    | { type: 'scoutReport'; opponentName: string }
+    | null
+  >(null);
 
   const [chatbotResponse, setChatbotResponse] = useState('');
 
@@ -1298,7 +1295,26 @@ export default function CoachesHub() {
                     area regardless of which tab is active; the tab strip
                     above still works to back out of it. */}
                 {detailView ? (
-                  detailView.type === 'player' ? (
+                  detailView.type === 'matchReport' ? (
+                    <MatchReport
+                      gameKey={detailView.gameKey}
+                      leagueId={selectedLeague.league_id}
+                      teamName={myTeam?.team_name || coachTeamName || ''}
+                      brandColor={readableBrand}
+                      onBack={() => setDetailView(null)}
+                    />
+                  ) : detailView.type === 'scoutReport' ? (
+                    <OpponentScoutReport
+                      opponentName={detailView.opponentName}
+                      leagueId={selectedLeague.league_id}
+                      myTeamName={myTeam?.team_name || coachTeamName || ''}
+                      standings={standings}
+                      teamSeasonAverages={teamSeasonAverages}
+                      playerSeasonAverages={playerSeasonAverages}
+                      brandColor={readableBrand}
+                      onBack={() => setDetailView(null)}
+                    />
+                  ) : detailView.type === 'player' ? (
                     <PlayerDetail
                       player={detailView.player}
                       players={playerSeasonAverages}
@@ -1337,6 +1353,8 @@ export default function CoachesHub() {
                         last5={last5}
                         last5FgPct={last5FgPct}
                         fallbackColor={readableBrand}
+                        onOpenMatchReport={(gameKey) => setDetailView({ type: 'matchReport', gameKey })}
+                        onOpenScoutReport={(opponentName) => setDetailView({ type: 'scoutReport', opponentName })}
                       />
                     )}
 
