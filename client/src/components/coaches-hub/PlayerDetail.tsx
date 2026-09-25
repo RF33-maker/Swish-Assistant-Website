@@ -276,7 +276,21 @@ export default function PlayerDetail({ player, players, teams, brandColor, onBac
               <span className="text-[11px] font-mono font-semibold tracking-widest" style={{ color: readableBrand.body }}>03</span>
               <h3 className="text-base md:text-lg font-semibold text-slate-800 dark:text-white">Shot chart</h3>
             </div>
-            <ShotChart shots={shots} loading={loading} emptyMessage="No located shots for this player yet." />
+            {/* Player and team filters are deliberately omitted — this view is
+                already scoped to one player. The rest let a coach isolate a
+                specific look ("3s only", "corner 3s", "pull-ups in Q4"). */}
+            <ShotChart
+              shots={shots}
+              loading={loading}
+              emptyMessage="No located shots for this player yet."
+              filters={{
+                showShotTypeFilter: true,
+                showZoneFilter: true,
+                showSubTypeFilter: true,
+                showQuarterFilter: true,
+                showResultFilter: true,
+              }}
+            />
           </div>
 
           <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
