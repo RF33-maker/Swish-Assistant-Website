@@ -5,6 +5,7 @@ import * as http from "http";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
 import { supabaseAdmin } from "./supabaseServiceClient";
 import { detectDuplicates } from "./playerMergeUtils";
+import { generateReportNarrative, narrativeAvailable } from "./matchNarrative";
 import { computeLineups } from "./lineupsService";
 import type { LineupMetric } from "./lineups";
 import { resolveAmbiguousTeam, syncTeamIdentitiesForLeague } from "./teamIdentityService";
@@ -1399,6 +1400,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (err: any) {
       console.error("team-competitions: unexpected error:", err.message);
       res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Written analysis layered over the Coaches Hub reports. The reports
+  // themselves are computed client-side and always render; this endpoint only
+  // supplies the prose, and every failure path returns 200 with
+  // { narrative: null } so a slow or unconfigured model degrades to the
+  // numbers-only report rather than an error state.
+  app.post("/api/reports/narrative", async (req: Request, res: Response) => {
+    try {
+      const userId = await authenticateSupabaseUser(req);
+      if (!userId) return res.status(401).json({ error: "Authentication required" });
+
+      const { kind, facts, sectionKeys } = req.body || {};
+      if (kind !== "match" && kind !== "scout") {
+        return res.status(400).json({ error: "kind must be 'match' or 'scout'" });
+      }
+      if (!facts || typeof facts !== "object") {
+        return res.status(400).json({ error: "facts object is required" });
+      }
+      const keys = Array.isArray(sectionKeys)
+        ? sectionKeys.filter((k: unknown): k is string => typeof k === "string").slice(0, 12)
+        : [];
+
+      // Bound the payload: these are pre-computed facts, so anything large is
+      // a caller bug rather than a legitimate request.
+      const serialized = JSON.stringify(facts);
+      if (serialized.length > 20000) {
+        return res.status(400).json({ error: "facts payload too large" });
+      }
+
+      // Checked after validation so a malformed request still gets a 400 —
+      // otherwise every caller bug looks like a missing API key.
+      if (!narrativeAvailable()) {
+        return res.json({ narrative: null, reason: "not_configured" });
+      }
+
+      const narrative = await generateReportNarrative({ kind, facts, sectionKeys: keys });
+      return res.json({ narrative });
+    } catch (err: any) {
+      console.error("[report-narrative] failed:", err?.message);
+      return res.json({ narrative: null, reason: "error" });
     }
   });
 

@@ -247,3 +247,81 @@ export function RankTrack({
     </div>
   );
 }
+
+/**
+ * The written analysis card that sits under a report's hero.
+ *
+ * Renders nothing at all when the analysis is unavailable — the report's own
+ * numbers are the product, and an error box in their place would be worse
+ * than silence. While loading it shows a single quiet line so the section
+ * does not pop in without warning.
+ */
+export function NarrativeSummary({
+  headline,
+  overview,
+  takeaways,
+  status,
+  color,
+}: {
+  headline?: string;
+  overview?: string;
+  takeaways?: string[];
+  status: 'idle' | 'loading' | 'ready' | 'unavailable';
+  color: string;
+}) {
+  if (status === 'unavailable' || status === 'idle') return null;
+
+  if (status === 'loading') {
+    return (
+      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
+        <p className="text-sm text-gray-400 dark:text-neutral-500 italic">Writing the analysis…</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
+      <div className="flex items-baseline gap-2 mb-2">
+        <span className="text-[11px] font-mono font-semibold tracking-widest" style={{ color }}>
+          ANALYSIS
+        </span>
+      </div>
+      {headline && (
+        <h3 className="text-base md:text-xl font-semibold text-slate-800 dark:text-white mb-2 leading-snug">
+          {headline}
+        </h3>
+      )}
+      {overview && (
+        <p className="text-sm text-gray-700 dark:text-neutral-300 leading-relaxed">{overview}</p>
+      )}
+      {takeaways && takeaways.length > 0 && (
+        <div className="mt-4">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400 mb-2">
+            Takeaways
+          </h4>
+          <ul className="space-y-1.5">
+            {takeaways.map((t, i) => (
+              <li key={i} className="flex items-start gap-2">
+                <span
+                  className="mt-1.5 w-1.5 h-1.5 rounded-full shrink-0"
+                  style={{ backgroundColor: color }}
+                />
+                <span className="text-sm text-gray-700 dark:text-neutral-300 leading-relaxed">{t}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The model's read on one section, shown under that section's own chart. */
+export function SectionNarrative({ body }: { body?: string }) {
+  if (!body) return null;
+  return (
+    <p className="text-sm text-gray-600 dark:text-neutral-400 leading-relaxed mt-3 pt-3 border-t border-gray-100 dark:border-neutral-800">
+      {body}
+    </p>
+  );
+}

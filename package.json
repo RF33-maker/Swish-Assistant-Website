@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.128.0",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
     "@google-cloud/storage": "^7.16.0",

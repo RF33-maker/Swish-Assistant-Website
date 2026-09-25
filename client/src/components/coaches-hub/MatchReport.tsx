@@ -3,7 +3,8 @@ import { ArrowLeft, FileText, TrendingDown, TrendingUp, Minus } from 'lucide-rea
 import { supabase } from '@/lib/supabase';
 import { useTeamBranding } from '@/hooks/useTeamBranding';
 import ShotChart, { type ShotData } from '@/components/ShotChart';
-import { ComparisonBarRow, QuarterFlowChart, StackedShare } from './reportVisuals';
+import { ComparisonBarRow, NarrativeSummary, QuarterFlowChart, SectionNarrative } from './reportVisuals';
+import { useReportNarrative } from '@/hooks/useReportNarrative';
 import {
   buildStorylines,
   fourFactors,
@@ -40,8 +41,8 @@ const PLAYER_COLUMNS =
   'sfieldgoalsmade, sfieldgoalsattempted, sthreepointersmade, sthreepointersattempted, ' +
   'sfreethrowsmade, sfreethrowsattempted, splusminuspoints, ts_percent, usage_percent';
 
-function Section({ n, title, subtitle, color, children }: {
-  n: string; title: string; subtitle?: string; color: string; children: React.ReactNode;
+function Section({ n, title, subtitle, color, children, narrative }: {
+  n: string; title: string; subtitle?: string; color: string; children: React.ReactNode; narrative?: string;
 }) {
   return (
     <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
@@ -51,6 +52,7 @@ function Section({ n, title, subtitle, color, children }: {
       </div>
       {subtitle && <p className="text-xs text-gray-500 dark:text-neutral-400 mb-3">{subtitle}</p>}
       <div className={subtitle ? '' : 'mt-3'}>{children}</div>
+      <SectionNarrative body={narrative} />
     </div>
   );
 }
@@ -163,6 +165,46 @@ export default function MatchReport({ gameKey, leagueId, teamName, brandColor, o
     return tagged.length > 0 ? tagged : shots;
   }, [shots, mine, teamRows, teamName]);
 
+  // Pre-computed facts only -- the model interprets numbers the report has
+  // already derived, so it cannot introduce one the coach can't see.
+  const facts = useMemo(() => {
+    if (!mine || !theirs) return null;
+    return {
+      yourTeam: teamName,
+      opponent: theirs.name,
+      finalScore: { you: num(mine.score), them: num(theirs.score) },
+      ratings: {
+        offensive: num(mine.off_rating),
+        defensive: num(mine.def_rating),
+        pace: num(mine.pace),
+      },
+      gameShape: {
+        minutesYouLed: num(mine.tot_timeleading),
+        yourBiggestLead: num(mine.tot_sbiggestlead),
+        theirBiggestLead: num(theirs.tot_sbiggestlead),
+        leadChanges: num(mine.tot_leadchanges),
+        timesTied: num(mine.tot_timesscoreslevel),
+        yourBestRun: num(mine.tot_biggestscoringrun),
+        theirBestRun: num(theirs.tot_biggestscoringrun),
+      },
+      decided: storylines.map((s) => ({ point: s.title, detail: s.detail, wentYourWay: s.tone === 'good' })),
+      fourFactors: factors.map((f) => ({ stat: f.label, you: f.mine, them: f.theirs, lowerIsBetter: !!f.lowerIsBetter })),
+      byQuarter: quarters.map((q) => ({ quarter: q.label, you: q.mine, them: q.theirs, runningMargin: q.cumulativeMargin })),
+      scoringMix: mix.map((m) => ({ category: m.label, you: m.mine, them: m.theirs })),
+      yourTopPerformers: myPlayers.map((p) => ({
+        name: p.name, points: p.points, rebounds: p.rebounds, assists: p.assists,
+        fieldGoals: p.fg, threes: p.tp, plusMinus: p.plusMinus, minutes: p.minutes,
+      })),
+      theirTopPerformers: theirPlayers.map((p) => ({
+        name: p.name, points: p.points, rebounds: p.rebounds, assists: p.assists,
+        fieldGoals: p.fg, threes: p.tp, plusMinus: p.plusMinus, minutes: p.minutes,
+      })),
+    };
+  }, [mine, theirs, teamName, storylines, factors, quarters, mix, myPlayers, theirPlayers]);
+
+  const SECTION_KEYS = ['decided', 'fourFactors', 'byQuarter', 'scoringMix', 'performers'];
+  const { narrative, status, bodyFor } = useReportNarrative('match', facts, SECTION_KEYS, !loading && !!facts);
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -231,12 +273,21 @@ export default function MatchReport({ gameKey, leagueId, teamName, brandColor, o
         )}
       </div>
 
+      <NarrativeSummary
+        headline={narrative?.headline}
+        overview={narrative?.overview}
+        takeaways={narrative?.takeaways}
+        status={status}
+        color={brand}
+      />
+
       {/* What decided it */}
       <Section
         n="01"
         title="What decided it"
-        subtitle="The numbers with the biggest gap between the two teams. A close game shows fewer of these."
+        subtitle="The numbers with the biggest gap between the two teams. Each one is only listed when the gap is wide enough to have plausibly affected the result, so a close game shows fewer of these — and an even one shows none."
         color={brand}
+        narrative={bodyFor('decided')}
       >
         {storylines.length === 0 ? (
           <p className="text-sm text-gray-500 dark:text-neutral-400 italic">
@@ -271,8 +322,9 @@ export default function MatchReport({ gameKey, leagueId, teamName, brandColor, o
         <Section
           n="02"
           title="The four factors"
-          subtitle={`How ${teamName} (left) compared with ${theirs.name} (right) on the four things that most decide basketball games.`}
+          subtitle={`Shooting efficiency, ball security, offensive rebounding and getting to the line — between them these four explain most of what separates two teams. ${teamName} on the left, ${theirs.name} on the right; the bar shows the split between you.`}
           color={brand}
+          narrative={bodyFor('fourFactors')}
         >
           {factors.map((row) => (
             <ComparisonBarRow key={row.label} row={row} myColor={brand} theirColor={OPP_COLOR} myLabel={teamName} theirLabel={theirs.name} />
@@ -282,14 +334,26 @@ export default function MatchReport({ gameKey, leagueId, teamName, brandColor, o
 
       {/* Quarter flow */}
       {quarters.length > 0 && (
-        <Section n="03" title="How it unfolded" subtitle="Scoring by quarter, with the running margin underneath." color={brand}>
+        <Section
+          n="03"
+          title="How it unfolded"
+          subtitle="Scoring by quarter, with the running margin underneath. The margin track is what shows when the game actually turned — a heavy final score can still come from one bad ten minutes."
+          color={brand}
+          narrative={bodyFor('byQuarter')}
+        >
           <QuarterFlowChart quarters={quarters} myColor={brand} theirColor={OPP_COLOR} myLabel={teamName} theirLabel={theirs.name} />
         </Section>
       )}
 
       {/* Where the points came from */}
       {mix.length > 0 && (
-        <Section n="04" title="Where the points came from" color={brand}>
+        <Section
+          n="04"
+          title="Where the points came from"
+          subtitle="Points totals by how they were created. Two teams can score similarly and have generated it in completely different ways, which is usually where the gameplan shows up."
+          color={brand}
+          narrative={bodyFor('scoringMix')}
+        >
           {mix.map((row) => (
             <ComparisonBarRow key={row.label} row={row} myColor={brand} theirColor={OPP_COLOR} myLabel={teamName} theirLabel={theirs.name} />
           ))}
@@ -297,7 +361,13 @@ export default function MatchReport({ gameKey, leagueId, teamName, brandColor, o
       )}
 
       {/* Performers */}
-      <Section n="05" title="Who did the damage" color={brand}>
+      <Section
+        n="05"
+        title="Who did the damage"
+        subtitle="Leading scorers on both sides, with shooting splits and plus-minus. Plus-minus is the team's net points while that player was on court, so it can disagree sharply with a points total."
+        color={brand}
+        narrative={bodyFor('performers')}
+      >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
           <div>
             <h4 className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: brand }}>{teamName}</h4>
