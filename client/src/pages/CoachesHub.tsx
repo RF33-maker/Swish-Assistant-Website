@@ -112,6 +112,18 @@ export interface NextGameRow {
   status: string | null;
 }
 
+/** 1 -> "1st", 2 -> "2nd", 13 -> "13th". */
+function ordinal(n: number): string {
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1: return `${n}st`;
+    case 2: return `${n}nd`;
+    case 3: return `${n}rd`;
+    default: return `${n}th`;
+  }
+}
+
 /** One row of win-loss standings, computed client-side from GameResultRow[]. */
 export interface StandingRow {
   teamId: string;
@@ -763,6 +775,61 @@ export default function CoachesHub() {
     ? standings.find((s) => s.teamName === canonicalTeamName(myTeam.team_name))
     : undefined;
 
+  // A coach reads "89.3 PPG" and cannot tell whether that is good. Rank it
+  // against the rest of the competition, collapsing alias rows first so the
+  // denominator matches the standings ("2nd of 20", not "of 21").
+  const teamRanks = useMemo(() => {
+    if (!myTeam) return null;
+    const byCanonical = new Map<string, TeamSeasonAverage>();
+    teamSeasonAverages.forEach((t) => {
+      const name = canonicalTeamName(t.team_name);
+      const existing = byCanonical.get(name);
+      if (!existing || (t.games_played || 0) > (existing.games_played || 0)) {
+        byCanonical.set(name, t);
+      }
+    });
+    const teams = Array.from(byCanonical.values());
+    const total = teams.length;
+    const myName = canonicalTeamName(myTeam.team_name);
+
+    const rankBy = (pick: (t: TeamSeasonAverage) => number | null | undefined) => {
+      const scored = teams
+        .map((t) => ({ name: canonicalTeamName(t.team_name), value: Number(pick(t) ?? NaN) }))
+        .filter((r) => !Number.isNaN(r.value))
+        .sort((a, b) => b.value - a.value);
+      const index = scored.findIndex((r) => r.name === myName);
+      return index >= 0 ? { rank: index + 1, of: scored.length } : null;
+    };
+
+    return {
+      total,
+      pts: rankBy((t) => t.avg_pts),
+      reb: rankBy((t) => t.avg_reb),
+      ast: rankBy((t) => t.avg_ast),
+      fg: rankBy((t) => t.season_fg_pct),
+    };
+  }, [myTeam, teamSeasonAverages, canonicalTeamName]);
+
+  // Reading's own roster, not the league's. Sorted per category so the coach
+  // sees who is carrying each part of their team.
+  const myRosterLeaders = useMemo(() => {
+    if (!myTeam) return null;
+    const mine = playerSeasonAverages.filter(
+      (p) => canonicalTeamName(p.team_name) === canonicalTeamName(myTeam.team_name)
+    );
+    if (mine.length === 0) return null;
+    const top = (pick: (p: PlayerSeasonAverage) => number | null | undefined) =>
+      [...mine]
+        .filter((p) => pick(p) != null && !Number.isNaN(Number(pick(p))))
+        .sort((a, b) => Number(pick(b) ?? 0) - Number(pick(a) ?? 0))[0];
+    return {
+      scorers: [...mine].sort((a, b) => Number(b.avg_pts ?? 0) - Number(a.avg_pts ?? 0)).slice(0, 3),
+      rebounder: top((p) => p.avg_reb),
+      passer: top((p) => p.avg_ast),
+      defender: top((p) => Number(p.avg_stl ?? 0) + Number(p.avg_blk ?? 0)),
+    };
+  }, [myTeam, playerSeasonAverages, canonicalTeamName]);
+
   // This team's own completed games, most-recent-first (leagueGameResults is
   // already ordered that way) — the source for "last game" and the last-5
   // trend strip.
@@ -1275,111 +1342,169 @@ export default function CoachesHub() {
 
                     {hasStats ? (
                       <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
-                        <SectionKicker n="01" label="Season snapshot" color={readableBrand} />
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-4 md:mb-6">
-                          <div className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700">
-                            <div className="flex items-center gap-2 mb-2">
-                              <Users className="w-4 h-4 text-gray-500 dark:text-neutral-400" />
-                              <span className="text-xs md:text-sm font-medium text-gray-600 dark:text-neutral-400">Teams</span>
-                            </div>
-                            <div className="text-xl md:text-2xl font-bold" style={{ color: readableBrand }}>
-                              {teamSeasonAverages.length}
-                            </div>
-                          </div>
-
-                          <div className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700">
-                            <div className="flex items-center gap-2 mb-2">
-                              <User className="w-4 h-4 text-gray-500 dark:text-neutral-400" />
-                              <span className="text-xs md:text-sm font-medium text-gray-600 dark:text-neutral-400">Players</span>
-                            </div>
-                            <div className="text-xl md:text-2xl font-bold" style={{ color: readableBrand }}>
-                              {playerSeasonAverages.length}
-                            </div>
-                          </div>
-
-                          <div className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700">
-                            <div className="flex items-center gap-2 mb-2">
-                              <Calendar className="w-4 h-4 text-gray-500 dark:text-neutral-400" />
-                              <span className="text-xs md:text-sm font-medium text-gray-600 dark:text-neutral-400">Games</span>
-                            </div>
-                            <div className="text-xl md:text-2xl font-bold" style={{ color: readableBrand }}>
-                              {uniqueGameCount}
-                            </div>
-                          </div>
-
-                          <div className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700">
-                            <div className="flex items-center gap-2 mb-2">
-                              <Award className="w-4 h-4 text-gray-500 dark:text-neutral-400" />
-                              <span className="text-xs md:text-sm font-medium text-gray-600 dark:text-neutral-400">Top Team</span>
-                            </div>
-                            <div className="text-base md:text-lg font-bold" style={{ color: readableBrand }}>
-                              {topTeam ? topTeam.team_name : 'No Data'}
-                            </div>
-                          </div>
-                        </div>
-
-                        <SectionKicker n="02" label="Team leaders" color={readableBrand} />
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
-                          <div className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700">
-                            <h4 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                              <Award className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
-                              Top Scoring Teams
-                            </h4>
-                            {/* team_id is occasionally duplicated across two different real teams
-                                in the source data, so index is folded into the key too */}
-                            <div className="space-y-2">
-                              {teamSeasonAverages.slice(0, 3).map((team, index) => (
-                                <div key={`${team.team_id ?? 'team'}-${index}`} className="flex items-center justify-between py-1">
-                                  <div className="flex items-center gap-2">
-                                    <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white ${
-                                      index === 0 ? 'bg-yellow-500' : index === 1 ? 'bg-gray-400' : 'bg-amber-600'
-                                    }`}>
-                                      {index + 1}
-                                    </div>
-                                    <button onClick={() => setDetailView({ type: 'team', team })} className="text-sm font-medium text-gray-900 dark:text-white hover:underline text-left">{team.team_name}</button>
-                                  </div>
-                                  <span className="text-sm font-bold text-gray-700 dark:text-neutral-300">{Number(team.avg_pts ?? 0).toFixed(1)} avg pts</span>
+                        <SectionKicker n="01" label={myTeam ? `${myTeam.team_name} in this competition` : 'Season snapshot'} color={readableBrand} />
+                        {myTeam && teamRanks ? (
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-4 md:mb-6">
+                            {([
+                              { label: 'Points', value: Number(myTeam.avg_pts ?? 0).toFixed(1), rank: teamRanks.pts, icon: TrendingUp },
+                              { label: 'Rebounds', value: Number(myTeam.avg_reb ?? 0).toFixed(1), rank: teamRanks.reb, icon: BarChart3 },
+                              { label: 'Assists', value: Number(myTeam.avg_ast ?? 0).toFixed(1), rank: teamRanks.ast, icon: Users },
+                              {
+                                label: 'FG%',
+                                value: myTeam.season_fg_pct != null ? `${Number(myTeam.season_fg_pct).toFixed(1)}%` : '—',
+                                rank: teamRanks.fg,
+                                icon: Target,
+                              },
+                            ] as const).map((stat) => (
+                              <div key={stat.label} className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <stat.icon className="w-4 h-4 text-gray-500 dark:text-neutral-400" />
+                                  <span className="text-xs md:text-sm font-medium text-gray-600 dark:text-neutral-400">{stat.label}</span>
                                 </div>
-                              ))}
+                                <div className="text-xl md:text-2xl font-bold" style={{ color: readableBrand }}>
+                                  {stat.value}
+                                </div>
+                                {stat.rank && (
+                                  <div className="text-[11px] md:text-xs text-gray-500 dark:text-neutral-400 mt-0.5">
+                                    {ordinal(stat.rank.rank)} of {stat.rank.of}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-4 md:mb-6">
+                            <div className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Users className="w-4 h-4 text-gray-500 dark:text-neutral-400" />
+                                <span className="text-xs md:text-sm font-medium text-gray-600 dark:text-neutral-400">Teams</span>
+                              </div>
+                              <div className="text-xl md:text-2xl font-bold" style={{ color: readableBrand }}>
+                                {standings.length || teamSeasonAverages.length}
+                              </div>
+                            </div>
+                            <div className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700">
+                              <div className="flex items-center gap-2 mb-2">
+                                <User className="w-4 h-4 text-gray-500 dark:text-neutral-400" />
+                                <span className="text-xs md:text-sm font-medium text-gray-600 dark:text-neutral-400">Players</span>
+                              </div>
+                              <div className="text-xl md:text-2xl font-bold" style={{ color: readableBrand }}>
+                                {playerSeasonAverages.length}
+                              </div>
+                            </div>
+                            <div className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Calendar className="w-4 h-4 text-gray-500 dark:text-neutral-400" />
+                                <span className="text-xs md:text-sm font-medium text-gray-600 dark:text-neutral-400">Games</span>
+                              </div>
+                              <div className="text-xl md:text-2xl font-bold" style={{ color: readableBrand }}>
+                                {uniqueGameCount}
+                              </div>
+                            </div>
+                            <div className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Award className="w-4 h-4 text-gray-500 dark:text-neutral-400" />
+                                <span className="text-xs md:text-sm font-medium text-gray-600 dark:text-neutral-400">Top Scoring Team</span>
+                              </div>
+                              <div className="text-base md:text-lg font-bold" style={{ color: readableBrand }}>
+                                {topTeam ? topTeam.team_name : 'No Data'}
+                              </div>
                             </div>
                           </div>
+                        )}
 
-                          <div className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700">
-                            <h4 className="text-sm md:text-base font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-                              <Target className="w-4 h-4 text-green-600 dark:text-green-400" />
-                              Team Leaders
-                            </h4>
-                            <div className="space-y-2">
-                              {(() => {
-                                const topAssistTeam = [...teamSeasonAverages].sort((a, b) => (b.avg_ast ?? 0) - (a.avg_ast ?? 0))[0];
-                                const topReboundTeam = [...teamSeasonAverages].sort((a, b) => (b.avg_reb ?? 0) - (a.avg_reb ?? 0))[0];
-                                const topFGTeam = [...teamSeasonAverages].sort((a, b) => (b.season_fg_pct ?? 0) - (a.season_fg_pct ?? 0))[0];
-                                return (
-                                  <>
-                                    <div className="flex justify-between items-center py-1">
-                                      <span className="text-sm text-gray-600 dark:text-neutral-400">Most Assists</span>
-                                      <span className="text-sm font-medium text-gray-900 dark:text-white">
-                                        {topAssistTeam ? `${topAssistTeam.team_name} (${Number(topAssistTeam.avg_ast ?? 0).toFixed(1)})` : 'No Data'}
-                                      </span>
+                        <SectionKicker n="02" label={myRosterLeaders ? 'Your squad' : 'Team leaders'} color={readableBrand} />
+                        {myRosterLeaders ? (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                            <div className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700">
+                              <h4 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                                <Award className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
+                                Leading scorers
+                              </h4>
+                              <div className="space-y-2">
+                                {myRosterLeaders.scorers.map((player, index) => (
+                                  <div key={`${player.player_name}-${index}`} className="flex items-center justify-between py-1">
+                                    <div className="flex items-center gap-2">
+                                      <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white ${
+                                        index === 0 ? 'bg-yellow-500' : index === 1 ? 'bg-gray-400' : 'bg-amber-600'
+                                      }`}>
+                                        {index + 1}
+                                      </div>
+                                      <button
+                                        onClick={() => setDetailView({ type: 'player', player })}
+                                        className="text-sm font-medium text-gray-900 dark:text-white hover:underline text-left"
+                                      >
+                                        {player.player_name}
+                                      </button>
                                     </div>
-                                    <div className="flex justify-between items-center py-1">
-                                      <span className="text-sm text-gray-600 dark:text-neutral-400">Most Rebounds</span>
-                                      <span className="text-sm font-medium text-gray-900 dark:text-white">
-                                        {topReboundTeam ? `${topReboundTeam.team_name} (${Number(topReboundTeam.avg_reb ?? 0).toFixed(1)})` : 'No Data'}
-                                      </span>
-                                    </div>
-                                    <div className="flex justify-between items-center py-1">
-                                      <span className="text-sm text-gray-600 dark:text-neutral-400">Best FG%</span>
-                                      <span className="text-sm font-medium text-gray-900 dark:text-white">
-                                        {topFGTeam?.season_fg_pct != null ? `${topFGTeam.team_name} (${Number(topFGTeam.season_fg_pct).toFixed(1)}%)` : 'No Data'}
-                                      </span>
-                                    </div>
-                                  </>
-                                );
-                              })()}
+                                    <span className="text-sm font-bold text-gray-700 dark:text-neutral-300">
+                                      {Number(player.avg_pts ?? 0).toFixed(1)} ppg
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700">
+                              <h4 className="text-sm md:text-base font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                                <Target className="w-4 h-4 text-green-600 dark:text-green-400" />
+                                Who leads what
+                              </h4>
+                              <div className="space-y-2">
+                                <div className="flex justify-between items-center py-1">
+                                  <span className="text-sm text-gray-600 dark:text-neutral-400">Rebounding</span>
+                                  <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                    {myRosterLeaders.rebounder
+                                      ? `${myRosterLeaders.rebounder.player_name} (${Number(myRosterLeaders.rebounder.avg_reb ?? 0).toFixed(1)})`
+                                      : 'No Data'}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between items-center py-1">
+                                  <span className="text-sm text-gray-600 dark:text-neutral-400">Playmaking</span>
+                                  <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                    {myRosterLeaders.passer
+                                      ? `${myRosterLeaders.passer.player_name} (${Number(myRosterLeaders.passer.avg_ast ?? 0).toFixed(1)})`
+                                      : 'No Data'}
+                                  </span>
+                                </div>
+                                <div className="flex justify-between items-center py-1">
+                                  <span className="text-sm text-gray-600 dark:text-neutral-400">Stocks (stl+blk)</span>
+                                  <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                    {myRosterLeaders.defender
+                                      ? `${myRosterLeaders.defender.player_name} (${(
+                                          Number(myRosterLeaders.defender.avg_stl ?? 0) + Number(myRosterLeaders.defender.avg_blk ?? 0)
+                                        ).toFixed(1)})`
+                                      : 'No Data'}
+                                  </span>
+                                </div>
+                              </div>
                             </div>
                           </div>
-                        </div>
+                        ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                            <div className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700">
+                              <h4 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                                <Award className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
+                                Top Scoring Teams
+                              </h4>
+                              <div className="space-y-2">
+                                {teamSeasonAverages.slice(0, 3).map((team, index) => (
+                                  <div key={`${team.team_id ?? 'team'}-${index}`} className="flex items-center justify-between py-1">
+                                    <div className="flex items-center gap-2">
+                                      <div className={`w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white ${
+                                        index === 0 ? 'bg-yellow-500' : index === 1 ? 'bg-gray-400' : 'bg-amber-600'
+                                      }`}>
+                                        {index + 1}
+                                      </div>
+                                      <button onClick={() => setDetailView({ type: 'team', team })} className="text-sm font-medium text-gray-900 dark:text-white hover:underline text-left">{team.team_name}</button>
+                                    </div>
+                                    <span className="text-sm font-bold text-gray-700 dark:text-neutral-300">{Number(team.avg_pts ?? 0).toFixed(1)} avg pts</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-8 text-center">
@@ -1395,13 +1520,18 @@ export default function CoachesHub() {
                     <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-sm border border-gray-200 dark:border-neutral-800 p-4 md:p-6">
                       <SectionKicker n="03" label="Quick actions" color={readableBrand} />
                       <div className="flex flex-wrap gap-x-6 gap-y-2">
-                        <Link
-                          href="/league-admin"
-                          className="flex items-center gap-2 text-sm text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 transition"
-                        >
-                          <Award className="w-4 h-4" />
-                          Upload Player Stats
-                        </Link>
+                        {/* League-owner action -- a coach account has no
+                            access to /league-admin, so offering it here only
+                            leads them to a permission wall. */}
+                        {!isCoach && (
+                          <Link
+                            href="/league-admin"
+                            className="flex items-center gap-2 text-sm text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 transition"
+                          >
+                            <Award className="w-4 h-4" />
+                            Upload Player Stats
+                          </Link>
+                        )}
                         <Link
                           href={`/competition/${selectedLeague.slug}`}
                           className="flex items-center gap-2 text-sm text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 transition"

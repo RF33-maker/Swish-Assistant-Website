@@ -92,6 +92,10 @@ export default function CoachTeamOverview({ team, leagueId, standing, standings,
   const marginDelta = seasonAvgMargin != null && last5AvgMargin != null ? last5AvgMargin - seasonAvgMargin : null;
   const marginDirection: 'up' | 'down' | 'flat' = marginDelta == null ? 'flat' : marginDelta > 1.5 ? 'up' : marginDelta < -1.5 ? 'down' : 'flat';
 
+  // A last-five-vs-season comparison only means something once the season is
+  // longer than five games; below that the two windows are the same games.
+  const hasTrendBaseline = Number(team.games_played ?? 0) > 5;
+
   return (
     <div className="space-y-4 md:space-y-6">
       {/* Game footage — StatsThread partnership placeholder, up top so it's
@@ -180,7 +184,9 @@ export default function CoachTeamOverview({ team, leagueId, standing, standings,
         <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-neutral-500 mb-2">Form</h4>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4">
           <div className="bg-gray-50 dark:bg-neutral-800/60 p-3 md:p-4 rounded-lg border border-gray-200 dark:border-neutral-700">
-            <div className="text-xs md:text-sm font-medium text-gray-600 dark:text-neutral-400 mb-2">Last 5 games</div>
+            <div className="text-xs md:text-sm font-medium text-gray-600 dark:text-neutral-400 mb-2">
+              {last5.length > 0 && last5.length < 5 ? `Last ${last5.length} game${last5.length === 1 ? '' : 's'}` : 'Last 5 games'}
+            </div>
             {last5.length > 0 ? (
               <div className="flex items-center gap-1.5">
                 {last5.map((g) => (
@@ -198,24 +204,40 @@ export default function CoachTeamOverview({ team, leagueId, standing, standings,
             )}
           </div>
 
+          {/* These compare the last five games against the season average, so
+              until a team has played more than five the two sets are the same
+              and the delta is structurally zero -- "0.0 vs season" reads like a
+              flat trend when it actually means "no comparison yet". */}
           <TrendPill
-            direction={marginDirection}
+            direction={hasTrendBaseline ? marginDirection : 'flat'}
             label="Scoring margin trend"
-            sub={marginDelta == null ? '—' : `${marginDelta > 0 ? '+' : ''}${marginDelta.toFixed(1)} vs season`}
+            sub={
+              !hasTrendBaseline
+                ? 'Needs more than 5 games'
+                : marginDelta == null
+                  ? '—'
+                  : `${marginDelta > 0 ? '+' : ''}${marginDelta.toFixed(1)} vs season`
+            }
             color={readable}
           />
 
           <TrendPill
-            direction={fgDirection}
+            direction={hasTrendBaseline ? fgDirection : 'flat'}
             label="FG% trend"
-            sub={fgDelta == null ? '—' : `${fgDelta > 0 ? '+' : ''}${fgDelta.toFixed(1)}pt vs season`}
+            sub={
+              !hasTrendBaseline
+                ? 'Needs more than 5 games'
+                : fgDelta == null
+                  ? '—'
+                  : `${fgDelta > 0 ? '+' : ''}${fgDelta.toFixed(1)}pt vs season`
+            }
             color={readable}
           />
         </div>
       </div>
 
       {/* Season averages */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 md:gap-4">
         {[
           { label: 'Games', value: team.games_played },
           { label: 'PPG', value: Number(team.avg_pts ?? 0).toFixed(1) },
