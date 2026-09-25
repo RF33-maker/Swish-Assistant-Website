@@ -1,5 +1,5 @@
 import { Link } from 'wouter';
-import { BarChart2, Calendar, Clock, FileText, MapPin, Minus, PlayCircle, TrendingDown, TrendingUp, Video } from 'lucide-react';
+import { BarChart2, Calendar, ClipboardList, Clock, FileText, MapPin, Minus, PlayCircle, TrendingDown, TrendingUp, Video } from 'lucide-react';
 import { useTeamBranding } from '@/hooks/useTeamBranding';
 import { useReadableTeamColor } from '@/hooks/useReadableColor';
 import { getGameFootage } from '@/lib/gameFootage';
@@ -18,6 +18,8 @@ interface Props {
   last5: MyTeamGame[];
   last5FgPct: number | null;
   fallbackColor: string;
+  onOpenMatchReport?: (gameKey: string) => void;
+  onOpenScoutReport?: (opponentName: string) => void;
 }
 
 /**
@@ -78,7 +80,7 @@ function TrendPill({ direction, label, sub, color }: { direction: 'up' | 'down' 
   );
 }
 
-export default function CoachTeamOverview({ team, leagueId, standing, standings, lastGame, nextGame, opponentLastGame, last5, last5FgPct, fallbackColor }: Props) {
+export default function CoachTeamOverview({ team, leagueId, standing, standings, lastGame, nextGame, opponentLastGame, last5, last5FgPct, fallbackColor, onOpenMatchReport, onOpenScoutReport }: Props) {
   const { primaryColor, isLoading: brandLoading } = useTeamBranding({ teamName: team.team_name, leagueId });
   const brandColor = brandLoading || !primaryColor ? fallbackColor : primaryColor;
   const readable = useReadableTeamColor(brandColor).body;
@@ -135,6 +137,19 @@ export default function CoachTeamOverview({ team, leagueId, standing, standings,
                 availableLabel={`Watch ${opponentLastGame?.opponentName ?? 'their'} last game`}
                 unavailableLabel={opponentLastGame ? `No footage of ${opponentLastGame.opponentName} yet` : 'No scouting footage yet'}
               />
+              {onOpenScoutReport && (
+                <button
+                  onClick={() =>
+                    onOpenScoutReport(
+                      nextGame.home_team_id === team.team_id ? nextGame.awayteam : nextGame.hometeam
+                    )
+                  }
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold hover:underline mt-2"
+                  style={{ color: readable }}
+                >
+                  <ClipboardList className="w-3.5 h-3.5" /> Scout report
+                </button>
+              )}
             </div>
           ) : (
             <p className="text-sm text-gray-400 dark:text-neutral-500 italic">No upcoming games scheduled.</p>
@@ -165,12 +180,19 @@ export default function CoachTeamOverview({ team, leagueId, standing, standings,
                   <BarChart2 className="w-3.5 h-3.5" /> Box score
                 </Link>
                 <VideoLink gameKey={lastGame.gameKey} availableLabel="Watch this game" unavailableLabel="Video not available yet" />
-                <span
-                  title="Coming soon — a generated write-up of this game"
-                  className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-400 dark:text-neutral-600 mt-2"
-                >
-                  <FileText className="w-3.5 h-3.5" /> Match report coming soon
-                </span>
+                {onOpenMatchReport ? (
+                  <button
+                    onClick={() => onOpenMatchReport(lastGame.gameKey)}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold hover:underline mt-2"
+                    style={{ color: readable }}
+                  >
+                    <FileText className="w-3.5 h-3.5" /> Match report
+                  </button>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-400 dark:text-neutral-600 mt-2">
+                    <FileText className="w-3.5 h-3.5" /> Match report coming soon
+                  </span>
+                )}
               </div>
             </div>
           ) : (
