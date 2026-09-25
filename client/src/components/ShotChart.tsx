@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { Target } from "lucide-react";
+import { analyseDistribution } from "@/lib/shotDistribution";
 
 export interface ShotData {
   id?: number | string;
@@ -428,6 +429,11 @@ export default function ShotChart({
     });
     return totals;
   }, [projected]);
+
+  // Volume alongside efficiency: the zone panel answers "how good are these
+  // shots", this answers "where do the shots actually come from", plus the
+  // written read so a coach doesn't have to decode seven numbers.
+  const distribution = useMemo(() => analyseDistribution(zoneStats, ZONES), [zoneStats]);
 
   const hasFilters =
     showPlayerFilter || showQuarterFilter || showTeamFilter || showResultFilter || showShotTypeFilter || showSubTypeFilter || showZoneFilter;
@@ -870,6 +876,93 @@ export default function ShotChart({
           </div>
         </div>
       </div>
+
+      {/* Distribution + written read. Hidden in shareMode, which is a fixed
+          capture surface with no room for prose. */}
+      {!shareMode && distribution.totalAttempts > 0 && (
+        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-neutral-700">
+          <h4 className="text-sm font-semibold text-slate-800 dark:text-white mb-1">Shot distribution</h4>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+            Where these {distribution.totalAttempts} shots were taken from, and how they went in.
+          </p>
+
+          <div className="flex h-3 rounded-full overflow-hidden bg-gray-200 dark:bg-neutral-700">
+            {distribution.groups
+              .filter((g) => g.attempts > 0)
+              .map((g) => (
+                <div
+                  key={g.key}
+                  style={{ width: `${g.share}%`, backgroundColor: g.color }}
+                  title={`${g.label}: ${g.attempts} attempts (${Math.round(g.share)}%)`}
+                />
+              ))}
+          </div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 mb-4">
+            {distribution.groups
+              .filter((g) => g.attempts > 0)
+              .map((g) => (
+                <div key={g.key} className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: g.color }} />
+                  <span className="text-[11px] text-slate-600 dark:text-slate-400">
+                    {g.label}{" "}
+                    <span className="font-semibold tabular-nums">{Math.round(g.share)}%</span>
+                    {g.fgPct != null && (
+                      <span className="text-slate-400 dark:text-slate-500"> · {g.fgPct.toFixed(0)}%</span>
+                    )}
+                  </span>
+                </div>
+              ))}
+          </div>
+
+          {/* Per-area share, so the busiest spots are visible at a glance. */}
+          <div className="space-y-1.5 mb-4">
+            {distribution.zones
+              .filter((z) => z.attempts > 0)
+              .sort((a, b) => b.attempts - a.attempts)
+              .map((z) => {
+                const isBest = distribution.bestZone?.key === z.key;
+                const isWorst = distribution.weakestZone?.key === z.key;
+                return (
+                  <div key={z.key} className="flex items-center gap-2 text-[11px]">
+                    <span className="w-28 md:w-32 shrink-0 text-slate-600 dark:text-slate-400 truncate">
+                      {z.label}
+                      {isBest && <span className="ml-1 text-orange-500 dark:text-orange-400 font-semibold">best</span>}
+                      {isWorst && <span className="ml-1 text-sky-600 dark:text-sky-400 font-semibold">coldest</span>}
+                    </span>
+                    <div className="flex-1 h-1.5 rounded-full bg-gray-200 dark:bg-neutral-700 overflow-hidden">
+                      <div
+                        className="h-full rounded-full"
+                        style={{
+                          width: `${z.share}%`,
+                          backgroundColor: isBest ? "#f59e3b" : isWorst ? "#5b9fbf" : "#94a3b8",
+                        }}
+                      />
+                    </div>
+                    <span className="w-24 shrink-0 text-right tabular-nums text-slate-500 dark:text-slate-400">
+                      {z.made}/{z.attempts}
+                      {z.fgPct != null && ` · ${z.fgPct.toFixed(0)}%`}
+                    </span>
+                  </div>
+                );
+              })}
+          </div>
+
+          {distribution.explanation.length > 0 && (
+            <div className="bg-gray-50 dark:bg-neutral-800/60 rounded-lg border border-gray-200 dark:border-neutral-700 p-3">
+              <h5 className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1.5">
+                What this shows
+              </h5>
+              <ul className="space-y-1">
+                {distribution.explanation.map((line, i) => (
+                  <li key={i} className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                    {line}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
 
       <style>{`
         @keyframes shotFadeIn {
