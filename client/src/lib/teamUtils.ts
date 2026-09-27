@@ -183,3 +183,23 @@ export function buildFuzzyTeamAliasMap(
 
   return result;
 }
+
+/**
+ * Short form of a team name for narrow layouts: the first three letters of
+ * the first word.
+ *
+ * "Milton Keynes Breakers" -> "MIL", "London Cavaliers" -> "LON".
+ *
+ * Initials were tried first and read badly — "Milton Keynes Breakers" became
+ * "MKB" and "London Cavaliers" became "LC", which are hard to tell apart at a
+ * glance and impossible to guess if you don't already know the fixture.
+ * Three letters of the place or club name is what scoreboards use, and it
+ * stays readable without being ambiguous.
+ *
+ * Full names are shown wherever there is room; this is only for small screens.
+ */
+export function getTeamAbbreviation(name: string): string {
+  if (!name) return '';
+  const firstWord = name.trim().split(/\s+/)[0] || '';
+  return firstWord.substring(0, 3).toUpperCase();
+}
