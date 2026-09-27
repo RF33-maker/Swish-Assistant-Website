@@ -3,6 +3,7 @@ import { ArrowLeft, Calendar, Clock, MapPin, Link as LinkIcon, Check, Loader2 } 
 import { supabase } from "@/lib/supabase";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import SharedBoxScore from "@/components/BoxScoreTable";
+import { getTeamAbbreviation } from "@/lib/teamUtils";
 import { TeamLogo } from "./TeamLogo";
 import { generatePlayCaption } from "@/utils/generatePlayCaption";
 import type { ShotData } from "./ShotChart";
@@ -111,13 +112,6 @@ function parseMinutes(s: string | null | undefined): string {
   const w = Math.floor(m);
   const sec = Math.round((m - w) * 60);
   return `${w}:${sec.toString().padStart(2, "0")}`;
-}
-
-function getTeamAbbr(name: string): string {
-  if (!name) return "";
-  const words = name.trim().split(/\s+/);
-  if (words.length === 1) return name.substring(0, 3).toUpperCase();
-  return words.slice(0, 3).map((w) => w[0]).join("").toUpperCase();
 }
 
 function getStatusBadge(status: string | null | undefined) {
@@ -617,11 +611,11 @@ export function InlineGameDetail({
               <div className="flex justify-center mb-2 md:mb-3">
                 {leagueId
                   ? <TeamLogo teamName={hometeam} leagueId={leagueId} size="md" className="md:w-20 md:h-20" />
-                  : <div className="w-16 h-16 rounded-full bg-orange-100 dark:bg-neutral-700 flex items-center justify-center text-lg font-bold text-orange-500">{getTeamAbbr(hometeam)}</div>
+                  : <div className="w-16 h-16 rounded-full bg-orange-100 dark:bg-neutral-700 flex items-center justify-center text-lg font-bold text-orange-500">{getTeamAbbreviation(hometeam)}</div>
                 }
               </div>
               <h2 className="text-sm md:text-xl font-bold text-slate-800 dark:text-white truncate hidden md:block">{hometeam}</h2>
-              <h2 className="text-base font-bold text-slate-800 dark:text-white md:hidden">{getTeamAbbr(hometeam)}</h2>
+              <h2 className="text-base font-bold text-slate-800 dark:text-white md:hidden">{getTeamAbbreviation(hometeam)}</h2>
               <span className="text-xs mt-0.5 block" style={{ color: brandColor }}>HOME</span>
             </div>
 
@@ -643,11 +637,11 @@ export function InlineGameDetail({
               <div className="flex justify-center mb-2 md:mb-3">
                 {leagueId
                   ? <TeamLogo teamName={awayteam} leagueId={leagueId} size="md" className="md:w-20 md:h-20" />
-                  : <div className="w-16 h-16 rounded-full bg-blue-100 dark:bg-neutral-700 flex items-center justify-center text-lg font-bold text-blue-500">{getTeamAbbr(awayteam)}</div>
+                  : <div className="w-16 h-16 rounded-full bg-blue-100 dark:bg-neutral-700 flex items-center justify-center text-lg font-bold text-blue-500">{getTeamAbbreviation(awayteam)}</div>
                 }
               </div>
               <h2 className="text-sm md:text-xl font-bold text-slate-800 dark:text-white truncate hidden md:block">{awayteam}</h2>
-              <h2 className="text-base font-bold text-slate-800 dark:text-white md:hidden">{getTeamAbbr(awayteam)}</h2>
+              <h2 className="text-base font-bold text-slate-800 dark:text-white md:hidden">{getTeamAbbreviation(awayteam)}</h2>
               <span className="text-xs mt-0.5 block" style={{ color: brandColor }}>AWAY</span>
             </div>
           </div>
@@ -675,12 +669,16 @@ export function InlineGameDetail({
         <div className="p-4 md:p-6">
           {isGamePlayed ? (
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-5 bg-orange-100 dark:bg-neutral-800 mb-4">
+              {/* Five equal grid columns leave ~75px each on a phone, which is
+                  narrower than "Box Score" or "Play by Play" — the labels
+                  overflowed their cells and ran into each other. Scroll the
+                  strip on small screens and keep the grid from md up. */}
+              <TabsList className="flex w-full justify-start overflow-x-auto gap-1 bg-orange-100 dark:bg-neutral-800 mb-4 md:grid md:grid-cols-5 md:gap-0">
                 {(["game", "boxscore", "teamstats", "shots", "feed"] as const).map((v) => (
                   <TabsTrigger
                     key={v}
                     value={v}
-                    className="data-[state=active]:text-white text-xs md:text-sm"
+                    className="shrink-0 whitespace-nowrap px-3 md:px-2 data-[state=active]:text-white text-xs md:text-sm"
                     style={activeTab === v ? tabActiveStyle : {}}
                   >
                     {v === "game" ? "Game" : v === "boxscore" ? "Box Score" : v === "teamstats" ? "Team Stats" : v === "shots" ? "Shots" : "Play by Play"}

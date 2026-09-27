@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { supabase } from "@/lib/supabase";
+import { getTeamAbbreviation } from "@/lib/teamUtils";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Trophy, Filter, Instagram } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
@@ -127,13 +128,6 @@ interface PlayerProfileContentProps {
   onBack?: () => void;
   linkedPlayerIds?: string[];
 }
-
-const getTeamAbbreviation = (name: string): string => {
-  if (!name) return '—';
-  const words = name.trim().split(/\s+/);
-  if (words.length === 1) return words[0].substring(0, 3).toUpperCase();
-  return words.map(w => w[0]).join('').toUpperCase().substring(0, 4);
-};
 
 interface LeagueDropdownProps {
   leagues: { id: string; name: string }[];

@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
 import BoxScoreTable from "@/components/BoxScoreTable";
+import { getTeamAbbreviation } from "@/lib/teamUtils";
 import { TeamLogo } from "@/components/TeamLogo";
 import { GameSwitcherBar } from "@/components/GameSwitcherBar";
 import { isGameSlug, parseGameSlug } from "@/lib/gameSlug";
@@ -224,16 +225,6 @@ function parseMinutes(minutesStr: string | null | undefined): string {
 function getTeamShortName(teamName: string): string {
   const words = teamName.trim().split(/\s+/);
   return words.length > 2 ? words.slice(0, 2).join(' ') : teamName;
-}
-
-function getTeamAbbr(teamName: string): string {
-  if (!teamName) return '';
-  const words = teamName.trim().split(/\s+/);
-  if (words.length === 1) {
-    return teamName.substring(0, 3).toUpperCase();
-  }
-  // Use first letter of each word, max 3 letters
-  return words.slice(0, 3).map(w => w[0]).join('').toUpperCase();
 }
 
 const LEADER_CATEGORIES: { key: string; label: string }[] = [
@@ -1283,12 +1274,12 @@ export default function GamePage() {
               </div>
             ) : (
               <Tabs defaultValue={initialTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-5 bg-orange-100 dark:bg-neutral-800 mb-4">
-                  <TabsTrigger value="game" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs md:text-sm">Game</TabsTrigger>
-                  <TabsTrigger value="boxscore" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs md:text-sm">Box Score</TabsTrigger>
-                  <TabsTrigger value="teamstats" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs md:text-sm">Team Stats</TabsTrigger>
-                  <TabsTrigger value="shotchart" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs md:text-sm">Shots</TabsTrigger>
-                  <TabsTrigger value="feed" className="data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs md:text-sm">Play by Play</TabsTrigger>
+                <TabsList className="flex w-full justify-start overflow-x-auto gap-1 bg-orange-100 dark:bg-neutral-800 mb-4 md:grid md:grid-cols-5 md:gap-0">
+                  <TabsTrigger value="game" className="shrink-0 whitespace-nowrap px-3 md:px-2 data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs md:text-sm">Game</TabsTrigger>
+                  <TabsTrigger value="boxscore" className="shrink-0 whitespace-nowrap px-3 md:px-2 data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs md:text-sm">Box Score</TabsTrigger>
+                  <TabsTrigger value="teamstats" className="shrink-0 whitespace-nowrap px-3 md:px-2 data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs md:text-sm">Team Stats</TabsTrigger>
+                  <TabsTrigger value="shotchart" className="shrink-0 whitespace-nowrap px-3 md:px-2 data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs md:text-sm">Shots</TabsTrigger>
+                  <TabsTrigger value="feed" className="shrink-0 whitespace-nowrap px-3 md:px-2 data-[state=active]:bg-orange-500 data-[state=active]:text-white text-xs md:text-sm">Play by Play</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="game">
@@ -1330,7 +1321,7 @@ export default function GamePage() {
                                   <tr className="border-b border-orange-50 dark:border-neutral-700">
                                     <td className="py-2 px-2 font-medium flex items-center gap-2">
                                       <TeamLogo teamName={gameData.hometeam} leagueId={gameData.league_id} size="sm" />
-                                      <span className="hidden sm:inline">{getTeamAbbr(gameData.hometeam)}</span>
+                                      <span className="hidden sm:inline">{getTeamAbbreviation(gameData.hometeam)}</span>
                                     </td>
                                     {quarterScores.map(q => (
                                       <td key={q.period} className={`text-center py-2 px-2 ${q.home > q.away ? 'font-bold text-orange-600 dark:text-orange-400' : ''}`}>
@@ -1344,7 +1335,7 @@ export default function GamePage() {
                                   <tr>
                                     <td className="py-2 px-2 font-medium flex items-center gap-2">
                                       <TeamLogo teamName={gameData.awayteam} leagueId={gameData.league_id} size="sm" />
-                                      <span className="hidden sm:inline">{getTeamAbbr(gameData.awayteam)}</span>
+                                      <span className="hidden sm:inline">{getTeamAbbreviation(gameData.awayteam)}</span>
                                     </td>
                                     {quarterScores.map(q => (
                                       <td key={q.period} className={`text-center py-2 px-2 ${q.away > q.home ? 'font-bold text-orange-600 dark:text-orange-400' : ''}`}>
@@ -1397,9 +1388,9 @@ export default function GamePage() {
                         <div className="bg-white dark:bg-neutral-800 rounded-lg p-4 border border-orange-100 dark:border-neutral-700">
                           <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-3 uppercase tracking-wide">Shooting</h3>
                           <div className="grid grid-cols-3 gap-2 text-center text-sm">
-                            <div className="font-semibold text-orange-600 dark:text-orange-400">{getTeamAbbr(gameData.hometeam)}</div>
+                            <div className="font-semibold text-orange-600 dark:text-orange-400">{getTeamAbbreviation(gameData.hometeam)}</div>
                             <div></div>
-                            <div className="font-semibold text-orange-600 dark:text-orange-400">{getTeamAbbr(gameData.awayteam)}</div>
+                            <div className="font-semibold text-orange-600 dark:text-orange-400">{getTeamAbbreviation(gameData.awayteam)}</div>
 
                             <div className="text-slate-800 dark:text-white font-medium">
                               {homeTeamStats?.tot_sfieldgoalsmade || 0}/{homeTeamStats?.tot_sfieldgoalsattempted || 0}
@@ -1462,7 +1453,7 @@ export default function GamePage() {
                                 <div key={team} className="space-y-2">
                                   <div className="flex items-center gap-2 mb-2">
                                     <TeamLogo teamName={team} leagueId={gameData.league_id} size="sm" />
-                                    <span className="text-xs font-medium text-slate-600 dark:text-slate-400">{getTeamAbbr(team)}</span>
+                                    <span className="text-xs font-medium text-slate-600 dark:text-slate-400">{getTeamAbbreviation(team)}</span>
                                   </div>
                                   {LEADER_CATEGORIES.map(({ key, label }) => {
                                     const leader = [...players].sort((a, b) => ((b as any)[key] || 0) - ((a as any)[key] || 0))[0];
@@ -1526,11 +1517,11 @@ export default function GamePage() {
                     {teamStats && teamStats.length >= 2 ? (
                       <div className="grid grid-cols-3 gap-4 text-center text-slate-800 dark:text-slate-200">
                         <div className="font-semibold text-orange-600 dark:text-orange-400">
-                          {getTeamAbbr(gameData.hometeam)}
+                          {getTeamAbbreviation(gameData.hometeam)}
                         </div>
                         <div className="text-slate-500">Stat</div>
                         <div className="font-semibold text-orange-600 dark:text-orange-400">
-                          {getTeamAbbr(gameData.awayteam)}
+                          {getTeamAbbreviation(gameData.awayteam)}
                         </div>
 
                         <div className="text-2xl font-bold">{homeTeamStats?.tot_spoints || 0}</div>
